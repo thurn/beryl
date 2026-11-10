@@ -283,6 +283,10 @@ pub enum StackItem {
         name: String,
         /// A triggered ability rather than an activated one.
         triggered: bool,
+        /// This activation has a Waterbend cost.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        waterbend: Option<bool>,
         /// How many abilities of its kind (triggered, or activated) come before it in its
         /// list: the face's text says them in that order, so the UI finds its paragraph.
         nth: u8,
@@ -1452,6 +1456,7 @@ fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry<
                 granted: matches!(ability, FaceAbility::Grant(_)),
                 name: t.def(e.card).face_name(e.face).to_owned(),
                 triggered: kind,
+                waterbend: (face.ability(ability).cost.waterbend > 0).then_some(true),
                 nth,
                 controller: side(obs, e.controller),
                 targets,

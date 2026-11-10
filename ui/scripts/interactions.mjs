@@ -5805,6 +5805,126 @@ if (wanted(modeHandoff)) {
     );
 }
 
+const opponentWaterbend =
+    "opponent waterbend shows benders, mana, then activation";
+if (wanted(opponentWaterbend)) {
+    const base = turnViews[mainHalt];
+    const payment = (await load("waterbend-tap")).at(-1);
+    const nextSlot = Math.max(...base.objects.map((o) => o.slot)) + 1;
+    const [iceberg, jace, plains, otherPlains] = [
+        "Aang's Iceberg",
+        "Jace, Vryn's Prodigy",
+        "Plains",
+        "Plains",
+    ].map((name, i) => ({
+        ...payment.objects.find(
+            (o) => o.zone === "battlefield" && o.name === name,
+        ),
+        slot: nextSlot + i,
+        owner: "opponent",
+        controller: "opponent",
+        tapped: false,
+    }));
+    const sources = [jace, plains, otherPlains];
+    const table = {
+        ...base,
+        objects: [...base.objects, iceberg, ...sources],
+        battlefield: [
+            ...base.battlefield,
+            iceberg.slot,
+            ...sources.map((o) => o.slot),
+        ],
+        events: [],
+    };
+    const ability = {
+        ...payment.stack.at(-1),
+        source: iceberg.slot,
+        controller: "opponent",
+        waterbend: true,
+    };
+    const tap = (o) => ({ kind: "tap", slot: o.slot });
+    const run = await motionFixture("opponent-waterbend-beats", [
+        table,
+        {
+            ...table,
+            objects: [
+                ...base.objects,
+                iceberg,
+                ...sources.map((o) => ({ ...o, tapped: true })),
+            ],
+            events: [
+                tap(jace),
+                ...[plains, otherPlains].flatMap((o) => [
+                    tap(o),
+                    {
+                        kind: "mana",
+                        player: "opponent",
+                        source: o.slot,
+                        color: "white",
+                        amount: 1,
+                    },
+                ]),
+                { kind: "ability", item: ability, loyalty: null },
+                { kind: "abilityFinished" },
+            ],
+        },
+    ]);
+    await check(
+        opponentWaterbend,
+        async (page) => {
+            await page.evaluate(record);
+            await page.locator(".turn-action button").first().click();
+            await page.clock.runFor(3500);
+            const recording = await page.evaluate(collect, 0);
+            const findings = audit(recording);
+            const bend = findings.find(
+                (f) => f.kind === "tap" && f.what === jace.name,
+            );
+            const lands = findings.filter(
+                (f) => f.kind === "tap" && f.what === plains.name,
+            );
+            const activate = findings.find(
+                (f) =>
+                    f.kind === "ability" &&
+                    f.what === `ability of ${iceberg.name}`,
+            );
+            assert.equal(lands.length, 2);
+            for (const f of [bend, ...lands])
+                assert.equal(f?.verdict, "ok", JSON.stringify(f));
+            const firstStackFrame = recording.frames.find((frame) =>
+                Object.entries(frame.stack).some(
+                    ([key, pose]) =>
+                        key.endsWith(`:${iceberg.name}`) &&
+                        pose.o > 0.3 &&
+                        pose.on,
+                ),
+            );
+            assert.ok(
+                firstStackFrame,
+                "the ability is visible before resolving",
+            );
+            assert.ok(
+                lands.every((f) => f.at - bend.at >= 250),
+                "Jace turns before the Plains",
+            );
+            assert.ok(
+                Math.abs(lands[0].at - lands[1].at) < 80,
+                "both Plains turn together",
+            );
+            assert.ok(
+                activate && lands.every((f) => firstStackFrame.t - f.at >= 250),
+                "the activation follows payment",
+            );
+            assert.equal(
+                await page.locator(".stack-ability").count(),
+                0,
+                "the resolved ability leaves",
+            );
+        },
+        { ...run, ready: ".turn-action button" },
+    );
+}
+
 const tapBeforeSacrifice = "a mana token turns before leaving the battlefield";
 if (wanted(tapBeforeSacrifice)) {
     const view = (await load("arrow-spell")).at(-1);

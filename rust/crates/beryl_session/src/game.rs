@@ -28,8 +28,8 @@ use serde_json::json;
 use crate::ai::{self, AgentMove, AgentMoves, SearchView};
 use crate::checkpoint::Checkpoint;
 use crate::protocol::{
-    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
-    player_view,
+    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, StackItem, Status,
+    StopsSetting, player_view,
 };
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
 use crate::save::{self, Chosen};
@@ -2043,6 +2043,21 @@ impl Game {
             let shown = view(&b.state, &self.table, &mut b.scratch);
             let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
+            // Let the opponent watch the Waterbend payment before the activation
+            // lifts from its source. The controller's payment view still needs the
+            // pending stack item to identify what they are paying for.
+            if matches!(shown.pending(), Pending::Casting(_))
+                && matches!(
+                    view.stack.last(),
+                    Some(StackItem::Ability {
+                        controller: Side::Opponent,
+                        waterbend: Some(true),
+                        ..
+                    })
+                )
+            {
+                view.stack.pop();
+            }
             if let Some(d) = &decision
                 && d.player == viewer
             {

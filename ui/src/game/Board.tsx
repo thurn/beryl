@@ -645,7 +645,15 @@ export function Board({
   // Mana flowing from its sources into what it paid for, as the game plays on.
   const motes = useMemo(
     () =>
-      live ? manaMotes(views.current.before, view, laid, previousTable) : [],
+      live
+        ? manaMotes(
+            views.current.before,
+            view,
+            laid,
+            previousTable,
+            spotlight.payingSource,
+          )
+        : [],
     // Once per view: the table settling under it (the log opening) sends none again.
     [view, live],
   );

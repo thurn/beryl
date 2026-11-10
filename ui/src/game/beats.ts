@@ -55,6 +55,8 @@ export const HOLD = {
   drawn: 700,
   /** Time for a permanent's tap rotation to finish before its departure. */
   tapBeforeMove: 450,
+  /** Time to see the mana sources turn and their mana reach the activation source. */
+  waterbendMana: 520,
   /** Cards milled, discarded by the opponent or moved between piles, shown face up in a row
    * before they land: all of one move at once, so six cards take no longer than one. */
   showcase: 1100,
@@ -206,6 +208,51 @@ function stackHold(item: StackItem): number {
   return controller === "you" ? HOLD.action : HOLD.stack;
 }
 
+/** Boundaries within a batched opponent Waterbend: benders turn, then mana sources
+ * turn, then the paid ability lifts from its source. Mana source slots come from the
+ * events so a creature or artifact used for mana is counted with the mana sources. */
+function waterbendCuts(events: GameEvent[]) {
+  const cuts = new Map<number, { hold: number; payingSource?: number }>();
+  for (const [end, event] of events.entries()) {
+    if (
+      event.kind !== "ability" ||
+      event.item.kind !== "ability" ||
+      event.item.controller !== "opponent" ||
+      !event.item.waterbend
+    )
+      continue;
+    let start = end;
+    while (start > 0) {
+      const prior = events[start - 1]!;
+      if (
+        prior.kind !== "tap" &&
+        prior.kind !== "mana" &&
+        !(prior.kind === "zoneChange" && prior.reason === "sacrifice")
+      )
+        break;
+      start--;
+    }
+    if (start === end) continue;
+    const payment = events.slice(start, end);
+    const sources = new Set(
+      payment.flatMap((e) => (e.kind === "mana" ? [e.source] : [])),
+    );
+    const firstMana = payment.findIndex(
+      (e) => e.kind === "mana" || (e.kind === "tap" && sources.has(e.slot)),
+    );
+    if (
+      firstMana > 0 &&
+      payment.slice(0, firstMana).some((e) => e.kind === "tap")
+    )
+      cuts.set(start + firstMana, { hold: HOLD.tapBeforeMove });
+    cuts.set(end, {
+      hold: sources.size ? HOLD.waterbendMana : HOLD.tapBeforeMove,
+      payingSource: event.item.source ?? undefined,
+    });
+  }
+  return cuts;
+}
+
 /** A view's events played forward from the view before it, cut into beats. */
 class Walk {
   private readonly view: PlayerView;
@@ -271,11 +318,20 @@ class Walk {
 
   run(reveal: ReadonlySet<number>): Beat[] {
     const events = this.view.events;
+    const payments = waterbendCuts(events);
     const marksAbilityResolution = events.some(
       (e) => e.kind === "abilityFinished",
     );
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
+      const payment = payments.get(i);
+      if (payment) {
+        const { hold, payingSource } = payment;
+        this.cut(
+          hold,
+          payingSource === undefined ? undefined : { payingSource },
+        );
+      }
       if (e.kind === "stepBegins") {
         // Untap has no priority of its own, so its events arrive with upkeep.
         const leavingUntap = this.cur.turn.step === "untap";
@@ -684,7 +740,8 @@ class Walk {
     if (this.pending.length === 0 && !always) return;
     const view: PlayerView = { ...this.cur, events: this.pending };
     const landing = this.landing;
-    this.landing = spotlight !== undefined;
+    this.landing =
+      spotlight !== undefined && spotlight.payingSource === undefined;
     this.out.push({
       update: { ...this.update, view },
       hold: landing ? Math.max(hold ?? eventsHold(view), HOLD.landing) : hold,

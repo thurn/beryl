@@ -427,6 +427,8 @@ export interface Spotlight {
   packHandling?: boolean;
   /** The backs taking the lower route into the opponent’s library. */
   scryBottom?: ReadonlySet<number>;
+  /** Mana reaches this permanent while its ability is still being paid for. */
+  payingSource?: number;
 }
 
 /** How far below the opponent's hand a card they just drew dips into view. */

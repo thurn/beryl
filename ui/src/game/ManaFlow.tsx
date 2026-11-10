@@ -129,6 +129,7 @@ export function manaMotes(
   view: PlayerView,
   placements: Layout,
   previous: Layout | undefined,
+  payingSource?: number,
 ): Mote[] {
   if (view.undone) return [];
   const { events } = view;
@@ -171,7 +172,9 @@ export function manaMotes(
       const placed = item.kind === "spell" && placements.get(item.slot);
       if (placed) return center(placed);
     }
-    return poolPoint(side);
+    const source =
+      payingSource === undefined ? undefined : placements.get(payingSource);
+    return source ? center(source) : poolPoint(side);
   };
   const origin = (slot: number | null): Point | undefined => {
     if (slot === null) return undefined;

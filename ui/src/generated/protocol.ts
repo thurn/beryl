@@ -286,6 +286,10 @@ paid: Array<PaidCost>, } | { "kind": "ability", source: number | null, ability: 
  */
 triggered: boolean, 
 /**
+ * This activation has a Waterbend cost.
+ */
+waterbend?: boolean, 
+/**
  * How many abilities of its kind (triggered, or activated) come before it in its
  * list: the face's text says them in that order, so the UI finds its paragraph.
  */
