@@ -5916,17 +5916,34 @@ if (wanted(directPrivateMill)) {
                 },
                 mill,
             ]);
+            const ownTop = base.players.you.library.at(-1);
+            const explore = {
+                ...base,
+                status: {
+                    kind: "deciding",
+                    decision: {
+                        ...base.status.decision,
+                        ask: { kind: "explore" },
+                    },
+                },
+            };
+            const explored = up([{ ...mill, slot: ownTop }]);
+            const showsExplored = beats(
+                { session: 1, view: explore },
+                { session: 1, view: explored },
+            ).some((beat) => beat.spotlight?.shown?.has(ownTop));
             return [
                 showcased(before, manifestDread),
                 showcased(base, manifestDread),
                 showcased(before, up([mill])),
+                showsExplored,
                 showcased(base, up([mill])),
             ];
         }, base);
         assert.deepEqual(
             shown,
-            [false, false, false, true],
-            "Manifest and surveil skip the extra reveal; a blind mill still shows its face",
+            [false, false, false, false, true],
+            "Manifest, surveil and explore skip the extra reveal; a blind mill still shows its face",
         );
     });
 }

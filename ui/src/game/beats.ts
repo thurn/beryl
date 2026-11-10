@@ -17,7 +17,7 @@ import type {
   StackItem,
   ZoneName,
 } from "../generated/protocol";
-import { choiceOf } from "./choices";
+import { choiceOf, choiceSlots } from "./choices";
 import { withResolving } from "./decisions";
 import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 
@@ -221,7 +221,7 @@ class Walk {
     private readonly update: GameUpdate,
   ) {
     const choice = choiceOf(before);
-    this.seenInChoice = new Set(choice?.kind === "pick" ? choice.cards : []);
+    this.seenInChoice = new Set(choice ? choiceSlots(choice) : []);
     const handling = before.handling;
     if (handling?.zone === "library" && handling.count) {
       // The other seat also saw these cards lift. Their departure can continue
