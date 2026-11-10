@@ -1938,7 +1938,7 @@ async function assertNoLineAtPlayer(page, attackers) {
 }
 
 await check(
-    "an attack on a player draws no line, blocked or not",
+    "attacks distinguish the player from a planeswalker until blocked",
     async (page) => {
         await page.clock.runFor(2000);
         // The opponent's attackers, none blocked yet, at the human.
@@ -1950,14 +1950,28 @@ await check(
             )
             .map((o) => o.slot);
         assert.ok(attacking.length >= 3, "three attackers at the human");
-        await assertNoLineAtPlayer(page, attacking);
+        const initialLines = await combatLines(page, ".board-arrows");
+        assert.ok(
+            blockView.objects.some(
+                (o) =>
+                    o.zone === "battlefield" &&
+                    o.controller === "you" &&
+                    o.types.includes("planeswalker"),
+            ),
+        );
+        for (const slot of attacking)
+            assert.ok(
+                initialLines.some(
+                    (l) => l.from === `card-${slot}` && l.to === "you-life-orb",
+                ),
+            );
         for (const [blocker, attacker] of declaredBlocks) {
             await page.click(slotOf(blocker));
             await page.click(slotOf(attacker));
         }
         await page.clock.runFor(2000);
         const blocked = new Set(declaredBlocks.values());
-        await assertNoLineAtPlayer(page, attacking);
+        await assertNoLineAtPlayer(page, [...blocked]);
         const lines = await combatLines(page, ".board-arrows");
         for (const a of blocked) {
             assert.ok(
@@ -5026,7 +5040,105 @@ if (wanted(manifestFlight)) {
             },
         ],
     };
+    const exileBefore = {
+        ...before,
+        objects: [
+            ...base.objects,
+            ...cards.map((o) => ({ ...o, zone: "graveyard" })),
+        ],
+        players: {
+            ...base.players,
+            you: {
+                ...base.players.you,
+                graveyard: [...base.players.you.graveyard, 800, 801],
+            },
+        },
+        status: {
+            ...before.status,
+            decision: {
+                ...before.status.decision,
+                kind: "exileCost",
+                ask: { kind: "exileCards", zone: "graveyard", count: 1 },
+            },
+        },
+    };
+    const exileAfter = {
+        ...exileBefore,
+        objects: exileBefore.objects.map((o) =>
+            o.slot === 800 ? { ...o, zone: "exile" } : o,
+        ),
+        players: {
+            ...exileBefore.players,
+            you: {
+                ...exileBefore.players.you,
+                graveyard: [...base.players.you.graveyard, 801],
+            },
+        },
+        status: base.status,
+        events: [
+            {
+                kind: "zoneChange",
+                slot: 800,
+                from: "graveyard",
+                to: "exile",
+                reason: "cost",
+            },
+        ],
+    };
+    const exileRun = await motionFixture("choice-exile-flight", [
+        exileBefore,
+        exileAfter,
+    ]);
+    await check(
+        "manifest cards and exile choices land even at the same pile height",
+        async (page) => {
+            await page.clock.runFor(1000);
+            const pile = await page
+                .locator(`.card-layer ${slotOf(801)}`)
+                .boundingBox();
+            await page.locator('.choice-card[data-slot="800"]').click();
+            await page
+                .getByRole("button", { name: "Exile", exact: true })
+                .click();
+            await until(page, `${slotOf(800)}[data-zone="exile"]`, 20);
+            await page.clock.runFor(1800);
+            const landed = await page
+                .locator(`.card-layer ${slotOf(800)}`)
+                .boundingBox();
+            assert.ok(
+                Math.abs(landed.y - pile.y) < 3,
+                "card reaches the pile height",
+            );
+            assert.ok(
+                Math.abs(landed.height - pile.height) < 3,
+                "card shrinks to pile size",
+            );
+        },
+        { ...exileRun, ready: '.choice-card[data-slot="800"]' },
+    );
     const run = await motionFixture("manifest-flight", [before, after]);
+    await check(
+        "manifest cards travel without carrying flights into another game",
+        async (page) => {
+            const discarded = await page.evaluate(async () => {
+                const { rememberChoiceCards, takeChoiceFlight } =
+                    await import("/src/game/choiceFlight.ts");
+                rememberChoiceCards({
+                    objects: [
+                        { slot: 800, zone: "library" },
+                        { slot: 801, zone: "library" },
+                    ],
+                });
+                document.querySelector(".stage").remove();
+                return takeChoiceFlight(800, "battlefield") === undefined;
+            });
+            assert.ok(
+                discarded,
+                "an unmounted game's chooser must not supply a new game's origin",
+            );
+        },
+        { ...run, ready: '.choice-card[data-slot="800"]' },
+    );
     await check(
         manifestFlight,
         async (page) => {

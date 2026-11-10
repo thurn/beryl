@@ -399,8 +399,11 @@ const CardElement = memo(function CardElement({
     opacity,
     place.width,
   ]);
-  useGlide(x, place.x, reduce, { holding, how });
-  useGlide(y, place.y, reduce, { holding, how });
+  // A chooser handoff resets every transform, including coordinates shared by the old and
+  // new piles. Restart on zone changes even when that destination value did not change.
+  const zone = object.zone;
+  useGlide(x, place.x, reduce, { holding, how, restart: zone });
+  useGlide(y, place.y, reduce, { holding, how, restart: zone });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
   // battlefield card): before that is painted, its scale makes up the difference, and then
   // glides, so the card's size changes smoothly too.
@@ -418,15 +421,16 @@ const CardElement = memo(function CardElement({
       scale.jump((scale.get() * was.width) / width);
     }
   }, [scale, width, frameKind, epoch]);
-  useGlide(scale, place.scale, reduce, { restart: width, how });
+  useGlide(scale, place.scale, reduce, { restart: `${width}:${zone}`, how });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
   const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce, {
     how: returning ? TRAVEL : SPRING,
+    restart: zone,
   });
-  useGlide(skewX, place.skew, reduce);
+  useGlide(skewX, place.skew, reduce, { restart: zone });
   // Out of a library, the card is in sight from the start, on the pile; into one, until it is
   // there.
   const fromLibrary = useRef(place.look === "hidden");
@@ -437,6 +441,7 @@ const CardElement = memo(function CardElement({
   }, [place.look, place.opacity, opacity, reduce]);
   useGlide(opacity, place.opacity, reduce, {
     how: change.travel && place.look === "hidden" ? INTO_LIBRARY : SPRING,
+    restart: zone,
   });
   // Raised, the card turns back upright about its top center and rises straight up the screen,
   // inside its element, which stays turned in the fan.

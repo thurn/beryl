@@ -9,8 +9,13 @@ interface Flight {
   width: number;
   at: number;
   element: HTMLElement;
+  stage: HTMLElement;
 }
 const flights = new Map<number, Flight>();
+
+export function clearChoiceFlights() {
+  flights.clear();
+}
 
 export function rememberChoiceCards(view: PlayerView) {
   flights.clear();
@@ -32,6 +37,7 @@ export function rememberChoiceCards(view: PlayerView) {
       width: box.width / scale,
       at: performance.now(),
       element,
+      stage,
     });
   }
 }
@@ -40,7 +46,8 @@ export function takeChoiceFlight(slot: number, zone: ZoneName) {
   const flight = flights.get(slot);
   if (!flight || flight.zone === zone) return undefined;
   flights.delete(slot);
-  if (performance.now() - flight.at > 15000) return undefined;
+  if (!flight.stage.isConnected || performance.now() - flight.at > 15000)
+    return undefined;
   // During the commit that changes the view the old chooser may remain for one render.
   // Its representation goes away before the table representation starts moving.
   flight.element.style.visibility = "hidden";

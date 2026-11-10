@@ -31,7 +31,7 @@ import {
   type TargetRef,
 } from "../ipc";
 import { Board } from "../game/Board";
-import { rememberChoiceCards } from "../game/choiceFlight";
+import { clearChoiceFlights, rememberChoiceCards } from "../game/choiceFlight";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
@@ -368,6 +368,12 @@ function Playing({ playback }: { playback: Playback }) {
   const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
+  // Layout effects consume the answer's flights first. Once playback reaches a new
+  // decision/idle state, unused cards must not fly from an old chooser on a later move.
+  useEffect(() => {
+    if (view.status.kind !== "playing") clearChoiceFlights();
+  }, [view]);
+  useEffect(() => () => clearChoiceFlights(), []);
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
   // or a step passing, shown or still to show.
   const waiting =
@@ -376,6 +382,7 @@ function Playing({ playback }: { playback: Playback }) {
     status.kind === "thinking" ||
     status.kind === "playing";
   const fail = (e: unknown) => {
+    clearChoiceFlights();
     setAnswered(undefined);
     planned.current = [];
     release();
