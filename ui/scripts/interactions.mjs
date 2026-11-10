@@ -10395,6 +10395,10 @@ if (wanted(objectColors)) {
                 `${objectColors}: ${controller} ${tone}`,
                 async (page) => {
                     const selector = `.arrow[data-to="card-${target.slot}"]`;
+                    // A followed arrow goes the moment either end moves (Stack.tsx REST_MS),
+                    // and on a loaded machine one long frame before the cards' entrance can
+                    // show it early: let the table settle before counting.
+                    await page.clock.runFor(2000);
                     await until(page, selector, 30);
                     const links = page.locator(selector);
                     assert.equal(await links.count(), 1);
