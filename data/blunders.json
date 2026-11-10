@@ -178,5 +178,37 @@
       "cast Subtlety for evoke"
     ],
     "why": "The stack is empty: evoking Subtlety pitches Abhorrent Oculus and then sacrifices Subtlety without a creature or planeswalker spell to affect."
+  },
+  {
+    "incident": "2026-11-09-subtlety-timing-teferi-pass",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-subtlety-timing-teferi-pass.replay.json"
+    },
+    "seat": 1,
+    "name": "subtlety-main-phase-empty-stack",
+    "class": "a flash creature cast at sorcery speed",
+    "turn": 7,
+    "index": 1,
+    "played": "cast Subtlety",
+    "forbidden": [
+      "cast Subtlety"
+    ],
+    "why": "Passing preserves Reprieve and Subtlety interaction; casting in the opposing end step gives the same next-turn attack without exposing the body to sorcery-speed removal."
+  },
+  {
+    "incident": "2026-11-09-subtlety-timing-teferi-pass",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-subtlety-timing-teferi-pass.replay.json"
+    },
+    "seat": 1,
+    "name": "skip-teferi-plus-one",
+    "class": "a free beneficial loyalty activation skipped",
+    "turn": 15,
+    "index": 5,
+    "played": "pass",
+    "forbidden": [
+      "pass"
+    ],
+    "why": "The final main-phase pass skips an available Teferi +1: a card, loyalty and delayed land untaps at no mana cost, with 23 library cards and no visible draw penalty."
   }
 ]
