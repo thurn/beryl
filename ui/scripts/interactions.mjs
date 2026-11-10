@@ -6350,6 +6350,116 @@ if (wanted(faceFlip)) {
     );
 }
 
+const departureFlip = "a face-down permanent reveals its face before landing";
+if (wanted(departureFlip)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const template = (await load("combat-blockers"))
+        .at(-1)
+        .objects.find((o) => o.zone === "battlefield" && o.facing === "down");
+    assert.ok(template);
+    const slot = 800;
+    for (const owner of ["you", "opponent"]) {
+        for (const to of ["library", "graveyard", "exile", "hand"]) {
+            const card = { ...template, slot, owner, controller: owner };
+            const before = {
+                ...base,
+                battlefield: [...base.battlefield, slot],
+                objects: [
+                    ...base.objects,
+                    {
+                        ...card,
+                        name: owner === "you" ? "Snapcaster Mage" : null,
+                    },
+                ],
+                events: [],
+            };
+            const player = base.players[owner];
+            const players = {
+                ...base.players,
+                [owner]: {
+                    ...player,
+                    ...(to === "library" || to === "graveyard"
+                        ? { [to]: [...player[to], slot] }
+                        : {}),
+                },
+            };
+            const after = {
+                ...base,
+                players,
+                objects: [
+                    ...base.objects,
+                    {
+                        ...card,
+                        name: "Snapcaster Mage",
+                        zone: to,
+                        facing: "up",
+                    },
+                ],
+                events: [
+                    {
+                        kind: "zoneChange",
+                        slot,
+                        from: "battlefield",
+                        to,
+                        reason: "effect",
+                    },
+                ],
+            };
+            const run = await motionFixture(`departure-flip-${owner}-${to}`, [
+                before,
+                after,
+            ]);
+            await check(
+                `${departureFlip} (${owner} to ${to})`,
+                async (page) => {
+                    await page.clock.runFor(1000);
+                    const card = page.locator(slotOf(slot));
+                    if (owner === "opponent")
+                        assert.equal(
+                            await card.getAttribute("data-card"),
+                            null,
+                        );
+                    await page.evaluate(record);
+                    await page
+                        .getByRole("button", { name: "Resolve", exact: true })
+                        .click();
+                    await page.clock.runFor(3200);
+                    const recording = await page.evaluate(collect, 0);
+                    const track = posesOf(recording, slot);
+                    assert.equal(track[0].back, true);
+                    const front = track.findIndex((c) => c.back === false);
+                    assert.ok(front > 0, "the departing card shows its face");
+                    assert.ok(
+                        [track[front - 1], track[front]].some(
+                            (c) => Math.abs(c.turn) < 0.35,
+                        ),
+                        "the card changes faces edge-on",
+                    );
+                    assert.ok(
+                        track.some(
+                            (c) =>
+                                c.zone === "battlefield" &&
+                                !c.back &&
+                                c.top &&
+                                c.w > track[0].w * 1.3,
+                        ),
+                        "the enlarged front is visible before the card leaves",
+                    );
+                    assert.equal(await card.getAttribute("data-zone"), to);
+                    if (to === "library")
+                        assert.equal(
+                            await card.locator(".card-scan").count(),
+                            0,
+                        );
+                    assert.equal(new Set(track.map((c) => c.id)).size, 1);
+                    assert.deepEqual(duplicatesIn(recording), []);
+                },
+                { ...run, ready: slotOf(slot) },
+            );
+        }
+    }
+}
+
 const directPrivateMill =
     "cards in a private library look skip the graveyard showcase";
 if (wanted(directPrivateMill)) {

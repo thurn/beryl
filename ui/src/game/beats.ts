@@ -418,6 +418,9 @@ class Walk {
         // The same physical card turns on the battlefield before it flies away.
         this.cut(HOLD.tapBeforeMove);
       }
+      if (e.kind === "zoneChange" && e.from === "battlefield") {
+        this.revealDepartures(events, i);
+      }
       if (
         e.kind === "zoneChange" &&
         e.from === "battlefield" &&
@@ -656,15 +659,10 @@ class Walk {
         this.cut(stackHold(item));
       }
     }
-    if (reveal.size) {
-      this.cut();
-      const spotlight = { shown: reveal };
-      // Lift the same face-down object first. The existing card turn then shows
-      // the public face at the midpoint of the flip while the card is large.
-      this.cut(HOLD.landing + 100, spotlight, true);
-      for (const slot of reveal) this.patch(slot, this.final.get(slot)!);
-      this.cut(HOLD.action, spotlight, true);
-    }
+    if (reveal.size)
+      this.showTurn(
+        new Map([...reveal].map((slot) => [slot, this.final.get(slot)!])),
+      );
     // A targeted ETB is on the stack before its targets are announced: its ability
     // event arrives in a later view. Keep that pending trigger off the landing beat too.
     const arrivingTrigger = this.view.stack.some(
@@ -756,6 +754,37 @@ class Walk {
     const tuck = ordered && bottom.size > 0;
     this.cut(HOLD.landing, tuck ? { scryBottom: bottom } : undefined);
     if (tuck && this.startsHandling) this.cut(HOLD.landing, undefined, true);
+  }
+
+  /** Reveal the cards leaving together (CR 708.9). Use the identity supplied
+   * by this seat's view after the move, even when the destination is hidden. */
+  private revealDepartures(events: GameEvent[], start: number) {
+    const faces = new Map<number, Partial<ObjectView>>();
+    for (let i = start; i < events.length; i++) {
+      const move = events[i]!;
+      if (move.kind !== "zoneChange" || move.from !== "battlefield") break;
+      if (move.to === "battlefield" || move.to === "nowhere") continue;
+      const before = this.cur.objects.find((o) => o.slot === move.slot);
+      const after = this.final.get(move.slot);
+      if (
+        before?.facing === "down" &&
+        after?.zone === move.to &&
+        after.facing === "up" &&
+        after.name !== null
+      ) {
+        faces.set(move.slot, { facing: "up", name: after.name, pt: null });
+      }
+    }
+    if (faces.size) this.showTurn(faces);
+  }
+
+  private showTurn(faces: ReadonlyMap<number, Partial<ObjectView>>) {
+    this.cut();
+    const spotlight = { shown: new Set(faces.keys()) };
+    // Lift the same face-down object first, then turn it while it is large.
+    this.cut(HOLD.landing + 100, spotlight, true);
+    for (const [slot, face] of faces) this.patch(slot, face);
+    this.cut(HOLD.action, spotlight, true);
   }
 
   /** Whether the zone change `e` is shown in a showcase. */

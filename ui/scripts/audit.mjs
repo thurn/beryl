@@ -192,8 +192,8 @@ export function record(ui) {
                 ...(flip && {
                     turn,
                     back:
-                        surface?.matches(".card-back, .card-face-down") ??
-                        false,
+                        !!surface?.matches(".card-back, .card-face-down") ||
+                        !!surface?.querySelector(".card-face-down"),
                 }),
                 ...(e.hasAttribute("data-dissolving") && {
                     mask: getComputedStyle(e).maskPosition,
