@@ -33,6 +33,9 @@ pub struct ReplayFile {
     /// The older engine silently answered a required waterbend choice with one answer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub legacy_waterbend: bool,
+    /// Older games skipped Waterbend review when only nonland mana activations could help.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub legacy_waterbend_mana: bool,
     pub seed: u64,
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
@@ -56,7 +59,7 @@ pub struct ReplayFile {
 }
 
 /// The format this build writes. Raising it adds a migration ([`crate::migrate`]).
-pub const FORMAT_VERSION: u8 = 8;
+pub const FORMAT_VERSION: u8 = 9;
 
 fn version_1() -> u8 {
     1

@@ -10348,7 +10348,7 @@ if (wanted(bendByHand)) {
             null,
             {
                 benders,
-                lands: [land],
+                mana: [land],
                 taps: [land.slot, ...benders],
                 plan: null,
             },

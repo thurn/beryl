@@ -233,6 +233,7 @@ interface Menu {
   slot: number;
   at: Point;
   acts: Act[];
+  waterbend?: boolean;
   pointed?: Act;
 }
 
@@ -862,8 +863,26 @@ export function Board({
     } else if (stepsIn(casts)) setUp(slot, casts);
     else cast(firstChoice(casts[0]!));
   };
+  const editWaterbend = (slot: number, act?: Act) => {
+    const option = act?.option;
+    if (
+      !waterbend.toggle(
+        slot,
+        option?.kind === "mana" ? option.color : undefined,
+      )
+    )
+      return false;
+    setMenu(undefined);
+    playSound("select");
+    return true;
+  };
+
   /** A menu's pick: a cast, with all of the card's casts, is made as a click makes it. */
   const pickAct = (slot: number, act: Act) => {
+    if (deciding && waterbend.active) {
+      editWaterbend(slot, act);
+      return;
+    }
     const casts = castActs(can.bySlot.get(slot) ?? []);
     if (act.option.kind === "cast") castOrSetUp(slot, casts);
     else pick(act.index, act.then);
@@ -1087,8 +1106,18 @@ export function Board({
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (isEmblem(slot)) return false;
-    if (deciding && waterbend.toggle(slot)) {
-      playSound("select");
+    if (deciding && waterbend.active) {
+      const acts = can.bySlot.get(slot) ?? [];
+      if (waterbend.selected.includes(slot) || acts.length <= 1)
+        return editWaterbend(slot, acts[0]);
+      setMenu({
+        slot,
+        at,
+        waterbend: true,
+        acts: acts.map((act) =>
+          act.option.kind === "object" ? { ...act, label: "Waterbend" } : act,
+        ),
+      });
       return true;
     }
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
@@ -3303,7 +3332,11 @@ function menuEntries(
       };
     }
     if (o.kind === "mana") {
-      return { act, effect: `Add {${MANA_SYMBOLS[o.color]}}`, labelled: true };
+      const effect =
+        menu.waterbend && name
+          ? act.label.replace(` ${name} for `, " for ")
+          : `Add {${MANA_SYMBOLS[o.color]}}`;
+      return { act, effect, labelled: true };
     }
     if (o.kind === "cast") {
       const cost = name ? cardEntry(name)?.faces[o.face]?.mana_cost : undefined;

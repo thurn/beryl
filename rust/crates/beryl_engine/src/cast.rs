@@ -1295,7 +1295,7 @@ fn begin_payment<L: Layout>(
 
 /// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
 /// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
-/// one answer (§7.2). The human can also float mana from a land
+/// one answer (§7.2). The human can also activate a mana ability
 /// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "they then have a
 /// chance to activate mana abilities." Empty when there is no choice to make.
 fn waterbend_options<L: Layout>(
@@ -1318,12 +1318,12 @@ fn waterbend_options<L: Layout>(
             }
         }
     }
-    // With only generic symbols, activating a land for mana keeps at least as much payment
+    // With only generic symbols, activating a mana source keeps at least as much payment
     // available as it did untapped. Activate before tapping any permanent as a bender.
-    let manual_lands = s.profile.taps_mana == Some(c.player)
+    let manual_mana = s.profile.taps_mana == Some(c.player)
         && c.bent == 0
         && cost.symbols.iter().all(|&n| n == 0);
-    if objects.is_empty() && !manual_lands {
+    if objects.is_empty() && !manual_mana {
         return Ok(out);
     }
     if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
@@ -1333,8 +1333,8 @@ fn waterbend_options<L: Layout>(
         out.push(o)?;
     }
     // Append the mana choices so existing candidate indices hold.
-    if manual_lands {
-        mana::waterbend_land_options(s, t, c.player, &mut out);
+    if manual_mana {
+        mana::waterbend_mana_options(s, t, c.player, &mut out);
     }
     if out.as_slice() == [Opt::Done] {
         return Ok(Default::default());

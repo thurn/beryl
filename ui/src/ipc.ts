@@ -486,8 +486,11 @@ export const choose = (
 ) => call("choose", { request: { decision, index, continuation } });
 
 /** Computes a payment without changing the game. */
-export const previewWaterbend = (decision: DecisionId, selected: number[]) =>
-  call("preview_waterbend", { request: { decision, selected } });
+export const previewWaterbend = (
+  decision: DecisionId,
+  selected: number[],
+  mana: Args<"preview_waterbend">["request"]["mana"],
+) => call("preview_waterbend", { request: { decision, selected, mana } });
 
 export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });

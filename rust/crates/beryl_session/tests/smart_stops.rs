@@ -371,6 +371,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
             let request = beryl_session::ipc::WaterbendRequest {
                 decision: decision.id,
                 selected: Some(vec![jace]),
+                mana: Vec::new(),
             };
             let mut outdated = request.clone();
             outdated.decision.seq += 1;

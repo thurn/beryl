@@ -641,6 +641,7 @@ impl Game {
         let replay = ReplayFile {
             format_version: FORMAT_VERSION,
             legacy_waterbend: false,
+            legacy_waterbend_mana: false,
             seed: start.seed,
             decks: start.decks.clone(),
             human: start.human.get(),
@@ -688,6 +689,7 @@ impl Game {
         let replay = ReplayFile {
             format_version: FORMAT_VERSION,
             legacy_waterbend: false,
+            legacy_waterbend_mana: false,
             seed: 0,
             decks: [Vec::new(), Vec::new()],
             human: human.get(),
@@ -934,9 +936,7 @@ impl Game {
                     continue;
                 }
             }
-            if (file.legacy_waterbend || file.format_version < 8)
-                && self.replay_implicit_waterbend(steps.peek().map(|(e, _)| *e))
-            {
+            if self.replay_implicit_waterbend(file, steps.peek().map(|(e, _)| *e)) {
                 self.chance_reproduced()?;
                 continue;
             }
@@ -987,15 +987,23 @@ impl Game {
 
     /// Before v8, a required singleton Waterbend answer was made inside the engine,
     /// without a log entry. Restore it here without consuming the next recorded answer.
-    fn replay_implicit_waterbend(&mut self, next: Option<&Entry>) -> bool {
+    fn replay_implicit_waterbend(&mut self, file: &ReplayFile, next: Option<&Entry>) -> bool {
         let At::Human(id, open @ Open::Decision(d)) = &self.at else {
             return false;
         };
-        if d.kind != DecisionKind::Waterbend || without_floating(d.clone()).len() != 1 {
+        if d.kind != DecisionKind::Waterbend {
+            return false;
+        }
+        let lone_bender = (file.legacy_waterbend || file.format_version < 8)
+            && without_floating(d.clone()).len() == 1;
+        // A v8 payment with only nonland mana to activate never opened the picker at all.
+        let nonland_only = (file.legacy_waterbend_mana || file.format_version < 9)
+            && on_board!(&self.board, b => only_nonland_mana(&b.state, &d.relayout()));
+        if !lone_bender && !nonland_only {
             return false;
         }
         if matches!(next, Some(Entry::Choice(c)) if c.what.as_ref()
-            .is_some_and(|w| w.kind == save::Kind::Waterbend && c.index == 0))
+            .is_some_and(|w| w.kind == save::Kind::Waterbend))
         {
             return false;
         }
@@ -1554,7 +1562,7 @@ impl Game {
             return Ok(None);
         }
         Ok(
-            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), request.selected.as_deref())),
+            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), request.selected.as_deref().unwrap_or_default(), &request.mana)),
         )
     }
 
@@ -2114,6 +2122,16 @@ pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
         .max_by_key(|&(_, &opt)| resolves_late(opt))
         .expect("a decision has a candidate");
     Choice(u16::try_from(last).expect("a choice names its candidate"))
+}
+
+/// A payment that v8 completed without a prompt: it needs no benders and none of its
+/// optional mana activations were offered at the time.
+fn only_nonland_mana<L: Layout>(s: &State<L>, d: &Decision<L>) -> bool {
+    d.candidates.option(Choice(0)) == Some(Opt::Done)
+        && (1..d.len() as u16).all(|i| {
+            matches!(d.candidates.option(Choice(i)), Some(Opt::Mana { slot, .. })
+                if !s.derived(slot).types.contains(beryl_engine::card::Types::LAND))
+        })
 }
 
 /// `d` without the optional mana activations offered at human priority or during waterbend

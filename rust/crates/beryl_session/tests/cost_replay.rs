@@ -65,6 +65,7 @@ fn setup(scenario: &Scenario) -> (Game, PlayerView) {
     let file = ReplayFile {
         format_version: 6,
         legacy_waterbend: false,
+        legacy_waterbend_mana: false,
         seed: 1,
         decks,
         human: 0,
@@ -205,6 +206,68 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
     let (restored, resumed) = Game::replay_exactly(&CARDS, &migrated, SESSION).unwrap();
     assert_eq!(resumed.objects, after.objects);
     assert!(!restored.replay().legacy_waterbend);
+    assert_eq!(
+        Game::replay_exactly(&CARDS, restored.replay(), SESSION)
+            .unwrap()
+            .1
+            .objects,
+        after.objects
+    );
+}
+
+#[test]
+fn old_waterbend_saves_restore_an_automatic_mana_rock() {
+    const BEND: Scenario = Scenario::new("saved rock waterbend")
+        .at(3, P0, TurnStep::Upkeep)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::AANGS_ICEBERG),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::MANA_CRYPT),
+            ],
+        )
+        .library(P0, &[names::ISLAND; 12])
+        .library(P1, &[names::ISLAND; 12]);
+    let (mut game, mut view) = setup(&BEND);
+    while view.turn.step != beryl_session::protocol::Step::PrecombatMain {
+        view = answer(&mut game, &view, 0);
+    }
+    let plains = decision(&view)
+        .candidates
+        .iter()
+        .position(|c| c.label == "Tap Plains for {W}")
+        .unwrap();
+    view = answer(&mut game, &view, plains);
+    let activate = decision(&view)
+        .candidates
+        .iter()
+        .position(|c| {
+            matches!(c.option, Candidate::Activate { .. }) && c.label.contains("Waterbend")
+        })
+        .unwrap();
+    view = answer(&mut game, &view, activate);
+    assert_eq!(decision(&view).kind, Kind::Waterbend);
+    assert!(
+        decision(&view).waterbend.is_none(),
+        "the rock requires an explicit tap"
+    );
+    let rock = decision(&view)
+        .candidates
+        .iter()
+        .position(|c| matches!(c.option, Candidate::Mana { .. }))
+        .unwrap();
+    let after = answer(&mut game, &view, rock);
+    let mut old = serde_json::to_value(game.replay()).unwrap();
+    old["formatVersion"] = 8.into();
+    old["log"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|e| e["choice"]["kind"] != "waterbend");
+    let migrated = beryl_session::migrate::to_current(old, &CARDS).unwrap();
+    let (restored, resumed) = Game::replay_exactly(&CARDS, &migrated, SESSION).unwrap();
+    assert_eq!(resumed.objects, after.objects);
+    assert!(!restored.replay().legacy_waterbend_mana);
     assert_eq!(
         Game::replay_exactly(&CARDS, restored.replay(), SESSION)
             .unwrap()

@@ -5,7 +5,7 @@
 //! before it sends the engine's picks; and what a count of targets lets the first target be, so
 //! the UI can take the count with the target.
 
-use beryl_engine::card::AbilityKind;
+use beryl_engine::card::{AbilityKind, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
@@ -14,6 +14,7 @@ use beryl_engine::{
 };
 
 use crate::Status;
+use crate::ipc::{WaterbendMana, WaterbendPreview};
 use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
@@ -28,7 +29,7 @@ pub fn add_previews<L: Layout>(
 ) {
     if let Status::Deciding { decision } = &mut view.status {
         if d.kind == DecisionKind::Waterbend {
-            decision.waterbend = waterbend(s, t, d, None).map(Box::new);
+            decision.waterbend = waterbend(s, t, d, &[], &[]).map(Box::new);
         }
         for (((c, p), b), targets) in decision
             .candidates
@@ -290,27 +291,86 @@ pub(crate) fn waterbend<L: Layout>(
     before: &State<L>,
     t: &GameTable,
     first: &Decision<L>,
-    selected: Option<&[u16]>,
-) -> Option<crate::ipc::WaterbendPreview> {
-    if selected.is_some_and(|slots| {
-        slots
-            .iter()
-            .enumerate()
-            .any(|(i, slot)| slots[..i].contains(slot))
-    }) {
+    selected: &[u16],
+    activations: &[WaterbendMana],
+) -> Option<WaterbendPreview> {
+    let slots: Vec<_> = activations
+        .iter()
+        .map(|m| m.slot)
+        .chain(selected.iter().copied())
+        .collect();
+    if slots
+        .iter()
+        .enumerate()
+        .any(|(i, slot)| slots[..i].contains(slot))
+    {
         return None;
     }
+    let safe = |plan: &WaterbendPreview| {
+        before.battlefield().iter().copied().all(|slot| {
+            let n = slot.num();
+            !plan.taps.contains(&n)
+                || plan.benders.contains(&n)
+                || plan.mana.iter().any(|m| m.slot == n)
+                || before.controller(slot) != first.player
+                || !before
+                    .derived(slot)
+                    .types
+                    .intersects(Types::ARTIFACT.union(Types::CREATURE))
+        })
+    };
+    let plan = waterbend_plan(before, t, first, selected, activations)?;
+    if safe(&plan) {
+        return Some(plan);
+    }
+
+    // The normal mana plan may prefer a rock to a land. Try funding from other sources first
+    // so that a legal land payment stays available without asking the player to click each land.
+    let mut funded = activations.to_vec();
+    for i in 0..first.len() {
+        let Some(Opt::Mana { slot, color }) = first.candidates.option(choice(i)) else {
+            continue;
+        };
+        if slots.contains(&slot.num())
+            || funded.iter().any(|m| m.slot == slot.num())
+            || before
+                .derived(slot)
+                .types
+                .intersects(Types::ARTIFACT.union(Types::CREATURE))
+        {
+            continue;
+        }
+        funded.push(WaterbendMana {
+            slot: slot.num(),
+            color: color.into(),
+        });
+        if let Some(plan) = waterbend_plan(before, t, first, selected, &funded)
+            && safe(&plan)
+        {
+            return Some(plan);
+        }
+    }
+    None
+}
+
+fn waterbend_plan<L: Layout>(
+    before: &State<L>,
+    t: &GameTable,
+    first: &Decision<L>,
+    selected: &[u16],
+    activations: &[WaterbendMana],
+) -> Option<WaterbendPreview> {
     let mut copy = forced(before);
     let mut scratch = Scratch::new();
     let mut decision = first.clone();
-    let selected = selected.unwrap_or_default();
-    let mut lands = Vec::new();
+    let mut mana = Vec::new();
     let mut benders = Vec::new();
     let mut plan = None;
     loop {
         let index = match decision.kind {
             DecisionKind::Waterbend => {
-                let desired = selected.get(lands.len() + benders.len());
+                let activation = activations.get(mana.len());
+                let desired = selected.get(benders.len());
                 let wanted = desired.and_then(|&wanted| {
                     before
                         .battlefield()
@@ -318,24 +378,25 @@ pub(crate) fn waterbend<L: Layout>(
                         .copied()
                         .find(|s| s.num() == wanted)
                 });
-                // A land that can also waterbend uses its mana ability when clicked.
-                (0..decision.len()).rev().find(|&i| {
-                    match decision.candidates.option(choice(i)) {
-                        Some(Opt::Object(slot) | Opt::Mana { slot, .. }) => {
-                            wanted.is_some_and(|wanted| {
+                (0..decision.len()).find(|&i| match decision.candidates.option(choice(i)) {
+                    Some(Opt::Mana { slot, color }) => {
+                        activation.is_some_and(|m| m.slot == slot.num() && m.color == color.into())
+                    }
+                    Some(Opt::Object(slot)) => {
+                        activation.is_none()
+                            && wanted.is_some_and(|wanted| {
                                 beryl_engine::interchangeable(before, slot, wanted)
                             })
-                        }
-                        Some(Opt::Done) => desired.is_none(),
-                        _ => false,
                     }
+                    Some(Opt::Done) => activation.is_none() && desired.is_none(),
+                    _ => false,
                 })?
             }
             DecisionKind::PaymentPlan => 0,
             _ => return None,
         };
         match decision.candidates.option(choice(index)) {
-            Some(Opt::Mana { slot, color }) => lands.push(crate::ipc::WaterbendLand {
+            Some(Opt::Mana { slot, color }) => mana.push(WaterbendMana {
                 slot: slot.num(),
                 color: color.into(),
             }),
@@ -353,11 +414,11 @@ pub(crate) fn waterbend<L: Layout>(
         };
         decision = next;
     }
-    if selected.len() != lands.len() + benders.len() {
+    if selected.len() != benders.len() || activations.len() != mana.len() {
         return None;
     }
-    Some(crate::ipc::WaterbendPreview {
-        lands,
+    Some(WaterbendPreview {
+        mana,
         benders,
         taps: tapped(before, &copy, t),
         plan,
@@ -437,26 +498,78 @@ mod tests {
             .map(|slot| slot.num())
             .collect();
         assert!(
-            waterbend(&s, &t, &d, None).is_none(),
+            waterbend(&s, &t, &d, &[], &[]).is_none(),
             "no bender is implied"
         );
         let land = d.candidates.option(choice(d.len() - 1)).unwrap();
-        let Opt::Mana { slot, .. } = land else {
+        let Opt::Mana { slot, color } = land else {
             panic!("land is an explicit payment choice");
         };
-        let mut selected = vec![slot.num()];
-        selected.extend(benders.iter().rev().copied());
-        let mixed = waterbend(&s, &t, &d, Some(&selected)).unwrap();
-        assert_eq!(mixed.lands[0].slot, slot.num());
+        let selected: Vec<_> = benders.iter().rev().copied().collect();
+        let mana = WaterbendMana {
+            slot: slot.num(),
+            color: color.into(),
+        };
+        let mixed = waterbend(&s, &t, &d, &selected, &[mana]).unwrap();
+        assert_eq!(mixed.mana[0].slot, slot.num());
         assert_eq!(mixed.benders, benders);
         assert_eq!(mixed.taps.len(), 3);
-        assert!(waterbend(&s, &t, &d, Some(&benders[..1])).is_none());
-        assert!(waterbend(&s, &t, &d, Some(&[benders[0], benders[0]])).is_none());
+        assert!(waterbend(&s, &t, &d, &benders[..1], &[]).is_none());
+        assert!(waterbend(&s, &t, &d, &[benders[0], benders[0]], &[]).is_none());
         assert!(
             s.battlefield()
                 .iter()
                 .all(|&slot| !s.object(slot).flags.has(ObjectFlags::TAPPED))
         );
+    }
+
+    #[test]
+    fn waterbend_automates_lands_but_requires_a_mana_rock_selection() {
+        const BOARD: Scenario = Scenario::new("waterbend mana sources").battlefield(
+            P0,
+            &[
+                Permanent::new(names::AANGS_ICEBERG),
+                Permanent::new(names::MANA_CRYPT),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+            ],
+        );
+        let (t, mut s) = beryl_scenario::position(&CARDS, &BOARD).unwrap();
+        s.set_profile(Profile {
+            taps_mana: Some(P0),
+            ..Profile::SMART
+        });
+        let mut scratch = Scratch::new();
+        let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+            panic!("priority");
+        };
+        let activate = (0..d.len()).find(|&i| matches!(
+            d.candidates.option(choice(i)),
+            Some(Opt::Activate { slot, .. }) if t.def(s.card(slot)).name == names::AANGS_ICEBERG
+        )).unwrap();
+        apply(&mut s, &t, &mut scratch, &mut Replay, choice(activate));
+        let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+            panic!("waterbend");
+        };
+        let rock = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| t.def(s.card(slot)).name == names::MANA_CRYPT)
+            .unwrap()
+            .num();
+        let automatic = waterbend(&s, &t, &d, &[], &[]).unwrap();
+        assert_eq!(automatic.taps.len(), 3);
+        assert!(!automatic.taps.contains(&rock));
+        let activation = WaterbendMana {
+            slot: rock,
+            color: crate::protocol::Mana::Colorless,
+        };
+        let paid = waterbend(&s, &t, &d, &[], &[activation]).unwrap();
+        assert!(paid.taps.contains(&rock));
+        assert!(paid.benders.is_empty());
+        assert_eq!(paid.taps.len(), 2);
     }
 
     /// The first decision of a scenario with `hand` and `battlefield` for the first player,

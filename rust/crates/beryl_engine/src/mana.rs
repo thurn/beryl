@@ -1764,19 +1764,17 @@ pub(crate) fn standalone_options<L: Layout>(
     add_activations(s, t, player, out, sources);
 }
 
-/// The exact lands the human can tap before paying Waterbend. A selected land stays the
-/// same physical card at confirmation, even when a twin would produce the same mana.
-pub(crate) fn waterbend_land_options<L: Layout>(
+/// Exact sources the human can activate before paying Waterbend, even when a twin
+/// would make the same mana. [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g):
+/// "they then have a chance to activate mana abilities".
+pub(crate) fn waterbend_mana_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     out: &mut L::Queue<Opt<L>, 64>,
 ) {
-    let lands = controlled(s, player)
-        .filter(|&(_, d)| d.types.contains(Types::LAND))
-        .map(|(slot, _)| slot)
-        .collect();
-    add_activations(s, t, player, out, lands);
+    let sources = controlled(s, player).map(|(slot, _)| slot).collect();
+    add_activations(s, t, player, out, sources);
 }
 
 fn add_activations<L: Layout>(

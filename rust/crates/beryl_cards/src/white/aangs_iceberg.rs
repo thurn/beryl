@@ -18,6 +18,7 @@ use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
+use crate::tokens::TREASURE_TOKEN;
 
 pub static CARD: CardDef = CardDef {
     name: names::AANGS_ICEBERG,
@@ -195,5 +196,36 @@ pub const SCENARIOS: &[Scenario] = &[
                 player: P0,
                 top: &[PLAINS, ISLAND],
             }),
+        ]),
+    Scenario::new("waterbend uses mana sources without sacrificing them")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ICEBERG),
+                Permanent::new(PLAINS),
+                Permanent::new(names::MANA_CRYPT),
+                Permanent::token(TREASURE_TOKEN),
+            ],
+        )
+        .library(P0, &[ISLAND, PLAINS])
+        .library(P1, &[PLAINS, names::BEZA_THE_BOUNDING_SPRING])
+        .actions(&[
+            Action::activate(P0, ICEBERG, 1),
+            // A Treasure tapped to waterbend does not activate its own mana ability or
+            // sacrifice itself (CR 701.67a and CR 111.10a).
+            Action::choose(P0, DecisionKind::Waterbend, TREASURE_TOKEN),
+            Action::choose(P0, DecisionKind::Waterbend, names::MANA_CRYPT),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: TREASURE_TOKEN,
+                count: 1,
+            }),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::MANA_CRYPT,
+                count: 1,
+            }),
+            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+            Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
         ]),
 ];

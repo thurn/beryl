@@ -6,6 +6,7 @@ import type {
   DecisionView,
   WaterbendPreview,
   ObjectView,
+  Mana,
 } from "../generated/protocol";
 import { twins, type Intent } from "./decisions";
 
@@ -18,7 +19,7 @@ export function useWaterbend(
   const revision = useRef(0);
   const [edit, setEdit] = useState<{
     key: string;
-    selected: number[];
+    picks: { slot: number; color?: Mana }[];
     preview?: WaterbendPreview | null;
   }>();
   useEffect(() => {
@@ -31,36 +32,50 @@ export function useWaterbend(
     : automatic?.benders.length === 0
       ? automatic
       : undefined;
-  const selected = current?.selected ?? [];
-  const eligible = (slot: number, kind: "mana" | "object") =>
+  const picks = current?.picks ?? [];
+  const selected = picks.map((pick) => pick.slot);
+  const benders = picks.flatMap((pick) =>
+    pick.color === undefined ? [pick.slot] : [],
+  );
+  const eligible = (slot: number, color?: Mana) =>
     active?.candidates.some(({ option }) => {
-      if (option.kind !== kind) return false;
+      if (color !== undefined)
+        return (
+          option.kind === "mana" &&
+          option.slot === slot &&
+          option.color === color
+        );
+      if (option.kind !== "object") return false;
       const clicked = objects.get(slot);
       const offered = objects.get(option.slot);
       return (
         option.slot === slot ||
-        (kind === "object" && !!clicked && !!offered && twins(clicked, offered))
+        (!!clicked && !!offered && twins(clicked, offered))
       );
     });
-  const toggle = (slot: number) => {
+  const toggle = (slot: number, color?: Mana) => {
     if (!active || !key) return false;
-    const land = eligible(slot, "mana");
-    if (!land && !eligible(slot, "object")) return false;
-    const next = selected.includes(slot)
-      ? selected.filter((s) => s !== slot)
-      : land
-        ? [slot, ...selected]
-        : [...selected, slot];
+    const removing = selected.includes(slot);
+    if (!removing && !eligible(slot, color)) return false;
+    const next = removing
+      ? picks.filter((pick) => pick.slot !== slot)
+      : [...picks, { slot, color }];
+    const bend = next.flatMap((pick) =>
+      pick.color === undefined ? [pick.slot] : [],
+    );
+    const mana = next.flatMap(({ slot, color }) =>
+      color === undefined ? [] : [{ slot, color }],
+    );
     const request = ++revision.current;
-    setEdit({ key, selected: next });
-    void previewWaterbend(active.id, next).then(
+    setEdit({ key, picks: next });
+    void previewWaterbend(active.id, bend, mana).then(
       (result) => {
         if (request === revision.current)
-          setEdit({ key, selected: next, preview: result });
+          setEdit({ key, picks: next, preview: result });
       },
       () => {
         if (request === revision.current)
-          setEdit({ key, selected: next, preview: null });
+          setEdit({ key, picks: next, preview: null });
       },
     );
     return true;
@@ -68,7 +83,7 @@ export function useWaterbend(
   const plan = (): Intent[] =>
     preview
       ? [
-          ...(preview.lands ?? []).map(({ slot, color }): Intent => ({
+          ...(preview.mana ?? []).map(({ slot, color }): Intent => ({
             kind: "waterbend",
             wants: (o) =>
               o.kind === "mana" && o.slot === slot && o.color === color,
@@ -101,14 +116,12 @@ export function useWaterbend(
   return {
     active: !!active,
     selected,
-    benders: selected.filter((s) => !eligible(s, "mana")),
+    benders,
     taps: preview
       ? [
           ...selected,
           ...preview.taps.filter(
-            (s) =>
-              !preview.benders.includes(s) &&
-              !(preview.lands ?? []).some((land) => land.slot === s),
+            (s) => !preview.benders.includes(s) && !selected.includes(s),
           ),
         ]
       : selected,

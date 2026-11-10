@@ -33,13 +33,13 @@ continuation?: boolean, };
 
 export type WaterbendRequest = { decision: DecisionId, 
 /**
- * Explicitly chosen lands and benders, with lands first. None uses only automatic mana.
+ * Artifacts and creatures explicitly chosen to tap for Waterbend.
  */
-selected: Array<number> | null, };
+selected: Array<number> | null, mana: Array<WaterbendMana>, };
 
-export type WaterbendPreview = { lands: Array<WaterbendLand>, benders: Array<number>, taps: Array<number>, plan: number | null, };
+export type WaterbendPreview = { mana: Array<WaterbendMana>, benders: Array<number>, taps: Array<number>, plan: number | null, };
 
-export type WaterbendLand = { slot: number, color: Mana, };
+export type WaterbendMana = { slot: number, color: Mana, };
 
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 

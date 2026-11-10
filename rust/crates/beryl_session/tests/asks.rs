@@ -189,7 +189,14 @@ fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
                 }
             ),
             (Kind::ChooseUpTo, scry.clone()),
-            (Kind::ChooseObject, scry)
+            (Kind::ChooseObject, scry),
+            // The mana-source scenario can continue after its first bender.
+            (
+                Kind::Waterbend,
+                AskView::Waterbend {
+                    cost: "{2}".to_owned()
+                }
+            ),
         ]
     );
 }

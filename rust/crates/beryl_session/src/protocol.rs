@@ -1767,16 +1767,7 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Ca
             },
             activate(slot, ability),
         ),
-        Opt::Mana { slot, color } => {
-            let (color, symbol) = mana(color);
-            (
-                format!("Tap {} for {symbol}", named(slot)),
-                Candidate::Mana {
-                    slot: slot.num(),
-                    color,
-                },
-            )
-        }
+        Opt::Mana { slot, color } => mana_candidate(t, obs, slot, color, named(slot)),
         Opt::Pool(color) => {
             let (color, symbol) = mana(color);
             (format!("Spend {symbol}"), Candidate::Pool { color })
@@ -1813,6 +1804,33 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Ca
         nth: ability_nth(t, obs, o),
         targets: Vec::new(),
     }
+}
+
+fn mana_candidate<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+    color: ManaColor,
+    name: &str,
+) -> (String, Candidate) {
+    let sacrifices = obs.card(slot).is_some_and(|card| {
+        t.def(card)
+            .face(obs.object(slot).face)
+            .abilities
+            .iter()
+            .any(|a| {
+                a.kind == AbilityKind::Mana && a.produces.includes(color) && a.cost.sacrifice_self
+            })
+    });
+    let verb = if sacrifices { "Sacrifice" } else { "Tap" };
+    let symbol = MANA_SYMBOLS[color.index()];
+    (
+        format!("{verb} {name} for {symbol}"),
+        Candidate::Mana {
+            slot: slot.num(),
+            color: color.into(),
+        },
+    )
 }
 
 /// [`CandidateView::nth`].

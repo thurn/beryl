@@ -28,22 +28,25 @@ pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendRequest {
     pub decision: DecisionId,
-    /// Explicitly chosen lands and benders, with lands first. None uses only automatic mana.
+    /// Artifacts and creatures explicitly chosen to tap for Waterbend.
     pub selected: Option<Vec<u16>>,
+    // Explicit mana activations, separate from tapping a bender for one generic mana.
+    #[serde(default)]
+    pub mana: Vec<WaterbendMana>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendPreview {
     #[serde(default)]
-    pub lands: Vec<WaterbendLand>,
+    pub mana: Vec<WaterbendMana>,
     pub benders: Vec<u16>,
     pub taps: Vec<u16>,
     pub plan: Option<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct WaterbendLand {
+pub struct WaterbendMana {
     pub slot: u16,
     pub color: crate::protocol::Mana,
 }
