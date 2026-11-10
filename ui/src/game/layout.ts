@@ -110,6 +110,7 @@ export type Look =
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
   | "shown" // a full frame face up over the table, on its way to a pile (SHOWCASE)
   | "handling" // cards lifted while the opponent handles them
+  | "scry-bottom" // backs rounding the library to slide beneath it
   | "hidden"; // fully occluded by the rest of a pile
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
@@ -424,6 +425,8 @@ export interface Spotlight {
   shuffle?: ReadonlySet<Side>;
   /** The lifted backs come together before returning to the library. */
   packHandling?: boolean;
+  /** The backs taking the lower route into the opponent’s library. */
+  scryBottom?: ReadonlySet<number>;
 }
 
 /** How far below the opponent's hand a card they just drew dips into view. */
@@ -1542,7 +1545,7 @@ export function sameHandling(before: PlayerView, after: PlayerView): boolean {
     a.zone === b.zone &&
     (a.zone !== "library" ||
       b.zone !== "library" ||
-      (a.count === null) === (b.count === null))
+      (a.scry === b.scry && (a.count === null) === (b.count === null)))
   );
 }
 
@@ -1575,7 +1578,7 @@ export function handlingSlots(
   return inOrder(cards, handOrder).map((o) => o.slot);
 }
 
-/** Private looks spread out their original backs. Scry lifts a small fan over its pile. */
+/** Private looks spread out their original backs. Opponent scry lifts into the space below the corner piles. */
 function handlingPlacements(
   view: PlayerView,
   cards: ObjectView[],
@@ -1595,15 +1598,20 @@ function handlingPlacements(
     scry || packed
       ? pileLook(side, PILES[side].library, scry ? library.length : 1)
       : undefined;
-  const width = pile?.width ?? (opening ? 72 : 104);
+  const opponentScry = scry && side === "opponent";
+  const width = (pile?.width ?? (opening ? 72 : 104)) * (opponentScry ? 2 : 1);
   const step = width * (scry ? 0.24 : handling.zone === "hand" ? 0.72 : 1.12);
   const center = pile
-    ? pile.x + width / 2 + (scry ? 0 : side === "you" ? 125 : -125)
+    ? opponentScry
+      ? fromRight(1465)
+      : pile.x + width / 2 + (scry ? 0 : side === "you" ? 125 : -125)
     : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
   const top = pile
-    ? scry
-      ? Math.max(1, pile.y - 28)
-      : pile.y + (side === "you" ? -65 : 48)
+    ? opponentScry
+      ? 144
+      : scry
+        ? Math.max(1, pile.y - 28)
+        : pile.y + (side === "you" ? -65 : 48)
     : opening
       ? 8
       : handling.zone === "hand" && side === "you"
@@ -1623,7 +1631,7 @@ function handlingPlacements(
       span: FULL_WIDTH,
       scale: width / FULL_WIDTH,
       rotate: scry ? 0 : dx * 2,
-      skew: scry ? (pile?.skew ?? 0) : 0,
+      skew: scry && !opponentScry ? (pile?.skew ?? 0) : 0,
       opacity: 1,
       z: SHOWCASE_Z + column * packet + packet - depth,
       rim: depth > 0,
@@ -1640,7 +1648,11 @@ function pileCards(
   cards: ObjectView[],
   borrowed: ReadonlySet<number>,
   aimed: ReadonlySet<number>,
-  library?: { top?: number; shuffle?: boolean },
+  library?: {
+    top?: number;
+    shuffle?: boolean;
+    scryBottom?: ReadonlySet<number>;
+  },
 ): Placement[] {
   const full = pileLook(side, PILES[side][zone], cards.length);
   const remaining = cards.filter((o) => !borrowed.has(o.slot)).length;
@@ -1650,6 +1662,24 @@ function pileCards(
     const away = borrowed.has(o.slot);
     const depth = away ? cards.length - 1 - i : --depthLeft;
     const at = onPile(away ? full : rest, side, depth);
+    if (library?.scryBottom?.has(o.slot)) {
+      // Approach the lower edge from the outside of the pile. The final flight
+      // keeps the pile's depth order, so these backs slide under its rim.
+      const spread = Math.min(10, (cards.length - 1 - depth) * 3);
+      return {
+        ...at,
+        slot: o.slot,
+        zone: o.zone,
+        look: "scry-bottom",
+        width: FULL_WIDTH,
+        span: FULL_WIDTH,
+        opacity: 1,
+        z: 80 - Math.min(depth, 79),
+        back: true,
+        x: full.x + full.width * 0.65 + spread,
+        y: full.y + full.depth.y + (full.width / CARD_ASPECT) * 0.9 + spread,
+      };
+    }
     const raised = !library && aimed.has(o.slot) && depth > 0;
     // A shuffle moves two packets toward the open table, keeping all faces down.
     const split =
@@ -1791,7 +1821,11 @@ export function layout(
       ? [object]
       : [];
   });
-  const lifted = new Set([...borrowed, ...handled.map((o) => o.slot)]);
+  const lifted = new Set([
+    ...borrowed,
+    ...handled.map((o) => o.slot),
+    ...(spotlight.scryBottom ?? []),
+  ]);
   for (const side of ["opponent", "you"] as const) {
     const cards = view.players[side].library.flatMap((slot) => {
       const object = bySlot.get(slot);
@@ -1803,6 +1837,7 @@ export function layout(
         // expose a different top just because a packet is temporarily off the pile.
         top: view.players[side].library.at(-1),
         shuffle: spotlight.shuffle?.has(side),
+        scryBottom: side === "opponent" ? spotlight.scryBottom : undefined,
       }),
     );
   }

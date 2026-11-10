@@ -514,14 +514,24 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
-  const libraryChoice = useMemo(
+  const lastOpponentAction = useMemo(
     () =>
       [...log]
         .reverse()
-        .find((entry) => entry.side === "opponent" && entry.kind !== "turn")
-        ?.libraryChoice,
+        .find((entry) => entry.side === "opponent" && entry.kind !== "turn"),
     [log],
   );
+  const scryResult = lastOpponentAction?.scry ? lastOpponentAction : undefined;
+  const [expiredScry, setExpiredScry] = useState<typeof scryResult>();
+  useEffect(() => {
+    if (!scryResult) return;
+    const timer = setTimeout(() => setExpiredScry(scryResult), 1800);
+    return () => clearTimeout(timer);
+  }, [scryResult]);
+  const libraryChoice =
+    scryResult && scryResult === expiredScry
+      ? undefined
+      : lastOpponentAction?.libraryChoice;
   // The hand sinks under a screen over the table, and rises whole for a choice of its cards,
   // once what the view shows has been seen (the card a loot draws arriving in it).
   const [seen, setSeen] = useState<PlayerView>();

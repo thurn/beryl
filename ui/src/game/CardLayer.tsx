@@ -162,7 +162,13 @@ const INTO_LIBRARY: Transition = { type: "tween", duration: 0.2, delay: 0.6 };
 const TRAVEL_FOR = 700;
 /** Looks a card travels to or from: the piles and libraries, which lie in the table's corners,
  * and the showcase over its middle. */
-const TRAVELLED = new Set<Look>(["hidden", "pile", "shown", "handling"]);
+const TRAVELLED = new Set<Look>([
+  "hidden",
+  "pile",
+  "shown",
+  "handling",
+  "scry-bottom",
+]);
 /** A hand card rises and settles back quickly and without bounce. */
 const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 /** A raised hand card is drawn over the rest of the hand. */
@@ -438,6 +444,7 @@ const CardElement = memo(function CardElement({
     look: place.look,
     zone: object.zone,
     travel: false,
+    tucking: false,
     epoch,
   });
   if (moved.current.look !== place.look || moved.current.zone !== object.zone) {
@@ -450,6 +457,7 @@ const CardElement = memo(function CardElement({
       look: place.look,
       zone: object.zone,
       epoch,
+      tucking: was === "scry-bottom" && place.librarySide === "opponent",
       travel:
         !samePile &&
         (returning || TRAVELLED.has(was) || TRAVELLED.has(place.look)),
@@ -679,7 +687,8 @@ const CardElement = memo(function CardElement({
   const untouchable =
     place.look === "hidden" ||
     place.look === "pile" ||
-    place.look === "handling";
+    place.look === "handling" ||
+    place.look === "scry-bottom";
 
   const stagePoint = (e: ReactPointerEvent) => {
     const stage = (e.currentTarget as HTMLElement).closest(".stage");
@@ -792,7 +801,10 @@ const CardElement = memo(function CardElement({
           visibility: state.splitting ? "hidden" : undefined,
           // A library's cards, drawn only while they travel, never take the pointer.
           pointerEvents:
-            !present || place.look === "hidden" || place.look === "handling"
+            !present ||
+            place.look === "hidden" ||
+            place.look === "handling" ||
+            place.look === "scry-bottom"
               ? "none"
               : undefined,
           // A card travelling into the hand keeps its place in the fan's order all the way,
@@ -800,7 +812,7 @@ const CardElement = memo(function CardElement({
           // dropping behind.
           zIndex: dragging
             ? DRAGGING_Z
-            : flying || emerging || (travelling && !hand)
+            : flying || emerging || (travelling && !hand && !change.tucking)
               ? FLYING_Z + departureLayer
               : lifted && !ghosted
                 ? RAISED_Z

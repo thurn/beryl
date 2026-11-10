@@ -238,7 +238,13 @@ class Walk {
     }
     this.view = update.view;
     this.startsHandling =
-      liftsHandling(this.view) && !sameHandling(before, this.view);
+      liftsHandling(this.view) &&
+      (!sameHandling(before, this.view) ||
+        (this.view.handling?.zone === "library" &&
+          this.view.handling.scry === true &&
+          this.view.events.some(
+            (e) => e.kind === "scry" && e.player === "opponent",
+          )));
     this.final = new Map(this.view.objects.map((o) => [o.slot, o]));
     // A scripted or automatic choice may leave no visible picker. The card
     // put into the graveyard alongside a manifest still travels there directly.
@@ -505,6 +511,17 @@ class Walk {
           this.finishAbility();
         this.cut();
       }
+      if (
+        e.kind === "scry" &&
+        e.player === "opponent" &&
+        this.cur.handling?.zone === "library" &&
+        this.cur.handling.side === "opponent" &&
+        this.cur.handling.scry
+      ) {
+        this.cut();
+        this.returnScry(e);
+        continue;
+      }
       if (e.kind === "draw" && e.cards > 1) this.cut();
       const drawing = this.drawn.size;
       this.apply(e);
@@ -600,6 +617,38 @@ class Walk {
               : undefined,
       },
     ];
+  }
+
+  /** Land the top cards while the bottom packet approaches from below. */
+  private returnScry(e: Extract<GameEvent, { kind: "scry" }>) {
+    const before = this.cur.players.opponent.library;
+    const after = this.view.players.opponent.library;
+    const slots = new Set(before);
+    const bottom = new Set(after.slice(0, e.bottom));
+    // A later draw or shuffle can obscure the result in the final library.
+    // Only use that order when the untouched middle still agrees.
+    const ordered =
+      before.length === after.length &&
+      after.every((slot) => slots.has(slot)) &&
+      before
+        .filter((slot) => !bottom.has(slot))
+        .slice(0, before.length - e.top - e.bottom)
+        .every((slot, i) => slot === after[e.bottom + i]);
+    this.cur = {
+      ...this.cur,
+      handling: undefined,
+      players: {
+        ...this.cur.players,
+        opponent: {
+          ...this.cur.players.opponent,
+          library: ordered ? after : before,
+        },
+      },
+    };
+    this.pending.push(e);
+    const tuck = ordered && bottom.size > 0;
+    this.cut(HOLD.landing, tuck ? { scryBottom: bottom } : undefined);
+    if (tuck && this.startsHandling) this.cut(HOLD.landing, undefined, true);
   }
 
   /** Whether the zone change `e` is shown in a showcase. */

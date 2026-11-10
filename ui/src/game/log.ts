@@ -22,6 +22,7 @@ export interface LogEntry {
   text: string;
   /** The public result of a library choice, also shown near the player. */
   libraryChoice?: string;
+  scry?: true;
 }
 
 export type LogLine = Omit<LogEntry, "key">;
@@ -145,6 +146,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
           side: e.player,
           text: `${who(e.player)} put ${e.top} on top and ${e.bottom} on bottom`,
           libraryChoice,
+          scry: true,
         });
         return;
       }

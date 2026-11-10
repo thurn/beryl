@@ -5235,7 +5235,7 @@ if (wanted(privateHandling)) {
 }
 
 const opponentScry =
-    "opponent scry lifts above the library and reports its result";
+    "opponent scry fans out, returns to both ends and clears its result";
 if (wanted(opponentScry)) {
     const before = { ...turnViews[mainHalt], events: [] };
     const library = before.players.opponent.library;
@@ -5263,6 +5263,7 @@ if (wanted(opponentScry)) {
         const run = await motionFixture(`opponent-scry-${bottom}`, [
             before,
             looking,
+            { ...looking, players: finished.players },
             finished,
         ]);
         await check(
@@ -5273,7 +5274,7 @@ if (wanted(opponentScry)) {
                 const cards = held.map((slot) =>
                     page.locator(`.card-layer ${slotOf(slot)}`),
                 );
-                const home = await where(cards[1]);
+                const home = await cards[1].boundingBox();
                 const parked = (slot) =>
                     page.locator(
                         `${slotOf(slot)}[data-library-pile="opponent"]`,
@@ -5293,14 +5294,15 @@ if (wanted(opponentScry)) {
                     0,
                 );
                 for (const card of cards) {
-                    const [x, y] = await where(card);
+                    const box = await card.boundingBox();
                     assert.ok(
-                        Math.abs(x - home[0]) < 28,
-                        "the lift stays above the library column",
+                        box.width > home.width * 1.5,
+                        "the lift enlarges the backs",
                     );
                     assert.ok(
-                        y < home[1] - 4,
-                        "both backs rise above their starting pile",
+                        box.x > home.x - home.width &&
+                            box.y > home.y + home.height,
+                        "the enlarged fan clears the corner piles",
                     );
                 }
                 const resting = await where(parked(library[0]));
@@ -5320,7 +5322,40 @@ if (wanted(opponentScry)) {
                     await page.locator(".library-choice-hud").innerText(),
                     `Scry · ${top} top · ${bottom} bottom`,
                 );
-                await page.clock.runFor(800);
+                await page.clock.runFor(550);
+                const tucked = page.locator(".card-el-scry-bottom");
+                assert.deepEqual(
+                    await tucked.evaluateAll((cards) =>
+                        cards.map((c) => Number(c.dataset.slot)).sort(),
+                    ),
+                    held.slice(top).sort(),
+                    "only bottom-bound cards take the lower route",
+                );
+                assert.equal(
+                    await tucked.locator(".card-back").count(),
+                    bottom,
+                );
+                for (const card of await tucked.all()) {
+                    const box = await card.boundingBox();
+                    assert.ok(
+                        box.x > home.x + home.width * 0.35 &&
+                            box.y > home.y + home.height * 0.8,
+                        "the bottom route rounds the pile's lower right edge",
+                    );
+                }
+                for (const card of cards.slice(0, top)) {
+                    const [x, y] = await where(card);
+                    assert.ok(
+                        Math.hypot(x - home.x, y - home.y) < 24,
+                        "top-bound backs have already returned directly",
+                    );
+                }
+                await page.clock.runFor(1650);
+                assert.equal(
+                    await page.locator(".library-choice-hud").count(),
+                    0,
+                    "the result expires without another view",
+                );
                 for (const card of cards) {
                     assert.equal(await card.count(), 1);
                     assert.equal(
@@ -5329,7 +5364,7 @@ if (wanted(opponentScry)) {
                     );
                     const [x] = await where(card);
                     assert.ok(
-                        Math.abs(x - home[0]) < 28,
+                        Math.abs(x - home.x) < 28,
                         "each back returns to the library",
                     );
                 }
@@ -5337,6 +5372,52 @@ if (wanted(opponentScry)) {
             { ...run, ready: ".turn-action button" },
         );
     }
+    const [moved, kept] = held;
+    const reordered = [moved, ...library.slice(0, -2), kept];
+    const next = {
+        ...looking,
+        players: {
+            ...before.players,
+            opponent: { ...before.players.opponent, library: reordered },
+        },
+        events: [{ kind: "scry", player: "opponent", top: 1, bottom: 1 }],
+    };
+    const run = await motionFixture("opponent-scry-consecutive", [
+        before,
+        looking,
+        next,
+        {
+            ...next,
+            status: before.status,
+            handling: undefined,
+            events: [{ kind: "scry", player: "opponent", top: 2, bottom: 0 }],
+        },
+    ]);
+    await check(
+        "opponent scry plays consecutive results and lifts the new top cards",
+        async (page) => {
+            await page.clock.pauseAt(Date.now() + 60_000);
+            await page.locator(".turn-action button").first().click();
+            const caption = page.locator(".library-choice-hud");
+            const backs = page.locator(".card-el-handling");
+            const slots = () =>
+                backs.evaluateAll((cards) =>
+                    cards.map((c) => Number(c.dataset.slot)).sort(),
+                );
+            await until(page, ".card-el-handling", 16);
+            assert.deepEqual(await slots(), [...held].sort());
+            await until(page, ".card-el-scry-bottom", 16);
+            assert.equal(await caption.innerText(), "Scry · 1 top · 1 bottom");
+            await until(page, ".card-el-handling", 16);
+            assert.deepEqual(await slots(), reordered.slice(-2).sort());
+            await until(page, '.library-choice-hud:has-text("2 top")', 16);
+            await page.clock.runFor(1100);
+            assert.equal(await caption.innerText(), "Scry · 2 top · 0 bottom");
+            await page.clock.runFor(850);
+            assert.equal(await caption.count(), 0);
+        },
+        { ...run, ready: ".turn-action button" },
+    );
 }
 
 const parkedSearch = "an opponent searching keeps their library parked";
