@@ -21,12 +21,7 @@ import type {
 import { choiceOf, choiceSlots } from "./choices";
 import { withResolving } from "./decisions";
 import { liftsHandling, sameHandling, type Spotlight } from "./layout";
-
-/** Stack-to-battlefield travel and the trigger it hands off to share playback timing. */
-export const PERMANENT_TRAVEL_MS = 510;
-export const TRIGGER_FLIGHT_MS = 320;
-const FRAME_BUFFER_MS = 40;
-export const TRIGGER_FLIGHT_HOLD = TRIGGER_FLIGHT_MS + FRAME_BUFFER_MS;
+import { FLIGHT_HOLD } from "./flight";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
  * briefly, a new turn while it is announced, an action long enough to follow, a spell or
@@ -38,7 +33,7 @@ export const HOLD = {
   turn: 1100,
   action: 900,
   trigger: 1300,
-  permanentLanding: PERMANENT_TRAVEL_MS + FRAME_BUFFER_MS,
+  permanentLanding: FLIGHT_HOLD,
   stack: 2000,
   counter: 1800,
   ending: 1600,

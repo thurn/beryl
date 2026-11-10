@@ -1,5 +1,11 @@
 # UI Conventions
 
+## Stack and battlefield movement
+
+Cards moving between the stack and battlefield travel directly and ease into
+place. Triggers and tokens use the same quick flight. They start small at their
+source and become visible as they move away.
+
 ## Paying with permanents
 
 During a payment prompt such as Waterbend or Convoke, start with no payment

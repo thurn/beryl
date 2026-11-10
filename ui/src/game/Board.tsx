@@ -68,7 +68,8 @@ import type {
   StackItem as StackItemView,
   StopsSetting,
 } from "../generated/protocol";
-import { announcedItem, sameItem, stackKey, TRIGGER_FLIGHT_MS } from "./beats";
+import { announcedItem, sameItem, stackKey } from "./beats";
+import { DIRECT_FLIGHT, EMERGENCE_FADE } from "./flight";
 import {
   CardLayer,
   cardId,
@@ -2476,9 +2477,8 @@ const SOURCE_FLIGHT = {
 // Position and scale use the same easing, so the growing trigger's center
 // travels straight to its stack slot.
 const TRIGGER_FLIGHT = {
-  duration: TRIGGER_FLIGHT_MS / 1000,
-  ease: [0.33, 0.44, 0.4, 1],
-  opacity: { duration: 0.045, ease: "linear" },
+  ...DIRECT_FLIGHT,
+  opacity: EMERGENCE_FADE,
 } as const;
 
 /** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,

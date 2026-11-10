@@ -70,6 +70,8 @@ export interface CardProps {
   variant?: "full" | "field";
   /** The card's width in pixels; its height and everything on it scale with it. */
   width?: number;
+  /** The parent animates the size during a flight between card frames. */
+  instantSize?: boolean;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -336,6 +338,7 @@ export function Card({
   variant = "full",
   width = 160,
   tapped = false,
+  instantSize = false,
   highlight,
   combat,
   marks,
@@ -405,7 +408,7 @@ export function Card({
       id={id}
       initial={false}
       animate={slot}
-      transition={TURN}
+      transition={instantSize ? { duration: 0 } : TURN}
     >
       {combat === "attacker" && <AttackChevron id={id} />}
       {combat === "blocker" && <BlockArc id={id} />}

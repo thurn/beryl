@@ -5605,6 +5605,119 @@ if (wanted(targetDeparture)) {
     }
 }
 
+/** Verify early progress, arrival, and a straight path on the simulated frame clock. */
+async function assertDirectCardFlight(page, card, start) {
+    await page.clock.runFor(120);
+    const early = center(await card.boundingBox());
+    await page.clock.runFor(220);
+    const at340 = center(await card.boundingBox());
+    await page.clock.runFor(180);
+    const end = center(await card.boundingBox());
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const distance = Math.hypot(dx, dy);
+    assert.ok(distance > 80, "the card travels to a different slot");
+    const x = early.x - start.x;
+    const y = early.y - start.y;
+    assert.ok(
+        (x * dx + y * dy) / distance > distance * 0.55,
+        "most travel happens in the first 120 ms",
+    );
+    const sideways = Math.abs(x * dy - y * dx) / distance;
+    assert.ok(
+        sideways < 4,
+        `the card travels in a straight line (deviation ${sideways.toFixed(1)} px)`,
+    );
+    assert.ok(
+        Math.hypot(end.x - at340.x, end.y - at340.y) < 3,
+        "the card has landed by 340 ms",
+    );
+}
+
+async function assertTokenFlight(page, token, sourceSelector) {
+    await page.clock.runFor(1000);
+    const source = await page.locator(sourceSelector).boundingBox();
+    const selector = slotOf(token);
+    // Sample the mounted token before the next animation frame can carry it away.
+    await page.evaluate((selector) => {
+        const observe = new MutationObserver(() => {
+            const token = document.querySelector(selector);
+            if (!token) return;
+            window.firstTokenFrame = token.getBoundingClientRect().toJSON();
+            observe.disconnect();
+        });
+        observe.observe(document.body, { childList: true, subtree: true });
+    }, selector);
+    await page.getByRole("button", { name: "Resolve", exact: true }).click();
+    await until(page, selector, 10);
+    const card = page.locator(selector);
+    const start = center(await page.evaluate(() => window.firstTokenFrame));
+    assert.ok(
+        start.x >= source.x && start.x <= source.x + source.width,
+        "token starts inside its source",
+    );
+    assert.ok(
+        start.y >= source.y && start.y <= source.y + source.height,
+        "token starts inside its source",
+    );
+    await assertDirectCardFlight(page, card, start);
+    assert.equal(await card.getAttribute("data-zone"), "battlefield");
+    assert.equal(
+        await card.evaluate((el) => Number(getComputedStyle(el).opacity)),
+        1,
+    );
+}
+
+const fieldToStack = "a battlefield card flies directly onto the stack";
+if (wanted(fieldToStack)) {
+    const view = (await load("arrow-stacked")).at(-1);
+    const slot = view.stack[0].targets[0].slot;
+    const before = {
+        ...view,
+        stack: [],
+        events: [],
+        objects: view.objects.filter((o) => o.zone !== "stack"),
+    };
+    const spell = { kind: "spell", slot, targets: [], paid: [], x: 0 };
+    const after = {
+        ...before,
+        stack: [spell],
+        battlefield: before.battlefield.filter((s) => s !== slot),
+        objects: before.objects.map((o) =>
+            o.slot === slot ? { ...o, zone: "stack" } : o,
+        ),
+        events: [
+            {
+                kind: "zoneChange",
+                slot,
+                from: "battlefield",
+                to: "stack",
+                reason: "cast",
+            },
+        ],
+    };
+    const run = await motionFixture("card-flies-from-battlefield-to-stack", [
+        before,
+        after,
+    ]);
+    await check(
+        fieldToStack,
+        async (page) => {
+            const card = page.locator(slotOf(slot));
+            const start = center(await card.boundingBox());
+            await card.evaluate((el) =>
+                el.setAttribute("data-tested-flight", ""),
+            );
+            await page.keyboard.press("Space");
+            await until(page, `${slotOf(slot)}[data-zone="stack"]`, 10);
+            await assertDirectCardFlight(page, card, start);
+            assert.equal(await card.count(), 1);
+            assert.equal(await card.getAttribute("data-tested-flight"), "");
+        },
+        { ...run, ready: slotOf(slot) },
+    );
+}
+
 const tokenFlight =
     "a spell's token starts over the spell and flies to the battlefield";
 if (wanted(tokenFlight)) {
@@ -5650,38 +5763,7 @@ if (wanted(tokenFlight)) {
     await check(
         tokenFlight,
         async (page) => {
-            await page.clock.runFor(1000);
-            const source = await page.locator(slotOf(item.slot)).boundingBox();
-            await page
-                .getByRole("button", { name: "Resolve", exact: true })
-                .click();
-            await until(page, slotOf(token.slot), 20);
-            const tokenCard = page.locator(slotOf(token.slot));
-            const start = center(await tokenCard.boundingBox());
-            assert.ok(
-                start.x >= source.x && start.x <= source.x + source.width,
-                "token starts inside the spell",
-            );
-            assert.ok(
-                start.y >= source.y && start.y <= source.y + source.height,
-                "token starts inside the spell",
-            );
-            assert.equal(
-                await tokenCard.evaluate((el) =>
-                    Number(getComputedStyle(el).opacity),
-                ),
-                1,
-            );
-            await page.clock.runFor(650);
-            const end = center(await tokenCard.boundingBox());
-            assert.ok(
-                Math.hypot(end.x - start.x, end.y - start.y) > 80,
-                "token reaches its own slot",
-            );
-            assert.equal(
-                await tokenCard.getAttribute("data-zone"),
-                "battlefield",
-            );
+            await assertTokenFlight(page, token.slot, slotOf(item.slot));
         },
         { ...run, ready: slotOf(item.slot) },
     );
@@ -5740,38 +5822,7 @@ if (wanted(abilityTokenFlight)) {
     await check(
         abilityTokenFlight,
         async (page) => {
-            await page.clock.runFor(1000);
-            const source = await page.locator("#stack-0").boundingBox();
-            await page
-                .getByRole("button", { name: "Resolve", exact: true })
-                .click();
-            await until(page, slotOf(token.slot), 20);
-            const tokenCard = page.locator(slotOf(token.slot));
-            const start = center(await tokenCard.boundingBox());
-            assert.ok(
-                start.x >= source.x && start.x <= source.x + source.width,
-                "token starts inside the spell",
-            );
-            assert.ok(
-                start.y >= source.y && start.y <= source.y + source.height,
-                "token starts inside the spell",
-            );
-            assert.equal(
-                await tokenCard.evaluate((el) =>
-                    Number(getComputedStyle(el).opacity),
-                ),
-                1,
-            );
-            await page.clock.runFor(650);
-            const end = center(await tokenCard.boundingBox());
-            assert.ok(
-                Math.hypot(end.x - start.x, end.y - start.y) > 80,
-                "token reaches its own slot",
-            );
-            assert.equal(
-                await tokenCard.getAttribute("data-zone"),
-                "battlefield",
-            );
+            await assertTokenFlight(page, token.slot, "#stack-0");
         },
         { ...run, ready: "#stack-0" },
     );
@@ -7393,6 +7444,10 @@ for (const [controller, resolution] of wanted(triggerLift)
                     Math.abs(permanent.x - destination.x) < 2 &&
                     Math.abs(permanent.y - destination.y) < 2 &&
                     Math.abs(permanent.width - destination.width) < 2,
+            );
+            assert.ok(
+                landed.at - samples[0].at <= 355,
+                "the permanent flies from the stack to the battlefield in 320 ms",
             );
             const gap = at - landed.at;
             assert.ok(

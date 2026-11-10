@@ -3,7 +3,8 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
-import { counterDeparture, PERMANENT_TRAVEL_MS } from "./beats";
+import { counterDeparture } from "./beats";
+import { DIRECT_FLIGHT, EMERGENCE_FADE, FLIGHT_HOLD } from "./flight";
 import { CARD_RETURN, takeMovedCard, type CardHandoff } from "./choiceFlight";
 import { play } from "../audio/sound";
 import {
@@ -131,12 +132,6 @@ export interface CardLayerProps {
 const DRAG_THRESHOLD = 6;
 
 const SPRING: Transition = { type: "spring", stiffness: 210, damping: 28 };
-/** Match the landing beat so the trigger can launch as the card settles. */
-const PERMANENT_TRAVEL: Transition = {
-  type: "tween",
-  duration: PERMANENT_TRAVEL_MS / 1000,
-  ease: [0.25, 0.55, 0.55, 1],
-};
 /** A struck spell shakes in place, then crosses the table at a pace the eye follows. */
 const STRUCK_SHAKE = [0, -12, 10, -8, 6, -3, 0];
 const STRUCK_FOR = 0.45;
@@ -146,13 +141,6 @@ const CARRIED: Transition = {
   ease: [0.4, 0, 0.2, 1],
   delay: STRUCK_FOR,
 };
-/** A token flies out of what made it at a pace the eye follows, over the table. */
-const EMERGING: Transition = {
-  type: "tween",
-  duration: 0.6,
-  ease: [0.4, 0, 0.2, 1],
-};
-const EMERGING_FOR = 650;
 /** A struck spell stays over the table until it has arrived, in ms. */
 const CARRIED_FOR = (STRUCK_FOR + 0.75) * 1000 + 50;
 /** A card going to or from a library or a pile, or into a showcase, crosses the table at a
@@ -429,7 +417,7 @@ const CardElement = memo(function CardElement({
   const scale = useMotionValue(grow ? sizeAtStart / place.width : place.scale);
   const rotate = useMotionValue(place.rotate);
   const skewX = useMotionValue(place.skew);
-  const opacity = useMotionValue(grow && !emerging ? 0 : place.opacity);
+  const opacity = useMotionValue(grow ? 0 : place.opacity);
   const [held, setHeld] = useState<Held>();
   const dragging = held?.dragging === true;
   // The pointer places the card while it holds it, whatever its placement does meanwhile. A
@@ -451,20 +439,22 @@ const CardElement = memo(function CardElement({
     zone: object.zone,
     travel: false,
     tucking: false,
-    landing: false,
+    stackFlight: false,
     epoch,
   });
   if (moved.current.look !== place.look || moved.current.zone !== object.zone) {
-    const was = moved.current.look;
+    const { look: was, zone: fromZone } = moved.current;
     const samePile =
-      moved.current.zone === object.zone &&
+      fromZone === object.zone &&
       (was === "hidden" || was === "pile") &&
       (place.look === "hidden" || place.look === "pile");
     moved.current = {
       look: place.look,
       zone: object.zone,
       epoch,
-      landing: moved.current.zone === "stack" && object.zone === "battlefield",
+      stackFlight:
+        (fromZone === "stack" && object.zone === "battlefield") ||
+        (fromZone === "battlefield" && object.zone === "stack"),
       tucking: was === "scry-bottom" && place.librarySide === "opponent",
       travel:
         !samePile &&
@@ -473,21 +463,20 @@ const CardElement = memo(function CardElement({
   }
   const change = moved.current;
   const moving = change.travel && change.epoch === epoch;
-  const landing = change.landing && change.epoch === epoch;
+  const stackFlight = change.stackFlight && change.epoch === epoch;
+  const direct = emerging || stackFlight;
   const how = useMemo(() => {
-    const base = carried
+    const base: Transition = carried
       ? CARRIED
-      : emerging
-        ? EMERGING
+      : direct
+        ? DIRECT_FLIGHT
         : moving
           ? TRAVEL
-          : landing
-            ? PERMANENT_TRAVEL
-            : SPRING;
+          : SPRING;
     return departureDelay
       ? { ...base, delay: (base.delay ?? 0) + departureDelay }
       : base;
-  }, [carried, emerging, moving, landing, departureDelay]);
+  }, [carried, direct, moving, departureDelay]);
   const element = useRef<HTMLDivElement>(null);
   const handed = useRef<unknown>(undefined);
   const [handoff, setHandoff] = useState(0);
@@ -566,12 +555,12 @@ const CardElement = memo(function CardElement({
   const hand = place.look === "hand";
   const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce, {
-    how: returning ? TRAVEL : landing ? PERMANENT_TRAVEL : SPRING,
+    how: returning ? TRAVEL : direct ? DIRECT_FLIGHT : SPRING,
     restart,
   });
   useGlide(skewX, place.skew, reduce, {
     restart,
-    how: landing ? PERMANENT_TRAVEL : SPRING,
+    how: direct ? DIRECT_FLIGHT : SPRING,
   });
   // Out of a library, the card is in sight from the start, on the pile; into one, until it is
   // there.
@@ -581,8 +570,9 @@ const CardElement = memo(function CardElement({
     if (was && place.look !== "hidden" && !reduce) opacity.jump(place.opacity);
   }, [place.look, place.opacity, opacity, reduce]);
   useGlide(opacity, place.opacity, reduce, {
-    how:
-      (moving || handoff > 0) && place.look === "hidden"
+    how: emerging
+      ? EMERGENCE_FADE
+      : (moving || handoff > 0) && place.look === "hidden"
         ? INTO_LIBRARY
         : SPRING,
     restart,
@@ -671,21 +661,21 @@ const CardElement = memo(function CardElement({
   useLayoutEffect(() => {
     const fromTray = handoff !== lastHandoff.current;
     lastHandoff.current = handoff;
-    if ((!moving && !fromTray) || reduce) {
+    if ((!moving && !stackFlight && !fromTray) || reduce) {
       setTravelling(false);
       return;
     }
     setTravelling(true);
     const timer = setTimeout(
       () => setTravelling(false),
-      TRAVEL_FOR + departureDelay * 1000,
+      (stackFlight ? FLIGHT_HOLD : TRAVEL_FOR) + departureDelay * 1000,
     );
     return () => clearTimeout(timer);
-  }, [change, moving, reduce, departureDelay, handoff]);
+  }, [change, moving, stackFlight, reduce, departureDelay, handoff]);
   // An emerging token crosses over the table, then is a card like the rest.
   useEffect(() => {
     if (!emerging) return;
-    const timer = setTimeout(() => setEmerging(false), EMERGING_FOR);
+    const timer = setTimeout(() => setEmerging(false), FLIGHT_HOLD);
     return () => clearTimeout(timer);
   }, [emerging]);
   // `strayed`: the pointer went past a click's reach on a card that does not drag. Let go, it
@@ -876,6 +866,7 @@ const CardElement = memo(function CardElement({
                       object={shown.object}
                       place={place}
                       state={state}
+                      instantSize={stackFlight}
                       ghost={!present}
                     />
                   )}
@@ -1029,12 +1020,14 @@ function Look({
   place,
   state,
   ghost = false,
+  instantSize = false,
 }: {
   object: ObjectView;
   place: Placement;
   state: CardState;
   /** A copy drawn over the card's element: the element keeps the id arrows find it by. */
   ghost?: boolean;
+  instantSize?: boolean;
 }) {
   const card = useFace(object);
   const under = place.look === "beneath" || place.look === "attached";
@@ -1070,6 +1063,7 @@ function Look({
       count={place.count}
       width={place.width}
       tapped={field && object.tapped}
+      instantSize={instantSize}
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge or the link's ring, which would
       // hide it.

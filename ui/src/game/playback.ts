@@ -22,13 +22,8 @@ import {
   type PlayerView,
   type SessionId,
 } from "../ipc";
-import {
-  beats,
-  eventsHold,
-  HOLD,
-  TRIGGER_FLIGHT_HOLD,
-  type Beat,
-} from "./beats";
+import { beats, eventsHold, HOLD, type Beat } from "./beats";
+import { FLIGHT_HOLD } from "./flight";
 import { soundBeat } from "../audio/events";
 import { liftsHandling, type Spotlight } from "./layout";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
@@ -58,9 +53,7 @@ function holdOf(update: GameUpdate, skipped = false): number {
   const beat = BEATS.get(update);
   const hold = beat?.hold ?? holdFor(update.view);
   // A transient trigger gets a full flight even if its resolution is already queued.
-  return !skipped && beat?.triggerFlights
-    ? Math.max(hold, TRIGGER_FLIGHT_HOLD)
-    : hold;
+  return !skipped && beat?.triggerFlights ? Math.max(hold, FLIGHT_HOLD) : hold;
 }
 
 /** `update` as the views a player can follow (beats.ts), after `before`, the view last shown
