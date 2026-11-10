@@ -339,3 +339,31 @@
     aspect-ratio: 4/5;
   }
 }
+
+/* Fit a complete desktop board below the navigation, title and playback controls.
+   Keep its 8:5 proportions as laptop height changes, rather than cropping the game. */
+@media (min-width: 1000px) and (min-height: 600px) {
+  .testing-playground {
+    width: min(calc(100% - 48px), calc((100dvh - 260px) * 1.6));
+    margin-inline: auto;
+  }
+  .testing-playground .testing-title {
+    padding: 12px 0;
+    gap: 12px;
+  }
+  .testing-playground .testing-title h1 {
+    font-size: 26px;
+  }
+  .testing-playground .testing-example-title {
+    padding: 8px 0;
+  }
+  .testing-playground .specs-moment-head {
+    padding: 6px 0;
+  }
+  .testing-playground .specs-frame {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 8 / 5;
+    border-radius: 12px;
+  }
+}

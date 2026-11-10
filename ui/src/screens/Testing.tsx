@@ -366,7 +366,11 @@ function TestingCard({
   const moment =
     checkpoints.find((m) => m.name === checkpoint) ?? checkpoints[0];
   return (
-    <main className="testing-main">
+    <main
+      className={
+        playground ? "testing-main testing-playground" : "testing-main"
+      }
+    >
       <div className="testing-title">
         <h1>{spec.card}</h1>
         {playground && (
