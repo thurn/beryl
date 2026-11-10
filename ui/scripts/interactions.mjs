@@ -10312,30 +10312,110 @@ if (wanted("waterbend selections")) {
     );
 }
 
-// A waterbend mana can't pay (`waterbend-tap`: one Plains for {3}) shows its cost in symbols
-// and lights the artifact and creature that may tap for it.
+// The one-Plains fixture needs both benders, even if the player supplies the mana manually.
 const tapBend = await lastDecision("waterbend-tap");
-await check(
-    "a waterbend shows its cost in symbols with its tappers lit",
-    async (page) => {
-        await page.clock.runFor(2000);
-        assert.deepEqual(
-            await page
-                .locator(".prompt-cost .mana-symbol")
-                .evaluateAll((els) => els.map((e) => e.ariaLabel)),
-            ["{3}"],
-        );
-        assert.deepEqual(
-            await glowing(page, "target"),
-            [...tapBend.bySlot.keys()].sort((a, b) => a - b),
-        );
-    },
-    {
-        fixture: "waterbend-tap",
-        at: tapBend.views.length,
-        ready: ".prompt-cost",
-    },
-);
+const bendByHand = "waterbend waits for manually selected lands and benders";
+if (wanted(bendByHand)) {
+    const benders = [...tapBend.bySlot.keys()];
+    const land = tapBend.decision.candidates.find(
+        (candidate) => candidate.option.kind === "mana",
+    )?.option;
+    assert.ok(land, "the Plains can be clicked during payment");
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "waterbend-tap.json"), "utf8"),
+    );
+    fixture.messages.unshift(
+        ...[
+            null,
+            null,
+            {
+                benders,
+                lands: [land],
+                taps: [land.slot, ...benders],
+                plan: null,
+            },
+        ].map((value) => ({
+            kind: "response",
+            command: "preview_waterbend",
+            value,
+        })),
+    );
+    await writeFile(
+        join(fixtures, "waterbend-manual.json"),
+        JSON.stringify(fixture),
+    );
+    await check(
+        bendByHand,
+        async (page) => {
+            const confirm = page.getByRole("button", {
+                name: "Confirm",
+                exact: true,
+            });
+            assert.equal(
+                await confirm.isEnabled(),
+                false,
+                "the UI starts with no benders",
+            );
+            assert.equal(await page.locator(".waterbend-tap").count(), 0);
+            assert.deepEqual(
+                await page
+                    .locator(".prompt-cost .mana-symbol")
+                    .evaluateAll((els) => els.map((e) => e.ariaLabel)),
+                ["{3}"],
+            );
+            assert.deepEqual(
+                await glowing(page, "target"),
+                [...benders, land.slot].sort((a, b) => a - b),
+            );
+            await page.locator(slotOf(land.slot)).click();
+            await page.clock.runFor(600);
+            assert.ok(
+                await page
+                    .locator(`${slotOf(land.slot)} .card`)
+                    .evaluate(
+                        (card) =>
+                            Math.abs(
+                                new DOMMatrix(getComputedStyle(card).transform)
+                                    .b,
+                            ) > 0.95,
+                    ),
+                "the selected land turns",
+            );
+            assert.equal(
+                await page
+                    .locator(`${slotOf(land.slot)} .waterbend-tap`)
+                    .count(),
+                0,
+            );
+            for (const slot of benders) {
+                assert.equal(await confirm.isEnabled(), false);
+                await page.locator(slotOf(slot)).click();
+                await page.clock.runFor(600);
+            }
+            assert.equal(await confirm.isEnabled(), true);
+            assert.equal(
+                await page.locator(".waterbend-tap").count(),
+                benders.length,
+            );
+            assert.deepEqual(
+                await chosen(page),
+                [],
+                "the draft does not spend mana or tap",
+            );
+            await confirm.click();
+            assert.deepEqual(await settled(page, 1), [
+                tapBend.decision.candidates.findIndex(
+                    (c) => c.option.kind === "mana",
+                ),
+            ]);
+        },
+        {
+            fixture: "waterbend-manual",
+            at: tapBend.views.length,
+            ready: ".prompt-cost",
+        },
+    );
+}
 
 // The opening: `opening-bottom` ends on the human's first card to put on the bottom after two
 // mulligans and a keep. The picks fill two slots and go back on a click; nothing is sent until

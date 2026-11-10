@@ -365,7 +365,7 @@ export function Board({
       ? previousGroup.slots
       : handlingSlots(view, standIns.order);
   heldGroup.current = { view, slots: handledSlots };
-  const waterbend = useWaterbend(deciding ? decision : undefined, objects);
+  const waterbend = useWaterbend(decision, objects);
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
@@ -1000,7 +1000,7 @@ export function Board({
   for (const slot of taps) {
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
   }
-  for (const slot of waterbend.selected) {
+  for (const slot of waterbend.benders) {
     states.set(slot, { ...states.get(slot), waterbending: true });
   }
   // The pointer over a permanent or what is attached to it shows the other.
@@ -1087,7 +1087,7 @@ export function Board({
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (isEmblem(slot)) return false;
-    if (waterbend.toggle(slot)) {
+    if (deciding && waterbend.toggle(slot)) {
       playSound("select");
       return true;
     }

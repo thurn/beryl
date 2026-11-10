@@ -28,16 +28,24 @@ pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendRequest {
     pub decision: DecisionId,
-    /// None requests the suggested payment; an empty list explicitly uses no benders.
+    /// Explicitly chosen lands and benders, with lands first. None uses only automatic mana.
     pub selected: Option<Vec<u16>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendPreview {
+    #[serde(default)]
+    pub lands: Vec<WaterbendLand>,
     pub benders: Vec<u16>,
     pub taps: Vec<u16>,
     pub plan: Option<u16>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct WaterbendLand {
+    pub slot: u16,
+    pub color: crate::protocol::Mana,
 }
 
 /// Switches the human's priority stops.

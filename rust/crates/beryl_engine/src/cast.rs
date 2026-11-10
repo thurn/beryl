@@ -1295,7 +1295,9 @@ fn begin_payment<L: Layout>(
 
 /// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
 /// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
-/// one answer (§7.2). Empty when no artifact or creature can help.
+/// one answer (§7.2). The human can also float mana from a land
+/// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "they then have a
+/// chance to activate mana abilities." Empty when there is no choice to make.
 fn waterbend_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -1316,7 +1318,12 @@ fn waterbend_options<L: Layout>(
             }
         }
     }
-    if objects.is_empty() {
+    // With only generic symbols, activating a land for mana keeps at least as much payment
+    // available as it did untapped. Activate before tapping any permanent as a bender.
+    let manual_lands = s.profile.taps_mana == Some(c.player)
+        && c.bent == 0
+        && cost.symbols.iter().all(|&n| n == 0);
+    if objects.is_empty() && !manual_lands {
         return Ok(out);
     }
     if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
@@ -1324,6 +1331,13 @@ fn waterbend_options<L: Layout>(
     }
     for &o in objects.iter() {
         out.push(o)?;
+    }
+    // Append the mana choices so existing candidate indices hold.
+    if manual_lands {
+        mana::waterbend_land_options(s, t, c.player, &mut out);
+    }
+    if out.as_slice() == [Opt::Done] {
+        return Ok(Default::default());
     }
     Ok(out)
 }
@@ -1672,6 +1686,14 @@ pub(crate) fn perform<L: Layout>(
         CastStep::Waterbend => {
             // CR 701.67a: "you may tap an untapped artifact or creature you control rather
             // than pay that mana."
+            if let Some(Opt::Mana { slot, color }) = option {
+                mana::activate(s, t, sink, slot, color)?;
+                if waterbend_options(s, t, &c)?.is_empty() {
+                    return pay_mana(s, t, sink, c);
+                }
+                s.pending = Pending::Casting(c);
+                return Ok(());
+            }
             let Some(Opt::Object(slot)) = option else {
                 return pay_mana(s, t, sink, c);
             };

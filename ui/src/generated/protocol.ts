@@ -33,11 +33,13 @@ continuation?: boolean, };
 
 export type WaterbendRequest = { decision: DecisionId, 
 /**
- * None requests the suggested payment; an empty list explicitly uses no benders.
+ * Explicitly chosen lands and benders, with lands first. None uses only automatic mana.
  */
 selected: Array<number> | null, };
 
-export type WaterbendPreview = { benders: Array<number>, taps: Array<number>, plan: number | null, };
+export type WaterbendPreview = { lands: Array<WaterbendLand>, benders: Array<number>, taps: Array<number>, plan: number | null, };
+
+export type WaterbendLand = { slot: number, color: Mana, };
 
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 

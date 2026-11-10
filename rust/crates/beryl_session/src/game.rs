@@ -640,6 +640,7 @@ impl Game {
     ) -> Result<Game, SessionError> {
         let replay = ReplayFile {
             format_version: FORMAT_VERSION,
+            legacy_waterbend: false,
             seed: start.seed,
             decks: start.decks.clone(),
             human: start.human.get(),
@@ -686,6 +687,7 @@ impl Game {
         state.set_profile(with_stops(base, stops, human));
         let replay = ReplayFile {
             format_version: FORMAT_VERSION,
+            legacy_waterbend: false,
             seed: 0,
             decks: [Vec::new(), Vec::new()],
             human: human.get(),
@@ -932,6 +934,12 @@ impl Game {
                     continue;
                 }
             }
+            if (file.legacy_waterbend || file.format_version < 8)
+                && self.replay_implicit_waterbend(steps.peek().map(|(e, _)| *e))
+            {
+                self.chance_reproduced()?;
+                continue;
+            }
             // Before v7, an interrupted cast could have exile picks but no mana plan yet.
             // Stop at the newly required payment instead of inventing its answer. The v7
             // migration re-records this prefix, restoring those unfinished exile picks.
@@ -975,6 +983,27 @@ impl Game {
             );
         }
         Ok(())
+    }
+
+    /// Before v8, a required singleton Waterbend answer was made inside the engine,
+    /// without a log entry. Restore it here without consuming the next recorded answer.
+    fn replay_implicit_waterbend(&mut self, next: Option<&Entry>) -> bool {
+        let At::Human(id, open @ Open::Decision(d)) = &self.at else {
+            return false;
+        };
+        if d.kind != DecisionKind::Waterbend || without_floating(d.clone()).len() != 1 {
+            return false;
+        }
+        if matches!(next, Some(Entry::Choice(c)) if c.what.as_ref()
+            .is_some_and(|w| w.kind == save::Kind::Waterbend && c.index == 0))
+        {
+            return false;
+        }
+        let answer = OpenDecision::new(*id, open, false, false)
+            .answer(*id, CandidateIndex(0))
+            .expect("waterbend has one non-mana answer");
+        self.choose(answer.as_continuation());
+        true
     }
 
     /// Settles the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
@@ -1578,8 +1607,15 @@ impl Game {
         };
         let c = match &open {
             Open::Decision(d) => on_board!(&mut self.board, b => {
-                let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
-                stand_in.choose(obs, &without_floating(d.relayout())).0
+                let d = without_floating(d.relayout());
+                // These confirmations are for the human. A stand-in has only the one
+                // ordinary payment choice and need not advance its random stream.
+                if d.kind == DecisionKind::Waterbend && d.len() == 1 {
+                    0
+                } else {
+                    let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
+                    stand_in.choose(obs, &d).0
+                }
             }),
             Open::Halt => 0,
         };
@@ -2080,12 +2116,14 @@ pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
     Choice(u16::try_from(last).expect("a choice names its candidate"))
 }
 
-/// `d` without the mana activations a priority offers the human on their own
+/// `d` without the optional mana activations offered at human priority or during waterbend
 /// ([`Profile::taps_mana`]), for an agent standing in for them: tapping ahead of a payment is
 /// dominated by tapping during it (architecture §10), and search never sees them. The engine
 /// lists them last, so every other candidate keeps its index.
 fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
-    if let (DecisionKind::Priority, Candidates::Options(list)) = (d.kind, &mut d.candidates) {
+    if let (DecisionKind::Priority | DecisionKind::Waterbend, Candidates::Options(list)) =
+        (d.kind, &mut d.candidates)
+    {
         let kept = list
             .iter()
             .take_while(|o| !matches!(o, Opt::Mana { .. }))

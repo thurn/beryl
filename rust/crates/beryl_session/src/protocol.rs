@@ -322,7 +322,7 @@ pub struct DecisionView {
     /// The suggested waterbend payment, editable without committing the taps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub waterbend: Option<crate::ipc::WaterbendPreview>,
+    pub waterbend: Option<Box<crate::ipc::WaterbendPreview>>,
     /// What an answer names.
     pub id: DecisionId,
     pub kind: Kind,

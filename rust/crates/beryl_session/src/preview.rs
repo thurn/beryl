@@ -28,7 +28,7 @@ pub fn add_previews<L: Layout>(
 ) {
     if let Status::Deciding { decision } = &mut view.status {
         if d.kind == DecisionKind::Waterbend {
-            decision.waterbend = waterbend(s, t, d, None);
+            decision.waterbend = waterbend(s, t, d, None).map(Box::new);
         }
         for (((c, p), b), targets) in decision
             .candidates
@@ -303,24 +303,30 @@ pub(crate) fn waterbend<L: Layout>(
     let mut copy = forced(before);
     let mut scratch = Scratch::new();
     let mut decision = first.clone();
+    let selected = selected.unwrap_or_default();
+    let mut lands = Vec::new();
     let mut benders = Vec::new();
     let mut plan = None;
     loop {
         let index = match decision.kind {
             DecisionKind::Waterbend => {
-                let desired = selected.and_then(|slots| slots.get(benders.len())).copied();
-                (0..decision.len()).find(|&i| {
-                    match (decision.candidates.option(choice(i)), desired, selected) {
-                        (Some(Opt::Object(slot)), Some(wanted), _) => before
-                            .battlefield()
-                            .iter()
-                            .copied()
-                            .find(|s| s.num() == wanted)
-                            .is_some_and(|wanted| {
+                let desired = selected.get(lands.len() + benders.len());
+                let wanted = desired.and_then(|&wanted| {
+                    before
+                        .battlefield()
+                        .iter()
+                        .copied()
+                        .find(|s| s.num() == wanted)
+                });
+                // A land that can also waterbend uses its mana ability when clicked.
+                (0..decision.len()).rev().find(|&i| {
+                    match decision.candidates.option(choice(i)) {
+                        Some(Opt::Object(slot) | Opt::Mana { slot, .. }) => {
+                            wanted.is_some_and(|wanted| {
                                 beryl_engine::interchangeable(before, slot, wanted)
-                            }),
-                        (Some(Opt::Done), None, _) => true,
-                        (_, None, None) => i == 0,
+                            })
+                        }
+                        Some(Opt::Done) => desired.is_none(),
                         _ => false,
                     }
                 })?
@@ -329,6 +335,10 @@ pub(crate) fn waterbend<L: Layout>(
             _ => return None,
         };
         match decision.candidates.option(choice(index)) {
+            Some(Opt::Mana { slot, color }) => lands.push(crate::ipc::WaterbendLand {
+                slot: slot.num(),
+                color: color.into(),
+            }),
             Some(Opt::Object(slot)) => benders.push(slot.num()),
             Some(Opt::Plan(p)) => plan = Some(p.into()),
             _ => {}
@@ -343,10 +353,11 @@ pub(crate) fn waterbend<L: Layout>(
         };
         decision = next;
     }
-    if selected.is_some_and(|slots| slots.len() != benders.len()) {
+    if selected.len() != lands.len() + benders.len() {
         return None;
     }
     Some(crate::ipc::WaterbendPreview {
+        lands,
         benders,
         taps: tapped(before, &copy, t),
         plan,
@@ -405,7 +416,10 @@ mod tests {
             ],
         );
         let (t, mut s) = beryl_scenario::position(&CARDS, &SCENARIO).unwrap();
-        s = forced(&s);
+        s.set_profile(Profile {
+            taps_mana: Some(P0),
+            ..Profile::SMART
+        });
         let mut scratch = Scratch::new();
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
             panic!("priority");
@@ -422,14 +436,20 @@ mod tests {
             .filter(|&&slot| t.def(s.card(slot)).name == names::SNAPCASTER_MAGE)
             .map(|slot| slot.num())
             .collect();
-        let suggested = waterbend(&s, &t, &d, None).unwrap();
-        assert_eq!(suggested.benders.len(), 2);
-        assert_eq!(suggested.taps.len(), 3);
-        let reversed: Vec<_> = benders.iter().rev().copied().collect();
-        assert_eq!(
-            waterbend(&s, &t, &d, Some(&reversed)).unwrap().taps,
-            suggested.taps
+        assert!(
+            waterbend(&s, &t, &d, None).is_none(),
+            "no bender is implied"
         );
+        let land = d.candidates.option(choice(d.len() - 1)).unwrap();
+        let Opt::Mana { slot, .. } = land else {
+            panic!("land is an explicit payment choice");
+        };
+        let mut selected = vec![slot.num()];
+        selected.extend(benders.iter().rev().copied());
+        let mixed = waterbend(&s, &t, &d, Some(&selected)).unwrap();
+        assert_eq!(mixed.lands[0].slot, slot.num());
+        assert_eq!(mixed.benders, benders);
+        assert_eq!(mixed.taps.len(), 3);
         assert!(waterbend(&s, &t, &d, Some(&benders[..1])).is_none());
         assert!(waterbend(&s, &t, &d, Some(&[benders[0], benders[0]])).is_none());
         assert!(

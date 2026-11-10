@@ -359,7 +359,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
             }
         }
         if decision.kind == Kind::Waterbend {
-            let suggested = decision.waterbend.as_ref().expect("a suggested payment");
+            let suggested = decision.waterbend.as_deref().expect("a suggested payment");
             assert!(suggested.benders.is_empty());
             assert_eq!(suggested.taps.len(), 3);
             let jace = view

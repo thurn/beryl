@@ -33,8 +33,9 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 
 /// The migrations, in order: the first upgrades a version 1 file to version 2. Its length is
 /// [`FORMAT_VERSION`] less one.
-pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] =
-    [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7];
+pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
+    v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8,
+];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
 /// are the cards its games are played with, which the migrations that replay need.
@@ -213,6 +214,14 @@ fn v6_to_v7(mut file: Value, cards: &'static CardTable) -> Result<Value, Session
         }
     }
     set_version(&mut file, 7)?;
+    Ok(file)
+}
+
+/// Version 7 silently answered singleton waterbend decisions. The replay reconstructs
+/// those answers where they fell and records them as continuations in its new log.
+fn v7_to_v8(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    set_version(&mut file, 8)?;
+    file["legacyWaterbend"] = true.into();
     Ok(file)
 }
 

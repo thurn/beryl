@@ -25,24 +25,32 @@ export function useWaterbend(
     revision.current += 1;
   }, [key]);
   const current = edit?.key === key ? edit : undefined;
-  const preview = current ? current.preview : active?.waterbend;
-  const selected = current?.selected ?? active?.waterbend?.benders ?? [];
+  const automatic = active?.waterbend;
+  const preview = current
+    ? current.preview
+    : automatic?.benders.length === 0
+      ? automatic
+      : undefined;
+  const selected = current?.selected ?? [];
+  const eligible = (slot: number, kind: "mana" | "object") =>
+    active?.candidates.some(({ option }) => {
+      if (option.kind !== kind) return false;
+      const clicked = objects.get(slot);
+      const offered = objects.get(option.slot);
+      return (
+        option.slot === slot ||
+        (kind === "object" && !!clicked && !!offered && twins(clicked, offered))
+      );
+    });
   const toggle = (slot: number) => {
     if (!active || !key) return false;
-    if (
-      !active.candidates.some(
-        (c) =>
-          c.option.kind === "object" &&
-          (c.option.slot === slot ||
-            (!!objects.get(slot) &&
-              !!objects.get(c.option.slot) &&
-              twins(objects.get(slot)!, objects.get(c.option.slot)!))),
-      )
-    )
-      return false;
+    const land = eligible(slot, "mana");
+    if (!land && !eligible(slot, "object")) return false;
     const next = selected.includes(slot)
       ? selected.filter((s) => s !== slot)
-      : [...selected, slot];
+      : land
+        ? [slot, ...selected]
+        : [...selected, slot];
     const request = ++revision.current;
     setEdit({ key, selected: next });
     void previewWaterbend(active.id, next).then(
@@ -60,6 +68,12 @@ export function useWaterbend(
   const plan = (): Intent[] =>
     preview
       ? [
+          ...(preview.lands ?? []).map(({ slot, color }): Intent => ({
+            kind: "waterbend",
+            wants: (o) =>
+              o.kind === "mana" && o.slot === slot && o.color === color,
+            continuation: true,
+          })),
           ...preview.benders.map((slot): Intent => ({
             kind: "waterbend",
             wants: (o) => o.kind === "object" && o.slot === slot,
@@ -87,10 +101,15 @@ export function useWaterbend(
   return {
     active: !!active,
     selected,
+    benders: selected.filter((s) => !eligible(s, "mana")),
     taps: preview
       ? [
           ...selected,
-          ...preview.taps.filter((s) => !preview.benders.includes(s)),
+          ...preview.taps.filter(
+            (s) =>
+              !preview.benders.includes(s) &&
+              !(preview.lands ?? []).some((land) => land.slot === s),
+          ),
         ]
       : selected,
     ready: !!preview,

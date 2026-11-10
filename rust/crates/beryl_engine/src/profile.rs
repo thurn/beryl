@@ -291,13 +291,15 @@ impl Profile {
     }
 
     /// Whether `d`, a decision with one candidate, is still asked: a target of a spell its
-    /// player casts or an ability they activate, while [`Profile::asks_targets`] names them.
+    /// player casts or an ability they activate, while [`Profile::asks_targets`] names them,
+    /// or a waterbend payment whose human must select even a required bender.
     /// A triggered ability's lone target stays silent, as nothing can take it back
     /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
     pub(crate) fn asks_lone<L: Layout>(self, s: &State<L>, d: &Decision<L>) -> bool {
-        d.kind == DecisionKind::Target
-            && self.asks_targets == Some(d.player)
-            && matches!(s.pending, Pending::Casting(c) if !c.triggered)
+        (d.kind == DecisionKind::Waterbend && self.taps_mana == Some(d.player))
+            || d.kind == DecisionKind::Target
+                && self.asks_targets == Some(d.player)
+                && matches!(s.pending, Pending::Casting(c) if !c.triggered)
     }
 
     /// Whether the open priority is the active player's first in the breakpoint's step.

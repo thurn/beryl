@@ -1760,7 +1760,33 @@ pub(crate) fn standalone_options<L: Layout>(
         .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
         .map(|(slot, _)| slot)
         .collect();
-    for slot in crate::engine::collapse(s, sources).iter() {
+    let sources = crate::engine::collapse(s, sources);
+    add_activations(s, t, player, out, sources);
+}
+
+/// The exact lands the human can tap before paying Waterbend. A selected land stays the
+/// same physical card at confirmation, even when a twin would produce the same mana.
+pub(crate) fn waterbend_land_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, 64>,
+) {
+    let lands = controlled(s, player)
+        .filter(|&(_, d)| d.types.contains(Types::LAND))
+        .map(|(slot, _)| slot)
+        .collect();
+    add_activations(s, t, player, out, lands);
+}
+
+fn add_activations<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, 64>,
+    sources: Bitboard<L::Slot>,
+) {
+    for slot in sources.iter() {
         let Some((kinds, ..)) = source(s, t, player, slot, s.derived(slot)) else {
             continue;
         };

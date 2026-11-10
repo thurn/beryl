@@ -53,8 +53,8 @@ fn answer(g: &mut Game, v: &PlayerView, i: usize) -> PlayerView {
     }
     last.unwrap()
 }
-fn setup() -> (Game, PlayerView) {
-    let (table, state) = beryl_scenario::position(&CARDS, &SETUP).unwrap();
+fn setup(scenario: &Scenario) -> (Game, PlayerView) {
+    let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let decks = Seat::BOTH.map(|p| {
         let mut cards = std::collections::BTreeMap::new();
         for &c in table.deck(p) {
@@ -64,6 +64,7 @@ fn setup() -> (Game, PlayerView) {
     });
     let file = ReplayFile {
         format_version: 6,
+        legacy_waterbend: false,
         seed: 1,
         decks,
         human: 0,
@@ -78,7 +79,7 @@ fn setup() -> (Game, PlayerView) {
 }
 #[test]
 fn old_cost_order_replays_complete_and_partial_casts() {
-    let (mut g, mut v) = setup();
+    let (mut g, mut v) = setup(&SETUP);
     while v.turn.step != beryl_session::protocol::Step::PrecombatMain {
         v = answer(&mut g, &v, 0);
     }
@@ -162,4 +163,53 @@ fn old_cost_order_replays_complete_and_partial_casts() {
     let (_, again) = Game::replay_exactly(&CARDS, &migrated, SESSION).unwrap();
     assert_eq!(decision(&again).kind, Kind::PaymentPlan);
     assert_eq!(again.players.you.graveyard.len(), 7);
+}
+
+#[test]
+fn old_waterbend_saves_restore_a_required_implicit_tap() {
+    const BEND: Scenario = Scenario::new("saved waterbend")
+        .at(3, P0, TurnStep::Upkeep)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::AANGS_ICEBERG),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::SNAPCASTER_MAGE),
+            ],
+        )
+        .library(P0, &[names::ISLAND; 12])
+        .library(P1, &[names::ISLAND; 12]);
+    let (mut game, mut view) = setup(&BEND);
+    while view.turn.step != beryl_session::protocol::Step::PrecombatMain {
+        view = answer(&mut game, &view, 0);
+    }
+    let activate = decision(&view)
+        .candidates
+        .iter()
+        .position(|c| {
+            matches!(c.option, Candidate::Activate { .. }) && c.label.contains("Waterbend")
+        })
+        .unwrap();
+    view = answer(&mut game, &view, activate);
+    assert_eq!(decision(&view).kind, Kind::Waterbend);
+    assert!(decision(&view).waterbend.is_none());
+    let after = answer(&mut game, &view, 0);
+    let mut old = serde_json::to_value(game.replay()).unwrap();
+    old["formatVersion"] = 7.into();
+    old["log"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|e| e["choice"]["kind"] != "waterbend");
+    let migrated = beryl_session::migrate::to_current(old, &CARDS).unwrap();
+    let (restored, resumed) = Game::replay_exactly(&CARDS, &migrated, SESSION).unwrap();
+    assert_eq!(resumed.objects, after.objects);
+    assert!(!restored.replay().legacy_waterbend);
+    assert_eq!(
+        Game::replay_exactly(&CARDS, restored.replay(), SESSION)
+            .unwrap()
+            .1
+            .objects,
+        after.objects
+    );
 }
