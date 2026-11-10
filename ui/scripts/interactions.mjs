@@ -11117,35 +11117,56 @@ if (wanted(tokenHandoff)) {
         async (page) => {
             const line = page.locator(combatLink(adeline));
             const tokenLine = page.locator(combatLink(human));
-            const heading = page.getByRole("heading", {
-                name: "Choose attack target for Human",
-                exact: true,
-            });
             await page.click(slotOf(adeline));
             await page.click(slotOf(emperor));
-            assert.equal(await line.getAttribute("data-to"), `card-${emperor}`);
+            const destination = `card-${emperor}`;
+            assert.equal(await line.getAttribute("data-to"), destination);
+            await page.evaluate(
+                ({ existing, token, destination }) => {
+                    const frames = { wrong: [], sawDeclaration: false };
+                    let next;
+                    const sample = () => {
+                        const links = [...document.querySelectorAll(existing)];
+                        const ends = links.map((link) => link.dataset.to);
+                        const tokenLinks =
+                            document.querySelectorAll(token).length;
+                        if (
+                            ends.length !== 1 ||
+                            ends[0] !== destination ||
+                            tokenLinks
+                        )
+                            frames.wrong.push({ ends, tokenLinks });
+                        const shown = window.berylShown.at(-1).update.view;
+                        frames.sawDeclaration ||= shown.events.some(
+                            (event) => event.kind === "attack",
+                        );
+                        next = requestAnimationFrame(sample);
+                    };
+                    window.finishAttackFrames = () => {
+                        cancelAnimationFrame(next);
+                        return frames;
+                    };
+                    next = requestAnimationFrame(sample);
+                },
+                {
+                    existing: combatLink(adeline),
+                    token: combatLink(human),
+                    destination,
+                },
+            );
             await page
                 .getByRole("button", { name: "Attack", exact: true })
                 .click();
-            for (let frame = 0; frame < 100; frame++) {
-                await page.clock.runFor(16);
-                assert.equal(
-                    await line.count(),
-                    1,
-                    `declared line in frame ${frame}`,
-                );
-                assert.equal(
-                    await line.getAttribute("data-to"),
-                    `card-${emperor}`,
-                );
-                assert.equal(
-                    await tokenLine.count(),
-                    0,
-                    "no line before choosing",
-                );
-                if (await heading.isVisible()) break;
-            }
-            assert.ok(await heading.isVisible(), "the Human's chooser opened");
+            await until(page, ':text-is("Choose attack target for Human")');
+            const frames = await page.evaluate(() =>
+                window.finishAttackFrames(),
+            );
+            assert.ok(frames.sawDeclaration, "sampled the declaration beat");
+            assert.deepEqual(
+                frames.wrong,
+                [],
+                "only the declared line in every frame",
+            );
             await page
                 .getByRole("button", { name: "Target opponent", exact: true })
                 .click();
