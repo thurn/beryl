@@ -1371,10 +1371,11 @@ fn pay_mana<L: Layout>(
     }
 }
 
-/// Mana is paid once before choosing cards for an exile cost. Both orders are permitted by
-/// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "First, they pay all costs
-/// that don't involve random elements or moving objects from the library to a public zone,
-/// in any order." Keeping the unfinished cast pending also keeps session cancellation valid.
+/// Mana production and spending have completed before choosing cards for an exile cost.
+/// [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "Mana abilities must be
+/// activated before costs are paid." CR 601.2h permits spending that mana before exiling
+/// cards; it does not permit activating mana abilities after paying the exile cost. Keeping
+/// the unfinished cast pending also keeps session cancellation valid.
 fn after_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Casting Abhorrent Oculus exiled graveyard cards before activating the mana
+  abilities used to pay for it. This violated
+  [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "Mana
+  abilities must be activated before costs are paid." The freedom to order
+  ordinary payments under
+  [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h) applies to
+  spending mana and exiling cards, not to activating mana abilities. The
+  casting-order fix activates mana abilities and spends the mana before opening
+  the exile-cost choice. Prevention: model mana production separately from cost
+  payment, and test event order across automatic and manual payment, including
+  sacrificed mana sources and cancellation. A visually late mana animation can
+  expose an engine sequencing violation, not just a UI defect.
+
 - Moving mana payment before exile selection changed the order of saved cast
   decisions. A historical explicit exile choice followed by a mana plan could no
   longer replay. Version 7 reorders completed costs with their undo boundaries;
