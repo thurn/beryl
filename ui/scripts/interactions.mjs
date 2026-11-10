@@ -7016,9 +7016,21 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
             },
         ],
     };
+    // The controller gets the pending trigger with the landing. An opponent
+    // can get a separate landing update while the engine chooses the targets.
+    const arrival =
+        controller === "you"
+            ? [after]
+            : [
+                  { ...after, stack: [], status: { kind: "thinking" } },
+                  {
+                      ...after,
+                      events: [{ kind: "ability", item, loyalty: null }],
+                  },
+              ];
     const run = await motionFixture(
         `trigger-lifts-from-permanent-${controller}`,
-        [before, after, { ...view, stack: [], events: [] }],
+        [before, ...arrival, { ...view, stack: [], events: [] }],
     );
     await check(
         `${triggerLift} (${controller})`,
@@ -7030,16 +7042,16 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                 const sample = () => {
                     const permanent = document.querySelector(source);
                     const trigger = document.querySelector(".stack-ability");
-                    if (permanent && trigger) {
+                    if (permanent?.dataset.zone === "battlefield") {
                         const bounds = (el) =>
                             el.getBoundingClientRect().toJSON();
-                        const style = getComputedStyle(trigger);
+                        const style = trigger && getComputedStyle(trigger);
                         window.triggerFrames.push({
                             at: performance.now(),
                             permanent: bounds(permanent),
-                            ability: bounds(trigger),
-                            opacity: Number(style.opacity),
-                            mask: style.maskImage,
+                            ability: trigger && bounds(trigger),
+                            opacity: style && Number(style.opacity),
+                            mask: style?.maskImage,
                         });
                     }
                     if (performance.now() < end) requestAnimationFrame(sample);
@@ -7049,9 +7061,28 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
                 .click();
-            await page.waitForFunction(() => window.triggerFrames.length > 35);
-            const frames = await page.evaluate(() => window.triggerFrames);
-            const [{ permanent: from, ability: start, at }] = frames;
+            await page.waitForFunction(
+                () => window.triggerFrames.filter((f) => f.ability).length > 35,
+            );
+            const samples = await page.evaluate(() => window.triggerFrames);
+            const frames = samples.filter((f) => f.ability);
+            const [{ permanent: from, ability: start, at, opacity }] = frames;
+            const destination = frames.at(-1).permanent;
+            const landed = samples.find(
+                ({ permanent }) =>
+                    Math.abs(permanent.x - destination.x) < 2 &&
+                    Math.abs(permanent.y - destination.y) < 2 &&
+                    Math.abs(permanent.width - destination.width) < 2,
+            );
+            const gap = at - landed.at;
+            assert.ok(
+                gap >= 0 && gap < 180,
+                `the trigger follows the landing within 180 ms (saw ${gap} ms)`,
+            );
+            assert.ok(
+                opacity < 0.8,
+                "the trigger emerges while it begins to lift",
+            );
             assert.ok(
                 start.width < from.width * 0.85 &&
                     start.x >= from.x &&
@@ -7086,12 +7117,21 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                 0,
             );
 
+            const exitAt = await page.evaluate(() => performance.now());
             await page.keyboard.press("Space");
-            await page.waitForFunction(() =>
-                window.triggerFrames.some(({ opacity }) => opacity < 0.9),
+            await page.waitForFunction(
+                (exitAt) =>
+                    window.triggerFrames.some(
+                        ({ at, opacity }) => at > exitAt && opacity < 0.9,
+                    ),
+                exitAt,
             );
-            const exit = await page.evaluate(() =>
-                window.triggerFrames.filter(({ opacity }) => opacity < 0.9),
+            const exit = await page.evaluate(
+                (exitAt) =>
+                    window.triggerFrames.filter(
+                        ({ at, opacity }) => at > exitAt && opacity < 0.9,
+                    ),
+                exitAt,
             );
             assert.ok(
                 exit.every(({ mask }) => mask === "none"),

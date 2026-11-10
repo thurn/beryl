@@ -2369,7 +2369,7 @@ function AbilityOnStack({
       }
     : origin && item.triggered
       ? {
-          opacity: 1,
+          opacity: 0,
           x: origin.start.x,
           y: origin.start.y,
           scale: origin.start.width / place.width,
@@ -2408,7 +2408,13 @@ function AbilityOnStack({
         y: origin ? [null, origin.lift.y, place.y] : place.y,
         rotate: 0,
       }}
-      transition={liftFrom ? SOURCE_FLIGHT : ABILITY_FLIGHT}
+      transition={
+        origin && item.triggered
+          ? TRIGGER_FLIGHT
+          : origin
+            ? SOURCE_FLIGHT
+            : ABILITY_FLIGHT
+      }
       onAnimationComplete={() => setLiftFrom(undefined)}
       onPointerMove={() => onPoint(true)}
       onPointerLeave={() => onPoint(false)}
@@ -2473,6 +2479,12 @@ const SOURCE_FLIGHT = {
   y: SOURCE_LEG,
   scale: SOURCE_LEG,
 };
+
+/** Reveal the trigger as it lifts, without a visible static frame over its source. */
+const TRIGGER_FLIGHT = {
+  ...SOURCE_FLIGHT,
+  opacity: { duration: 0.1, ease: "linear" },
+} as const;
 
 /** A stack item's identity during its flight and exit. Targets can change while it is there. */
 const stackKey = (index: number, item: StackItemView) =>

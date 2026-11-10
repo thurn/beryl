@@ -32,6 +32,8 @@ export const HOLD = {
   turn: 1100,
   action: 900,
   trigger: 1300,
+  /** Time for the spring carrying a resolving permanent from the stack to settle. */
+  permanentLanding: 550,
   stack: 2000,
   counter: 1800,
   ending: 1600,
@@ -551,7 +553,7 @@ class Walk {
             e.slot === item.source,
         ),
     );
-    if (arrivingTrigger) this.cut(HOLD.action);
+    if (arrivingTrigger) this.cut();
     // Mana payment must be visible before an additional-cost chooser covers the table.
     // Its spell is still pending; confirming the chooser will not pay the mana again.
     if (
@@ -911,6 +913,8 @@ function eventHold(e: GameEvent): number {
     case "mana":
       return HOLD.step;
     case "zoneChange":
+      if (e.from === "stack" && e.to === "battlefield")
+        return HOLD.permanentLanding;
       return e.reason === "counter" ? HOLD.counter : HOLD.action;
     // The player's own casts they just chose; the opponent's they have to read.
     case "cast":
