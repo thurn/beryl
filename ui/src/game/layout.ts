@@ -249,10 +249,9 @@ export const MANA_POOLS: Record<Side, { left: number; top: number }> = {
 /** The least zoom the battlefield may take (`battlefieldZoom`) before its rows crowd their cards
  * together instead. */
 const ZOOM_LEAST = 0.3;
-/** The least zoom the back row's other permanents, in their room right of the orb, may
- * pull the whole battlefield down to: past it, they zoom out further alone, so a few
- * planeswalkers don't shrink every land and creature on the table. */
-const OTHERS_PULL = 0.8;
+/** The least zoom the back rows may pull the battlefield down to. Below it, each crowded
+ * back row fits its own space so the front rows stay readable. */
+const BACK_ROW_PULL = 0.8;
 /** Lands of different names stand this far apart before depth scaling, and the tapped ones
  * stand this far from the untapped ones. */
 const LAND_GAP = 12;
@@ -992,10 +991,8 @@ function rowFit(
 }
 
 /** How far the whole battlefield zooms out, as a fraction of each row's depth's scale: as far as
- * its most crowded row, on either side, needs to fit its room, down to `ZOOM_LEAST`, though the
- * back row's other permanents pull it no lower than `OTHERS_PULL`. Every row of both sides
- * takes the same zoom, so the cards keep one size across the table, as if the camera drew
- * back, rather than a crowded row's shrinking alone. */
+ * its most crowded row, on either side, needs to fit its room, down to `ZOOM_LEAST`.
+ * Back rows pull it no lower than `BACK_ROW_PULL` and fit independently beyond that. */
 function battlefieldZoom(
   sides: [Side, SideGroups][],
   beneath: Map<number, ObjectView[]>,
@@ -1009,15 +1006,18 @@ function battlefieldZoom(
     if (lands > 0) {
       zoom = Math.min(
         zoom,
-        (rows.lands.end - rows.lands.start) /
-          (lands * depthScale(rows.lands.y)),
+        Math.max(
+          BACK_ROW_PULL,
+          (rows.lands.end - rows.lands.start) /
+            (lands * depthScale(rows.lands.y)),
+        ),
       );
     }
     zoom = Math.min(
       zoom,
       rowFit(groups.creatures, rows.creatures, beneath, attached),
       Math.max(
-        OTHERS_PULL,
+        BACK_ROW_PULL,
         rowFit(groups.others, rows.others, beneath, attached),
       ),
     );
@@ -1026,8 +1026,9 @@ function battlefieldZoom(
 }
 
 /** One side's battlefield, as MTG Arena lays it out (ROWS): mana piles on the left behind the
- * creatures' row, other permanents smaller on the right behind it, every row zoomed out alike
- * by `zoom` (`battlefieldZoom`). A blocker stands across the table from the attacker it blocks
+ * creatures' row and other permanents smaller on the right behind it. All rows share
+ * `zoom` (`battlefieldZoom`), with back rows fitting further if needed. A blocker stands
+ * across the table from the attacker it blocks
  * among the other side's placements `across`, as combat.png does, an attacker's blockers side
  * by side about its center, so a block reads as a short line; the rest of the row makes room.
  * Attackers stand forward in the row, ordered by destination so their lines cross less.
@@ -1050,7 +1051,10 @@ function battlefieldPlacements(
   const { landPiles } = groups;
   const run = landRun(groups);
   const landFull = depthScale(rows.lands.y);
-  const landScale = landFull * zoom;
+  const landScale = Math.min(
+    landFull * zoom,
+    (rows.lands.end - rows.lands.start) / run.length,
+  );
   const landHeight = LAND_WIDTH / CARD_ASPECT;
   // A zoomed-out row keeps its edge toward its player where a full-size one has it.
   const landTop =
