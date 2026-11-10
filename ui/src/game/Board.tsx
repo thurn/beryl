@@ -2176,7 +2176,8 @@ function boardArrows(
   );
   for (const slot of view.battlefield) {
     const o = objects.get(slot);
-    const combat = o?.combat;
+    if (!o) continue;
+    const combat = o.combat;
     if (combat?.kind === "blocking" && combat.attacker !== null) {
       out.push({
         from: cardId(slot),
