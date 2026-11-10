@@ -372,7 +372,8 @@ function Playing({ playback }: { playback: Playback }) {
   const [held, setHeld] = useState<{ choice: Choice; view: PlayerView }>();
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
-  const { update, live, spotlight, behind, skip, log } = playback;
+  const { update, live, spotlight, triggerFlights, behind, skip, log } =
+    playback;
   const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
@@ -618,6 +619,7 @@ function Playing({ playback }: { playback: Playback }) {
       view={view}
       live={live}
       spotlight={spotlight}
+      triggerFlights={triggerFlights}
       log={log}
       waiting={waiting}
       onSkip={behind ? skip : undefined}

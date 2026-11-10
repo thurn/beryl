@@ -68,7 +68,7 @@ import type {
   StackItem as StackItemView,
   StopsSetting,
 } from "../generated/protocol";
-import { announcedItem, sameItem } from "./beats";
+import { announcedItem, sameItem, stackKey, TRIGGER_FLIGHT_MS } from "./beats";
 import {
   CardLayer,
   cardId,
@@ -190,6 +190,7 @@ export interface BoardProps {
   /** Cards shown apart from where they lie (beats.ts): on their way to a pile, or just drawn
    * by the opponent. */
   spotlight?: Spotlight;
+  triggerFlights?: ReadonlySet<number>;
   /** What has happened in the game, oldest first. */
   log: LogEntry[];
   /** An answer was sent and the next view has not arrived, or the game plays on without the
@@ -251,6 +252,7 @@ export function Board({
   view: given,
   live,
   spotlight = NO_SPOTLIGHT,
+  triggerFlights,
   log,
   waiting,
   onSkip,
@@ -1615,7 +1617,7 @@ export function Board({
                     item.source === null ? undefined : objects.get(item.source)
                   }
                   from={
-                    live
+                    live && (!item.triggered || triggerFlights?.has(i))
                       ? abilityPlacement(
                           view,
                           item,
@@ -2362,6 +2364,8 @@ function AbilityOnStack({
     !reduce && !chosen ? from : undefined,
   );
   const origin = liftFrom && abilityLift(liftFrom, item.triggered);
+  const flight =
+    origin && item.triggered ? triggerArc(origin, place) : undefined;
   const text = abilityText(face.text ?? "", item.triggered, item.nth);
   // A trigger starts inside its source. With no source drawn, it fades in at the stack.
   const start = chosen
@@ -2406,11 +2410,17 @@ function AbilityOnStack({
       initial={reduce ? false : start}
       animate={{
         opacity: 1,
-        scale: origin
-          ? [null, Math.min(1, origin.lift.width / place.width), 1]
-          : 1,
-        x: origin ? [null, origin.lift.x, place.x] : place.x,
-        y: origin ? [null, origin.lift.y, place.y] : place.y,
+        scale: flight
+          ? flight.map((point) => point.scale)
+          : origin
+            ? [null, Math.min(1, origin.lift.width / place.width), 1]
+            : 1,
+        x:
+          flight?.map((point) => point.x) ??
+          (origin ? [null, origin.lift.x, place.x] : place.x),
+        y:
+          flight?.map((point) => point.y) ??
+          (origin ? [null, origin.lift.y, place.y] : place.y),
         rotate: 0,
       }}
       transition={
@@ -2485,25 +2495,55 @@ const SOURCE_FLIGHT = {
   scale: SOURCE_LEG,
 };
 
-// Give the visible lift its own leg before the trigger crosses the board.
-const TRIGGER_LEG = {
-  ...SOURCE_LEG,
-  duration: 0.74,
-  times: [0, 0.29, 1],
-} as const;
-const TRIGGER_FLIGHT = {
-  ...ABILITY_FLIGHT,
-  x: TRIGGER_LEG,
-  y: TRIGGER_LEG,
-  scale: TRIGGER_LEG,
-  opacity: { duration: 0.055, ease: "linear" },
-} as const;
+/** One curve from the source to the stack, with an upward launch and no stop at the crest. */
+function triggerArc(
+  { start, lift }: ReturnType<typeof abilityLift>,
+  end: { x: number; y: number; width: number },
+) {
+  const from = {
+    x: start.x + start.width / 2,
+    y: start.y + start.width / (2 * CARD_ASPECT),
+  };
+  const to = {
+    x: end.x + end.width / 2,
+    y: end.y + end.width / (2 * CARD_ASPECT),
+  };
+  const rise = from.y - lift.y - lift.width / (2 * CARD_ASPECT);
+  const distance = to.x - from.x;
+  const controlX =
+    from.x +
+    Math.sign(distance || 1) *
+      Math.max(Math.abs(distance) * 0.22, lift.width * 0.75);
+  return Array.from({ length: 33 }, (_, index) => {
+    // Sample the whole eased curve, then interpolate linearly between samples.
+    // Follow the center so the trigger can grow without changing its path.
+    const progress = index / 32;
+    const t = 1 - (1 - progress) ** 1.5;
+    const u = 1 - t;
+    const width = end.width + (start.width - end.width) * (1 - progress) ** 3;
+    const x =
+      u ** 3 * from.x +
+      3 * u ** 2 * t * from.x +
+      3 * u * t ** 2 * controlX +
+      t ** 3 * to.x;
+    const y =
+      u ** 3 * from.y +
+      3 * u ** 2 * t * (from.y - rise * 1.8) +
+      3 * u * t ** 2 * (from.y - rise * 2.2) +
+      t ** 3 * to.y;
+    return {
+      x: x - width / 2,
+      y: y - width / (2 * CARD_ASPECT),
+      scale: width / end.width,
+    };
+  });
+}
 
-/** A stack item's identity during its flight and exit. Targets can change while it is there. */
-const stackKey = (index: number, item: StackItemView) =>
-  item.kind === "spell"
-    ? `${index}:${item.slot}`
-    : `${index}:${item.name}:${item.source}:${item.ability}:${item.granted}:${item.controller}`;
+const TRIGGER_FLIGHT = {
+  duration: TRIGGER_FLIGHT_MS / 1000,
+  ease: "linear",
+  opacity: { duration: 0.07, ease: "linear" },
+} as const;
 
 /** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,
  * which the view gives no source ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144):

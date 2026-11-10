@@ -22,6 +22,12 @@ import { choiceOf, choiceSlots } from "./choices";
 import { withResolving } from "./decisions";
 import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 
+/** Stack-to-battlefield travel and the trigger it hands off to share playback timing. */
+export const PERMANENT_TRAVEL_MS = 510;
+export const TRIGGER_FLIGHT_MS = 640;
+const FRAME_BUFFER_MS = 40;
+export const TRIGGER_FLIGHT_HOLD = TRIGGER_FLIGHT_MS + FRAME_BUFFER_MS;
+
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
  * briefly, a new turn while it is announced, an action long enough to follow, a spell or
  * ability the opponent puts on the stack long enough to read before it resolves unanswered, a
@@ -32,8 +38,7 @@ export const HOLD = {
   turn: 1100,
   action: 900,
   trigger: 1300,
-  /** Time for the spring carrying a resolving permanent from the stack to settle. */
-  permanentLanding: 550,
+  permanentLanding: PERMANENT_TRAVEL_MS + FRAME_BUFFER_MS,
   stack: 2000,
   counter: 1800,
   ending: 1600,
@@ -71,6 +76,8 @@ export interface Beat {
   hold?: number;
   /** Cards shown apart from where they lie: face up over the table, or just drawn. */
   spotlight?: Spotlight;
+  /** Stack entries whose trigger flight starts in this beat. */
+  triggerFlights?: ReadonlySet<number>;
 }
 
 /** A pending cost can spend previously floating mana without emitting a new mana event. */
@@ -90,6 +97,27 @@ export function beats(
   before: GameUpdate | undefined,
   update: GameUpdate,
 ): Beat[] {
+  let prior = before?.view.stack ?? [];
+  return cutBeats(before, update).map((beat) => {
+    const { view } = beat.update;
+    const flights = new Set<number>();
+    if (!view.undone) {
+      for (const [index, item] of view.stack.entries()) {
+        const old = prior[index];
+        if (
+          item.kind === "ability" &&
+          item.triggered &&
+          (!old || stackKey(index, old) !== stackKey(index, item))
+        )
+          flights.add(index);
+      }
+    }
+    prior = view.stack;
+    return flights.size ? { ...beat, triggerFlights: flights } : beat;
+  });
+}
+
+function cutBeats(before: GameUpdate | undefined, update: GameUpdate): Beat[] {
   const { view } = update;
   const reveal = new Set<number>();
   if (before) {
@@ -148,6 +176,12 @@ export function sameItem(a: StackItem, b: StackItem): boolean {
   if (a.kind === "spell" && b.kind === "spell") return a.slot === b.slot;
   return a.kind === b.kind && JSON.stringify(a) === JSON.stringify(b);
 }
+
+/** Targets can change while an item is on the stack without starting another flight. */
+export const stackKey = (index: number, item: StackItem) =>
+  item.kind === "spell"
+    ? `${index}:${item.slot}`
+    : `${index}:${item.name}:${item.source}:${item.ability}:${item.granted}:${item.controller}:${item.triggered}`;
 
 /** A cast's spell as the stack showed it. An event recorded before casts carried their spell
  * says only its card. */

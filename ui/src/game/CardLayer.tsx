@@ -3,7 +3,7 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
-import { counterDeparture } from "./beats";
+import { counterDeparture, PERMANENT_TRAVEL_MS } from "./beats";
 import { CARD_RETURN, takeMovedCard, type CardHandoff } from "./choiceFlight";
 import { play } from "../audio/sound";
 import {
@@ -131,6 +131,12 @@ export interface CardLayerProps {
 const DRAG_THRESHOLD = 6;
 
 const SPRING: Transition = { type: "spring", stiffness: 210, damping: 28 };
+/** Match the landing beat so the trigger can launch as the card settles. */
+const PERMANENT_TRAVEL: Transition = {
+  type: "tween",
+  duration: PERMANENT_TRAVEL_MS / 1000,
+  ease: [0.25, 0.55, 0.55, 1],
+};
 /** A struck spell shakes in place, then crosses the table at a pace the eye follows. */
 const STRUCK_SHAKE = [0, -12, 10, -8, 6, -3, 0];
 const STRUCK_FOR = 0.45;
@@ -445,6 +451,7 @@ const CardElement = memo(function CardElement({
     zone: object.zone,
     travel: false,
     tucking: false,
+    landing: false,
     epoch,
   });
   if (moved.current.look !== place.look || moved.current.zone !== object.zone) {
@@ -457,6 +464,7 @@ const CardElement = memo(function CardElement({
       look: place.look,
       zone: object.zone,
       epoch,
+      landing: moved.current.zone === "stack" && object.zone === "battlefield",
       tucking: was === "scry-bottom" && place.librarySide === "opponent",
       travel:
         !samePile &&
@@ -465,6 +473,7 @@ const CardElement = memo(function CardElement({
   }
   const change = moved.current;
   const moving = change.travel && change.epoch === epoch;
+  const landing = change.landing && change.epoch === epoch;
   const how = useMemo(() => {
     const base = carried
       ? CARRIED
@@ -472,11 +481,13 @@ const CardElement = memo(function CardElement({
         ? EMERGING
         : moving
           ? TRAVEL
-          : SPRING;
+          : landing
+            ? PERMANENT_TRAVEL
+            : SPRING;
     return departureDelay
       ? { ...base, delay: (base.delay ?? 0) + departureDelay }
       : base;
-  }, [carried, emerging, moving, departureDelay]);
+  }, [carried, emerging, moving, landing, departureDelay]);
   const element = useRef<HTMLDivElement>(null);
   const handed = useRef<unknown>(undefined);
   const [handoff, setHandoff] = useState(0);
@@ -555,10 +566,13 @@ const CardElement = memo(function CardElement({
   const hand = place.look === "hand";
   const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce, {
-    how: returning ? TRAVEL : SPRING,
+    how: returning ? TRAVEL : landing ? PERMANENT_TRAVEL : SPRING,
     restart,
   });
-  useGlide(skewX, place.skew, reduce, { restart });
+  useGlide(skewX, place.skew, reduce, {
+    restart,
+    how: landing ? PERMANENT_TRAVEL : SPRING,
+  });
   // Out of a library, the card is in sight from the start, on the pile; into one, until it is
   // there.
   useLayoutEffect(() => {

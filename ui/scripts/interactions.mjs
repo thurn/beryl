@@ -7212,10 +7212,11 @@ if (wanted(manifestFlight)) {
 }
 
 const triggerLift =
-    "an ETB trigger visibly lifts away from the permanent before crossing";
+    "an ETB trigger flies continuously from the settled permanent";
 const triggerCases = [
     ["you", "stop"],
     ["opponent", "stop"],
+    ["you", "target"],
     ["you", "immediate"],
     ["opponent", "immediate"],
 ];
@@ -7277,32 +7278,64 @@ for (const [controller, resolution] of wanted(triggerLift)
             },
         ],
     };
-    // The controller gets the pending trigger with the landing. An opponent
-    // can get a separate landing update while the engine chooses the targets.
-    const arrival =
-        controller === "you"
-            ? [after]
-            : [
-                  { ...after, stack: [], status: { kind: "thinking" } },
-                  {
-                      ...after,
-                      events: [{ kind: "ability", item, loyalty: null }],
-                  },
-              ];
+    const targets = view.objects
+        .filter((o) => o.zone === "battlefield" && o.controller !== controller)
+        .slice(0, 2)
+        .map((o) => ({
+            label: o.name,
+            option: { kind: "object", slot: o.slot },
+            nth: null,
+            targets: [],
+            payments: [],
+            blocks: [],
+        }));
+    const targetDecision = {
+        ...board.status.decision,
+        id: { session: 1, seq: board.status.decision.id.seq + 1 },
+        kind: "target",
+        source: slot,
+        passOn: null,
+        passTo: null,
+        candidates: targets,
+    };
     const resolved = { ...view, stack: [], events: [] };
-    const updates =
-        resolution === "stop"
-            ? [...arrival, resolved]
-            : [
-                  {
-                      ...resolved,
-                      events: [
-                          ...after.events,
-                          { kind: "ability", item, loyalty: null },
-                          { kind: "abilityFinished" },
-                      ],
-                  },
-              ];
+    let updates;
+    if (resolution === "target") {
+        assert.ok(targets.length > 1);
+        const announced = { ...item, targets: [targets[0].option] };
+        updates = [
+            {
+                ...after,
+                status: { kind: "deciding", decision: targetDecision },
+            },
+            {
+                ...after,
+                stack: [announced],
+                events: [{ kind: "ability", item: announced, loyalty: null }],
+            },
+        ];
+    } else if (resolution === "immediate") {
+        // The incoming view already has an empty stack.
+        updates = [
+            {
+                ...resolved,
+                events: [
+                    ...after.events,
+                    { kind: "ability", item, loyalty: null },
+                    { kind: "abilityFinished" },
+                ],
+            },
+        ];
+    } else if (controller === "opponent") {
+        // An opponent can get a separate landing update before the announcement.
+        updates = [
+            { ...after, stack: [], status: { kind: "thinking" } },
+            { ...after, events: [{ kind: "ability", item, loyalty: null }] },
+            resolved,
+        ];
+    } else {
+        updates = [after, resolved];
+    }
     const run = await motionFixture(
         `trigger-lifts-from-permanent-${controller}-${resolution}`,
         [before, ...updates],
@@ -7343,9 +7376,15 @@ for (const [controller, resolution] of wanted(triggerLift)
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
                 .click();
-            await page.waitForFunction(
-                () => window.triggerFrames.filter((f) => f.ability).length > 35,
-            );
+            await page.waitForFunction(() => {
+                const first = window.triggerFrames.find((f) => f.ability);
+                return (
+                    first &&
+                    window.triggerFrames.some(
+                        (f) => f.at - first.at >= 640 && f.opacity === 1,
+                    )
+                );
+            });
             const samples = await page.evaluate(() => window.triggerFrames);
             const frames = samples.filter((f) => f.ability);
             const [{ permanent: from, ability: start, at, opacity }] = frames;
@@ -7358,8 +7397,8 @@ for (const [controller, resolution] of wanted(triggerLift)
             );
             const gap = at - landed.at;
             assert.ok(
-                gap >= 0 && gap < 180,
-                `the trigger follows the landing within 180 ms (saw ${gap} ms)`,
+                gap >= 0 && gap < 105,
+                `the trigger follows the landing within 105 ms (saw ${gap} ms)`,
             );
             assert.ok(
                 opacity < 0.8,
@@ -7378,7 +7417,7 @@ for (const [controller, resolution] of wanted(triggerLift)
                     opacity >= 0.85 &&
                     ability.width > permanent.width &&
                     Math.abs(center(ability).x - center(permanent).x) <
-                        permanent.width * 0.2 &&
+                        permanent.width * 0.45 &&
                     ability.y + ability.height <
                         permanent.y + permanent.height * 0.72,
             );
@@ -7386,6 +7425,22 @@ for (const [controller, resolution] of wanted(triggerLift)
                 lifted.length >= 3,
                 "the visible trigger lifts above its source, uncovering its lower portion before crossing",
             );
+            // Follow the center, so growth alone cannot hide a stall. Check through
+            // the bend and allow the last part to ease into the stack.
+            for (const frame of frames.filter(
+                (f) => f.opacity >= 0.18 && f.at - at < 420,
+            )) {
+                const later = frames.find((f) => f.at - frame.at >= 65);
+                assert.ok(later, "the trigger survives the whole flight");
+                const a = center(frame.ability);
+                const b = center(later.ability);
+                const speed =
+                    Math.hypot(b.x - a.x, b.y - a.y) / (later.at - frame.at);
+                assert.ok(
+                    speed > from.width / 400,
+                    `the trigger keeps moving at ${Math.round(frame.at - at)} ms (saw ${speed.toFixed(2)} px/ms)`,
+                );
+            }
             assert.ok(
                 samples.every(
                     ({ copies, triggers, arrows }) =>
@@ -7400,6 +7455,27 @@ for (const [controller, resolution] of wanted(triggerLift)
                 ),
                 "trigger grows into the large stack item",
             );
+            if (resolution === "target") {
+                const trigger = page.locator(".stack-ability");
+                await trigger.evaluate((el) =>
+                    el.setAttribute("data-tested-flight", ""),
+                );
+                await page.locator(slotOf(targets[0].option.slot)).click();
+                await page.waitForFunction(() =>
+                    window.berylShown.some(({ update }) =>
+                        update.view.stack.some(
+                            (s) =>
+                                s.kind === "ability" && s.targets.length === 1,
+                        ),
+                    ),
+                );
+                assert.equal(await trigger.count(), 1);
+                assert.equal(
+                    await trigger.getAttribute("data-tested-flight"),
+                    "",
+                );
+                return;
+            }
             if (resolution === "stop") await page.keyboard.press("Space");
             await page.waitForFunction(() =>
                 window.triggerFrames.some(

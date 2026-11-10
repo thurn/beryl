@@ -22,7 +22,13 @@ import {
   type PlayerView,
   type SessionId,
 } from "../ipc";
-import { beats, eventsHold, HOLD } from "./beats";
+import {
+  beats,
+  eventsHold,
+  HOLD,
+  TRIGGER_FLIGHT_HOLD,
+  type Beat,
+} from "./beats";
 import { soundBeat } from "../audio/events";
 import { liftsHandling, type Spotlight } from "./layout";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
@@ -44,14 +50,17 @@ export function holdFor(view: PlayerView): number {
   return Math.max(eventsHold(view), liftsHandling(view) ? HOLD.handling : 0);
 }
 
-/** Holds of the views `beats` made, which their events would not give, and the cards each
- * shows in a showcase. */
-const BEAT_HOLDS = new WeakMap<GameUpdate, number>();
-const SPOTLIGHTS = new WeakMap<GameUpdate, Spotlight>();
+/** Presentation data kept with queued updates, separate from the engine's view. */
+const BEATS = new WeakMap<GameUpdate, Beat>();
 
-/** How long `update` stays: its beat's hold, or `holdFor` its view. */
-function holdOf(update: GameUpdate): number {
-  return BEAT_HOLDS.get(update) ?? holdFor(update.view);
+/** How long the beat stays before playback may replace it. */
+function holdOf(update: GameUpdate, skipped = false): number {
+  const beat = BEATS.get(update);
+  const hold = beat?.hold ?? holdFor(update.view);
+  // A transient trigger gets a full flight even if its resolution is already queued.
+  return !skipped && beat?.triggerFlights
+    ? Math.max(hold, TRIGGER_FLIGHT_HOLD)
+    : hold;
 }
 
 /** `update` as the views a player can follow (beats.ts), after `before`, the view last shown
@@ -61,8 +70,7 @@ function split(
   update: GameUpdate,
 ): GameUpdate[] {
   return beats(before, update).map((beat) => {
-    if (beat.hold !== undefined) BEAT_HOLDS.set(beat.update, beat.hold);
-    if (beat.spotlight) SPOTLIGHTS.set(beat.update, beat.spotlight);
+    BEATS.set(beat.update, beat);
     return beat.update;
   });
 }
@@ -75,6 +83,8 @@ export interface Playback {
   live: boolean;
   /** Cards it shows apart from where they lie (beats.ts). */
   spotlight?: Spotlight;
+  /** Stack entries starting their trigger flight in this beat. */
+  triggerFlights?: ReadonlySet<number>;
   /** More views wait to be shown after it. */
   behind: boolean;
   /** Shows every view waiting at once, the last with all their events. */
@@ -96,6 +106,7 @@ interface State {
   shown?: GameUpdate;
   live: boolean;
   spotlight?: Spotlight;
+  triggerFlights?: ReadonlySet<number>;
   /** When the view shown may give way to the next, on `Date.now()`'s clock. */
   until: number;
   queue: GameUpdate[];
@@ -142,6 +153,7 @@ function show(
   updates: GameUpdate[],
   live: boolean,
   now: number,
+  skipped = false,
 ): State {
   let { names, log, marks, key } = state;
   for (const u of updates) {
@@ -163,12 +175,14 @@ function show(
   const last = updates.at(-1)!;
   // The views passed over lend the one shown their events, so it animates all of them.
   const update = merged(updates);
+  const beat = live ? BEATS.get(last) : undefined;
   return {
     ...state,
     shown: update,
     live,
-    spotlight: live ? SPOTLIGHTS.get(last) : undefined,
-    until: now + (live ? holdOf(last) : 0),
+    spotlight: beat?.spotlight,
+    triggerFlights: skipped ? undefined : beat?.triggerFlights,
+    until: now + (live ? holdOf(last, skipped) : 0),
     names,
     marks,
     key,
@@ -275,7 +289,7 @@ function reduce(state: State, action: Action): State {
     }
     case "skip":
       if (state.queue.length === 0) return state;
-      return show({ ...state, queue: [] }, state.queue, true, action.now);
+      return show({ ...state, queue: [] }, state.queue, true, action.now, true);
   }
 }
 
@@ -381,6 +395,7 @@ export function usePlayback(): {
       update: shown,
       live: state.live,
       spotlight: state.spotlight,
+      triggerFlights: state.triggerFlights,
       behind: queue.length > 0,
       skip: () => dispatch({ kind: "skip", now: Date.now() }),
       gather: (kind) => dispatch({ kind: "gather", for: kind }),
