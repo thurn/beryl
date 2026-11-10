@@ -233,7 +233,6 @@ interface Menu {
   slot: number;
   at: Point;
   acts: Act[];
-  waterbend?: boolean;
   pointed?: Act;
 }
 
@@ -366,7 +365,7 @@ export function Board({
       ? previousGroup.slots
       : handlingSlots(view, standIns.order);
   heldGroup.current = { view, slots: handledSlots };
-  const waterbend = useWaterbend(decision, objects);
+  const waterbend = useWaterbend(decision);
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
@@ -426,10 +425,10 @@ export function Board({
     return {
       ...declaredView,
       objects: declaredView.objects.map((o) =>
-        waterbend.selected.includes(o.slot) ? { ...o, tapped: true } : o,
+        waterbend.previewTaps.includes(o.slot) ? { ...o, tapped: true } : o,
       ),
     };
-  }, [view, draft, decision, waterbend.active, waterbend.selected]);
+  }, [view, draft, decision, waterbend.active, waterbend.previewTaps]);
   // Every card the table draws: the objects shown, and the emblems.
   const drawn = useMemo(() => [...shown.objects, ...emblems], [shown, emblems]);
   // Until combat damage is dealt, what each player's unblocked attackers will deal them.
@@ -881,15 +880,8 @@ export function Board({
     } else if (stepsIn(casts)) setUp(slot, casts);
     else cast(firstChoice(casts[0]!));
   };
-  const editWaterbend = (slot: number, act?: Act) => {
-    const option = act?.option;
-    if (
-      !waterbend.toggle(
-        slot,
-        option?.kind === "mana" ? option.color : undefined,
-      )
-    )
-      return false;
+  const editWaterbend = (slot: number) => {
+    if (!waterbend.toggle(slot)) return false;
     setMenu(undefined);
     playSound("select");
     return true;
@@ -897,17 +889,13 @@ export function Board({
 
   /** A menu's pick: a cast, with all of the card's casts, is made as a click makes it. */
   const pickAct = (slot: number, act: Act) => {
-    if (deciding && waterbend.active) {
-      editWaterbend(slot, act);
-      return;
-    }
     const casts = castActs(can.bySlot.get(slot) ?? []);
     if (act.option.kind === "cast") castOrSetUp(slot, casts);
     else pick(act.index, act.then);
   };
 
   const states = new Map<number, CardState>();
-  if (deciding) {
+  if (deciding && !waterbend.active) {
     for (const [slot, acts] of can.bySlot) {
       const single = can.picking && acts.length === 1;
       states.set(slot, {
@@ -973,10 +961,15 @@ export function Board({
     if (t.kind === "object") marks.push([t.slot, "target"]);
   }
   for (const [slot, highlight] of marks) {
-    if (slot == null || states.get(slot)?.highlight) continue;
+    if (waterbend.active || slot == null || states.get(slot)?.highlight)
+      continue;
     states.set(slot, { ...states.get(slot), highlight });
   }
-  if (can.source !== undefined && decision?.ask.kind !== "attackTarget") {
+  if (
+    !waterbend.active &&
+    can.source !== undefined &&
+    decision?.ask.kind !== "attackTarget"
+  ) {
     states.set(can.source, {
       ...states.get(can.source),
       highlight: "source",
@@ -1018,7 +1011,7 @@ export function Board({
   // permanents are tapped.
   const taps = new Set(
     waterbend.active
-      ? waterbend.taps
+      ? waterbend.selected
       : paying
         ? tapsOf(paying)
         : (unlessTaps ??
@@ -1026,22 +1019,27 @@ export function Board({
             ? paid.taps
             : [])),
   );
-  const others = castingNow
-    ? plansOf(castingNow.choice).flatMap((p) =>
-        p.taps.filter((slot) => !taps.has(slot)),
-      )
-    : [];
+  const others =
+    castingNow && !waterbend.active
+      ? plansOf(castingNow.choice).flatMap((p) =>
+          p.taps.filter((slot) => !taps.has(slot)),
+        )
+      : [];
   for (const slot of others) {
     states.set(slot, { ...states.get(slot), playable: true });
   }
   for (const slot of taps) {
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
   }
+  for (const slot of waterbend.eligible) {
+    if (!taps.has(slot))
+      states.set(slot, { ...states.get(slot), highlight: "target" });
+  }
   for (const slot of waterbend.benders) {
     states.set(slot, { ...states.get(slot), waterbending: true });
   }
   // The pointer over a permanent or what is attached to it shows the other.
-  for (const slot of linked(shown, hovered)) {
+  for (const slot of waterbend.active ? [] : linked(shown, hovered)) {
     states.set(slot, { ...states.get(slot), linked: true });
   }
 
@@ -1124,20 +1122,7 @@ export function Board({
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (isEmblem(slot)) return false;
-    if (deciding && waterbend.active) {
-      const acts = can.bySlot.get(slot) ?? [];
-      if (waterbend.selected.includes(slot) || acts.length <= 1)
-        return editWaterbend(slot, acts[0]);
-      setMenu({
-        slot,
-        at,
-        waterbend: true,
-        acts: acts.map((act) =>
-          act.option.kind === "object" ? { ...act, label: "Waterbend" } : act,
-        ),
-      });
-      return true;
-    }
+    if (deciding && waterbend.active) return editWaterbend(slot);
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
       // A permanent another payment taps pays that way.
@@ -3078,13 +3063,22 @@ function Prompt({
             text={
               decision.kind === "target" && !targetLabel
                 ? prompt(decision)
-                : title
+                : ask.kind === "waterbend"
+                  ? "Tap permanents to Waterbend"
+                  : title
             }
           />
           {ask.kind === "waterbend" && (
-            <span className="prompt-cost">
-              <CostText text={ask.cost} />
-            </span>
+            <>
+              {" "}
+              <span className="prompt-cost">
+                {/^{[0-9]+}$/.test(ask.cost) ? (
+                  `(${ask.cost.slice(1, -1)})`
+                ) : (
+                  <CostText text={ask.cost} />
+                )}
+              </span>
+            </>
           )}
         </>
       }
@@ -3393,11 +3387,7 @@ function menuEntries(
       };
     }
     if (o.kind === "mana") {
-      const effect =
-        menu.waterbend && name
-          ? act.label.replace(` ${name} for `, " for ")
-          : `Add {${MANA_SYMBOLS[o.color]}}`;
-      return { act, effect, labelled: true };
+      return { act, effect: `Add {${MANA_SYMBOLS[o.color]}}`, labelled: true };
     }
     if (o.kind === "cast") {
       const cost = name ? cardEntry(name)?.faces[o.face]?.mana_cost : undefined;

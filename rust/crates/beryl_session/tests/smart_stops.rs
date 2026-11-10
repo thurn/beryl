@@ -370,8 +370,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
                 .slot;
             let request = beryl_session::ipc::WaterbendRequest {
                 decision: decision.id,
-                selected: Some(vec![jace]),
-                mana: Vec::new(),
+                selected: vec![jace, suggested.taps[0], suggested.taps[1]],
             };
             let mut outdated = request.clone();
             outdated.decision.seq += 1;
@@ -382,15 +381,14 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
             assert!(changed.taps.contains(&jace));
             assert_eq!(changed.taps.iter().filter(|s| **s != jace).count(), 2);
             let none = beryl_session::ipc::WaterbendRequest {
-                selected: Some(vec![]),
+                selected: Vec::new(),
                 ..request.clone()
             };
-            assert_eq!(
-                game.preview_waterbend(&none).unwrap().as_ref(),
-                Some(suggested)
-            );
+            let empty = game.preview_waterbend(&none).unwrap().unwrap();
+            assert!(empty.taps.is_empty());
+            assert!(!empty.ready);
             let invalid = beryl_session::ipc::WaterbendRequest {
-                selected: Some(vec![u16::MAX]),
+                selected: vec![u16::MAX],
                 ..request
             };
             assert!(game.preview_waterbend(&invalid).unwrap().is_none());

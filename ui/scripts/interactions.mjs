@@ -10968,22 +10968,33 @@ await check(
     { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
 );
 
-// Editing the proposal sends only a read request; toggling back restores the lands.
+// The player can drop a suggested land, replace it with a creature, then cancel
+// the draft. An extra creature cannot contribute while all three lands are selected.
 if (wanted("waterbend selections")) {
     const bending = scryViews[bendAt].status.decision;
     const slot = bending.candidates.find((c) => c.option.kind === "object")
         .option.slot;
     const suggested = bending.waterbend;
-    const selected = {
+    const [land, ...otherLands] = suggested.taps;
+    const short = {
         ...suggested,
+        mana: suggested.mana.filter((m) => m.slot !== land),
+        ready: false,
+        eligible: [land, slot],
+        taps: otherLands,
+    };
+    const replacement = {
+        ...short,
         benders: [slot],
-        taps: [slot, ...suggested.taps.slice(0, 2)],
+        ready: true,
+        eligible: [],
+        taps: [...otherLands, slot],
     };
     const fixture = JSON.parse(
         await readFile(join(fixtures, "choice-scry.json"), "utf8"),
     );
     fixture.messages.unshift(
-        ...[selected, suggested].map((value) => ({
+        ...[short, replacement, short, suggested].map((value) => ({
             kind: "response",
             command: "preview_waterbend",
             value,
@@ -10996,26 +11007,9 @@ if (wanted("waterbend selections")) {
     await check(
         "waterbend selections are reversible until confirmation",
         async (page) => {
-            await page.waitForTimeout(1000);
-            await page.locator(slotOf(slot)).click();
-            await page.waitForTimeout(1000);
-            assert.equal(
-                await page.locator(`${slotOf(slot)} .waterbend-tap`).count(),
-                1,
-            );
-            await page.waitForTimeout(1000);
-            assert.ok(
-                await page
-                    .locator(`${slotOf(slot)} .card`)
-                    .evaluate(
-                        (e) =>
-                            Math.abs(
-                                new DOMMatrix(getComputedStyle(e).transform).b,
-                            ) > 0.95,
-                    ),
-                `selected card physically taps: ${await page.locator(slotOf(slot)).innerHTML()}`,
-            );
-            assert.deepEqual(await chosen(page), []);
+            const confirm = page.getByRole("button", { name: "Confirm" });
+            const marked = (slot, mark) =>
+                page.locator(`${slotOf(slot)} .${mark}`);
             const lit = () =>
                 page
                     .locator(".card-paying")
@@ -11026,44 +11020,69 @@ if (wanted("waterbend selections")) {
                             )
                             .sort((a, b) => a - b),
                     );
-            assert.deepEqual(
-                await lit(),
-                selected.taps.toSorted((a, b) => a - b),
+            const click = async (slot) => {
+                await page.locator(slotOf(slot)).click();
+                await page.waitForTimeout(750);
+            };
+            assert.match(
+                await page.locator(".prompt-title").innerText(),
+                /Tap permanents to Waterbend\s*\(3\)/,
             );
-            await page.locator(slotOf(slot)).click();
-            await page.waitForTimeout(300);
-            assert.deepEqual(await chosen(page), []);
+            assert.equal(await confirm.isEnabled(), true);
+            assert.deepEqual(await glowing(page, "target"), []);
+            assert.equal(await page.locator(".card-playable").count(), 0);
+            await click(slot);
             assert.deepEqual(
                 await lit(),
                 suggested.taps.toSorted((a, b) => a - b),
             );
             assert.equal(
-                await page.locator(`${slotOf(slot)} .waterbend-tap`).count(),
+                await confirm.isEnabled(),
+                true,
+                "excess click does nothing",
+            );
+
+            await click(land);
+            assert.equal(await confirm.isEnabled(), false);
+            assert.equal(await marked(slot, "card-target").count(), 1);
+            assert.equal(await marked(land, "card-target").count(), 1);
+            await click(slot);
+            assert.equal(await confirm.isEnabled(), true);
+            assert.equal(await marked(slot, "waterbend-tap").count(), 1);
+            assert.equal(await marked(slot, "card-target").count(), 0);
+            assert.equal(
+                await page.locator(".action-menu, .mana-picker").count(),
                 0,
             );
-            await page.waitForTimeout(700);
-            assert.ok(
-                await page
-                    .locator(`${slotOf(slot)} .card`)
-                    .evaluate(
-                        (e) =>
-                            Math.abs(
-                                new DOMMatrix(getComputedStyle(e).transform).b,
-                            ) < 0.05,
-                    ),
-                "deselected card untaps",
+            assert.deepEqual(
+                await lit(),
+                replacement.taps.toSorted((a, b) => a - b),
             );
+            const rotation = () =>
+                marked(slot, "card").evaluate((e) =>
+                    Math.abs(new DOMMatrix(getComputedStyle(e).transform).b),
+                );
+            assert.ok(
+                (await rotation()) > 0.95,
+                "selected card physically taps",
+            );
+
+            await click(slot);
+            assert.equal(await confirm.isEnabled(), false);
+            assert.ok((await rotation()) < 0.05, "deselected card untaps");
+            await click(land);
+            assert.equal(await confirm.isEnabled(), true);
+            assert.deepEqual(
+                await lit(),
+                suggested.taps.toSorted((a, b) => a - b),
+            );
+            assert.deepEqual(await chosen(page), []);
             await page
                 .getByRole("button", { name: "Cancel", exact: true })
                 .click();
             await page.waitForTimeout(1000);
             assert.deepEqual(await chosen(page), []);
-            assert.equal(
-                await page
-                    .getByRole("button", { name: "Confirm", exact: true })
-                    .count(),
-                0,
-            );
+            assert.equal(await confirm.count(), 0);
         },
         {
             fixture: "waterbend-edit",
@@ -11074,32 +11093,29 @@ if (wanted("waterbend selections")) {
     );
 }
 
-// The one-Plains fixture needs both benders, even if the player supplies the mana manually.
+// The safe Plains is suggested even though it cannot fund the payment alone.
 const tapBend = await lastDecision("waterbend-tap");
-const bendByHand = "waterbend waits for manually selected lands and benders";
+const bendByHand = "waterbend waits for manually selected benders";
 if (wanted(bendByHand)) {
-    const benders = [...tapBend.bySlot.keys()];
-    const land = tapBend.decision.candidates.find(
-        (candidate) => candidate.option.kind === "mana",
-    )?.option;
-    assert.ok(land, "the Plains can be clicked during payment");
+    const benders = tapBend.decision.candidates
+        .filter((c) => c.option.kind === "object")
+        .map((c) => c.option.slot);
+    const suggested = tapBend.decision.waterbend;
+    const [land] = suggested.taps;
     const fixture = JSON.parse(
         await readFile(join(fixtures, "waterbend-tap.json"), "utf8"),
     );
     fixture.messages.unshift(
-        ...[
-            null,
-            null,
-            {
-                benders,
-                mana: [land],
-                taps: [land.slot, ...benders],
-                plan: null,
-            },
-        ].map((value) => ({
+        ...benders.map((_, i) => ({
             kind: "response",
             command: "preview_waterbend",
-            value,
+            value: {
+                ...suggested,
+                benders: benders.slice(0, i + 1),
+                taps: [land, ...benders.slice(0, i + 1)],
+                eligible: benders.slice(i + 1),
+                ready: i === benders.length - 1,
+            },
         })),
     );
     await writeFile(
@@ -11109,45 +11125,19 @@ if (wanted(bendByHand)) {
     await check(
         bendByHand,
         async (page) => {
-            const confirm = page.getByRole("button", {
-                name: "Confirm",
-                exact: true,
-            });
+            const confirm = page.getByRole("button", { name: "Confirm" });
+            assert.equal(await confirm.isEnabled(), false);
             assert.equal(
-                await confirm.isEnabled(),
-                false,
-                "the UI starts with no benders",
+                await page.locator(`${slotOf(land)} .card-paying`).count(),
+                1,
             );
-            assert.equal(await page.locator(".waterbend-tap").count(), 0);
-            assert.deepEqual(
-                await page
-                    .locator(".prompt-cost .mana-symbol")
-                    .evaluateAll((els) => els.map((e) => e.ariaLabel)),
-                ["{3}"],
+            assert.equal(
+                await page.locator(`${slotOf(land)} .card-target`).count(),
+                0,
             );
             assert.deepEqual(
                 await glowing(page, "target"),
-                [...benders, land.slot].sort((a, b) => a - b),
-            );
-            await page.locator(slotOf(land.slot)).click();
-            await page.clock.runFor(600);
-            assert.ok(
-                await page
-                    .locator(`${slotOf(land.slot)} .card`)
-                    .evaluate(
-                        (card) =>
-                            Math.abs(
-                                new DOMMatrix(getComputedStyle(card).transform)
-                                    .b,
-                            ) > 0.95,
-                    ),
-                "the selected land turns",
-            );
-            assert.equal(
-                await page
-                    .locator(`${slotOf(land.slot)} .waterbend-tap`)
-                    .count(),
-                0,
+                [...benders].sort((a, b) => a - b),
             );
             for (const slot of benders) {
                 assert.equal(await confirm.isEnabled(), false);
@@ -11159,11 +11149,7 @@ if (wanted(bendByHand)) {
                 await page.locator(".waterbend-tap").count(),
                 benders.length,
             );
-            assert.deepEqual(
-                await chosen(page),
-                [],
-                "the draft does not spend mana or tap",
-            );
+            assert.deepEqual(await chosen(page), []);
             await confirm.click();
             assert.deepEqual(await settled(page, 1), [
                 tapBend.decision.candidates.findIndex(

@@ -370,6 +370,17 @@ fn source<L: Layout>(
     read_source(s, t, player, face())
 }
 
+/// Amount and whether the source is consumed by its mana activation, for payment previews.
+#[must_use]
+pub fn mana_contribution<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+) -> Option<(u8, bool)> {
+    source(s, t, player, slot, s.derived(slot)).map(|(_, amount, _, consumed)| (amount, consumed))
+}
+
 /// What [`source`] finds, read from the face of an untapped source `player` controls that may
 /// tap for mana now.
 fn read_source<L: Layout>(

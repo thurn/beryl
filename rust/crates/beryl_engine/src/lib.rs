@@ -55,6 +55,7 @@ pub use engine::{
 pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
 pub use invariants::{At, Violation};
 pub use layout::{Large, Layout, Small};
+pub use mana::mana_contribution;
 pub use observation::Observation;
 pub use profile::{
     Breakpoint, Limits, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers,

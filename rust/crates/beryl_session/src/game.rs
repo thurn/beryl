@@ -1562,7 +1562,7 @@ impl Game {
             return Ok(None);
         }
         Ok(
-            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), request.selected.as_deref().unwrap_or_default(), &request.mana)),
+            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), Some(&request.selected))),
         )
     }
 

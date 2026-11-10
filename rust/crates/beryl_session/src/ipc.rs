@@ -28,11 +28,8 @@ pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendRequest {
     pub decision: DecisionId,
-    /// Artifacts and creatures explicitly chosen to tap for Waterbend.
-    pub selected: Option<Vec<u16>>,
-    // Explicit mana activations, separate from tapping a bender for one generic mana.
-    #[serde(default)]
-    pub mana: Vec<WaterbendMana>,
+    /// The complete selection, including any suggested mana sources the player kept.
+    pub selected: Vec<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -43,6 +40,10 @@ pub struct WaterbendPreview {
     pub benders: Vec<u16>,
     pub taps: Vec<u16>,
     pub plan: Option<u16>,
+    // Whether these permanents suffice to pay the full cost.
+    pub ready: bool,
+    // Other permanents that could be added without a redundant contribution.
+    pub eligible: Vec<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -5,13 +5,15 @@
 //! before it sends the engine's picks; and what a count of targets lets the first target be, so
 //! the UI can take the count with the target.
 
-use beryl_engine::card::{AbilityKind, Types};
+use std::collections::BTreeMap;
+
+use beryl_engine::card::AbilityKind;
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
     Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
-    Scratch, Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, next,
-    target_removes_permanent,
+    Scratch, Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, mana_contribution,
+    next, target_removes_permanent,
 };
 
 use crate::Status;
@@ -30,7 +32,7 @@ pub fn add_previews<L: Layout>(
 ) {
     if let Status::Deciding { decision } = &mut view.status {
         if d.kind == DecisionKind::Waterbend {
-            decision.waterbend = waterbend(s, t, d, &[], &[]).map(Box::new);
+            decision.waterbend = waterbend(s, t, d, None).map(Box::new);
         }
         for (((c, p), b), targets) in decision
             .candidates
@@ -314,75 +316,196 @@ fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
     }
 }
 
-/// A proposed waterbend payment, computed on a copy. The supplied benders replace generic
-/// mana one at a time; the remainder uses the engine's usual mana plan. No preview changes
-/// the real state. [CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a):
+/// One way a selected permanent can contribute. Bending is an alternative to making mana
+/// [CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a):
 /// "you may tap an untapped artifact or creature you control rather than pay that mana."
+#[derive(Clone)]
+struct Contribution {
+    slot: u16,
+    mana: Option<WaterbendMana>,
+    amount: u16,
+    consumed: bool,
+}
+
+type Selection = (u8, u8, Vec<Contribution>);
+
+/// Find roles for the whole selection. Each row keeps the best way to reach a total with a
+/// given smallest contribution. A set can overpay with a multi-mana source only when omitting
+/// even its smallest contribution would leave it short.
+fn waterbend_roles(
+    selected: &[u16],
+    sources: &BTreeMap<u16, Vec<Contribution>>,
+    need: u16,
+) -> Option<(bool, Vec<Contribution>)> {
+    if selected.len() > usize::from(need) {
+        return None;
+    }
+    let mut ways = BTreeMap::from([((0, u16::MAX), (0, 0, Vec::new()))]);
+    for (i, slot) in selected.iter().enumerate() {
+        if selected[..i].contains(slot) {
+            return None;
+        }
+        let mut next: BTreeMap<_, Selection> = BTreeMap::new();
+        for (&(total, least), (consumed, bent, plan)) in &ways {
+            for role in sources.get(slot)? {
+                let total = total + role.amount;
+                let least = least.min(role.amount);
+                if total - least >= need {
+                    continue;
+                }
+                let score = (
+                    consumed + u8::from(role.consumed),
+                    bent + u8::from(role.mana.is_none()),
+                );
+                let entry = next.entry((total, least)).or_insert_with(|| {
+                    let mut plan = plan.clone();
+                    plan.push(role.clone());
+                    (score.0, score.1, plan)
+                });
+                if score < (entry.0, entry.1) {
+                    entry.0 = score.0;
+                    entry.1 = score.1;
+                    entry.2.clone_from(plan);
+                    entry.2.push(role.clone());
+                }
+            }
+        }
+        ways = next;
+    }
+    ways.into_iter()
+        .min_by_key(|&((total, _), (consumed, bent, _))| {
+            (need.saturating_sub(total), consumed, bent, total)
+        })
+        .map(|((total, _), (_, _, roles))| (total >= need, roles))
+}
+
+fn waterbend_sources<L: Layout>(
+    before: &State<L>,
+    t: &GameTable,
+    first: &Decision<L>,
+) -> BTreeMap<u16, Vec<Contribution>> {
+    let offered: Vec<_> = (0..first.len())
+        .filter_map(|i| first.candidates.option(choice(i)))
+        .collect();
+    let mut sources = BTreeMap::new();
+    for &slot in before.battlefield() {
+        let n = slot.num();
+        let mut roles = Vec::new();
+        if let Some(color) = offered.iter().find_map(|o| match *o {
+            Opt::Mana { slot: s, color } if s == slot => Some(color),
+            _ => None,
+        }) && let Some((amount, consumed)) = mana_contribution(before, t, first.player, slot)
+        {
+            roles.push(Contribution {
+                slot: n,
+                mana: Some(WaterbendMana {
+                    slot: n,
+                    color: color.into(),
+                }),
+                amount: amount.into(),
+                consumed,
+            });
+        }
+        if offered
+            .iter()
+            .any(|o| matches!(*o, Opt::Object(s) if beryl_engine::interchangeable(before, slot, s)))
+        {
+            roles.push(Contribution {
+                slot: n,
+                mana: None,
+                amount: 1,
+                consumed: false,
+            });
+        }
+        if !roles.is_empty() {
+            sources.insert(n, roles);
+        }
+    }
+    sources
+}
+
+/// Computes the suggested or edited set, then verifies complete payments on a game copy.
+/// Nothing taps on the real board until Confirm sends the checked sequence of answers.
 pub(crate) fn waterbend<L: Layout>(
     before: &State<L>,
     t: &GameTable,
     first: &Decision<L>,
-    selected: &[u16],
-    activations: &[WaterbendMana],
+    selected: Option<&[u16]>,
 ) -> Option<WaterbendPreview> {
-    let slots: Vec<_> = activations
-        .iter()
-        .map(|m| m.slot)
-        .chain(selected.iter().copied())
-        .collect();
-    if slots
-        .iter()
-        .enumerate()
-        .any(|(i, slot)| slots[..i].contains(slot))
-    {
+    let Ask::Waterbend { cost } = first.ask else {
         return None;
-    }
-    let safe = |plan: &WaterbendPreview| {
-        before.battlefield().iter().copied().all(|slot| {
-            let n = slot.num();
-            !plan.taps.contains(&n)
-                || plan.benders.contains(&n)
-                || plan.mana.iter().any(|m| m.slot == n)
-                || before.controller(slot) != first.player
-                || !before
-                    .derived(slot)
-                    .types
-                    .intersects(Types::ARTIFACT.union(Types::CREATURE))
-        })
     };
-    let plan = waterbend_plan(before, t, first, selected, activations)?;
-    if safe(&plan) {
-        return Some(plan);
-    }
-
-    // The normal mana plan may prefer a rock to a land. Try funding from other sources first
-    // so that a legal land payment stays available without asking the player to click each land.
-    let mut funded = activations.to_vec();
-    for i in 0..first.len() {
-        let Some(Opt::Mana { slot, color }) = first.candidates.option(choice(i)) else {
-            continue;
-        };
-        if slots.contains(&slot.num())
-            || funded.iter().any(|m| m.slot == slot.num())
-            || before
-                .derived(slot)
-                .types
-                .intersects(Types::ARTIFACT.union(Types::CREATURE))
-        {
-            continue;
+    let sources = waterbend_sources(before, t, first);
+    let generic = cost.symbols.iter().all(|&n| n == 0);
+    // The engine offers manual mana activations in this step for generic costs. If a
+    // combined cost has colored symbols, let the engine cover those as usual.
+    let pool = if generic {
+        before
+            .player(first.player)
+            .mana
+            .amounts()
+            .into_iter()
+            .map(u16::from)
+            .sum()
+    } else {
+        0
+    };
+    let need = u16::from(cost.generic).saturating_sub(pool);
+    let suggested;
+    let selected = if let Some(selected) = selected {
+        selected
+    } else {
+        let mut safe: Vec<_> = sources
+            .values()
+            .flatten()
+            .filter(|r| r.mana.is_some() && !r.consumed)
+            .collect();
+        safe.sort_by_key(|r| std::cmp::Reverse(r.amount));
+        let mut remaining = need;
+        suggested = safe
+            .into_iter()
+            .take_while(|r| {
+                let take = remaining > 0;
+                remaining = remaining.saturating_sub(r.amount);
+                take
+            })
+            .map(|r| r.slot)
+            .collect::<Vec<_>>();
+        &suggested
+    };
+    let (funded, roles) = waterbend_roles(selected, &sources, need)?;
+    let mut eligible = Vec::new();
+    let mut extra = selected.to_vec();
+    for &slot in sources.keys().filter(|slot| !selected.contains(slot)) {
+        extra.push(slot);
+        if waterbend_roles(&extra, &sources, need).is_some() {
+            eligible.push(slot);
         }
-        funded.push(WaterbendMana {
-            slot: slot.num(),
-            color: color.into(),
-        });
-        if let Some(plan) = waterbend_plan(before, t, first, selected, &funded)
-            && safe(&plan)
-        {
-            return Some(plan);
-        }
+        extra.pop();
     }
-    None
+    let mana: Vec<_> = roles.iter().filter_map(|r| r.mana.clone()).collect();
+    let benders: Vec<_> = roles
+        .iter()
+        .filter(|r| r.mana.is_none())
+        .map(|r| r.slot)
+        .collect();
+    let payment = (funded || !generic)
+        .then(|| waterbend_plan(before, t, first, &benders, &mana))
+        .flatten();
+    let ready = payment.is_some();
+    let (mana, benders, taps, plan) =
+        payment.unwrap_or_else(|| (mana, benders, selected.to_vec(), None));
+    Some(WaterbendPreview {
+        mana,
+        benders,
+        taps,
+        plan,
+        ready,
+        eligible,
+    })
 }
+
+type WaterbendAnswers = (Vec<WaterbendMana>, Vec<u16>, Vec<u16>, Option<u16>);
 
 fn waterbend_plan<L: Layout>(
     before: &State<L>,
@@ -390,7 +513,7 @@ fn waterbend_plan<L: Layout>(
     first: &Decision<L>,
     selected: &[u16],
     activations: &[WaterbendMana],
-) -> Option<WaterbendPreview> {
+) -> Option<WaterbendAnswers> {
     let mut copy = forced(before);
     let mut scratch = Scratch::new();
     let mut decision = first.clone();
@@ -448,12 +571,7 @@ fn waterbend_plan<L: Layout>(
     if selected.len() != benders.len() || activations.len() != mana.len() {
         return None;
     }
-    Some(WaterbendPreview {
-        mana,
-        benders,
-        taps: tapped(before, &copy, t),
-        plan,
-    })
+    Some((mana, benders, tapped(before, &copy, t), plan))
 }
 
 /// The permanents untapped in `before` and tapped in `after`, by slot, with those the payment
@@ -528,25 +646,19 @@ mod tests {
             .filter(|&&slot| t.def(s.card(slot)).name == names::SNAPCASTER_MAGE)
             .map(|slot| slot.num())
             .collect();
-        assert!(
-            waterbend(&s, &t, &d, &[], &[]).is_none(),
-            "no bender is implied"
-        );
-        let land = d.candidates.option(choice(d.len() - 1)).unwrap();
-        let Opt::Mana { slot, color } = land else {
-            panic!("land is an explicit payment choice");
-        };
-        let selected: Vec<_> = benders.iter().rev().copied().collect();
-        let mana = WaterbendMana {
-            slot: slot.num(),
-            color: color.into(),
-        };
-        let mixed = waterbend(&s, &t, &d, &selected, &[mana]).unwrap();
-        assert_eq!(mixed.mana[0].slot, slot.num());
+        let automatic = waterbend(&s, &t, &d, None).unwrap();
+        assert!(!automatic.ready, "no bender is implied");
+        assert_eq!(automatic.taps.len(), 1);
+        assert!(benders.iter().all(|slot| automatic.eligible.contains(slot)));
+        let mut selected = automatic.taps;
+        selected.extend(benders.iter().rev());
+        let mixed = waterbend(&s, &t, &d, Some(&selected)).unwrap();
+        assert!(mixed.ready);
+        assert_eq!(mixed.mana[0].slot, selected[0]);
         assert_eq!(mixed.benders, benders);
         assert_eq!(mixed.taps.len(), 3);
-        assert!(waterbend(&s, &t, &d, &benders[..1], &[]).is_none());
-        assert!(waterbend(&s, &t, &d, &[benders[0], benders[0]], &[]).is_none());
+        assert!(!waterbend(&s, &t, &d, Some(&benders[..1])).unwrap().ready);
+        assert!(waterbend(&s, &t, &d, Some(&[benders[0], benders[0]])).is_none());
         assert!(
             s.battlefield()
                 .iter()
@@ -555,12 +667,14 @@ mod tests {
     }
 
     #[test]
-    fn waterbend_automates_lands_but_requires_a_mana_rock_selection() {
+    fn waterbend_suggests_safe_sources_and_respects_replacements() {
         const BOARD: Scenario = Scenario::new("waterbend mana sources").battlefield(
             P0,
             &[
                 Permanent::new(names::AANGS_ICEBERG),
                 Permanent::new(names::MANA_CRYPT),
+                Permanent::new(names::CURRENCY_CONVERTER).tapped(),
+                Permanent::token(beryl_cards::tokens::TREASURE_TOKEN),
                 Permanent::new(names::PLAINS),
                 Permanent::new(names::PLAINS),
                 Permanent::new(names::PLAINS),
@@ -590,17 +704,47 @@ mod tests {
             .find(|&slot| t.def(s.card(slot)).name == names::MANA_CRYPT)
             .unwrap()
             .num();
-        let automatic = waterbend(&s, &t, &d, &[], &[]).unwrap();
-        assert_eq!(automatic.taps.len(), 3);
-        assert!(!automatic.taps.contains(&rock));
-        let activation = WaterbendMana {
-            slot: rock,
-            color: crate::protocol::Mana::Colorless,
-        };
-        let paid = waterbend(&s, &t, &d, &[], &[activation]).unwrap();
-        assert!(paid.taps.contains(&rock));
-        assert!(paid.benders.is_empty());
-        assert_eq!(paid.taps.len(), 2);
+        let automatic = waterbend(&s, &t, &d, None).unwrap();
+        assert!(automatic.ready);
+        assert!(automatic.benders.is_empty());
+        assert_eq!(automatic.taps.len(), 2);
+        assert!(automatic.taps.contains(&rock));
+        assert!(automatic.mana.iter().any(|m| m.slot == rock));
+        let treasure = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| t.def(s.card(slot)).name == beryl_cards::tokens::TREASURE_TOKEN)
+            .unwrap()
+            .num();
+        assert!(!automatic.taps.contains(&treasure));
+        let alternate = waterbend(&s, &t, &d, Some(&[rock, treasure])).unwrap();
+        assert!(alternate.ready);
+        assert_eq!(alternate.benders, vec![treasure], "tap without sacrificing");
+        assert_eq!(alternate.mana.len(), 1);
+        assert_eq!(alternate.mana[0].slot, rock, "use both colorless mana");
+        let tapped = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| t.def(s.card(slot)).name == names::CURRENCY_CONVERTER)
+            .unwrap()
+            .num();
+        assert!(!alternate.eligible.contains(&tapped));
+        let lands: Vec<_> = s
+            .battlefield()
+            .iter()
+            .filter(|&&slot| t.def(s.card(slot)).name == names::PLAINS)
+            .map(|slot| slot.num())
+            .collect();
+        let paid = waterbend(&s, &t, &d, Some(&lands)).unwrap();
+        assert!(paid.ready);
+        assert_eq!(paid.taps.len(), 3);
+        assert!(
+            paid.eligible.is_empty(),
+            "Crypt cannot contribute to four picks"
+        );
+        assert!(!waterbend(&s, &t, &d, Some(&lands[..2])).unwrap().ready);
     }
 
     /// The first decision of a scenario with `hand` and `battlefield` for the first player,

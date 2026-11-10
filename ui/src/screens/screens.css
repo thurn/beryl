@@ -1779,10 +1779,9 @@
   font: 13px/1.3 var(--font-sans);
   color: var(--text-dim);
 }
-/* A waterbend's cost still to pay, in symbols beside the title. */
+/* A Waterbend cost beside the prompt title. */
 .prompt-cost {
-  margin-left: 10px;
-  font-size: 18px;
+  white-space: nowrap;
 }
 /* A crew cost as a row of pips: crewed gold, what the pointed-at creature would add soft. */
 .crew-meter {

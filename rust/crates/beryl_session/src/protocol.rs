@@ -1828,17 +1828,21 @@ fn mana_candidate<L: Layout>(
     color: ManaColor,
     name: &str,
 ) -> (String, Candidate) {
-    let sacrifices = obs.card(slot).is_some_and(|card| {
+    let ability = obs.card(slot).and_then(|card| {
         t.def(card)
             .face(obs.object(slot).face)
             .abilities
             .iter()
-            .any(|a| {
-                a.kind == AbilityKind::Mana && a.produces.includes(color) && a.cost.sacrifice_self
-            })
+            .filter(|a| a.kind == AbilityKind::Mana && a.produces.includes(color))
+            .find(|a| a.cost.tap || a.cost.sacrifice_self)
     });
-    let verb = if sacrifices { "Sacrifice" } else { "Tap" };
-    let symbol = MANA_SYMBOLS[color.index()];
+    let verb = if ability.is_some_and(|a| a.cost.sacrifice_self) {
+        "Sacrifice"
+    } else {
+        "Tap"
+    };
+    let symbol =
+        MANA_SYMBOLS[color.index()].repeat(ability.map_or(1, |a| a.produces.amount).into());
     (
         format!("{verb} {name} for {symbol}"),
         Candidate::Mana {

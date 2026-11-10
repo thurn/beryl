@@ -33,11 +33,11 @@ continuation?: boolean, };
 
 export type WaterbendRequest = { decision: DecisionId, 
 /**
- * Artifacts and creatures explicitly chosen to tap for Waterbend.
+ * The complete selection, including any suggested mana sources the player kept.
  */
-selected: Array<number> | null, mana: Array<WaterbendMana>, };
+selected: Array<number>, };
 
-export type WaterbendPreview = { mana: Array<WaterbendMana>, benders: Array<number>, taps: Array<number>, plan: number | null, };
+export type WaterbendPreview = { mana: Array<WaterbendMana>, benders: Array<number>, taps: Array<number>, plan: number | null, ready: boolean, eligible: Array<number>, };
 
 export type WaterbendMana = { slot: number, color: Mana, };
 

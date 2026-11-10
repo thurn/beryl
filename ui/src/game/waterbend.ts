@@ -1,87 +1,53 @@
 // Waterbend is edited locally. Only Confirm sends the tap choices to the engine; previews
 // run the real payment rules on a copy and stale replies never replace a newer selection.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { previewWaterbend } from "../ipc";
-import type {
-  DecisionView,
-  WaterbendPreview,
-  ObjectView,
-  Mana,
-} from "../generated/protocol";
-import { twins, type Intent } from "./decisions";
+import type { DecisionView, WaterbendPreview } from "../generated/protocol";
+import type { Intent } from "./decisions";
 
-export function useWaterbend(
-  decision: DecisionView | undefined,
-  objects: Map<number, ObjectView>,
-) {
+const NO_SLOTS: number[] = [];
+
+export function useWaterbend(decision: DecisionView | undefined) {
   const active = decision?.kind === "waterbend" ? decision : undefined;
   const key = active ? `${active.id.session}:${active.id.seq}` : undefined;
   const revision = useRef(0);
   const [edit, setEdit] = useState<{
     key: string;
-    picks: { slot: number; color?: Mana }[];
-    preview?: WaterbendPreview | null;
+    preview: WaterbendPreview;
+    pending?: number[];
   }>();
   useEffect(() => {
     revision.current += 1;
   }, [key]);
   const current = edit?.key === key ? edit : undefined;
-  const automatic = active?.waterbend;
-  const preview = current
-    ? current.preview
-    : automatic?.benders.length === 0
-      ? automatic
-      : undefined;
-  const picks = current?.picks ?? [];
-  const selected = picks.map((pick) => pick.slot);
-  const benders = picks.flatMap((pick) =>
-    pick.color === undefined ? [pick.slot] : [],
+  const suggestion = active?.waterbend;
+  const preview = current?.preview ?? suggestion;
+  const selected = current?.pending ?? preview?.taps ?? NO_SLOTS;
+  const eligible = preview?.eligible ?? NO_SLOTS;
+  // Suggested sources stay upright until payment. An explicit addition can preview its tap.
+  const previewTaps = useMemo(
+    () => selected.filter((slot) => !suggestion?.taps.includes(slot)),
+    [selected, suggestion],
   );
-  const eligible = (slot: number, color?: Mana) =>
-    active?.candidates.some(({ option }) => {
-      if (color !== undefined)
-        return (
-          option.kind === "mana" &&
-          option.slot === slot &&
-          option.color === color
-        );
-      if (option.kind !== "object") return false;
-      const clicked = objects.get(slot);
-      const offered = objects.get(option.slot);
-      return (
-        option.slot === slot ||
-        (!!clicked && !!offered && twins(clicked, offered))
-      );
-    });
-  const toggle = (slot: number, color?: Mana) => {
-    if (!active || !key) return false;
+
+  const toggle = (slot: number) => {
+    if (!active || !key || !preview || current?.pending) return false;
     const removing = selected.includes(slot);
-    if (!removing && !eligible(slot, color)) return false;
+    if (!removing && !eligible.includes(slot)) return false;
     const next = removing
-      ? picks.filter((pick) => pick.slot !== slot)
-      : [...picks, { slot, color }];
-    const bend = next.flatMap((pick) =>
-      pick.color === undefined ? [pick.slot] : [],
-    );
-    const mana = next.flatMap(({ slot, color }) =>
-      color === undefined ? [] : [{ slot, color }],
-    );
+      ? selected.filter((s) => s !== slot)
+      : [...selected, slot];
     const request = ++revision.current;
-    setEdit({ key, picks: next });
-    void previewWaterbend(active.id, bend, mana).then(
-      (result) => {
-        if (request === revision.current)
-          setEdit({ key, picks: next, preview: result });
-      },
-      () => {
-        if (request === revision.current)
-          setEdit({ key, picks: next, preview: null });
-      },
-    );
+    setEdit({ key, preview, pending: next });
+    const settle = (result: WaterbendPreview | null) => {
+      if (request === revision.current)
+        setEdit({ key, preview: result ?? preview });
+    };
+    void previewWaterbend(active.id, next).then(settle, () => settle(null));
     return true;
   };
   const plan = (): Intent[] =>
-    preview
+    preview?.ready && !current?.pending
       ? [
           ...(preview.mana ?? []).map(({ slot, color }): Intent => ({
             kind: "waterbend",
@@ -116,16 +82,10 @@ export function useWaterbend(
   return {
     active: !!active,
     selected,
-    benders,
-    taps: preview
-      ? [
-          ...selected,
-          ...preview.taps.filter(
-            (s) => !preview.benders.includes(s) && !selected.includes(s),
-          ),
-        ]
-      : selected,
-    ready: !!preview,
+    previewTaps,
+    benders: (preview?.benders ?? []).filter((s) => selected.includes(s)),
+    eligible,
+    ready: !!preview?.ready && !current?.pending,
     toggle,
     plan,
   };
