@@ -1660,6 +1660,10 @@
   z-index: 900;
   pointer-events: none;
 }
+/* The safety prompt focuses Cancel on open. Brighten its existing rim. */
+.prompt .removal-cancel:focus-visible {
+  outline-offset: -2px;
+}
 .prompt-body {
   position: absolute;
   left: 50%;

@@ -4439,6 +4439,37 @@ const ravelerActs = lowView.status.decision.candidates.flatMap((c, i) =>
     c.option.kind === "activate" && c.option.slot === raveler ? [i] : [],
 );
 assert.equal(ravelerActs.length, 1, "Teferi offers its +1 alone");
+for (const phone of [false, true]) {
+    await check(
+        `the loyalty badge centers the number in the shield on ${phone ? "phone" : "desktop"}`,
+        async (page) => {
+            const badge = page.locator(
+                `[data-slot="${raveler}"] .card-loyalty`,
+            );
+            const numberCenter = await badge.evaluate((e) => {
+                const shield = e
+                    .querySelector(".card-loyalty-glyph")
+                    .getBoundingClientRect();
+                const number = e.querySelector("b").getBoundingClientRect();
+                return (
+                    (number.top + number.height / 2 - shield.top) /
+                    shield.height
+                );
+            });
+            assert.ok(
+                numberCenter >= 0.54 && numberCenter <= 0.64,
+                `the number sits in the body below the shield's top notch: ${numberCenter}`,
+            );
+        },
+        {
+            fixture: "walker-low",
+            at: lowViews.length,
+            ready: ".card-loyalty",
+            phone,
+            viewport: phone ? { width: 390, height: 844 } : undefined,
+        },
+    );
+}
 await check(
     "a planeswalker's click opens its chooser, unaffordable abilities disabled",
     async (page) => {
@@ -9456,7 +9487,20 @@ await check(
         await page.click(slotOf(slot));
         await warning.waitFor();
         assert.deepEqual(await chosen(page), []);
-        await warning.getByRole("button", { name: "Cancel" }).click();
+        const cancel = warning.getByRole("button", { name: "Cancel" });
+        assert.deepEqual(
+            await cancel.evaluate((e) => ({
+                focused: document.activeElement === e,
+                outline: getComputedStyle(e).outlineStyle,
+                offset: getComputedStyle(e).outlineOffset,
+            })),
+            { focused: true, outline: "solid", offset: "-2px" },
+            "Cancel's focus outline replaces the rim in place",
+        );
+        await page.keyboard.press("Escape");
+        await page.getByRole("button", { name: "No Target" }).waitFor();
+        await page.click(slotOf(slot));
+        await cancel.click();
         await page.getByRole("button", { name: "No Target" }).waitFor();
         assert.equal(await cancels(page), 0);
         assert.deepEqual(await chosen(page), []);

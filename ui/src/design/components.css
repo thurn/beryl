@@ -459,7 +459,8 @@
 }
 .card-loyalty b {
   grid-area: 1 / 1;
-  translate: 0 -0.05em;
+  /* Center in the shield body below its top notch. */
+  translate: 0 0.16em;
   font: 700 1.8em/1 var(--font-serif);
   color: #1c1a19;
 }

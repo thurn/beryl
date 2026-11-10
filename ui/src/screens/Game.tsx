@@ -680,6 +680,7 @@ function Playing({ playback }: { playback: Playback }) {
               </Button>
               <Button
                 variant="secondary"
+                className="removal-cancel"
                 autoFocus
                 onClick={() => setRemoval(undefined)}
               >
