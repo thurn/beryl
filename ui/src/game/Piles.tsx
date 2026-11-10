@@ -109,11 +109,11 @@ export function PileButton({
   const { look, cards } = pile;
   return (
     <Lying
-      look={look}
+      look={pile.zone === "library" ? { ...look, skew: 0 } : look}
       className="pile-at"
       tip={
         <Tip side={pile.side === "you" ? "over" : "below"}>
-          {pileTip(pile.zone, cards.length)}
+          {pileTip(pile.zone, pile.count ?? cards.length)}
         </Tip>
       }
     >
@@ -127,7 +127,7 @@ export function PileButton({
           width: look.width,
           height: look.width / CARD_ASPECT,
         }}
-        aria-label={`${pileName(pile)}, ${cardCount(cards.length)}`}
+        aria-label={`${pileName(pile)}, ${cardCount(pile.count ?? cards.length)}`}
         data-pile={pile.zone}
         data-side={pile.side}
         onClick={onOpen}

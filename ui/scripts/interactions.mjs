@@ -1024,7 +1024,11 @@ await check(
  * of its width, with both of the opponent's piles on the table: nothing lies over it. */
 async function assertReachable(page, button) {
     assert.equal(
-        await page.locator("[data-pile][data-side=opponent]").count(),
+        await page
+            .locator(
+                "[data-pile=graveyard][data-side=opponent], [data-pile=exile][data-side=opponent]",
+            )
+            .count(),
         2,
         "the opponent's graveyard and exile piles lie on the table",
     );
@@ -5416,7 +5420,7 @@ await check(
             `Graveyard · ${view.players.you.graveyard.length}`,
         );
         assert.equal(
-            await tip('[aria-label^="Library"]'),
+            await tip("[data-pile=library][data-side=opponent]"),
             `Library · ${view.players.opponent.library.length}`,
         );
     },

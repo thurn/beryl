@@ -1371,6 +1371,7 @@ export interface ZonePile {
   zone: "graveyard" | "exile" | "library";
   /** Bottom first: the last lies on top. */
   cards: ObjectView[];
+  count?: number;
   look: PileLook;
 }
 
@@ -1380,6 +1381,7 @@ export function knownLibraries(view: PlayerView): ZonePile[] {
   return (["you", "opponent"] as const).map((side) => ({
     side,
     zone: "library",
+    count: view.players[side].library.length,
     look: pileLook(
       side,
       PILES[side].library,

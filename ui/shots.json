@@ -319,7 +319,7 @@
       "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900,
-      "hover": "[aria-label^=\"Library\"]"
+      "hover": "[data-pile=library][data-side=opponent]"
     },
     {
       "name": "game-graveyard-viewer",
