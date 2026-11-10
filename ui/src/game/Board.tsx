@@ -2363,9 +2363,9 @@ function AbilityOnStack({
   const [liftFrom, setLiftFrom] = useState(() =>
     !reduce && !chosen ? from : undefined,
   );
-  const origin = liftFrom && abilityLift(liftFrom, item.triggered);
-  const flight =
-    origin && item.triggered ? triggerArc(origin, place) : undefined;
+  const triggerStart =
+    liftFrom && item.triggered ? triggerOrigin(liftFrom) : undefined;
+  const lift = item.triggered ? undefined : liftFrom;
   const text = abilityText(face.text ?? "", item.triggered, item.nth);
   // A trigger starts inside its source. With no source drawn, it fades in at the stack.
   const start = chosen
@@ -2376,12 +2376,12 @@ function AbilityOnStack({
         scale: chosen.width / place.width,
         rotate: 0,
       }
-    : origin && item.triggered
+    : triggerStart
       ? {
           opacity: 0,
-          x: origin.start.x,
-          y: origin.start.y,
-          scale: origin.start.width / place.width,
+          x: triggerStart.x,
+          y: triggerStart.y,
+          scale: triggerStart.width / place.width,
           rotate: 0,
         }
       : from
@@ -2410,25 +2410,19 @@ function AbilityOnStack({
       initial={reduce ? false : start}
       animate={{
         opacity: 1,
-        scale: flight
-          ? flight.map((point) => point.scale)
-          : origin
-            ? [null, Math.min(1, origin.lift.width / place.width), 1]
-            : 1,
-        x:
-          flight?.map((point) => point.x) ??
-          (origin ? [null, origin.lift.x, place.x] : place.x),
-        y:
-          flight?.map((point) => point.y) ??
-          (origin ? [null, origin.lift.y, place.y] : place.y),
+        scale: lift
+          ? [
+              null,
+              Math.min(1, (lift.width * lift.scale * 1.35) / place.width),
+              1,
+            ]
+          : 1,
+        x: lift ? [null, lift.x, place.x] : place.x,
+        y: lift ? [null, lift.y - 54, place.y] : place.y,
         rotate: 0,
       }}
       transition={
-        origin && item.triggered
-          ? TRIGGER_FLIGHT
-          : origin
-            ? SOURCE_FLIGHT
-            : ABILITY_FLIGHT
+        triggerStart ? TRIGGER_FLIGHT : lift ? SOURCE_FLIGHT : ABILITY_FLIGHT
       }
       onAnimationComplete={() => setLiftFrom(undefined)}
       onPointerMove={() => onPoint(true)}
@@ -2448,30 +2442,14 @@ function AbilityOnStack({
   );
 }
 
-/** Let a trigger emerge at the center of the visible card before it crosses the board. */
-function abilityLift(from: Placement, triggered: boolean) {
-  const width = from.width * from.scale;
-  if (!triggered)
-    return {
-      start: { x: from.x, y: from.y, width },
-      lift: { x: from.x, y: from.y - 54, width: width * 1.35 },
-    };
+/** Start a trigger small and centered inside the card it came from. */
+function triggerOrigin(from: Placement) {
   const { left, right, top, bottom } = footprint(from);
-  const centerX = (left + right) / 2;
-  const centerY = (top + bottom) / 2;
-  const startWidth = Math.min(right - left, (bottom - top) * CARD_ASPECT) * 0.6;
-  const liftWidth = width * 1.16;
+  const width = Math.min(right - left, (bottom - top) * CARD_ASPECT) * 0.6;
   return {
-    start: {
-      x: centerX - startWidth / 2,
-      y: centerY - startWidth / CARD_ASPECT / 2,
-      width: startWidth,
-    },
-    lift: {
-      x: centerX - liftWidth / 2,
-      y: centerY - liftWidth / CARD_ASPECT / 2 - (bottom - top) * 0.7,
-      width: liftWidth,
-    },
+    x: (left + right - width) / 2,
+    y: (top + bottom - width / CARD_ASPECT) / 2,
+    width,
   };
 }
 
@@ -2495,54 +2473,12 @@ const SOURCE_FLIGHT = {
   scale: SOURCE_LEG,
 };
 
-/** One curve from the source to the stack, with an upward launch and no stop at the crest. */
-function triggerArc(
-  { start, lift }: ReturnType<typeof abilityLift>,
-  end: { x: number; y: number; width: number },
-) {
-  const from = {
-    x: start.x + start.width / 2,
-    y: start.y + start.width / (2 * CARD_ASPECT),
-  };
-  const to = {
-    x: end.x + end.width / 2,
-    y: end.y + end.width / (2 * CARD_ASPECT),
-  };
-  const rise = from.y - lift.y - lift.width / (2 * CARD_ASPECT);
-  const distance = to.x - from.x;
-  const controlX =
-    from.x +
-    Math.sign(distance || 1) *
-      Math.max(Math.abs(distance) * 0.22, lift.width * 0.75);
-  return Array.from({ length: 33 }, (_, index) => {
-    // Sample the whole eased curve, then interpolate linearly between samples.
-    // Follow the center so the trigger can grow without changing its path.
-    const progress = index / 32;
-    const t = 1 - (1 - progress) ** 1.5;
-    const u = 1 - t;
-    const width = end.width + (start.width - end.width) * (1 - progress) ** 3;
-    const x =
-      u ** 3 * from.x +
-      3 * u ** 2 * t * from.x +
-      3 * u * t ** 2 * controlX +
-      t ** 3 * to.x;
-    const y =
-      u ** 3 * from.y +
-      3 * u ** 2 * t * (from.y - rise * 1.8) +
-      3 * u * t ** 2 * (from.y - rise * 2.2) +
-      t ** 3 * to.y;
-    return {
-      x: x - width / 2,
-      y: y - width / (2 * CARD_ASPECT),
-      scale: width / end.width,
-    };
-  });
-}
-
+// Position and scale use the same easing, so the growing trigger's center
+// travels straight to its stack slot.
 const TRIGGER_FLIGHT = {
   duration: TRIGGER_FLIGHT_MS / 1000,
-  ease: "linear",
-  opacity: { duration: 0.07, ease: "linear" },
+  ease: [0.33, 0.44, 0.4, 1],
+  opacity: { duration: 0.045, ease: "linear" },
 } as const;
 
 /** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,

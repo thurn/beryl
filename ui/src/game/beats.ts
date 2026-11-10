@@ -24,7 +24,7 @@ import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 
 /** Stack-to-battlefield travel and the trigger it hands off to share playback timing. */
 export const PERMANENT_TRAVEL_MS = 510;
-export const TRIGGER_FLIGHT_MS = 640;
+export const TRIGGER_FLIGHT_MS = 320;
 const FRAME_BUFFER_MS = 40;
 export const TRIGGER_FLIGHT_HOLD = TRIGGER_FLIGHT_MS + FRAME_BUFFER_MS;
 

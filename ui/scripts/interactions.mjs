@@ -7211,8 +7211,7 @@ if (wanted(manifestFlight)) {
     );
 }
 
-const triggerLift =
-    "an ETB trigger flies continuously from the settled permanent";
+const triggerLift = "an ETB trigger flies directly from the settled permanent";
 const triggerCases = [
     ["you", "stop"],
     ["opponent", "stop"],
@@ -7381,7 +7380,7 @@ for (const [controller, resolution] of wanted(triggerLift)
                 return (
                     first &&
                     window.triggerFrames.some(
-                        (f) => f.at - first.at >= 640 && f.opacity === 1,
+                        (f) => f.at - first.at >= 320 && f.opacity === 1,
                     )
                 );
             });
@@ -7400,53 +7399,56 @@ for (const [controller, resolution] of wanted(triggerLift)
                 gap >= 0 && gap < 105,
                 `the trigger follows the landing within 105 ms (saw ${gap} ms)`,
             );
+            assert.ok(opacity < 0.8, "the trigger emerges as it departs");
+            const departure = center(start);
+            const sourceCenter = center(from);
+            // The first sampled frame can already be partway out of the source.
             assert.ok(
-                opacity < 0.8,
-                "the trigger emerges while it begins to lift",
+                start.width < from.width &&
+                    Math.abs(departure.x - sourceCenter.x) <
+                        from.width * 0.65 &&
+                    Math.abs(departure.y - sourceCenter.y) < from.height * 0.65,
+                "the trigger emerges small from the settled permanent",
             );
+            const arrival = center(frames.at(-1).ability);
+            const dx = arrival.x - departure.x;
+            const dy = arrival.y - departure.y;
+            const distance = Math.hypot(dx, dy);
             assert.ok(
-                start.width < from.width * 0.85 &&
-                    start.x >= from.x &&
-                    start.y >= from.y &&
-                    start.x + start.width <= from.x + from.width &&
-                    start.y + start.height <= from.y + from.height,
-                "trigger starts small inside the settled permanent",
+                distance > from.width,
+                "the trigger travels across the table",
             );
-            const lifted = frames.filter(
-                ({ permanent, ability, opacity }) =>
-                    opacity >= 0.85 &&
-                    ability.width > permanent.width &&
-                    Math.abs(center(ability).x - center(permanent).x) <
-                        permanent.width * 0.45 &&
-                    ability.y + ability.height <
-                        permanent.y + permanent.height * 0.72,
-            );
-            assert.ok(
-                lifted.length >= 3,
-                "the visible trigger lifts above its source, uncovering its lower portion before crossing",
-            );
-            // Follow the center, so growth alone cannot hide a stall. Check through
-            // the bend and allow the last part to ease into the stack.
-            for (const frame of frames.filter(
-                (f) => f.opacity >= 0.18 && f.at - at < 420,
-            )) {
-                const later = frames.find((f) => f.at - frame.at >= 65);
-                assert.ok(later, "the trigger survives the whole flight");
-                const a = center(frame.ability);
-                const b = center(later.ability);
-                const speed =
-                    Math.hypot(b.x - a.x, b.y - a.y) / (later.at - frame.at);
+            let previous = 0;
+            for (const { ability } of frames) {
+                const position = center(ability);
+                const x = position.x - departure.x;
+                const y = position.y - departure.y;
+                const progress = (x * dx + y * dy) / distance;
+                const sideways = Math.abs(x * dy - y * dx) / distance;
                 assert.ok(
-                    speed > from.width / 400,
-                    `the trigger keeps moving at ${Math.round(frame.at - at)} ms (saw ${speed.toFixed(2)} px/ms)`,
+                    sideways < 4,
+                    `the trigger flies straight (deviation ${sideways.toFixed(1)} px)`,
                 );
+                assert.ok(
+                    progress >= previous - 1,
+                    "the trigger moves toward the stack without reversing",
+                );
+                previous = progress;
             }
+            const early = center(frames.find((f) => f.at - at >= 120).ability);
+            const covered =
+                ((early.x - departure.x) * dx + (early.y - departure.y) * dy) /
+                distance;
+            assert.ok(
+                covered > distance * 0.55,
+                "the trigger covers most of the distance in the first 120 ms",
+            );
             assert.ok(
                 samples.every(
                     ({ copies, triggers, arrows }) =>
                         copies === 1 && triggers <= 1 && arrows === 0,
                 ),
-                "the lift has one permanent, one trigger and no arrows",
+                "the flight has one permanent, one trigger and no arrows",
             );
             assert.ok(
                 frames.some(
