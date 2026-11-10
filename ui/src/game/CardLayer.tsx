@@ -272,15 +272,19 @@ export function CardLayer(props: CardLayerProps) {
         {objects.map((o) => {
           const place = placements.get(o.slot);
           const departure = departureOrder.get(o.slot);
+          const tokenLife = o.token
+            ? (identities.keys.get(o.slot) ?? 0)
+            : undefined;
           return (
             place && (
               <CardElement
                 key={
-                  o.token
-                    ? `token:${o.slot}:${identities.keys.get(o.slot) ?? 0}`
+                  tokenLife !== undefined
+                    ? `token:${o.slot}:${tokenLife}`
                     : (props.keys?.get(o.slot) ?? o.slot)
                 }
                 object={o}
+                tokenLife={tokenLife}
                 shuffling={o.zone === "library" && shuffled.has(o.owner)}
                 place={place}
                 state={stateOf(o.slot)}
@@ -354,6 +358,7 @@ type Held =
 
 const CardElement = memo(function CardElement({
   object,
+  tokenLife,
   shuffling,
   place,
   state,
@@ -368,6 +373,7 @@ const CardElement = memo(function CardElement({
   modeHandoff,
 }: {
   object: ObjectView;
+  tokenLife?: number;
   shuffling: boolean;
   place: Placement;
   state: CardState;
@@ -464,6 +470,9 @@ const CardElement = memo(function CardElement({
     const start = (from: CardHandoff) => {
       if (reduce || !from.width) return;
       handed.current = epoch;
+      // The borrowed card has its own departure pose. Stop applying the
+      // packet's translation before the first frame, while React unparks it.
+      table.removeAttribute("data-library-pile");
       x.jump(from.x);
       y.jump(from.y);
       scale.jump(from.width / place.width);
@@ -752,6 +761,7 @@ const CardElement = memo(function CardElement({
         className={classes}
         data-slot={present || !temporary ? object.slot : undefined}
         data-ceasing-slot={!present && temporary ? object.slot : undefined}
+        data-token-life={tokenLife}
         data-zone={object.zone}
         data-dissolving={!present && temporary && !reduce ? "" : undefined}
         data-card={place.back ? undefined : (object.name ?? undefined)}
@@ -847,6 +857,8 @@ const CardElement = memo(function CardElement({
       {ghosted && (
         <motion.div
           className={`${classes} card-ghost`}
+          data-ghost-slot={object.slot}
+          data-zone={object.zone}
           aria-hidden
           style={{ ...frame, zIndex: RAISED_Z }}
         >

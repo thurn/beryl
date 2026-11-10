@@ -41,9 +41,10 @@ show the mechanics it shares.
    `crowded` (more than three events in one view). Arrows are judged too: `jump`
    (a new path while both its ends stood still) and `stretch` (drawn while an end
    moved). Beside the events,
-   `duplicate` flags one card shown twice at once for 250 ms or more (one slot
-   drawn twice, or a slotless copy beside it; a prompt's copies are allowed),
-   and `ui` findings judge what moved with no event behind it (a fan making
+   `duplicate` flags two visible instances of the same card in any recorded
+   frame, including face-down cards, browsers and prompts. Hover inspection
+   is exempt. Distinct slots and ability indicators may share card art.
+   The `ui` findings judge what moved with no event behind it (a fan making
    room, a button sliding in). About 20 s a card; the JSON with every event, ok
    ones too, lands in `$BERYL_CACHE/spec-motion/`. Taps, untaps and `ui`
    findings of a scripted play are `minor`: printed only with `--minor`. A

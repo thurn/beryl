@@ -2834,6 +2834,7 @@ function PromptCard({
       type="button"
       className="prompt-card"
       data-option={object.slot}
+      data-prompt-slot={object.slot}
       aria-label={object.name ?? "A card"}
       onClick={onPick}
       {...hover}
@@ -2844,6 +2845,7 @@ function PromptCard({
     <span
       ref={ref as RefObject<HTMLSpanElement>}
       className="prompt-card prompt-subject"
+      data-prompt-slot={object.slot}
       aria-label={object.name ?? "A card"}
       {...hover}
     >

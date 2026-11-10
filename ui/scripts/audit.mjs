@@ -8,9 +8,8 @@
 //   unseen    they changed, but off screen, covered or transparent the while
 //   still     nothing showed it: no element changed, or none shows it
 //   crowded   a view showed more than CROWDED events at once, too many to follow
-//   duplicate the same card showed twice at once for DUPLICATE_MS or longer: a second copy of
-//             a card (one slot drawn twice, or a copy with no slot beside it), outside a
-//             prompt, which shows copies of the cards it offers on purpose
+//   duplicate two painted instances of the same slot shared a frame, including in browsers
+//             and prompts. Only hover inspection may show another copy.
 //   jump      an arrow took a new path while both its ends stood still: rerouted round
 //             something that moved elsewhere, which the eye reads as the arrow jumping
 //   stretch   an arrow was drawn while one of its ends moved, following a card in flight
@@ -42,9 +41,6 @@ const QUIET_EVENTS = new Set([
 ]);
 /** Events that come with another and count for nothing in a crowd. */
 const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast", "mana"]);
-/** How long a card may show twice before it counts as a duplicate: a hand-off between two
- * elements of one card (a prompt's card settling back onto the table) crosses briefly. */
-const DUPLICATE_MS = 250;
 /** How long after a view's window a card drawn in it may still arrive in the hand: a draw's
  * beat can hold it back past the next view. */
 const DRAW_GRACE = 1500;
@@ -56,8 +52,25 @@ export function record(ui) {
     const UI_SELECTOR =
         ui ??
         ".dock button, .prompt-title, .ability-choice, .choice-card, .chooser-close, .chooser-corner";
-    // Where copies of a card are shown on purpose: the cards a prompt offers, the inspector.
-    const ALLOWED = "[role=dialog], .prompt, .ability-chooser, .inspector";
+    const CARD_SELECTOR =
+        "[data-slot], [data-viewer-slot], [data-risen], [data-prompt-slot], " +
+        "[data-shown-slot], [data-ghost-slot], [data-ceasing-slot], [data-card]";
+    const slotOf = ({ dataset: d }) =>
+        d.slot ??
+        d.viewerSlot ??
+        d.risen ??
+        d.promptSlot ??
+        d.shownSlot ??
+        d.ghostSlot ??
+        d.ceasingSlot;
+    // A DOM node keeps its own ID when it moves or changes faces. A different node
+    // can take over the same object, and a recycled slot can get a new node.
+    const ids = new WeakMap();
+    let nextId = 0;
+    const id = (e) => {
+        if (!ids.has(e)) ids.set(e, ++nextId);
+        return ids.get(e);
+    };
     const opacity = (e) => {
         let o = 1;
         for (let x = e; x && x !== document.body; x = x.parentElement) {
@@ -102,27 +115,32 @@ export function record(ui) {
         ),
     ];
     const frames = [];
-    window.__motion = { frames, stop: false };
+    const recording = { frames, stop: false };
+    window.__motion = recording;
     const frame = () => {
+        if (recording.stop) return;
         document.head.append(hits);
-        const cards = {};
-        for (const e of document.querySelectorAll("[data-slot]")) {
-            const r = e.getBoundingClientRect();
-            if (r.width === 0 && r.height === 0) continue;
-            const slot = e.dataset.slot;
-            // A slot shown twice (a source and its ability) keeps its largest.
-            if (
-                cards[slot] &&
-                cards[slot].w * cards[slot].h >= r.width * r.height
-            )
+        const instances = [];
+        const inside = (x, y) =>
+            x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+        for (const e of document.querySelectorAll(CARD_SELECTOR)) {
+            if (e.closest(".inspect")) continue;
+            const slot = slotOf(e);
+            // A stack indicator or mode may reuse a card's art. It has its own
+            // identity. A real slot inside either is still audited.
+            if (slot == null && e.closest("[data-stack-key], [data-mode]"))
                 continue;
-            const cx = r.left + r.width / 2;
-            const cy = r.top + r.height / 2;
-            // Seen where any of five points across it is on screen and on top: a land under
-            // its neighbours in a group, or the opponent's hand peeking in at the edge, shows
-            // a part.
-            const inside = (x, y) =>
-                x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+            const parent = e.parentElement?.closest(CARD_SELECTOR);
+            if (parent && (slot == null || slot === slotOf(parent))) continue;
+            // Borrowing hides the actual face, which can move inside a stationary
+            // hit target. A raised hand card has a separate visual above that target.
+            const face =
+                e.querySelector(
+                    ":scope > .shown-card, .card-body, .pile-card-rim",
+                ) ?? e;
+            const r = face.getBoundingClientRect();
+            const style = getComputedStyle(face);
+            const o = style.visibility === "visible" ? opacity(face) : 0;
             const points = [
                 [0.5, 0.5],
                 [0.2, 0.2],
@@ -135,72 +153,51 @@ export function record(ui) {
                     r.top + r.height * fy,
                 ])
                 .filter(([x, y]) => inside(x, y));
-            const on = points.length > 0;
-            const top = points.some(([x, y]) => onTop(e, x, y));
-            cards[slot] = {
+            const badge = badges(e);
+            const flip = o > 0.3 && face.querySelector(".card-flip");
+            const surface = flip && flip.firstElementChild;
+            const transform = flip && getComputedStyle(flip).transform;
+            const turn =
+                transform && transform !== "none"
+                    ? new DOMMatrix(transform).m11
+                    : 1;
+            instances.push({
+                id: id(e),
+                stage: id(e.closest(".stage") ?? document.body),
+                slot,
+                tokenLife: e.dataset.tokenLife,
+                ceasing: e.hasAttribute("data-ceasing-slot"),
+                where:
+                    e.dataset.zone ?? e.classList[0] ?? e.tagName.toLowerCase(),
                 zone: e.dataset.zone,
                 librarySide: e.dataset.libraryPile,
-                name: e.dataset.card ?? null,
-                x: Math.round(cx),
-                y: Math.round(cy),
+                name: e.dataset.card ?? e.getAttribute("aria-label") ?? null,
+                x: Math.round(r.left + r.width / 2),
+                y: Math.round(r.top + r.height / 2),
                 w: Math.round(r.width),
                 h: Math.round(r.height),
-                o: opacity(e),
-                on,
-                top,
-                anim: e.getAnimations({ subtree: true }).length > 0,
-                // Its counters and loyalty, as their badges read, and whether they animate.
-                badge: badges(e)
-                    .map((b) => b.textContent.trim())
-                    .join(" "),
-                badgeAnim: badges(e).some(
+                o,
+                on: points.length > 0,
+                top:
+                    o > 0.3 &&
+                    r.width > 1 &&
+                    r.height > 1 &&
+                    points.some(([x, y]) => onTop(face, x, y)),
+                anim: o > 0.3 && e.getAnimations({ subtree: true }).length > 0,
+                badge: badge.map((b) => b.textContent.trim()).join(" "),
+                badgeAnim: badge.some(
                     (b) => b.getAnimations({ subtree: true }).length > 0,
                 ),
-            };
-        }
-        // Each card shown more than once at a time: its name, and where each copy is. Twins
-        // (two slots of one name) are two cards; one slot drawn twice, or a copy with no slot
-        // beside it, is a duplicate.
-        const copies = {};
-        for (const e of document.querySelectorAll("[data-card]")) {
-            const name = e.dataset.card;
-            if (!name || e.closest(ALLOWED)) continue;
-            // The outermost element of a card: its own parts may name it too.
-            if (e.parentElement?.closest(`[data-card="${CSS.escape(name)}"]`))
-                continue;
-            const r = e.getBoundingClientRect();
-            if (r.width * r.height < 1500 || opacity(e) <= 0.3) continue;
-            const visible = [
-                [0.5, 0.5],
-                [0.25, 0.25],
-                [0.75, 0.75],
-            ].some(([fx, fy]) => {
-                const x = r.left + r.width * fx;
-                const y = r.top + r.height * fy;
-                return (
-                    x >= 0 &&
-                    y >= 0 &&
-                    x < innerWidth &&
-                    y < innerHeight &&
-                    onTop(e, x, y)
-                );
+                ...(flip && {
+                    turn,
+                    back:
+                        surface?.matches(".card-back, .card-face-down") ??
+                        false,
+                }),
+                ...(e.hasAttribute("data-dissolving") && {
+                    mask: getComputedStyle(e).maskPosition,
+                }),
             });
-            if (!visible) continue;
-            (copies[name] ??= []).push({
-                slot: e.dataset.slot ?? null,
-                where:
-                    e.dataset.zone ??
-                    (e.className && typeof e.className === "string"
-                        ? e.className.split(" ")[0]
-                        : e.tagName.toLowerCase()),
-            });
-        }
-        const dupes = {};
-        for (const [name, list] of Object.entries(copies)) {
-            const slots = list.filter((c) => c.slot !== null);
-            const distinct = new Set(slots.map((c) => c.slot)).size;
-            if (list.length > Math.max(distinct, 1) || slots.length > distinct)
-                dupes[name] = list.map((c) => c.where).join(" + ");
         }
         // The other elements a click opens or moves, by their kind and place among those
         // alike.
@@ -312,14 +309,13 @@ export function record(ui) {
         frames.push({
             arrows,
             t: performance.now(),
-            cards,
+            instances,
             lives,
             stack,
             uis,
-            dupes,
             motes,
         });
-        if (!window.__motion.stop) requestAnimationFrame(frame);
+        requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
     // A few frames of where things were before the caller sets anything going: a view can
@@ -873,32 +869,83 @@ function arrowFindings(frames) {
     }));
 }
 
-/** Each card shown twice at once for DUPLICATE_MS or more, over `frames`. */
+/** The event matcher needs a pose per slot. Prefer the painted owner and keep
+ * covered cards as a fallback for pile and zone bookkeeping. */
+function cardPoses(instances) {
+    const cards = {};
+    for (const card of instances) {
+        if (card.slot == null) continue;
+        const before = cards[card.slot];
+        if (
+            !before ||
+            (before.ceasing && !card.ceasing) ||
+            (before.ceasing === card.ceasing &&
+                ((card.top && !before.top) ||
+                    (card.top === before.top && card.o > before.o)))
+        )
+            cards[card.slot] = card;
+    }
+    return cards;
+}
+
+/** Report visible duplicates even if the overlap lasts only a single frame.
+ * Group by stage and slot, never by name when both instances have slots. */
 function duplicates(frames) {
-    const runs = {};
+    const reported = new Set();
     const out = [];
-    const close = (name, end) => {
-        const run = runs[name];
-        delete runs[name];
-        if (end - run.from >= DUPLICATE_MS) {
+    for (const { t, instances } of frames) {
+        const bySlot = new Map();
+        const byName = new Map();
+        for (const card of instances.filter((c) => c.top)) {
+            if (card.slot != null) {
+                const key = `${card.stage}:${card.slot}`;
+                const list = bySlot.get(key) ?? [];
+                list.push(card);
+                bySlot.set(key, list);
+            }
+            if (card.name) {
+                const key = `${card.stage}:${card.name}`;
+                const list = byName.get(key) ?? [];
+                list.push(card);
+                byName.set(key, list);
+            }
+        }
+        const report = (key, cards) => {
+            if (reported.has(key)) return;
+            reported.add(key);
+            const locations = cards.map((c) => `${c.where} #${c.id}`);
+            const name = cards.find((c) => c.name)?.name ?? "Face-down card";
+            const slot = cards[0].slot;
             out.push({
                 kind: "duplicate",
-                what: `${name} shown twice: ${run.where}`,
+                what: `${name}${slot == null ? "" : ` (slot ${slot})`} shown twice`,
                 verdict: "duplicate",
-                why: `two copies on screen for ${Math.round(end - run.from)} ms`,
-                start: run.from,
+                why: locations.join(" + "),
+                start: t,
             });
+        };
+        for (const [key, cards] of bySlot) {
+            // A token can leave a dissolving visual behind when its slot is
+            // reused. Those two lifetimes represent distinct game objects.
+            for (const [i, a] of cards.entries()) {
+                const b = cards
+                    .slice(i + 1)
+                    .find(
+                        (b) =>
+                            a.tokenLife == null ||
+                            b.tokenLife == null ||
+                            a.tokenLife === b.tokenLife,
+                    );
+                if (b) report(`slot:${key}`, [a, b]);
+            }
         }
-    };
-    for (const f of frames) {
-        for (const [name, where] of Object.entries(f.dupes ?? {})) {
-            runs[name] ??= { from: f.t, where };
-        }
-        for (const name of Object.keys(runs)) {
-            if (!f.dupes?.[name]) close(name, f.t);
+        for (const [key, cards] of byName) {
+            // Legacy unlabelled card faces, such as a result illustration,
+            // have no slot. A name match is the only evidence for those.
+            if (cards.length > 1 && cards.some((c) => c.slot == null))
+                report(`name:${key}`, cards);
         }
     }
-    for (const name of Object.keys(runs)) close(name, frames.at(-1).t);
     return out;
 }
 
@@ -907,7 +954,14 @@ function duplicates(frames) {
  * a scripted play): what it moved before the first view counts as a view of its own, and `ui`
  * findings are not minor. Each finding has `at`, ms from the recording's start to when it
  * first showed, where it showed at all. */
-export function audit({ frames, shown, since }, { live = false } = {}) {
+export function audit(
+    { frames: recorded, shown, since },
+    { live = false } = {},
+) {
+    const frames = recorded.map((f) => ({
+        ...f,
+        cards: cardPoses(f.instances),
+    }));
     const findings = [];
     const origin = since ?? frames[0]?.t ?? 0;
     const views = [...shown];

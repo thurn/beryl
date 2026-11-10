@@ -186,7 +186,12 @@ function ShownCard({
   const ref = useRef<HTMLSpanElement>(null);
   useBorrowedCard(ref, object?.slot);
   return (
-    <span ref={ref} className="shown-card" {...inspect?.(object)}>
+    <span
+      ref={ref}
+      className="shown-card"
+      data-shown-slot={object?.slot}
+      {...inspect?.(object)}
+    >
       {object?.name ? (
         <Card card={face} width={width} highlight={highlight} />
       ) : name ? (

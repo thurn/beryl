@@ -23,6 +23,7 @@ import {
 import { logLines } from "../src/game/log.ts";
 import { untapChoice } from "../src/game/untapChoice.ts";
 import { cutText, launch, workers } from "./capture.mjs";
+import { audit, collect, record } from "./audit.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 /** Whether the check `title` runs: every check, or those a filter names. */
@@ -116,6 +117,25 @@ const center = (box) => ({
     x: box.x + box.width / 2,
     y: box.y + box.height / 2,
 });
+
+const duplicatesIn = (recording) =>
+    audit({ ...recording, shown: [] }).filter((f) => f.kind === "duplicate");
+
+const posesOf = (recording, slot) =>
+    recording.frames.flatMap((f) =>
+        f.instances.filter((c) => c.slot === String(slot) && c.o > 0.3),
+    );
+
+const motionSizes = [
+    { width: 1600, height: 900 },
+    { width: 1180, height: 820 },
+];
+const motionConfigs = motionSizes.flatMap((viewport) =>
+    ["no-preference", "reduce"].map((reducedMotion) => ({
+        viewport,
+        reducedMotion,
+    })),
+);
 
 const browser = await launch();
 const errors = [];
@@ -3731,6 +3751,213 @@ await check(
     { ...pileRun, reducedMotion: "reduce" },
 );
 
+// The production recorder must catch deliberate duplicates in viewer and
+// prompt markup, even when the borrowed face has no name.
+await check(
+    "the physical audit rejects copies in dialogs and prompts",
+    async (page) => {
+        await page.evaluate(record);
+        await page.evaluate(() => {
+            const panel = (klass, role) => {
+                const e = document.createElement("div");
+                e.className = klass;
+                e.setAttribute("role", role);
+                e.style.cssText = "all: initial; position: absolute; inset: 0";
+                return e;
+            };
+            const board = panel("test-motion-overlay", "group");
+            Object.assign(board.style, {
+                position: "fixed",
+                translate: "none",
+                zIndex: 99999,
+            });
+            document.body.append(board);
+            const browser = panel("zone-viewer", "dialog");
+            const prompt = panel("prompt", "group");
+            const hover = panel("inspect", "group");
+            const mode = panel("ability-chooser", "group");
+            board.append(browser, prompt, hover, mode);
+            let n = 0;
+            const card = (parent, attrs, klass = "") => {
+                const e = document.createElement("div");
+                e.className = klass;
+                e.style.cssText = "all: initial";
+                Object.assign(e.dataset, attrs);
+                Object.assign(e.style, {
+                    position: "absolute",
+                    left: `${30 + (n % 8) * 125}px`,
+                    top: `${60 + Math.floor(n++ / 8) * 150}px`,
+                    width: "90px",
+                    height: "125px",
+                    background: "white",
+                });
+                parent.append(e);
+                return e;
+            };
+            card(board, { slot: "9901" });
+            card(browser, { viewerSlot: "9901" }, "zone-viewer-card");
+            card(board, { slot: "9902", card: "Prompt card" });
+            card(
+                prompt,
+                { promptSlot: "9902", card: "Different face" },
+                "prompt-card",
+            );
+            card(board, { slot: "9903", card: "Twin" });
+            card(board, { slot: "9904", card: "Twin" });
+            card(hover, { slot: "9903", card: "Twin" });
+            card(mode, { mode: "activated", stackKey: "1:Twin", card: "Twin" });
+            card(board, { slot: "9905", tokenLife: "1" });
+            card(board, { ceasingSlot: "9905", tokenLife: "0" });
+        });
+        await page.clock.runFor(100);
+        const recording = await page.evaluate(collect, 0);
+        const found = duplicatesIn(recording);
+        assert.equal(found.length, 2);
+        assert.ok(
+            found.some(
+                (f) =>
+                    f.what.includes("slot 9901") &&
+                    f.why.includes("zone-viewer"),
+            ),
+        );
+        assert.ok(
+            found.some(
+                (f) => f.what.includes("slot 9902") && f.why.includes("prompt"),
+            ),
+        );
+    },
+    pileRun,
+);
+
+for (const { viewport, reducedMotion } of motionConfigs) {
+    const config = `${viewport.width}x${viewport.height} ${reducedMotion}`;
+    await check(
+        `physical audit follows both graveyard browsers (${config})`,
+        async (page) => {
+            await page.clock.runFor(800);
+            await page.evaluate(record);
+            for (const side of ["you", "opponent"]) {
+                await page.click(pile(side, "graveyard"));
+                await page.waitForSelector(".zone-viewer-card");
+                // Close one opening in mid-flight, then let the other settle.
+                await page.clock.runFor(side === "you" ? 100 : 650);
+                await page.keyboard.press("Escape");
+                await page.waitForSelector(".zone-viewer", {
+                    state: "detached",
+                });
+                await page.clock.runFor(650);
+            }
+            const run = await page.evaluate(collect, 0);
+            assert.deepEqual(duplicatesIn(run), []);
+            for (const side of ["you", "opponent"]) {
+                const slots = pilesView.players[side].graveyard.map(String);
+                const resting = (frame) =>
+                    frame.instances.filter(
+                        (c) => c.zone === "graveyard" && slots.includes(c.slot),
+                    );
+                const initial = resting(run.frames[0]);
+                assert.equal(initial.length, slots.length);
+                assert.equal(
+                    new Set(initial.map(({ x, y }) => `${x},${y}`)).size,
+                    slots.length,
+                    "each layer has its own pose",
+                );
+                assert.deepEqual(
+                    resting(run.frames.at(-1)).map(({ id, x, y }) => ({
+                        id,
+                        x,
+                        y,
+                    })),
+                    initial.map(({ id, x, y }) => ({ id, x, y })),
+                    "the same layers settle back into the pile",
+                );
+                const slot = slots.at(-1);
+                const track = posesOf(run, slot);
+                const from = track[0];
+                const end = track.at(-1);
+                const borrower = track.filter(
+                    (c) => c.where === "zone-viewer-card",
+                );
+                assert.ok(
+                    borrower.length > 0,
+                    `${side}'s original was borrowed`,
+                );
+                assert.equal(
+                    end.id,
+                    from.id,
+                    "the same table node takes the card back",
+                );
+                assertNear(
+                    [end.x, end.y],
+                    [from.x, from.y],
+                    "back on its pile",
+                );
+                if (reducedMotion !== "reduce") {
+                    assert.ok(
+                        new Set(borrower.map((c) => `${c.x},${c.y}`)).size > 2,
+                        "the browser drew intermediate poses",
+                    );
+                    const last = borrower.at(-1);
+                    const returning = track
+                        .slice(track.lastIndexOf(last) + 1)
+                        .filter((c) => c.top);
+                    assert.ok(
+                        returning.some(
+                            (c) => Math.hypot(c.x - from.x, c.y - from.y) > 4,
+                        ),
+                        `the ${side}'s card begins its visible return away from the pile`,
+                    );
+                    assertBetween(
+                        returning.map(({ x, y }) => [x, y]),
+                        [last.x, last.y],
+                        [end.x, end.y],
+                        `the ${side}'s card flies back to its pile`,
+                    );
+                }
+            }
+        },
+        { ...pileRun, viewport, reducedMotion },
+    );
+    await check(
+        `physical audit follows a scry tray's same-zone return (${config})`,
+        async (page) => {
+            await page.clock.runFor(650);
+            await page.evaluate(record);
+            await page
+                .getByRole("button", { name: "View Battlefield" })
+                .click();
+            await page.clock.runFor(650);
+            await page.locator(".overlay-return").click();
+            await page.clock.runFor(650);
+            const run = await page.evaluate(collect, 0);
+            assert.deepEqual(duplicatesIn(run), []);
+            const track = posesOf(run, scryTop);
+            const table = track.filter((c) => c.zone === "library");
+            assert.ok(table.length > 0, "the card returned to its library");
+            assert.equal(new Set(table.map((c) => c.id)).size, 1);
+            assert.equal(track[0].where, "choice-card");
+            assert.equal(track.at(-1).where, "choice-card");
+            if (reducedMotion !== "reduce") {
+                const points = table.map(({ x, y }) => [x, y]);
+                assert.ok(new Set(points.map(String)).size > 2);
+                assertBetween(
+                    points,
+                    [track[0].x, track[0].y],
+                    points.at(-1),
+                    "the card returns from the tray",
+                );
+            }
+        },
+        {
+            fixture: "choice-scry",
+            at: scry.views.length,
+            ready: tray(scryNext),
+            viewport,
+            reducedMotion,
+        },
+    );
+}
+
 // A full row and a scrolling row both borrow from the same live pile. Use distinct slots
 // even where the fixture repeats the same printing.
 for (const count of [1, 10, 11]) {
@@ -4667,9 +4894,9 @@ if (wanted(privateHandling)) {
         looking,
         finished,
     ]);
-    for (const reducedMotion of ["no-preference", "reduce"]) {
+    for (const { viewport, reducedMotion } of motionConfigs) {
         await check(
-            `${privateHandling} (${reducedMotion})`,
+            `${privateHandling} (${viewport.width}x${viewport.height} ${reducedMotion})`,
             async (page) => {
                 const group = page.locator(".card-layer .card-el-handling");
                 const cards = held.map((slot) =>
@@ -4768,7 +4995,7 @@ if (wanted(privateHandling)) {
             {
                 ...run,
                 ready: ".turn-action button",
-                viewport: { width: 1180, height: 820 },
+                viewport,
                 reducedMotion,
             },
         );
@@ -5143,10 +5370,11 @@ if (wanted(tokenDissolve)) {
         ],
     };
     const run = await motionFixture("token-dissolve", [before, after]);
-    for (const reducedMotion of ["no-preference", "reduce"]) {
+    for (const { viewport, reducedMotion } of motionConfigs) {
         await check(
-            `${tokenDissolve} (${reducedMotion})`,
+            `${tokenDissolve} (${viewport.width}x${viewport.height} ${reducedMotion})`,
             async (page) => {
+                await page.evaluate(record);
                 const dying = `[data-ceasing-slot="${token.slot}"]`;
                 await page
                     .getByRole("button", { name: "Resolve", exact: true })
@@ -5184,8 +5412,26 @@ if (wanted(tokenDissolve)) {
                 );
                 await page.clock.runFor(400);
                 assert.equal(await card.count(), 0, "the token has ceased");
+                const recording = await page.evaluate(collect, 0);
+                assert.deepEqual(duplicatesIn(recording), []);
+                const track = posesOf(recording, token.slot);
+                assert.equal(new Set(track.map((c) => c.id)).size, 1);
+                const masks = new Set(
+                    track.flatMap((c) => (c.mask ? [c.mask] : [])),
+                );
+                if (reducedMotion === "reduce") assert.equal(masks.size, 0);
+                else
+                    assert.ok(
+                        masks.size > 1,
+                        "the original token's mask progresses",
+                    );
+                assert.ok(
+                    recording.frames
+                        .at(-1)
+                        .instances.every((c) => c.id !== track[0].id),
+                );
             },
-            { ...run, ready: slotOf(token.slot), reducedMotion },
+            { ...run, ready: slotOf(token.slot), viewport, reducedMotion },
         );
     }
 }
@@ -5213,43 +5459,47 @@ if (wanted(revealFlip)) {
         events: [],
     };
     const run = await motionFixture("cast-reveal", [before, after]);
-    await check(
-        revealFlip,
-        async (page) => {
-            const card = page.locator(slotOf(slot));
-            assert.equal(await card.locator(".card-back").count(), 1);
-            const sameCard = await card.elementHandle();
-            await page
-                .getByRole("button", { name: "Resolve", exact: true })
-                .click();
-            await until(page, `${slotOf(slot)}[data-zone="stack"]`, 10);
-            await page.clock.runFor(75);
-            assert.equal(
-                await card.locator(".card-back").count(),
-                1,
-                "the hidden face stays covered during the first half",
-            );
-            assert.ok(
-                await card
-                    .locator(".card-flip")
-                    .evaluate(
-                        (el) =>
-                            new DOMMatrix(getComputedStyle(el).transform).m11 <
-                            0.98,
-                    ),
-                "the card is turning",
-            );
-            await page.clock.runFor(500);
-            assert.equal(await card.locator(".card-back").count(), 0);
-            assert.equal(await card.locator(".card").count(), 1);
-            assert.ok(
-                await sameCard.evaluate(
-                    (el) => el.isConnected && el.dataset.zone === "stack",
-                ),
-            );
-        },
-        { ...run, ready: slotOf(slot) },
-    );
+    for (const { viewport, reducedMotion } of motionConfigs) {
+        await check(
+            `${revealFlip} (${viewport.width}x${viewport.height} ${reducedMotion})`,
+            async (page) => {
+                const card = page.locator(slotOf(slot));
+                assert.equal(await card.locator(".card-back").count(), 1);
+                await page.evaluate(record);
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .click();
+                await until(page, `${slotOf(slot)}[data-zone="stack"]`, 10);
+                await page.clock.runFor(600);
+                assert.equal(await card.locator(".card-back").count(), 0);
+                assert.equal(await card.locator(".card").count(), 1);
+                const recording = await page.evaluate(collect, 0);
+                assert.deepEqual(duplicatesIn(recording), []);
+                const track = posesOf(recording, slot);
+                assert.equal(new Set(track.map((c) => c.id)).size, 1);
+                assert.equal(track[0].back, true);
+                assert.equal(track.at(-1).back, false);
+                assert.equal(track.at(-1).zone, "stack");
+                const edge = track.findIndex((c) => Math.abs(c.turn) < 0.25);
+                if (reducedMotion === "reduce") {
+                    assert.equal(edge, -1, "the face changes without a turn");
+                } else {
+                    const reveal = track.findIndex((c) => c.back === false);
+                    assert.ok(
+                        edge > 0 && reveal > 0,
+                        "the card turns through edge-on",
+                    );
+                    assert.ok(
+                        [track[reveal - 1], track[reveal]].some(
+                            (c) => Math.abs(c.turn) < 0.35,
+                        ),
+                        "the face changes at the turn",
+                    );
+                }
+            },
+            { ...run, ready: slotOf(slot), viewport, reducedMotion },
+        );
+    }
 }
 
 const faceFlip = "a face-down permanent turns over before revealing its face";
