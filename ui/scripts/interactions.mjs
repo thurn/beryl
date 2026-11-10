@@ -1356,8 +1356,8 @@ await check(
             `no pill says the opponent is thinking: ${[...pills].join(", ")}`,
         );
         assert.ok(
-            pills.size >= 5,
-            `the steps are seen passing: ${[...pills].join(", ")}`,
+            pills.size === 0,
+            `no repeated phase labels while play advances: ${[...pills].join(", ")}`,
         );
         assert.ok(
             landBeforeHalt,
@@ -9199,6 +9199,23 @@ await check(
     },
     { fixture: "game-over-resumed", at: 0, ready: "[data-life]" },
 );
+
+await check("libraries face their owners", async (page) => {
+    await page.clock.runFor(3000);
+    for (const side of ["you", "opponent"]) {
+        const cards = page.locator(`.card-layer [data-library-pile="${side}"]`);
+        assert.ok((await cards.count()) > 0);
+        const direction = await cards.first().evaluate((e) => {
+            const m = new DOMMatrix(getComputedStyle(e).transform);
+            return Math.sign(m.a);
+        });
+        assert.equal(
+            direction,
+            side === "you" ? 1 : -1,
+            `${side} library faces its owner`,
+        );
+    }
+});
 
 await queue.drain();
 await browser.close();

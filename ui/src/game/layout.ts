@@ -1595,6 +1595,14 @@ function pileCards(
     const away = borrowed.has(o.slot);
     const depth = away ? cards.length - 1 - i : --depthLeft;
     const at = onPile(away ? full : rest, side, depth);
+    // Turn the opponent's library around its center, preserving the skewed pile's
+    // footprint. The same placement carries each card through draws and returns.
+    if (library && side === "opponent") {
+      const height = full.width / CARD_ASPECT;
+      at.x += full.width + Math.tan((at.skew * Math.PI) / 180) * height;
+      at.y += height;
+      at.rotate = 180;
+    }
     const raised = !library && aimed.has(o.slot) && depth > 0;
     // A shuffle moves two packets toward the open table, keeping all faces down.
     const split =

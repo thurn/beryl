@@ -1,25 +1,9 @@
-// What the board says about the game playing on: who is acting (the turn controls' pill and the
-// opponent's badge) and the game log. What came and went on the stack is seen there, each
+// What the board says about the game playing on: who is acting (the opponent's badge)
+// and the game log. What came and went on the stack is seen there, each
 // spell and ability held in a beat of its own (beats.ts).
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import type { PlayerView } from "../generated/protocol";
-import { STEP_NAMES } from "./layout";
 import type { LogEntry } from "./log";
-
-/** What the game is doing while the player waits: a step of whose turn passing. The opponent
- * deciding says nothing here: a spinner under their orb shows it (Player.tsx' Thinking). */
-export function actingLabel(view: PlayerView): string | undefined {
-  switch (view.status.kind) {
-    case "thinking":
-      return undefined;
-    case "playing": {
-      const whose = view.turn.active === "you" ? "Your" : "Opponent's";
-      return `${whose} ${STEP_NAMES[view.turn.step]}`;
-    }
-    default:
-      return "Opponent has priority";
-  }
-}
 
 /** Whether the opponent is acting while the player waits: thinking, or their turn playing on.
  * The spinner under their orb (Player.tsx' Thinking) shows it, wordless. */

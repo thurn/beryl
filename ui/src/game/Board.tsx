@@ -30,7 +30,6 @@ import {
   Button,
   Dock,
   DockButtons,
-  PriorityPill,
   Tip,
   TurnButton,
   FastForwardIcon,
@@ -166,7 +165,7 @@ import {
   type PlayChoice,
 } from "./AbilityChooser";
 import type { LogEntry } from "./log";
-import { actingLabel, GameLog, opponentActing } from "./Narration";
+import { GameLog, opponentActing } from "./Narration";
 import {
   Inspect,
   INSPECT_WIDTH,
@@ -454,7 +453,6 @@ export function Board({
   // table, or from it while a screen asking about the cast is put aside to see the table
   // (inert, but not dimmed).
   /** What the priority pill says while you wait, if anything. */
-  const acting = actingLabel(view);
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // An answer can be taken back, one per press.
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
@@ -1609,13 +1607,9 @@ export function Board({
                       </Tip>
                     </button>
                   )}
-                  {/* While you wait, the priority pill takes the caption's place under the
-                  button, leaving the tracker showing the phase. */}
-                  {waiting
-                    ? acting && <PriorityPill>{acting}</PriorityPill>
-                    : stop.caption && (
-                        <span className="turn-caption">{stop.caption}</span>
-                      )}
+                  {!waiting && stop.caption && (
+                    <span className="turn-caption">{stop.caption}</span>
+                  )}
                 </div>
               </Dock>
             ) : null}
