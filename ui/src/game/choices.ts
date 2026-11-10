@@ -629,7 +629,9 @@ function manifestDread(at: Situation): Pick {
  * cards with one name the lowest, and takes them unasked once one answer is left: the plan
  * follows it, asking for each card the engine will ask for. */
 function graveyardExile(at: Situation, count: number): Pick {
-  const graveyard = at.view.players.you.graveyard;
+  const graveyard = at.view.players.you.graveyard.filter(
+    (slot) => !at.view.objects.find((o) => o.slot === slot)?.token,
+  );
   return {
     kind: "pick",
     key: at.key,

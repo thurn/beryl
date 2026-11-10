@@ -66,6 +66,17 @@ export interface Beat {
   spotlight?: Spotlight;
 }
 
+/** A pending cost can spend previously floating mana without emitting a new mana event. */
+function spentPool(before: PlayerView, after: PlayerView): boolean {
+  return (["you", "opponent"] as const).some((side) =>
+    Object.entries(before.players[side].mana).some(
+      ([color, amount]) =>
+        amount >
+        after.players[side].mana[color as keyof typeof after.players.you.mana],
+    ),
+  );
+}
+
 /** `update` as the beats a player can follow from `before`, the view last shown or queued; with
  * none, or nothing worth a beat, it is one beat, itself. */
 export function beats(
@@ -73,12 +84,21 @@ export function beats(
   update: GameUpdate,
 ): Beat[] {
   const { view } = update;
-  if (before && sameHandling(before.view, view) && view.events.length === 0)
+  const poolBeforeChoice =
+    before && choiceOf(view) && spentPool(before.view, view);
+  if (
+    before &&
+    !poolBeforeChoice &&
+    sameHandling(before.view, view) &&
+    view.events.length === 0
+  )
     return [{ update, hold: 0 }];
   if (
     !before ||
     view.undone ||
-    (view.events.length === 0 && !packHandling(before.view, view))
+    (view.events.length === 0 &&
+      !poolBeforeChoice &&
+      !packHandling(before.view, view))
   )
     return [{ update }];
   return new Walk(withResolving(before.view), update).run();
@@ -141,40 +161,6 @@ function crosses(from: ZoneName, to: ZoneName): boolean {
   return from !== to && open.includes(from) && open.includes(to);
 }
 
-/** Cost selections arrive before automatic mana payment. Present the completed payment
- * first, then the selected graveyard cards leaving. Only reorder the contiguous cost batch
- * immediately before a cast; resolution exiles and unrelated taps retain their order. The
- * engine's recorded events and decisions remain untouched. */
-function paymentFirst(events: GameEvent[]): GameEvent[] {
-  const out = [...events];
-  for (let i = 0; i < out.length; i++) {
-    if (out[i]?.kind !== "cast") continue;
-    let start = i;
-    while (start > 0) {
-      const e = out[start - 1]!;
-      if (
-        e.kind === "tap" ||
-        e.kind === "mana" ||
-        (e.kind === "zoneChange" && e.from === "graveyard" && e.to === "exile")
-      )
-        start--;
-      else break;
-    }
-    const costs = out.slice(start, i);
-    const exiles = costs.filter((e) => e.kind === "zoneChange");
-    if (!exiles.length || !costs.some((e) => e.kind === "mana")) continue;
-    // Include the cast announcement with its mana so ManaFlow can route into its spell.
-    out.splice(
-      start,
-      i - start + 1,
-      ...costs.filter((e) => e.kind !== "zoneChange"),
-      out[i]!,
-      ...exiles,
-    );
-  }
-  return out;
-}
-
 /** The opponent's spell or ability on the stack, held long enough to read; a trigger a little
  * less; the player's own, which they chose, an action's beat. */
 function stackHold(item: StackItem): number {
@@ -211,7 +197,7 @@ class Walk {
   }
 
   run(): Beat[] {
-    const events = paymentFirst(this.view.events);
+    const events = this.view.events;
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
       if (e.kind === "stepBegins") {
@@ -438,6 +424,25 @@ class Walk {
         ),
     );
     if (arrivingTrigger) this.cut(HOLD.action);
+    // Mana payment must be visible before an additional-cost chooser covers the table.
+    // Its spell is still pending; confirming the chooser will not pay the mana again.
+    if (
+      choiceOf(this.view) &&
+      (this.pending.some((e) => e.kind === "mana") ||
+        spentPool(this.cur, this.view))
+    ) {
+      this.cur = {
+        ...this.cur,
+        players: {
+          you: { ...this.cur.players.you, mana: this.view.players.you.mana },
+          opponent: {
+            ...this.cur.players.opponent,
+            mana: this.view.players.opponent.mana,
+          },
+        },
+      };
+      this.cut(HOLD.action, undefined, true);
+    }
     // A question asked over the table (a search, a scry) waits for what led to it to land: a
     // card exiled, a spell resolving, seen rather than moving under the overlay.
     if (

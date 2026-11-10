@@ -765,3 +765,48 @@ fn a_quiet_pointless_activation_makes_no_stop() {
         "offered quietly, the turn plays on to a drawn land"
     );
 }
+
+/// A token sacrificed for mana is still in the graveyard during casting, but
+/// [CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116) says "A token isn't a card".
+/// This transient-state fixture stays in Rust: the oracle exporters cannot seed its token.
+#[test]
+fn sacrificed_mana_token_cannot_pay_a_graveyard_card_cost() {
+    use beryl_scenario::{Action, Assertion, P0, Permanent, Scenario};
+    const SCENARIO: Scenario =
+        Scenario::new("Abhorrent Oculus pays with Treasure without exiling the token")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::token(crate::tokens::TREASURE_TOKEN),
+                    Permanent::new(names::CURRENCY_CONVERTER).tapped(),
+                ],
+            )
+            .hand(P0, &[names::ABHORRENT_OCULUS])
+            .graveyard(P0, &[names::ISLAND; 6])
+            .actions(&[
+                Action::cast(P0, names::ABHORRENT_OCULUS),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: None,
+                    count: 6,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: Some(crate::tokens::TREASURE_TOKEN),
+                    count: 0,
+                }),
+                Action::Resolve,
+                Action::assert(Assertion::Pt {
+                    player: P0,
+                    card: names::ABHORRENT_OCULUS,
+                    token: false,
+                    power: 5,
+                    toughness: 5,
+                }),
+            ]);
+    beryl_scenario::run(&CARDS, &SCENARIO).unwrap();
+}

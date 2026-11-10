@@ -5656,6 +5656,215 @@ if (wanted(taxFlow)) {
     );
 }
 
+const beforeChooser = "mana finishes before the additional-cost chooser opens";
+if (wanted(beforeChooser)) {
+    const views = await load("cast-exile-choice");
+    const at = views.findIndex((v) => v.status.decision?.kind === "exileCost");
+    const spell = views[at].stack.at(-1).slot;
+    await check(
+        beforeChooser,
+        async (page) => {
+            await page.clock.runFor(1000);
+            await dragFromHand(page, slotOf(spell), { x: 0, y: -320 });
+            await page.mouse.up();
+            await until(page, ".mana-mote", 20);
+            assert.equal(
+                await page.locator(".choice").count(),
+                0,
+                "payment is not covered by the chooser",
+            );
+            await until(page, ".choice", 20);
+            const shown = await page.evaluate(() =>
+                window.berylShown.map((s) => ({
+                    at: s.at,
+                    events: s.update.view.events.map((e) => e.kind),
+                    kind: s.update.view.status.decision?.kind,
+                })),
+            );
+            const mana = shown.find((s) => s.events.includes("mana"));
+            const chooser = shown.find((s) => s.kind === "exileCost");
+            assert.ok(
+                chooser.at - mana.at >= 800,
+                "payment finishes before selection",
+            );
+            const paid = await page.evaluate(
+                () =>
+                    window.berylShown
+                        .flatMap((s) => s.update.view.events)
+                        .filter((e) => e.kind === "mana").length,
+            );
+            for (const slot of views[at].players.you.graveyard.slice(1)) {
+                await page.locator(`.choice-card[data-slot="${slot}"]`).click();
+            }
+            await page
+                .getByRole("button", { name: "Exile", exact: true })
+                .click();
+            await page.clock.runFor(4000);
+            assert.equal(
+                await page.evaluate(
+                    () =>
+                        window.berylShown
+                            .flatMap((s) => s.update.view.events)
+                            .filter((e) => e.kind === "mana").length,
+                ),
+                paid,
+                "confirm does not animate mana twice",
+            );
+        },
+        { fixture: "cast-exile-choice", at, ready: slotOf(spell) },
+    );
+}
+
+const pendingMana =
+    "pending costs route mana without catching later standalone mana";
+if (wanted(pendingMana)) {
+    const views = await load("cast-exile-choice");
+    const view = views.find((v) => v.status.decision?.kind === "exileCost");
+    await check(
+        pendingMana,
+        async (page) => {
+            const result = await page.evaluate(async (v) => {
+                const { manaMotes } = await import("/src/game/ManaFlow.tsx");
+                const { layout, zonePiles, MANA_POOLS } =
+                    await import("/src/game/layout.ts");
+                const { choiceOf } = await import("/src/game/choices.ts");
+                const { beats } = await import("/src/game/beats.ts");
+                const source = v.objects.find(
+                    (o) => o.zone === "battlefield" && o.controller === "you",
+                );
+                const order = new Map();
+                const places = layout(
+                    v,
+                    "held",
+                    false,
+                    {},
+                    order,
+                    new Set(),
+                    zonePiles(v, order),
+                    [],
+                );
+                v.events = [
+                    {
+                        kind: "mana",
+                        player: "you",
+                        source: source.slot,
+                        color: "blue",
+                        amount: 1,
+                    },
+                ];
+                const pool = {
+                    x: MANA_POOLS.you.left + 24,
+                    y: MANA_POOLS.you.top + 17,
+                };
+                const paid = manaMotes(undefined, v, places, places)[0].to;
+                const later = structuredClone(v);
+                later.status = { kind: "playing" };
+                later.stack = [{ ...v.stack[0], slot: 999 }];
+                const unrelated = manaMotes(v, later, places, places)[0].to;
+                const standalone = structuredClone(v);
+                standalone.status.decision.kind = "priority";
+                standalone.status.decision.cancellable = false;
+                const floating = manaMotes(
+                    undefined,
+                    standalone,
+                    places,
+                    places,
+                )[0].to;
+                const ability = structuredClone(v);
+                ability.stack = [
+                    {
+                        kind: "ability",
+                        source: source.slot,
+                        controller: "you",
+                        ability: 0,
+                        nth: 0,
+                        granted: false,
+                        triggered: false,
+                        name: source.name,
+                        targets: [],
+                        x: 0,
+                    },
+                ];
+                ability.status.decision.kind = "manaPayment";
+                ability.status.decision.cancellable = false;
+                const manual = manaMotes(undefined, ability, places, places)[0]
+                    .to;
+                const pooledBefore = structuredClone(v);
+                pooledBefore.status.decision.kind = "manaPayment";
+                pooledBefore.players.you.mana.blue = 3;
+                const pooledAfter = structuredClone(v);
+                pooledAfter.events = [];
+                const pooled = beats(
+                    { view: pooledBefore },
+                    { view: pooledAfter },
+                );
+                const pooledMotes = manaMotes(
+                    pooledBefore,
+                    pooled[0].update.view,
+                    places,
+                    places,
+                ).length;
+                const token = structuredClone(
+                    v.objects.find((o) => o.zone === "graveyard"),
+                );
+                token.slot = 999;
+                token.token = true;
+                v.objects.push(token);
+                v.players.you.graveyard.push(999);
+                return {
+                    pool,
+                    paid,
+                    unrelated,
+                    floating,
+                    manual,
+                    cards: choiceOf(v).cards,
+                    pooled: pooled.map((b) => ({
+                        kind: b.update.view.status.kind,
+                        hold: b.hold,
+                    })),
+                    pooledMotes,
+                };
+            }, view);
+            assert.notDeepEqual(
+                result.paid,
+                result.pool,
+                "pending spell receives payment",
+            );
+            assert.deepEqual(
+                result.unrelated,
+                result.pool,
+                "later spell cannot catch standalone mana",
+            );
+            assert.deepEqual(
+                result.floating,
+                result.pool,
+                "priority mana floats",
+            );
+            assert.notDeepEqual(
+                result.manual,
+                result.pool,
+                "manual ability receives payment",
+            );
+            assert.equal(
+                result.pooled[0].kind,
+                "playing",
+                "pooled payment precedes chooser",
+            );
+            assert.ok(result.pooled[0].hold >= 800);
+            assert.equal(
+                result.pooledMotes,
+                3,
+                "floating mana flies before choice",
+            );
+            assert.ok(
+                !result.cards.includes(999),
+                "sacrificed token is not an exile-cost card",
+            );
+        },
+        { fixture: "cast-exile-choice", at: views.length, ready: ".table" },
+    );
+}
+
 const costOrder = "mana payment precedes graveyard exile departures";
 if (wanted(costOrder)) {
     for (const seat of ["you", "opponent"]) {

@@ -290,7 +290,8 @@ fn perf_counts_stay_in_their_bands() {
     let pinned: [(bool, u64, [u64; 7]); 6] = [
         (false, 0, [170, 611, 716, 66, 55, 51, 738]),
         (false, 1, [216, 722, 854, 144, 71, 73, 881]),
-        (false, 2, [212, 688, 810, 92, 77, 71, 858]),
+        // Paying mana before exile choices reduces this game's solver look-ahead work.
+        (false, 2, [212, 688, 810, 86, 77, 67, 858]),
         (true, 0, [115, 442, 527, 62, 41, 41, 555]),
         (true, 1, [138, 531, 604, 66, 52, 43, 665]),
         (true, 2, [406, 913, 1205, 206, 101, 91, 1366]),

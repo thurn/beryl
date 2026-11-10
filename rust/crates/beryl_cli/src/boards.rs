@@ -869,6 +869,29 @@ pub const BOARDS: &[Scenario] = &[
         .library(P0, LANDS)
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, ABHORRENT_OCULUS)]),
+    // A seventh graveyard card leaves a live additional-cost choice after mana payment.
+    Scenario::new("cast-exile-choice")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[ABHORRENT_OCULUS])
+        .graveyard(
+            P0,
+            &[
+                PLAINS,
+                ISLAND,
+                OUST,
+                REPRIEVE,
+                COUNTERSPELL,
+                STOCK_UP,
+                THIRST_FOR_DISCOVERY,
+            ],
+        )
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, ABHORRENT_OCULUS),
+            Action::choose(P0, DecisionKind::ExileCost, THIRST_FOR_DISCOVERY),
+        ]),
     // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
     Scenario::new("namesake-target")
         .at(3, P0, TurnStep::PrecombatMain)

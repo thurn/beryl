@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Exile costs counted a Treasure sacrificed for mana as a graveyard card while
+  the cast was still pending. Moving mana payment before the exile chooser
+  exposed the extra candidate and could let a token pay a card cost. Tokens are
+  not cards (CR 111.6), even before state-based actions remove them. Prevention:
+  filter cost eligibility and candidate counts by card identity, rather than
+  assuming every object in a graveyard is a card; the Oculus Treasure scenario
+  covers the interval between payment and state-based actions.
+
 - A paused resolution's runs disagreed on what was known: each pause kept in the
   committed state what its run had shown, and the next run started from that, so
   a card shown after one question was known before it. When Thirst for

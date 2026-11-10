@@ -863,8 +863,11 @@ pub fn interchangeable<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool 
 
 /// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
 /// rather than the lowest slot.
-pub(crate) fn collapse_in_order<L: Layout>(s: &State<L>, slots: &[L::Slot]) -> Bitboard<L::Slot> {
-    collapse_ordered(s, slots.iter().copied())
+pub(crate) fn collapse_in_order<L: Layout>(
+    s: &State<L>,
+    slots: impl Iterator<Item = L::Slot>,
+) -> Bitboard<L::Slot> {
+    collapse_ordered(s, slots)
 }
 
 fn collapse_ordered<L: Layout>(

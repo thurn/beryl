@@ -133,11 +133,36 @@ export function manaMotes(
   if (view.undone) return [];
   const { events } = view;
   const out: Mote[] = [];
-  const paying =
-    view.status.kind === "deciding" &&
-    view.status.decision.kind === "manaPayment"
-      ? view.stack.at(-1)
+  const making = (v: PlayerView | undefined) =>
+    v?.status.kind === "deciding" &&
+    (v.status.decision.kind === "manaPayment" ||
+      (v.status.decision.cancellable && v.status.decision.kind !== "priority"));
+  // A cost chooser can follow payment before a Cast event exists. Bind the motes to that
+  // pending item, never to a different spell that becomes topmost after it resolves.
+  const pending = making(view)
+    ? view.stack.at(-1)
+    : making(before)
+      ? before?.stack.at(-1)
       : undefined;
+  const paying = view.stack.find(
+    (item) =>
+      (pending && sameItem(item, pending)) ||
+      (item.kind === "spell" &&
+        events.some(
+          (e) =>
+            e.kind === "zoneChange" &&
+            e.slot === item.slot &&
+            e.to === "stack" &&
+            e.reason === "cast",
+        )),
+  );
+  const payingFor = (side: Side) => {
+    const controller =
+      paying?.kind === "spell"
+        ? view.objects.find((o) => o.slot === paying.slot)?.controller
+        : paying?.controller;
+    return controller === side ? paying : undefined;
+  };
   const destination = (item: StackItem | undefined, n: number, side: Side) => {
     if (item) {
       const box = stackBox(view, item);
@@ -164,8 +189,7 @@ export function manaMotes(
     if (e.kind !== "mana") return;
     const from = origin(e.source);
     if (!from || e.source === null) return;
-    const item =
-      spentOn(events, i, e.player) ?? (e.player === "you" ? paying : undefined);
+    const item = spentOn(events, i, e.player) ?? payingFor(e.player);
     for (let k = 0; k < Math.min(e.amount, MOTES_MAX); k++) {
       add({
         color: e.color,
@@ -187,11 +211,7 @@ export function manaMotes(
             e.item.controller === side),
       );
       const item =
-        index < 0
-          ? side === "you"
-            ? paying
-            : undefined
-          : spentOn(events, index - 1, side);
+        index < 0 ? payingFor(side) : spentOn(events, index - 1, side);
       if (!item) continue;
       for (const color of KINDS) {
         const spent =

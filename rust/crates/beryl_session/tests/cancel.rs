@@ -161,3 +161,120 @@ fn a_cast_taken_back_at_its_target_returns_to_priority_as_it_was() {
     }
     assert_eq!(replayed, view);
 }
+
+use beryl_cards::names;
+use beryl_scenario::{P0, P1, Permanent, Scenario};
+
+const EXILE_PAYMENT_SETUP: Scenario = Scenario::new("mana before an exile selection")
+    .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+    .hand(P0, &[names::ABHORRENT_OCULUS])
+    .graveyard(
+        P0,
+        &[
+            names::PLAINS,
+            names::ISLAND,
+            names::OUST,
+            names::REPRIEVE,
+            names::COUNTERSPELL,
+            names::STOCK_UP,
+            names::THIRST_FOR_DISCOVERY,
+        ],
+    )
+    .library(P0, &[names::ISLAND; 10])
+    .library(P1, &[names::ISLAND; 10]);
+
+/// Paying mana before the additional-cost picker is still part of the cancellable cast.
+#[test]
+fn exile_cost_picker_follows_mana_and_cancel_restores_payment() {
+    use beryl_search::Budget;
+    use beryl_session::Prepared;
+    use beryl_session::protocol::{GameEvent, ZoneName};
+
+    for payment in [
+        beryl_engine::Payment::KeepMostPayable,
+        beryl_engine::Payment::Greedy,
+        beryl_engine::Payment::Manual,
+    ] {
+        let stops = StopsSetting::EXACT;
+        let (table, mut state) = beryl_scenario::position(&CARDS, &EXILE_PAYMENT_SETUP).unwrap();
+        state.set_profile(beryl_engine::Profile {
+            payment,
+            ..state.profile()
+        });
+        let random = beryl_search::agent("random").unwrap();
+        let mut game = Game::prepared(
+            Prepared {
+                opponent: (random.new)(&table, 1, Budget::DEFAULT),
+                stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+                scripted: false,
+                hand_over: None,
+                table,
+                state,
+                human: Seat::P0,
+                stops,
+            },
+            SESSION,
+        );
+        let before = to_human(&mut game);
+        let state = *game.state();
+        let cast = deciding(&before)
+            .unwrap()
+            .candidates
+            .iter()
+            .position(|c| matches!(c.option, Candidate::Cast { .. }))
+            .unwrap();
+        {
+            let mut choosing = answer(&mut game, &before, cast);
+            while matches!(
+                deciding(&choosing).unwrap().kind,
+                Kind::ManaPayment | Kind::PaymentPlan
+            ) {
+                choosing = answer(&mut game, &choosing, 0);
+            }
+            assert_eq!(deciding(&choosing).unwrap().kind, Kind::ExileCost);
+            assert_eq!(
+                choosing
+                    .objects
+                    .iter()
+                    .filter(|o| o.zone == ZoneName::Battlefield && o.tapped)
+                    .count(),
+                3,
+                "mana sources tapped before selection"
+            );
+            assert_eq!(choosing.players.you.graveyard.len(), 7);
+            assert!(deciding(&choosing).unwrap().cancellable);
+            let restored = game.cancel().unwrap();
+            assert_eq!(*game.state(), state);
+            assert_eq!(restored.objects, before.objects);
+            // A restored decision has a fresh id; use it for the next attempt.
+            let mut again = answer(&mut game, &restored, cast);
+            while matches!(
+                deciding(&again).unwrap().kind,
+                Kind::ManaPayment | Kind::PaymentPlan
+            ) {
+                again = answer(&mut game, &again, 0);
+            }
+            while deciding(&again).is_some_and(|d| d.kind == Kind::ExileCost) {
+                again = answer(&mut game, &again, 0);
+                assert!(
+                    !again
+                        .events
+                        .iter()
+                        .any(|e| matches!(e, GameEvent::Mana { .. } | GameEvent::Tap { .. })),
+                    "no selection pays or taps mana twice"
+                );
+            }
+            assert_eq!(again.players.you.graveyard.len(), 1);
+            assert_eq!(
+                again
+                    .objects
+                    .iter()
+                    .filter(|o| o.zone == ZoneName::Exile)
+                    .count(),
+                6
+            );
+            assert!(matches!(again.stack.last(), Some(StackItem::Spell { .. })));
+            assert!(!deciding(&again).unwrap().cancellable);
+        }
+    }
+}

@@ -205,7 +205,11 @@ impl ExileCost {
             ExileCost::Graveyard(n) => {
                 let mut graveyard = s.zone(player, Zone::Graveyard);
                 graveyard.remove(itself);
-                graveyard.count() >= u32::from(n)
+                graveyard
+                    .iter()
+                    .filter(|&slot| !s.object(slot).flags.has(ObjectFlags::TOKEN))
+                    .count()
+                    >= usize::from(n)
             }
         }
     }
@@ -239,8 +243,25 @@ fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboar
         ExileCost::Hand(colors) => collapse(s, hand_cards(s, t, c.player, colors, itself)),
         ExileCost::Graveyard(_) => {
             let graveyard = s.graveyard(c.player);
-            let last = graveyard.len() - usize::from(c.left);
-            collapse_in_order(s, &graveyard[usize::from(c.spec)..=last])
+            // A sacrificed mana token remains here until state-based actions, but
+            // [CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116):
+            // "A token isn't a card". Count and offer only cards for this cost.
+            let card = |slot| !s.object(slot).flags.has(ObjectFlags::TOKEN);
+            let last = graveyard
+                .iter()
+                .enumerate()
+                .rev()
+                .filter(|&(_, &slot)| card(slot))
+                .nth(usize::from(c.left) - 1)
+                .expect("enough cards to pay the cost")
+                .0;
+            collapse_in_order(
+                s,
+                graveyard[usize::from(c.spec)..=last]
+                    .iter()
+                    .copied()
+                    .filter(|&slot| card(slot)),
+            )
         }
     }
 }
@@ -1221,12 +1242,13 @@ fn advance<L: Layout>(
     Ok(())
 }
 
-/// Pays the costs that are not mana, then turns to the mana.
+/// Pays an ability's non-mana costs, then turns to mana. A spell's exile choices follow
+/// mana payment, so its caster sees the mana spent before selecting the other costs.
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. First, they pay all costs that don't involve random elements or moving objects
 /// from the library to a public zone, in any order." The solver never taps a source that pays
-/// with itself (`spent_by_entry`), so paying these first changes nothing.
+/// with itself (`spent_by_entry`), so paying an ability's costs first changes nothing.
 fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -1234,16 +1256,7 @@ fn begin_payment<L: Layout>(
     mut c: Casting,
 ) -> Result<(), Full> {
     let entry = top(s);
-    if entry.is_spell() {
-        let face = t.def(entry.card).face(entry.face);
-        if let Some(cost) = ExileCost::of(face, entry.costs) {
-            c.step = CastStep::Exile;
-            c.left = cost.count();
-            c.spec = 0;
-            s.pending = Pending::Casting(c);
-            return Ok(());
-        }
-    } else {
+    if !entry.is_spell() {
         let a = entry_ability_of(t, &entry);
         let source = entry.object.expect("an activated ability's source");
         if a.cost.tap {
@@ -1328,7 +1341,7 @@ fn pay_mana<L: Layout>(
         Payment::Manual => {
             c.remaining = cost;
             if cost.is_zero() {
-                return finish(s, t, sink, c);
+                return after_mana(s, t, sink, c);
             }
             c.step = CastStep::Manual;
             s.pending = Pending::Casting(c);
@@ -1353,9 +1366,33 @@ fn pay_mana<L: Layout>(
             if let Some(plan) = plans.as_slice().first() {
                 mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan)?;
             }
-            finish(s, t, sink, c)
+            after_mana(s, t, sink, c)
         }
     }
+}
+
+/// Mana is paid once before choosing cards for an exile cost. Both orders are permitted by
+/// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "First, they pay all costs
+/// that don't involve random elements or moving objects from the library to a public zone,
+/// in any order." Keeping the unfinished cast pending also keeps session cancellation valid.
+fn after_mana<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    mut c: Casting,
+) -> Result<(), Full> {
+    let entry = top(s);
+    if entry.is_spell() {
+        let face = t.def(entry.card).face(entry.face);
+        if let Some(cost) = ExileCost::of(face, entry.costs) {
+            c.step = CastStep::Exile;
+            c.left = cost.count();
+            c.spec = 0;
+            s.pending = Pending::Casting(c);
+            return Ok(());
+        }
+    }
+    finish(s, t, sink, c)
 }
 
 /// The spell becomes cast, or the ability activated.
@@ -1618,7 +1655,7 @@ pub(crate) fn perform<L: Layout>(
                 Bitboard::EMPTY,
                 &plans.as_slice()[Into::<usize>::into(i)],
             )?;
-            return finish(s, t, sink, c);
+            return after_mana(s, t, sink, c);
         }
         CastStep::Crew => {
             // CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
@@ -1660,13 +1697,13 @@ pub(crate) fn perform<L: Layout>(
                 s.pending = Pending::Casting(c);
                 return Ok(());
             }
-            return pay_mana(s, t, sink, c);
+            return finish(s, t, sink, c);
         }
         CastStep::Manual => {
             let option = option.expect("a manual payment");
             c.remaining = mana::manual_pay(s, t, sink, c.player, c.remaining, option)?;
             if c.remaining.is_zero() {
-                return finish(s, t, sink, c);
+                return after_mana(s, t, sink, c);
             }
         }
     }
