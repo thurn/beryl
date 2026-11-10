@@ -91,6 +91,10 @@ ui-live *args:
 specs *args:
     {{ by }} specs "$@"
 
+# Index an Arena recording as a UI reference: index, find or film (by video --help)
+video *args:
+    {{ by }} video "$@"
+
 # Playable card review and the reproducible scenario viewer.
 playground *args:
     {{ by }} playground "$@"

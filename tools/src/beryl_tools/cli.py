@@ -21,6 +21,7 @@ from . import (
     shots,
     specs,
     system,
+    video,
     warm,
 )
 
@@ -63,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         shots,
         specs,
         system,
+        video,
         warm,
     ):
         module.register(sub)
