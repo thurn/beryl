@@ -5,15 +5,22 @@ description: Work the bug reports filed from Beryl's in-app bug button (âŒ˜B) â€
 
 # Fixing reported bugs
 
-Please investigate and fix the following issues. Handle small fixes directly;
-use child sessions for larger investigations and fixes to keep context
-manageable. Give each child the report, acceptance criteria, and relevant prior
-findings. The parent session owns report accounting and reviews the child's
-verification evidence before closure. Please feel free to use and extend the
-`/specs` tool to assist with this. Surface questions about expected behavior
-during the initial review: read every report first, then ask material questions
-together before implementing fixes. Continue independent reports while answers
-are pending; only work that depends on an unanswered question waits.
+The parent handles triage and may fix small items directly. For larger fixes,
+create separate Codex tasks in the Beryl project using the Sol model
+(`gpt-6.1-sol`). Use the desktop task creation tool for these independently
+visible tasks. Do not spawn in-chat subagents for this workflow. Group reports
+that share a mechanism to avoid overlapping fixes.
+
+Give each task the original reports or bead IDs, acceptance criteria, relevant
+prior findings, and ownership boundaries. Each task uses its own Enact worktree,
+lands through CI, and returns the commit and verification evidence per report.
+The parent tracks all assigned reports, reviews that evidence, and handles bead
+closure and report archival. Use and extend `/specs` as needed.
+
+Surface questions about expected behavior during the initial review: read every
+report first, then ask material questions together before implementing fixes.
+Continue independent reports while answers are pending; only work that depends
+on an unanswered question waits.
 
 A plausible code change is a candidate fix. For rules and UI reports, closure
 requires evidence that the player's requested behavior works, including the
