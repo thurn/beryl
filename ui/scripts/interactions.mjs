@@ -2840,9 +2840,12 @@ await check(
         await assertCaptionAligned(
             frames.first().locator(".ability-choice-caption"),
         );
-        await page
-            .locator(".ability-chooser")
-            .getByRole("button", { name: /Cast Thieving Skydiver with kicker/ })
+        await frames
+            .and(
+                page.getByRole("button", {
+                    name: /Cast Thieving Skydiver with kicker/,
+                }),
+            )
             .click();
         const step = page.getByRole("dialog", {
             name: "Cast Thieving Skydiver",
@@ -3067,9 +3070,13 @@ await check(
             await page.click(subtlety);
             await frames(page).first().waitFor();
         }
-        await page
-            .locator(".ability-chooser")
-            .getByRole("button", { name: "Cast Subtlety", exact: true })
+        await frames(page)
+            .and(
+                page.getByRole("button", {
+                    name: "Cast Subtlety",
+                    exact: true,
+                }),
+            )
             .click();
         assert.deepEqual(await settled(page, 1), [plainCast], "cast");
     },
@@ -3180,9 +3187,8 @@ await check(
             "cancel returns the card without casting",
         );
         await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
-        await page
-            .locator(".ability-chooser")
-            .getByRole("button", { name: /Cast Subtlety with evoke/ })
+        await frames(page)
+            .and(page.getByRole("button", { name: /Cast Subtlety with evoke/ }))
             .click();
         assert.deepEqual(await settled(page, 1), [evoked], "evoked");
     },
@@ -3338,9 +3344,12 @@ await check(
         const evoke = async () => {
             await page.clock.runFor(2000);
             await page.click(subtlety);
-            await page
-                .locator(".ability-chooser")
-                .getByRole("button", { name: /Cast Subtlety with evoke/ })
+            await frames(page)
+                .and(
+                    page.getByRole("button", {
+                        name: /Cast Subtlety with evoke/,
+                    }),
+                )
                 .click();
             await prompt.waitFor();
             await page.clock.runFor(1000);
