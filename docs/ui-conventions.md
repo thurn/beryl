@@ -6,6 +6,12 @@ Cards moving between the stack and battlefield travel directly and ease into
 place. Triggers and tokens use the same quick flight. They start small at their
 source and become visible as they move away.
 
+## Piles and permanents
+
+No layer of a library, graveyard or exile pile covers a card in play, for either
+seat, however long a row grows. The opponent's piles keep the band above their
+back row to themselves.
+
 ## Paying with permanents
 
 During a payment prompt such as Waterbend or Convoke, start with no payment
