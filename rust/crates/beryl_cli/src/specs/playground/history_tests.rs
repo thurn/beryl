@@ -4,7 +4,8 @@
 
 use super::*;
 use beryl_session::protocol::{
-    AskView, Candidate, CandidateIndex, Kind, PlayerView, Side, Status, ZoneName,
+    AskView, Candidate, CandidateIndex, CardHandling, GameEvent, Kind, PlayerView, Side, Status,
+    ZoneName,
 };
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -103,6 +104,37 @@ fn subtlety_keeps_opponents_bottom_choice_and_viewers_prompt() {
         matches!(&v.status, Status::Deciding { decision }
             if matches!(decision.ask, AskView::TopOrBottom { .. }) && decision.candidates.len() == 2)
     });
+}
+
+#[test]
+fn iceberg_shows_a_private_scry_and_its_public_result() {
+    let mut looked = false;
+    exercise(
+        "Aang's Iceberg",
+        "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top",
+        true,
+        |v| {
+            looked |= matches!(
+                v.handling,
+                Some(CardHandling::Library {
+                    side: Side::Opponent,
+                    count: Some(2),
+                    scry: Some(true),
+                })
+            );
+            looked
+                && v.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        GameEvent::Scry {
+                            player: Side::Opponent,
+                            top: 2,
+                            bottom: 0
+                        }
+                    )
+                })
+        },
+    );
 }
 
 #[test]

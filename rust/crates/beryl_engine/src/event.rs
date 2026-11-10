@@ -122,6 +122,12 @@ pub enum Event<L: Layout = Small> {
     DrawCard {
         slot: L::Slot,
     },
+    /// The public result of a scry, without the identities or order of the cards.
+    Scry {
+        player: Seat,
+        top: u8,
+        bottom: u8,
+    },
     LibraryShuffled {
         player: Seat,
     },

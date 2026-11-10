@@ -562,6 +562,15 @@ impl<L: Layout> Relayout for Event<L> {
             },
             &Event::Draw { player, cards } => Event::Draw { player, cards },
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
+            &Event::Scry {
+                player,
+                top,
+                bottom,
+            } => Event::Scry {
+                player,
+                top,
+                bottom,
+            },
             &Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
             &Event::LifeGain { player, amount } => Event::LifeGain { player, amount },
             &Event::LifeLoss { player, amount } => Event::LifeLoss { player, amount },

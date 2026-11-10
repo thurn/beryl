@@ -5145,6 +5145,149 @@ if (wanted(privateHandling)) {
     }
 }
 
+const opponentScry =
+    "opponent scry lifts above the library and reports its result";
+if (wanted(opponentScry)) {
+    const before = { ...turnViews[mainHalt], events: [] };
+    const library = before.players.opponent.library;
+    const held = library.slice(-2);
+    const looking = {
+        ...before,
+        status: { kind: "thinking" },
+        handling: { zone: "library", side: "opponent", count: 2, scry: true },
+    };
+    for (const bottom of [0, 1, 2]) {
+        const top = held.length - bottom;
+        const reordered = [
+            ...held.slice(top),
+            ...library.slice(0, -held.length),
+            ...held.slice(0, top).reverse(),
+        ];
+        const finished = {
+            ...before,
+            players: {
+                ...before.players,
+                opponent: { ...before.players.opponent, library: reordered },
+            },
+            events: [{ kind: "scry", player: "opponent", top, bottom }],
+        };
+        const run = await motionFixture(`opponent-scry-${bottom}`, [
+            before,
+            looking,
+            finished,
+        ]);
+        await check(
+            `${opponentScry} (${top} top, ${bottom} bottom)`,
+            async (page) => {
+                await page.clock.runFor(800);
+                const backs = page.locator(".card-el-handling");
+                const cards = held.map((slot) =>
+                    page.locator(`.card-layer ${slotOf(slot)}`),
+                );
+                const home = await where(cards[1]);
+                const parked = (slot) =>
+                    page.locator(
+                        `${slotOf(slot)}[data-library-pile="opponent"]`,
+                    );
+                const staying = await where(parked(library[0]));
+                for (const card of cards)
+                    await card.evaluate((e) => (e.dataset.original = "true"));
+
+                await page.clock.pauseAt(Date.now() + 60_000);
+                await page.locator(".turn-action button").first().click();
+                await until(page, ".card-el-handling", 16);
+                await page.clock.runFor(720);
+                assert.equal(await backs.count(), 2);
+                assert.equal(await backs.locator(".card-back").count(), 2);
+                assert.equal(
+                    await page.locator(".card-el-handling[data-card]").count(),
+                    0,
+                );
+                for (const card of cards) {
+                    const [x, y] = await where(card);
+                    assert.ok(
+                        Math.abs(x - home[0]) < 28,
+                        "the lift stays above the library column",
+                    );
+                    assert.ok(
+                        y < home[1] - 4,
+                        "both backs rise above their starting pile",
+                    );
+                }
+                const resting = await where(parked(library[0]));
+                assertNear(
+                    resting,
+                    staying,
+                    "the rest of the library stays put",
+                );
+
+                await until(page, ".library-choice-hud", 16);
+                assert.equal(
+                    await backs.count(),
+                    0,
+                    "the backs return without a separate packed hold",
+                );
+                assert.equal(
+                    await page.locator(".library-choice-hud").innerText(),
+                    `Scry · ${top} top · ${bottom} bottom`,
+                );
+                await page.clock.runFor(800);
+                for (const card of cards) {
+                    assert.equal(await card.count(), 1);
+                    assert.equal(
+                        await card.getAttribute("data-original"),
+                        "true",
+                    );
+                    const [x] = await where(card);
+                    assert.ok(
+                        Math.abs(x - home[0]) < 28,
+                        "each back returns to the library",
+                    );
+                }
+            },
+            { ...run, ready: ".turn-action button" },
+        );
+    }
+}
+
+const parkedSearch = "an opponent searching keeps their library parked";
+if (wanted(parkedSearch)) {
+    const before = { ...turnViews[mainHalt], events: [] };
+    const searching = {
+        ...before,
+        status: { kind: "thinking" },
+        handling: { zone: "library", side: "opponent", count: null },
+    };
+    const run = await motionFixture("opponent-parked-search", [
+        before,
+        searching,
+    ]);
+    await check(
+        parkedSearch,
+        async (page) => {
+            await page.clock.runFor(1100);
+            const library = page.locator(
+                '.card-layer [data-library-pile="opponent"]',
+            );
+            assert.equal(
+                await library.count(),
+                before.players.opponent.library.length,
+            );
+            assert.equal(
+                await page
+                    .locator(
+                        '.card-layer [data-library-pile="opponent"][data-card]',
+                    )
+                    .count(),
+                0,
+            );
+            assert.equal(await page.locator(".card-el-handling").count(), 0);
+            assert.equal(await page.locator(".choice-zone").count(), 0);
+        },
+        { ...run, at: 2, ready: ".card-layer" },
+    );
+}
+
 const targetDeparture =
     "a resolving spell's arrow stays until its target leaves";
 if (wanted(targetDeparture)) {
@@ -9719,7 +9862,7 @@ await check(
     { fixture: "game-over-resumed", at: 0, ready: "[data-life]" },
 );
 
-await check("libraries face their owners", async (page) => {
+await check("libraries match the other piles", async (page) => {
     await page.clock.runFor(3000);
     for (const side of ["you", "opponent"]) {
         const cards = page.locator(`.card-layer [data-library-pile="${side}"]`);
@@ -9730,8 +9873,8 @@ await check("libraries face their owners", async (page) => {
         });
         assert.equal(
             direction,
-            side === "you" ? 1 : -1,
-            `${side} library faces its owner`,
+            1,
+            `${side} library uses the same upright orientation as the other piles`,
         );
     }
 });

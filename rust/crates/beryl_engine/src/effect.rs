@@ -848,6 +848,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let ask = Ask::Scry { count: n };
         let mut left = self.top_of_library(player, n);
         self.look_at(player, left);
+        let mut bottom = 0;
         while !left.is_empty() {
             let Some(slot) = self.choose_or_done(player, left, ask)? else {
                 break;
@@ -855,6 +856,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             let r = zone::reorder_library(self.state, slot, Place::Bottom);
             self.check(r);
             left.remove(slot);
+            bottom += 1;
         }
         let mut order: L::Queue<L::Slot, 60> = Default::default();
         while left.count() > 1 {
@@ -868,6 +870,13 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         for &slot in order.iter().rev() {
             let r = zone::reorder_library(self.state, slot, Place::Top);
             self.check(r);
+        }
+        if n > 0 {
+            self.sink.note(event::Event::Scry {
+                player,
+                top: u8::try_from(order.len()).expect("scry top fits in u8"),
+                bottom,
+            });
         }
         Ok(())
     }

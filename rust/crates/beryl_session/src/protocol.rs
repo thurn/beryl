@@ -91,6 +91,9 @@ pub enum CardHandling {
     Library {
         side: Side,
         count: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        scry: Option<bool>,
     },
     Hand {
         side: Side,
@@ -794,6 +797,11 @@ pub enum GameEvent {
         #[ts(optional)]
         slots: Option<Vec<u16>>,
     },
+    Scry {
+        player: Side,
+        top: u8,
+        bottom: u8,
+    },
     LibraryShuffled {
         player: Side,
     },
@@ -1181,6 +1189,7 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
         (size > 0 && count != Some(0)).then(|| CardHandling::Library {
             side: side(obs, player),
             count,
+            scry: matches!(d.ask, Ask::Scry { .. }).then_some(true),
         })
     };
     let hand = |player| {
@@ -2236,6 +2245,30 @@ fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     }
 }
 
+fn library_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
+    let side = |p| side(obs, p);
+    match *e {
+        Event::Draw { player, cards } => GameEvent::Draw {
+            player: side(player),
+            cards,
+            slots: None,
+        },
+        Event::Scry {
+            player,
+            top,
+            bottom,
+        } => GameEvent::Scry {
+            player: side(player),
+            top,
+            bottom,
+        },
+        Event::LibraryShuffled { player } => GameEvent::LibraryShuffled {
+            player: side(player),
+        },
+        _ => unreachable!("not a library event"),
+    }
+}
+
 /// Combine the individual public handles with the draw count the rules listen to.
 fn game_events<L: Layout>(
     t: &GameTable,
@@ -2290,15 +2323,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             amount,
             combat,
         },
-        Event::Draw { player, cards } => GameEvent::Draw {
-            player: side(player),
-            cards,
-            slots: None,
-        },
+        Event::Draw { .. } | Event::Scry { .. } | Event::LibraryShuffled { .. } => {
+            library_event(obs, e)
+        }
         Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
-        Event::LibraryShuffled { player } => GameEvent::LibraryShuffled {
-            player: side(player),
-        },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {
             player: side(player),
             amount,

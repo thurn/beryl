@@ -472,12 +472,12 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
-  const libraryTop = useMemo(
+  const libraryChoice = useMemo(
     () =>
       [...log]
         .reverse()
         .find((entry) => entry.side === "opponent" && entry.kind !== "turn")
-        ?.libraryTop,
+        ?.libraryChoice,
     [log],
   );
   // The hand sinks under a screen over the table, and rises whole for a choice of its cards,
@@ -1445,17 +1445,17 @@ export function Board({
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
-        {libraryTop !== undefined && (
+        {libraryChoice !== undefined && (
           <div className="hud library-choice-hud">
             <Button variant="secondary" onClick={toggleLog}>
-              {libraryTop ? "Top of Library" : "Bottom of Library"}
+              {libraryChoice}
             </Button>
           </div>
         )}
         {opponentActing(view, waiting) && !bannerUp && (
           <div
             className="hud thinking-hud"
-            style={libraryTop === undefined ? undefined : { top: 200 }}
+            style={libraryChoice === undefined ? undefined : { top: 200 }}
           >
             <Thinking />
           </div>

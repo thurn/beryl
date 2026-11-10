@@ -40,6 +40,7 @@ const EVENTS: Sounds = {
   },
   damage: () => "hit",
   draw: () => "slide",
+  scry: () => null,
   libraryShuffled: () => "fan",
   lifeGain: () => "gain",
   lifeLoss: () => "drain",

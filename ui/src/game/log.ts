@@ -20,8 +20,8 @@ export interface LogEntry {
   /** The player it is about, for its marker. */
   side: Side;
   text: string;
-  /** A spell's owner chose an end of their library. */
-  libraryTop?: boolean;
+  /** The public result of a library choice, also shown near the player. */
+  libraryChoice?: string;
 }
 
 export type LogLine = Omit<LogEntry, "key">;
@@ -138,6 +138,16 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
       }
       case "zoneChange":
         return zoneChange(e);
+      case "scry": {
+        const libraryChoice = `Scry · ${e.top} top · ${e.bottom} bottom`;
+        out.push({
+          kind: "action",
+          side: e.player,
+          text: `${who(e.player)} put ${e.top} on top and ${e.bottom} on bottom`,
+          libraryChoice,
+        });
+        return;
+      }
       case "draw":
         // The draw step's draw goes without saying.
         if (view.turn.step === "draw" && e.player === view.turn.active) return;
@@ -306,7 +316,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
             kind: "action",
             side,
             text: `${who(side)} put ${card} on the ${end} of ${side === "you" ? "your" : "their"} library`,
-            libraryTop,
+            libraryChoice: libraryTop ? "Top of Library" : "Bottom of Library",
           });
         }
         return;

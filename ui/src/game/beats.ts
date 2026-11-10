@@ -19,7 +19,7 @@ import type {
 } from "../generated/protocol";
 import { choiceOf } from "./choices";
 import { withResolving } from "./decisions";
-import { sameHandling, type Spotlight } from "./layout";
+import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
  * briefly, a new turn while it is announced, an action long enough to follow, a spell or
@@ -111,6 +111,7 @@ function packHandling(before: PlayerView, after: PlayerView): boolean {
     handling?.zone === "library" &&
     handling.count !== null &&
     handling.count > 1 &&
+    !handling.scry &&
     !sameHandling(before, after)
   );
 }
@@ -191,7 +192,7 @@ class Walk {
     this.seenInChoice = new Set(choice?.kind === "pick" ? choice.cards : []);
     this.view = update.view;
     this.startsHandling =
-      !!this.view.handling && !sameHandling(before, this.view);
+      liftsHandling(this.view) && !sameHandling(before, this.view);
     this.final = new Map(this.view.objects.map((o) => [o.slot, o]));
     this.cur = { ...before, status: { kind: "playing" }, events: [] };
   }
@@ -254,9 +255,9 @@ class Walk {
           end++;
         }
         const handling = this.cur.handling;
-        if (handling && shuffle.has(handling.side)) {
-          // Put the search packet back before shuffling. Those backs remain the same
-          // elements, but the shuffle breaks the correspondence to any known faces.
+        if (handling && shuffle.has(handling.side) && liftsHandling(this.cur)) {
+          // Put any lifted cards back first. The shuffle breaks the correspondence
+          // to any known faces.
           const shuffles = this.pending;
           this.pending = [];
           this.cur = { ...this.cur, handling: undefined };

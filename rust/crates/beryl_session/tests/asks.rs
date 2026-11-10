@@ -88,6 +88,7 @@ fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
             Some(CardHandling::Library {
                 side: Side::Opponent,
                 count: Some(5),
+                scry: None,
             }),
         );
         for slot in observer.players.opponent.library.iter().rev().take(5) {

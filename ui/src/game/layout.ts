@@ -1522,6 +1522,14 @@ export function sameHandling(before: PlayerView, after: PlayerView): boolean {
   );
 }
 
+/** A full-library search keeps the deck parked. */
+export function liftsHandling({ handling }: PlayerView): boolean {
+  return (
+    handling !== undefined &&
+    (handling.zone === "hand" || handling.count !== null)
+  );
+}
+
 /** The group in its initial table order. Keep that order while it is up so private
  * selections and same-zone reorders do not shuffle the backs around on screen. */
 export function handlingSlots(
@@ -1532,7 +1540,7 @@ export function handlingSlots(
   if (!handling) return [];
   if (handling.zone === "library") {
     const library = view.players[handling.side].library;
-    return library.slice(-(handling.count ?? library.length)).reverse();
+    return handling.count ? library.slice(-handling.count).reverse() : [];
   }
   const cards = view.objects.filter(
     (o) => o.owner === handling.side && o.zone === "hand",
@@ -1542,8 +1550,7 @@ export function handlingSlots(
   );
 }
 
-/** A small group spreads out. A full library moves as several overlapping packets so the
- * whole library can travel without making a card smaller than a visible back. */
+/** Private looks spread out their original backs. Scry lifts a small fan over its pile. */
 function handlingPlacements(
   view: PlayerView,
   cards: ObjectView[],
@@ -1551,20 +1558,27 @@ function handlingPlacements(
 ): Placement[] {
   const handling = view.handling;
   if (!handling || cards.length === 0) return [];
+  const side = handling.side;
+  const scry = handling.zone === "library" && handling.scry;
+  const library = view.players[side].library;
   const opening = view.turn.number === 0;
   const columns = packed
     ? 1
     : Math.min(handling.zone === "library" ? 5 : 7, cards.length);
   const packet = Math.ceil(cards.length / columns);
-  const side = handling.side;
-  const pile = packed ? pileLook(side, PILES[side].library, 1) : undefined;
+  const pile =
+    scry || packed
+      ? pileLook(side, PILES[side].library, scry ? library.length : 1)
+      : undefined;
   const width = pile?.width ?? (opening ? 72 : 104);
-  const step = width * (handling.zone === "hand" ? 0.72 : 1.12);
+  const step = width * (scry ? 0.24 : handling.zone === "hand" ? 0.72 : 1.12);
   const center = pile
-    ? pile.x + width / 2 + (side === "you" ? 125 : -125)
+    ? pile.x + width / 2 + (scry ? 0 : side === "you" ? 125 : -125)
     : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
   const top = pile
-    ? pile.y + (side === "you" ? -65 : 48)
+    ? scry
+      ? Math.max(1, pile.y - 28)
+      : pile.y + (side === "you" ? -65 : 48)
     : opening
       ? 8
       : handling.zone === "hand" && side === "you"
@@ -1583,8 +1597,8 @@ function handlingPlacements(
       width: FULL_WIDTH,
       span: FULL_WIDTH,
       scale: width / FULL_WIDTH,
-      rotate: dx * 2,
-      skew: 0,
+      rotate: scry ? 0 : dx * 2,
+      skew: scry ? (pile?.skew ?? 0) : 0,
       opacity: 1,
       z: SHOWCASE_Z + column * packet + packet - depth,
       rim: depth > 0,
@@ -1611,14 +1625,6 @@ function pileCards(
     const away = borrowed.has(o.slot);
     const depth = away ? cards.length - 1 - i : --depthLeft;
     const at = onPile(away ? full : rest, side, depth);
-    // Turn the opponent's library around its center, preserving the skewed pile's
-    // footprint. The same placement carries each card through draws and returns.
-    if (library && side === "opponent") {
-      const height = full.width / CARD_ASPECT;
-      at.x += full.width + Math.tan((at.skew * Math.PI) / 180) * height;
-      at.y += height;
-      at.rotate = 180;
-    }
     const raised = !library && aimed.has(o.slot) && depth > 0;
     // A shuffle moves two packets toward the open table, keeping all faces down.
     const split =
