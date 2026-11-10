@@ -1604,13 +1604,13 @@
 }
 .tip-below {
   top: calc(100% + 8px);
-  /* Under a leaning pile (Piles.tsx' Lying), its foot. */
+  /* Under a leaning pile (Piles.tsx' PileButton), its foot. */
   margin-left: var(--drop, 0px);
 }
 .tip-over {
   top: 50%;
   transform: translate(-50%, -50%);
-  /* Over a leaning pile (Piles.tsx' Lying), its middle. */
+  /* Over a leaning pile (Piles.tsx' PileButton), its middle. */
   margin-left: calc(var(--drop, 0px) / 2);
 }
 .tip-left {

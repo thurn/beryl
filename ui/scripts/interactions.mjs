@@ -12027,6 +12027,89 @@ await check(
     { fixture: "game-over-resumed", at: 0, ready: "[data-life]" },
 );
 
+const pileAlignment = "zone pile faces share a bottom edge";
+if (wanted(pileAlignment)) {
+    const spare = (await load("cast-exile-choice"))[0].objects.find(
+        (o) => o.name === "Thirst for Discovery" && o.zone === "graveyard",
+    );
+    for (const side of ["you", "opponent"]) {
+        for (const graveyardCount of [0, 1]) {
+            const view = structuredClone(oculusViews[1]);
+            view.events = [];
+            if (graveyardCount) {
+                const slot = Math.max(...view.objects.map((o) => o.slot)) + 1;
+                view.objects.push({ ...spare, slot });
+                view.players.you.graveyard.push(slot);
+            }
+            if (side === "opponent") {
+                [view.players.you, view.players.opponent] = [
+                    view.players.opponent,
+                    view.players.you,
+                ];
+                for (const o of view.objects) {
+                    o.owner = o.owner === "you" ? "opponent" : "you";
+                    o.controller = o.controller === "you" ? "opponent" : "you";
+                }
+            }
+            const { library, graveyard } = view.players[side];
+            const exile = view.objects
+                .filter((o) => o.zone === "exile" && o.owner === side)
+                .map((o) => o.slot);
+            assert.equal(exile.length, 6);
+            const run = await motionFixture(
+                `pile-alignment-${side}-${graveyardCount}`,
+                [view],
+            );
+            const anchor = `[data-table-library="${side}"]`;
+            await check(
+                `${pileAlignment}: ${side}, ${graveyardCount} in graveyard`,
+                async (page) => {
+                    const baseline = await page
+                        .locator(anchor)
+                        .evaluate((e) => e.getBoundingClientRect().bottom);
+                    const graveyardButton = page.locator(
+                        `.pile-button[data-side="${side}"][data-pile="graveyard"]`,
+                    );
+                    assert.equal(await graveyardButton.count(), graveyardCount);
+                    for (const [zone, slots] of Object.entries({
+                        library,
+                        exile,
+                        graveyard,
+                    })) {
+                        if (slots.length === 0) continue;
+                        const edges = await page
+                            .locator(
+                                slots
+                                    .map(
+                                        (slot) =>
+                                            `.card-el-pile${slotOf(slot)}`,
+                                    )
+                                    .join(","),
+                            )
+                            .evaluateAll((cards) => {
+                                const z = (card) =>
+                                    Number(getComputedStyle(card).zIndex);
+                                return cards
+                                    .sort((a, b) => z(b) - z(a))
+                                    .map(
+                                        (card) =>
+                                            card.getBoundingClientRect().bottom,
+                                    );
+                            });
+                        assert.equal(edges.length, slots.length);
+                        assert.ok(
+                            Math.abs(edges[0] - baseline) < 1 &&
+                                Math.abs(Math.max(...edges) - baseline) < 1,
+                            `${zone} face and pile end at ${baseline}, measured ${edges}`,
+                        );
+                    }
+                },
+                { ...run, ready: anchor, reducedMotion: "reduce" },
+            );
+        }
+    }
+}
+
 await check("libraries match the other piles", async (page) => {
     await page.clock.runFor(3000);
     for (const side of ["you", "opponent"]) {

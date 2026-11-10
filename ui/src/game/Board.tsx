@@ -179,7 +179,7 @@ import {
   INSPECT_WIDTH,
   inspectorBox,
   type InspectPlace,
-  Lying,
+  LibraryAnchor,
   pileMark,
   PileButton,
   ZoneViewer,
@@ -1534,15 +1534,7 @@ export function Board({
         <div className="far-shade" />
         {/* The arrange tray borrows the pile as a packet. This anchor supplies its flight box. */}
         {libraries.map(({ side, look }) => (
-          <Lying key={side} look={look}>
-            <div
-              data-table-library={side}
-              style={{
-                width: look.width + Math.abs(look.depth.x),
-                height: look.width / CARD_ASPECT + look.depth.y,
-              }}
-            />
-          </Lying>
+          <LibraryAnchor key={side} side={side} look={look} />
         ))}
 
         <div className="hud" style={{ left: 18, top: 62 }}>

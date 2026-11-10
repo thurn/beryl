@@ -293,13 +293,12 @@ export function overLog(placements: Layout): boolean {
   return false;
 }
 
-/** Where each side's library, graveyard and exile lie: their top cards' top-left corners, and
- * how wide a top card is before its depth shrinks it. The two sides mirror each other through
- * the table's middle: yours lie side by side in the near left corner, under your badge and left
- * of the hand's widest fan, the library outermost, then the graveyard and exile toward the
- * middle; the opponent's in the far right corner, their library outermost, then their graveyard
- * and exile toward the middle, left of the gear. Their top cards end above the opponent's back
- * row (`ROWS`), whose permanents, nearer, lie over the edges of a thick pile. Leave room
+/** The library, graveyard and exile anchors and their unscaled card widths. The two sides
+ * mirror each other through the table's middle: yours lie in the near left corner, under your
+ * badge and left of the hand's widest fan. The library is outermost, then the graveyard and
+ * exile toward the middle. The opponent's lie in the far right corner, their library outermost,
+ * then their graveyard and exile toward the middle, left of the gear. Their top cards end above
+ * the opponent's back row (`ROWS`), whose permanents lie over the edges of a thick pile. Leave room
  * between piles for both the sideways rise of a thick pile and the lean at ultrawide widths. */
 export const PILES = {
   // In the far right corner, held to the stage's right edge.
@@ -330,7 +329,7 @@ function pileThickness(depth: number) {
 }
 function pileOffset(side: Side, depth: number) {
   const thickness = pileThickness(depth);
-  return { x: (side === "you" ? 0.5 : -0.5) * thickness, y: thickness };
+  return { x: (side === "you" ? 0.5 : -0.5) * thickness, y: -thickness };
 }
 
 /** How a pile of cards looks on the table. */
@@ -346,7 +345,7 @@ export interface PileLook {
   depth: { x: number; y: number };
 }
 
-/** A pile stands on a fixed spot on the table. Its top rises with each card. */
+/** The top face shares its bottom edge with its neighbors. Deeper cards fan behind it. */
 export function pileLook(
   side: Side,
   at: { x: number; y: number },
@@ -357,7 +356,7 @@ export function pileLook(
   const depth = pileOffset(side, Math.max(0, count - 1));
   return {
     x: at.x - depth.x,
-    y: at.y + PILE_BASE[side] - depth.y,
+    y: at.y + PILE_BASE[side],
     width,
     skew: lean(center, at.y),
     depth,
@@ -1671,7 +1670,7 @@ function pileCards(
         z: 80 - Math.min(depth, 79),
         back: true,
         x: full.x + full.width * 0.65 + spread,
-        y: full.y + full.depth.y + (full.width / CARD_ASPECT) * 0.9 + spread,
+        y: full.y + (full.width / CARD_ASPECT) * 0.9 + spread,
       };
     }
     const raised = !library && aimed.has(o.slot) && depth > 0;

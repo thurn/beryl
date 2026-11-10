@@ -26,47 +26,25 @@ import { ManaSymbol } from "../components/Mana";
 import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
-import { STAGE, type Box, type PileLook, type ZonePile } from "./layout";
+import { STAGE, type Box, type ZonePile } from "./layout";
 import { useReducedMotion } from "motion/react";
 import { BORROW_FLIGHT_MS, useBorrowedCard } from "./choiceFlight";
 
-/** A pile lying on the table as `look` says: its top card's top-left corner at the look's
- * corner, the edges beneath on whichever side they show. Its `tip` (Controls.tsx' Tip), shown
- * on hover, stands upright beside the leaning pile: from its top edge, which stays put, or
- * from its foot, which the lean moves sideways by `--drop`. */
-export function Lying({
-  look,
-  className = "hud",
-  tip,
-  children,
-}: {
-  look: PileLook;
-  className?: string;
-  tip?: ReactNode;
-  children: ReactNode;
-}) {
-  const at = { left: look.x - Math.max(0, -look.depth.x), top: look.y };
-  const lean = {
-    transformOrigin: "0 0",
-    transform: `skewX(${look.skew}deg)`,
-  };
-  if (!tip) {
-    return (
-      <div className={className} style={{ ...at, ...lean }}>
-        {children}
-      </div>
-    );
-  }
-  const height = look.width / CARD_ASPECT + Math.max(0, look.depth.y);
+/** The arrange tray borrows the whole library. Measure the envelope of its skewed cards. */
+export function LibraryAnchor({ side, look }: Pick<ZonePile, "side" | "look">) {
+  const height = look.width / CARD_ASPECT;
   const drop = height * Math.tan((look.skew * Math.PI) / 180);
   return (
     <div
-      className={`${className} has-tip`}
-      style={{ ...at, "--drop": `${drop}px` } as CSSProperties}
-    >
-      <div style={lean}>{children}</div>
-      {tip}
-    </div>
+      className="hud"
+      data-table-library={side}
+      style={{
+        left: look.x + Math.min(0, look.depth.x) + Math.min(0, drop),
+        top: look.y + look.depth.y,
+        width: look.width + Math.abs(look.depth.x) + Math.abs(drop),
+        height: height - look.depth.y,
+      }}
+    />
   );
 }
 
@@ -106,14 +84,13 @@ export function PileButton({
   onOpen(): void;
 }) {
   const { look, cards } = pile;
+  const height = look.width / CARD_ASPECT;
+  const drop = height * Math.tan((look.skew * Math.PI) / 180);
   return (
-    <Lying
-      look={look}
-      className="pile-at"
-      tip={
-        <Tip side={pile.side === "you" ? "over" : "below"}>
-          {pileTip(pile.zone, pile.count ?? cards.length)}
-        </Tip>
+    <div
+      className="pile-at has-tip"
+      style={
+        { left: look.x, top: look.y, "--drop": `${drop}px` } as CSSProperties
       }
     >
       <button
@@ -122,16 +99,20 @@ export function PileButton({
           .filter(Boolean)
           .join(" ")}
         style={{
-          marginLeft: Math.max(0, -look.depth.x),
           width: look.width,
-          height: look.width / CARD_ASPECT,
+          height,
+          transformOrigin: "0 0",
+          transform: `skewX(${look.skew}deg)`,
         }}
         aria-label={`${pileName(pile)}, ${cardCount(pile.count ?? cards.length)}`}
         data-pile={pile.zone}
         data-side={pile.side}
         onClick={onOpen}
       />
-    </Lying>
+      <Tip side={pile.side === "you" ? "over" : "below"}>
+        {pileTip(pile.zone, pile.count ?? cards.length)}
+      </Tip>
+    </div>
   );
 }
 
