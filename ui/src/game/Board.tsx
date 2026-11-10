@@ -3073,11 +3073,7 @@ function Prompt({
             <>
               {" "}
               <span className="prompt-cost">
-                {/^{[0-9]+}$/.test(ask.cost) ? (
-                  `(${ask.cost.slice(1, -1)})`
-                ) : (
-                  <CostText text={ask.cost} />
-                )}
+                <CostText text={ask.cost} />
               </span>
             </>
           )}

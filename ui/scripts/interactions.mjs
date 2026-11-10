@@ -11143,6 +11143,33 @@ await check(
     { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
 );
 
+const bendCost = "waterbend prompt renders its generic mana symbol";
+if (wanted(bendCost)) {
+    for (const fixture of ["choice-scry", "waterbend-tap"]) {
+        const views = await load(fixture);
+        const at = views.findIndex(
+            (v) => v.status.decision?.kind === "waterbend",
+        );
+        const cost = views[at].status.decision.ask.cost;
+        await check(
+            bendCost,
+            async (page) => {
+                const symbol = page.locator(".prompt-cost").getByRole("img", {
+                    name: cost,
+                    exact: true,
+                });
+                assert.equal(
+                    await symbol.count(),
+                    1,
+                    `${fixture} should display ${cost}`,
+                );
+                assert.ok(await symbol.isVisible());
+            },
+            { fixture, at: at + 1, ready: ".prompt-cost" },
+        );
+    }
+}
+
 const mixedBend = "waterbend Auto Pay keeps manual picks";
 if (wanted(mixedBend)) {
     const bender = bending.candidates.find((c) => c.option.kind === "object")
