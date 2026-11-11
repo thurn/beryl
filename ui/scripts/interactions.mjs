@@ -164,42 +164,58 @@ async function check(
     if (!wanted(title)) return;
     ran += 1;
     await queue(async () => {
-        const context = await browser.newContext({
-            viewport,
-            deviceScaleFactor: 1,
-            reducedMotion,
-            hasTouch: phone,
-        });
-        await context.route("**/fixtures/*.json", (route) =>
-            route.fulfill({
-                path: join(
-                    fixtures,
-                    decodeURIComponent(
-                        basename(new URL(route.request().url()).pathname),
+        // A page whose boot lost one of its modules to the network (Windows now and then
+        // runs out of socket buffers, net::ERR_NO_BUFFER_SPACE, beside the slow suite's other
+        // lanes) never shows the board: boot it once more, in a fresh context. Any other
+        // failure, and any after the board shows, fails the check.
+        for (let boots = 1; ; boots++) {
+            const context = await browser.newContext({
+                viewport,
+                deviceScaleFactor: 1,
+                reducedMotion,
+                hasTouch: phone,
+            });
+            await context.route("**/fixtures/*.json", (route) =>
+                route.fulfill({
+                    path: join(
+                        fixtures,
+                        decodeURIComponent(
+                            basename(new URL(route.request().url()).pathname),
+                        ),
                     ),
-                ),
-            }),
-        );
-        const page = await context.newPage();
-        page.on("pageerror", (e) => errors.push(`${title}: ${e.message}`));
-        page.on(
-            "console",
-            (m) => m.type() === "error" && errors.push(`${title}: ${m.text()}`),
-        );
-        try {
-            if (clock) await page.clock.install();
-            if (init) await page.addInitScript(init);
-            const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
-            await page.goto(new URL(route, base).href, { waitUntil: "load" });
-            await page.waitForSelector(ready);
-            await body(page);
-            await assertSounded(page);
-            console.log(`ok: ${title}`);
-        } catch (e) {
-            failed = true;
-            console.error(`FAILED: ${title}\n${e.stack ?? e}`);
-        } finally {
-            await context.close();
+                }),
+            );
+            const page = await context.newPage();
+            const seen = [];
+            page.on("pageerror", (e) => seen.push(`${title}: ${e.message}`));
+            page.on(
+                "console",
+                (m) =>
+                    m.type() === "error" && seen.push(`${title}: ${m.text()}`),
+            );
+            let booted = false;
+            try {
+                if (clock) await page.clock.install();
+                if (init) await page.addInitScript(init);
+                const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
+                await page.goto(new URL(route, base).href, {
+                    waitUntil: "load",
+                });
+                await page.waitForSelector(ready);
+                booted = true;
+                await body(page);
+                await assertSounded(page);
+                console.log(`ok: ${title}`);
+            } catch (e) {
+                const lost = seen.some((s) => s.includes("net::ERR_"));
+                if (!booted && lost && boots < 2) continue;
+                failed = true;
+                console.error(`FAILED: ${title}\n${e.stack ?? e}`);
+            } finally {
+                await context.close();
+            }
+            errors.push(...seen);
+            break;
         }
     });
 }
@@ -7846,15 +7862,20 @@ if (wanted(manifestFlight)) {
                     .locator('.choice-card[data-slot="800"]')
                     .boundingBox(),
             );
+            // The flight's first frame, recorded in the page: a position read after the
+            // card has reached the battlefield may come frames into its flight on a busy
+            // machine.
+            await page.evaluate(record);
             await page
                 .getByRole("button", { name: "Manifest", exact: true })
                 .click();
             await until(page, `${slotOf(800)}[data-zone="battlefield"]`, 20);
-            const start = center(
-                await page.locator(`.card-layer ${slotOf(800)}`).boundingBox(),
+            const start = posesOf(await page.evaluate(collect, 0), 800).find(
+                (c) => c.zone,
             );
             assert.ok(
-                Math.hypot(origin.x - start.x, origin.y - start.y) < 90,
+                start &&
+                    Math.hypot(origin.x - start.x, origin.y - start.y) < 90,
                 "card starts in chooser, not library",
             );
             await page.clock.runFor(1800);
