@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: motion-review description: Get a verb's motion on Beryl's stage judged by an independent reviewer, the judgement that decides when a verb is done. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and records the verdict on the verb's bead. Use when a verb, a case of one or an effect on the stage is new or its motion changed, when asked to review, judge or pass an animation, or before closing a bead that changes how something moves.
+---
+name: motion-review
+description: Get a verb's motion on Beryl's stage judged by an independent reviewer, the judgement that decides when a verb is done. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and records the verdict on the verb's bead. Use when a verb, a case of one or an effect on the stage is new or its motion changed, when asked to review, judge or pass an animation, or before closing a bead that changes how something moves.
+---
 
 # Motion review
 

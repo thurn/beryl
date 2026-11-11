@@ -50,10 +50,12 @@ removes an entry; nothing else does.
    neighbours move) is designed for them, starting from Arena's clip and numbers
    but never copying them: "animations are not only about duration", and
    "independent aesthetic judgement is needed here, our cards do not work the
-   same way". A verb is done when the independent motion review passes it;
-   `just motion` holds the stage to the verb's own values below (by-w8gv.21.42).
-   Arena's motion is made for its art crops, frames and distances, and copying
-   its numbers onto Beryl's full cards does not carry over what makes it work.
+   same way". A verb is done when the independent motion review passes it (the
+   `motion-review` skill: a fresh reviewer scores a fixed rubric on films from
+   `just motion --film`); `just motion` holds the stage to the verb's own values
+   below (by-w8gv.21.42). Arena's motion is made for its art crops, frames and
+   distances, and copying its numbers onto Beryl's full cards does not carry
+   over what makes it work.
 
 ## Settled as Arena
 

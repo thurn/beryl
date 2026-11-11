@@ -30,6 +30,7 @@ import { join } from "node:path";
 import { launch } from "./capture.mjs";
 import {
     ANSWERS,
+    differing,
     EDGE,
     ending,
     GAP,
@@ -387,7 +388,7 @@ async function shoot(folder, chosen, learned, open, play, seat, title) {
         const shot = await play(second.page, [...byTick.keys()]);
         if (!isDeepStrictEqual(shot, learned)) {
             throw new Error(
-                "the stage played the moment otherwise the second time",
+                `the stage played the moment otherwise the second time: ${differing(learned, shot)}`,
             );
         }
         if (second.errors.length) throw new Error(second.errors.join("\n"));
@@ -510,6 +511,7 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                     query,
                     fixture,
                     scale: SCALE,
+                    paced: true,
                 })),
                 size,
             });
@@ -521,6 +523,7 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                     edge: EDGE,
                     shoot,
                     whole: moment.whole,
+                    paced: true,
                 });
             try {
                 const first = await open();

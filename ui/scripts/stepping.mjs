@@ -3,6 +3,7 @@
 // stepped in ticks on whole milliseconds, with each tick's time and where everything drawn
 // then lay. Nothing here reads the page's own time, so nothing a play finds depends on the
 // machine's speed, and two plays of one moment read the same to the bit.
+import { isDeepStrictEqual } from "node:util";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
@@ -24,10 +25,25 @@ export const EDGE = 3;
  * times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
  * with the box on the page of everything drawn then (a card's frame is 63 by 88, taken as it
  * lies upright) and its pose as the stage has it; and where each player's life total is
- * drawn. */
-export async function walk({ tick, gap, answers, edge, shoot, whole }) {
+ * drawn.
+ *
+ * With `paced`, on a page `openStage` opened so, the page's own time is the stage's while the
+ * moment plays. The screen waits on the page's clock before it shows a choice (screens/
+ * Game.tsx), and the stage lays the table out again for what the screen then shows (the hand
+ * tucks under a choice): left to the machine's clock, that lands on another tick each play,
+ * and later in a play that stops to shoot than in one that does not. So what the page set
+ * before the walk is first let run out; then `setTimeout` counts the stage's milliseconds,
+ * `performance.now` reads them, and the page is given turns of its own before each tick is
+ * read, as it has between two frames, in which React draws without ever running out of
+ * time. A moment in which a choice opens needs it to play the same twice. */
+export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
     const stage = window.berylStage;
     const { clock } = stage;
+    const live = window.berylTimers;
+    const wait = live?.set ?? window.setTimeout.bind(window);
+    for (let ms = 0; paced && live.pending.size && ms < 3000; ms += 20) {
+        await new Promise((resolve) => wait(resolve, 20));
+    }
     clock.hold();
     while (!Number.isInteger(clock.now)) {
         clock.advance(Math.ceil(clock.now) - clock.now);
@@ -55,7 +71,49 @@ export async function walk({ tick, gap, answers, edge, shoot, whole }) {
     const wanted = new Set(shoot);
     const ticks = [];
     let abilities = false;
+    // The page's timers on the stage's clock: each runs in the first turn at or after its
+    // time, the earliest first.
+    const timers = new Map();
+    const now = () => clock.now - origin;
+    const page = {
+        setTimeout: window.setTimeout,
+        clearTimeout: window.clearTimeout,
+    };
+    if (paced) {
+        let set = 0;
+        window.setTimeout = (run, delay, ...given) => {
+            const at = now() + Math.max(0, Number(delay) || 0);
+            timers.set(++set, { at, run, given });
+            return -set;
+        };
+        window.clearTimeout = (id) => {
+            if (!timers.delete(-id)) live.clear(id);
+        };
+        const began = performance.now();
+        performance.now = () => began + now();
+    }
+    const turns = async () => {
+        for (let turn = 0; paced && turn < 8; turn++) {
+            for (;;) {
+                const [next] = [...timers]
+                    .filter(([, timer]) => timer.at <= now())
+                    .sort(([a, x], [b, y]) => x.at - y.at || a - b);
+                if (!next) break;
+                timers.delete(next[0]);
+                next[1].run(...next[1].given);
+            }
+            await new Promise((resolve) => {
+                const channel = new MessageChannel();
+                channel.port1.onmessage = () => {
+                    channel.port1.close();
+                    resolve();
+                };
+                channel.port2.postMessage(null);
+            });
+        }
+    };
     const sample = async () => {
+        await turns();
         const table = layer.getBoundingClientRect();
         const by = table.width / layer.offsetWidth;
         const boxes = {};
@@ -88,7 +146,7 @@ export async function walk({ tick, gap, answers, edge, shoot, whole }) {
     for (let answer = 0; answer < answers && after < edge; answer++) {
         await window.berylFixture.invoke("choose", { request: {} });
         // The transport hands the views on in a microtask.
-        await new Promise((resolve) => setTimeout(resolve));
+        await new Promise((resolve) => wait(resolve));
         let idle = 0;
         while (after < edge && idle < gap) {
             // On the whole milliseconds nearest each tick's time, so that two plays read the
@@ -105,6 +163,10 @@ export async function walk({ tick, gap, answers, edge, shoot, whole }) {
         }
     }
     unfollow();
+    if (paced) {
+        Object.assign(window, page);
+        delete performance.now;
+    }
     const shown = stage.shown.view;
     const orbs = Object.fromEntries(
         [...document.querySelectorAll("[data-life]")].map((orb) => {
@@ -156,15 +218,36 @@ export async function ending(fixtures, fixture) {
 
 /** A page of `size` on the stage `query` asks for, whose fixtures are those recorded into
  * `fixtures`, at `fixture`'s first view, drawn at `scale` device pixels a pixel: its context,
- * the page and the errors it logs. */
+ * the page and the errors it logs. With `paced` the page keeps count of the timers it has
+ * set (`window.berylTimers`), for `walk` to pace it. */
 export async function openStage(
     browser,
-    { base, fixtures, size, query, fixture, scale = 1 },
+    { base, fixtures, size, query, fixture, scale = 1, paced = false },
 ) {
     const context = await browser.newContext({
         viewport: size,
         deviceScaleFactor: scale,
     });
+    if (paced) {
+        await context.addInitScript(() => {
+            const set = window.setTimeout.bind(window);
+            const clear = window.clearTimeout.bind(window);
+            const pending = new Set();
+            window.berylTimers = { pending, set, clear };
+            window.setTimeout = (run, delay, ...given) => {
+                const id = set(() => {
+                    pending.delete(id);
+                    run(...given);
+                }, delay);
+                pending.add(id);
+                return id;
+            };
+            window.clearTimeout = (id) => {
+                pending.delete(id);
+                clear(id);
+            };
+        });
+    }
     await context.route("**/fixtures/*.json", (route) =>
         route.fulfill({
             path: join(
@@ -186,4 +269,28 @@ export async function openStage(
     );
     await page.evaluate(() => document.fonts.ready.then(() => {}));
     return { context, page, errors };
+}
+
+/** Where two plays of a moment first differ, in a few words. */
+export function differing(first, second) {
+    const told = ({ act, from, to }) => `${act.verb} ${from} to ${to}`;
+    const n = first.steps.findIndex(
+        (step, k) => !isDeepStrictEqual(step, second.steps[k]),
+    );
+    if (n >= 0 || first.steps.length !== second.steps.length) {
+        const at = n >= 0 ? n : first.steps.length;
+        const [a, b] = [first.steps[at], second.steps[at]];
+        return `step ${at} was ${a ? told(a) : "none"}, then ${b ? told(b) : "none"}`;
+    }
+    const t = first.ticks.findIndex(
+        (tick, k) => !isDeepStrictEqual(tick, second.ticks[k]),
+    );
+    if (t < 0 || !second.ticks[t]) {
+        return `${first.ticks.length} ticks, then ${second.ticks.length}`;
+    }
+    const [a, b] = [first.ticks[t].poses, second.ticks[t].poses];
+    const names = Object.keys({ ...a, ...b }).filter(
+        (name) => !isDeepStrictEqual(a[name], b[name]),
+    );
+    return `at tick ${t}, ${first.ticks[t].at} ms, ${names.join(", ")} was ${JSON.stringify(a[names[0]])}, then ${JSON.stringify(b[names[0]])}`;
 }
