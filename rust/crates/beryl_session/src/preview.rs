@@ -677,7 +677,7 @@ fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<
 #[cfg(test)]
 mod tests {
     use beryl_cards::{CARDS, names};
-    use beryl_engine::card::{AbilityIx, Castings};
+    use beryl_engine::card::{Castings, ObjectAbility};
     use beryl_engine::{Slot, TurnStep};
     use beryl_scenario::{P0, P1, Permanent, Scenario};
 
@@ -1172,7 +1172,7 @@ mod tests {
             let minus = opts
                 .iter()
                 .position(
-                    |o| matches!(o, Opt::Activate { ability, .. } if *ability == AbilityIx::Own(2)),
+                    |o| matches!(o, Opt::Activate { ability, .. } if *ability == ObjectAbility::Own(2)),
                 )
                 .expect("Teferi's −3");
             apply(&mut s, &t, &mut scratch, &mut Replay, choice(minus));

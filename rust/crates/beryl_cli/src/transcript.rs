@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use beryl_engine::card::{AbilityIx, CastingOption, FaceIx, Types};
+use beryl_engine::card::{CastingOption, FaceIx, ObjectAbility, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
@@ -398,7 +398,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Activate { slot, ability } => {
             let def = t.def(s.card(slot));
             match ability {
-                AbilityIx::Own(i) => {
+                ObjectAbility::Own(i) => {
                     let face = def.face(s.object(slot).face);
                     let a = &face.abilities[usize::from(i)];
                     match a.cost.loyalty {
@@ -406,7 +406,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                         None => format!("activate {} #{i}", named(slot)),
                     }
                 }
-                AbilityIx::Granted(k) => format!("activate {} granted #{k}", named(slot)),
+                ObjectAbility::Granted(k) => format!("activate {} granted #{k}", named(slot)),
             }
         }
         Opt::Mana { slot, color } => format!("tap {} for {}", named(slot), color.index()),

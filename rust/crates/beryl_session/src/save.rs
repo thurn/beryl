@@ -5,7 +5,7 @@
 //! candidate that does the same ([`Chosen::find`]); the index it had is kept as a hint, which
 //! only breaks ties between candidates that do the same and shows drift.
 
-use beryl_engine::card::{AbilityIx, AbilityKind, CastingOption, ManaColor, Types};
+use beryl_engine::card::{AbilityKind, CastingOption, ManaColor, ObjectAbility, Types};
 use beryl_engine::state::ObjectFlags;
 use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
@@ -772,9 +772,9 @@ pub struct AbilityRef {
 }
 
 impl AbilityRef {
-    fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot, ability: AbilityIx) -> Self {
+    fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot, ability: ObjectAbility) -> Self {
         match ability {
-            AbilityIx::Own(i) => {
+            ObjectAbility::Own(i) => {
                 let face = t.def(s.card(slot)).face(s.object(slot).face);
                 let before = face.abilities[..usize::from(i)]
                     .iter()
@@ -785,7 +785,7 @@ impl AbilityRef {
                     n: u8::try_from(before).expect("a face's abilities number under 256"),
                 }
             }
-            AbilityIx::Granted(n) => AbilityRef { granted: true, n },
+            ObjectAbility::Granted(n) => AbilityRef { granted: true, n },
         }
     }
 }

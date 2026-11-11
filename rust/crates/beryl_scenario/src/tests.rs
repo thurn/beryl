@@ -1,7 +1,7 @@
 //! The runner on test cards: what it accepts, and what it refuses.
 
 use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, Castings, Face, FaceIx, ManaColor, ManaCost, ManaSet, Subtype,
+    Ability, CardDef, Castings, Face, FaceIx, ManaColor, ManaCost, ManaSet, ObjectAbility, Subtype,
     Subtypes, Types,
 };
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
@@ -172,7 +172,7 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
             Action::Activate {
                 player: P0,
                 card: "Test Cycler",
-                ability: AbilityIx::Own(0),
+                ability: ObjectAbility::Own(0),
             },
             Action::Resolve,
             count(P0, Zone::Hand, 1),

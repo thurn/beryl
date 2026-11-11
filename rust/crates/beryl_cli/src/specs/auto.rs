@@ -24,7 +24,7 @@ use beryl_cards::names::{
     COUNTERSPELL, FRACTURED_IDENTITY, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR,
     STOCK_UP, SWAMP, THIEVING_SKYDIVER, TIME_SPIRAL,
 };
-use beryl_engine::card::{AbilityIx, AbilityKind, CardDef, Face, Needs, Timing, Types};
+use beryl_engine::card::{AbilityKind, CardDef, Face, Needs, ObjectAbility, Timing, Types};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -1193,7 +1193,7 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candi
         if let Action::Activate {
             player: P0,
             card,
-            ability: AbilityIx::Own(_),
+            ability: ObjectAbility::Own(_),
         } = *action
             && card == def.name
             && !def.front().types.intersects(Types::LAND)
@@ -1278,7 +1278,7 @@ pub(super) fn label_of(def: &'static CardDef, action: &Action) -> Option<String>
         Action::TurnFaceUp { card, .. } if card == def.name => Some("Turn up".to_owned()),
         Action::Activate {
             card,
-            ability: AbilityIx::Own(k),
+            ability: ObjectAbility::Own(k),
             ..
         } if card == def.name => Some(
             def.front()

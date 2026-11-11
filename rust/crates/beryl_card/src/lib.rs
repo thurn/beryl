@@ -36,7 +36,9 @@ pub use continuous::{
     Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, StaticCondition,
 };
 pub use cost::{CastingKind, CastingOption, Castings, Cost};
-pub use definition::{AbilityIx, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx};
+pub use definition::{
+    CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility,
+};
 pub use effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
 };

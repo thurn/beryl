@@ -14,8 +14,9 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
-    Keywords, ManaCost, Needs, Part, Prompt, Purpose, Rule, TargetKind, TargetSpec, Timing, Types,
+    Ability, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx, Keywords,
+    ManaCost, Needs, ObjectAbility, Part, Prompt, Purpose, Rule, TargetKind, TargetSpec, Timing,
+    Types,
 };
 use crate::decision::{Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
@@ -57,12 +58,12 @@ fn entry_ability_of<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static
 fn activated<L: Layout>(
     s: &State<L>,
     slot: L::Slot,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> Option<(CardIx, FaceIx, FaceAbility)> {
     let o = s.object(slot);
     match ability {
-        AbilityIx::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
-        AbilityIx::Granted(k) => {
+        ObjectAbility::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
+        ObjectAbility::Granted(k) => {
             if o.zone != Zone::Battlefield {
                 return None;
             }
@@ -766,7 +767,7 @@ fn activatable<L: Layout>(
     t: &GameTable,
     now: &Situation<L>,
     slot: L::Slot,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> bool {
     let player = now.player;
     let o = s.object(slot);
@@ -890,7 +891,7 @@ pub fn pointless<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> bool {
     let Some((card, face, index)) = activated(s, slot, ability) else {
         return false;
@@ -951,8 +952,8 @@ fn activation_options<L: Layout>(
             })
         });
         let abilities = own
-            .map(AbilityIx::Own)
-            .chain((0..granted).map(AbilityIx::Granted));
+            .map(ObjectAbility::Own)
+            .chain((0..granted).map(ObjectAbility::Granted));
         for ability in abilities {
             if activatable(s, t, now, slot, ability) && !(prunes && pointless(s, t, slot, ability))
             {
@@ -1044,7 +1045,7 @@ pub(crate) fn begin_activate<L: Layout>(
     sink: &mut Sink<L>,
     player: Seat,
     slot: L::Slot,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> Result<(), Full> {
     let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
     let a = t.def(card).face(face).ability(index);

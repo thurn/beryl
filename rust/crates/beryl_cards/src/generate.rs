@@ -9,7 +9,7 @@
 //! action, so each script replays as written, and the dump adds the final snapshot (§17.2)
 //! for the oracles to compare. A seed whose script the runner refuses is skipped.
 
-use beryl_engine::card::{AbilityIx, AbilityKind, Face, Subtype, Supertypes, Trigger, Types};
+use beryl_engine::card::{AbilityKind, Face, ObjectAbility, Subtype, Supertypes, Trigger, Types};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{DecisionKind, Step, TurnStep, Zone, ZoneKey};
 use beryl_scenario::{Action, Live, P0, Permanent, Pick, PlayerSetup, Scenario};
@@ -167,10 +167,10 @@ fn taps_a_mana_source(
     live: &Live,
     player: beryl_engine::Seat,
     card: &str,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> bool {
     let s = live.state();
-    let AbilityIx::Own(i) = ability else {
+    let ObjectAbility::Own(i) = ability else {
         return false;
     };
     s.battlefield()

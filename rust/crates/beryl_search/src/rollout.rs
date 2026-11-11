@@ -27,8 +27,8 @@ use beryl_engine::{Layout, Small, ZoneKey};
 use std::cell::Cell;
 
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
-    Keywords, Purpose, Replacement, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
+    ObjectAbility, Purpose, Replacement, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -497,8 +497,8 @@ impl<L: Layout> Policy<'_, L> {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
             Opt::Activate { slot, ability } => match ability {
-                AbilityIx::Own(i) => self.activate(slot, i),
-                AbilityIx::Granted(_) => 0,
+                ObjectAbility::Own(i) => self.activate(slot, i),
+                ObjectAbility::Granted(_) => 0,
             },
             _ => 0,
         }

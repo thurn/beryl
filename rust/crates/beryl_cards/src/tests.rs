@@ -679,7 +679,7 @@ fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
 #[test]
 fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
     use crate::colorless::currency_converter::SCENARIOS as CONVERTER;
-    use beryl_engine::card::AbilityIx;
+    use beryl_engine::card::ObjectAbility;
     let scenario = CONVERTER
         .iter()
         .find(|s| s.name == "Currency Converter chooses among its exiled cards")
@@ -689,7 +689,7 @@ fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
         if d.kind == DecisionKind::Priority && d.player == Seat::P0 {
             let converter = permanent_named(t, s, names::CURRENCY_CONVERTER);
             seen.push((
-                beryl_engine::pointless(s, t, converter, AbilityIx::Own(2)),
+                beryl_engine::pointless(s, t, converter, ObjectAbility::Own(2)),
                 s.exiled_with(converter).count(),
             ));
         }
@@ -708,7 +708,7 @@ fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
 /// for them; every other profile offers it, as the rules do (CR 602.2).
 #[test]
 fn a_hidden_pointless_activation_is_left_out() {
-    use beryl_engine::card::AbilityIx;
+    use beryl_engine::card::ObjectAbility;
     use beryl_scenario::{P0, Permanent, Scenario};
     const SETUP: Scenario = Scenario::new("Currency Converter with nothing exiled")
         .at(3, P0, TurnStep::PrecombatMain)
@@ -728,7 +728,7 @@ fn a_hidden_pointless_activation_is_left_out() {
             d.candidates.option(Choice(i))
                 == Some(Opt::Activate {
                     slot: converter,
-                    ability: AbilityIx::Own(2),
+                    ability: ObjectAbility::Own(2),
                 })
         })
     };
@@ -750,7 +750,7 @@ fn a_hidden_pointless_activation_is_left_out() {
 /// them (CR 602.2, CR 117.3d).
 #[test]
 fn a_quiet_pointless_activation_makes_no_stop() {
-    use beryl_engine::card::AbilityIx;
+    use beryl_engine::card::ObjectAbility;
     use beryl_scenario::{P0, P1, Permanent, Scenario};
     const SETUP: Scenario = Scenario::new("Currency Converter alone")
         .at(3, P0, TurnStep::PrecombatMain)
@@ -772,7 +772,7 @@ fn a_quiet_pointless_activation_makes_no_stop() {
                     d.candidates.option(Choice(i))
                         == Some(Opt::Activate {
                             slot: converter,
-                            ability: AbilityIx::Own(2),
+                            ability: ObjectAbility::Own(2),
                         })
                 });
                 return (s.turn().number, s.turn().step, offered);

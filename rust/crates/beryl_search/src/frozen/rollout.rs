@@ -26,8 +26,8 @@
 //!   the bottom only the cards not worth drawing.
 
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
-    Keywords, Replacement, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
+    ObjectAbility, Replacement, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -343,8 +343,8 @@ impl Policy<'_> {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
             Opt::Activate { slot, ability } => match ability {
-                AbilityIx::Own(i) => self.activate(slot, i),
-                AbilityIx::Granted(_) => 0,
+                ObjectAbility::Own(i) => self.activate(slot, i),
+                ObjectAbility::Granted(_) => 0,
             },
             _ => 0,
         }

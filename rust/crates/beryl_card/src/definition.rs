@@ -227,7 +227,7 @@ pub enum FaceAbility {
 /// up's own, by its index in [`Face::abilities`], or the `k`th ability other objects grant
 /// it, by its index among them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum AbilityIx {
+pub enum ObjectAbility {
     Own(u8),
     Granted(u8),
 }

@@ -1,8 +1,8 @@
 //! Building each candidate answer of a decision, with its label.
 
 use beryl_engine::card::{
-    AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx, ManaColor,
-    ManaCost, Types,
+    AbilityKind, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx, ManaColor, ManaCost,
+    ObjectAbility, Types,
 };
 use beryl_engine::layout::Queue;
 use beryl_engine::state::CounterKind;
@@ -159,7 +159,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
     let (face, i) = match o {
         Opt::Activate {
             slot,
-            ability: AbilityIx::Own(i),
+            ability: ObjectAbility::Own(i),
         } => (t.def(obs.card(slot)?).face(obs.object(slot).face), i),
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];
@@ -281,11 +281,11 @@ fn activated_cost<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     slot: L::Slot,
-    ability: AbilityIx,
+    ability: ObjectAbility,
 ) -> Option<String> {
     let (card, face, ability) = match ability {
-        AbilityIx::Own(i) => (obs.card(slot)?, obs.object(slot).face, FaceAbility::Own(i)),
-        AbilityIx::Granted(k) => {
+        ObjectAbility::Own(i) => (obs.card(slot)?, obs.object(slot).face, FaceAbility::Own(i)),
+        ObjectAbility::Granted(k) => {
             let grant = obs.derived(slot).granted[usize::from(k)]?;
             (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
         }
@@ -358,10 +358,10 @@ fn counter_name(kind: CounterKind) -> &'static str {
 }
 
 /// Activating ability `ability` of the object in `slot`.
-pub(super) fn activate<S: SlotId>(slot: S, ability: AbilityIx) -> Candidate {
+pub(super) fn activate<S: SlotId>(slot: S, ability: ObjectAbility) -> Candidate {
     let (ability, granted) = match ability {
-        AbilityIx::Own(i) => (i, false),
-        AbilityIx::Granted(k) => (k, true),
+        ObjectAbility::Own(i) => (i, false),
+        ObjectAbility::Granted(k) => (k, true),
     };
     Candidate::Activate {
         slot: slot.num(),

@@ -46,7 +46,8 @@ use std::cell::OnceCell;
 
 use beryl_cards::names;
 use beryl_engine::card::{
-    Ability, AbilityIx, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, Purpose, Types,
+    Ability, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, ObjectAbility, Purpose,
+    Types,
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -966,12 +967,12 @@ impl<L: Layout> Expert<'_, L> {
             }
             Opt::Activate {
                 slot,
-                ability: AbilityIx::Own(i),
+                ability: ObjectAbility::Own(i),
             } => self.main_activate(slot, i, precombat),
             // Crewing a Vehicle of ours: only for an attack that kills.
             Opt::Activate {
                 slot,
-                ability: AbilityIx::Granted(_),
+                ability: ObjectAbility::Granted(_),
             } if precombat && self.crew_lethal(slot, 0) => 950,
             _ => 0,
         }
@@ -2248,7 +2249,7 @@ impl<L: Layout> Expert<'_, L> {
             },
             Opt::Activate {
                 slot,
-                ability: AbilityIx::Own(i),
+                ability: ObjectAbility::Own(i),
             } if self.has_type(slot, Types::PLANESWALKER)
                 && self.walker_ability(slot) == Some(i) =>
             {
@@ -2300,7 +2301,7 @@ impl<L: Layout> Expert<'_, L> {
             }
             Opt::Activate {
                 slot,
-                ability: AbilityIx::Own(i),
+                ability: ObjectAbility::Own(i),
             } => {
                 if self.obs().object(slot).zone == Zone::Battlefield
                     && self.has_type(slot, Types::PLANESWALKER)

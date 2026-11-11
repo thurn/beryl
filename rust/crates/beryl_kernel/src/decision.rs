@@ -6,7 +6,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::state::State;
-use beryl_card::{AbilityIx, Castings, FaceIx, ManaColor, Prompt};
+use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt};
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
 /// value with its candidates inline, so it can live in the state and be copied with it.
@@ -235,7 +235,7 @@ pub enum Opt<L: Layout = Small> {
     /// Activate an ability of the object in `slot`.
     Activate {
         slot: L::Slot,
-        ability: AbilityIx,
+        ability: ObjectAbility,
     },
     /// Tap the mana source in `slot` for one mana of `color`.
     Mana {

@@ -165,7 +165,7 @@ fn fold_loyalty_abilities(
         };
         let Some(
             &action @ Action::Activate {
-                ability: beryl_engine::card::AbilityIx::Own(index),
+                ability: beryl_engine::card::ObjectAbility::Own(index),
                 ..
             },
         ) = variant.moment.play.first()

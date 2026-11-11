@@ -16,7 +16,7 @@ mod setup;
 #[cfg(test)]
 mod tests;
 
-use beryl_engine::card::{AbilityIx, Castings, FaceIx, ManaColor};
+use beryl_engine::card::{Castings, FaceIx, ManaColor, ObjectAbility};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
@@ -229,7 +229,7 @@ pub enum Action {
         player: Seat,
         card: &'static str,
         #[serde(serialize_with = "ability_ix")]
-        ability: AbilityIx,
+        ability: ObjectAbility,
     },
     /// `player` turns the face-down permanent `card` face up at a priority decision, a
     /// special action (CR 116.2b). Its payment's questions follow as decisions.
@@ -290,7 +290,7 @@ impl Action {
         Action::Activate {
             player,
             card,
-            ability: AbilityIx::Own(ability),
+            ability: ObjectAbility::Own(ability),
         }
     }
 
@@ -299,7 +299,7 @@ impl Action {
         Action::Activate {
             player,
             card,
-            ability: AbilityIx::Granted(k),
+            ability: ObjectAbility::Granted(k),
         }
     }
 
@@ -468,10 +468,10 @@ fn variant<T: std::fmt::Debug, S: Serializer>(value: &T, s: S) -> Result<S::Ok, 
 
 /// An ability of a permanent, as `{"Own": i}` or `{"Granted": k}`.
 #[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
-fn ability_ix<S: Serializer>(ability: &AbilityIx, s: S) -> Result<S::Ok, S::Error> {
+fn ability_ix<S: Serializer>(ability: &ObjectAbility, s: S) -> Result<S::Ok, S::Error> {
     match *ability {
-        AbilityIx::Own(i) => s.serialize_newtype_variant("AbilityIx", 0, "Own", &i),
-        AbilityIx::Granted(k) => s.serialize_newtype_variant("AbilityIx", 1, "Granted", &k),
+        ObjectAbility::Own(i) => s.serialize_newtype_variant("ObjectAbility", 0, "Own", &i),
+        ObjectAbility::Granted(k) => s.serialize_newtype_variant("ObjectAbility", 1, "Granted", &k),
     }
 }
 

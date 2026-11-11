@@ -4,7 +4,7 @@
 mod common;
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::AbilityIx;
+use beryl_engine::card::ObjectAbility;
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
     Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next,
@@ -155,7 +155,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
     };
     let waterbend = Opt::Activate {
         slot: iceberg,
-        ability: AbilityIx::Own(1),
+        ability: ObjectAbility::Own(1),
     };
     let mut activated = false;
     while s.object(iceberg).zone != Zone::Graveyard {

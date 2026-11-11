@@ -3,7 +3,7 @@
 //! played (a shrunk fuzz failure, an exhaustive search's failure) can be pasted into a card's
 //! scenarios.
 
-use beryl_engine::card::{AbilityIx, Castings, FaceIx};
+use beryl_engine::card::{Castings, FaceIx, ObjectAbility};
 use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, Seat, State};
 
 use std::fmt::Write;
@@ -122,12 +122,12 @@ pub fn source(action: &Action) -> String {
         Action::Activate {
             player,
             card,
-            ability: AbilityIx::Own(i),
+            ability: ObjectAbility::Own(i),
         } => format!("Action::activate({}, {card:?}, {i})", seat(player)),
         Action::Activate {
             player,
             card,
-            ability: AbilityIx::Granted(k),
+            ability: ObjectAbility::Granted(k),
         } => format!("Action::activate_granted({}, {card:?}, {k})", seat(player)),
         Action::TurnFaceUp { player, card } => {
             format!(

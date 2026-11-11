@@ -4,7 +4,7 @@
 mod common;
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::AbilityIx;
+use beryl_engine::card::ObjectAbility;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile,
     Replay, Scratch, Seat, Slot, State, Step, TurnStep, ZoneKey, apply, next, view,
@@ -308,7 +308,7 @@ fn jace_bounces_only_when_that_saves_him() {
     let ability = |t: &GameTable, s: &State, o: Opt| match o {
         Opt::Activate {
             slot,
-            ability: AbilityIx::Own(i),
+            ability: ObjectAbility::Own(i),
         } if name(t, s, slot) == names::JACE_THE_MIND_SCULPTOR => {
             t.def(s.card(slot)).front().abilities[usize::from(i)]
                 .cost
@@ -668,7 +668,7 @@ fn teferi_hero_does_not_draw_from_a_thin_library() {
         });
         matches!(
             chosen(&d, c),
-            Opt::Activate { slot, ability: AbilityIx::Own(i) }
+            Opt::Activate { slot, ability: ObjectAbility::Own(i) }
                 if t.def(s.card(slot)).front().abilities[usize::from(i)].cost.loyalty == Some(1)
         )
     };
