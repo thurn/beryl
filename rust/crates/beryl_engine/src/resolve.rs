@@ -187,24 +187,25 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     Ok(spare)
 }
 
-/// Whether every target of a spell or ability is illegal now, so it doesn't resolve
-/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If all its targets, for
-/// every instance of the word "target," are now illegal, the spell or ability doesn't
-/// resolve." One that chose no targets is not targeted (CR 115.6) and resolves.
-fn fizzles<L: Layout>(
+/// The targets of `entry` that are still legal as it begins to resolve, a bit for each by its
+/// place in the entry's list
+/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or ability
+/// specifies targets, it checks whether the targets are still legal." Found once: whether it
+/// resolves at all and what effect data may act on both read this.
+pub(crate) fn legal_targets<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     entry: &StackEntry<L>,
-    ability: Option<&Ability>,
-) -> bool {
-    let Some(ability) = ability else {
-        return false;
-    };
-    !entry.targets.is_empty()
-        && entry
-            .targets
-            .iter()
-            .all(|&target| !cast::still_legal(s, t, entry, ability, target))
+    ability: &Ability,
+) -> u8 {
+    const _: () = assert!(crate::state::TARGETS <= 8, "a bit for each target");
+    let mut legal = 0;
+    for (i, &target) in entry.targets.iter().enumerate() {
+        if cast::still_legal(s, t, entry, ability, target) {
+            legal |= 1 << i;
+        }
+    }
+    legal
 }
 
 /// Whether a triggered ability's intervening "if" no longer holds as it resolves
@@ -250,7 +251,11 @@ fn run<L: Layout>(
 ) -> Result<Option<Decision<L>>, Full> {
     s.stack.pop();
     let face = t.def(entry.card).face(entry.face);
-    if fizzles(s, t, entry, ability) {
+    // CR 608.2b: "If all its targets, for every instance of the word "target," are now
+    // illegal, the spell or ability doesn't resolve." One that chose no targets is not
+    // targeted (CR 115.6) and resolves.
+    let legal = ability.map_or(0, |ability| legal_targets(s, t, entry, ability));
+    if ability.is_some() && !entry.targets.is_empty() && legal == 0 {
         if entry.is_spell() {
             cast::leave_stack(s, t, sink, entry, false, Reason::Resolve)?;
         }
@@ -269,7 +274,7 @@ fn run<L: Layout>(
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
             let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry.clone(), ability);
             crate::coverage::hit(ability);
-            let flow = interpret::resolve(&mut ctx);
+            let flow = interpret::resolve(&mut ctx, legal);
             let question = ctx.question.take();
             offer = ctx.offer;
             ctx.finish()?;

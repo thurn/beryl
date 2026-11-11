@@ -9,7 +9,6 @@ use beryl_card::{CopyException, Duration, Effect, LibraryPosition, Objects, Play
 
 use crate::bitboard::Bitboard;
 use crate::card::{CardDef, FaceAbility, Flow, ManaCost, ManaSet, Modification};
-use crate::cast;
 use crate::decision::Ask;
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Reason, TokenEntry};
@@ -28,10 +27,11 @@ pub(super) struct Run<'c, 'a, L: Layout> {
 }
 
 impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
-    /// Begins resolving the ability `ctx` was made for, noting which of its targets are
-    /// still legal ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a
-    /// spell or ability specifies targets, it checks whether the targets are still legal."
-    pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>) -> Self {
+    /// Begins resolving the ability `ctx` was made for. Which of its targets are `legal` was
+    /// settled as its resolution began, once for the whole effect
+    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or
+    /// ability specifies targets, it checks whether the targets are still legal."
+    pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>, legal: u8) -> Self {
         let entry = &ctx.entry;
         let subject = PendingTrigger {
             source: entry.object,
@@ -44,12 +44,6 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             controller: entry.controller,
             info: entry.info,
         };
-        let mut legal = 0;
-        for (i, &target) in entry.targets.iter().enumerate() {
-            if cast::still_legal(ctx.state, ctx.table, entry, ctx.ability, target) {
-                legal |= 1 << i;
-            }
-        }
         Run {
             ctx,
             subject,
@@ -267,7 +261,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 && leaving.contains(object.slot)
             {
                 self.registers.known[i] = self.scene().known(object.slot);
-                self.registers.moved |= 1 << i;
+                self.registers.noted |= 1 << i;
             }
         }
     }

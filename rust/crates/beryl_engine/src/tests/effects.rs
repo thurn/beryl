@@ -4,8 +4,9 @@
 use beryl_card::effect::build::{
     EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
     THOSE, YOU, add_counters, controller_of, create_copy, destroy, discard, draw, exile,
-    for_each_player, gain_life, if_else, lose_life, may, mill, modify, put_into_library,
-    remove_counters, return_to_hand, sacrifice, scry, sequence, target, target_player, when,
+    exile_until_this_leaves, for_each_player, gain_life, if_else, lose_life, may, mill, modify,
+    put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence, target,
+    target_player, when,
 };
 use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects};
 
@@ -64,8 +65,9 @@ fn resolve(
     for &target in targets {
         entry.targets.push(target).unwrap();
     }
+    let legal = crate::resolve::legal_targets(s, t, &entry, ability);
     let mut ctx = EffectCtx::resolving(s, t, &mut x.events, None, answers, entry, ability);
-    let flow = crate::interpret::resolve(&mut ctx);
+    let flow = crate::interpret::resolve(&mut ctx, legal);
     let question = ctx.question.take();
     ctx.finish().unwrap();
     assert_eq!(flow.is_err(), question.is_some());
@@ -284,6 +286,30 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     assert_eq!(zone_of(&s, bear), Zone::Exile);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (17, 20));
     assert!(SWORDS.removes_target(0));
+}
+
+#[test]
+fn a_target_an_instruction_could_not_move_is_read_where_it_is() {
+    // The source has left, so nothing is exiled (CR 610.3b): the creature is still a 2/2 on
+    // the battlefield, counted once.
+    static HOLE: Ability = does_to(
+        &[A_CREATURE],
+        &sequence(&[
+            exile_until_this_leaves(TARGET),
+            Effect::GainLife {
+                player: YOU,
+                amount: Amount::Power(TARGET),
+            },
+        ]),
+    );
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    let targets = [Target::object(0, s.object_ref(bear))];
+    let to = Zone::Graveyard;
+    event::move_one(&mut s, &t, &mut x.events, source.slot, to, Reason::Effect).unwrap();
+    assert!(resolve(&t, &mut s, &mut x, source, &HOLE, &targets, &[]).is_none());
+    assert_eq!(zone_of(&s, bear), Zone::Battlefield);
+    assert_eq!(life(&s, p), 22);
 }
 
 #[test]

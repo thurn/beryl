@@ -26,16 +26,17 @@ use scene::{Registers, Scene};
 
 /// Resolves the ability `ctx` was made for
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of the
-/// spell or ability follows its instructions in the order written."
+/// spell or ability follows its instructions in the order written." `legal` is its targets
+/// that were legal as its resolution began ([`crate::resolve::legal_targets`]).
 #[inline]
-pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: u8) -> Flow {
     let ability: &'static Ability = ctx.ability;
     match ability.body {
         Behavior::Custom(custom) => {
             let bodies = custom.get::<Bodies>().expect("a body made by bodies!");
             L::body(bodies)(ctx)
         }
-        Behavior::Data(effect) => data(ctx, effect),
+        Behavior::Data(effect) => data(ctx, effect, legal),
     }
 }
 
@@ -43,12 +44,12 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// a permanent spell, which has no ability to run, or a mana ability, which
 /// [`mana_ability`] does without coming here.
 #[inline(never)]
-fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect) -> Flow {
+fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect, legal: u8) -> Flow {
     debug_assert!(
         !ctx.ability.may_pause || effect.asks(),
         "an ability declares may_pause, but its effect never asks"
     );
-    Run::new(ctx).carry_out(effect)
+    Run::new(ctx, legal).carry_out(effect)
 }
 
 /// Carries out a mana ability whose costs are paid, making mana of the kind `color` its
@@ -89,8 +90,8 @@ pub(crate) fn mana_ability<L: Layout>(
     }
     let mut ctx = EffectCtx::new(s, t, sink, &activation(), ability);
     ctx.mana = color;
-    // A mana ability never asks a question.
-    let _ = resolve(&mut ctx);
+    // A mana ability never asks a question, and has no targets (CR 605.1a).
+    let _ = resolve(&mut ctx, 0);
     ctx.finish()
 }
 

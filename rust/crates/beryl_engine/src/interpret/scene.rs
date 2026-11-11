@@ -115,15 +115,15 @@ pub(super) struct Registers<L: Layout> {
     /// begins to resolve, and "Illegal targets, if any, won't be affected by parts of a
     /// resolving spell's effect for which they're illegal."
     pub(super) legal: u8,
-    /// The targets the effect has moved, a bit for each, and what is known of them.
-    pub(super) moved: u8,
+    /// The targets an instruction set out to move, a bit for each, and what was known of
+    /// each as it did. One that is no longer where it was has moved; one the instruction
+    /// could not move is read where it is.
+    pub(super) noted: u8,
     pub(super) known: [Known; TARGETS],
     pub(super) outcome: Outcome<L>,
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
     pub(super) that_player: Option<Seat>,
 }
-
-const _: () = assert!(TARGETS <= 8, "a bit for each target");
 
 /// What an expression is read against.
 pub(super) struct Scene<'s, L: Layout> {
@@ -156,6 +156,8 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The targets among [`Scene::targets`] the effect has moved, as they were last known.
+    /// One an instruction set out to move and could not, as when what would have exiled it
+    /// had left first (CR 610.3b), is still what [`Scene::objects`] names, and is not here.
     fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known> + '_ {
         let spec = match objects {
             Objects::Target(spec) => Some(spec),
@@ -163,7 +165,12 @@ impl<L: Layout> Scene<'_, L> {
         };
         spec.into_iter()
             .flat_map(|spec| self.targets(spec))
-            .filter(|&(i, _)| self.registers.moved & (1 << i) != 0)
+            .filter(|&(i, target)| {
+                self.registers.noted & (1 << i) != 0
+                    && target
+                        .as_object()
+                        .is_some_and(|object| !self.s.is_current(object))
+            })
             .map(|(i, _)| &self.registers.known[i])
     }
 
@@ -230,6 +237,8 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
+            // A target the effect moved is known as it last was. What `Those` and `All`
+            // name are read where they are now, so their owners once they have left.
             Players::ControllerOf(objects) => {
                 let mut who = Who::NOBODY;
                 for slot in self.objects(objects).iter() {
@@ -390,8 +399,14 @@ impl<L: Layout> Scene<'_, L> {
                     Comparison::LessThan => left < right,
                 }
             }
-            Condition::Is(objects, filter) => {
-                let objects = self.objects(objects);
+            Condition::Is(names, filter) => {
+                // What a target was is not kept once the effect has moved it (`Known` holds
+                // no characteristics), so "if it was a [filter]" cannot be asked of one yet.
+                debug_assert!(
+                    self.moved(names).next().is_none(),
+                    "the last known characteristics of a target the effect moved"
+                );
+                let objects = self.objects(names);
                 !objects.is_empty() && self.passing(objects, filter) == objects
             }
             Condition::Not(condition) => !self.holds(condition),

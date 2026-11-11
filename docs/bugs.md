@@ -201,3 +201,12 @@ fixed in the same session. Newest first.
   could show its effect without animating the ability from its source.
   Prevention: finish putting abilities on the stack through a shared
   announcement path, regardless of whether they ask for targets.
+
+- The effect interpreter counted a target twice when an instruction set out to
+  move it and could not, as when "exile target ... until this leaves the
+  battlefield" resolves after its source has left (CR 610.3b): the target was
+  marked moved before the move, so a later "its power" or "its mana value" added
+  the last known value to the one it still had. Prevention: do not keep a flag
+  for what the state already says. Whether an object moved is whether its
+  reference is still current, so the register now only says that its last known
+  information was noted.
