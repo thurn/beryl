@@ -32,6 +32,18 @@ if (!base || !fixtures || !out || !(TICK > 0)) {
 const { verbs, moment } = JSON.parse(
     await readFile(new URL("../verbs.json", import.meta.url), "utf8"),
 );
+/** The verbs a numbered exception exempts (data/ui-conventions.json): Beryl's own, which no
+ * capture holds to Arena's, so none of their steps is shot (`by motion` lists them). */
+const exempt = new Set(
+    JSON.parse(
+        await readFile(
+            new URL("../../data/ui-conventions.json", import.meta.url),
+            "utf8",
+        ),
+    )
+        .verbs.filter((verb) => "exempt" in verb)
+        .map((verb) => verb.name),
+);
 /** The layouts captured, as verbs.mjs opens them. The phone's battlefield is laid out again
  * as the stack comes and goes, so a step's frames hold more than its subject moving: not
  * captured yet. */
@@ -234,7 +246,10 @@ for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
             if (!learned.done) throw new Error("the moment did not play out");
             const captures = learned.steps
                 .map((step, n) => ({ ...step, n, verb: step.act.verb }))
-                .filter((step) => verbs.includes(step.verb))
+                .filter(
+                    (step) =>
+                        verbs.includes(step.verb) && !exempt.has(step.verb),
+                )
                 .map((step) => {
                     const framed = framing(step, learned.ticks, size);
                     return (

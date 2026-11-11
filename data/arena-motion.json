@@ -1458,13 +1458,6 @@
       "gaps": [
         "A face-down permanent turning face up is not seen: no morph or disguise is in play, and manifest dread's face-down cards (I3Te0m1bBFw 28:57 to 29:40, 44:04 to 44:19) never turn face up. That case stays as \"A card turning face up\" says."
       ],
-      "waivers": [
-        {
-          "measure": "capture",
-          "bead": "by-w8gv.21.41",
-          "reason": "The stepped capture plays only the verb suite's first moment, where nothing turns over; the moment `place` (ui/verbs.json) turns a face-down permanent face up, which verb:flip checks from both seats in stage time. No capture of it is measured yet (by-w8gv.21.21)."
-        }
-      ],
       "instances": [
         {
           "case": "transform",
@@ -1558,13 +1551,6 @@
       "path": "Turns 7 to 8 degrees in place, easing out.",
       "gaps": [
         "An attacker tapping as it is declared was seen only at 3 fps (UrGalw_f35w 20:57.3)."
-      ],
-      "waivers": [
-        {
-          "measure": "capture",
-          "bead": "by-w8gv.21.41",
-          "reason": "The stepped capture plays only the verb suite's first moment, in which a land's turn is hidden by the spell it pays for; the moments `combat` and `place` (ui/verbs.json) play taps and untaps, which verb:tap checks from both seats in stage time. No capture of them is measured yet (by-w8gv.21.21)."
-        }
       ],
       "instances": [
         {
@@ -1681,13 +1667,6 @@
       "path": "Winds back, lunges straight at the avatar or its blocker, then drifts back to its slot.",
       "gaps": [
         "First strike as a strike of its own was not measured; sMpAJ0HKDdg 54:55.7's target is a likely reading."
-      ],
-      "waivers": [
-        {
-          "measure": "capture",
-          "bead": "by-w8gv.21.41",
-          "reason": "The stepped capture plays only the verb suite's first moment, a cast and its trigger, where nothing strikes; the moment `combat` (ui/verbs.json) plays four strikes, which verb:strike checks from both seats in stage time. No capture of them is measured yet (by-w8gv.21.21)."
-        }
       ],
       "instances": [
         {
@@ -2067,13 +2046,6 @@
       "path": "None: the number changes in a burst. A life loss's red number drifts down from the opponent's avatar; a gain's green one rises.",
       "gaps": [
         "Loyalty: one instance (5UHzpVvUkfI); counters: two. Their delays count from the ability reaching the stack and are left out."
-      ],
-      "waivers": [
-        {
-          "measure": "capture",
-          "bead": "by-w8gv.21.41",
-          "reason": "The stepped capture plays only the verb suite's first moment, where no number changes; the moments `combat` and `place` (ui/verbs.json) play life totals, loyalty, a counter and a power and toughness changing, which verb:count checks from both seats in stage time. No capture of them is measured yet (by-w8gv.21.21)."
-        }
       ],
       "instances": [
         {

@@ -278,3 +278,10 @@ def test_a_change_in_place_is_held_to_its_case() -> None:
     assert counted({"kind": "counters", "counter": "loyalty"}) == "loyalty"
     assert counted({"kind": "counters", "counter": "plusOne"}) == "counter"
     assert counted({"kind": "life", "player": "you", "life": 17}) is None
+
+
+def test_an_exempt_verb_is_held_to_no_capture() -> None:
+    """A verb a numbered exception covers is Beryl's own: the capture lists it and shoots no
+    step of it."""
+    data = {"verbs": [{"name": "tap", "exempt": 2}, {"name": "fly"}]}
+    assert motion.exempted(data) == {"tap": 2}

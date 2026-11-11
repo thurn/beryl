@@ -59,6 +59,11 @@ CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
 NOT_CAPTURED: dict[str, str] = {
     "lift": "the capture plays only the suite's first moment, where nothing lifts;"
     " by-w8gv.21.38 plays the rest",
+    **{
+        verb: "the capture plays only the suite's first moment, which has none;"
+        " by-w8gv.21.41 captures the moments `combat` and `place`"
+        for verb in ("strike", "count", "flip")
+    },
 }
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
@@ -172,6 +177,13 @@ def held(
         case,
         arena_of(reference, verb, measure, case),
     )
+
+
+def exempted(data: dict[str, Any]) -> dict[str, int]:
+    """The verbs a numbered exception exempts, each with its exception: no capture holds them
+    (stepped.mjs shoots none of their steps). A permanent that taps turns where it lies, which
+    the tracker, made to follow a card that travels, does not read."""
+    return {v["name"]: v["exempt"] for v in data.get("verbs", []) if "exempt" in v}
 
 
 def timing_verdicts(
@@ -479,8 +491,13 @@ def command(args: argparse.Namespace) -> int:
     verbs = [str(v) for v in verbs] if isinstance(verbs, list) else []
     took = (time.monotonic() - began) / max(1, len(verbs) * len(LAYOUTS))
     failed = False
+    exempt = exempted(data)
     for layout in LAYOUTS:
         for verb in verbs:
+            if verb in exempt:
+                print(f"{layout}: {verb} is exempt (exception {exempt[verb]})")
+                runlog.result(f"motion:{verb}/{layout}", "pass", took)
+                continue
             mine = [
                 (name, vs)
                 for v, name, vs in measured
