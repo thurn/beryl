@@ -713,9 +713,13 @@ decline: string,
  */
 yes: string, no: string, 
 /**
- * The button that pays as the session suggests.
+ * The button that answers as the session suggests: its payment, every attacker.
  */
 auto: string, 
+/**
+ * The button that takes the prompt back, where it can be.
+ */
+cancel: string, 
 /**
  * What each of `places` is called over its pile.
  */

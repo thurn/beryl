@@ -450,7 +450,7 @@ function look(at: Situation): Pick {
     pickable,
     min: 1,
     max: 1,
-    confirm: () => words.confirm,
+    confirm: (n) => counted(words.confirm, n, 1),
     decline: asking ? words.decline : undefined,
     picked: pickable.length === 1 ? pickable : [],
     plan: ([slot]) =>
@@ -489,8 +489,7 @@ function search(at: Situation): Pick {
     pickable: cards,
     min: 1,
     max: most,
-    confirm: (n) =>
-      most > 1 ? counted(words.counted, n, most) : words.confirm,
+    confirm: (n) => counted(most > 1 ? words.counted : words.confirm, n, most),
     decline: words.decline,
     picked: cards.length === 1 ? cards : [],
     plan: (picked) => [
@@ -517,7 +516,7 @@ function chooseObject(at: Situation): Pick {
     pickable: at.offeredAmong(cards),
     min: 1,
     max: 1,
-    confirm: () => words.confirm,
+    confirm: (n) => counted(words.confirm, n, 1),
     plan: ([slot]) =>
       slot === undefined ? [] : [at.pickCard("chooseObject", slot, purpose)],
   };
@@ -542,7 +541,7 @@ function graveyardExile(at: Situation): Pick {
     pickable: graveyard,
     min: count,
     max: count,
-    confirm: () => at.prompt.words.confirm,
+    confirm: (n) => counted(at.prompt.words.confirm, n, count),
     plan(picked) {
       const need = new Map<string, number>();
       for (const slot of picked) {
@@ -587,7 +586,7 @@ function legendRule(at: Situation): Pick {
     pickable: cards,
     min: 1,
     max: 1,
-    confirm: () => at.prompt.words.confirm,
+    confirm: (n) => counted(at.prompt.words.confirm, n, 1),
     plan: ([slot]) =>
       slot === undefined
         ? []

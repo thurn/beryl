@@ -265,16 +265,16 @@ fn thundertrap_trainer_looks_at_the_top_four_for_a_card_to_take() {
     assert_eq!(
         asks(names::THUNDERTRAP_TRAINER, &[Purpose::Look]),
         [
-            "yesNo pick look whether: \"Top Four\" 4/1 >hand you's library about 2",
-            "chooseObject pick look pick: \"Top Four\" 4/1 >hand you's library about 2",
+            "yesNo pick look whether: \"Put one of them into your hand?\" 4/1 >hand you's library about 2",
+            "chooseObject pick look pick: \"Put one of them into your hand.\" 4/1 >hand you's library about 2",
         ]
     );
     let look = decisions(names::THUNDERTRAP_TRAINER)
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Look))
         .unwrap();
-    assert_eq!(look.prompt.words.confirm, "Put in Hand");
-    assert_eq!(look.prompt.words.decline, "Take Nothing");
+    assert_eq!(look.prompt.words.confirm, "Submit {picked}");
+    assert_eq!(look.prompt.words.decline, "Decline");
 }
 
 #[test]
@@ -284,11 +284,11 @@ fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
     for look in &asked {
         // A hand is looked at whole: the prompt counts no cards.
         let rest = look
-            .strip_prefix("yesNo pick look whether: ")
-            .or_else(|| look.strip_prefix("chooseObject pick look pick: "))
+            .strip_prefix("yesNo pick look whether: \"Exile one of them?\"")
+            .or_else(|| look.strip_prefix("chooseObject pick look pick: \"Exile one of them.\""))
             .unwrap_or_else(|| panic!("{look}"));
         let about = rest
-            .strip_prefix("\"Opponent's Hand\" 0/1 >exile opponent's hand about ")
+            .strip_prefix(" 0/1 >exile opponent's hand about ")
             .unwrap_or_else(|| panic!("{look}"));
         assert!(about.parse::<usize>().is_ok_and(|n| n > 0), "{look}");
     }
@@ -296,8 +296,8 @@ fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Look))
         .unwrap();
-    assert_eq!(look.prompt.words.confirm, "Exile");
-    assert_eq!(look.prompt.words.decline, "Exile Nothing");
+    assert_eq!(look.prompt.words.confirm, "Submit {picked}");
+    assert_eq!(look.prompt.words.decline, "Decline");
 }
 
 #[test]
@@ -312,8 +312,8 @@ fn jace_fateseals_and_puts_two_cards_back() {
              opponent's library about 1",
             "yesNo yesNo fateseal pick: \"Top of Library\" 1/0 >bottom >top \
              you's library about 1",
-            "chooseObject split put-back first: \"Put Back\" 0/2 >onTop you's hand",
-            "chooseObject split put-back first: \"Put Back\" 0/1 >onTop you's hand",
+            "chooseObject split put-back first: \"Put two cards on top.\" 0/2 >onTop you's hand",
+            "chooseObject split put-back first: \"Put a card on top.\" 0/1 >onTop you's hand",
         ]
     );
 }
@@ -322,21 +322,21 @@ fn jace_fateseals_and_puts_two_cards_back() {
 fn a_maps_explore_asks_whether_the_revealed_card_goes_to_the_graveyard() {
     assert_eq!(
         asks(names::GET_LOST, &[Purpose::Explore]),
-        ["yesNo yesNo explore pick: \"Revealed\" 1/0 >graveyard >top you's library about 1"]
+        ["yesNo yesNo explore pick: \"Explore\" 1/0 >graveyard >top you's library about 1"]
     );
     let explore = decisions(names::GET_LOST)
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Explore))
         .unwrap();
     assert_eq!(explore.prompt.words.yes, "Graveyard");
-    assert_eq!(explore.prompt.words.no, "Keep on Top");
+    assert_eq!(explore.prompt.words.no, "Library");
 }
 
 #[test]
 fn time_spiral_untaps_up_to_six_lands() {
     assert_eq!(
         asks(names::TIME_SPIRAL, &[Purpose::Untap]),
-        ["chooseUpTo pick untap pick: \"Untap\" 0/6 you's battlefield"]
+        ["chooseUpTo pick untap pick: \"Untap up to six lands.\" 0/6 you's battlefield"]
     );
 }
 
@@ -348,8 +348,8 @@ fn trinket_mage_may_search_for_up_to_one_card() {
             &[Purpose::MaySearch, Purpose::Search, Purpose::Fateseal]
         ),
         [
-            "yesNo yesNo may-search pick: \"Search?\" 0/0",
-            "chooseUpTo pick search pick: \"Search\" 0/1 you's library",
+            "yesNo yesNo may-search pick: \"Search your library?\" 0/0",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/1 you's library",
             // The known-top search scenario first uses Jace to look at that card.
             "yesNo yesNo fateseal pick: \"Top of Library\" 1/0 >bottom >top \
              you's library about 1",
@@ -363,8 +363,8 @@ fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
         asks(names::WINDS_OF_ABANDON, &[Purpose::Search]),
         [
             // Each creature's controller searches their own library.
-            "chooseUpTo pick search pick: \"Search\" 0/1 you's library",
-            "chooseUpTo pick search pick: \"Search\" 0/2 you's library",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/1 you's library",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/2 you's library",
         ]
     );
 }
@@ -373,14 +373,14 @@ fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
 fn mana_tithe_asks_its_target_to_pay_one() {
     assert_eq!(
         asks(names::MANA_TITHE, &[Purpose::UnlessPays]),
-        ["yesNo yesNo unless-pays pick: \"Pay {1}?\" 0/0 {1}"]
+        ["yesNo yesNo unless-pays pick: \"Pay {1}.\" 0/0 {1}"]
     );
     let pays = decisions(names::MANA_TITHE)
         .into_iter()
         .find(|d| d.prompt.is(Purpose::UnlessPays))
         .unwrap();
     assert_eq!(pays.prompt.words.yes, "Pay {1}");
-    assert_eq!(pays.prompt.words.no, "Don't Pay");
+    assert_eq!(pays.prompt.words.no, "Decline");
 }
 
 #[test]
@@ -388,9 +388,9 @@ fn subtlety_asks_the_spells_owner_top_or_bottom_and_its_evoke_exile() {
     assert_eq!(
         asks(names::SUBTLETY, &[Purpose::TopOrBottom, Purpose::ExileCost]),
         [
-            "yesNo yesNo top-or-bottom pick: \"Top or Bottom?\" 0/0 >top >bottom \
+            "yesNo yesNo top-or-bottom pick: \"Subtlety\" 0/0 >top >bottom \
              you's stack about 1",
-            "chooseObject pick exile-cost pick: \"Exile a card\" 0/1 you's hand",
+            "chooseObject pick exile-cost pick: \"Exile a card.\" 0/1 you's hand",
         ]
     );
 }
@@ -405,12 +405,12 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
     // are laid out under the one word.
     assert_eq!(
         asked[0],
-        "chooseObject pick exile-cost pick: \"Exile\" 0/6 you's graveyard"
+        "chooseObject pick exile-cost pick: \"Exile six other cards.\" 0/6 you's graveyard"
     );
     assert_eq!(
         asked.last().map(String::as_str),
         Some(
-            "chooseObject pick manifest-dread pick: \"Manifest Dread\" 2/1 \
+            "chooseObject pick manifest-dread pick: \"Manifest one of them.\" 2/1 \
              >battlefield >graveyard you's library"
         )
     );
@@ -428,63 +428,83 @@ enum Titled {
 /// a scenario that reaches another purpose adds its line here.
 const REACHED: &[(Purpose, &str, Titled)] = &[
     (Purpose::Priority, "pick", Titled::As(&[""])),
-    (Purpose::Target, "pick", Titled::As(&["Choose a target"])),
-    (Purpose::Choose, "pick", Titled::As(&["Choose a card"])),
+    (Purpose::Target, "pick", Titled::As(&["Choose a target."])),
+    (Purpose::Choose, "pick", Titled::As(&["Choose One"])),
     (
         Purpose::Discard,
         "pick",
-        Titled::As(&["Discard a basic land or 2 cards", "Discard a card"]),
+        Titled::As(&[
+            "Discard a basic land card or two cards.",
+            "Discard a card.",
+            "Discard two cards.",
+        ]),
     ),
     (
         Purpose::Look,
         "pick",
-        Titled::As(&["Opponent's Hand", "Top Four"]),
+        Titled::As(&[
+            "Exile one of them?",
+            "Put one of them into your hand.",
+            "Put one of them into your hand?",
+        ]),
     ),
-    (Purpose::Search, "pick", Titled::As(&["Search"])),
-    (Purpose::Untap, "pick", Titled::As(&["Untap"])),
+    (Purpose::Search, "pick", Titled::As(&["Search for a card."])),
+    (
+        Purpose::Untap,
+        "pick",
+        Titled::As(&["Untap up to six lands.", "Untap up to two lands."]),
+    ),
     (
         Purpose::ManifestDread,
         "pick",
-        Titled::As(&["Manifest Dread"]),
+        Titled::As(&["Manifest one of them."]),
     ),
     (
         Purpose::ExileCost,
         "pick",
-        Titled::As(&["Exile", "Exile a card"]),
+        Titled::As(&["Exile a card.", "Exile six other cards."]),
     ),
     (
         Purpose::TriggerOrder,
         "order",
-        Titled::As(&["Put a trigger on the stack"]),
+        Titled::As(&["Order Triggers"]),
     ),
     (Purpose::Scry, "split", Titled::As(&["Scry"])),
     (
         Purpose::Arrange,
         "split",
-        Titled::As(&["Top Five", "Top Four", "Top Three", "Top Two"]),
+        Titled::As(&[
+            "Order Cards",
+            "Put one of them into your hand.",
+            "Put two of them into your hand.",
+        ]),
     ),
-    (Purpose::PutBack, "split", Titled::As(&["Put Back"])),
-    (Purpose::MaySearch, "yesNo", Titled::As(&["Search?"])),
+    (
+        Purpose::PutBack,
+        "split",
+        Titled::As(&["Put a card on top.", "Put two cards on top."]),
+    ),
+    (
+        Purpose::MaySearch,
+        "yesNo",
+        Titled::As(&["Search your library?"]),
+    ),
     (
         Purpose::Move,
         "yesNo",
         Titled::As(&["Exile that card from your graveyard?"]),
     ),
     (Purpose::Fateseal, "yesNo", Titled::As(&["Top of Library"])),
-    (
-        Purpose::TopOrBottom,
-        "yesNo",
-        Titled::As(&["Top or Bottom?"]),
-    ),
-    (Purpose::Explore, "yesNo", Titled::As(&["Revealed"])),
+    (Purpose::TopOrBottom, "yesNo", Titled::ByName),
+    (Purpose::Explore, "yesNo", Titled::As(&["Explore"])),
     (
         Purpose::UnlessPays,
         "yesNo",
-        Titled::As(&["Pay {1}?", "Pay {3}?"]),
+        Titled::As(&["Pay {1}.", "Pay {3}."]),
     ),
-    (Purpose::PayLife, "yesNo", Titled::ByName),
-    (Purpose::X, "number", Titled::As(&["Choose X"])),
-    (Purpose::CastOffer, "mode", Titled::ByName),
+    (Purpose::PayLife, "yesNo", Titled::As(&["Pay 3 life?"])),
+    (Purpose::X, "number", Titled::As(&["Select a value for X."])),
+    (Purpose::CastOffer, "mode", Titled::As(&["Cast that card?"])),
     (
         Purpose::Waterbend,
         "pay",
@@ -493,9 +513,9 @@ const REACHED: &[(Purpose, &str, Titled)] = &[
     (
         Purpose::Attack,
         "declare",
-        Titled::As(&["Choose attack target", "Declare attackers"]),
+        Titled::As(&["Choose attack target", "Choose attackers."]),
     ),
-    (Purpose::Block, "declare", Titled::As(&["Declare blockers"])),
+    (Purpose::Block, "declare", Titled::As(&["Choose blockers."])),
 ];
 
 #[test]

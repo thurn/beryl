@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(checkpoints.len(), 3);
         let payment = checkpoints
             .iter()
-            .find(|c| c.moment.title == "Pay {1}?")
+            .find(|c| c.moment.title == "Pay {1}.")
             .unwrap();
         assert_eq!(payment.first, View::Yours);
         for (answer, expected) in [

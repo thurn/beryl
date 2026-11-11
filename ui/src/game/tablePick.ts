@@ -114,7 +114,7 @@ function handPick(
     initial: [],
     ready,
     label: (picked) =>
-      counts ? counted(words.counted, picked.size, need) : words.confirm,
+      counted(counts ? words.counted : words.confirm, picked.size, need),
     plan: (picked) => [...picked].map((slot) => pickOf(purpose, slot, objects)),
   };
 }
@@ -177,7 +177,7 @@ function insteadOrCards(
     initial: [],
     ready,
     label: (picked) =>
-      ready(picked) ? words.confirm : counted(words.counted, picked.size, need),
+      counted(ready(picked) ? words.confirm : words.counted, picked.size, need),
     plan: (picked) => [
       {
         kind: "yesNo",

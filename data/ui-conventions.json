@@ -269,7 +269,7 @@
     {
       "kind": "settled",
       "name": "Wording",
-      "rule": "Arena's exactly: \"All Attack\", \"Choose attackers.\"",
+      "rule": "Arena's exactly, case and punctuation too: \"All Attack\", \"Choose attackers.\" Every prompt's title and buttons are one table in the session (`rust/crates/beryl_session/src/prompt/wording.rs`), each entry beside the recording moments that show it. A browser's title is the line that asks: its sentence of rules text, or its heading where the line under it only says how to drag. A pick is confirmed by \"Submit\" and the number picked, an arrangement by \"Done\", a \"may\" by \"Take Action\" or \"Decline\".",
       "reports": [
         "by-u4g",
         "by-a09o"
@@ -872,6 +872,84 @@
       "kind": "not-seen",
       "name": "Other numbers",
       "rule": "A changed power and toughness, and mana left in a pool, count as a life total does. Neither is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Words: what a card's text would say",
+      "rule": "Arena words many prompts from the text of the card that asks, which a prompt's record does not carry. Beryl says what Arena says of any card, or the same sentence less the card's part: \"Choose a target.\", \"Search for a card.\", \"Search your library?\", \"Exile a card.\", \"Exile {most:words} cards.\", \"Distribute damage.\", \"Distribute counters.\", \"Choose One\" over a card chosen for an effect, and an optional effect under its asker's name (\"{source}\", or \"Take Action?\" with none). Braces are the table's holes.",
+      "arena": {
+        "does": "Arena names the card's own: Target a creature., Search for a basic land card., Exile a blue card., Draw a card?",
+        "evidence": [
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "25:33.5"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "36:34.0"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "32:00.5"
+          },
+          {
+            "recording": "XYkigNjhINU",
+            "time": "1:17:11.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Words: prompts Beryl folds",
+      "rule": "Where Arena asks before a choice, Beryl opens the choice (exception 3) and words it from both screens. One discard in place of several: \"Discard a basic land card or {most:words} cards.\" A look that may take nothing is its sentence as a question, with \"Decline\": \"Put {most:words} of them into your hand?\", \"Exile {most:words} of them?\", \"Put {most:words} of them into your library?\", \"Put {most:words} of them into your graveyard?\", \"Put {most:words} of them onto the battlefield?\". The other way about, Arena opens a payment that may be declined and Beryl asks first: \"Pay {cost}.\" is answered \"Pay {cost}\" or \"Decline\". A card offered to cast is cast by its button, \"Cast\".",
+      "arena": {
+        "does": "Arena asks Discard a basic land card? and then Discard two cards.; a look that may take nothing is headed Choose One over a question, with Submit and Decline; a payment that may be declined has Decline beside Auto Pay.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "21:13.5"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "27:36.5"
+          },
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "28:19.5"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "56:48.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Words: prompts the recordings lack",
+      "rule": "Each is composed from the nearest prompt Arena shows. A discard to hand size: \"Discard {most} cards.\" A mulligan of more than one card: \"Return {most} Cards\". A count of targets asked first: \"How many targets?\". Manifest dread: \"Manifest one of them.\" Cards put back from a hand: \"Put a card on top.\", \"Put {most:words} cards on top.\" A fateseal: \"Top of Library\", answered \"BOTTOM\" or \"TOP\" as a scry's piles are named. A card that goes on top or bottom with no asker to name: \"Top or Bottom?\". Looked-at cards sent to a graveyard or the battlefield: \"Put {most:words} of them into your graveyard.\", \"Put {most:words} of them onto the battlefield.\" An optional move of a card anywhere but to exile: \"Put that card into your hand{from}?\", \"Put that card into your graveyard{from}?\", \"Put that card onto the battlefield{from}?\", \"Put that card into your library{from}?\", \"Move that card{from}?\". A cost of no mana: \"Pay {0}.\" The opening choices: \"Play or draw?\", answered Play or Draw, and \"Keep or mulligan?\" over Arena's own buttons. Catalogs: \"Choose Creature Type\", \"Choose Card Name\". Waterbend: \"Tap permanents to Waterbend\". What a declared creature is aimed at: \"Choose attack target\", \"Choose what to block\". Piles of a split: \"Hand\", \"Exile\", \"Battlefield\".",
+      "arena": {
+        "does": "Only the opponent's manifest dread, fateseal and put-back are seen, and games begin with the first player chosen.",
+        "evidence": [
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "28:43.5"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "34:55.0"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "27:18.0"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "16:58.0"
+          }
+        ]
+      }
     },
     {
       "kind": "not-seen",

@@ -112,19 +112,25 @@ impl Priority {
             PassTo::Resolve => PassLeads::Resolve,
             PassTo::CombatDamage => PassLeads::CombatDamage,
             PassTo::Step { step } => PassLeads::Step(step),
-            PassTo::NextTurn => PassLeads::NextTurn { yours: self.yours },
+            PassTo::NextTurn => PassLeads::NextTurn,
         };
         let (label, caption) = match (&decision.pass_to, decision.halt) {
-            (_, true) => pass_words(PassLeads::Halt),
-            (Some(to), false) => pass_words(leads(to)),
+            (_, true) => pass_words(PassLeads::Halt, self.yours),
+            (Some(to), false) => pass_words(leads(to), self.yours),
             (None, false) => (self.word.as_str(), ""),
         };
         let pass = PromptButton {
             caption: caption.to_owned(),
             ..button(ButtonId::Decline, label, self.pass.is_some(), true)
         };
-        let on = (decision.pass_on.as_ref())
-            .map(|to| button(ButtonId::PassOn, pass_words(leads(to)).1, true, false));
+        let on = (decision.pass_on.as_ref()).map(|to| {
+            button(
+                ButtonId::PassOn,
+                pass_words(leads(to), self.yours).1,
+                true,
+                false,
+            )
+        });
         self.buttons = std::iter::once(pass).chain(on).collect();
     }
 

@@ -64,8 +64,13 @@ restore the old behavior.
   hand, Wasteland on the battlefield (SN9QFe2kM4Y 42:44.2, 3sEoP_s4DQE 50:44.3,
   3sEoP_s4DQE 46:50.2, MnhyzykajXw 35:43).
 - **A finished ability.** It is removed at once, with no fade (by-c8b).
-- **Wording.** Arena's exactly: "All Attack", "Choose attackers." (by-u4g,
-  by-a09o).
+- **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
+  attackers." Every prompt's title and buttons are one table in the session
+  (`rust/crates/beryl_session/src/prompt/wording.rs`), each entry beside the
+  recording moments that show it. A browser's title is the line that asks: its
+  sentence of rules text, or its heading where the line under it only says how
+  to drag. A pick is confirmed by "Submit" and the number picked, an arrangement
+  by "Done", a "may" by "Take Action" or "Decline" (by-u4g, by-a09o).
 - **Button order.** It follows Arena prompt by prompt; there is no blanket
   "default on the right" (by-ceo3).
 - **The opponent's turn.** Arena's "Opponent's Turn" label shows in the action
@@ -228,6 +233,50 @@ recordings do not show them.
   move is not seen (krskVfn2v5Q 46:10.45).
 - **Other numbers.** A changed power and toughness, and mana left in a pool,
   count as a life total does. Neither is seen.
+- **Words: what a card's text would say.** Arena words many prompts from the
+  text of the card that asks, which a prompt's record does not carry. Beryl says
+  what Arena says of any card, or the same sentence less the card's part:
+  "Choose a target.", "Search for a card.", "Search your library?", "Exile a
+  card.", "Exile {most:words} cards.", "Distribute damage.", "Distribute
+  counters.", "Choose One" over a card chosen for an effect, and an optional
+  effect under its asker's name ("{source}", or "Take Action?" with none).
+  Braces are the table's holes. Arena names the card's own: Target a creature.,
+  Search for a basic land card., Exile a blue card., Draw a card? (0VsYGs88NXA
+  25:33.5, I3Te0m1bBFw 36:34.0, TbrYIs2juCw 32:00.5, XYkigNjhINU 1:17:11.0).
+- **Words: prompts Beryl folds.** Where Arena asks before a choice, Beryl opens
+  the choice (exception 3) and words it from both screens. One discard in place
+  of several: "Discard a basic land card or {most:words} cards." A look that may
+  take nothing is its sentence as a question, with "Decline": "Put {most:words}
+  of them into your hand?", "Exile {most:words} of them?", "Put {most:words} of
+  them into your library?", "Put {most:words} of them into your graveyard?",
+  "Put {most:words} of them onto the battlefield?". The other way about, Arena
+  opens a payment that may be declined and Beryl asks first: "Pay {cost}." is
+  answered "Pay {cost}" or "Decline". A card offered to cast is cast by its
+  button, "Cast". Arena asks Discard a basic land card? and then Discard two
+  cards.; a look that may take nothing is headed Choose One over a question,
+  with Submit and Decline; a payment that may be declined has Decline beside
+  Auto Pay (UrGalw_f35w 21:13.5, 5UHzpVvUkfI 27:36.5, IHPV6yRaFlk 28:19.5,
+  0VsYGs88NXA 56:48.5).
+- **Words: prompts the recordings lack.** Each is composed from the nearest
+  prompt Arena shows. A discard to hand size: "Discard {most} cards." A mulligan
+  of more than one card: "Return {most} Cards". A count of targets asked first:
+  "How many targets?". Manifest dread: "Manifest one of them." Cards put back
+  from a hand: "Put a card on top.", "Put {most:words} cards on top." A
+  fateseal: "Top of Library", answered "BOTTOM" or "TOP" as a scry's piles are
+  named. A card that goes on top or bottom with no asker to name: "Top or
+  Bottom?". Looked-at cards sent to a graveyard or the battlefield: "Put
+  {most:words} of them into your graveyard.", "Put {most:words} of them onto the
+  battlefield." An optional move of a card anywhere but to exile: "Put that card
+  into your hand{from}?", "Put that card into your graveyard{from}?", "Put that
+  card onto the battlefield{from}?", "Put that card into your library{from}?",
+  "Move that card{from}?". A cost of no mana: "Pay {0}." The opening choices:
+  "Play or draw?", answered Play or Draw, and "Keep or mulligan?" over Arena's
+  own buttons. Catalogs: "Choose Creature Type", "Choose Card Name". Waterbend:
+  "Tap permanents to Waterbend". What a declared creature is aimed at: "Choose
+  attack target", "Choose what to block". Piles of a split: "Hand", "Exile",
+  "Battlefield". Only the opponent's manifest dread, fateseal and put-back are
+  seen, and games begin with the first player chosen (pE4XSNi-nZc 28:43.5,
+  pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own.
 

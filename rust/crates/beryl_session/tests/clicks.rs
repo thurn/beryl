@@ -73,7 +73,7 @@ fn a_priority_is_answered_by_a_click_on_a_card_or_its_pass_button() {
     assert_eq!(play.on(counterspell).as_deref(), Some(open.as_str()));
     // The Tundra makes white or blue: two ways, so the choice among them opens, under its
     // name. The session does not hold that prompt's state yet.
-    assert_eq!(play.on(tundra).as_deref(), Some("mode act: Tundra\n"));
+    assert_eq!(play.on(tundra).as_deref(), Some("mode act: Choose One\n"));
     assert_eq!(play.prompt(), open, "the priority is as it was");
 
     // The second Island in hand stands for the first, which the engine offers for both
@@ -129,7 +129,7 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
     assert_eq!(play.on(oust), None, "casting Oust is a priority's click");
     assert!(play.decision().prompt.is(Purpose::Target));
     let open = format!(
-        "pick target: Choose a target\n\
+        "pick target: Choose a target.\n\
          picked 0 of 1\n\
          warned #{mine}\n\
          eligible {}\n",
@@ -137,12 +137,12 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
     );
     assert_eq!(play.prompt(), open);
     let asked = format!(
-        "pick target: Target your Thundertrap Trainer?\n\
+        "pick target: Do you want to target Thundertrap Trainer?\n\
          picked 1 of 1: #{mine}\n\
          warned #{mine}\n\
          eligible #{theirs}\n\
          friendly-target #{mine}\n\
-         confirm[Confirm] decline[Cancel]*\n"
+         confirm[Yes] decline[No]*\n"
     );
     assert_eq!(play.on(mine).as_deref(), Some(asked.as_str()));
     // Cancel takes the pick back, and so does a second click on it.
@@ -229,7 +229,7 @@ fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
          picked 1 of 1: #{tithe}\n\
          eligible #{crypt}\n\
          hostile-target #{tithe}\n\
-         confirm[Confirm]*\n"
+         confirm[Submit 1]*\n"
     );
     assert_eq!(play.prompt(), open);
     // The viewer's own spell takes the pick's place, and a second click on it leaves none.
@@ -240,16 +240,16 @@ fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
              picked 1 of 1: #{crypt}\n\
              eligible #{tithe}\n\
              friendly-target #{crypt}\n\
-             confirm[Confirm]*\n"
+             confirm[Submit 1]*\n"
         )
     );
     assert_eq!(
         play.on(crypt).unwrap(),
         format!(
-            "pick target: Choose a target\n\
+            "pick target: Choose a target.\n\
              picked 0 of 1\n\
              eligible {}\n\
-             confirm(Confirm)\n",
+             confirm(Submit 0)\n",
             cards(&[crypt, tithe]),
         )
     );
@@ -294,7 +294,7 @@ fn a_target_in_a_graveyard_is_picked_from_a_tray() {
     assert_eq!(
         play.prompt(),
         format!(
-            "pick target: Choose a target\n\
+            "pick target: Choose a target.\n\
              tray {}\n\
              picked 0 of 1\n\
              eligible {}\n",
@@ -349,10 +349,10 @@ fn up_to_one_target_is_one_prompt_whose_click_announces_the_count() {
     play.choose(minus_three);
     assert_eq!(play.decision().kind, Kind::TargetCount);
     let open = format!(
-        "pick target: Choose a target\n\
+        "pick target: Choose a target.\n\
          picked 0 of 0..1\n\
          eligible {}\n\
-         decline[No Target]\n",
+         decline[Submit 0]\n",
         cards(&[staff, spellbinder]),
     );
     assert_eq!(play.prompt(), open);
@@ -435,10 +435,10 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
     assert_eq!(
         play.prompt(),
         format!(
-            "pick untap: Untap\n\
+            "pick untap: Untap up to two lands.\n\
              picked 2 of 0..2: {both}\n\
              selected {both}\n\
-             confirm[Untap 2/2]* decline[Untap None]\n",
+             confirm[Submit 2]* decline[Submit 0]\n",
             both = cards(&[island, tundra]),
         )
     );
@@ -446,21 +446,21 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
     assert_eq!(
         play.on(island).unwrap(),
         format!(
-            "pick untap: Untap\n\
+            "pick untap: Untap up to two lands.\n\
              picked 1 of 0..2: #{tundra}\n\
              eligible {}\n\
              selected #{tundra}\n\
-             confirm[Untap 1/2]* decline[Untap None]\n",
+             confirm[Submit 1]* decline[Submit 0]\n",
             cards(&[plains, island, theirs]),
         )
     );
     assert_eq!(
         play.on(plains).unwrap(),
         format!(
-            "pick untap: Untap\n\
+            "pick untap: Untap up to two lands.\n\
              picked 2 of 0..2: #{tundra} #{plains}\n\
              selected {}\n\
-             confirm[Untap 2/2]* decline[Untap None]\n",
+             confirm[Submit 2]* decline[Submit 0]\n",
             cards(&[tundra, plains]),
         )
     );
@@ -494,10 +494,10 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
     assert_eq!(
         none.on(tundra).unwrap(),
         format!(
-            "pick untap: Untap\n\
+            "pick untap: Untap up to two lands.\n\
              picked 0 of 0..2\n\
              eligible {}\n\
-             confirm(Untap 0/2) decline[Untap None]*\n",
+             confirm(Submit 0) decline[Submit 0]*\n",
             cards(&[plains, island, tundra, theirs]),
         )
     );
@@ -566,7 +566,8 @@ fn the_legend_to_keep_is_picked_by_a_click() {
     assert_eq!(
         play.prompt(),
         format!(
-            "pick legend-rule: Choose the legend to keep\n\
+            "pick legend-rule: Choose the legendary permanent that you wish to keep. All others \
+             will go to their owner's graveyard.\n\
              picked 0 of 1\n\
              eligible {}\n",
             cards(&teferis),

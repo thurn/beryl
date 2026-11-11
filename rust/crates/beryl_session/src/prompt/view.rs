@@ -136,8 +136,9 @@ pub struct Lies {
 
 /// The words of a prompt's buttons, from the wording table, for a UI that holds the prompt's
 /// state itself: the session's own [`PromptButton`]s say theirs. A button the purpose does not
-/// have is empty. `{picked}` stands for how many are picked and `{of}` for how many the prompt
-/// takes, which only the holder of the state knows.
+/// have is empty. `{picked}` stands for how many are picked, `{of}` for how many the prompt
+/// takes and `{s}` for the plural's letter unless one is picked, which only the holder of the
+/// state knows.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Words {
@@ -150,8 +151,10 @@ pub struct Words {
     /// The button that answers yes, and the one that answers no.
     pub yes: String,
     pub no: String,
-    /// The button that pays as the session suggests.
+    /// The button that answers as the session suggests: its payment, every attacker.
     pub auto: String,
+    /// The button that takes the prompt back, where it can be.
+    pub cancel: String,
     /// What each of `places` is called over its pile.
     pub piles: [String; 2],
 }

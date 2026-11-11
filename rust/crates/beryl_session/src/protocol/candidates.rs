@@ -7,7 +7,9 @@ use beryl_engine::card::{
 use beryl_engine::layout::Queue;
 use beryl_engine::state::CounterKind;
 use beryl_engine::two_player::TwoPlayerSeat as _;
-use beryl_engine::{Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId};
+use beryl_engine::{
+    Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId, Zone, ZoneKey,
+};
 
 use super::{Candidate, CandidateView, Mana, Side, ability_order, face_name, name, side};
 
@@ -46,9 +48,20 @@ pub(super) fn candidate<L: Layout>(
             ),
             Candidate::PlayLand { slot: slot.num() },
         ),
-        Opt::Play => ("Play first".to_owned(), Candidate::Play),
-        Opt::Draw => ("Draw first".to_owned(), Candidate::Draw),
-        Opt::Keep => ("Keep".to_owned(), Candidate::Keep),
+        // Composed: the recordings' games begin with the choice made.
+        Opt::Play => ("Play".to_owned(), Candidate::Play),
+        Opt::Draw => ("Draw".to_owned(), Candidate::Draw),
+        // Arena's "Keep 7" and "Mulligan" (`0VsYGs88NXA 16:58.0`, `UrGalw_f35w 16:04.5`): the
+        // number is the cards the hand keeps
+        // ([CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035)): a player who keeps
+        // "puts a number of those cards equal to the number of times that player has taken a
+        // mulligan on the bottom of their library".
+        Opt::Keep => {
+            let you = obs.viewer();
+            let hand = obs.zone(ZoneKey::Of(you, Zone::Hand)).count();
+            let kept = hand.saturating_sub(obs.player(you).mulligans().into());
+            (format!("Keep {kept}"), Candidate::Keep)
+        }
         Opt::Mulligan => ("Mulligan".to_owned(), Candidate::Mulligan),
         Opt::Trigger(index) => trigger(t, obs, index),
         Opt::Yes => ("Yes".to_owned(), Candidate::Yes),
@@ -175,7 +188,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
 /// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a
 /// land before putting it onto the battlefield"), as Sink into Stupor plays as Soporific
 /// Springs.
-pub(crate) fn land_face_name<L: Layout>(
+fn land_face_name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     slot: L::Slot,

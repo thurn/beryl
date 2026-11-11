@@ -543,7 +543,7 @@ await check(
         assertBetween(flight, inHand, await where(handle), "its flight");
         // It asks for its target; Escape takes the cast back, and the card is in hand again.
         const targeting = page.getByRole("dialog", {
-            name: `Choose a target for ${name}`,
+            name: `(${name}) Choose a target.`,
         });
         await targeting.waitFor();
         await page.keyboard.press("Escape");
@@ -570,7 +570,7 @@ await check(
         const onStack = `${card}[data-zone="stack"]`;
         await page.waitForSelector(onStack);
         await page
-            .getByRole("dialog", { name: `Choose a target for ${name}` })
+            .getByRole("dialog", { name: `(${name}) Choose a target.` })
             .waitFor();
         await page.clock.runFor(1000);
         const from = center(await page.locator(onStack).boundingBox());
@@ -1204,7 +1204,7 @@ await check(
         await page.clock.runFor(2000);
         // From here on time passes only when the test says so: the replay cannot advance.
         await page.clock.pauseAt(Date.now() + 60_000);
-        await page.getByRole("button", { name: "Take Nothing" }).click();
+        await page.getByRole("button", { name: "Decline" }).click();
         await page.waitForSelector(".table:not(.table-dimmed)");
         // The turn plays out to the session's halt at the human's main: End Turn.
         const halt = page.getByRole("button", { name: "End Turn" });
@@ -2636,7 +2636,10 @@ await check(
         await page.getByRole("button", { name: "Undo" }).click();
         await page.clock.runFor(1500);
         await page.locator(`${byDefault.spell}[data-zone="hand"]`).waitFor();
-        assert.equal(await page.getByText("Choose how to pay").count(), 0);
+        assert.equal(
+            await page.getByRole("dialog", { name: /^Pay / }).count(),
+            0,
+        );
     },
     {
         fixture: "pay-default",
@@ -3358,7 +3361,7 @@ await derive("choice-jace", fatesealFixture, jace.views.length - 1, (v) => ({
             kind: "yesNo",
             prompt: asking(v.status.decision.prompt, "yesNo", "fateseal", {
                 title: "Top of Library",
-                words: { yes: "Put on Bottom", no: "Keep on Top" },
+                words: { yes: "BOTTOM", no: "TOP" },
                 about: [v.players.you.library.at(-1)],
                 from: { player: "you", zone: "library" },
             }),
@@ -3462,7 +3465,7 @@ await check(
         assert.deepEqual(await lit(page), []);
         await page.getByRole("button", { name: /^Pay/ }).hover();
         assert.deepEqual(await lit(page), payTaps, "the paying land glows");
-        await page.getByRole("button", { name: "Don't Pay" }).click();
+        await page.getByRole("button", { name: "Decline" }).click();
         assert.deepEqual(await settled(page, 1), [decline]);
     },
     { fixture: "choice-pay", at: pay.views.length, ready: ".prompt" },
@@ -3700,7 +3703,7 @@ await writeFixture(
 );
 for (const [fixture, primary, kind] of [
     ["pay-life", "Pay 3 Life", "yes"],
-    ["pay-life-unwanted", "Tapped", "no"],
+    ["pay-life-unwanted", "Enters Tapped", "no"],
 ]) {
     await check(
         `paying life for a land defaults by whether its mana is wanted (${fixture})`,
@@ -3708,8 +3711,8 @@ for (const [fixture, primary, kind] of [
             await page.clock.runFor(2000);
             assert.equal(
                 await page.locator(".prompt-title").textContent(),
-                "Soporific Springs",
-                "the land named",
+                "Pay 3 life?",
+                "Arena's question",
             );
             assert.equal(await page.$(".overlay"), null, "the table stays lit");
             const confirm = page.locator(".prompt .button-primary");
@@ -4158,8 +4161,7 @@ if (wanted(parkedHand)) {
                 const answer =
                     choice === "mulligan"
                         ? page.getByRole("button", {
-                              name: "Keep",
-                              exact: true,
+                              name: /^Keep \d$/,
                           })
                         : page.locator(".turn-action button").first();
                 await answer.evaluate((button) => button.click());
@@ -5780,9 +5782,7 @@ if (wanted(beforeChooser)) {
             for (const slot of views[at].players.you.graveyard.slice(1)) {
                 await page.locator(`.choice-card[data-slot="${slot}"]`).click();
             }
-            await page
-                .getByRole("button", { name: "Exile", exact: true })
-                .click();
+            await page.getByRole("button", { name: /^Submit \d+$/ }).click();
             await page.clock.runFor(4000);
             assert.equal(
                 await page.evaluate(
@@ -6421,8 +6421,8 @@ if (wanted("manifest cards")) {
                     "pick",
                     "manifest-dread",
                     {
-                        title: "Manifest Dread",
-                        words: { confirm: "Manifest" },
+                        title: "Manifest one of them.",
+                        words: { confirm: "Submit {picked}" },
                         count: 2,
                         from: { player: "you", zone: "library" },
                     },
@@ -6497,8 +6497,8 @@ if (wanted("manifest cards")) {
                     "pick",
                     "exile-cost",
                     {
-                        title: "Exile",
-                        words: { confirm: "Exile" },
+                        title: "Exile a card.",
+                        words: { confirm: "Submit {picked}" },
                         most: 1,
                         from: { player: "you", zone: "graveyard" },
                     },
@@ -6542,7 +6542,7 @@ if (wanted("manifest cards")) {
                 .boundingBox();
             await page.locator('.choice-card[data-slot="800"]').click();
             await page
-                .getByRole("button", { name: "Exile", exact: true })
+                .getByRole("button", { name: "Submit 1", exact: true })
                 .click();
             await until(page, `${slotOf(800)}[data-zone="exile"]`, 20);
             await page.clock.runFor(1800);
@@ -6607,7 +6607,7 @@ if (wanted("manifest cards")) {
             // machine.
             await startRecording(page);
             await page
-                .getByRole("button", { name: "Manifest", exact: true })
+                .getByRole("button", { name: "Submit 1", exact: true })
                 .click();
             await until(page, `${slotOf(800)}[data-zone="battlefield"]`, 20);
             // A few frames of the flight: the paused clock draws none until it is stepped.
@@ -7783,6 +7783,7 @@ function asking(prompt, shape, purpose, fields = {}) {
             yes: "",
             no: "",
             auto: "",
+            cancel: "Cancel",
             piles: ["", ""],
             ...fields.words,
         },
@@ -8588,7 +8589,7 @@ await check(
         assert.match(await prompt.innerText(), /Choose a target/);
         assert.deepEqual(
             await prompt.locator(".prompt-choices button").allInnerTexts(),
-            ["No Target", "Cancel"],
+            ["Submit 0", "Cancel"],
             "no count is asked",
         );
         await page.click(slotOf(aimed));
@@ -8604,7 +8605,7 @@ await check(
 await check(
     "up to one target chooses none from its one button",
     async (page) => {
-        await page.getByRole("button", { name: "No Target" }).click();
+        await page.getByRole("button", { name: "Submit 0" }).click();
         assert.deepEqual(await settled(page, 1), [countOf(0)]);
     },
     upToRun,
@@ -8635,10 +8636,10 @@ await check(
             "Cancel's focus outline replaces the rim in place",
         );
         await page.keyboard.press("Escape");
-        await page.getByRole("button", { name: "No Target" }).waitFor();
+        await page.getByRole("button", { name: "Submit 0" }).waitFor();
         await page.click(slotOf(slot));
         await cancel.click();
-        await page.getByRole("button", { name: "No Target" }).waitFor();
+        await page.getByRole("button", { name: "Submit 0" }).waitFor();
         assert.equal(await cancels(page), 0);
         assert.deepEqual(await chosen(page), []);
 
@@ -8671,7 +8672,7 @@ await check(
         await page.clock.runFor(2000);
         await page.click(slotOf(oust));
         const targeting = page.getByRole("dialog", {
-            name: "Choose a target for Oust",
+            name: "(Oust) Choose a target.",
         });
         await targeting.waitFor();
         assert.ok(
@@ -9083,7 +9084,7 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(slotOf(jaceVp));
-        await until(page, 'role=dialog[name="Discard a card"]');
+        await until(page, 'role=dialog[name="Discard a card."]');
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         await page.clock.runFor(1500);
         const drawn = page.locator(
@@ -9180,7 +9181,7 @@ await check(
             theirTapped,
             "the opponent's are not picked",
         );
-        const picked = (n) => `Untap ${n}/${untapMax}`;
+        const picked = (n) => `Submit ${n}`;
         // An untapped land can't be picked.
         await page.click(slotOf(await uncovered(page, untappedLands)));
         await page
@@ -9249,7 +9250,7 @@ await check(
             await glowing(page, "source"),
             [...teferiTapped, teferi.decision.source].sort((a, b) => a - b),
         );
-        await page.getByRole("button", { name: "Untap 2/2" }).waitFor();
+        await page.getByRole("button", { name: "Submit 2" }).waitFor();
         await page.keyboard.press("Space");
         const [first] = await settled(page, 1);
         assert.ok(
@@ -9292,7 +9293,7 @@ const thirstRun = {
     ready: ".prompt",
 };
 const discardButton = (page) =>
-    page.locator(".prompt .prompt-row .button", { hasText: "Discard" });
+    page.locator(".prompt .prompt-row .button", { hasText: "Submit" });
 await check(
     "Thirst's basic land is discarded from the hand in two clicks",
     async (page) => {
@@ -9332,7 +9333,7 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(slotOf(spellsInHand[0]));
-        assert.equal(await discardButton(page).textContent(), "Discard 1/2");
+        assert.equal(await discardButton(page).textContent(), "Submit 1");
         assert.ok(await discardButton(page).isDisabled(), "one is not enough");
         await page.click(slotOf(spellsInHand[1]));
         await discardButton(page).click();
@@ -9394,7 +9395,7 @@ await check(
     "a search finds nothing from its second button",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Find Nothing" }).click();
+        await page.getByRole("button", { name: "Decline" }).click();
         assert.deepEqual(await settled(page, 1), [
             answerIndex(searching.decision, "done"),
         ]);
@@ -9417,7 +9418,9 @@ await check(
             (cards) => cards.map((c) => Number(c.dataset.slot)),
         );
         assert.deepEqual(lit, [converter], "one card is lit, the last");
-        await page.getByRole("button", { name: "Find", exact: true }).click();
+        await page
+            .getByRole("button", { name: "Submit 1", exact: true })
+            .click();
         assert.deepEqual(
             await settled(page, 2),
             [searching.bySlot.get(converter)],
@@ -9516,11 +9519,11 @@ const inHand = (slot) => `[data-slot="${slot}"][data-zone="hand"]`;
 await check(
     "the cleanup discard counts its picks",
     async (page) => {
-        await page.getByRole("button", { name: "Discard 0/1" }).waitFor();
+        await page.getByRole("button", { name: "Submit 0" }).waitFor();
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         await page.clock.runFor(1500);
         await page.click(inHand(extra));
-        await page.getByRole("button", { name: "Discard 1/1" }).click();
+        await page.getByRole("button", { name: "Submit 1" }).click();
         assert.deepEqual(await settled(page, 1), [cleanup.bySlot.get(extra)]);
     },
     {

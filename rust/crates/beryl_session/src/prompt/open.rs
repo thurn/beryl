@@ -4,9 +4,9 @@
 use beryl_engine::card::{ManaCost, Prompt, Purpose};
 use beryl_engine::{Decision, GameTable, Layout, Observation, Zone};
 
-use super::wording::{Holes, place_word, wording};
+use super::wording::{Holes, cancel_word, pile_word, wording};
 use super::{Lies, PromptView, Words};
-use crate::protocol::{land_face_name, mana_text, name, shown, side, slots};
+use crate::protocol::{mana_text, name, shown, side, slots};
 
 /// The prompt the pick `d` asks belongs to, as the seat `obs` sees for is sent it; `asker`
 /// names the spell or ability whose resolution asks.
@@ -26,11 +26,9 @@ pub(crate) fn prompt_view<L: Layout>(
     let holes = Holes {
         count: d.prompt.count,
         most: d.prompt.most,
-        cost: cost.as_deref().unwrap_or_default(),
+        cost: cost.as_deref(),
         source: asker,
         name: about.and_then(|slot| name(t, obs, slot)),
-        land: about.and_then(|slot| land_face_name(t, obs, slot)),
-        yours: shown.is_some_and(|card| card.owner() == obs.viewer()),
         from: about.map(|slot| obs.object(slot).zone()),
     };
     PromptView {
@@ -89,7 +87,10 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, cost: Option<String>, holes: &Hol
             yes: holes.label(words.yes),
             no: holes.label(words.no),
             auto: holes.label(words.auto),
-            piles: prompt.places.map(|place| place_word(place).to_owned()),
+            cancel: cancel_word(prompt.purpose).to_owned(),
+            piles: prompt
+                .places
+                .map(|place| pile_word(prompt.purpose, place).to_owned()),
         },
         count: prompt.count,
         most: prompt.most,

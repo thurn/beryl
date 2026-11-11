@@ -77,10 +77,14 @@ const answers = (decision: DecisionView, intent: Intent) =>
 export const aimsAttack = ({ prompt }: DecisionView) =>
   prompt.purpose === "attack" && prompt.part === "aim";
 
-/** A counted button's label from the session's words: `{picked}` and `{of}` are the UI's to
- * fill while it holds the prompt's state, how many are picked and how many the prompt takes. */
+/** A button's label from the session's words: `{picked}`, `{of}` and `{s}` are the UI's to
+ * fill while it holds the prompt's state, how many are picked, how many the prompt takes and
+ * the plural's letter unless one is picked ("Submit 1", "2 Attackers"). */
 export const counted = (template: string, picked: number, of: number) =>
-  template.replace("{picked}", String(picked)).replace("{of}", String(of));
+  template
+    .replace("{picked}", String(picked))
+    .replace("{of}", String(of))
+    .replace("{s}", picked === 1 ? "" : "s");
 
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
 export function intended(
@@ -331,12 +335,12 @@ export const playActs = (acts: Act[]) =>
   acts.filter((a) => a.option.kind === "cast" || a.option.kind === "playLand");
 
 /** The prompt's title, in the session's words: what the decision asks, and for whom when a
- * target has a source. */
+ * target has a source, which Arena names first in parentheses ("(True-Name Nemesis) Choose a
+ * player.", `jD7VqaT8VC8 16:32.5`; "(Archon of Cruelty) Discard a card.",
+ * `SN9QFe2kM4Y 37:42.5`). */
 export function prompt(decision: DecisionView, source?: string): string {
   const { title } = decision.prompt;
-  return source && decision.kind === "target"
-    ? `${title} for ${source}`
-    : title;
+  return source && decision.kind === "target" ? `(${source}) ${title}` : title;
 }
 
 /** The picks that put simultaneous triggers on the stack to resolve in `order`, the indexes of
