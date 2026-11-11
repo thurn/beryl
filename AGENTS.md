@@ -181,15 +181,15 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   the nightly coverage (`just coverage`), worst failure record first, as many as
   fit; the run log's `chosen` says why each ran, and `cut` marks those left to
   slow CI. It also refuses conflict markers and bad commit subjects.
-- `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
-  `shots` (`just ui-shots`, which fails on any page error), `ui-test`
-  (`just ui-test`, which plays the game screen through a fixture), `oracle`
-  (`just oracle`, which needs `just oracle-setup` once per machine), `counts`
-  (`just count-gate`: the rollout benchmark's instruction count, held to the bar
-  in `rust/crates/beryl_bench/count-gate.toml`, whose comments say when it may
-  rise) and `mobile` (`cargo check` of the app for the iOS Simulator and
-  Android, which needs `just mobile-setup`). A run over budget fails: speed up,
-  move or delete the slowest step rather than raise it.
+- `just ci` (slow, budget 300 s; 450 s on Windows) runs every lane plus `app`
+  (`just smoke`), `shots` (`just ui-shots`, which fails on any page error),
+  `ui-test` (`just ui-test`, which plays the game screen through a fixture),
+  `oracle` (`just oracle`, which needs `just oracle-setup` once per machine),
+  `counts` (`just count-gate`: the rollout benchmark's instruction count, held
+  to the bar in `rust/crates/beryl_bench/count-gate.toml`, whose comments say
+  when it may rise) and `mobile` (`cargo check` of the app for the iOS Simulator
+  and Android, which needs `just mobile-setup`). A run over budget fails: speed
+  up, move or delete the slowest step rather than raise it.
 - A UI fix adds the broken state as a fixture or spec moment for the generic
   audits (overlap, off-screen, reachability, duplicate objects, page errors,
   motion), extending an audit for a new class of bug. Write a scripted check in

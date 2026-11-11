@@ -1,5 +1,5 @@
 """The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
-on the staging tip (budget 300 s, and a run over it fails). Both run lanes in parallel, each a
+on the staging tip (budget 300 s, 450 s on Windows, and a run over it fails). Both run lanes in parallel, each a
 sequence of timed steps, and print failed lanes last. A run has a hard deadline of twice its
 budget ($CHECK_DEADLINE_S overrides it): a step still running then is killed, with everything it
 started, and fails its lane.
@@ -72,7 +72,8 @@ from .rust_tests import (
 )
 
 FAST_BUDGET = 60
-SLOW_BUDGET = 300
+# Windows runs the same lanes markedly slower (process start, file system, antivirus).
+SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
 # times its deadline, however loaded the machine.
 MAX_STRETCH = 8.0
