@@ -14,7 +14,8 @@ use beryl_engine::{
 use beryl_session::preview::add_previews;
 use beryl_session::prompt::add_opening_state;
 use beryl_session::protocol::{
-    DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, StackItem, player_view,
+    DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, StackItem,
+    hold_back_activation_being_paid, player_view,
 };
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
@@ -577,6 +578,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                         .map(Relayout::relayout)
                         .collect::<Vec<_>>(),
                 );
+                // An opponent's activation still being paid by taps is held back, as a game
+                // holds it back.
+                hold_back_activation_being_paid(&mut theirs, &det);
                 // What a cast taps and whom a blocker may block, played out on the redealt state.
                 if let Some(d) = &d
                     && d.player == Seat::P0

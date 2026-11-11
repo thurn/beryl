@@ -5,11 +5,11 @@ use beryl_engine::card::{
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry};
+use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
-    Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, Zone,
-    ZoneKey,
+    Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, State,
+    Zone, ZoneKey,
 };
 
 use super::{
@@ -211,6 +211,26 @@ pub(crate) fn shown<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Opti
             _ => None,
         }),
     })
+}
+
+/// Takes off the stack of `view`, a view of the game `s`, an opponent's ability whose cost is
+/// still being paid by tapping permanents in place of mana: the viewer watches the permanents
+/// tap before the activation lifts from its source. The controller's own view keeps the entry,
+/// which says what they are paying for. A game does this as it draws a view; a view built from
+/// a position alone ([`player_view`]) has it done here.
+pub fn hold_back_activation_being_paid<L: Layout>(view: &mut PlayerView, s: &State<L>) {
+    if matches!(s.pending(), Pending::Casting(_))
+        && matches!(
+            view.stack.last(),
+            Some(StackItem::Ability {
+                controller: Side::Opponent,
+                taps_to_pay: Some(true),
+                ..
+            })
+        )
+    {
+        view.stack.pop();
+    }
 }
 
 /// What the opponent sees of the cards `d`'s prompt has its player look through: the hand or

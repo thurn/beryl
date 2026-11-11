@@ -1,14 +1,15 @@
 //! Drawing the views of the game that the human and the agent's seat are shown.
 
 use beryl_engine::event::{Event, Recipient};
-use beryl_engine::state::Pending;
 use beryl_engine::{
     Large, Observation, Outcome, Relayout, Seat, paused_events, two_player::TwoPlayerSeat as _,
     view,
 };
 
 use crate::preview;
-use crate::protocol::{Moment, PlayerView, Side, StackItem, Status, player_view};
+use crate::protocol::{
+    Moment, PlayerView, Side, Status, hold_back_activation_being_paid, player_view,
+};
 
 use super::{At, Boards, Game, Open, on_board};
 
@@ -118,21 +119,7 @@ impl Game {
             let shown = view(&b.state, &self.table, &mut b.scratch);
             let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
-            // Let the opponent watch permanents tapped in place of mana before the activation
-            // lifts from its source. The controller's payment view still needs the
-            // pending stack item to identify what they are paying for.
-            if matches!(shown.pending(), Pending::Casting(_))
-                && matches!(
-                    view.stack.last(),
-                    Some(StackItem::Ability {
-                        controller: Side::Opponent,
-                        taps_to_pay: Some(true),
-                        ..
-                    })
-                )
-            {
-                view.stack.pop();
-            }
+            hold_back_activation_being_paid(&mut view, shown);
             if let Some(d) = &decision
                 && d.player == viewer
             {
