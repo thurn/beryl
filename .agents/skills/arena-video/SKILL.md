@@ -5,10 +5,11 @@ description: Find out exactly how MTG Arena presents something (a card's cast or
 
 # Arena video reference
 
-Arena's flow is Beryl's reference (AGENTS.md, Workflow). The recordings in
-`~/Movies/arena` are hours of real Arena play, indexed into `~/arena`
-(`$BERYL_ARENA`), and `just video` makes them answer questions like "how does Arena let you attack a planeswalker?"
-for the price of a few images.
+Arena is Beryl's reference for flow, motion, timing, table layout and wording
+(AGENTS.md, UI). The recordings in `~/Movies/arena` are hours of real Arena
+play, indexed into `~/arena` (`$BERYL_ARENA`), and `just video` makes them
+answer questions like "how does Arena let you attack a planeswalker?" for the
+price of a few images.
 
 You cannot watch video. You read a text index to find the second something
 happens, then look at stills tiled into one image. Never step through a
@@ -150,12 +151,20 @@ The kinds of event:
 
 ## What to take from Arena
 
-Take its flow: what is asked, in what order, with which defaults and ways to
-decline, what is highlighted, how long things take. Beryl's own rules still
-win where they differ: everything is a physical object, nothing is shown
-twice, every transition is animated (AGENTS.md, UI; `docs/ui-conventions.md`).
-Do not copy Arena's art, frames, effects or wording wholesale, and never commit
-a recording, a shot or a filmstrip: they stay outside the tree.
+Take everything but the skin: what is asked, in what order, with which
+defaults and ways to decline; what is highlighted and what that means; what
+moves, from where to where, how it eases and how long it takes; where things sit
+on the table; and the words, exactly. Beryl keeps its own skin (colors, type,
+icon drawings and frames, and full cards that tap), and differs from Arena only
+where `docs/ui-conventions.md` lists a numbered exception: check that list
+before copying Arena and before "fixing" a difference from it. What the
+recordings cannot show is built from the motions and prompt shapes Beryl
+already has and listed there under "Not seen in Arena".
+
+Where you are unsure what Arena does, find another instance rather than ask;
+where the user's eye is wanted, proceed on Arena and file a bead labelled
+`human` saying what to look at. Never commit a recording, a shot or a
+filmstrip: they stay outside the tree.
 
 ## A worked example
 

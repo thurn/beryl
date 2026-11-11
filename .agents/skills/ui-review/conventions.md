@@ -102,8 +102,9 @@ cites a known failure in Arena, MTGO, Forge or XMage.
   readable and its targets shown, nothing resolving during an animation?
 - **Pay or be countered** (`yesNo`, `ask: unlessPays`): "Pay {2} for Mana
   Leak?", untapped mana shown, Pay disabled when unaffordable.
-- **Countered**: does a countered spell visibly go to the graveyard, logged with
-  what countered it, or why it fizzled?
+- **Countered**: is a countered spell seen to leave as Arena shows it
+  (crumbling in place, before the spell that countered it), logged with what
+  countered it, or why it fizzled?
 - **Resolving choices**: when a resolving spell asks something, is the spell
   still shown by the prompt, though off the stack?
 
@@ -201,9 +202,8 @@ cites a known failure in Arena, MTGO, Forge or XMage.
 
 - **Latency**: every click acknowledged within about 100 ms; engine replies to
   the player's actions within about 200 ms.
-- **Animation**: short (150–400 ms), showing cause and effect (hand to stack to
-  battlefield, source to target, life changes), never blocking input or hiding
-  the result.
+- **Animation**: Arena's motion and timing at the same moment (the
+  `arena-video` skill), never blocking input or hiding the result.
 - **Stillness**: nothing moves that didn't change: hand order, permanent
   positions and panels stay put; a prompt or stack item doesn't reflow the
   board; an enlarged card overlays rather than shifts the layout.

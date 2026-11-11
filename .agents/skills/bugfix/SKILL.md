@@ -17,15 +17,20 @@ lands through CI, and returns the commit and verification evidence per report.
 The parent tracks all assigned reports, reviews that evidence, and handles bead
 closure and report archival. Use and extend `/specs` as needed.
 
-Surface questions about expected behavior during the initial review: read every
-report first, then ask material questions together before implementing fixes.
-Continue independent reports while answers are pending; only work that depends
-on an unanswered question waits.
+Nothing in this workflow waits for the user. Where a report leaves a real
+question, decide it (step 2), proceed, and file a bead labelled `human` saying
+what to look at. Nothing depends on that bead.
+
+MTG Arena is the reference for the UI's flow, motion, timing, table layout and
+wording (AGENTS.md, UI). Beryl differs from it only where
+[UI Conventions](../../../docs/ui-conventions.md) lists a numbered exception.
+The user's report wins over Arena and over an earlier report.
 
 A plausible code change is a candidate fix. For rules and UI reports, closure
 requires evidence that the player's requested behavior works, including the
 scope of the complaint beyond the pictured card. AI reports retain the
-blunder-catalog completion criteria below.
+blunder-catalog completion criteria below. Reports about motion, arrows and
+combat lines are banked for the stage rather than fixed (step 3).
 
 ## Where reports are
 
@@ -35,10 +40,10 @@ player select the area that shows the bug, and writes a folder under
 `beryl_session`'s `bugs.rs` writes it):
 
 - `report.md`: front matter (`kind`: `bug`, or `ai` for a play of the AI's the
-  player ticked "AI play" for; `status`: open, filed or done; `bead`; the game's
-  `seed`, `turn`, `step`, `decision`; the `commit` the app was built from,
-  marked if it had uncommitted changes; the page `url`), then the player's words
-  and how to reproduce it.
+  player ticked "AI play" for; `status`: open, filed, banked or done; `bead`;
+  the game's `seed`, `turn`, `step`, `decision`; the `commit` the app was built
+  from, marked if it had uncommitted changes; the page `url`), then the player's
+  words and how to reproduce it.
 - `screenshot.png`: the area they selected. `window.png`: the whole window at
   that instant, animations frozen mid-flight and hovers held. Look at both with
   the Read tool.
@@ -67,10 +72,10 @@ reproduces it.
 
 ## The loop
 
-1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
-   files a bead for each open one (type bug, label `bug-report`, priority 1)
-   holding the report's path and the player's words, and writes the bead into
-   the report's front matter. `bd list --label bug-report --all --limit 0`
+1. **File them.** `just bugs` lists open and filed reports, then the banked
+   ones apart. `just bugs file` files a bead for each open one (type bug, label
+   `bug-report`, priority 1) holding the report's path and the player's words,
+   and writes the bead into the report's front matter. `bd list --label bug-report --all --limit 0`
    includes closed history and work left in progress. Reconcile the local
    reports with the beads and establish the reports in scope for this run; do
    not silently omit blocked, deferred, or interrupted work. Do not take over a
@@ -84,8 +89,8 @@ reproduces it.
    - What the player saw, the experience they want, and observable acceptance
      criteria covering every part of their complaint.
    - The intended scope: a named card may illustrate a shared interaction. For
-     example, a trigger appearing abruptly is a complaint about its visible
-     journey from the source, not merely whether the trigger exists. Infer scope
+     example, a chooser that opens with the wrong button on one card is a
+     complaint about that prompt shape on every card that opens it. Infer scope
      from the player's words and evidence; do not turn a local preference into
      an unrelated redesign.
    - Related open and closed reports and fixing commits. For a repeat report,
@@ -101,15 +106,55 @@ reproduces it.
    might mean before the exile chooser opens or before selected cards depart;
    do not defer that question until a flight-order patch is already underway.
 
-   Ask unresolved material questions together now, preferably asynchronously.
-   Do not ask the player to repeat a clear expectation. Record which acceptance
-   criteria depend on each answer, and continue reproduction, independent
-   fixes, and verification while waiting. A pending question on one report
-   does not block the rest of the run. Do not implement a guessed narrower
-   interpretation and count it as completion. If reproduction later reveals a
-   genuinely new ambiguity, ask promptly and pause only its dependent work.
+   Settle each such question yourself, in this order: what the player's words
+   and screenshot show; what Arena does at the same moment (the `arena-video`
+   skill: a still or filmstrip settles it); UI Conventions; the nearest
+   behavior Beryl already has. Take the interpretation that covers the whole
+   complaint, not a narrower one that is easier to build, record it and its
+   evidence in the bead, and proceed. Then file one bead labelled `human` for
+   the run listing each question, the interpretation taken and the evidence
+   for it, so the user can overrule it with a new report. Nothing depends on
+   that bead.
 
-3. **Reproduce.** Pick by what went wrong:
+3. **Triage** each UI report by what it is about:
+
+   - **script**: what plays, in what order, from where;
+   - **verb**: how a motion feels (its timing, path, easing);
+   - **shape**: a prompt (its buttons, defaults, ways to decline);
+   - **mark**: what an outline, glow or arrow means;
+   - **layout**: where things sit on the table;
+   - **skin**: colors, type, icons and frames, which stay Beryl's;
+   - **wording**: a label or prompt's text, which is Arena's exactly.
+
+   Rules and AI reports stay as they are. Record the kind on the bead.
+
+   **Bank** a report about motion, arrows or combat lines (most script, verb
+   and mark reports). The stage replaces the code that draws them
+   (`ui/src/game/beats.ts`, `CardLayer.tsx`, `Board.tsx`'s flights and arrows,
+   `ui/src/components/Stack.tsx`, `Piles.tsx`, `ManaFlow.tsx`): do not fix it
+   there. Instead, through a worktree as AGENTS.md says:
+
+   - Reproduce the state as a board in `rust/crates/beryl_cli/src/boards.rs`
+     named `banked-<bead>`, with a comment above it saying what the player
+     reported and what should happen instead.
+   - Add a fixture of the same name to `ui/fixtures.json` that stops on the
+     moment, and a shot of the same name to `ui/shots.json` that shows it.
+   - Register it as a pending case in `tools/src/beryl_tools/verdicts.py`'s
+     `PENDING`:
+     `Pending(check="shots:banked-<bead>", board="banked-<bead>", bead="<bead>")`.
+     It runs and is logged but fails no run; `just ci-report --pending` lists
+     the cases and any that now pass. The stage's bead that makes one pass
+     removes the entry and closes the report.
+   - Land it with `enact push`, then `just bugs bank <bead>`, which marks the
+     report banked and labels the bead `banked`. The bead stays open: note on
+     it the evidence (Arena's moment, Beryl's) and the acceptance the stage
+     must meet. Skip banked beads in later bugfix runs.
+
+   Fix everything else as now: shape, layout, skin and wording reports, a
+   motion report whose cause is outside the code above (a wrong view or event
+   from the session, say), and every rules and AI report.
+
+4. **Reproduce.** Pick by what went wrong:
 
    - An AI play (`kind: ai`, bead label `ai-play`): start from the digest and
      `searches.json`, then review the position and rerun the recorded agent with
@@ -121,7 +166,7 @@ reproduces it.
        its replay and add the case to `data/blunders.json`. Verify that
        `just blunders --only <id>` reaches the reported decision. Land the case
        through the worktree workflow, then close and archive the report with
-       that commit as in step 5. The ladder owns later changes to the AI.
+       that commit as in step 6. The ladder owns later changes to the AI.
      - Otherwise, or if the evidence is inconclusive, record your reasoning in
        the bead and return it to the reporter through the human review queue
        below.
@@ -142,7 +187,7 @@ reproduces it.
    - Errors: search `journal.jsonl` and `ui.json` for `"level":"error"`,
      `"warn"`, `panic` and `refused`.
 
-4. **Fix and verify** rules and UI bugs through a worktree as AGENTS.md says.
+5. **Fix and verify** rules and UI bugs through a worktree as AGENTS.md says.
    Claim the bead (`bd update <bead> --status in_progress`) while you work it.
    Identify the shared mechanism responsible for the complaint and fix it at
    that level. Choose representative neighboring cases that could expose the
@@ -156,32 +201,42 @@ reproduces it.
    unexplained inability to reproduce is not evidence of a fix.
 
    Add a regression test that fails before the fix and asserts the player's
-   expectation (a scenario, session test, or ui-test). For example, an arrow
-   timeout test does not establish that arrows never follow cards into the
-   graveyard: exercise the zone transition and check the forbidden behavior. A
-   rules engine bug also gets its `docs/bugs.md` entry.
+   expectation (a scenario, session test, or ui-test). For example, a test that
+   a chooser opens does not establish that its default button is Arena's:
+   exercise the prompt and check the forbidden behavior. A UI fix also adds the
+   broken state as a fixture or spec moment for the generic audits (AGENTS.md,
+   Checks). A rules engine bug also gets its `docs/bugs.md` entry.
+
+   When the user's report asks for something Arena does differently, or
+   reverses an earlier report, build what it asks, and add, change or remove
+   the exception in `data/ui-conventions.json` in the same change (then
+   `just conventions` regenerates `docs/ui-conventions.md`). Name the report's
+   bead in the entry.
 
    For UI complaints, inspect the actual interaction headlessly after the fix,
-   including the neighboring cases. For motion, use a filmstrip and motion audit
-   or a driven capture spanning before, during, and after the transition. Check
-   its origin, path, timing, destination, and any duplicate or lingering visuals
-   relevant to the complaint. A final screenshot, passing typecheck, engine
-   event, or DOM presence alone cannot prove an animation feels or behaves as
-   requested. Use the `specs` skill for card moments, and extend its coverage
-   when necessary.
+   including the neighboring cases, and put it beside Arena's: film the same
+   moment in a recording (the `arena-video` skill) and in Beryl (the `specs`
+   skill's `--film`, or `just ui-shots`), and compare what is shown, when, in
+   what words and with which buttons. A final screenshot, passing typecheck,
+   engine event, or DOM presence alone cannot prove the screen behaves as
+   requested. Extend the specs' coverage when necessary.
 
    Record the reproduction, shared cause, tests and commands, and observed
    result against each acceptance criterion in the bead. Keep remaining
    uncertainty explicit; a partial fix leaves the report open.
 
-5. **Close** it only after the above verification and required CI pass and
-   `enact push` has landed the fix, or the AI blunder case meets step 3:
+6. **Close** it only after the above verification and required CI pass and
+   `enact push` has landed the fix, or the AI blunder case meets step 4. Agents
+   close their own reports. The evidence for closing a UI report, recorded on
+   its bead, is an Arena still or filmstrip beside Beryl's at the same moment,
+   or, where Arena has no such moment, a hand-written expectation (the test
+   above, or the UI Conventions entry it follows). Then:
    `bd close <bead> --reason "<what was wrong>"`, then
    `just bugs done <bead> --commit <sha>`, which marks the report done and moves
    it to `done/`, then `enact sync`.
 
-If the reported behavior appears to be working as intended, or an AI report
-needs the reporter’s judgment, use
+If a rules report describes behavior the Comprehensive Rules require, or an AI
+report needs the reporter’s judgment, use
 `bd note <bead> "<evidence and expected behavior>"`, then
 `bd update <bead> --status open --add-label human` and `enact sync`. Leave it in
 the `bd human list` queue for the reporter to review and skip it in later bugfix
@@ -191,13 +246,14 @@ report done with `just bugs done <bead>`, and run `enact sync`. If the reporter
 identifies a bug or confirms a blunder, remove the `human` label and resume the
 corresponding workflow.
 
-A rules or UI report you cannot reproduce, or whose expected behavior is still
-unclear, stays filed. Use `bd note <bead> "..."` to record what you tried.
+A UI report is never working as intended merely because Arena does the same:
+the user's report wins (step 5). A rules or UI report you cannot reproduce stays
+filed. Use `bd note <bead> "..."` to record what you tried.
 
 Before ending the run, reconcile its report list with the final bead and local
 report states. Give the reporter a concise outcome for every report in scope:
-verified fixed (with commit and evidence), cataloged AI blunder, awaiting human
-input, unresolved/partially fixed, or untouched (with reason). For unfinished
-work, record the remaining acceptance criteria and next action in the bead. Do
-not let a successful subset stand in for completing the run, and do not archive
-a report merely because a related change landed.
+verified fixed (with commit and evidence), banked (with its board), cataloged
+AI blunder, awaiting human input, unresolved/partially fixed, or untouched (with
+reason). For unfinished work, record the remaining acceptance criteria and next
+action in the bead. Do not let a successful subset stand in for completing the
+run, and do not archive a report merely because a related change landed.

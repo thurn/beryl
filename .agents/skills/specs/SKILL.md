@@ -61,7 +61,10 @@ show the mechanics it shares.
    room, a button sliding in). About 20 s a card; the JSON with every event, ok
    ones too, lands in `$BERYL_CACHE/spec-motion/`. Taps, untaps and `ui`
    findings of a scripted play are `minor`: printed only with `--minor`. A
-   finding is a lead, not a verdict: look at the film before fixing.
+   finding is a lead, not a verdict: look at the film, and at Arena's motion at
+   the same moment, before fixing. Arena's tokens appear at their slot and its
+   permanents dissolve where they are (UI Conventions, "Settled as Arena"), so
+   a `still` or `instant` there can be right.
 
 4. **Watch it.** `just specs --film <card> [--moment M]` writes one sheet per
    moment, `$BERYL_CACHE/spec-film/<checkout>/<card>/<moment>.png`: the bursts
@@ -275,18 +278,26 @@ Fix it in this order, preferring the general fix:
    cut or dedupe in `from_scenario`/`generate`, a condition `snapshot` records,
    or a scripted-seat rule in `boards.rs`'s `Scripted`. Say which other cards'
    moments it changed.
-3. **A general fix in the UI**: an animation belongs to an event kind or a zone
-   change, never to one card, so fix it where every card with that event gets it
-   (`ui/src/game/playback.ts` holds and beats, `CardLayer.tsx` card motion), and
-   audit a few other cards with the same event.
+3. **A general fix in the UI**: a prompt, layout or wording belongs to a shape
+   or a zone, never to one card, so fix it where every card with that shape
+   gets it, and audit a few other cards that open it. A wrong motion, arrow or
+   combat line is banked for the stage, not fixed in the code it replaces
+   (`ui/src/game/beats.ts`, `playback.ts`'s holds, `CardLayer.tsx`): the
+   `bugfix` skill, step 3, says how.
 
 There are no hand-written moments: a case only one card has is a scenario in its
 file. A fixed engine bug gets its entry in `docs/bugs.md`.
 
-## Judging against the design
+## Judging against Arena
 
-Beyond motion, judge each moment from both seats against the design philosophy
-in `.agents/skills/ui-review/SKILL.md`: common case one gesture, the client does the
-bookkeeping, ask once in context, Arena as the reference, show don't tell, few
-words. Report what each moment shows from each seat, what you fixed, which other
-cards' moments changed, and any moment you could not get and why.
+Beyond motion, judge each moment from both seats against Arena and
+[UI Conventions](../../../docs/ui-conventions.md): find the same kind of moment
+in the recordings with the `arena-video` skill and compare what is asked, in
+what words, with which buttons, what is highlighted, and what moves where and
+for how long. Beryl differs only where UI Conventions lists a numbered
+exception; any other difference is a finding, cited with the recording id and
+time. Where the recordings show nothing, judge by the design philosophy in
+`.agents/skills/ui-review/SKILL.md`, and where the user's eye is wanted, proceed
+and file a bead labelled `human` saying what to look at. Report what each moment
+shows from each seat, what you fixed or banked, which other cards' moments
+changed, and any moment you could not get and why.

@@ -84,8 +84,9 @@ NEUTRAL = ("docs/*", ".beads/*", "*.md")
 @dataclass(frozen=True)
 class Pending:
     """A banked UI report (plan K30): the check that shows it, the board in beryl_cli's
-    boards.rs that reproduces it, and the report's bead. The stage's bead that makes it pass
-    removes the entry, and the check becomes a normal one."""
+    boards.rs that reproduces it, and the report's bead. The bugfix skill names the board, its
+    fixture and its shot `banked-<bead>`, so the check is `shots:banked-<bead>`. The stage's
+    bead that makes it pass removes the entry, and the check becomes a normal one."""
 
     check: str
     board: str

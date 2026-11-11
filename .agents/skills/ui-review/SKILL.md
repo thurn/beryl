@@ -35,21 +35,28 @@ Measure the UI against three references and report every gap:
 1. **The player's intent.** At every moment a player wants to know: what just
    happened, whose move it is, what can I do, and what will this do. Anything
    that leaves one of those unanswered is a defect.
-2. **The design philosophy below.** It is the project owner's, and it outranks
-   everything else here.
+2. **MTG Arena and [UI Conventions](../../../docs/ui-conventions.md).** Arena
+   is the reference for flow, motion, timing, table layout and wording
+   (AGENTS.md, UI); Beryl keeps its own skin. Beryl differs from Arena only
+   where UI Conventions lists a numbered exception, and follows each entry
+   there. Any other difference from what Arena does at the same moment is a
+   finding: find the moment with the `arena-video` skill and cite its
+   recording id and time. The design philosophy below is the project owner's:
+   judge by it what Arena and UI Conventions do not settle, and how well Beryl
+   does what they do.
 3. **Strong digital Magic clients.** [conventions.md](conventions.md) lists what
    good clients do for each part of the game. When Beryl does less, or asks
    more of the player, that is a finding. It is a defect if a player would be
-   confused or blocked, and a design note otherwise. The checklist describes
-   what clients do. Where it accepts something the philosophy rejects, such as
-   an extra prompt or a stop, follow the philosophy.
+   confused or blocked, and a design note otherwise. Where the checklist and
+   Arena differ, Arena wins.
 
 Do not dismiss something because it is "technically correct" per the rules or
 "probably intended". A rules-correct UI that a player cannot follow is broken.
 
 ## Design philosophy
 
-Beryl should feel seamless. Judge every flow by these principles:
+Beryl should feel seamless. Judge every flow by these principles, within what
+Arena and UI Conventions settle:
 
 - **The common case is one gesture.** The things a player does all game
   (playing a land, casting a spell, attacking, blocking, passing) should take
@@ -66,31 +73,26 @@ Beryl should feel seamless. Judge every flow by these principles:
   where the action happens, with the board in view and each option saying what
   it does. One intent should not become a chain of modal prompts, and options
   should not be abstract labels.
-- **Convention over invention.** MTG Arena is the primary reference for how
-  standard things look and behave, then MTGO. A player who knows Arena should
-  never have to learn a Beryl-specific way to do a standard thing. Beryl may
-  depart from Arena only where a player would see the result as clearly
-  better. Report each departure and say whether it is better.
+- **Arena, not invention.** A player who knows Arena should never have to
+  learn a Beryl-specific way to do a standard thing. Report each departure from
+  Arena that UI Conventions does not list as an exception, with Arena's moment
+  beside Beryl's. Where the recordings show nothing, Beryl builds it from the
+  motions and prompt shapes it already has, listed under "Not seen in Arena";
+  a new look there is a finding.
 - **Show, don't make them infer.** Whatever happens is shown happening, at a
   pace a player can follow. Whatever matters is visible without a hunt.
-- **Few words.** On-screen text is a cost. Where an icon, a highlight or the
-  board itself can say it, words are noise. Flag text that could be half as
-  long.
+- **Arena's words.** Labels and prompts use Arena's wording exactly. Where
+  Arena shows no label, on-screen text is a cost: flag text that could be half
+  as long.
 - **The opponent's cards read as clearly as yours.** Every spell, ability,
   draw, discard, mill, search and counter the opponent makes is shown to the
-  player as plainly as their own: the card or ability comes up large enough to
-  read, and each card it moves travels visibly to where it goes.
-- **Everything appears with animation.** Nothing pops in or blinks out: cards,
-  choices, prompts and counters arrive from where they come from (a mode
-  option out of its card, a drawn card out of the library) and leave toward
-  where they go.
-- **Picking how to play a card is picking a card.** Modes, alternate costs
-  (evoke, overload), cycling and ability choices appear as full-size cards
-  with art in the middle of the screen, out of the source card, never as a
-  text prompt.
-- **One button system, bottom right.** Every action button shares one design
-  and sits in the bottom-right corner, with Resolve. No buttons in the middle
-  of the screen.
+  player at least as plainly as Arena shows it from the bottom seat.
+- **Motion is Arena's.** What moves, from where to where, how it eases and how
+  long it takes match Arena at the same moment, as do what appears or leaves
+  in place (UI Conventions, "Settled as Arena"). A motion Arena has and Beryl
+  lacks is a finding; so is one Beryl adds.
+- **One button system.** Every action button shares one design and sits where
+  Arena puts it, in Arena's order for that prompt.
 
 A flow that works but breaks one of these principles is a finding. It is Major
 when it affects something players do every turn, and Design otherwise.
