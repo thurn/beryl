@@ -45,7 +45,8 @@
 //!   the spec page (`just specs`, [`specs::serve`]); `beryl_cli specs-check [card...]` lists
 //!   each generated moment and the candidates generation skipped;
 //!   `beryl_cli specs-describe [--views] <card> [moment]` prints what each moment shows from
-//!   each seat, each view whole with `--views` ([`specs`]).
+//!   each seat, each view whole with `--views`; `beryl_cli specs-script <card> [moment]`
+//!   prints each seat's scripts, view by view ([`specs`]).
 
 mod agreement;
 mod anchor_replay;
@@ -94,6 +95,7 @@ const USAGE: &str = "usage:
   beryl_cli specs-check [card...]
   beryl_cli script-check <definitions.json> [check...]
   beryl_cli specs-describe [--views] <card> [moment]
+  beryl_cli specs-script <card> [moment]
   beryl_cli blunder-hunt [--hours 6] [--out DIR] [--seed N] [--inspect CASE.json]
   beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]
   beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]
@@ -150,6 +152,12 @@ fn main() -> ExitCode {
         }
         [command, card, moment] if command == "specs-describe" => {
             specs::describe(std::slice::from_ref(card), Some(moment), false)
+        }
+        [command, card] if command == "specs-script" => {
+            specs::scripts(std::slice::from_ref(card), None)
+        }
+        [command, card, moment] if command == "specs-script" => {
+            specs::scripts(std::slice::from_ref(card), Some(moment))
         }
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {

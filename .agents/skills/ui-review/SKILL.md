@@ -237,7 +237,9 @@ At every step, do this:
 2. **Check against the truth.** Compare that with `probe.timeline()` and the
    open decision. Every disagreement is a finding: an event you could not see,
    a highlighted card that the decision does not offer, an offered option with
-   no visible way in, a step or turn shown wrongly.
+   no visible way in, a step or turn shown wrongly. For a wrong motion, read
+   the script the session sent (`just specs --script <card>`, the `specs`
+   skill): it says whether the session or the stage is at fault.
 3. **Act as a player would.** Use the pointer, at visible points, and the
    gestures the UI seems to invite (drag for cards, click for buttons). If the
    way to do something is not obvious, record that before you read the code to

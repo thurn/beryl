@@ -37,9 +37,9 @@ impl From<Unreached> for String {
     }
 }
 
-/// [`reach`], with the views the viewer was shown on the way once the setup was done, each
-/// with the events it animates.
-fn trace(
+/// [`reach`], with the views the viewer was shown once the setup was done, each with the
+/// events it animates and its script: the first, shown at once, and the last, [`reach`]'s.
+pub(super) fn trace(
     moment: &'static Moment,
     view: View,
 ) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), Unreached> {
@@ -52,7 +52,7 @@ fn trace(
     })
     .map_err(Unreached::Failed)?;
     let mut shown = false;
-    let mut events = Vec::new();
+    let mut views = Vec::new();
     loop {
         let (update, phase) = received
             .recv_timeout(std::time::Duration::from_secs(30))
@@ -61,15 +61,14 @@ fn trace(
         if let Some(failure) = boards::lock(&progress).failure.take() {
             return Err(Unreached::Failed(failure));
         }
-        // The first view shown animates nothing (`specs-serve` clears its events).
-        if shown {
-            events.push(update.view.clone());
-        }
         shown |= phase != Phase::Setup;
+        if shown {
+            views.push(update.view.clone());
+        }
         match update.view.status {
             // A game won or lost once shown is a moment too: its end.
             Status::Over { .. } if shown && boards::lock(&progress).done() => {
-                return Ok((update.view, events));
+                return Ok((update.view, views));
             }
             Status::Over { .. } | Status::Stopped => {
                 return Err(Unreached::Failed(match boards::lock(&progress).stalled() {
@@ -81,7 +80,7 @@ fn trace(
                 if !shown {
                     return Err(Unreached::Failed("nothing was shown".to_owned()));
                 }
-                return Ok((update.view, events));
+                return Ok((update.view, views));
             }
             _ => {}
         }
@@ -91,7 +90,7 @@ fn trace(
 /// A view's events in a line, each its kind and fields, objects by name: "turn 5 your
 /// postcombatMain: zoneChange Island exile->graveyard (effect); tokensCreated you [Treasure]".
 /// None if it has none but steps beginning, which every view of a turn passing has.
-fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
+pub(super) fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
     let name = |slot: &serde_json::Value| {
         slot.as_u64()
             .and_then(|s| view.objects.iter().find(|o| u64::from(o.slot) == s))
@@ -149,18 +148,22 @@ fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
             parts.join(" ")
         })
         .collect();
+    (!events.is_empty()).then(|| format!("{}: {}", turn_line(view), events.join("; ")))
+}
+
+/// A view's turn and step as a line begins with them: "turn 5 your postcombatMain".
+pub(super) fn turn_line(view: &beryl_session::PlayerView) -> String {
     let turn = &view.turn;
     let whose = if turn.active == beryl_session::protocol::Side::You {
         "your"
     } else {
         "their"
     };
-    let step = serde_json::to_value(turn.step)
-        .ok()
-        .map(|v| text(&v))
-        .unwrap_or_default();
-    (!events.is_empty())
-        .then(|| format!("turn {} {whose} {step}: {}", turn.number, events.join("; ")))
+    let step = match serde_json::to_value(turn.step) {
+        Ok(serde_json::Value::String(step)) => step,
+        _ => String::new(),
+    };
+    format!("turn {} {whose} {step}", turn.number)
 }
 
 /// One view as `specs-describe --views` prints it: its turn and events, what the viewer is
@@ -295,9 +298,10 @@ pub fn describe(cards: &[String], moment: Option<&str>, views: bool) -> Result<(
                 println!("plays: {a:?}");
             }
             for view in View::ALL {
-                let (shown, events) = trace(m, view)?;
+                let (shown, views_shown) = trace(m, view)?;
                 println!("{}:", view.name());
-                for (n, v) in events.iter().enumerate() {
+                // The first view shown animates nothing (`specs-serve` clears its events).
+                for (n, v) in views_shown.iter().skip(1).enumerate() {
                     if views {
                         println!("  view {}", n + 1);
                         for line in view_lines(v) {

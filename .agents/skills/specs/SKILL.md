@@ -47,6 +47,15 @@ show the mechanics it shares.
    asks, the stack bottom first, and each side's battlefield, hand, graveyard,
    exile and library size, as that seat sees them (a hidden card is `?`).
 
+   `--script` instead prints each seat's scripts, view by view: what the session
+   told the stage to show, one step a line (`fly`, `vanish`, `+point`, `tap`,
+   `streak`, ...; `&` joins a step to the beat above, `<-` names its cause;
+   `beryl_session`'s `script/text.rs` documents the form). Read it first for any
+   wrong motion, arrow, combat line or mana flow, before filming: a wrong script
+   (a missing, extra or misordered step, a wrong cause, an arrow ended late) is a
+   session bug, fixed in the builder (`beryl_session/src/script/`); a right
+   script played wrongly is a stage bug (`ui/src/stage/`).
+
 3. **Audit its motion.** `just specs --motion <card> [--moment M]` plays each
    moment from both seats with motion on and judges every event: `ok` (moved,
    faded or animated long enough, visibly), `instant` (a jump), `unseen` (moved
@@ -184,7 +193,8 @@ both seats, for a quick look at end states: `--moment M` one moment,
 
 For ui-test and ui-shots: `just ui-test <filter...>` runs only the checks whose
 titles contain a filter, and `just ui-shots --views <fixture>` lists a
-fixture's views with the index a route's `&at=` takes. A scripted board that
+fixture's views with the index a route's `&at=` takes, each with its script's
+steps in brief. A scripted board that
 stalls names the actions still waiting and the last decision one fit no
 candidate of (a target that resolved to nothing offered). A board's fixture
 records from seat 1 with `"until": "first <kind> decision for seat 1"`.

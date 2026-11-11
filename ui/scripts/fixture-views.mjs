@@ -5,8 +5,39 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+/** A script step in brief: its verb (`+` or `-` before one that begins or ends a span) and
+ * what it acts on, by name: "fly Counterspell", "+point hostile-target", "set turn". The full
+ * text form is `beryl_session::script`'s (`just specs --script`). */
+function stepBrief(step, name) {
+    const a = step.act;
+    const subject = (s) =>
+        s.kind === "object"
+            ? name(s.slot)
+            : s.kind === "ability"
+              ? `a${s.id}`
+              : s.player;
+    const what = {
+        vanish: () => subject(a.subject),
+        dwell: () => subject(a.subject),
+        emerge: () => `a${a.id}`,
+        strike: () => name(a.source),
+        streak: () => subject(a.to),
+        count: () =>
+            `${a.tally.kind} ${a.tally.object ? name(a.tally.object.slot) : a.tally.player}`,
+        set: () => a.fact.kind,
+        announce: () => a.notice.kind,
+        point: () => a.arrow,
+        mark: () => a.mark,
+        lift: () => a.handling,
+    }[a.verb];
+    const on = what ? what() : a.object ? name(a.object.slot) : "";
+    const span = a.span === "begin" ? "+" : a.span === "end" ? "-" : "";
+    return `${span}${a.verb} ${on}`.trim();
+}
+
 /** Each view of `fixture` (a recording: `{ messages }`): its `at` index, turn, step, who
- * holds priority, what the viewer is asked (or the game's status) and its events in brief. */
+ * holds priority, what the viewer is asked (or the game's status), its events and its
+ * script's steps in brief (beats apart, a beat's steps joined by `&`). */
 export function summary(fixture) {
     return fixture.messages
         .filter((m) => m.kind === "event")
@@ -27,12 +58,19 @@ export function summary(fixture) {
                     if ("slot" in e) return `${e.kind} ${name(e.slot)}`;
                     return e.kind;
                 });
+            const steps = [
+                ...(v.script?.reset ? ["reset"] : []),
+                ...(v.script?.beats ?? []).map((beat) =>
+                    beat.map((step) => stepBrief(step, name)).join(" & "),
+                ),
+            ];
             return {
                 at,
                 turn: `turn ${v.turn.number} ${v.turn.active} ${v.turn.step}`,
                 status,
                 stack: v.stack.length,
                 events,
+                steps,
             };
         });
 }
@@ -51,5 +89,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         console.log(
             `at=${String(v.at).padEnd(4)} ${v.turn}  ${v.status}${stack}${events}`,
         );
+        if (v.steps.length) console.log(`        steps ${v.steps.join(" | ")}`);
     }
 }

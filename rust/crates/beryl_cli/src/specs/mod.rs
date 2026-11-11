@@ -21,6 +21,7 @@ mod describe;
 mod listing;
 mod playground;
 pub mod reviews;
+mod script;
 pub mod serve;
 mod start;
 
@@ -34,6 +35,7 @@ use beryl_session::Seat;
 
 use describe::reach;
 pub use describe::{Unreached, describe};
+pub use script::scripts;
 #[cfg(test)]
 pub(crate) use start::FAULTS;
 pub use start::{Phase, start};

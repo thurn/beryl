@@ -134,6 +134,9 @@ reproduces it.
    `ui/src/components/Stack.tsx`, `Piles.tsx`, `ManaFlow.tsx`): do not fix it
    there. Instead, through a worktree as AGENTS.md says:
 
+   - Read the moment's script first (`just specs --script <card>`, or the
+     steps `just ui-shots --views <fixture>` lists; the `specs` skill, step 2):
+     a wrong script is a session bug to fix in the builder now, not banked.
    - Reproduce the state as a board in `rust/crates/beryl_cli/src/boards.rs`
      named `banked-<bead>`, with a comment above it saying what the player
      reported and what should happen instead.

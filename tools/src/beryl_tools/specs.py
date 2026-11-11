@@ -7,6 +7,8 @@ runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 - `--check`: lists every generated moment and the candidates generation skipped;
 - `--describe <card> [--moment M]`: what each moment shows from each seat, as text;
 - `--views <card> [--moment M]`: each view shown from each seat, its events, stack and zones;
+- `--script <card> [--moment M]`: each seat's scripts, view by view, one step a line: what the
+  session told the stage to show, to read before filming (a wrong script is the session's bug);
 - `--film`: one sheet per moment of its playout from both seats (ui/scripts/film.mjs);
 - `--motion`: audits that every event animates clearly for both seats (ui/scripts/motion.mjs);
 - `--shots`: a settled screenshot of every moment from both seats (ui/scripts/specs.mjs);
@@ -330,14 +332,20 @@ def specs(args: argparse.Namespace) -> int:
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
-    if args.describe or args.views:
+    if args.describe or args.views or args.script:
         if len(args.cards) != 1:
-            print("specs: --describe and --views take one card", file=sys.stderr)
+            print(
+                "specs: --describe, --views and --script take one card", file=sys.stderr
+            )
             return 2
         moment = [args.moment] if args.moment else []
-        views = ["--views"] if args.views else []
+        command = (
+            ["specs-script"]
+            if args.script
+            else ["specs-describe", *(["--views"] if args.views else [])]
+        )
         return subprocess.run(
-            [str(binary), "specs-describe", *views, args.cards[0], *moment],
+            [str(binary), *command, args.cards[0], *moment],
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
@@ -406,6 +414,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--views",
         action="store_true",
         help="each view shown from each seat: its events, stack and zones",
+    )
+    mode.add_argument(
+        "--script",
+        action="store_true",
+        help="each seat's scripts, view by view, as text",
     )
     mode.add_argument(
         "--film", action="store_true", help="a sheet of each moment's playout"
