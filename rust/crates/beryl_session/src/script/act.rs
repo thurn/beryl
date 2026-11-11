@@ -86,7 +86,8 @@ pub enum Act {
     /// A streak from `from` lands on `to`: mana on what it pays for, or noncombat damage on
     /// what it hits, whose record `object` is. Mana that stays in a pool is a `count`.
     Streak {
-        /// None when the source has no place on the table.
+        /// A player, for mana out of their pool. None when the source has no place on the
+        /// table.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         from: Option<Subject>,

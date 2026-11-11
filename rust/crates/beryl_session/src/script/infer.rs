@@ -7,7 +7,8 @@
 
 use super::table::{Entry, Table};
 use crate::protocol::{
-    AskView, CardHandling, Counter, GameEvent, PlayerView, Side, StackItem, Status, Why, ZoneName,
+    AskView, CardHandling, Counter, GameEvent, Kind, PlayerView, Side, StackItem, Status, Why,
+    ZoneName,
 };
 
 /// What a step comes from, before the builder names it.
@@ -32,6 +33,27 @@ pub(super) struct Told {
     /// It happens with the event before it that shows anything.
     pub together: bool,
     pub show: Show,
+    /// What a `Mana` event's mana pays for.
+    pub pays: Pays,
+    /// What it casts, activates or pays into takes the mana its player's pool lost since the
+    /// view before: the first of a player's in a script, with no step ending in it to empty
+    /// the pool ([CR 500.5](https://yawgatog.com/resources/magic-rules/#R5005): "As a step
+    /// or phase ends ... any unspent mana left in a player's mana pool empties").
+    pub drains: bool,
+}
+
+/// What mana is spent on, as `spentOn` in `ManaFlow.tsx` read it out of the events' order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Pays {
+    /// Nothing in this script: it is left in its player's pool.
+    Pool,
+    /// The spell cast from the card in this slot.
+    Spell(u16),
+    /// The ability the event at this index announces, or the resolving spell or ability the
+    /// payment at this index names.
+    Event(usize),
+    /// The spell or ability in the making on top of the stack.
+    Top,
 }
 
 /// How an event shows, beyond what its kind says.
@@ -54,6 +76,8 @@ pub(super) const TOLD: Told = Told {
     cause: Origin::Rules,
     together: false,
     show: Show::Plain,
+    pays: Pays::Pool,
+    drains: false,
 };
 
 /// What each of `view`'s events is guessed to be, between the tables `before` and `after`.
@@ -69,6 +93,7 @@ pub(super) fn tell(
     let events = &view.events;
     let mut told = vec![TOLD; events.len()];
     causes(events, before, after, resolving, &mut told);
+    payments(events, after, making(view), &mut told);
     let pregame = before.turn.number == 0;
     let mut previous = None;
     let mut striking = false;
@@ -149,6 +174,91 @@ fn show(events: &[GameEvent], i: usize, after: &Table, looked: &[u16], pregame: 
         _ => false,
     };
     if still { Show::Still } else { Show::Plain }
+}
+
+/// Whether `view` has its seat in the middle of casting a spell, activating an ability or
+/// paying as one resolves, with the mana it makes going into what is on top of the stack
+/// (`making` in `ManaFlow.tsx`): a cost chooser can follow the payment, before any event
+/// announces the spell.
+pub(super) fn making(view: &PlayerView) -> bool {
+    matches!(
+        &view.status,
+        Status::Deciding { decision }
+            if decision.kind == Kind::ManaPayment
+                || (decision.cancellable && decision.kind != Kind::Priority)
+    )
+}
+
+/// Who pays as `event` says: the player casting, activating, or paying into a resolution.
+fn payer(event: &GameEvent) -> Option<Side> {
+    match *event {
+        GameEvent::Cast { controller, .. }
+        | GameEvent::Ability {
+            item:
+                StackItem::Ability {
+                    controller,
+                    triggered: false,
+                    ..
+                },
+            ..
+        } => Some(controller),
+        GameEvent::ResolutionPayment { player, .. } => Some(player),
+        _ => None,
+    }
+}
+
+/// What each `Mana` event's mana pays for, and which events take what a pool lost. A cost is
+/// paid as the last step of casting a spell or activating an ability, before either is
+/// announced here ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The
+/// player pays the total cost in any order"), so mana is spent on its player's next cast,
+/// activation or payment in the script; with none, on the spell being cast as the view
+/// shows; else it is left in the pool.
+fn payments(events: &[GameEvent], after: &Table, making: bool, told: &mut [Told]) {
+    let empties = events
+        .iter()
+        .any(|e| matches!(e, GameEvent::StepBegins { .. }));
+    let mut drained = Vec::new();
+    for (i, event) in events.iter().enumerate() {
+        if let GameEvent::Mana { player, .. } = *event {
+            told[i].pays = paid_for(events, i, player, after, making);
+        } else if let Some(player) = payer(event)
+            && !empties
+            && !drained.contains(&player)
+        {
+            told[i].drains = true;
+            drained.push(player);
+        }
+    }
+}
+
+fn paid_for(events: &[GameEvent], i: usize, player: Side, after: &Table, making: bool) -> Pays {
+    let next = (i + 1..events.len()).find(|&j| payer(&events[j]) == Some(player));
+    if let Some(j) = next {
+        return match events[j] {
+            GameEvent::Cast { slot, .. } => Pays::Spell(slot),
+            _ => Pays::Event(j),
+        };
+    }
+    if making && player == Side::You {
+        return Pays::Top;
+    }
+    // A spell this script puts on the stack, whose cast is not yet announced.
+    let cast = |slot: u16| {
+        let puts = |e: &GameEvent| matches!(*e, GameEvent::ZoneChange { slot: s, to: ZoneName::Stack, reason: Why::Cast, .. } if s == slot);
+        events.iter().any(puts)
+            && after
+                .objects
+                .get(&slot)
+                .is_some_and(|o| o.controller == player)
+    };
+    after
+        .stack
+        .iter()
+        .find_map(|entry| match entry.item {
+            StackItem::Spell { slot, .. } if cast(slot) => Some(Pays::Spell(slot)),
+            _ => None,
+        })
+        .unwrap_or(Pays::Pool)
 }
 
 /// Whether `event` ends the costs before it: what they paid for is announced, or something

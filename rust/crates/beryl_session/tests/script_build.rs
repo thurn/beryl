@@ -2,61 +2,15 @@
 //! both seats: small scripted positions played through the engine, each seat's views fed to
 //! its screen, the script between two of them read as text.
 
+mod common;
+
 use beryl_cards::decks::WU_CONTROL;
-use beryl_cards::{CARDS, SCENARIOS, names};
-use beryl_engine::{Observation, Seat};
-use beryl_session::protocol::{Moment, PlayerView, Why, ZoneName, player_view};
-use beryl_session::script::{Act, Screen, Script, Step, Subject, Table, failure, replay};
+use beryl_cards::{CARDS, names};
+use beryl_engine::Seat;
+use beryl_session::protocol::{PlayerView, Why, ZoneName};
+use beryl_session::script::{Act, Script, Step, Subject, Table, failure, replay};
 use beryl_session::{CandidateIndex, Game, SessionId, StartGame, Status, StopsSetting};
-
-/// Each seat's scripts as `card`'s scenario named `name` plays: the first is the reset its
-/// screen starts from, and script `n` is what action `n` of the scenario did, with the forced
-/// answers after it, in the first player's text and then the second's.
-fn scripts(card: &str, name: &str) -> Vec<[String; 2]> {
-    let (_, scenarios) = SCENARIOS
-        .iter()
-        .find(|&&(c, _)| c == card)
-        .expect("the card's scenarios");
-    let scenario = scenarios
-        .iter()
-        .find(|s| s.name == name)
-        .expect("the scenario");
-    let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
-    let mut screens: [Screen; 2] = Default::default();
-    let mut scripts = Vec::new();
-    beryl_scenario::watch(&CARDS, scenario, |state, events| {
-        scripts.push([0, 1].map(|seat| {
-            let view = player_view(
-                &table,
-                Observation::new(state, Seat::new(seat)),
-                Moment::Thinking {
-                    resolving: None,
-                    decision: None,
-                },
-                StopsSetting::SMART,
-                events,
-            );
-            screens[usize::from(seat)].script(&view, false).to_string()
-        }));
-    })
-    .unwrap_or_else(|e| panic!("{e:?}"));
-    scripts
-}
-
-/// Script `n` of `card`'s scenario `name`, for the player who goes first and for the other.
-fn script(card: &str, name: &str, n: usize) -> [String; 2] {
-    scripts(card, name).swap_remove(n)
-}
-
-/// A script's text from its lines.
-fn text<S: AsRef<str>>(lines: &[S]) -> String {
-    let mut text = String::new();
-    for line in lines {
-        text.push_str(line.as_ref());
-        text.push('\n');
-    }
-    text
-}
+use common::{script, scripts, text};
 
 /// Prints every script of a scenario, to read what a change does to them:
 /// `SCRIPT_DUMP="card|scenario" cargo test -p beryl_session --test script_build dump --
@@ -78,13 +32,15 @@ fn a_seats_first_script_starts_its_screen_over() {
         "Mana Crypt's flip lost: 3 damage to its controller",
         0,
     );
-    // The upkeep trigger is on the stack as the scenario begins: each seat numbers it.
-    assert_eq!(first, "reset a1\n");
-    assert_eq!(second, "reset a1\n");
+    // The upkeep trigger is on the stack as the scenario begins: each seat numbers it, and
+    // shows at once the line from it to its source (`point`).
+    assert_eq!(first, "reset a1\n+point source a1 > #1\n");
+    assert_eq!(second, "reset a1\n+point source a1 > #1\n");
 }
 
-/// `fly`, `tap`, `dwell` and `vanish`: a spell is cast, and a counterspell takes it off the
-/// stack and follows it.
+/// `fly`, `tap`, `streak` of mana, `point`, `dwell` and `vanish`: a spell is cast, and a
+/// counterspell takes it off the stack and follows it. The counterspell's arrow begins as it
+/// goes on the stack and ends in a beat of its own before its target leaves.
 #[test]
 fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     let name = "Counterspell counters a spell into its owner's graveyard";
@@ -92,15 +48,20 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     let [first, second] = script(names::COUNTERSPELL, name, 1);
     assert_eq!(first, "fly #60 (Mana Crypt) hand>stack cast <- opponent\n");
     assert_eq!(second, "fly #60 (Mana Crypt) hand>stack cast <- you\n");
-    // The first answers. Their Islands tap together; the spell is read by the player who did
-    // not cast it; the countered spell and the counterspell leave in one beat.
+    // The first answers. Their Islands tap together, each sending its mana into the spell; the
+    // spell is read by the player who did not cast it; the countered spell and the
+    // counterspell leave in one beat.
     let [first, second] = script(names::COUNTERSPELL, name, 2);
     assert_eq!(
         first,
         text(&[
             "fly #1 (Counterspell) hand>stack cast at #60 <- you",
+            "& +point hostile-target #1 > #60",
             "tap #0 (Island) <- you",
+            "& streak #0 > #1 blue 1 <- you",
             "& tap #2 (Island) <- you",
+            "& streak #2 > #1 blue 1 <- you",
+            "-point hostile-target #1 > #60",
             "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
@@ -109,18 +70,22 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
         second,
         text(&[
             "fly #1 (Counterspell) hand>stack cast at #60 <- opponent",
+            "& +point hostile-target #1 > #60",
             "tap #0 (Island) <- opponent",
+            "& streak #0 > #1 blue 1 <- opponent",
             "& tap #2 (Island) <- opponent",
+            "& streak #2 > #1 blue 1 <- opponent",
             "dwell #1",
+            "-point hostile-target #1 > #60",
             "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
     );
 }
 
-/// `set`, `emerge`, `appear` and `count`: an attacker with vigilance is declared, its trigger
-/// lifts out of it, and the token the trigger makes is there, which raises the attacker's
-/// power.
+/// `set`, `emerge`, `point` at a source, `appear` and `count`: an attacker with vigilance is
+/// declared, its trigger lifts out of it with the line that joins the two, and the token the
+/// trigger makes is there, which raises the attacker's power.
 #[test]
 fn an_attack_trigger_emerges_and_its_token_appears() {
     let name = "Adeline's Human arrives attacking";
@@ -133,6 +98,7 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
             7,
             vec![
                 "appear #120 (Human Token) nowhere>battlefield created <- a1",
+                "-point source a1 > #0",
                 "vanish a1 stack>gone resolve",
                 "count #0 (Adeline, Resplendent Cathar) pt 3/4",
             ],
@@ -146,11 +112,17 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
     let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, 5);
     assert_eq!(
         first,
-        "emerge a1 (Adeline, Resplendent Cathar, triggered) you from #0\n"
+        text(&[
+            "emerge a1 (Adeline, Resplendent Cathar, triggered) you from #0",
+            "& +point source a1 > #0",
+        ])
     );
     assert_eq!(
         second,
-        "emerge a1 (Adeline, Resplendent Cathar, triggered) opponent from #0\n"
+        text(&[
+            "emerge a1 (Adeline, Resplendent Cathar, triggered) opponent from #0",
+            "& +point source a1 > #0",
+        ])
     );
 }
 
@@ -203,6 +175,7 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
             "announce coin you lost <- #1",
             "streak a1 > you damage 3 <- a1",
             "& count you life 17 <- a1",
+            "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
             "set turn 3 you draw",
             "fly #0 (Island) library>hand draw",
@@ -216,6 +189,7 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
             "announce coin opponent lost <- #1",
             "streak a1 > opponent damage 3 <- a1",
             "& count opponent life 17 <- a1",
+            "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
             "set turn 3 opponent draw",
             "fly #0 library>hand draw",
@@ -225,8 +199,9 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
 }
 
 /// `emerge` and `count`, in Arena's order: a loyalty ability is on the stack before its cost
-/// shows on the planeswalker, though the cost is paid first. Then the turn passes: `set`,
-/// the banner, and the lands untapping together.
+/// shows on the planeswalker, though the cost is paid first. The attacker it exiles loses
+/// its attack line and the ability's arrow in one beat before it goes. Then the turn passes:
+/// `set`, the banner, and the lands untapping together.
 #[test]
 fn a_loyalty_cost_counts_after_its_ability_emerges() {
     let [first, second] = script(
@@ -238,9 +213,14 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
         first,
         text(&[
             "emerge a1 (The Wandering Emperor, activated) you from #1 at #61 <- you",
+            "& +point source a1 > #1",
+            "& +point hostile-target a1 > #61",
             "count #1 (The Wandering Emperor) loyalty 1 <- you",
+            "-point attack #61 > you",
+            "& -point hostile-target a1 > #61",
             "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
+            "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
             "set turn 2 opponent declareBlockers",
             "set turn 2 opponent combatDamage",
@@ -261,10 +241,15 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
         second,
         text(&[
             "emerge a1 (The Wandering Emperor, activated) opponent from #1 at #61 <- opponent",
+            "& +point source a1 > #1",
+            "& +point hostile-target a1 > #61",
             "count #1 (The Wandering Emperor) loyalty 1 <- opponent",
             "dwell a1",
+            "-point attack #61 > opponent",
+            "& -point hostile-target a1 > #61",
             "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
+            "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
             "set turn 2 you declareBlockers",
             "set turn 2 you combatDamage",
@@ -293,13 +278,15 @@ fn a_counter_counts() {
     );
     let lines = [
         "count #2 (Staff of the Storyteller) story 1 <- a2",
+        "-point source a2 > #2",
         "vanish a2 stack>gone resolve",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
 }
 
-/// `fly` within the battlefield: a permanent changes sides.
+/// `fly` within the battlefield: a permanent changes sides, the arrow at it ended first and
+/// not drawn again by the ability that moved it.
 #[test]
 fn a_stolen_permanent_flies_to_its_new_side() {
     let [first, second] = script(
@@ -310,14 +297,18 @@ fn a_stolen_permanent_flies_to_its_new_side() {
     assert_eq!(
         first,
         text(&[
+            "-point hostile-target a1 > #60",
             "fly #60 (Mana Crypt) battlefield>battlefield you effect <- a1",
+            "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
     );
     assert_eq!(
         second,
         text(&[
+            "-point hostile-target a1 > #60",
             "fly #60 (Mana Crypt) battlefield>battlefield opponent effect <- a1",
+            "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
     );
@@ -355,7 +346,10 @@ fn a_permanent_put_into_a_library_takes_its_place() {
         first,
         text(&[
             "fly #0 (Oust) hand>stack cast at #60 <- you",
+            "& +point hostile-target #0 > #60",
             "tap #2 (Plains) <- you",
+            "& streak #2 > #0 white 1 <- you",
+            "-point hostile-target #0 > #60",
             "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count opponent life 23 <- #0",
             "vanish #0 (Oust) stack>graveyard resolve",
@@ -365,8 +359,11 @@ fn a_permanent_put_into_a_library_takes_its_place() {
         second,
         text(&[
             "fly #0 (Oust) hand>stack cast at #60 <- opponent",
+            "& +point hostile-target #0 > #60",
             "tap #2 (Plains) <- opponent",
+            "& streak #2 > #0 white 1 <- opponent",
             "dwell #0",
+            "-point hostile-target #0 > #60",
             "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count you life 23 <- #0",
             "vanish #0 (Oust) stack>graveyard resolve",
@@ -374,26 +371,37 @@ fn a_permanent_put_into_a_library_takes_its_place() {
     );
 }
 
-/// `flip`: a manifested card comes onto the battlefield face down, named only for its
-/// controller, and turns face up where it lies. No event says that it turned: the step closes
-/// the script.
+/// `flip` and `lift`: a manifested card comes onto the battlefield face down, named only for
+/// its controller, and turns face up where it lies. No event says that it turned: the step
+/// closes the script. The opponent sees the two cards looked at come off the library while
+/// the choice is made, and the one not manifested is then in the graveyard with no flight.
 #[test]
 fn a_face_down_permanent_flips() {
     let name = "A manifested creature turns face up for its mana cost, entering no more";
+    // The player choosing sees both cards' faces; the other sees them lifted.
+    let [first, second] = script(names::ABHORRENT_OCULUS, name, 2);
+    assert_eq!(
+        first,
+        text(&["flip #2 (Snapcaster Mage)", "& flip #4 (Island)"])
+    );
+    assert_eq!(second, "+lift opponent library 2\n");
     let [first, second] = script(names::ABHORRENT_OCULUS, name, 3);
     assert_eq!(
         first,
         text(&[
             "fly #2 (Snapcaster Mage, face down) library>battlefield effect <- a1",
             "fly #4 (Island) library>graveyard effect <- a1",
+            "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
     );
     assert_eq!(
         second,
         text(&[
+            "-lift opponent library 2",
             "fly #2 (face down) library>battlefield effect <- a1",
-            "fly #4 (Island) library>graveyard effect <- a1",
+            "appear #4 (Island) library>graveyard effect <- a1",
+            "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
     );
@@ -431,8 +439,11 @@ fn a_shuffle_sets_the_library() {
         vec![
             format!("fly #1 (Timetwister) hand>stack cast <- {who}"),
             format!("tap #0 (Island) <- {who}"),
+            format!("& streak #0 > #1 blue 1 <- {who}"),
             format!("& tap #5 (Island) <- {who}"),
+            format!("& streak #5 > #1 blue 1 <- {who}"),
             format!("& tap #9 (Island) <- {who}"),
+            format!("& streak #9 > #1 blue 1 <- {who}"),
         ]
     };
     let draws = |slots: [u16; 7], card: Option<&str>| -> Vec<String> {

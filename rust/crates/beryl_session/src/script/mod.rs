@@ -52,6 +52,24 @@
 //! a later step ends it ([`Span`]), in the same script or in another; between the two the
 //! stage keeps it drawn. A view's `handling` is the lift the script begins and ends.
 //!
+//! A screen holds the spans its scripts have left open ([`Open`]) and its next script ends
+//! them. The arrows and lines are the ones its table calls for (`spans.rs`): from each spell
+//! and ability on the stack to its targets, from each ability to its source on the
+//! battlefield, from each blocker to its attacker, and from each attacker to what it attacks
+//! where a planeswalker could be attacked. One ends in a beat of its own before the beat
+//! that moves either of its ends, and is not drawn again at a card that changed zones. A
+//! script draws no mark: all six are a prompt's, which the session's prompt state will give
+//! (plan K26).
+//!
+//! Spans change no table, so replay cannot hold them. The rule invariants do ([`carried`],
+//! `check.rs`), which a debug build runs with the replay check on every script it builds.
+//!
+//! # Mana
+//!
+//! Mana is a `streak` from what made it into the spell or ability it pays for, and a `count`
+//! of the pool for what stays there; what a pool has lost streaks from its player
+//! (`mana.rs`).
+//!
 //! # Reset
 //!
 //! A seat's first script, and the script beside an undone view, has [`Script::reset`]: the
@@ -64,8 +82,9 @@
 //!
 //! A [`Screen`] is what one seat last showed; the session keeps one per seat and asks it for
 //! the script beside each view. The events become steps in order, played on the table as
-//! they are written (`build.rs`, `moves.rs`); what the view's table then has that no event
-//! told closes the script (`settle.rs`). What an event came from, which events happen
+//! they are written (`build.rs`, `moves.rs`, `mana.rs`), each with the spans it ends and
+//! begins (`spans.rs`); what the view's table then has that no event told closes the script
+//! (`settle.rs`). What an event came from, which events happen
 //! together and which stack entry an event is about are guesses, all made in `infer.rs`
 //! (see Cause).
 //!
@@ -90,10 +109,13 @@
 
 mod act;
 mod build;
+mod check;
 mod infer;
+mod mana;
 mod moves;
 mod replay;
 mod settle;
+mod spans;
 mod table;
 mod text;
 mod verb;
@@ -103,6 +125,7 @@ use ts_rs::TS;
 
 pub use act::{Act, Fact, Notice, Stream, Tally};
 pub use build::Screen;
+pub use check::{Open, carried};
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;

@@ -817,6 +817,22 @@
     },
     {
       "kind": "not-seen",
+      "name": "Mana spent from a pool",
+      "rule": "It streaks from its player's pool into the spell or ability it pays for, as from a land. No floating mana is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A target that moves",
+      "rule": "An arrow or line ends before either of its ends moves, and an arrow is not drawn again at a card that changed zones while its spell or ability stays on the stack. No target is seen leaving in response.",
+      "reports": [
+        "by-yfw",
+        "by-ad8",
+        "by-8uw",
+        "by-2wsl"
+      ]
+    },
+    {
+      "kind": "not-seen",
       "name": "A copy on the stack",
       "rule": "It appears on the stack with no flight. None is seen."
     },

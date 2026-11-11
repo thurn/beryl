@@ -24,7 +24,7 @@ pub fn replay(mut before: Table, script: &Script) -> Result<Table, String> {
 }
 
 /// Gives the abilities on `table`'s stack the numbers a reset lists, bottom first.
-fn number(table: &mut Table, reset: &Reset) -> Result<(), String> {
+pub(super) fn number(table: &mut Table, reset: &Reset) -> Result<(), String> {
     let mut ids = reset.abilities.iter();
     for entry in &mut table.stack {
         if matches!(entry.item, StackItem::Ability { .. }) {

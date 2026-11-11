@@ -573,7 +573,8 @@ at?: number,
  */
 item?: StackItem, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: number, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
 /**
- * None when the source has no place on the table.
+ * A player, for mana out of their pool. None when the source has no place on the
+ * table.
  */
 from?: Subject, to: Subject, stream: Stream, amount: number, object?: ObjectView, } | { "verb": "count", tally: Tally, } | { "verb": "set", fact: Fact, } | { "verb": "showcase", object: ObjectView, } | { "verb": "dwell", subject: Subject, } | { "verb": "announce", notice: Notice, } | { "verb": "point", span: Span, arrow: Arrow, from: Subject, to: Subject, } | { "verb": "mark", span: Span, mark: Mark, on: Subject, } | { "verb": "lift", span: Span, handling: CardHandling, };
 

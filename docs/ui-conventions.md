@@ -213,6 +213,12 @@ recordings do not show them.
 - **A cost paid as a spell resolves.** Mana streaks from its sources into the
   resolving spell or ability, as into a spell being cast. No such payment is
   seen.
+- **Mana spent from a pool.** It streaks from its player's pool into the spell
+  or ability it pays for, as from a land. No floating mana is seen.
+- **A target that moves.** An arrow or line ends before either of its ends
+  moves, and an arrow is not drawn again at a card that changed zones while its
+  spell or ability stays on the stack. No target is seen leaving in response
+  (by-yfw, by-ad8, by-8uw, by-2wsl).
 - **A copy on the stack.** It appears on the stack with no flight. None is seen.
 - **A permanent changing sides.** It flies across the battlefield to its new
   controller's row. Seen only before and after its move (0VsYGs88NXA 27:39.5,
