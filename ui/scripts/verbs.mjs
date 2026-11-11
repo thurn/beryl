@@ -460,31 +460,43 @@ async function open() {
     return context;
 }
 
-/** Plays `fixture` from its first view on `page`'s stage in ticks of `tick`, and checks what
- * holds of every run: the page drew what the model said, nothing but the stage's clock moved a
- * node, and the old playback and card layer took no part. */
-async function play(page, fixture, tick) {
-    await page.goto(
-        new URL(`/?stage&fixture=${fixture}&at=1#/game`, base).href,
-    );
-    await page.waitForFunction(
-        () => window.berylStage && document.querySelector(".stage-node"),
-    );
-    await page.evaluate(() => document.fonts.ready.then(() => {}));
-    const run = await page.evaluate(walk, {
-        tick,
-        gap: GAP,
-        answers: ANSWERS,
-    });
-    assert.deepEqual(run.faults.slice(0, 5), [], "the page against the model");
-    assert.deepEqual(await stageFaults(page), []);
-    assert.deepEqual(
-        run.old,
-        { shown: 0, cards: 0 },
-        "the old playback or card layer ran",
-    );
-    assert.equal(run.done, true, "the moment did not play out");
-    return run;
+/** Plays `fixture` from its first view on the stage of a page of its own in `context`, which
+ * `watch` is shown first and returns what to do before the page closes, in ticks of `tick`;
+ * and checks what holds of every run: the page drew what the model said, nothing but the
+ * stage's clock moved a node, and the old playback and card layer took no part. */
+async function play(context, watch, fixture, tick) {
+    const page = await context.newPage();
+    const done = await watch(page);
+    try {
+        await page.goto(
+            new URL(`/?stage&fixture=${fixture}&at=1#/game`, base).href,
+        );
+        await page.waitForFunction(
+            () => window.berylStage && document.querySelector(".stage-node"),
+        );
+        await page.evaluate(() => document.fonts.ready.then(() => {}));
+        const run = await page.evaluate(walk, {
+            tick,
+            gap: GAP,
+            answers: ANSWERS,
+        });
+        assert.deepEqual(
+            run.faults.slice(0, 5),
+            [],
+            "the page against the model",
+        );
+        assert.deepEqual(await stageFaults(page), []);
+        assert.deepEqual(
+            run.old,
+            { shown: 0, cards: 0 },
+            "the old playback or card layer ran",
+        );
+        assert.equal(run.done, true, "the moment did not play out");
+        return run;
+    } finally {
+        await done();
+        await page.close();
+    }
 }
 
 /** The scripts' steps are played in the script's order: those seen, which take time, are
@@ -510,20 +522,28 @@ for (const verb of verbs) {
             await queue(async () => {
                 const started = performance.now();
                 const context = await open();
-                const page = await context.newPage();
-                const finish = await coverage(page);
                 const seen = [];
-                page.on("pageerror", (e) =>
-                    seen.push(`${check}: ${e.message}`),
-                );
-                page.on(
-                    "console",
-                    (m) =>
-                        m.type() === "error" &&
-                        seen.push(`${check}: ${m.text()}`),
-                );
                 let threw = false;
-                let covered = null;
+                let covered;
+                // Every page's errors are the check's; what a page ran is taken of the first,
+                // since each plays the same code.
+                const watch = async (page) => {
+                    page.on("pageerror", (e) =>
+                        seen.push(`${check}: ${e.message}`),
+                    );
+                    page.on(
+                        "console",
+                        (m) =>
+                            m.type() === "error" &&
+                            seen.push(`${check}: ${m.text()}`),
+                    );
+                    if (covered !== undefined) return async () => {};
+                    covered = null;
+                    const finish = await coverage(page);
+                    return async () => {
+                        covered = await finish();
+                    };
+                };
                 try {
                     // Only the lift is asked how its views were batched.
                     const names =
@@ -532,9 +552,9 @@ for (const verb of verbs) {
                     for (const name of names) {
                         const each = [];
                         for (const tick of TICKS) {
-                            each.push(await play(page, fixture[name], tick));
-                            // What the page ran is the same at either tick.
-                            covered ??= await finish();
+                            each.push(
+                                await play(context, watch, fixture[name], tick),
+                            );
                         }
                         assert.deepEqual(
                             each[1].steps,
@@ -552,7 +572,6 @@ for (const verb of verbs) {
                     threw = true;
                     console.error(`FAILED: ${check}\n${e.stack ?? e}`);
                 } finally {
-                    covered ??= await finish();
                     await context.close();
                 }
                 errors.push(...seen);
@@ -560,7 +579,7 @@ for (const verb of verbs) {
                     check,
                     threw || seen.length ? "fail" : "pass",
                     (performance.now() - started) / 1000,
-                    covered,
+                    covered ?? null,
                 );
             });
         }
