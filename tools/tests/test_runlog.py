@@ -187,6 +187,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
         "skips": 0,
         "seconds": 3.0,
         "verdicts": {"flaky": 1},
+        "backfilled": 0,
     }
     assert out["checks"]["ui-test:drag"]["skips"] == 1
     assert out["lanes"]["ui-test"]["seconds"] == 10.0
@@ -200,6 +201,44 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     table = capsys.readouterr().out
     assert "6 runs" not in table and "4 runs of 3 checks" in table
     assert table.index("shots:board") < table.index("ui-test:drag")
+
+
+def test_backfilled_failures_count_as_runs_and_rewrites_as_stale_updates(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Verdicts(verdicts.Beads):
+        """The failure's verdict, backfilled into its bead."""
+
+        def checks(self) -> list[str]:
+            return ["ui-test:drag"]
+
+        def history(self, checks: Iterable[str]) -> dict[str, list[verdicts.Entry]]:
+            when = datetime.now(timezone.utc).isoformat()
+            entry = {"time": when, "verdict": "catch", "backfilled": True}
+            return {"ui-test:drag": [entry]}
+
+    monkeypatch.setattr(verdicts, "STORE", Verdicts())
+    runlog.append(
+        [
+            record("ui-test:drag", "pass", 4.0),
+            record("ui-test:drag", "fail", 0.0, days_ago=3, backfilled=True),
+            record("ui-test:drag", runlog.REWRITE, 0.0, days_ago=2, backfilled=True),
+            record("ui-test:drag", runlog.REWRITE, 0.0, days_ago=1, backfilled=True),
+        ]
+    )
+    args = argparse.Namespace(days=30, json=True, quarantined=False, pending=False)
+    assert runlog.report(args) == 0
+    assert json.loads(capsys.readouterr().out)["checks"]["ui-test:drag"] == {
+        "runs": 2,
+        "failures": 1,
+        "skips": 0,
+        "seconds": 4.0,
+        "verdicts": {"stale": 2, "catch": 1},
+        "backfilled": 4,
+    }
+    args.json = False
+    assert runlog.report(args) == 0
+    assert "ui-test:drag  catch 1, stale 2 (4 backfilled)" in capsys.readouterr().out
 
 
 def test_nextest_junit_gives_each_test_a_check() -> None:

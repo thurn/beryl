@@ -35,6 +35,9 @@ from . import paths, system, verdicts
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
 OUTCOMES = ("pass", "fail", "skip")
+# A record backfilled from history (`backfilled`) of a commit that rewrote a check after the
+# commit that added it: no run, but one stale update in the check's record (K18's prune).
+REWRITE = "rewrite"
 # What a check on the pending list (verdicts.PENDING) logs instead of a pass or a fail.
 PENDING_OUTCOMES = {"pass": "pending-pass", "fail": "pending-fail"}
 
@@ -259,9 +262,14 @@ class Tally:
     skips: int = 0
     seconds: float = 0.0
     verdicts: dict[str, int] = field(default_factory=dict)
+    backfilled: int = 0
 
     def add(self, r: dict[str, object]) -> None:
         outcome = r.get("outcome")
+        self.backfilled += bool(r.get("backfilled"))
+        if outcome == REWRITE:
+            self.judged("stale")
+            return
         if outcome == "skip":
             self.skips += 1
             return
@@ -270,8 +278,9 @@ class Tally:
         seconds = r.get("seconds")
         self.seconds += seconds if isinstance(seconds, (int, float)) else 0.0
 
-    def judged(self, verdict: str) -> None:
+    def judged(self, verdict: str, backfilled: bool = False) -> None:
         self.verdicts[verdict] = self.verdicts.get(verdict, 0) + 1
+        self.backfilled += backfilled
 
     def json(self) -> dict[str, object]:
         return {
@@ -280,6 +289,7 @@ class Tally:
             "skips": self.skips,
             "seconds": round(self.seconds, 1),
             "verdicts": self.verdicts,
+            "backfilled": self.backfilled,
         }
 
 
@@ -303,8 +313,9 @@ def tally(
                 continue
             if recent:
                 lane = str(e.get("lane") or check.split(":")[0])
-                checks.setdefault(check, Tally()).judged(str(e["verdict"]))
-                lanes.setdefault(lane, Tally()).judged(str(e["verdict"]))
+                old = bool(e.get("backfilled"))
+                checks.setdefault(check, Tally()).judged(str(e["verdict"]), old)
+                lanes.setdefault(lane, Tally()).judged(str(e["verdict"]), old)
 
     def costliest(t: dict[str, Tally]) -> dict[str, Tally]:
         return dict(sorted(t.items(), key=lambda kv: (-kv[1].seconds, kv[0])))
@@ -344,6 +355,8 @@ def report(args: argparse.Namespace) -> int:
         print(f"\n{'seconds':>9} {'runs':>6} {'fails':>6}  {title}  verdicts")
         for name, t in rows.items():
             judged = ", ".join(f"{v} {n}" for v, n in sorted(t.verdicts.items()))
+            if t.backfilled:
+                judged += f" ({t.backfilled} backfilled)"
             row = f"{t.seconds:9.1f} {t.runs:6} {t.failures:6}  {name}  {judged}"
             print(row.rstrip())
     return 0

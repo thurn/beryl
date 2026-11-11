@@ -264,6 +264,20 @@ def test_two_flakes_in_seven_days_quarantine_a_check(
     assert list(held) == ["ui-test:scry"] and len(held["ui-test:scry"]) == 2
 
 
+def test_backfilled_flakes_quarantine_nothing(bd: FakeBd) -> None:
+    for days in (1, 2):
+        when = datetime.now(timezone.utc) - timedelta(days=days)
+        entry: verdicts.Entry = {
+            "time": when.isoformat(),
+            "verdict": "flaky",
+            "backfilled": True,
+        }
+        bd.record("ui-test:scry", "ui-test", entry)
+    assert verdicts.quarantine(bd.history(bd.checks())) == {}
+    flakes(bd, "ui-test:scry", 1, 2)
+    assert list(verdicts.quarantine(bd.history(bd.checks()))) == ["ui-test:scry"]
+
+
 def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeBd) -> None:
     flakes(bd, "app:smoke", 1, 2)
     lane = checks.Lane("app").step(

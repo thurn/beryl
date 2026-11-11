@@ -393,10 +393,15 @@ STORE: Beads = Beads()
 
 
 def flakes(found: Iterable[Entry], at: datetime) -> list[str]:
-    """The times of the flaky verdicts in the quarantine window before `at`."""
+    """The times of the flaky verdicts in the quarantine window before `at`. A verdict
+    backfilled from the slow-CI history before the run log (`backfilled`) quarantines nothing:
+    its race was fixed before the rerun existed, and quarantine is for flakes seen since.
+    """
     since = at - timedelta(days=QUARANTINE_DAYS)
     times: list[str] = []
     for e in found:
+        if e.get("backfilled"):
+            continue
         try:
             when = datetime.fromisoformat(str(e.get("time")))
         except ValueError:
