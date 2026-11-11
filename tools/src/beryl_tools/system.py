@@ -202,6 +202,15 @@ def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def utility(command: list[str]) -> list[str]:
+    """`command` as one that runs below normal priority: at utility QoS on macOS, where the
+    CPU goes first to interactive work and checks (`nice` does not do that); through `by low`
+    on Windows. What the justfile's `low` does, for work `by` starts itself."""
+    if WINDOWS:
+        return [sys.executable, "-m", "beryl_tools.cli", "low", "--", *command]
+    return ["taskpolicy", "-c", "utility", *command]
+
+
 def low(args: argparse.Namespace) -> int:
     """Runs a command below normal priority, which its children inherit, so other work gets
     the CPU first; with `--awake`, keeping the machine from sleeping meanwhile. Windows' stand-in

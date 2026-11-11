@@ -285,6 +285,21 @@ ci-report *args:
 coverage *args:
     {{ low }} {{ by }} coverage "$@"
 
+# The nightly work (coverage of origin/staging), unless one succeeded under 20 h ago or the machine is busy
+[group('checks')]
+nightly *args:
+    {{ by }} nightly "$@"
+
+# Load the launchd agent that runs `by nightly` at 03:00, hourly until 08:00 (macOS; idempotent)
+[group('checks')]
+nightly-install:
+    {{ by }} nightly-install
+
+# Unload and remove the nightly launchd agent
+[group('checks')]
+nightly-uninstall:
+    {{ by }} nightly-uninstall
+
 # Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky
 [group('checks')]
 verdict check verdict:

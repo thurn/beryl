@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, system, verdicts
+from . import nightly, paths, system, verdicts
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
@@ -337,6 +337,7 @@ def report(args: argparse.Namespace) -> int:
         print(
             json.dumps(
                 {
+                    "coverage": nightly.coverage_age_line(),
                     "since": since.isoformat(timespec="seconds"),
                     "log": str(log_path()),
                     "checks": {k: t.json() for k, t in checks.items()},
@@ -351,6 +352,7 @@ def report(args: argparse.Namespace) -> int:
         f"ci-report: {runs} runs of {len(checks)} checks in the last {args.days} days"
         f" ({log_path()})"
     )
+    print(nightly.coverage_age_line())
     for title, rows in (("check", checks), ("lane", lanes)):
         print(f"\n{'seconds':>9} {'runs':>6} {'fails':>6}  {title}  verdicts")
         for name, t in rows.items():
