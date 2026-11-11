@@ -18,11 +18,13 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
 use crate::filter::{Filter, Whose};
 use crate::ids::{Seat, Slot};
-use crate::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, Zone, ZoneKey};
+use crate::state::{
+    CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey,
+};
 use crate::two_player::TwoPlayerSeat as _;
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 
-use super::events::{INSECT, game, put, with_ctx};
+use super::events::{INSECT, advance_to, game, put, with_ctx};
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
 const A_CREATURE: TargetSpec = TargetSpec::one(TargetKind::Permanent, CREATURES);
@@ -416,4 +418,106 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     assert_eq!(s.card_behind(copies[0]), None);
     assert_eq!(s.controller(copies[0]), p);
     assert!(!COPY.takes_target(SpecIx::new(0), Takes::Removal));
+}
+
+/// The permanent's power and toughness after continuous effects, as they are now.
+fn size(t: &GameTable, s: &mut State, x: &mut Scratch, slot: Slot) -> (i8, i8) {
+    crate::layers::refresh(s, t, &mut x.events);
+    (s.derived(slot).power, s.derived(slot).toughness)
+}
+
+/// "Creatures get +1/+1": one effect on every creature there as it begins.
+const fn creatures_get_bigger(duration: Duration) -> Ability {
+    const ALL_CREATURES: Objects = Objects::All {
+        zone: Zone::Battlefield,
+        filter: CREATURES,
+    };
+    static UNTIL_END_OF_TURN: Effect = modify(
+        ALL_CREATURES,
+        Modification::ModifyPt(1, 1),
+        Duration::EndOfTurn,
+    );
+    static INDEFINITELY: Effect = modify(
+        ALL_CREATURES,
+        Modification::ModifyPt(1, 1),
+        Duration::Indefinite,
+    );
+    does(match duration {
+        Duration::EndOfTurn => &UNTIL_END_OF_TURN,
+        _ => &INDEFINITELY,
+    })
+}
+
+/// [CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c): "the set of objects it
+/// affects is determined when that continuous effect begins. After that point, the set won't
+/// change." [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that
+/// moves from one zone to another becomes a new object with no memory of, or relation to, its
+/// previous existence."
+#[test]
+fn an_effect_on_several_permanents_is_one_effect_on_those_that_were_there() {
+    static PUMP: Ability = creatures_get_bigger(Duration::EndOfTurn);
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let q = p.opponent();
+    let [stays, leaves] = [p, q].map(|owner| put(&t, &mut s, &mut x, owner, "Test Bear"));
+    let before = s.effects().len();
+    assert!(resolve(&t, &mut s, &mut x, source, &PUMP, &[], &[]).is_none());
+
+    // One effect for both, whoever controls them, and none for what is no creature.
+    assert_eq!(s.effects().len(), before + 1);
+    assert_eq!(size(&t, &mut s, &mut x, stays), (3, 3));
+    assert_eq!(size(&t, &mut s, &mut x, leaves), (3, 3));
+
+    // A creature that arrives afterwards is no member of the set.
+    let late = put(&t, &mut s, &mut x, p, "Test Bear");
+    assert_eq!(size(&t, &mut s, &mut x, late), (2, 2));
+
+    // One that leaves and comes back is a new object: the effect is still one effect, on
+    // the other alone.
+    for zone in [Zone::Hand, Zone::Battlefield] {
+        event::move_one(&mut s, &t, &mut x.events, leaves, zone, Reason::Effect).unwrap();
+    }
+    assert_eq!(size(&t, &mut s, &mut x, leaves), (2, 2));
+    assert_eq!(size(&t, &mut s, &mut x, stays), (3, 3));
+    assert_eq!(s.effects().len(), before + 1);
+    assert_eq!(s.check_invariants(&t), Ok(()));
+
+    // It ends with the turn.
+    advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
+    assert!(s.effects().is_empty());
+    assert_eq!(size(&t, &mut s, &mut x, stays), (2, 2));
+}
+
+#[test]
+fn an_effect_on_several_permanents_ends_when_the_last_of_them_has_left() {
+    static PUMP: Ability = creatures_get_bigger(Duration::Indefinite);
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let q = p.opponent();
+    let bears = [p, q, q].map(|owner| put(&t, &mut s, &mut x, owner, "Test Bear"));
+    assert!(resolve(&t, &mut s, &mut x, source, &PUMP, &[], &[]).is_none());
+    // It outlasts the turn, and each member but the last.
+    advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
+    for &bear in &bears[..2] {
+        event::move_one(
+            &mut s,
+            &t,
+            &mut x.events,
+            bear,
+            Zone::Graveyard,
+            Reason::Effect,
+        )
+        .unwrap();
+        assert_eq!(s.effects().len(), 1);
+        assert_eq!(size(&t, &mut s, &mut x, bears[2]), (3, 3));
+    }
+    event::move_one(
+        &mut s,
+        &t,
+        &mut x.events,
+        bears[2],
+        Zone::Exile,
+        Reason::Effect,
+    )
+    .unwrap();
+    assert!(s.effects().is_empty());
+    assert_eq!(s.check_invariants(&t), Ok(()));
 }

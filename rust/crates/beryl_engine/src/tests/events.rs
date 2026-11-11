@@ -590,7 +590,7 @@ fn resolve_all(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
 /// Passes priority until the active player has priority with an empty stack in `step` of
 /// their turn. Only main phases are sure to stop: elsewhere a player with nothing but a pass
 /// passes silently.
-fn advance_to(
+pub(super) fn advance_to(
     t: &GameTable,
     s: &mut State,
     x: &mut Scratch,

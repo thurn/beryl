@@ -74,14 +74,15 @@ impl Ended {
 }
 
 /// What a store implements once, whatever kinds of entry it holds (the crate's contract,
-/// "Stores"). With `Clone` and equality, which it derives, a `Hash` of its entries alone
-/// and [`Relayout`], this is everything the kernel asks of a store outside its own mutators
+/// "Stores"). With `Clone` and equality, which it derives, a `Hash` of what it holds of
+/// the game and none of its indices, and [`Relayout`], this is everything the kernel asks of a store outside its own mutators
 /// and queries.
 pub(crate) trait Store<L: Layout>: Clone + Debug + Eq + Hash + Relayout {
     /// The store of a new game: nothing in it.
     fn empty() -> Self;
 
-    /// The slots it has an entry about as an object, each the object's current incarnation.
+    /// The slots it has an entry about as an object, alone or as a member of a set, each
+    /// the object's current incarnation.
     fn keys(&self) -> Bitboard<L::Slot>;
 
     /// Ends every entry about the object in `slot`, which has left its zone or ceased to

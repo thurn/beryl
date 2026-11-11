@@ -9,10 +9,11 @@
 //! [`State::layer_effects`], a zone change for [`State::move_replacements`]. A kind with
 //! nothing live costs its reader one AND.
 //!
-//! Built so far: an object (by-w8gv.7.2) and a player (by-w8gv.7.3) as the affected side,
-//! and the layer change, the zone-change replacement, the rule change, the permission to
-//! cast and the cost change (by-w8gv.7.4) as payloads. The game and locked-in sets as sides
-//! are designed in the contract and built with their first users (by-w8gv.7.5).
+//! Built so far: an object (by-w8gv.7.2), a player (by-w8gv.7.3) and a locked-in set of
+//! objects ([`sets`], by-w8gv.7.5) as the affected side, and the layer change, the
+//! zone-change replacement, the rule change, the permission to cast and the cost change
+//! (by-w8gv.7.4) as payloads. The game as a side is designed in the contract and built with
+//! its first user.
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
 //! ability or one of these effects makes it.
@@ -20,17 +21,20 @@
 use beryl_card::{GrantIx, Keywords, Layer, Modification, Rule, Rules, Subtype, Types};
 
 use crate::bitboard::Bitboard;
-use crate::fit::{Misfit, room};
 use crate::fixed::Full;
-use crate::ids::{CardId, Seat, SlotId};
-use crate::invariants::{At, Violation, check};
+use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
-use crate::relayout::{Relayout, card, queue, slot};
 use crate::state::State;
-use crate::store::{Duration, Ended, Store};
+use crate::store::{Duration, Ended};
 use crate::table::GameTable;
+
+mod sets;
+mod store;
+
+use sets::Sets;
+pub use sets::{LockedIn, SETS};
 
 /// The continuous effects a [`Small`] game holds at once. One past it stalls the game into
 /// [`crate::Large`], whose store grows.
@@ -40,11 +44,13 @@ pub const EFFECTS: usize = 64;
 ///
 /// An object is named by one incarnation of its slot, so the effect ends with the object
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The fields are the
-/// variant's own rather than an [`ObjectRef`] so that the sides to come (a player, a
-/// locked-in set, the game) share its four bytes in [`Small`].
+/// variant's own rather than an [`ObjectRef`] so that every side (a player, a locked-in
+/// set, and the game to come) shares its four bytes in [`Small`].
 ///
 /// A player is affected by a rule change alone: a layer changes a permanent and a zone
-/// change is an object's.
+/// change is an object's. A set is affected by a layer change alone: only a change to
+/// characteristics or control locks in what it affects (CR 611.2c), and nothing else that
+/// the cards do is one effect on several objects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Affects<L: Layout = Small> {
     /// One object, as it was when the effect began
@@ -54,6 +60,10 @@ pub enum Affects<L: Layout = Small> {
     Object { slot: L::Slot, incarnation: u16 },
     /// One player: "you may", "target player can't".
     Player(Seat),
+    /// Several permanents, those that were there as the effect began and have not left
+    /// since ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "After that
+    /// point, the set won't change." [`State::locked_in`] reads them.
+    Set(LockedIn<L>),
 }
 
 impl<L: Layout> Affects<L> {
@@ -66,12 +76,12 @@ impl<L: Layout> Affects<L> {
         }
     }
 
-    /// The object it affects, if it affects one.
+    /// The object it affects, if it affects one and no more.
     #[inline]
     pub fn as_object(self) -> Option<ObjectRef<L>> {
         match self {
             Affects::Object { slot, incarnation } => Some(ObjectRef { slot, incarnation }),
-            Affects::Player(_) => None,
+            Affects::Player(_) | Affects::Set(_) => None,
         }
     }
 }
@@ -293,11 +303,14 @@ impl<L: Layout> Default for ContinuousEffect<L> {
     }
 }
 
-/// The Effects store: the entries in the order they began, and two indices of them, the
-/// kinds among them and the rules they change for each player.
+/// The Effects store: the entries in the order they began, the sets of objects that
+/// entries on several affect, and two indices of the entries, the kinds among them and the
+/// rules they change for each player.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Effects<L: Layout = Small> {
     entries: L::Queue<ContinuousEffect<L>, EFFECTS>,
+    /// The members of each set an entry names ([`Affects::Set`]).
+    sets: Sets<L>,
     kinds: Kinds,
     /// The rules the entries on each player change, so that whether one applies to a
     /// player is one AND ([`State::rule_applies`]).
@@ -306,11 +319,16 @@ pub struct Effects<L: Layout = Small> {
 
 impl Copy for Effects<Small> {}
 
-/// The entries alone: the kinds and the players' rules are indices of them, and a hash of
-/// a state is a hash of the game.
+/// The entries, and the members of each set one names: the kinds and the players' rules
+/// are indices of them, and a hash of a state is a hash of the game.
 impl<L: Layout> std::hash::Hash for Effects<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.entries.hash(h);
+        for e in self.entries.iter() {
+            if let Affects::Set(set) = e.affected {
+                self.sets.members(set).hash(h);
+            }
+        }
     }
 }
 
@@ -324,14 +342,22 @@ impl<L: Layout> Effects<L> {
         self.entries.as_slice()
     }
 
-    /// Ends the entries `keep` refuses and says what that changed.
+    /// Ends the entries `keep` refuses, and each whose set has no member left, and says
+    /// what that changed.
     #[inline]
     fn end(&mut self, keep: impl Fn(&ContinuousEffect<L>) -> bool) -> Ended {
         let mut done = Ended::default();
         let mut kinds = 0;
         let mut rules: L::PerPlayer<Rules> = Table::filled(Rules::NONE);
+        let sets = &mut self.sets;
         self.entries.retain(|e| {
-            let kept = keep(e);
+            let mut kept = keep(e);
+            if let Affects::Set(set) = e.affected {
+                kept &= !sets.members(set).is_empty();
+                if !kept {
+                    sets.release(set);
+                }
+            }
             if kept {
                 kinds |= e.payload.kind();
                 if let Some((player, rule)) = e.player_rule() {
@@ -343,6 +369,7 @@ impl<L: Layout> Effects<L> {
             }
             kept
         });
+        self.sets.trim();
         self.kinds = Kinds(kinds);
         self.rules = rules;
         done
@@ -369,133 +396,6 @@ impl<L: Layout> ContinuousEffect<L> {
     }
 }
 
-impl<L: Layout> Store<L> for Effects<L> {
-    fn empty() -> Self {
-        Effects {
-            entries: Default::default(),
-            kinds: Kinds::default(),
-            rules: Table::filled(Rules::NONE),
-        }
-    }
-
-    fn keys(&self) -> Bitboard<L::Slot> {
-        self.entries
-            .iter()
-            .filter_map(|e| e.affected.as_object())
-            .map(|r| r.slot)
-            .collect()
-    }
-
-    fn forget(&mut self, slot: L::Slot) -> Ended {
-        // Every entry about a slot is about its current object (the store's invariant), so
-        // the slot names what ended.
-        self.end(|e| e.affected.as_object().is_none_or(|r| r.slot != slot))
-    }
-
-    #[inline]
-    fn expire(&mut self, ended: Duration) -> Ended {
-        if self.entries.is_empty() {
-            return Ended::default();
-        }
-        self.end(|e| e.duration != ended)
-    }
-
-    fn fits<M: Layout>(&self) -> Result<(), Misfit> {
-        room(
-            "the continuous effects",
-            self.entries.len(),
-            <M::Queue<ContinuousEffect<M>, EFFECTS> as Queue<_>>::CAPACITY,
-        )
-    }
-
-    fn check(&self, s: &State<L>, t: &GameTable) -> Result<(), Violation> {
-        let mut kinds = 0;
-        let mut rules: L::PerPlayer<Rules> = Table::filled(Rules::NONE);
-        for e in self.entries.iter() {
-            kinds |= e.payload.kind();
-            if let Some((player, rule)) = e.player_rule() {
-                rules[player.index()] = rules[player.index()].with(rule);
-            }
-            let object = e.affected.as_object();
-            let at = object.map(|r| At::Slot(r.slot.index()));
-            check(
-                object.is_none_or(|r| s.is_current(r)),
-                "an effect on an object that has ended",
-                at,
-            )?;
-            check(
-                object.is_some() || matches!(e.payload, Payload::Rule(_)),
-                "an effect on a player that is no rule change",
-                at,
-            )?;
-            check(e.source.index() < t.len(), "an effect of no card", at)?;
-        }
-        check(
-            kinds == self.kinds.0,
-            "the kinds of effect disagree with the effects",
-            None,
-        )?;
-        check(
-            rules == self.rules,
-            "the players' rules disagree with the effects",
-            None,
-        )
-    }
-
-    fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String> {
-        // The first entry about an object that is no permission to cast: those, and then a
-        // rule change on a player, are listed after these
-        // ([`State::cast_permission_lingering`], [`State::rule_change_lingering`]), where
-        // and as saves have always had them.
-        let (e, on) = self
-            .entries
-            .iter()
-            .filter(|e| !matches!(e.payload, Payload::Cast(_)))
-            .find_map(|e| Some((e, e.affected.as_object()?)))?;
-        Some(format!(
-            "an effect of {} on {} lasting {}",
-            t.def(e.source).name,
-            t.def(s.card(on.slot)).name,
-            e.duration.words()
-        ))
-    }
-}
-
-impl<L: Layout> Relayout for ContinuousEffect<L> {
-    type In<M: Layout> = ContinuousEffect<M>;
-
-    fn relayout<M: Layout>(&self) -> ContinuousEffect<M> {
-        ContinuousEffect {
-            source: card(self.source),
-            timestamp: self.timestamp,
-            duration: self.duration,
-            affected: match self.affected {
-                Affects::Object {
-                    slot: affected,
-                    incarnation,
-                } => Affects::Object {
-                    slot: slot(affected),
-                    incarnation,
-                },
-                Affects::Player(player) => Affects::Player(player),
-            },
-            payload: self.payload,
-        }
-    }
-}
-
-impl<L: Layout> Relayout for Effects<L> {
-    type In<M: Layout> = Effects<M>;
-
-    fn relayout<M: Layout>(&self) -> Effects<M> {
-        Effects {
-            entries: queue(self.entries.as_slice(), ContinuousEffect::relayout),
-            kinds: self.kinds,
-            rules: Table::from_fn(|player| self.rules[player]),
-        }
-    }
-}
-
 impl<L: Layout> State<L> {
     /// Starts a continuous effect of the card `source`, with the next timestamp
     /// ([CR 611.2](https://yawgatog.com/resources/magic-rules/#R6112)): "A continuous effect
@@ -505,6 +405,11 @@ impl<L: Layout> State<L> {
     /// affected by a rule change alone. The layer results are stale from here if it changes
     /// a layer. No event: the rules announce what the effect is part of, as they do a
     /// change of control.
+    ///
+    /// # Panics
+    ///
+    /// For a locked-in set, which is another effect's:
+    /// [`State::start_effect_on_set`] locks one in.
     #[inline]
     pub fn start_effect(
         &mut self,
@@ -536,6 +441,7 @@ impl<L: Layout> State<L> {
                         *rules = rules.with(rule);
                     }
                 }
+                Affects::Set(_) => unreachable!("an effect on another effect's set"),
             }
         }
         if matches!(payload, Payload::Layer(_)) {
@@ -695,6 +601,8 @@ impl<L: Layout> State<L> {
                 (rule.whose().is_none() && self.copiable(slot).has_rule(t, rule))
                     || self.effects.changes_rule(rule, to)
             }
+            // A set is affected by a layer change alone.
+            Affects::Set(_) => false,
         }
     }
 }

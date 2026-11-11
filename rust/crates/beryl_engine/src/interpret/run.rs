@@ -18,8 +18,8 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::state::{
-    self, CounterKind, LayerChange, ObjectRef, Payload, PendingTrigger, StackEntry, TargetPlaces,
-    Zone, ZoneKey, placed,
+    self, CounterKind, LayerChange, ObjectRef, PendingTrigger, StackEntry, TargetPlaces, Zone,
+    ZoneKey, placed,
 };
 use crate::zone::Place;
 
@@ -585,10 +585,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         };
         // "You" in what it says is the ability's controller as it resolves.
         let change = LayerChange::resolve(modification, self.ctx.controller());
+        // One effect, with one timestamp, on the set as it is now
+        // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an
+        // earlier timestamp is applied before an effect with a later timestamp.").
         let permanents = self.permanents(objects);
-        self.each_permanent(permanents, |ctx, object| {
-            ctx.add_effect(object, Payload::Layer(change), duration);
-        });
+        self.ctx.add_effect_on_set(permanents, change, duration);
         Outcome::acted_on(permanents)
     }
 }

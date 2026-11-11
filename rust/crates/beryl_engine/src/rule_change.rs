@@ -53,6 +53,8 @@ pub(crate) fn maker<L: Layout>(
                 })
                 .map(|(slot, _)| slot)
         }
+        // No rule is changed for a set of objects.
+        Affects::Set(_) => None,
     }
 }
 

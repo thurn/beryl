@@ -57,7 +57,7 @@
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
 //! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
-//! | start and end what a card creates | [`State::start_effect`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; `derived_dirty` where the entry is a layer input |
+//! | start and end what a card creates | [`State::start_effect`], [`State::start_effect_on_set`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; a locked-in set's place in the store's table; `derived_dirty` where the entry is a layer input |
 //!
 //! ## Events
 //!
@@ -150,7 +150,8 @@
 //! the permission to cast and the cost change as payloads, and flashback's zone-change
 //! replacement (by-w8gv.7.4); the Memos store ([`memos`]) with what a permanent remembers
 //! of its spell, the costs paid and the value of X, and [`State::signature`]'s comparison
-//! of memos (by-w8gv.7.6); what exiled a card, as memos of the card (by-w8gv.7.7).
+//! of memos (by-w8gv.7.6); what exiled a card, as memos of the card (by-w8gv.7.7); a
+//! locked-in set of objects as the affected side (by-w8gv.7.5).
 //!
 //! ### Where everything goes
 //!
@@ -183,7 +184,7 @@
 //! | --- | --- | --- | --- | --- | --- |
 //! | Effects | a queue in the order the effects began, and a mask of the kinds live in it | 24 | 64 ([`effects::EFFECTS`]) | 1,552 | a `Vec` of 32-byte entries |
 //! | the keyed slots, shared by every store | one set of slots | | | 32 | 128 |
-//! | Effects' locked-in sets | a table of sets of slots, which an entry names by index | 32 | 4 | 136 | a `Vec` |
+//! | Effects' locked-in sets | a table of sets of slots, which an entry names by index; an empty set is a free place, and the table ends at its last set in use | 32 | 4 ([`effects::SETS`]) | 136 | a `Vec` |
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 1 for each eight rules of the list | 2 players, twice | 4 | the same |
 //! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
@@ -200,7 +201,8 @@
 //! sets are those `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is
 //! 19,832: the `permissions` queue gave back 80 and each of the stack's 64 entries two
 //! bytes, [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it
-//! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`.
+//! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5,
+//! which landed after it, it is 20,016: the table of locked-in sets, 136.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -209,7 +211,7 @@
 //! | --- | --- | --- |
 //! | by-w8gv.7.3 | +16 (landed: 0) | the rule sets, a byte each while the list has at most eight rules, less `sorceries_as_flash` |
 //! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
-//! | by-w8gv.7.5 | +136 | the locked-in sets |
+//! | by-w8gv.7.5 | +136 (landed: +136) | the locked-in sets |
 //! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
 //! | by-w8gv.7.7 | 0 (landed: 0) | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 | two sets of slots |
@@ -226,12 +228,24 @@
 //! ### Affected sides and payloads
 //!
 //! An effect affects one of four sides ([`effects::Affects`]): an object, named by slot and
-//! incarnation, and a player (built); the game, which joins with its first user, since no
-//! card yet changes a rule for everyone; a locked-in set, by its index in the store's table
-//! (by-w8gv.7.5:
-//! [CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c), "the set of objects it
+//! incarnation, a player, and a locked-in set, by its index in the store's table (built);
+//! the game, which joins with its first user, since no card yet changes a rule for
+//! everyone. The fields are the variant's own, so every side fits four bytes.
+//!
+//! A locked-in set is the objects one effect affects when it affects several
+//! ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c), "the set of objects it
 //! affects is determined when that continuous effect begins. After that point, the set
-//! won't change."). The fields are the variant's own, so every side fits four bytes.
+//! won't change."): [`State::start_effect_on_set`] starts one entry with one timestamp
+//! (CR 613.7) for the permanents it is given, and the layers apply it to each member
+//! ([`State::locked_in`]). A set holds slots, not incarnations: a member that ends leaves
+//! its set where every stored thing about it ends ("Duration and expiry"), so whatever a
+//! set holds is still the object it was, and a card that comes back is no member. The
+//! effect ends with its duration or with its last member, and its place in the table is
+//! free again. Only an effect on two objects or more takes a place: on one it is an entry
+//! on that object, the same effect, and on none it never begins. A set is affected by a
+//! layer change alone, as a player is by a rule change alone (the store's invariants):
+//! nothing else the cards do is one effect on several objects, and each query by kind
+//! would otherwise search the sets. An effect cannot be started on another's set.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
 //! rule change, a permission to cast or a cost change (built). A payload is a
@@ -257,8 +271,9 @@
 //!   ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), inside the three
 //!   chokepoints that bump an incarnation ([`State::move_object`],
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
-//!   store has an entry about, so the move tests one bit and calls nothing else. This
-//!   replaces three sweeps, all gone: `State::drop_stale_effects`,
+//!   store has an entry about, the members of the locked-in sets among them, so the move
+//!   tests one bit and calls nothing else: it pays for the sets only while an object of
+//!   one moves. This replaces three sweeps, all gone: `State::drop_stale_effects`,
 //!   `Legacy::end_permissions_of_turn` and the one in `Legacy::remember_x`. A permission to
 //!   cast a card "for as long as it remains exiled" is an entry of no stated duration on
 //!   the card: it ends as the card leaves.
@@ -290,7 +305,7 @@
 //!
 //! | Hot read | With the kind absent | With it live |
 //! | --- | --- | --- |
-//! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds |
+//! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds; for an entry on a set, a pass over the battlefield testing each permanent's bit |
 //! | `event::destination` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
 //! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
 //! | the objects that are no other's twin for what an effect does to them ([`State::told_apart_by_effects`]) | one AND of the kinds that are no layer change | one pass |
@@ -378,7 +393,8 @@
 //! ### The API
 //!
 //! A write is a [`State`] mutator, `#[inline]` and generic over the layout:
-//! [`State::start_effect`], [`State::remember`] and [`State::expire`] so far. One whose change a player sees
+//! [`State::start_effect`], [`State::start_effect_on_set`], [`State::remember`] and
+//! [`State::expire`] so far. One whose change a player sees
 //! returns its [`event::Event`] and pushes nothing; starting or ending an effect is no
 //! event of its own, since the rules announce what it is part of, as they do a change of
 //! control. The mutator that changes a layer input sets `derived_dirty` itself. A store

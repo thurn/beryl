@@ -11,7 +11,7 @@ use crate::event::{Sink, kind};
 use crate::filter;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue};
-use crate::state::{CounterKind, Derived, GrantRef, LayerChange, State, Zone};
+use crate::state::{Affects, CounterKind, Derived, GrantRef, LayerChange, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -29,6 +29,10 @@ struct Apply<C: CardId> {
     source: C,
     change: Option<LayerChange>,
 }
+
+/// The effects one recompute applies. A list longer than its capacity would need more
+/// effects than the cards can create at once.
+type Applying<L> = <L as Layout>::Queue<Apply<<L as Layout>::Card>, 192>;
 
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
@@ -103,7 +107,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     let listening = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
-    let mut list: Option<L::Queue<Apply<L::Card>, 192>> = None;
+    let mut list: Option<Applying<L>> = None;
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
@@ -155,24 +159,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             }
         }
     }
-    for (e, change) in s.layer_effects() {
-        let Some(affected) = e.affected.as_object() else {
-            continue;
-        };
-        if s.object(affected.slot).zone() != Zone::Battlefield {
-            continue;
-        }
-        if let Some(target) = s.battlefield_position(affected.slot) {
-            let _ = list.get_or_insert_with(Default::default).push(Apply {
-                layer: change.layer() as u8,
-                timestamp: e.timestamp,
-                order: 0,
-                target: target as u8,
-                source: e.source,
-                change: Some(change),
-            });
-        }
-    }
+    resolved_effects(&s, &mut list);
     let len = s.battlefield().len();
     if let Some(list) = &mut list {
         list.as_mut_slice()
@@ -202,6 +189,51 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         [Rules::NONE; _]
     };
     s.finish(listening, rules);
+}
+
+/// Lists the continuous effects of resolved spells and abilities that change a permanent
+/// on the battlefield now, for [`recompute`] to apply with the static abilities' in layer
+/// and timestamp order. The kernel has ended those on objects that left their zone.
+#[inline]
+fn resolved_effects<L: Layout>(s: &Rederive<'_, L>, list: &mut Option<Applying<L>>) {
+    for (e, change) in s.layer_effects() {
+        let effect = |target: usize| Apply {
+            layer: change.layer() as u8,
+            timestamp: e.timestamp,
+            order: 0,
+            target: target as u8,
+            source: e.source,
+            change: Some(change),
+        };
+        match e.affected {
+            Affects::Object { slot, .. } => {
+                if s.object(slot).zone() != Zone::Battlefield {
+                    continue;
+                }
+                if let Some(target) = s.battlefield_position(slot) {
+                    let _ = list
+                        .get_or_insert_with(Default::default)
+                        .push(effect(target));
+                }
+            }
+            // One effect on each permanent it locked in that is still the object it was
+            // ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c): "the set of
+            // objects it affects is determined when that continuous effect begins. After
+            // that point, the set won't change."), all with its one timestamp.
+            Affects::Set(set) => {
+                let members = s.locked_in(set);
+                for target in 0..s.battlefield().len() {
+                    if members.contains(s.battlefield()[target]) {
+                        let _ = list
+                            .get_or_insert_with(Default::default)
+                            .push(effect(target));
+                    }
+                }
+            }
+            // A player is affected by a rule change alone.
+            Affects::Player(_) => {}
+        }
+    }
 }
 
 /// The rules the permanents' static abilities change for each player, by seat

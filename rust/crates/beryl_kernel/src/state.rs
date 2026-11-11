@@ -4,8 +4,8 @@
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
 pub use crate::effects::{
-    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, MoveReplacement, Payload,
-    Permission, Permitted,
+    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, LockedIn,
+    MoveReplacement, Payload, Permission, Permitted, SETS,
 };
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};

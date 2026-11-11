@@ -1,9 +1,16 @@
 //! The Effects store's tests: what it keeps across layouts, when it is full, and what ends
 //! its entries.
 
+use beryl_card::Zone;
+
 use super::*;
+use crate::fit::Misfit;
+use crate::fixed::Full;
+use crate::ids::SlotId;
 use crate::layout::Large;
 use crate::profile::Profile;
+use crate::relayout::Relayout;
+use crate::store::Store;
 use crate::{CardIx, LargeCardIx, LargeSlot, Slot};
 
 const PUMP: Payload = Payload::Layer(LayerChange::ModifyPt(2, 2));
@@ -397,5 +404,201 @@ fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
     assert_eq!(
         s.cast_permission_lingering(&t).as_deref(),
         Some("player 1's permission to cast Test Card")
+    );
+}
+
+/// A dealt game of sixty of one card a player, and the table it is of.
+fn dealt() -> (GameTable, State<Small>) {
+    let deck: &[(u8, &str)] = &[(60, "Test Card")];
+    let t = GameTable::new(&ONE_CARD, [deck, deck]).unwrap();
+    let s = State::new(&t, 7, Profile::EXACT).unwrap();
+    (t, s)
+}
+
+/// Puts the cards in the slots at `places` onto the battlefield, and says which slots.
+fn permanents<L: Layout>(s: &mut State<L>, places: &[usize]) -> Bitboard<L::Slot> {
+    let slots = places.iter().map(|&i| L::Slot::from_index(i));
+    slots
+        .inspect(|&slot| s.board().place(slot, Zone::Battlefield).unwrap())
+        .collect()
+}
+
+const PUMPED: LayerChange = LayerChange::ModifyPt(2, 2);
+
+#[test]
+fn one_effect_on_a_set_ends_with_its_duration_or_with_its_last_member() {
+    let (t, mut s) = dealt();
+    let [first, second] = [3, 70].map(Slot::from_index);
+    let both = permanents(&mut s, &[3, 70]);
+    let began = s.zones.next_timestamp;
+    let start = |s: &mut State<Small>, members, duration| {
+        s.start_effect_on_set(CardIx::FIRST, members, PUMPED, duration)
+    };
+
+    // One entry with one timestamp, whatever the number of members.
+    assert_eq!(start(&mut s, both, Duration::Indefinite), Ok(()));
+    assert_eq!(s.zones.next_timestamp, began + 1);
+    let [effect] = *s.effects() else {
+        panic!("one effect");
+    };
+    let Affects::Set(set) = effect.affected else {
+        panic!("an effect on a set");
+    };
+    assert_eq!(effect.timestamp, began);
+    assert_eq!((s.locked_in(set), s.keyed), (both, both));
+    assert!(s.is_derived_stale());
+    assert_eq!(s.check_stores(&t), Ok(()));
+
+    // A member that leaves is no longer one, and is not again when its card comes back
+    // (CR 400.7); the effect goes on for the other.
+    s.board().place(first, Zone::Graveyard).unwrap();
+    assert_eq!(s.locked_in(set), Bitboard::single(second));
+    s.board().place(first, Zone::Battlefield).unwrap();
+    assert_eq!(s.locked_in(set), Bitboard::single(second));
+    assert_eq!(s.keyed, Bitboard::single(second));
+    assert_eq!(s.layer_effects().count(), 1);
+    assert_eq!(s.check_stores(&t), Ok(()));
+
+    // No duration ends it. Its last member leaving does, and frees its place.
+    s.expire(Duration::EndOfTurn);
+    assert_eq!(s.effects().len(), 1);
+    s.board().place(second, Zone::Hand).unwrap();
+    assert_eq!(s.effects, Effects::empty());
+    assert!(s.keyed.is_empty() && s.locked_in(set).is_empty());
+    s.board().place(second, Zone::Battlefield).unwrap();
+
+    // An effect that lasts until end of turn ends there, with every member still there.
+    assert_eq!(start(&mut s, both, Duration::EndOfTurn), Ok(()));
+    s.flags.derived_dirty = false;
+    s.expire(Duration::EndOfTurn);
+    assert_eq!(s.effects, Effects::empty());
+    assert!(s.keyed.is_empty() && s.is_derived_stale());
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+#[test]
+fn an_effect_on_one_object_is_an_entry_on_it_and_one_on_none_never_begins() {
+    let (t, mut s) = dealt();
+    let one = permanents(&mut s, &[3]);
+    let began = s.zones.next_timestamp;
+    let nothing = Bitboard::EMPTY;
+    assert_eq!(
+        s.start_effect_on_set(CardIx::FIRST, nothing, PUMPED, Duration::EndOfTurn),
+        Ok(())
+    );
+    assert!(s.effects().is_empty());
+    assert_eq!(s.zones.next_timestamp, began);
+
+    assert_eq!(
+        s.start_effect_on_set(CardIx::FIRST, one, PUMPED, Duration::EndOfTurn),
+        Ok(())
+    );
+    let third = s.object_ref(Slot::from_index(3));
+    assert_eq!(s.effects()[0].affected, Affects::object(third));
+    assert_eq!(s.effects()[0].timestamp, began);
+    assert_eq!(s.effects.sets, Sets::empty());
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+#[test]
+fn a_set_survives_small_to_large_and_back() {
+    let (t, mut small) = dealt();
+    // The second player's cards keep their places, not their numbers.
+    let members = permanents(&mut small, &[3, 70, 119]);
+    let other = permanents(&mut small, &[4, 5]);
+    for (members, duration) in [
+        (members, Duration::Indefinite),
+        (other, Duration::EndOfTurn),
+    ] {
+        small
+            .start_effect_on_set(CardIx::FIRST, members, PUMPED, duration)
+            .unwrap();
+    }
+    let sets = |effects: &[ContinuousEffect<Large>]| {
+        effects
+            .iter()
+            .map(|e| match e.affected {
+                Affects::Set(set) => set,
+                other => panic!("{other:?} is no set"),
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let mut large: State<Large> = small.widen();
+    let [first, second] = sets(large.effects())[..] else {
+        panic!("two effects");
+    };
+    assert_eq!(large.locked_in(first), Bitboard::<LargeSlot>::from(members));
+    assert_eq!(large.locked_in(second), Bitboard::<LargeSlot>::from(other));
+    assert_eq!(large.check_stores(&t), Ok(()));
+    let back: State<Small> = large.try_relayout(&t).unwrap();
+    assert_eq!(back, small);
+
+    // The wide game ends a member and an effect as the narrow one does.
+    let seventieth = Slot::from_index(70).to::<LargeSlot>().unwrap();
+    large.board().place(seventieth, Zone::Graveyard).unwrap();
+    large.expire(Duration::EndOfTurn);
+    small
+        .board()
+        .place(Slot::from_index(70), Zone::Graveyard)
+        .unwrap();
+    small.expire(Duration::EndOfTurn);
+    assert_eq!(large.effects().len(), 1);
+    assert_eq!(large.locked_in(first).count(), 2);
+    assert_eq!(large.try_relayout::<Small>(&t).unwrap(), small);
+}
+
+#[test]
+fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
+    let (t, mut small) = dealt();
+    let pairs: Vec<Bitboard> = (0..=SETS)
+        .map(|i| permanents(&mut small, &[2 * i, 2 * i + 1]))
+        .collect();
+    let mut large: State<Large> = small.widen();
+    for &pair in &pairs[..SETS] {
+        assert_eq!(
+            small.start_effect_on_set(CardIx::FIRST, pair, PUMPED, Duration::EndOfTurn),
+            Ok(())
+        );
+    }
+    let began = small.effects;
+    assert_eq!(
+        small.start_effect_on_set(CardIx::FIRST, pairs[SETS], PUMPED, Duration::EndOfTurn),
+        Err(Full)
+    );
+    // What did not fit is in no index.
+    assert_eq!(small.effects, began);
+    assert!(!small.keyed.contains(Slot::from_index(2 * SETS)));
+    assert_eq!(small.check_stores(&t), Ok(()));
+
+    // A set whose effect ended leaves its place to the next.
+    for member in [2, 3] {
+        small
+            .board()
+            .place(Slot::from_index(member), Zone::Graveyard)
+            .unwrap();
+    }
+    assert_eq!(small.effects().len(), SETS - 1);
+    assert_eq!(
+        small.start_effect_on_set(CardIx::FIRST, pairs[SETS], PUMPED, Duration::EndOfTurn),
+        Ok(())
+    );
+    assert_eq!(small.check_stores(&t), Ok(()));
+
+    for &pair in &pairs {
+        let pair = Bitboard::<LargeSlot>::from(pair);
+        assert_eq!(
+            large.start_effect_on_set(LargeCardIx::FIRST, pair, PUMPED, Duration::EndOfTurn),
+            Ok(())
+        );
+    }
+    assert_eq!(large.effects().len(), SETS + 1);
+    assert_eq!(
+        large.fits::<Small>(&t),
+        Err(Misfit::ListTooLong {
+            list: "the locked-in sets",
+            len: SETS + 1,
+            capacity: SETS,
+        })
     );
 }
