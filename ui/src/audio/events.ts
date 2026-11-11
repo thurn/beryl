@@ -10,7 +10,7 @@ import type {
 import { play, type Sound } from "./sound";
 
 /** A card arriving in each zone. */
-const ARRIVING: Record<ZoneName, Sound | null> = {
+export const ARRIVING: Record<ZoneName, Sound | null> = {
   battlefield: "place",
   graveyard: "shove",
   exile: "exile",
@@ -70,7 +70,7 @@ const soundOf = <K extends GameEvent["kind"]>(
   (EVENTS[e.kind] as (e: Extract<GameEvent, { kind: K }>) => Sound | null)(e);
 
 /** How much quieter the opponent's doings are than the player's own, in decibels. */
-const THEIRS_DB = -4;
+export const THEIRS_DB = -4;
 /** How long after its beat a sound waits, in ms: a card is placed as it lands, after its
  * glide (Board's GLIDE_MS, near enough). */
 const DELAY: Partial<Record<Sound, number>> = { place: 450 };

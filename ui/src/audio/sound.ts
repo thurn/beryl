@@ -121,7 +121,7 @@ window.addEventListener("storage", (event) => {
 
 declare global {
   interface Window {
-    berylSounds?: { sound: Sound; at: number }[];
+    berylSounds?: { sound: Sound; at: number; delay: number }[];
     berylMusic?: { music: Music | null; at: number }[];
   }
 }
@@ -227,8 +227,8 @@ const pick = (cue: Cue) => Math.floor(Math.random() * cue.variants.length);
 
 /** Plays a sound effect: a variant at random, slightly varied, unless that sound already
  * plays at its most copies or the player muted effects. `gain` is in decibels; `delay` in
- * milliseconds; `at` stamps the log entry (the beat it sounds, game/playback.ts), now by
- * default. */
+ * milliseconds; `at` stamps the log entry (the beat it sounds, game/playback.ts, or on the
+ * stage the edge of its step, audio/steps.ts), now by default. */
 export function play(
   sound: Sound,
   {
@@ -237,7 +237,7 @@ export function play(
     at = performance.now(),
   }: { gain?: number; delay?: number; at?: number } = {},
 ) {
-  logged?.berylSounds.push({ sound, at });
+  logged?.berylSounds.push({ sound, at, delay });
   if (!engine || settings.muted || settings.sfx === 0) return;
   // Sounds asked for while the context is locked would all burst out when it unlocks.
   if (engine.context.state !== "running" && !resuming) return;

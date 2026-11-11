@@ -3,6 +3,7 @@
 // stage with its script (feed.ts), and the screen takes it when the stage says its script has
 // played out.
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { soundSteps } from "../audio/steps.ts";
 import { startGame } from "../ipc";
 import type { usePlayback } from "../game/playback";
 import { useGameUpdates, useShownToFrame } from "../game/updates";
@@ -21,7 +22,8 @@ let page: { stage: ScriptStage; feed: Feed } | undefined;
 
 /** The page's one stage and what feeds it, made when first asked for: the model lasts as long
  * as the page, whatever of the screen is mounted, so a table shown again finds every object
- * where its scripts left it. */
+ * where its scripts left it. It is laid out for the desktop until a board says otherwise
+ * (StageBoard.tsx, PhoneStageBoard.tsx), and its steps sound as they play. */
 export function pageStage() {
   if (!page) {
     const stage = new ScriptStage({
@@ -29,6 +31,7 @@ export function pageStage() {
       timings: timingOf,
       frames: animationFrames,
     });
+    soundSteps(stage);
     page = { stage, feed: new Feed(stage) };
     if (navigator.webdriver) (window as Hooked).berylStage = stage;
   }
