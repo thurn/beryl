@@ -63,8 +63,9 @@ pub(crate) struct Ended {
 }
 
 /// What a store implements once, whatever kinds of entry it holds (the crate's contract,
-/// "Stores"). With `Clone`, equality and hashing, which it derives, and [`Relayout`], this
-/// is everything the kernel asks of a store outside its own mutators and queries.
+/// "Stores"). With `Clone` and equality, which it derives, a `Hash` of its entries alone
+/// and [`Relayout`], this is everything the kernel asks of a store outside its own mutators
+/// and queries.
 pub(crate) trait Store<L: Layout>: Clone + Debug + Eq + Hash + Relayout {
     /// The store of a new game: nothing in it.
     fn empty() -> Self;

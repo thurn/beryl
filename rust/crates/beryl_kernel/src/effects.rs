@@ -162,7 +162,7 @@ impl Payload {
 
 /// The kinds of payload among a store's entries: its index by kind, so that a reader of a
 /// kind with nothing live stops at one AND.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Kinds(u16);
 
 impl Kinds {
@@ -205,13 +205,21 @@ impl<L: Layout> Default for ContinuousEffect<L> {
 }
 
 /// The Effects store: the entries in the order they began, and the kinds among them.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Effects<L: Layout = Small> {
     entries: L::Queue<ContinuousEffect<L>, EFFECTS>,
     kinds: Kinds,
 }
 
 impl Copy for Effects<Small> {}
+
+/// The entries alone: the kinds are an index of them, and a hash of a state is a hash of
+/// the game.
+impl<L: Layout> std::hash::Hash for Effects<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.entries.hash(h);
+    }
+}
 
 impl<L: Layout> Effects<L> {
     /// The entries, if one of them has a payload of a kind in `kinds`; none otherwise.

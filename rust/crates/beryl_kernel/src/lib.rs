@@ -312,14 +312,15 @@
 //!
 //! ### What a store implements once
 //!
-//! `store::Store`, in the store's own file, with `Clone`, equality and hashing, which it
-//! derives, and [`relayout::Relayout`]. Nothing below grows with a new kind of entry, which
+//! `store::Store`, in the store's own file, with `Clone` and equality, which it derives,
+//! `Hash` and [`relayout::Relayout`]. Nothing below grows with a new kind of entry, which
 //! is a variant of the store's payload:
 //!
 //! | Once | Where |
 //! | --- | --- |
 //! | the store of a new game | `Store::empty`, named once in [`State::empty`] |
 //! | the copy | `Clone`, named once in [`Large::clone_state`]'s destructure, so the compiler finds a new store; `Small` copies the state whole |
+//! | the hash | `Hash` of the entries and not of the store's indices (its kinds, the keyed slots), so a hash of a state is a hash of the game: [`State`]'s own `Hash` feeds its fields in a fixed order whatever order they are laid out in, which `beryl_bench`'s pin of its corpus holds to |
 //! | another layout, and what does not fit one | [`relayout::Relayout`] and `Store::fits`, from [`State::fits`] |
 //! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, and the keyed slots are exactly the stores' keys |
 //! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records |

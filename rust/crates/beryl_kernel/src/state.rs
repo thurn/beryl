@@ -106,8 +106,8 @@ pub struct Flags {
 /// most loads of it, so a store that grows moves nothing before it. The whole order costs
 /// [`Small`] 8 bytes of padding; in the order the compiler chose, the same fields counted
 /// 0.9% more instructions (by-w8gv.7.2). A new field joins the group of its alignment, the
-/// stores at the end.
-#[derive(Debug, PartialEq, Eq, Hash)]
+/// stores at the end. A hash of the state does not follow that order ([`State`]'s `Hash`).
+#[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct State<L: Layout = Small> {
     pub(crate) turn: Turn,
@@ -157,6 +157,58 @@ pub struct State<L: Layout = Small> {
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
+
+/// Every field in the order the game is described in, whatever order they are laid out in,
+/// but the stores' index of keyed slots, which says nothing the stores do not: so a hash of
+/// a state is a hash of the game, and moving a field for speed leaves it alone
+/// (`beryl_bench` pins the hash of its corpus).
+impl<L: Layout> std::hash::Hash for State<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let State {
+            turn,
+            players,
+            budgets,
+            listening,
+            outcome,
+            profile,
+            flags,
+            battlefield,
+            rng,
+            knowledge,
+            keyed: _,
+            zones,
+            pending,
+            objects,
+            derived,
+            stack,
+            triggers,
+            delayed,
+            effects,
+            permissions,
+            entered_x,
+        } = self;
+        objects.hash(h);
+        battlefield.hash(h);
+        derived.hash(h);
+        listening.hash(h);
+        zones.hash(h);
+        players.hash(h);
+        turn.hash(h);
+        stack.hash(h);
+        triggers.hash(h);
+        delayed.hash(h);
+        effects.hash(h);
+        permissions.hash(h);
+        entered_x.hash(h);
+        pending.hash(h);
+        knowledge.hash(h);
+        rng.hash(h);
+        profile.hash(h);
+        budgets.hash(h);
+        flags.hash(h);
+        outcome.hash(h);
+    }
+}
 
 // A `Copy` type's `Clone` should be `*self`, which `Small::clone_state` is.
 #[allow(clippy::expl_impl_clone_on_copy)]
