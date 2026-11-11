@@ -3,8 +3,8 @@
 //! A [`Behavior::Custom`] is a Rust body, called as it always was. A [`Behavior::Data`] is
 //! effect data: [`run`] carries out its instructions through the same [`EffectCtx`] methods
 //! a body calls, so an ability written as data makes the events its body made, and [`scene`]
-//! reads its expressions. Neither is generic over the card: the data is the same for every
-//! layout, and only the interpreter is compiled for each.
+//! reads its expressions. The data is the same for every layout; only the interpreter is
+//! compiled for each, so an ability written as data needs no `bodies!`.
 
 mod run;
 mod scene;

@@ -300,7 +300,7 @@ static ADELINE: CardDef = CardDef {
     tokens: &[&HUMAN],
 };
 
-static INSECT: CardDef = CardDef {
+pub(super) static INSECT: CardDef = CardDef {
     name: "Test Insect",
     faces: &[Face {
         types: Types::CREATURE,
@@ -501,7 +501,7 @@ const DECK: &Decklist = &[
 ];
 
 /// A game in the starting player's first main phase, with that player and the table.
-fn game() -> (GameTable, State, Seat) {
+pub(super) fn game() -> (GameTable, State, Seat) {
     game_with_seed(7)
 }
 
@@ -531,14 +531,14 @@ fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::
 }
 
 /// Puts a card onto the battlefield through the pipeline, under its owner's control.
-fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: Seat, name: &str) -> Slot {
+pub(super) fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: Seat, name: &str) -> Slot {
     let slot = find(s, t, player, name);
     event::move_one(s, t, &mut x.events, slot, Zone::Battlefield, Reason::Effect).unwrap();
     slot
 }
 
 /// Runs `body` as an ability of the permanent in `slot`.
-fn with_ctx(
+pub(super) fn with_ctx(
     t: &GameTable,
     s: &mut State,
     x: &mut Scratch,

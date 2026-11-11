@@ -4,11 +4,12 @@
 //! [CR 405.5](https://yawgatog.com/resources/magic-rules/#R4055): "When all players pass in
 //! succession, the top (last-added) spell or ability on the stack resolves."
 //!
-//! A body that declares `may_pause` runs on the scratch copy of the state with the answers
-//! recorded so far. If it finishes, the copy becomes the state. If it asks a question the
-//! record cannot answer, the copy is discarded and the question waits in `pending` with the
-//! record, over the unchanged pre-resolution state; the answer is appended and the body runs
-//! again from the start. An inline answer source runs every body once on the state itself.
+//! An ability that may ask a question ([`Ability::asks`]) runs on the scratch copy of the
+//! state with the answers recorded so far. If it finishes, the copy becomes the state. If it
+//! asks a question the record cannot answer, the copy is discarded and the question waits in
+//! `pending` with the record, over the unchanged pre-resolution state; the answer is appended
+//! and it runs again from the start. An inline answer source runs every body once on the
+//! state itself.
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};

@@ -239,22 +239,18 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// ([CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
     /// card or token on the battlefield."
     fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
-        self.elsewhere_than(objects, None)
-            .iter()
-            .filter(|&slot| self.ctx.state.object(slot).zone == Zone::Battlefield)
+        let s = &*self.ctx.state;
+        (self.scene().objects(objects).iter())
+            .filter(|&slot| s.object(slot).zone == Zone::Battlefield)
             .collect()
     }
 
     /// The objects `objects` names that are not in `zone` already.
-    fn elsewhere_than(&self, objects: Objects, zone: Option<Zone>) -> Bitboard<L::Slot> {
-        let named = self.scene().objects(objects);
-        match zone {
-            Some(zone) => named
-                .iter()
-                .filter(|&slot| self.ctx.state.object(slot).zone != zone)
-                .collect(),
-            None => named,
-        }
+    fn elsewhere_than(&self, objects: Objects, zone: Zone) -> Bitboard<L::Slot> {
+        let s = &*self.ctx.state;
+        (self.scene().objects(objects).iter())
+            .filter(|&slot| s.object(slot).zone != zone)
+            .collect()
     }
 
     /// Notes what is known of the targets among `leaving` before the effect moves them, for
@@ -375,7 +371,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// "Exile [objects]" (CR 701.13a): "move it to the exile zone from wherever it is."
     fn exile(&mut self, objects: Objects) -> Outcome<L> {
-        let objects = self.elsewhere_than(objects, Some(Zone::Exile));
+        let objects = self.elsewhere_than(objects, Zone::Exile);
         if objects.is_empty() {
             return Outcome::NOTHING;
         }
@@ -389,7 +385,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// in a library (CR 400.3): "If an object would go to any library, graveyard, or hand
     /// other than its owner's, it goes to its owner's corresponding zone."
     fn put(&mut self, objects: Objects, to: Zone, place: Place) -> Outcome<L> {
-        let objects = self.elsewhere_than(objects, Some(to));
+        let objects = self.elsewhere_than(objects, to);
         if objects.is_empty() {
             return Outcome::NOTHING;
         }

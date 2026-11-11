@@ -4,6 +4,7 @@ mod banned;
 mod cast;
 mod casting;
 mod combat;
+mod effects;
 mod events;
 mod game;
 mod invariants;
