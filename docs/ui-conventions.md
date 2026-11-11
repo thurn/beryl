@@ -292,7 +292,15 @@ recordings do not show them.
   for the stack, so a source glides aside while its ability lifts. An exiled
   card rests unseen under its owner's graveyard, and an emblem's ability appears
   on the stack with no lift: the phone draws no exile pile and no emblem yet.
-  Sounds follow the same steps.
+  Sounds follow the same steps. What the desktop shows around its table is
+  composed for the phone from the same pieces. The menu button opens the
+  settings with the log and the bug report in them. Undo and full control's mark
+  stand at the end of the middle band, across from the phase. Unspent mana lies
+  beside its player's life total, and the combat damage on its way on the
+  total's rim. A touch on a graveyard, or on a library with a known card, lists
+  its cards; a touch on a card shows it whole, and a touch beside it puts it
+  away. The turn's banner crosses the middle band, a combat step's lies under
+  the opponent's strip, and a scry's pill beside its player's strip.
 
 ## Verbs
 
