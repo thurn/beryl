@@ -171,6 +171,31 @@ def test_interactions_outside_any_check_is_the_harness(repo: Path) -> None:
     assert set(choice.reasons) == set(UNIVERSE)
 
 
+def test_code_interactions_runs_in_node_chooses_the_checks_using_it(repo: Path) -> None:
+    script = repo / "ui" / "scripts" / "interactions.mjs"
+    imported = INTERACTIONS.replace(
+        'import assert from "node:assert/strict";\n',
+        'import assert from "node:assert/strict";\n'
+        'import { type Plan, blockPlan as plan } from "../src/game/combat.ts";\n',
+    )
+    script.write_text(imported.replace("page.drop()", "page.drop(plan())"))
+    # No page ran the line: only the check that calls it in Node can see the change.
+    found = coverage_of(**{"ui-test:drag": {COMBAT: [[1, 9]]}})
+    code = {COMBAT: [hunk(COMBAT, 15, 15, ["  x();"], ["  y();"])]}
+    choice = selection.choose("ui-test", [COMBAT], code, UNIVERSE, found, "c0ffee")
+    assert choice.reasons == {
+        "ui-test:a blocker can be dragged onto an attacker": f"import:{COMBAT}"
+    }
+    comment = {COMBAT: [hunk(COMBAT, 15, 15, ["// x"], ["// y"])]}
+    choice = selection.choose("ui-test", [COMBAT], comment, UNIVERSE, found, "c0ffee")
+    assert choice.idle()
+    # Called outside any check, by the harness, it reaches every check.
+    wanted = "    if (!wanted(title))"
+    script.write_text(imported.replace(wanted, f"    plan();\n{wanted}"))
+    choice = selection.choose("ui-test", [COMBAT], code, UNIVERSE, found, "c0ffee")
+    assert set(choice.reasons) == set(UNIVERSE)
+
+
 def test_the_capture_harness_chooses_every_check(repo: Path) -> None:
     choice = selection.choose(
         "shots",

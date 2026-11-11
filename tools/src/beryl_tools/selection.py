@@ -9,6 +9,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
   nightly coverage file (coverage.py), mapped across the commits between it and the branch;
 - `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs, or a
   top-level block of them, or its entry in ui/shots.json;
+- `import:<file>`: code changed in a ui/src file interactions.mjs imports into Node, which no
+  coverage sees: as if each line of interactions.mjs that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
   step recorded it against the recording the coverage run made;
 - `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, interactions.mjs outside
@@ -338,6 +340,42 @@ def body_reasons(
     return chosen, harness
 
 
+NODE_IMPORT: re.Pattern[str] = re.compile(
+    r'^import\s*\{([^}]*)\}\s*from\s*"\.\./(src/[^"]+)";', re.M
+)
+
+
+def import_reasons(
+    source: str, path: str, changed: list[Hunk], universe: Iterable[str]
+) -> tuple[set[str], bool]:
+    """body_reasons for a change to `path`, a ui/src file, as interactions.mjs (`source`) runs it
+    in Node, where the browser's coverage does not see it: each line that uses a name the file
+    imports from `path` counts as changed. Nothing when it imports nothing from there or the
+    change is to comments."""
+    if all(h.comment_only() for h in changed):
+        return set(), False
+    names: list[str] = []
+    imports: set[int] = set()
+    for m in NODE_IMPORT.finditer(source):
+        if f"ui/{m[2]}" != path:
+            continue
+        first = source.count("\n", 0, m.start()) + 1
+        imports |= set(range(first, first + m[0].count("\n") + 1))
+        for part in m[1].split(","):
+            words = part.split()
+            if words and words[0] != "type":
+                names.append(words[-1])
+    if not names:
+        return set(), False
+    use = re.compile(rf"\b(?:{'|'.join(re.escape(n) for n in names)})\b")
+    uses = [
+        Hunk(INTERACTIONS, n, 1, n, 1, [text], [text])
+        for n, text in enumerate(source.splitlines(), 1)
+        if n not in imports and use.search(text)
+    ]
+    return body_reasons(source, uses, universe)
+
+
 def interaction_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
     """The checks interactions.mjs has: the titles it spells out, and the patterns of all of
     them (a computed title it cannot follow matches anything)."""
@@ -480,6 +518,13 @@ def choose(
         choice.fill = True
     elif sources and found is not None:
         coverage_reasons(choice, sources, found, base)
+    if lane == "ui-test" and sources:
+        source = (paths.REPO / INTERACTIONS).read_text()
+        for path, hs in sources.items():
+            bodies, harness = import_reasons(source, path, hs, universe)
+            choice.add(sorted(bodies), f"import:{path}")
+            if harness:
+                choice.add(universe, "harness")
     return choice
 
 
