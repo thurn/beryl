@@ -7,12 +7,13 @@ each to the run log itself as `script:<card>/<moment>/<seat>` or
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING
 
 from . import paths, system
 from .reruns import CANNOT_RUN, failed_scripts
@@ -38,6 +39,13 @@ def lane() -> Lane:
 def script_check_step(*only: str) -> int:
     """Every script check, or `only` those named (a check's id, or what ids begin with, such as
     a card's slug)."""
+    if not build():
+        return CANNOT_RUN
+    return run(list(only))
+
+
+def build() -> bool:
+    """Builds the checker in debug, where the script checks are assertions; whether it built."""
     built = subprocess.run(
         ["cargo", "build", "--locked", "--quiet", "--package", CHECKER],
         cwd=paths.RUST,
@@ -45,13 +53,24 @@ def script_check_step(*only: str) -> int:
         stdin=subprocess.DEVNULL,
         check=False,
     )
-    if built.returncode != 0:
-        return CANNOT_RUN
+    return built.returncode == 0
+
+
+def run(
+    only: list[str], results: Path | None = None, out: IO[str] | None = None
+) -> int:
+    """Runs the built checker on every check or `only` those named, logging each check to
+    `results` when given (`$BERYL_CHECK_RESULTS` otherwise) and printing to `out`."""
+    env = dict(os.environ)
+    if results is not None:
+        env["BERYL_CHECK_RESULTS"] = str(results)
     binary = system.exe(paths.RUN_TARGET / "debug" / CHECKER)
     return subprocess.run(
         [str(binary), "script-check", str(FIXTURES), *only],
         cwd=paths.RUST,
+        env=env,
         stdin=subprocess.DEVNULL,
+        stdout=out,
         check=False,
     ).returncode
 

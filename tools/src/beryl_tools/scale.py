@@ -16,6 +16,13 @@ A clone keeps its `use crate::...` lines working: each shard re-exports the real
 (`crate::tokens`) and has a `names` module of its own, the real names
 plus one constant per clone. Files reaching another card (`super::`, `crate::white::...`) are left out of the pool.
 
+It then prints what scripts cost (plan K24): the seconds `beryl_cli script-check` takes to play
+every spec moment of each pooled card from both seats in a debug build, where every script the
+session builds is held to the replay check and the rule invariants, per card and extrapolated to
+the N clones. A clone is a copy of a real card file, so its scenarios are the same work as its
+original's: the clones' cost is their originals' summed, measured once on the real cards. It is
+reported with no bar.
+
 Budgets are not asserted yet (milestone 7 adds `--assert`: check 60 s, release 180 s, one-card
 rebuild 2 s, 4 GiB). Times are load-adjusted as the checks' are (`checks.Clock`). The one-card
 rebuild is a `cargo check` one, the edit-and-look loop.
@@ -24,18 +31,21 @@ rebuild is a `cargo check` one, the edit-and-look loop.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import checks, paths
+from . import checks, nearest, paths, script_checks
 
 DEFAULT_CARDS = 50_000
 DEFAULT_CRATES = 20
@@ -52,6 +62,14 @@ NAME_FIELD: re.Pattern[str] = re.compile(
 )
 NAME_CONST: re.Pattern[str] = re.compile(r'pub const ([A-Z0-9_]+): &str = "(.*)";')
 MAX_LINE = 100
+# A card's script check in the run log: `script:<card>/<moment>/<seat>`.
+SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
+# The cards the script cost names by name, the costliest first.
+COSTLIEST = 5
+# `script-check`'s last line: its checks' own seconds, past the process's start.
+SCRIPT_SUMMARY: re.Pattern[str] = re.compile(
+    r"^script-check: .* in ([\d.]+) s$", re.MULTILINE
+)
 
 
 @dataclass
@@ -279,6 +297,95 @@ def report(cards: int, shards: int, pool: int, runs: dict[str, Run]) -> str:
     return "\n".join(lines)
 
 
+@dataclass
+class Scripts:
+    """What a script-check run of the pool's cards cost: each card's checks' seconds summed, by
+    slug, how many checks there were, the run's seconds and the seconds its checks took, past
+    the process's start, by its own clock."""
+
+    cards: dict[str, float]
+    checks: int
+    seconds: float  # load-adjusted
+    wall: float
+    checking: float
+
+
+def card_seconds(lines: Iterable[str]) -> tuple[dict[str, float], int]:
+    """Each card's script checks' seconds summed, by its slug, from `script-check`'s run-log
+    lines, and how many checks there were; fixtures' recordings are no card's."""
+    cards: dict[str, float] = {}
+    count = 0
+    for line in lines:
+        try:
+            record = json.loads(line)
+            check, seconds = str(record["check"]), float(record["seconds"])
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            continue
+        found = SCRIPT_CHECK.match(check)
+        if found is None or found.group(1) == "fixtures":
+            continue
+        cards[found.group(1)] = cards.get(found.group(1), 0.0) + seconds
+        count += 1
+    return cards, count
+
+
+def clone_seconds(cards: dict[str, float], pool: list[Source], count: int) -> float:
+    """The script checks' seconds of `count` clones: clone `i` is `pool[i % len(pool)]`, as
+    [`generate`] picks them, and costs what its original does."""
+    each = [cards.get(nearest.slug(s.name), 0.0) for s in pool]
+    rounds, rest = divmod(count, len(each))
+    return rounds * sum(each) + sum(each[:rest])
+
+
+def measure_scripts(pool: list[Source]) -> Scripts:
+    """Runs the script checks of the pool's cards, every spec moment from both seats, and reads
+    what each cost from the results they log."""
+    if not script_checks.build():
+        sys.exit("scale: beryl_cli did not build for the script checks")
+    slugs = sorted({nearest.slug(s.name) for s in pool})
+    with tempfile.TemporaryDirectory() as tmp:
+        results, printed = Path(tmp) / "results.jsonl", Path(tmp) / "out.txt"
+        clock = checks.Clock()
+        began = time.monotonic()
+        with open(printed, "w") as out:
+            code = script_checks.run(slugs, results, out=out)
+        wall, adjusted = time.monotonic() - began, clock.now()
+        output = printed.read_text()
+        print(output, end="", file=sys.stderr)
+        if code != 0:
+            sys.exit(
+                "scale: a script check failed: `just test-rust`, or the script lane"
+            )
+        lines = results.read_text().splitlines() if results.exists() else []
+    summary = SCRIPT_SUMMARY.search(output)
+    cards, count = card_seconds(lines)
+    checking = float(summary.group(1)) if summary else wall
+    return Scripts(cards, count, adjusted, wall, checking)
+
+
+def script_report(scripts: Scripts, pool: list[Source], cards: int) -> str:
+    """The script cost, per card and for the `cards` clones, at the run's own parallelism."""
+    measured = [nearest.slug(s.name) for s in pool]
+    spent = sum(scripts.cards.values())
+    names = sorted(set(measured))
+    mean = sum(scripts.cards.get(n, 0.0) for n in names) / len(names)
+    costliest = sorted(scripts.cards.items(), key=lambda kv: -kv[1])[:COSTLIEST]
+    clones = clone_seconds(scripts.cards, pool, cards)
+    # The run's checks overlap on its threads: the clones' would as much.
+    parallel = max(spent / scripts.checking, 1.0) if scripts.checking > 0 else 1.0
+    run = checks.took(scripts.wall, scripts.seconds)
+    lines = [
+        "",
+        f"{'script checks':<26}{run:>34}   {scripts.checks:,} checks: the spec moments "
+        f"of {len(names)} cards from both seats, every script built and replayed",
+        f"{'  per card':<26}{mean:>32.3f} s   of checks on average; the costliest: "
+        + ", ".join(f"{name} {seconds:.2f} s" for name, seconds in costliest),
+        f"{f'  {cards:,} clones':<26}{clones:>32,.0f} s   of checks, about "
+        f"{clones / parallel:,.0f} s at this run's parallelism ({parallel:.1f}x)",
+    ]
+    return "\n".join(lines)
+
+
 def scale(args: argparse.Namespace) -> int:
     pool = sources()
     root = paths.cache_root() / "scale"
@@ -308,7 +415,10 @@ def scale(args: argparse.Namespace) -> int:
     print("scale: one-card rebuild", file=sys.stderr)
     edit_card(root)
     runs["one-card rebuild (check)"] = timed(["cargo", "check", "--workspace"], root)
+    print("scale: script checks", file=sys.stderr)
+    scripts = measure_scripts(pool)
     print(report(args.cards, len(shards), len(pool), runs))
+    print(script_report(scripts, pool, args.cards))
     return 0
 
 

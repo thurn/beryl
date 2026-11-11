@@ -90,3 +90,45 @@ def test_report_names_the_largest_process() -> None:
     text = scale.report(2000, 4, 41, runs)
     assert "2,000 cards" in text
     assert "3.00 GiB   (release build)" in text
+
+
+def test_card_seconds_sum_each_cards_checks_and_skip_recordings() -> None:
+    lines = [
+        '{"check": "script:counterspell/start/yours", "outcome": "pass", "seconds": 0.5}',
+        '{"check": "script:counterspell/start/theirs", "outcome": "pass", "seconds": 0.25}',
+        '{"check": "script:brainstorm/cast/yours", "outcome": "pass", "seconds": 1.0}',
+        '{"check": "script:fixtures/stack-two/yours", "outcome": "pass", "seconds": 9.0}',
+        "not a record",
+    ]
+    cards, count = scale.card_seconds(lines)
+    assert cards == {"counterspell": 0.75, "brainstorm": 1.0}
+    assert count == 3
+
+
+def source(name: str) -> scale.Source:
+    return scale.Source(Path(f"{name}.rs"), "", name.upper(), name)
+
+
+def test_clones_cost_what_their_originals_do_cycled_as_generated() -> None:
+    pool = [source("Counterspell"), source("Brainstorm"), source("Ponder")]
+    cards = {"counterspell": 2.0, "brainstorm": 1.0}
+    # Clone i is pool[i % 3]: 7 clones are two rounds of 3.0 s and one Counterspell.
+    assert scale.clone_seconds(cards, pool, 7) == 8.0
+    assert scale.clone_seconds(cards, pool, 2) == 3.0
+
+
+def test_the_script_report_extrapolates_at_the_runs_parallelism() -> None:
+    pool = [source("Counterspell"), source("Brainstorm")]
+    scripts = scale.Scripts(
+        {"counterspell": 3.0, "brainstorm": 1.0},
+        checks=6,
+        seconds=4.0,
+        wall=4.0,
+        checking=2.0,
+    )
+    text = scale.script_report(scripts, pool, 1000)
+    assert "6 checks" in text and "2 cards" in text
+    assert "2.000 s" in text  # The mean of 3 and 1.
+    assert "counterspell 3.00 s, brainstorm 1.00 s" in text
+    # 500 rounds of 4 s, overlapping twofold as the run's 4 s of checks took 2 s.
+    assert "2,000 s" in text and "about 1,000 s" in text and "(2.0x)" in text
