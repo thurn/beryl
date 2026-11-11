@@ -321,7 +321,8 @@ scenario. All four are logged and judged the same way.
 
 - **Run log.** Every run of every check appends a record to `$BERYL_CACHE`: the
   commit, fast or slow, the outcome, the seconds, the load, and why the check
-  was chosen. Nothing is committed.
+  was chosen. Nothing is committed. It is one machine's record and is lost with
+  the cache.
 
 - **Verdicts.** The tool infers one for each failure and asks the agent only
   when it cannot tell.
@@ -330,6 +331,12 @@ scenario. All four are logged and judged the same way.
   - *Stale test:* the fix touched only the check or its fixture.
   - *Caught a bug:* the fix touched product code.
   - *Selection miss:* slow CI failed a check the fast check did not choose.
+
+- **Failure records.** Every failure that reaches a verdict is also written to
+  beads, which every machine shares and git keeps: one closed bead per check
+  that has ever failed, and one comment on it per failure, with the commit, the
+  verdict and what fixed it. Passes and timings stay in the run log. Quarantine
+  and pruning read verdicts from the beads, so they agree on every machine.
 
 - **Selection.** A nightly Chromium run records the functions and CSS rules each
   browser check executes. The fast check runs the checks whose recorded lines
