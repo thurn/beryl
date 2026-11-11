@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import cards, forge, paths, system, xmage
+from . import cards, checks, forge, paths, system, xmage
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -608,10 +608,13 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
+    # Whether the oracles and the scenarios built, so that a failure is the scenarios'.
+    built = False
     try:
         with locked():
             require_built()
             entries = dump_scenarios(work / "scenarios.json", log_dir() / "dump.log")
+            built = True
             if args.cards:
                 entries = [e for e in entries if e["card"] in args.cards]
             xmage_log = log_dir() / "xmage-oracle.log"
@@ -627,7 +630,7 @@ def oracle(args: argparse.Namespace) -> int:
             stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
     except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
         print(f"oracle: {e}", file=sys.stderr)
-        return 1
+        return 1 if built else checks.CANNOT_RUN
     report = log_dir() / "oracle.json"
     report.write_text(json.dumps(results, indent=2))
     # Only what needs attention on stdout; the full report is in the log.

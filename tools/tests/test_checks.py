@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -127,3 +128,124 @@ def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
     monkeypatch.setattr(checks.system, "loadavg", lambda: (4.0, 4.0, 4.0))
     assert checks.run_lanes([lane], "ci", 1, strict=True) == 1
     assert "ci busy sleep: TIMED OUT after" in capsys.readouterr().out
+
+
+# A step that fails the first time it runs and passes after, recording each run's arguments.
+FLAKY = """
+import pathlib, sys
+runs = pathlib.Path("runs")
+before = runs.read_text() if runs.exists() else ""
+runs.write_text(before + " ".join(sys.argv[1:]) + "\\n")
+if before and {passes}:
+    sys.exit(0)
+print("FAILED: plays a land")
+print("FAILED: casts a spell")
+sys.exit({code})
+"""
+
+
+def flaky_step(passes: bool = True, code: int = 1) -> list[str]:
+    return [sys.executable, "-c", FLAKY.format(passes=passes, code=code)]
+
+
+def runs(tmp_path: Path) -> list[str]:
+    return (tmp_path / "runs").read_text().splitlines()
+
+
+def test_a_step_that_fails_once_reruns_its_failed_checks_and_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lane = checks.Lane("ui-test").step(
+        "ui-test", flaky_step(), tmp_path, rerun=checks.failed_titles
+    )
+    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert runs(tmp_path) == ["", "plays a land casts a spell"]
+    out = capsys.readouterr().out
+    assert "ci ui-test ui-test: FAILED (exit 1) after" in out
+    assert "; rerunning plays a land, casts a spell once" in out
+    assert "\nflaky: ui-test plays a land\nflaky: ui-test casts a spell\n" in out
+    assert "ci: passed in" in out
+
+
+def test_a_step_that_cannot_name_its_checks_reruns_whole(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lane = checks.Lane("app").step("smoke", flaky_step(), tmp_path, rerun=checks.whole)
+    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert runs(tmp_path) == ["", ""]
+    assert "\nflaky: app smoke\n" in capsys.readouterr().out
+
+
+def test_a_step_that_fails_twice_fails_its_lane_showing_both_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lane = checks.Lane("ui-test").step(
+        "ui-test",
+        flaky_step(passes=False),
+        tmp_path,
+        rerun=checks.failed_titles,
+    )
+    assert checks.run_lanes([lane], "ci", 60, strict=True) == 1
+    assert len(runs(tmp_path)) == 2
+    out = capsys.readouterr().out
+    assert out.count("FAILED: plays a land") == 2
+    assert out.count("ci ui-test ui-test: FAILED (exit 1)") == 2
+    assert "flaky:" not in out
+    assert "ci: FAILED: ui-test in" in out
+
+
+def test_a_build_failure_or_a_static_check_is_not_rerun(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    build = checks.Lane("rust").step(
+        "tests",
+        flaky_step(code=checks.CANNOT_RUN),
+        tmp_path,
+        rerun=checks.failed_tests,
+    )
+    assert checks.run_lanes([build], "ci", 60, strict=True) == 1
+    assert len(runs(tmp_path)) == 1
+    (tmp_path / "runs").unlink()
+    clippy = checks.Lane("rust").step("clippy", flaky_step(), tmp_path)
+    assert checks.run_lanes([clippy], "ci", 60, strict=True) == 1
+    assert len(runs(tmp_path)) == 1
+    assert "rerunning" not in capsys.readouterr().out
+
+
+def test_failed_rust_tests_are_named_as_nextest_filters() -> None:
+    output = """
+        FAIL [   0.010s] (3/4) beryl_cli::exe also_bad
+  stdout ───
+    test also_bad ... FAILED
+     SIGSEGV [   1.002s] (4/4) beryl_engine tests::crashes
+     Summary [   0.011s] 4 tests run: 2 passed, 2 failed, 0 skipped
+        FAIL [   0.010s] (3/4) beryl_cli::exe also_bad
+"""
+    failed = checks.failed_tests(output)
+    assert failed == ["beryl_cli::exe also_bad", "beryl_engine tests::crashes"]
+    assert checks.nextest_filter(failed) == (
+        "(binary_id(beryl_cli::exe) & test(=also_bad))"
+        " | (binary_id(beryl_engine) & test(=tests::crashes))"
+    )
+    # The allocations harness runs beside nextest, so its failure reruns the lot.
+    assert checks.failed_tests(output + checks.ALLOCATIONS_FAILED) == []
+
+
+def test_failed_shots_and_oracle_cards_are_named() -> None:
+    shot = json.loads((checks.paths.UI / "shots.json").read_text())["shots"][0]["name"]
+    shots = f"ui-shots: {shot}: screen: overlap\nui-shots: no-such-shot: x\nui-shots: FAILED\n"
+    assert checks.failed_shots(shots) == [shot]
+    summary = {
+        "xmage": {"scenarios": [{"card": "Ponder", "status": "fail"}]},
+        "forge": {
+            "scenarios": [
+                {"card": "Brainstorm", "status": "allowlisted"},
+                {"card": "Daze", "status": "pass", "stale_allowlist": True},
+            ]
+        },
+        "report": "oracle.json",
+    }
+    oracle = "oracle: noise\n" + json.dumps(summary, indent=2)
+    assert checks.failed_cards(oracle) == ["Ponder", "Daze"]
+    # Page errors are no check's, so the checks named alone would not show them again.
+    assert checks.failed_titles("FAILED: a\npage errors:\n  b: boom\n") == []

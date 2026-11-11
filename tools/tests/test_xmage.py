@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import cards, oracles, xmage
+from beryl_tools import cards, checks, oracles, xmage
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-xmage.json"
 XMAGE_CARDS = {
@@ -213,7 +213,8 @@ def test_oracle_needs_the_oracles_built(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
-    assert oracles.oracle(argparse.Namespace(cards=[])) == 1
+    # Not built at its pin is no flake: slow CI does not rerun it.
+    assert oracles.oracle(argparse.Namespace(cards=[])) == checks.CANNOT_RUN
 
 
 @pytest.mark.parametrize("source", ["Time Spiral", "Teferi, Hero of Dominaria"])

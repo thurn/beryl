@@ -13,6 +13,11 @@ CI runs every lane plus `app` (the debug app built and launched headless until i
 `shots` (the screens rendered headless), `ui-test` (the game screen played headless),
 `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the rollout
 benchmark's instruction count held to its bar).
+
+A step that fails is rerun once before its lane fails (plan K21), narrowed to the checks it says
+failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
+<check>` line for each. A step killed at the deadline, or one that failed to build or start
+(exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -51,6 +56,27 @@ BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 # The game screen's code: it reads what a decision asks from the protocol
 # (`DecisionView.ask`), never from the card asking, so a new card needs no change here.
 GAME_UI: Path = paths.UI / "src" / "game"
+# A step's exit code when it failed to build or start (a compile error, a UiError, an oracle not
+# built at its pin): its checks never ran, so a failure on rerun would only cost the time.
+CANNOT_RUN = 125
+
+# Given a failed step's output, the checks it names as failed, each an argument the step takes
+# to run only that check; none to rerun the step whole.
+Failed = Callable[[str], list[str]]
+
+
+def whole(output: str) -> list[str]:
+    """A step that cannot name its failed checks: it reruns whole."""
+    return []
+
+
+@dataclass
+class Step:
+    name: str
+    cmd: list[str]
+    cwd: Path
+    # How the step reruns once after failing; None for a step whose failure is no flake.
+    failed: Failed | None = None
 
 
 @dataclass
@@ -58,10 +84,16 @@ class Lane:
     name: str
     # Whether it builds, so needs warm caches; Markdown and Python lanes skip the clone.
     warm: bool = False
-    steps: list[tuple[str, list[str], Path]] = field(default_factory=list)
+    steps: list[Step] = field(default_factory=list)
 
-    def step(self, name: str, cmd: list[str], cwd: Path = paths.REPO) -> Lane:
-        self.steps.append((name, cmd, cwd))
+    def step(
+        self,
+        name: str,
+        cmd: list[str],
+        cwd: Path = paths.REPO,
+        rerun: Failed | None = None,
+    ) -> Lane:
+        self.steps.append(Step(name, cmd, cwd, rerun))
         return self
 
 
@@ -72,6 +104,8 @@ class Outcome:
     seconds: float
     log: str
     timings: list[str]
+    # The checks that failed and then passed on the rerun; a step's name where it reran whole.
+    flaky: list[str] = field(default_factory=list)
 
 
 def stretch(load: float, cpus: int) -> float:
@@ -173,32 +207,104 @@ class Steps:
 
 
 def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outcome:
-    clock = steps.clock
+    clock: Clock = steps.clock
     started = clock.now()
     log: list[str] = []
     timings: list[str] = []
-    for name, cmd, cwd in lane.steps:
+    flaky: list[str] = []
+
+    def attempt(step: Step, cmd: list[str]) -> int | None:
+        """Runs `cmd` for `step`, logging its output and how it ended; its exit code."""
         t, wall = clock.now(), clock.wall()
-        code, output = steps.run(cmd, cwd, env)
+        code, output = steps.run(cmd, step.cwd, env)
         seconds, wall = clock.now() - t, clock.wall() - wall
         if output.strip():
             log.append(output.rstrip())
+        ended = f"{script} {lane.name} {step.name}: "
+        if code is None:
+            ended += f"TIMED OUT after {took(wall, seconds)} (deadline {steps.deadline:.0f} s)"
+        elif code != 0:
+            ended += f"FAILED (exit {code}) after {took(wall, seconds)}"
+        else:
+            ended += took(wall, seconds)
+        if code != 0 and step.failed and code not in (None, CANNOT_RUN):
+            # Named before the rerun's output follows, so a rerun of the lot says so.
+            checks = step.failed(output)
+            ended += f"; rerunning {', '.join(checks) if checks else 'it'} once"
+            log.append(ended)
+            again = attempt(Step(step.name, step.cmd, step.cwd), cmd + checks)
+            if again == 0:
+                flaky.extend(checks or [step.name])
+            return again
+        log.append(ended)
+        return code
+
+    for step in lane.steps:
+        t, flakes = clock.now(), len(flaky)
+        code = attempt(step, step.cmd)
         if code != 0:
-            log.append(
-                f"{script} {lane.name} {name}: "
-                + (
-                    f"TIMED OUT after {took(wall, seconds)} (deadline {steps.deadline:.0f} s)"
-                    if code is None
-                    else f"FAILED (exit {code}) after {took(wall, seconds)}"
-                )
-            )
-            timings.append(f"{name} {'TIMED OUT' if code is None else 'FAILED'}")
+            timings.append(f"{step.name} {'TIMED OUT' if code is None else 'FAILED'}")
             return Outcome(
-                lane.name, False, clock.now() - started, "\n".join(log), timings
+                lane.name, False, clock.now() - started, "\n".join(log), timings, flaky
             )
-        log.append(f"{script} {lane.name} {name}: {took(wall, seconds)}")
-        timings.append(f"{name} {seconds:.0f} s")
-    return Outcome(lane.name, True, clock.now() - started, "\n".join(log), timings)
+        rerun = " after a rerun" if len(flaky) > flakes else ""
+        timings.append(f"{step.name} {clock.now() - t:.0f} s{rerun}")
+    return Outcome(
+        lane.name, True, clock.now() - started, "\n".join(log), timings, flaky
+    )
+
+
+# What each rerunnable step names as failed (`Failed`).
+
+# nextest's line for a test that failed, crashed or timed out: its binary and its name.
+NEXTEST_FAILED: re.Pattern[str] = re.compile(
+    r"^\s*(?:TRY \d+ )?(?:FAIL|LEAK-FAIL|SIG[A-Z]+|ABORT|TIMEOUT) \[[^\]]*\]"
+    r"(?: \(\s*\d+/\d+\))? (\S+) (\S+)\s*$",
+    re.MULTILINE,
+)
+ALLOCATIONS_FAILED = "rust-tests: allocations FAILED"
+
+
+def failed_tests(output: str) -> list[str]:
+    """The tests nextest failed, each as `<binary> <test>` (`rust_tests_step` takes them); none
+    when the allocations harness failed, which nextest does not run."""
+    if ALLOCATIONS_FAILED in output:
+        return []
+    return list(dict.fromkeys(" ".join(m) for m in NEXTEST_FAILED.findall(output)))
+
+
+def failed_shots(output: str) -> list[str]:
+    """The shots `ui-shots` names on its `ui-shots: <shot>: <errors>` lines."""
+    names = {
+        s["name"] for s in json.loads((paths.UI / "shots.json").read_text())["shots"]
+    }
+    found = re.findall(r"^ui-shots: ([^\s:]+): ", output, re.MULTILINE)
+    return [n for n in dict.fromkeys(found) if n in names]
+
+
+def failed_titles(output: str) -> list[str]:
+    """The checks `ui-test` names on its `FAILED: <title>` lines; none when it also reports
+    page errors or sounds, which a rerun of those checks alone would not see again."""
+    if re.search(r"^(page errors|sound):", output, re.MULTILINE):
+        return []
+    return list(dict.fromkeys(re.findall(r"^FAILED: (.+)$", output, re.MULTILINE)))
+
+
+def failed_cards(output: str) -> list[str]:
+    """The cards whose scenarios failed in the JSON summary `oracle` ends with."""
+    start = re.search(r"^\{$", output, re.MULTILINE)
+    try:
+        summary = json.loads(output[start.start() :]) if start else {}
+    except json.JSONDecodeError:
+        return []
+    cards = [
+        str(s["card"])
+        for result in summary.values()
+        if isinstance(result, dict)
+        for s in result.get("scenarios", [])
+        if s.get("status") == "fail" or s.get("stale_allowlist")
+    ]
+    return list(dict.fromkeys(cards))
 
 
 def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
@@ -219,6 +325,10 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
     for o in outcomes:
         print(f"{script}: {o.lane} {o.seconds:.0f} s ({', '.join(o.timings)})")
+    # Checks that failed once and passed on the rerun (`run_lane`), for whoever greps the log.
+    for o in outcomes:
+        for check in o.flaky:
+            print(f"flaky: {o.lane} {check}")
     elapsed = steps.clock.now()
     failed = [o.lane for o in outcomes if not o.ok]
     over = elapsed > budget
@@ -330,7 +440,9 @@ def python_lane() -> Lane:
     # Pyre has no Windows build: macOS checks the types.
     if not system.WINDOWS:
         lane.step("pyre", ["pyre", "--noninteractive", "check"], paths.TOOLS)
-    return lane.step("pytest", [sys.executable, "-m", "beryl_tools.checks", "pytest"])
+    return lane.step(
+        "pytest", [sys.executable, "-m", "beryl_tools.checks", "pytest"], rerun=whole
+    )
 
 
 def rust_lane() -> Lane:
@@ -345,7 +457,11 @@ def rust_lane() -> Lane:
             ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
             paths.RUST,
         )
-        .step("tests", [sys.executable, "-m", "beryl_tools.checks", "rust-tests"])
+        .step(
+            "tests",
+            [sys.executable, "-m", "beryl_tools.checks", "rust-tests"],
+            rerun=failed_tests,
+        )
     )
 
 
@@ -359,24 +475,28 @@ def ui_lane() -> Lane:
 
 
 def app_lane() -> Lane:
-    return Lane("app", warm=True).step("smoke", [*BY, "smoke"])
+    return Lane("app", warm=True).step("smoke", [*BY, "smoke"], rerun=whole)
 
 
 def shots_lane() -> Lane:
     """Renders every screen in ui/shots.json headless; a page error or a crash fails it."""
-    return Lane("shots", warm=True).step("ui-shots", [*BY, "ui-shots"])
+    return Lane("shots", warm=True).step(
+        "ui-shots", [*BY, "ui-shots"], rerun=failed_shots
+    )
 
 
 def ui_test_lane() -> Lane:
     """Plays the game screen through fixtures it records apart from `shots`' (shots.py), so
     the two run at once; a page error or a failed interaction fails it."""
-    return Lane("ui-test", warm=True).step("ui-test", [*BY, "ui-test"])
+    return Lane("ui-test", warm=True).step(
+        "ui-test", [*BY, "ui-test"], rerun=failed_titles
+    )
 
 
 def oracle_lane() -> Lane:
     """Plays every card scenario in XMage and Forge (`by oracle`): a failure the divergence
     allowlist does not explain fails it, as does an oracle not built at its pin."""
-    return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"])
+    return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"], rerun=failed_cards)
 
 
 def mobile_lane() -> Lane:
@@ -389,7 +509,7 @@ def counts_lane() -> Lane:
     """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
     fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
     target dir, so it needs no warm clone."""
-    return Lane("counts").step("count-gate", [*BY, "count-gate"])
+    return Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
 
 
 def fast(args: argparse.Namespace) -> int:
@@ -521,17 +641,27 @@ def pytest_step() -> int:
     return 0 if code == 5 else code  # 5: no tests collected
 
 
-def rust_tests_step() -> int:
-    """The workspace's tests. cargo-nextest runs the test binaries in parallel (cargo test runs
-    them one after another); it cannot list the harness-less `allocations` targets, so cargo
-    test runs those beside it once everything is built. Plain cargo test where cargo-nextest is
-    missing."""
+def nextest_filter(tests: Iterable[str]) -> str:
+    """A filterset of exactly `tests`, each `<binary> <test>` as nextest names a failure."""
+    return " | ".join(
+        f"(binary_id({binary}) & test(={name}))"
+        for binary, name in (t.split(" ", 1) for t in tests)
+    )
+
+
+def rust_tests_step(*only: str) -> int:
+    """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`).
+    cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
+    it cannot list the harness-less `allocations` targets, so cargo test runs those beside it
+    once everything is built. Plain cargo test where cargo-nextest is missing."""
     cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
     build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
     if build.returncode != 0:
-        return build.returncode
+        return CANNOT_RUN
+    # Every test runs past a failure, so that a rerun of those named failed covers the run:
+    # nextest would otherwise cancel the rest unrun.
     nextest = [
         "cargo",
         "nextest",
@@ -539,12 +669,14 @@ def rust_tests_step() -> int:
         "--locked",
         "--workspace",
         "--cargo-quiet",
+        "--no-fail-fast",
         "--status-level=fail",
         "--final-status-level=fail",
         "-E",
-        "not binary(allocations)",
+        nextest_filter(only) if only else "not binary(allocations)",
     ]
-    jobs = [nextest, [*cargo, "--test", "allocations"]]
+    allocations = [*cargo, "--test", "allocations"]
+    jobs = [nextest] if only else [nextest, allocations]
 
     def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -559,8 +691,10 @@ def rust_tests_step() -> int:
 
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         runs = list(pool.map(run, jobs))
-    for r in runs:
+    for cmd, r in zip(jobs, runs):
         print(r.stdout.rstrip(), flush=True)
+        if cmd is allocations and r.returncode != 0:
+            print(ALLOCATIONS_FAILED, flush=True)
     return next((r.returncode for r in runs if r.returncode != 0), 0)
 
 
@@ -572,10 +706,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
 
 
 if __name__ == "__main__":
-    steps = {
+    steps: dict[str, Callable[..., int]] = {
         "pytest": pytest_step,
         "rust-tests": rust_tests_step,
         "card-names": card_names_step,
         "build-paths": build_paths_step,
     }
-    sys.exit(steps[sys.argv[1]]())
+    sys.exit(steps[sys.argv[1]](*sys.argv[2:]))

@@ -34,7 +34,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import paths, system, warm
+from . import checks, paths, system, warm
 
 SERVER_TIMEOUT = 60.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
@@ -187,7 +187,8 @@ def ui_shots(args: argparse.Namespace) -> int:
     out.mkdir(parents=True)
     try:
         env = browser_env()
-        code = record_fixtures()
+        # Recording builds and plays the fixtures; failing that, no shot was taken.
+        code = checks.CANNOT_RUN if record_fixtures() else 0
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(
@@ -200,7 +201,7 @@ def ui_shots(args: argparse.Namespace) -> int:
                 ).returncode
     except UiError as e:
         print(f"ui-shots: {e}", file=sys.stderr)
-        code = 1
+        code = checks.CANNOT_RUN
     if code != 0:
         print("ui-shots: FAILED", file=sys.stderr)
     return code
@@ -269,7 +270,9 @@ def ui_test(args: argparse.Namespace) -> int:
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     try:
         env = browser_env()
-        code = record_fixtures(recorded, INTERACTION_FIXTURES)
+        code = (
+            checks.CANNOT_RUN if record_fixtures(recorded, INTERACTION_FIXTURES) else 0
+        )
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(
@@ -282,7 +285,7 @@ def ui_test(args: argparse.Namespace) -> int:
                 ).returncode
     except UiError as e:
         print(f"ui-test: {e}", file=sys.stderr)
-        code = 1
+        code = checks.CANNOT_RUN
     if code != 0:
         print("ui-test: FAILED", file=sys.stderr)
     return code

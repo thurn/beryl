@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import paths, system, warm
+from . import checks, paths, system, warm
 
 BINARY: Path = system.exe(paths.TAURI_TARGET / "debug" / "beryl")
 
@@ -53,9 +53,8 @@ def dev(args: argparse.Namespace) -> int:
 
 def smoke(args: argparse.Namespace) -> int:
     if not args.no_build:
-        code = tauri("build", "--debug", "--no-bundle")
-        if code != 0:
-            return code
+        if tauri("build", "--debug", "--no-bundle") != 0:
+            return checks.CANNOT_RUN
     run = subprocess.run(
         [str(BINARY)],
         env={**os.environ, "BERYL_SMOKE": str(args.seconds)},
