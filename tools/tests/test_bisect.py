@@ -74,7 +74,7 @@ def lane(repo: Path) -> checks.Lane:
         venv.mkdir()
         # The base interpreter: a Windows venv's python.exe is a launcher that runs only
         # beside its own pyvenv.cfg.
-        base = getattr(sys, "_base_executable", sys.executable)
+        base = vars(sys).get("_base_executable", sys.executable)
         (venv / "python").symlink_to(base)
     python = str(venv / "python")
     return checks.Lane("ui-test").step(
