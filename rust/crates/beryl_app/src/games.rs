@@ -4,6 +4,7 @@
 use beryl_session::ipc::{
     CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest, UndoRequest,
 };
+use beryl_session::prompt::{ClickReply, ClickRequest};
 use beryl_session::{AgentView, GameUpdate, SessionError, SessionId, Sessions, StartRequest, ipc};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -37,6 +38,15 @@ pub fn start_game(
 #[allow(clippy::needless_pass_by_value)]
 pub fn choose(sessions: State<'_, Sessions>, request: ChooseRequest) -> Result<(), SessionError> {
     sessions.choose_request(request)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn click(
+    sessions: State<'_, Sessions>,
+    request: ClickRequest,
+) -> Result<ClickReply, SessionError> {
+    sessions.click(request)
 }
 
 #[tauri::command]

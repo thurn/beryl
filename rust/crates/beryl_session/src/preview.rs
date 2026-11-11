@@ -13,12 +13,11 @@ use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay, Scratch,
     Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, mana_contribution, next,
-    target_removes_permanent,
 };
 
 use crate::Status;
 use crate::ipc::{WaterbendMana, WaterbendPreview};
-use crate::protocol::{Candidate, Payment, PlayerView, Side, TargetRef, ZoneName, mana_text};
+use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
 /// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
@@ -48,36 +47,6 @@ pub fn add_previews<L: Layout>(
         if d.kind == DecisionKind::DamageDivision {
             decision.damage_default = beryl_engine::preferred_damage(s, d)
                 .map(|(choice, _)| crate::CandidateIndex(choice.0));
-        }
-        if matches!(d.kind, DecisionKind::Target | DecisionKind::TargetCount)
-            && target_removes_permanent(s, t)
-        {
-            let slots: Vec<_> = decision
-                .candidates
-                .iter()
-                .flat_map(|candidate| {
-                    let direct = match candidate.option {
-                        Candidate::Object { slot } => Some(slot),
-                        _ => None,
-                    };
-                    direct
-                        .into_iter()
-                        .chain(candidate.targets.iter().filter_map(|target| match target {
-                            TargetRef::Object { slot } => Some(*slot),
-                            TargetRef::Player { .. } => None,
-                        }))
-                })
-                .filter(|&slot| {
-                    view.objects.iter().any(|object| {
-                        object.slot == slot
-                            && object.zone == ZoneName::Battlefield
-                            && object.controller == Side::You
-                    })
-                })
-                .collect();
-            if !slots.is_empty() {
-                decision.self_removal_targets = Some(slots);
-            }
         }
     }
 }

@@ -10901,7 +10901,7 @@ if (wanted("undo does not repeat an automatic target")) {
         object.owner = "opponent";
         object.controller = "opponent";
     }
-    delete target.status.decision.selfRemovalTargets;
+    target.status.decision.prompt.state.warned = [];
     const resolved = structuredClone(target);
     resolved.status = structuredClone(before.status);
     resolved.status.decision.id.seq += 100;

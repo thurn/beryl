@@ -289,6 +289,28 @@ function upToOne(
   return none;
 }
 
+/** The permanent the answer `index` to `decision` would target, itself or as the target
+ * `then` plans after a count, if the session asks about that target before it is taken
+ * (its prompt's `warned`: the player's own permanent, for a removal). */
+export function warnedTarget(
+  decision: DecisionView,
+  index: CandidateIndex,
+  then?: Intent,
+): number | undefined {
+  const option = decision.candidates[index]?.option;
+  const state = decision.prompt.state;
+  const warned = state?.shape === "pick" ? state.warned : [];
+  return warned
+    .flatMap((on) => (on.kind === "object" ? [on.slot] : []))
+    .find((slot) =>
+      option?.kind === "object"
+        ? option.slot === slot
+        : option?.kind === "number" &&
+          then?.kind === "target" &&
+          then.wants({ kind: "object", slot }),
+    );
+}
+
 /** The combat declarations: made on the board, finished with the turn button. */
 export const isCombat = (kind: Kind) =>
   kind === "attacker" ||

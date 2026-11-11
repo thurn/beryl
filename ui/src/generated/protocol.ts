@@ -141,7 +141,7 @@ export type UiLogEntry = { level: Level, message: string, data: unknown, };
 
 export type Level = "debug" | "info" | "warn" | "error";
 
-export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "noPassOn" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
+export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "noPassOn" } | { "kind": "promptNotHeld" } | { "kind": "stalePrompt", revision: number, open: number, } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
 /**
@@ -344,10 +344,6 @@ export type DecisionView = {
  * The initial Auto Pay proposal for Waterbend.
  */
 waterbend?: WaterbendPreview, 
-/**
- * Legal targets that remove a permanent controlled by the viewer.
- */
-selfRemovalTargets?: Array<number>, 
 /**
  * The recommended lethal pick in a combat damage division.
  */
@@ -729,6 +725,11 @@ export type Marked = { on: Subject, mark: Mark, };
 
 export type PromptButton = { id: ButtonId, label: string, 
 /**
+ * What it says under its label, where it says more: where a pass of priority leads.
+ * Empty otherwise.
+ */
+caption: string, 
+/**
  * Whether a click does anything now.
  */
 enabled: boolean, 
@@ -752,7 +753,13 @@ least: number, most: number,
 /**
  * Those picked, in the order they were.
  */
-picked: Array<Subject>, } | { "shape": "order", items: Array<Subject>, } | { "shape": "split", piles: Array<Pile>, } | { "shape": "yesNo", 
+picked: Array<Subject>, 
+/**
+ * Those the prompt asks about before it answers with them: the viewer's own
+ * permanents a removal would target (UI Conventions, exception 7). A click on one
+ * picks it and puts the question; the confirm button then answers.
+ */
+warned: Array<Subject>, } | { "shape": "order", items: Array<Subject>, } | { "shape": "split", piles: Array<Pile>, } | { "shape": "yesNo", 
 /**
  * The cards the question is about.
  */
@@ -829,6 +836,7 @@ export type Commands = {
   list_agents: { args: Record<string, never>; result: Array<AgentView>; error: never };
   start_game: { args: { request: StartRequest }; result: SessionId; error: SessionError };
   preview_waterbend: { args: { request: WaterbendRequest }; result: WaterbendPreview | null; error: SessionError };
+  click: { args: { request: ClickRequest }; result: ClickReply; error: SessionError };
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
   cancel: { args: { request: CancelRequest }; result: null; error: SessionError };

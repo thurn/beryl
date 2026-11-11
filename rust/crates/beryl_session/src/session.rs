@@ -11,6 +11,7 @@ use serde_json::json;
 
 use crate::game::{Answer, Game, OpenDecision};
 use crate::ipc::{ChooseRequest, WaterbendPreview, WaterbendRequest};
+use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{DecisionId, PlayerView, Status, StopsSetting};
 use crate::sessions::LatestReplay;
 use crate::{SessionError, journal};
@@ -34,6 +35,7 @@ enum Command {
         Sender<Result<Option<WaterbendPreview>, SessionError>>,
     ),
     Choose(Answer),
+    Click(ClickRequest, Sender<Result<ClickReply, SessionError>>),
     SetStops(StopsSetting),
     Cancel,
     Undo,
@@ -102,6 +104,22 @@ impl GameSession {
         self.commands
             .send(Command::Choose(answer))
             .map_err(|_| SessionError::Ended)
+    }
+
+    /// Takes a click on the prompt of the human's open decision ([`Game::click`]) and returns
+    /// the prompt's state after it. A click that answers closes the decision, and the next
+    /// view arrives through `emit`.
+    pub(crate) fn click(&self, request: ClickRequest) -> Result<ClickReply, SessionError> {
+        self.open
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .ok_or(SessionError::NotDeciding)?
+            .answer(request.decision, crate::CandidateIndex(0))?;
+        let (reply, received) = channel();
+        self.commands
+            .send(Command::Click(request, reply))
+            .map_err(|_| SessionError::Ended)?;
+        received.recv().map_err(|_| SessionError::Ended)?
     }
 
     /// Computes a payment while leaving the open decision and game untouched.
@@ -260,6 +278,9 @@ fn run(
                 Command::PreviewWaterbend(request, response) => {
                     let _ = response.send(game.preview_waterbend(&request));
                 }
+                // A click that answers its prompt plays the game on.
+                Command::Click(request, to) if click(&mut game, shared, request, &to) => break,
+                Command::Click(..) => {}
                 // The session checked the answer against the open decision, which only this
                 // thread changes.
                 Command::Choose(answer) => {
@@ -304,6 +325,24 @@ fn run(
             }
         }
     }
+}
+
+/// Takes a click on the game's open prompt and tells its sender what it did. Returns whether
+/// it answered the prompt: the game then plays on.
+fn click(
+    game: &mut Game,
+    shared: &Shared,
+    request: ClickRequest,
+    response: &Sender<Result<ClickReply, SessionError>>,
+) -> bool {
+    let clicked = game.click(request);
+    let answered = matches!(clicked, Ok(ClickReply::Answered));
+    if answered {
+        // The decision is closed before the click's sender hears so.
+        *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    }
+    let _ = response.send(clicked);
+    answered
 }
 
 /// A command the session accepted that the game then refused: the two disagree on what is open.

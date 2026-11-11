@@ -11,6 +11,7 @@ use ts_rs::{Config, TS};
 
 use crate::bugs::{BugReport, BugSaved, UiLogRequest};
 use crate::card_records::{CardRecords, CardRecordsRequest};
+use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -22,6 +23,9 @@ pub const LIST_AGENTS: &str = "list_agents";
 pub const START_GAME: &str = "start_game";
 /// Answers the human's open decision with a candidate.
 pub const CHOOSE: &str = "choose";
+/// Takes a click on the human's open prompt ([`ClickRequest`]) and returns the prompt's state
+/// after it, or that the click answered it ([`ClickReply`]).
+pub const CLICK: &str = "click";
 /// Reads a proposed waterbend payment without changing the game.
 pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
 
@@ -222,6 +226,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             PREVIEW_WATERBEND,
             request(name::<WaterbendRequest>(cfg)),
             name::<Option<WaterbendPreview>>(cfg),
+            error.clone(),
+        ),
+        (
+            CLICK,
+            request(name::<ClickRequest>(cfg)),
+            name::<ClickReply>(cfg),
             error.clone(),
         ),
         (

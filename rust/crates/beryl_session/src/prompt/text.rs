@@ -16,6 +16,7 @@
 //! ```text
 //! tray #31 #32                      pick: the cards laid out, if any
 //! picked 1 of 0..2: #32             pick: how many of how few to how many, and which
+//! warned #5                         pick: those it asks about before it answers with them
 //! order a2 a1 #7                    order: first to last
 //! pile bottom "Bottom": #31         split: a pile, the top first
 //! pile hand "Hand" exactly 2 closed: #32 #33
@@ -31,11 +32,12 @@
 //! Then a line for each mark in use, in the list's order, with what carries it: cards by slot,
 //! then abilities, then players. Last the buttons, in their order: each is its id and its
 //! label, in brackets when it can be clicked and in parentheses when not, with a star on the
-//! primary one. An answer offered as a button has its candidate's index for an id. A card is
+//! primary one; a caption follows its label after a bar (`decline[Next | To Main 2]*`). An
+//! answer offered as a button has its candidate's index for an id. A card is
 //! `#` and its slot, an ability `a` and its number, a player `you` or `opponent`, as in a
 //! script's text.
 
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter, Write as _};
 
 use super::{ButtonId, Marked, Pile, PromptButton, PromptView, ShapeView};
 use crate::protocol::Side;
@@ -122,7 +124,12 @@ impl Display for PromptButton {
             ButtonId::PassOn => f.write_str("passOn")?,
             ButtonId::Option { index } => write!(f, "{index}")?,
         }
-        write!(f, "{open}{}{close}", self.label)?;
+        f.write_char(open)?;
+        f.write_str(&self.label)?;
+        if !self.caption.is_empty() {
+            write!(f, " | {}", self.caption)?;
+        }
+        f.write_char(close)?;
         if self.primary {
             f.write_str("*")?;
         }
@@ -138,6 +145,7 @@ impl Display for ShapeView {
                 least,
                 most,
                 picked,
+                warned,
             } => {
                 if !tray.is_empty() {
                     writeln!(f, "tray{}", cards(tray))?;
@@ -151,7 +159,12 @@ impl Display for ShapeView {
                 if !picked.is_empty() {
                     write!(f, ":{}", Each(picked.iter()))?;
                 }
-                f.write_str("\n")
+                f.write_str("\n")?;
+                if warned.is_empty() {
+                    Ok(())
+                } else {
+                    writeln!(f, "warned{}", Each(warned.iter()))
+                }
             }
             ShapeView::Order { items } => writeln!(f, "order{}", Each(items.iter())),
             ShapeView::Split { piles } => piles.iter().try_for_each(|pile| write!(f, "{pile}")),

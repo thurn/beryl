@@ -44,7 +44,6 @@ pub(super) fn decision_view<L: Layout>(
     };
     DecisionView {
         waterbend: None,
-        self_removal_targets: None,
         damage_default: None,
         id,
         kind: d.kind.into(),
@@ -101,7 +100,6 @@ pub(super) fn halt_view<L: Layout>(
 ) -> DecisionView {
     DecisionView {
         waterbend: None,
-        self_removal_targets: None,
         damage_default: None,
         id,
         kind: Kind::Priority,

@@ -14,10 +14,6 @@ pub struct DecisionView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub waterbend: Option<Box<crate::ipc::WaterbendPreview>>,
-    /// Legal targets that remove a permanent controlled by the viewer.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub self_removal_targets: Option<Vec<u16>>,
     /// The recommended lethal pick in a combat damage division.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

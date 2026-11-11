@@ -22,6 +22,7 @@ fn button(id: ButtonId, label: &str) -> PromptButton {
     PromptButton {
         id,
         label: label.to_owned(),
+        caption: String::new(),
         enabled: true,
         primary: false,
     }
@@ -97,6 +98,7 @@ fn search() -> Worked {
                 least: 0,
                 most: 2,
                 picked: vec![card(32)],
+                warned: Vec::new(),
             },
         ),
         "pick search: Search\n\

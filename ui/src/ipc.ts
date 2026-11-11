@@ -8,6 +8,7 @@ import type {
   BugReport,
   CandidateIndex,
   CardRecords,
+  Click,
   Commands,
   DecisionId,
   Events,
@@ -71,7 +72,8 @@ export interface FixtureCall {
  * player answers or the end, as if the app played on from the recorded answer. A `cancel`
  * goes back to the priority the cast began at, shown again with nothing happening in it, and
  * the next `choose` plays the recording on from there; an `undo` goes back to the decision before
- * the latest, shown again as undone; a `pass_on` plays on as a `choose` does. The events a listener gets as it
+ * the latest, shown again as undone; a `pass_on` plays on as a `choose` does, and so does a `click`
+ * whose recorded reply says it answered its prompt. The events a listener gets as it
  * starts listening are past; those released by `choose` and `cancel` happen live.
  * `card_records` alone is answered by what it asks: the records the fixture recorded for those
  * names (`cards`), which the recording holds for every name its events show.
@@ -219,10 +221,16 @@ export function fixtureTransport(
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
       }
-      if (
-        (command === "choose" || command === "pass_on") &&
-        released < events.length
-      ) {
+      const response = (
+        queue.length > 1 ? queue.shift() : queue[0]
+      ) as Result<C>;
+      // A click whose recorded reply says it answered plays on as an answer does.
+      const answers =
+        command === "choose" ||
+        command === "pass_on" ||
+        (command === "click" &&
+          (response as Result<"click">).kind === "answered");
+      if (answers && released < events.length) {
         const from = released;
         if (
           command === "choose" &&
@@ -239,9 +247,7 @@ export function fixtureTransport(
         } while (released < events.length && last && playsOn(last));
         deliver(from, released);
       }
-      return Promise.resolve(
-        (queue.length > 1 ? queue.shift() : queue[0]) as Result<C>,
-      );
+      return Promise.resolve(response);
     },
     async listen<E extends keyof Events>(
       event: E,
@@ -538,6 +544,13 @@ export const choose = (
   index: CandidateIndex,
   continuation?: boolean,
 ) => call("choose", { request: { decision, index, continuation } });
+
+/** Sends a click on the open prompt of `decision`, made on its state `revision`
+ * (`PromptView.revision`): the session decides what it does. Resolves to the prompt's whole
+ * state after it, or says the click answered the prompt, whose next views then arrive as
+ * after `choose`. */
+export const click = (decision: DecisionId, revision: number, click: Click) =>
+  call("click", { request: { decision, revision, click } });
 
 /** Computes a payment without changing the game. */
 export const previewWaterbend = (decision: DecisionId, selected: number[]) =>

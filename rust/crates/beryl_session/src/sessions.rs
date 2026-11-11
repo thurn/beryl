@@ -16,6 +16,7 @@ use ts_rs::TS;
 use crate::ai::{self, AgentMove, AgentMoves};
 use crate::game::Game;
 use crate::ipc::ChooseRequest;
+use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
@@ -334,6 +335,25 @@ impl Sessions {
         self.with("choose", data, decision.session, |game| {
             game.choose(request)
         })
+    }
+
+    /// Takes a click on the prompt of the human's open decision ([`crate::Game::click`]). The
+    /// prompt's new state is the reply, and the latest view keeps it, so a UI that takes the
+    /// game up again ([`Sessions::current`]) finds the prompt as the clicks left it.
+    pub fn click(&self, request: ClickRequest) -> Result<ClickReply, SessionError> {
+        let data = json!({ "decision": request.decision.seq, "revision": request.revision });
+        let reply = self.with("click", data, request.decision.session, |game| {
+            game.click(request)
+        })?;
+        let mut latest = self.latest.lock().unwrap_or_else(PoisonError::into_inner);
+        if let (ClickReply::Open { prompt }, Some(update)) = (&reply, latest.as_mut())
+            && let Status::Deciding { decision } = &mut update.view.status
+            && decision.id == request.decision
+            && decision.prompt.purpose == prompt.purpose
+        {
+            decision.prompt.clone_from(prompt);
+        }
+        Ok(reply)
     }
 
     /// Reads a proposed payment without answering the open decision.

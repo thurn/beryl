@@ -170,6 +170,9 @@ pub struct Marked {
 pub struct PromptButton {
     pub id: ButtonId,
     pub label: String,
+    /// What it says under its label, where it says more: where a pass of priority leads.
+    /// Empty otherwise.
+    pub caption: String,
     /// Whether a click does anything now.
     pub enabled: bool,
     /// The one the prompt puts forward: at most one button of a prompt.
@@ -182,7 +185,8 @@ pub struct PromptButton {
 pub enum ButtonId {
     /// Answers with what the player has put together.
     Confirm,
-    /// Answers with nothing: pass priority, find nothing, no attackers.
+    /// Answers with nothing: pass priority, find nothing, no attackers. Where the prompt asks
+    /// about a pick before it answers ([`ShapeView::Pick`]'s `warned`), it takes the pick back.
     Decline,
     /// Answers with what the marks suggest, as Auto Pay does.
     Auto,
@@ -207,6 +211,10 @@ pub enum ShapeView {
         most: u8,
         /// Those picked, in the order they were.
         picked: Vec<Subject>,
+        /// Those the prompt asks about before it answers with them: the viewer's own
+        /// permanents a removal would target (UI Conventions, exception 7). A click on one
+        /// picks it and puts the question; the confirm button then answers.
+        warned: Vec<Subject>,
     },
     /// Things in an order the player changes, first to last.
     Order { items: Vec<Subject> },
@@ -374,7 +382,8 @@ pub struct ClickRequest {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ClickReply {
     /// The prompt goes on, in this state. A click that does nothing returns the state it was
-    /// made on.
+    /// made on. A click that opens another prompt over this one returns that prompt: a card
+    /// with several ways to use it, clicked at a priority, opens the choice among them.
     Open { prompt: Box<PromptView> },
     /// The click answered the prompt: the session has sent the engine its picks, and the
     /// game's next views arrive as updates, as after any answer.

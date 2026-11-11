@@ -23,6 +23,7 @@ use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest,
     UndoRequest,
 };
+use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -194,6 +195,9 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::PREVIEW_WATERBEND => answer(
             request::<ipc::WaterbendRequest>(args)
                 .and_then(|r| sessions.preview_waterbend(r).map_err(|e| json!(e))),
+        ),
+        ipc::CLICK => answer(
+            request::<ClickRequest>(args).and_then(|r| sessions.click(r).map_err(|e| json!(e))),
         ),
         ipc::CHOOSE => answer(
             request::<ChooseRequest>(args)

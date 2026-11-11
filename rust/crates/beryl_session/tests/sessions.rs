@@ -12,6 +12,7 @@ use beryl_engine::{
     next,
 };
 use beryl_session::preview::add_previews;
+use beryl_session::prompt::add_opening_state;
 use beryl_session::protocol::{
     DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, StackItem, player_view,
 };
@@ -582,6 +583,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 {
                     add_previews(&mut theirs, &det, t, d);
                 }
+                // The state the prompt opens in, from the redealt state as well.
+                let asked = d.as_ref().filter(|d| d.player == Seat::P0);
+                add_opening_state(&mut theirs, &det, t, asked);
                 // Who won the opening flip, whether a cast can be taken back, and whether the
                 // turn can, are the session's to say, not the position's.
                 theirs.turn.flip_winner = view.turn.flip_winner;

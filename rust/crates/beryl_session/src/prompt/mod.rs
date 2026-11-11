@@ -50,11 +50,15 @@
 //! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
 //! expectations of tests (plan K24).
 
+mod held;
 mod open;
+mod pick;
 mod text;
 mod view;
 mod wording;
 
+pub use held::add_opening_state;
+pub(crate) use held::{Clicked, Held, Run};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use view::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,

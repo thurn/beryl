@@ -35,7 +35,13 @@ import { Board } from "../stage/switch";
 import { FloatPrompt, PromptRow } from "../game/FloatPrompt";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, choiceSlots, floats, type Choice } from "../game/choices";
-import { follow, isOpening, twins, type Intent } from "../game/decisions";
+import {
+  follow,
+  isOpening,
+  twins,
+  warnedTarget,
+  type Intent,
+} from "../game/decisions";
 import { BLANK, paragraphOf, useAbilityFace, useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import { eventsHold, HOLD, type Playback } from "../game/playback";
@@ -409,15 +415,7 @@ function Playing({ playback }: { playback: Playback }) {
       play("no");
       return;
     }
-    const option = decision.candidates[index]?.option;
-    const target = then[0];
-    const slot = decision.selfRemovalTargets?.find((slot) =>
-      option?.kind === "object"
-        ? option.slot === slot
-        : option?.kind === "number" &&
-          target?.kind === "target" &&
-          target.wants({ kind: "object", slot }),
-    );
+    const slot = warnedTarget(decision, index, then[0]);
     if (slot !== undefined) {
       setRemoval({ view, slot, index, then });
       return;

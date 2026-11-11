@@ -25,6 +25,8 @@
 use beryl_engine::Zone;
 use beryl_engine::card::{Part, Place, Prompt, Purpose};
 
+use crate::protocol::Step;
+
 /// A purpose's words: templates, each empty where the prompt has no such thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Wording {
@@ -82,6 +84,8 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
                 (Part::Count, 2..) => "How many targets?",
                 _ => "Choose a target",
             },
+            confirm: "Confirm",
+            counted: "Confirm {picked}/{of}",
             decline: "No Target",
             ..NONE
         },
@@ -299,6 +303,60 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             decline: "No Blocks",
             ..NONE
         },
+    }
+}
+
+/// What a target prompt asks before it takes one of the viewer's own permanents for a removal
+/// (UI Conventions, exception 7): the question, and the buttons that answer and take it back.
+pub(crate) const OWN_TARGET: Wording = Wording {
+    title: "Target your {name}?",
+    unnamed: "Target your permanent?",
+    confirm: "Confirm",
+    decline: "Cancel",
+    ..NONE
+};
+
+/// Where a pass of priority leads, for the pass button's words ([`pass_words`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PassLeads {
+    /// The session halts the viewer where passing is all they can do.
+    Halt,
+    /// The top of the stack resolves.
+    Resolve,
+    /// Combat damage is dealt.
+    CombatDamage,
+    /// On to this step of the turn.
+    Step(Step),
+    /// The turn ends: the viewer's own, or the opponent's.
+    NextTurn { yours: bool },
+}
+
+/// The pass button's label and the caption under it, by where passing leads.
+pub(crate) const fn pass_words(leads: PassLeads) -> (&'static str, &'static str) {
+    match leads {
+        PassLeads::Halt => ("End Turn", "Nothing to play"),
+        PassLeads::Resolve => ("Resolve", ""),
+        PassLeads::CombatDamage => ("Resolve Damage", "Combat damage"),
+        PassLeads::Step(step) => (
+            "Next",
+            match step {
+                Step::Untap => "To Untap",
+                Step::Upkeep => "To Upkeep",
+                Step::Draw => "To Draw",
+                Step::PrecombatMain => "To Main 1",
+                Step::BeginningOfCombat => "To Beginning of combat",
+                Step::DeclareAttackers => "To Attackers",
+                Step::DeclareBlockers => "To Blockers",
+                Step::FirstStrikeDamage => "To First-strike damage",
+                Step::CombatDamage => "To Combat damage",
+                Step::EndOfCombat => "To End of combat",
+                Step::PostcombatMain => "To Main 2",
+                Step::End => "To End Step",
+                Step::Cleanup => "To Cleanup",
+            },
+        ),
+        PassLeads::NextTurn { yours: true } => ("End Turn", "To Opponent's Turn"),
+        PassLeads::NextTurn { yours: false } => ("Next", "To Your Turn"),
     }
 }
 

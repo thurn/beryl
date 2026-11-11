@@ -295,7 +295,7 @@ fn handle_moment(
                     // The viewer acts on the game: it plays on from where it truly is.
                     if matches!(
                         command,
-                        ipc::CHOOSE | ipc::CANCEL | ipc::UNDO | ipc::PASS_ON
+                        ipc::CHOOSE | ipc::CLICK | ipc::CANCEL | ipc::UNDO | ipc::PASS_ON
                     ) {
                         release(&feed);
                     }

@@ -37,6 +37,8 @@ use crate::save::{self, Chosen, KindBeforeV10};
 use crate::{HandOver, Prepared, SessionError, StartGame};
 use crate::{journal, perturb, preview};
 
+mod prompts;
+
 /// The human's open decision, as a session records it: the one place an answer is checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OpenDecision {
@@ -632,6 +634,11 @@ pub struct Game {
     /// What the game's random events produced since it was last logged, and while a replay
     /// plays, what its record says they produced ([`beryl_engine::chance`]).
     chance: Chance,
+    /// The state of the human's open prompt, where the session holds its shape's, with the
+    /// decision it is for: made as that decision's view is drawn and changed by clicks.
+    prompt: Option<(DecisionId, crate::prompt::Held)>,
+    /// The picks still to make of the prompt the human's latest click answered.
+    run: Option<crate::prompt::Run>,
 }
 
 impl Game {
@@ -769,6 +776,8 @@ impl Game {
             passes_on: None,
             flip_winner,
             chance: Chance::default(),
+            prompt: None,
+            run: None,
         }
     }
 
@@ -1131,10 +1140,7 @@ impl Game {
                 let answer = OpenDecision::new(id, &open, false, false)
                     .answer(id, CandidateIndex(c.0))
                     .expect("a found candidate is in range");
-                self.choose(Answer {
-                    continuation: chosen.continuation,
-                    ..answer
-                });
+                self.answer_as(answer, chosen.continuation);
             }
             (At::Human(..), Entry::Stops(stops)) => self.change_stops(*stops),
             (At::Human(_, Open::Decision(_)), Entry::PassOn) => {
@@ -1511,19 +1517,6 @@ impl Game {
         self.at = At::Playing;
     }
 
-    /// Passes the human's priority, at their open decision, with `answer` (checked by
-    /// [`OpenDecision::pass_on`]), and goes on passing it for them until their next stop in a
-    /// later step: where passing would stop them again in this one, for the stack resolving or
-    /// combat damage, this goes on past it, through whatever the opponent does: the human
-    /// asked to pass until then, as Arena's end-turn button does. They stop sooner only at a
-    /// decision other than a priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
-    /// passes on the same way. [`Game::next_view`] plays on from it.
-    pub fn pass_on(&mut self, answer: Answer) {
-        let started = self.start_passing();
-        debug_assert!(started, "a pass on is checked against the open decision");
-        self.choose(answer);
-    }
-
     /// Begins passing on to the human's next stop from their open decision, if it can pass on,
     /// and records it. Returns whether it began.
     fn start_passing(&mut self) -> bool {
@@ -1566,37 +1559,19 @@ impl Game {
         (turn.number(), turn.step()) < passing.until
     }
 
-    /// Checks `index` as an answer to the human's open decision `id`.
-    pub fn answer(&self, id: DecisionId, index: CandidateIndex) -> Result<Answer, SessionError> {
-        self.open()
-            .ok_or(SessionError::NotDeciding)?
-            .answer(id, index)
-    }
-
-    /// Previews the human's selected waterbenders on a copy, without advancing the game.
-    pub fn preview_waterbend(
-        &self,
-        request: &crate::ipc::WaterbendRequest,
-    ) -> Result<Option<crate::ipc::WaterbendPreview>, SessionError> {
-        self.answer(request.decision, CandidateIndex(0))?;
-        let At::Human(_, Open::Decision(d)) = &self.at else {
-            return Err(SessionError::NotDeciding);
-        };
-        if d.prompt.purpose != Purpose::Waterbend {
-            return Ok(None);
-        }
-        Ok(
-            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), &request.selected)),
-        )
-    }
-
     /// Applies an answer to the human's open decision; [`Game::next_view`] plays on from it.
+    /// A client's follow-up joins the answer before it only while a cast is in progress.
     pub fn choose(&mut self, answer: Answer) {
+        self.answer_as(answer, answer.continuation && self.casting());
+    }
+
+    /// Applies `answer` to the human's open decision, as a `continuation` of their answer
+    /// before it or as one of its own: a recorded answer, or a later pick of a prompt's run.
+    fn answer_as(&mut self, answer: Answer, continuation: bool) {
         let At::Human(id, open) = self.at.clone() else {
             panic!("an answer is checked against the open decision");
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
-        let continuation = answer.continuation && self.casting();
         self.keep_undo_point(continuation);
         match open {
             Open::Decision(d) => {
@@ -1761,6 +1736,10 @@ impl Game {
             if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
             }
+            // Only the decisions that follow the human's answer at once are its prompt's.
+            if !matches!(&step, Some(Step::Decide(_))) {
+                self.run = None;
+            }
             self.at = match step {
                 None => {
                     let turn = self.board.turn();
@@ -1787,6 +1766,18 @@ impl Game {
                     hurt_by: None,
                 },
                 Some(Step::Decide(d)) if d.player == self.human || self.reviewing() => {
+                    if let Some(choice) = self.pick_in_run(&d) {
+                        self.seq += 1;
+                        let id = self.decision_id();
+                        self.at = At::Human(id, Open::Decision(d));
+                        let answer = Answer {
+                            id,
+                            choice,
+                            continuation: true,
+                        };
+                        self.answer_as(answer, true);
+                        continue;
+                    }
                     if !self.reviewing()
                         && let Some(c) = self.auto_answer(&d, replaying)
                     {
@@ -2095,6 +2086,8 @@ impl Game {
             {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
             }
+            let asked = decision.as_ref().filter(|d| d.player == viewer);
+            prompts::hold(&mut self.prompt, &mut view, &b.state, shown, &self.table, asked);
             view
         });
         view.turn.flip_winner = self.flip_winner.map(|p| {
