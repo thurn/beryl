@@ -1,6 +1,9 @@
+import socket
 from pathlib import Path
 
-from beryl_tools import citation_migrate, citations
+import pytest
+
+from beryl_tools import citation_migrate, citations, paths
 
 # A release's text as Wizards publishes it: a contents section naming the sections, numbered
 # rules with further paragraphs, and a glossary whose numbered senses are no rules.
@@ -184,3 +187,60 @@ def test_a_version_pins_and_reads_back(tmp_path: Path) -> None:
     assert version.url.endswith("/2026/downloads/MagicCompRules%2020261106.txt")
     citations.pin(tmp_path, version)
     assert citations.pinned(tmp_path) == version
+
+
+def refused_url() -> str:
+    """A URL on this machine that nothing listens at, so a fetch fails at once."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    return f"http://127.0.0.1:{port}/MagicCompRules.txt"
+
+
+def step_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: bool
+) -> list[str]:
+    """A tree pinned to a release at an unreachable URL, with one wrong citation and one
+    right one, and the step's rules cache, holding that release's text when `cached`."""
+    root, cache = tmp_path / "repo", tmp_path / "cache"
+    (root / "data").mkdir(parents=True)
+    citations.pin(root, citations.Version("2026-11-06", refused_url()))
+    write(root, "docs/a.md", f'{cite("712.6a")}: "not the rule\'s text"\n')
+    write(root, "docs/b.md", f'{cite("712.6a")}: "it has only its front face"\n')
+    monkeypatch.setattr(paths, "REPO", root)
+    monkeypatch.setenv("BERYL_CACHE", str(cache))
+    if cached:
+        write(cache, "rules/2026-11-06.txt", NEW)
+    return ["docs/a.md", "docs/b.md"]
+
+
+def test_the_step_holds_the_tree_or_the_files_named_to_the_cached_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    wrong, right = step_tree(tmp_path, monkeypatch, cached=True)
+    assert citations.step("--fetch") == 1
+    assert capsys.readouterr().out == (
+        f'citations: {wrong}:1: CR 712.6a: the rule does not say "not the rule\'s text"\n'
+    )
+    assert citations.step(wrong) == 1
+    capsys.readouterr()
+    # A file the branch deleted, or one that cites no rules, is passed over.
+    assert citations.step(right, "docs/gone.md", "rust/crates/a/target/b.rs") == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_the_step_skips_and_passes_with_no_text_to_hold_the_tree_to(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    wrong, _ = step_tree(tmp_path, monkeypatch, cached=False)
+    # The fast check never fetches.
+    assert citations.step(wrong) == 0
+    assert capsys.readouterr().out == (
+        "citations: skipped: the 2026-11-06 rules are not cached\n"
+    )
+    # Slow CI fetches, and a failed fetch is no failure.
+    assert citations.step("--fetch") == 0
+    assert capsys.readouterr().out.startswith(
+        "citations: skipped: the 2026-11-06 rules could not be fetched: "
+    )
+    assert not citations.cached_text(citations.pinned(paths.REPO)).exists()

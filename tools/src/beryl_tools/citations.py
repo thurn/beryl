@@ -18,11 +18,17 @@ The release's text is Wizards' dated `.txt` file, which Wizards keeps hosted aft
 releases. It is fetched once per machine into `$BERYL_CACHE/rules` and never changes, so only
 the first run needs the network. `just citations migrate <date>` moves the tree to a new
 release (`citation_migrate`).
+
+The `names` lane runs it as the `citations` step (`step`), which never fails for want of the
+network: slow CI holds the whole tree, fetching the text if it is not cached; the fast check
+holds the files changed on the branch and never fetches. With no text to hold them to, the step
+logs a skip and passes.
 """
 
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import re
 import sys
@@ -31,7 +37,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import paths
+from . import paths, runlog
 
 VERSION_FILE = "data/rules-version.json"
 ROOTS = ("rust/crates", "ui/src", "tools/src", "data", "docs")
@@ -42,6 +48,8 @@ SKIPPED_DIRECTORIES = {"node_modules", "target", "generated"}
 SKIPPED_FILES: set[str] = {VERSION_FILE}
 # How many comment lines a quotation may run over.
 QUOTATION_LINES = 20
+# How long the `citations` step waits for the release's text before it skips.
+STEP_FETCH_TIMEOUT = 10
 
 NUMBER = r"\d{1,3}(?:\.\d+[a-z]*)?"
 RULE_LINE: re.Pattern[str] = re.compile(rf"^({NUMBER})\.?\s+(\S.*)$")
@@ -153,14 +161,19 @@ def pin(root: Path, version: Version) -> None:
     (root / VERSION_FILE).write_text(text + "\n", encoding="utf-8")
 
 
-def rules_text(version: Version) -> str:
+def cached_text(version: Version) -> Path:
+    """Where the text of `version` is cached once it has been fetched."""
+    return paths.cache_root() / "rules" / f"{version.effective}.txt"
+
+
+def rules_text(version: Version, timeout: float = 60) -> str:
     """The text of `version`, from the cache once it has been fetched."""
-    cached = paths.cache_root() / "rules" / f"{version.effective}.txt"
+    cached = cached_text(version)
     if not cached.is_file():
         request = urllib.request.Request(
             version.url, headers={"User-Agent": "beryl-tools"}
         )
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             body: bytes = response.read()
         cached.parent.mkdir(parents=True, exist_ok=True)
         cached.write_bytes(body)
@@ -173,6 +186,20 @@ def load_rules(version: Version) -> dict[str, str]:
     if not rules:
         sys.exit(f"citations: no rules found in {version.url}")
     return rules
+
+
+def step_rules(version: Version, fetch: bool) -> tuple[dict[str, str] | None, str]:
+    """The rules of `version` for the `citations` step, or None and why they are missing: the
+    cached text, else, with `fetch`, the text fetched with a short timeout. A failed fetch is
+    no failure of the step; a cached text with no rules in it is (`load_rules`)."""
+    if not cached_text(version).is_file():
+        if not fetch:
+            return None, f"the {version.effective} rules are not cached"
+        try:
+            rules_text(version, timeout=STEP_FETCH_TIMEOUT)
+        except (OSError, http.client.HTTPException) as e:
+            return None, f"the {version.effective} rules could not be fetched: {e}"
+    return load_rules(version), ""
 
 
 def comment_text(line: str) -> str | None:
@@ -251,6 +278,17 @@ def problems_in(rel: str, lines: list[str], rules: dict[str, str]) -> list[str]:
     return found
 
 
+def cites(rel: str) -> bool:
+    """Whether the file at `rel` (relative to the root) is one that may cite the rules."""
+    parts = rel.split("/")
+    return (
+        rel.startswith(tuple(f"{r}/" for r in ROOTS))
+        and Path(rel).suffix in EXTENSIONS
+        and not SKIPPED_DIRECTORIES.intersection(parts[:-1])
+        and rel not in SKIPPED_FILES
+    )
+
+
 def source_files(root: Path) -> list[tuple[str, Path]]:
     """Each file under `root`'s roots that may cite the rules, with its relative path."""
     found = []
@@ -259,22 +297,25 @@ def source_files(root: Path) -> list[tuple[str, Path]]:
         files = sorted(base.rglob("*")) if base.is_dir() else []
         for path in files:
             rel = path.relative_to(root).as_posix()
-            skipped = SKIPPED_DIRECTORIES.intersection(rel.split("/")[:-1])
-            if (
-                path.suffix not in EXTENSIONS
-                or skipped
-                or rel in SKIPPED_FILES
-                or not path.is_file()
-            ):
-                continue
-            found.append((rel, path))
+            if cites(rel) and path.is_file():
+                found.append((rel, path))
     return found
 
 
-def check(root: Path, rules: dict[str, str]) -> list[str]:
-    """Each problem with a citation in the files under `root`'s roots."""
+def check(
+    root: Path, rules: dict[str, str], only: list[str] | None = None
+) -> list[str]:
+    """Each problem with a citation in the files under `root`'s roots, or in those of them at
+    the relative paths `only`."""
+    files = (
+        source_files(root)
+        if only is None
+        else [
+            (rel, root / rel) for rel in only if cites(rel) and (root / rel).is_file()
+        ]
+    )
     found = []
-    for rel, path in source_files(root):
+    for rel, path in files:
         lines = path.read_text(encoding="utf-8").splitlines()
         found.extend(problems_in(rel, lines, rules))
     return found
@@ -290,6 +331,23 @@ def run(args: argparse.Namespace) -> int:
         f"citations: {len(found)} problems against the {version.effective} rules",
         file=sys.stderr,
     )
+    return 1 if found else 0
+
+
+def step(*args: str) -> int:
+    """The `citations` step: `--fetch` to fetch the release's text when it is not cached, then
+    the files to hold (relative to the repository), or none for every file."""
+    fetch = bool(args) and args[0] == "--fetch"
+    only = list(args[1:] if fetch else args) or None
+    version = pinned(paths.REPO)
+    rules, missing = step_rules(version, fetch)
+    if rules is None:
+        print(f"citations: skipped: {missing}")
+        runlog.result("citations", "skip", 0.0)
+        return 0
+    found = check(paths.REPO, rules, only)
+    for line in found:
+        print(f"citations: {line}")
     return 1 if found else 0
 
 

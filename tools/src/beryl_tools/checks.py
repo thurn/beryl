@@ -45,8 +45,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import (
+    board_door,
     build_paths,
     card_names,
+    citations,
     conventions,
     file_length,
     hygiene,
@@ -547,14 +549,23 @@ def ui_lane() -> Lane:
     )
 
 
-def names_lane() -> Lane:
-    """No card name in generic code, held to the burn-down list (card_names.py), and no
-    other player of two in rules code (two_player.py)."""
-    return (
+def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
+    """No card name in generic code, held to the burn-down list (card_names.py), no other
+    player of two and no board door in rules code (two_player.py, board_door.py), and every
+    rules citation held to the pinned release (citations.py): in the files `cited`, or with
+    None in the whole tree, fetching the release's text if `fetch` and it is not cached.
+    """
+    checks = [sys.executable, "-m", "beryl_tools.checks"]
+    lane = (
         Lane("names")
-        .step("card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"])
-        .step("two-player", [sys.executable, "-m", "beryl_tools.checks", "two-player"])
+        .step("card-names", [*checks, "card-names"])
+        .step("two-player", [*checks, "two-player"])
+        .step("board-door", [*checks, "board-door"])
     )
+    if cited != []:
+        flags = ["--fetch"] if fetch else []
+        lane.step("citations", [*checks, "citations", *flags, *(cited or [])])
+    return lane
 
 
 def app_lane() -> Lane:
@@ -639,8 +650,10 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(script_checks.lane())
     if touched(r"^ui/"):
         lanes.append(ui_lane())
-    if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
-        lanes.append(names_lane())
+    # The changed files that may cite the rules, held to the cached release's text.
+    cited = None if every else [p for p in changed or [] if citations.cites(p)]
+    if cited or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
+        lanes.append(names_lane(cited))
     # The browser checks the change can break, as many as fit the budget (plan K19).
     if not every and touched(r"^(rust|ui)/"):
         lanes += [ui_test_lane(select=True), shots_lane(select=True)]
@@ -672,7 +685,7 @@ def slow(args: argparse.Namespace) -> int:
         "rust": rust_lane(),
         "script": script_checks.lane(),
         "ui": ui_lane(),
-        "names": names_lane(),
+        "names": names_lane(fetch=True),
         "app": app_lane(),
         "shots": shots_lane(),
         "ui-test": ui_test_lane(),
@@ -741,6 +754,8 @@ if __name__ == "__main__":
         "card-names": card_names.step,
         "file-length": file_length.step,
         "two-player": two_player.step,
+        "board-door": board_door.step,
+        "citations": citations.step,
         "conventions": conventions.step,
         "build-paths": build_paths.step,
     }

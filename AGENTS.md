@@ -126,6 +126,8 @@ the release pinned in `data/rules-version.json`.
 - Rules code and card bodies never name the other player of two (`two-player`):
   they ask the state for a player's opponents, the defending players or the next
   player in turn order (`beryl_kernel`'s contract, "Players").
+- Rules code and card bodies never open the board door (`board-door`): they
+  change the state through a mutator (`beryl_kernel`'s contract, "Mutators").
 - State a card creates lives in a store, not in a new field on Player, Object or
   State (plan K4).
 - Helpers shared by two cards live in the shared library, not in a card file.
@@ -142,9 +144,9 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    tested here, not through the app. A card's scenarios live in its file;
    `just oracle <card names>` checks them against XMage and Forge,
    `just citations` holds every Comprehensive Rules citation and quotation in
-   the tree to the release pinned in `data/rules-version.json` (run it after
-   writing a citation; `just citations migrate <date>` moves the tree to a new
-   release, renumbering what it can place and listing what needs judgment),
+   the tree to the release pinned in `data/rules-version.json` (the `names` lane
+   runs it in both checks; `just citations migrate <date>` moves the tree to a
+   new release, renumbering what it can place and listing what needs judgment),
    `just fuzz` plays random games at length, and `just exhaust` plays every
    decision sequence near the scenarios' end positions. A new card starts from
    `just card brief <name>`: its Oracle text, rulings, matching vocabulary
@@ -203,17 +205,21 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   `names` (`card-names`: no card name in generic code, held to the burn-down
   list `data/card-names-allowlist.json`, whose counts only fall;
   `python -m beryl_tools.checks card-names --shrink` lowers them; `two-player`:
-  no rules module or card file names `beryl_kernel::two_player`), `oracle` (each
-  changed card file's scenarios in XMage and Forge, skipped when another oracle
-  run holds the oracles past 10 s) and `motion` (`just motion`, for a change to
-  the stage, its capture or the verbs' data: the stage's verbs captured in
-  stepped stage time and measured as Arena's clips were, each held to its own
-  values in `data/ui-conventions.json` with Arena's beside, one run-log check
-  `motion:<verb>/<layout>` each; also nightly). For a change to `ui/` or `rust/`
-  it also runs `ui-test` and `shots` on the browser checks the change can break,
-  by the nightly coverage (`just coverage`), worst failure record first, as many
-  as fit; the run log's `chosen` says why each ran, and `cut` marks those left
-  to slow CI. It also refuses conflict markers and bad commit subjects.
+  no rules module or card file names `beryl_kernel::two_player`; `board-door`:
+  no rules module or card file outside tests names `.board()` or `board::Board`;
+  `citations`: `just citations` on the changed files, against the cached rules
+  text, skipping when none is cached; slow CI runs it on the whole tree and
+  fetches the text), `oracle` (each changed card file's scenarios in XMage and
+  Forge, skipped when another oracle run holds the oracles past 10 s) and
+  `motion` (`just motion`, for a change to the stage, its capture or the verbs'
+  data: the stage's verbs captured in stepped stage time and measured as Arena's
+  clips were, each held to its own values in `data/ui-conventions.json` with
+  Arena's beside, one run-log check `motion:<verb>/<layout>` each; also
+  nightly). For a change to `ui/` or `rust/` it also runs `ui-test` and `shots`
+  on the browser checks the change can break, by the nightly coverage
+  (`just coverage`), worst failure record first, as many as fit; the run log's
+  `chosen` says why each ran, and `cut` marks those left to slow CI. It also
+  refuses conflict markers and bad commit subjects.
 - `just ci` (slow, budget 300 s; 450 s on Windows) runs every lane plus `app`
   (`just smoke`), `shots` (`just ui-shots`, which fails on any page error),
   `ui-test` (`just ui-test`, which plays the game screen through a fixture),
