@@ -69,7 +69,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
 /// stale, which this sees and the dirty flag cannot.
 fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
     let mut fresh = s.clone();
-    fresh.board().forget_derived();
+    fresh.forget_derived();
     layers::refresh(&mut fresh, t, &mut Sink::default());
     for ((slot, was), (_, now)) in s.permanents().zip(fresh.permanents()) {
         check(

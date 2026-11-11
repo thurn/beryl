@@ -35,7 +35,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
             s.board().set_life(p, 0);
         }),
         ("derived characteristics are stale", |s, _, _| {
-            s.board().forget_derived();
+            s.forget_derived();
         }),
     ];
     for (what, corrupt) in corruptions {

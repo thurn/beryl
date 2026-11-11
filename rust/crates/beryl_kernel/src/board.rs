@@ -384,13 +384,6 @@ impl<L: Layout> Board<'_, L> {
         }
     }
 
-    /// Marks the layer results stale, so the next refresh computes them again from base:
-    /// for the reference check, which compares the two, and the tests of the invariants.
-    #[doc(hidden)]
-    pub fn forget_derived(&mut self) {
-        self.0.flags.derived_dirty = true;
-    }
-
     pub fn set_life(&mut self, player: Seat, life: i16) {
         self.0.player_mut(player).life = life;
     }

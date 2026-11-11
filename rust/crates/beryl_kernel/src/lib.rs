@@ -120,10 +120,9 @@
 //! `swap_cards`, `add_emblem`, `order_library`, `begin_at`, `begin_before_turn`,
 //! `set_flip_winner`, `renumber_deck_slots` and `reverse_deck_slots`, and `corrupt`, which
 //! breaks a state for the tests of the invariant check. Scenarios, checkpoints, tools and
-//! tests go through it. A card body is lent the state shared, so it cannot open the door;
-//! rules code never names it, and a search for `.board()` finds whoever does. In
-//! `beryl_engine` that is its tests and one line of the reference check (`reference.rs`),
-//! which marks the layer results of a copy stale to compare them with a fresh recompute.
+//! tests go through it. A card body is lent the state shared, so it cannot open the door,
+//! and rules code has no use for it: the `board-door` check in the `names` lane refuses
+//! `.board()` and `board::Board` in `beryl_engine` and `beryl_cards` outside their tests.
 //!
 //! ## The legacy accessor
 //!

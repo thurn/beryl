@@ -4,7 +4,8 @@
 //! A mutator that changes a layer input marks the cache stale. [`State::rederive`] then
 //! lends it to the one function that fills it, `beryl_engine`'s `layers::refresh`, and the
 //! cache is current again once that function finishes. Nothing else writes the cache or
-//! clears the mark.
+//! clears the mark; [`State::forget_derived`] sets it with no change, for a recompute to
+//! compare against.
 
 use std::ops::Deref;
 
@@ -30,6 +31,15 @@ impl<L: Layout> State<L> {
         }
         self.drop_stale_effects();
         Some(Rederive(self))
+    }
+
+    /// Marks the layer results stale, so the next refresh computes them again from base:
+    /// for the reference check, which compares the two, and the tests of the invariants. It
+    /// can cause a recompute and nothing else, so it needs no event.
+    #[doc(hidden)]
+    #[inline]
+    pub fn forget_derived(&mut self) {
+        self.flags.derived_dirty = true;
     }
 }
 
