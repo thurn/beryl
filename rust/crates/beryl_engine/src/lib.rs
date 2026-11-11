@@ -24,6 +24,7 @@ mod layers;
 mod mana;
 mod reference;
 mod resolve;
+mod rule_change;
 mod sba;
 mod scratch;
 mod start;

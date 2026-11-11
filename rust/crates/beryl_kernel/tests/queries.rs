@@ -143,7 +143,7 @@ fn derive(t: &GameTable, s: &mut State, boost: i8) {
             ..Derived::default()
         };
     }
-    cache.finish(0);
+    cache.finish(0, Default::default());
 }
 
 #[test]

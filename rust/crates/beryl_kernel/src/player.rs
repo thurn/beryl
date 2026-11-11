@@ -74,10 +74,6 @@ pub struct Player<L: Layout = Small> {
     /// marker used to represent an object that has one or more abilities, but usually no
     /// other characteristics."
     pub(crate) emblems: L::Queue<L::Card, 4>,
-    /// "Until your next turn, you may cast sorcery spells as though they had flash." (Teferi,
-    /// Time Raveler) Milestone 4 (by-w8gv.7.1) deletes it: written only through
-    /// [`State::legacy_mut`].
-    pub(crate) sorceries_as_flash: bool,
 }
 
 impl Copy for Player<Small> {}
@@ -137,13 +133,6 @@ impl<L: Layout> Player<L> {
     #[inline]
     pub fn emblems(&self) -> &[L::Card] {
         self.emblems.as_slice()
-    }
-
-    /// Whether the player may cast sorcery spells as though they had flash. Milestone 4
-    /// (by-w8gv.7.1) deletes it.
-    #[inline]
-    pub fn sorceries_as_flash(&self) -> bool {
-        self.sorceries_as_flash
     }
 }
 

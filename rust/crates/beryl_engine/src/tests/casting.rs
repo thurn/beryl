@@ -3,6 +3,7 @@
 
 use super::cast::{Game, cast, index_of};
 use crate::card::{Castings, FaceIx, ManaColor, ObjectAbility};
+use crate::event::{self, Reason};
 use crate::ids::Slot;
 use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
@@ -434,6 +435,38 @@ fn a_static_ability_limits_an_opponent_to_sorcery_speed() {
     assert!(!g.offers_cast(flasher), "flash, but only at sorcery speed");
     g.main(g.them);
     assert!(g.offers_cast(flasher));
+}
+
+/// "Each opponent" is read for the permanent's controller after continuous effects
+/// ([CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095)): "For a static ability,
+/// this is the current controller of the object it's on." The limit is found with the
+/// layers, so it moves as control does and ends as the permanent leaves.
+#[test]
+fn a_static_rule_change_follows_its_permanents_controller_and_ends_with_it() {
+    let mut g = Game::new(Profile::EXACT);
+    let flasher = g.give(g.me, "Test Flasher", Zone::Hand);
+    // An instant-speed action keeps my priority a decision.
+    g.give(g.me, "Test HQ", Zone::Hand);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    let raveler = g.give(g.me, "Test Raveler", Zone::Battlefield);
+    g.at(g.me, TurnStep::Upkeep);
+    assert!(g.offers_cast(flasher), "mine limits my opponents, not me");
+    g.s.board().set_controller(raveler, g.them);
+    g.at(g.me, TurnStep::Upkeep);
+    assert!(!g.offers_cast(flasher), "under their control it limits me");
+    let graveyard = Zone::Graveyard;
+    event::move_one(
+        &mut g.s,
+        &g.t,
+        &mut g.x.events,
+        raveler,
+        graveyard,
+        Reason::Effect,
+    )
+    .unwrap();
+    g.at(g.me, TurnStep::Upkeep);
+    assert!(g.offers_cast(flasher), "the limit left with it");
 }
 
 #[test]

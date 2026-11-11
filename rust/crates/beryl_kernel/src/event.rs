@@ -244,6 +244,12 @@ pub mod kind {
     pub const DIES: u16 = 1 << 6;
     pub const DISCARD: u16 = 1 << 7;
     pub const DRAW: u16 = 1 << 8;
+    /// No kind of event, and no [`super::Event`] has it: the bit of a card's mask
+    /// ([`crate::GameTable`]) that says a static ability of it changes a rule for players
+    /// ([`beryl_card::Rule::whose`]). The layers read each permanent's mask once, for what
+    /// listens, and so learn in the same read whether any permanent changes a rule
+    /// ([`crate::derive::Rederive::finish`]).
+    pub const RULE_CHANGE: u16 = 1 << 15;
 }
 
 impl Copy for Event<Small> {}

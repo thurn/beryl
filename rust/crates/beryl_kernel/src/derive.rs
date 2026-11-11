@@ -9,9 +9,9 @@
 
 use std::ops::Deref;
 
-use beryl_card::FaceIx;
+use beryl_card::{FaceIx, Rules};
 
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, PerSeat, Queue, Table};
 use crate::object::Derived;
 use crate::state::State;
 
@@ -58,14 +58,16 @@ impl<L: Layout> Rederive<'_, L> {
     }
 
     /// Stores the results as current, with `listening`, the kinds of event the permanents
-    /// have triggered abilities for. Control is settled now, so each face-down permanent's
-    /// controller sees it from here on
+    /// have triggered abilities for, and `rules`, the rules their static abilities change
+    /// for each player, by seat ([`State::rule_applies`]). Control is settled now, so each
+    /// face-down permanent's controller sees it from here on
     /// ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "At any time, you may
     /// look at ... a face-down permanent you control".
     #[inline]
-    pub fn finish(self, listening: u16) {
+    pub fn finish(self, listening: u16, rules: PerSeat<Rules>) {
         let s = self.0;
         s.listening = listening;
+        s.static_rules = Table::from_fn(|player| rules[player]);
         for i in 0..s.battlefield.len() {
             let slot = s.battlefield.as_slice()[i];
             if s.object(slot).face == FaceIx::DOWN {

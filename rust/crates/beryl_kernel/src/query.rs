@@ -10,7 +10,7 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{CardDef, Face, FaceIx, Rule, Zone};
+use beryl_card::{CardDef, Face, FaceIx, Rule, Rules, Zone};
 
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
@@ -128,7 +128,22 @@ impl<L: Layout> Copiable<L> {
     /// Whether the face that is up has a static ability with `rule`.
     #[inline]
     pub fn has_rule(self, t: &GameTable, rule: Rule) -> bool {
-        t.may_have_rule(self.card, rule) && self.facts(t).has_rule(rule)
+        t.may_have_rules(self.card).contains(rule) && self.facts(t).rules().contains(rule)
+    }
+
+    /// The rules the static abilities of the face that is up change for players
+    /// ([`Rule::whose`]). For a card no face of which changes one, a load and an AND. The
+    /// layers ask it only of a battlefield with such a card on it
+    /// ([`crate::event::kind::RULE_CHANGE`]).
+    #[inline]
+    pub fn player_rules(self, t: &GameTable) -> Rules {
+        if t.may_have_rules(self.card)
+            .common(Rules::OF_PLAYERS)
+            .is_empty()
+        {
+            return Rules::NONE;
+        }
+        self.facts(t).rules().common(Rules::OF_PLAYERS)
     }
 
     /// The event kinds the triggered abilities of any face of the definition listen to: more

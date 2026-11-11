@@ -14,7 +14,9 @@ use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{Seat, Slot};
-use crate::state::{CounterKind, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
+use crate::state::{
+    Affects, CounterKind, Duration, Payload, Pending, TargetPlace, TurnStep, Zone, ZoneKey,
+};
 use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
@@ -159,7 +161,11 @@ fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    ctx.allow_sorceries_as_flash(you);
+    ctx.add_effect(
+        Affects::Player(you),
+        Payload::Rule(Rule::SorceriesAsFlash),
+        Duration::UntilYourNextTurn(you),
+    );
     Ok(())
 }
 

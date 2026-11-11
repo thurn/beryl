@@ -12,6 +12,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::{Affects, Duration, Payload};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -72,9 +73,16 @@ pub static CARD: CardDef = CardDef {
 
 /// "+1: Until your next turn, you may cast sorcery spells as though they had flash."
 /// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means 'You may
-/// play this card any time you could cast an instant.'"
+/// play this card any time you could cast an instant.'" A change to a rule for one player
+/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects
+/// affect game rules rather than objects."), which ends as their next turn begins.
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.allow_sorceries_as_flash(ctx.controller());
+    let you = ctx.controller();
+    ctx.add_effect(
+        Affects::Player(you),
+        Payload::Rule(Rule::SorceriesAsFlash),
+        Duration::UntilYourNextTurn(you),
+    );
     Ok(())
 }
 

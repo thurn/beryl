@@ -268,7 +268,6 @@ impl<L: Layout> Relayout for Player<L> {
             mulligan: self.mulligan,
             to_bottom: self.to_bottom,
             emblems: queue(self.emblems.as_slice(), |&c| card(c)),
-            sorceries_as_flash: self.sorceries_as_flash,
         }
     }
 }
@@ -666,6 +665,7 @@ impl<L: Layout> Relayout for State<L> {
             battlefield,
             derived,
             listening,
+            static_rules,
             zones,
             players,
             turn,
@@ -696,6 +696,7 @@ impl<L: Layout> Relayout for State<L> {
                 Derived::relayout,
             ),
             listening: *listening,
+            static_rules: per_player(static_rules, |&rules| rules),
             zones: zones.relayout(),
             players: per_player(players, Player::relayout),
             turn: *turn,

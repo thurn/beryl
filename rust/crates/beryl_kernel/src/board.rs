@@ -80,15 +80,7 @@ impl<L: Layout> State<L> {
                 name(p.object.slot)
             ));
         }
-        for p in Seat::BOTH {
-            if self.player(p).sorceries_as_flash {
-                return Some(format!(
-                    "player {} casting sorceries as though they had flash until their next turn",
-                    p.get()
-                ));
-            }
-        }
-        None
+        self.rule_change_lingering()
     }
 }
 

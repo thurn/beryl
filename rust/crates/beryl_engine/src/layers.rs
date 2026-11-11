@@ -1,10 +1,15 @@
 //! Derived characteristics: continuous effects applied in layers, recomputed from base when
 //! dirty (architecture §9, decision D5, CR 613).
 
-use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
-use crate::event::Sink;
+use beryl_kernel::derive::Rederive;
+
+use crate::card::{
+    AbilityKind, Affected, Colors, Modification, Rules, StaticCondition, Subtypes, Types,
+};
+use crate::event::{Sink, kind};
+use crate::filter;
 use crate::ids::CardId;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, PerSeat, Queue};
 use crate::state::{CounterKind, Derived, GrantRef, LayerChange, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
@@ -88,7 +93,8 @@ pub(crate) fn counters_matter<L: Layout>(
 ///
 /// The kernel has ended the effects on objects that left their zone as they left, and stores
 /// the results, with what each face-down permanent's controller now sees, as the
-/// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]).
+/// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]), and with them the rules
+/// the permanents' static abilities change for each player ([`player_rules`]).
 fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     let Some(mut s) = s.rederive() else {
         return;
@@ -187,7 +193,52 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         d.power = d.power.saturating_add(delta);
         d.toughness = d.toughness.saturating_add(delta);
     }
-    s.finish(listening);
+    // A permanent that may change a rule for players said so in the mask just read for
+    // the listeners: with none on the battlefield, one AND.
+    let rules = if listening & kind::RULE_CHANGE != 0 {
+        player_rules(&mut s, t)
+    } else {
+        [Rules::NONE; _]
+    };
+    s.finish(listening, rules);
+}
+
+/// The rules the permanents' static abilities change for each player, by seat
+/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
+/// effects affect game rules rather than objects. ... These effects are applied after all
+/// other continuous effects have been applied." So control is settled: "each opponent" and
+/// "you" in such an ability are read for the permanent's controller as layer 2 left it
+/// ([CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095): "For a static ability,
+/// this is the current controller of the object it's on."). A face-down permanent has no
+/// abilities ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)), which its
+/// copiable values answer for.
+///
+/// Out of line: only a recompute with such a permanent on the battlefield comes here.
+#[inline(never)]
+fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Rules> {
+    let mut rules = [Rules::NONE; _];
+    for i in 0..s.battlefield().len() {
+        let what = s.copiable(s.battlefield()[i]);
+        if what.player_rules(t).is_empty() {
+            continue;
+        }
+        let controller = s.results()[i].controller;
+        for ability in what.face(t).abilities {
+            let (AbilityKind::Static, Some(whose)) = (ability.kind, ability.rule.whose()) else {
+                continue;
+            };
+            // The rule is in force for those players from here: the ability did what it
+            // says, as one that changes a permanent does above.
+            crate::coverage::hit(ability);
+            // Each player's set is a union: the order they are met in is nothing.
+            for player in s.players_in_seat_order(s.players()) {
+                if filter::is_whose(whose, player, controller) {
+                    rules[player.index()] = rules[player.index()].with(ability.rule);
+                }
+            }
+        }
+    }
+    rules
 }
 
 /// Applies one modification to the permanent at battlefield index `i`.

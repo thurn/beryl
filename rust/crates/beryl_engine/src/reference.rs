@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, Cost, ManaCost, Types};
+use crate::card::{AbilityKind, Cost, ManaCost, Rules, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -17,7 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
-use crate::state::{ObjectFlags, State, Zone, ZoneKey};
+use crate::state::{Affects, ObjectFlags, State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -61,8 +61,9 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
     Ok(())
 }
 
-/// The layer results, the listeners and the knowledge the layers give, against a
-/// recompute from base ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
+/// The layer results, the listeners, the players' rules and the knowledge the layers give,
+/// against a recompute from base
+/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
 /// "The values of an object's characteristics are determined by starting with the actual
 /// object ... Then all applicable continuous effects are applied in a series of layers".
 /// A chokepoint that changes a layer input without marking the results dirty leaves them
@@ -83,6 +84,17 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
         "the trigger listeners differ from a fresh recompute",
         None,
     )?;
+    // The players in any order: each is checked alone.
+    for player in s.players_in_seat_order(s.players()) {
+        let to = Affects::Player(player);
+        check(
+            Rules::OF_PLAYERS
+                .iter()
+                .all(|rule| fresh.rule_applies(t, rule, to) == s.rule_applies(t, rule, to)),
+            "the rules static abilities change differ from a fresh recompute",
+            Some(At::Player(player)),
+        )?;
+    }
     check(
         fresh.knowledge() == s.knowledge(),
         "knowledge differs from a fresh layer recompute",

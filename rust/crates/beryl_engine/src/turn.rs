@@ -42,8 +42,6 @@ pub(crate) fn begin_turn<L: Layout>(
     // most recent turn began. Nothing has entered, and no loyalty ability has been
     // activated (CR 606.3), this turn.
     s.reset_permanents_for_turn(active);
-    // "Until your next turn" ends as that turn begins.
-    s.legacy_mut().set_sorceries_as_flash(active, false);
     begin_step(s, t, sink, TurnStep::Untap)
 }
 

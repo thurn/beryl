@@ -1,6 +1,6 @@
 //! A new game's state: each deck dealt into its slots, and the coin flip (CR 103).
 
-use beryl_card::{TurnStep, Zone};
+use beryl_card::{Rules, TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
@@ -28,7 +28,6 @@ fn new_player<L: Layout>() -> Player<L> {
         mulligan: MulliganStatus::Undeclared,
         to_bottom: 0,
         emblems: Default::default(),
-        sorceries_as_flash: false,
     }
 }
 
@@ -102,6 +101,7 @@ impl<L: Layout> State<L> {
             battlefield: Default::default(),
             derived: Table::filled(Derived::default()),
             listening: 0,
+            static_rules: Table::filled(Rules::NONE),
             zones: Zones {
                 members: Table::filled([Bitboard::EMPTY; Zone::OWNED]),
                 stack: Bitboard::EMPTY,

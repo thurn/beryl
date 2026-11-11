@@ -3,7 +3,7 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs,
-    Rule, Trigger,
+    Rule, Rules, Trigger,
 };
 
 use crate::event::kind;
@@ -74,14 +74,15 @@ pub struct GameTable {
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
     decks: PerSeat<Vec<usize>>,
-    /// Per game index, the event kinds its triggered abilities listen to.
+    /// Per game index, the event kinds its triggered abilities listen to, and
+    /// [`kind::RULE_CHANGE`] if a static ability of it changes a rule for players.
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
     /// Per game index, the [`Rule`]s any of its faces, or face down, has.
-    rules: Vec<u8>,
+    rules: Vec<Rules>,
     /// The game index of [`FACE_DOWN_COPY`], in the width of each layout's
     /// ([`GameTable::face_down_copy`]); index 0, never read, in a width that does not number
     /// it.
@@ -100,13 +101,11 @@ pub struct GameTable {
 /// The kinds of continuous effect have no bit here: the Effects store knows exactly which
 /// are live ([`crate::effects`]), which a table could only bound, since a Rust body is
 /// opaque to it. These are what no live entry can say: whether to keep a count nothing has
-/// yet read, and whether a static ability that is not on the battlefield yet could ever
-/// change a rule.
+/// yet read. Whether a static ability changes a rule for players is no capability of the
+/// game either: it is a bit of each card's listener mask ([`kind::RULE_CHANGE`]), which says
+/// it of the permanents on the battlefield now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Capability {
-    /// A card has a static ability that changes a rule of the game ([`Rule`]), so the
-    /// rules in force are found with the layers (by-w8gv.7.3).
-    RuleChanges,
     /// A card reads whether a permanent entered the battlefield this turn, so that is
     /// tracked (by-w8gv.7.8).
     EnteredThisTurn,
@@ -124,9 +123,6 @@ impl Capability {
     fn of(face: &Face) -> u8 {
         let mut found = 0;
         for a in face.abilities {
-            if a.kind == AbilityKind::Static && a.rule != Rule::None {
-                found |= Capability::RuleChanges.bit();
-            }
             if a.rule == Rule::InstantLoyaltyTheTurnItEntered {
                 found |= Capability::EnteredThisTurn.bit();
             }
@@ -200,7 +196,11 @@ impl GameTable {
         let down = FaceFacts::of(&FACE_DOWN).rules;
         let rules = defs
             .iter()
-            .map(|d| d.faces.iter().fold(down, |r, f| r | FaceFacts::of(f).rules))
+            .map(|d| {
+                d.faces
+                    .iter()
+                    .fold(down, |r, f| r.union(FaceFacts::of(f).rules))
+            })
             .collect();
         let capabilities = defs
             .iter()
@@ -266,11 +266,12 @@ impl GameTable {
         }
     }
 
-    /// Whether some face of the card at `card` has a static ability with `rule`: so whether it
-    /// can, whichever face is up. The crate's own: others ask [`crate::Copiable::has_rule`].
+    /// The rules the static abilities of any face of the card at `card` change: more than
+    /// the face that is up may, so a set to skip a card by and nothing else. The crate's
+    /// own: others ask [`crate::Copiable::has_rule`] and [`crate::Copiable::player_rules`].
     #[inline]
-    pub(crate) fn may_have_rule(&self, card: impl CardId, rule: Rule) -> bool {
-        self.rules[card.index()] & rule_bit(rule) != 0
+    pub(crate) fn may_have_rules(&self, card: impl CardId) -> Rules {
+        self.rules[card.index()]
     }
 
     /// The event kinds any card of this game listens to.
@@ -347,8 +348,8 @@ pub struct FaceFacts {
     pub mana: ManaFace,
     /// A bit per [`AbilityIx`] of its activated abilities.
     activated: u64,
-    /// A bit per [`Rule`] of its static abilities.
-    rules: u8,
+    /// The [`Rule`]s its static abilities change.
+    rules: Rules,
 }
 
 impl FaceFacts {
@@ -356,7 +357,7 @@ impl FaceFacts {
     const NONE: FaceFacts = FaceFacts {
         mana: ManaFace::Read,
         activated: 0,
-        rules: 0,
+        rules: Rules::NONE,
     };
 
     /// Whether it has an activated ability
@@ -389,35 +390,36 @@ impl FaceFacts {
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
             activated: 0,
-            rules: 0,
+            rules: Rules::NONE,
         };
         for (i, a) in face.abilities.iter().enumerate() {
             match a.kind {
                 AbilityKind::Activated => facts.activated |= 1 << i,
-                AbilityKind::Static => facts.rules |= rule_bit(a.rule),
+                AbilityKind::Static if a.rule != Rule::None => {
+                    facts.rules = facts.rules.with(a.rule);
+                }
                 _ => {}
             }
         }
         facts
     }
 
-    /// Whether one of its static abilities has `rule`.
+    /// The rules its static abilities change.
     #[inline]
-    pub fn has_rule(self, rule: Rule) -> bool {
-        self.rules & rule_bit(rule) != 0
+    pub fn rules(self) -> Rules {
+        self.rules
     }
 }
 
-#[inline]
-fn rule_bit(rule: Rule) -> u8 {
-    1 << (rule as u8)
-}
-
-/// The event kinds a card's triggered abilities listen to, on any face.
+/// The event kinds a card's triggered abilities listen to, on any face, and
+/// [`kind::RULE_CHANGE`] if a static ability of any face changes a rule for players.
 fn listens(def: &CardDef) -> u16 {
     let mut mask = 0;
     for face in def.faces {
         for ability in face.abilities {
+            if ability.kind == AbilityKind::Static && ability.rule.whose().is_some() {
+                mask |= kind::RULE_CHANGE;
+            }
             mask |= match ability.trigger {
                 Trigger::None | Trigger::Delayed(_) => 0,
                 Trigger::Enters => kind::ENTERS,
@@ -528,7 +530,8 @@ mod tests {
     };
     static TABLE: CardTable = CardTable::new(&[&ALPHA, &BETA, &ALPHA_AGAIN]);
 
-    /// A planeswalker whose static ability reads the turn it entered.
+    /// A planeswalker whose static abilities read the turn it entered and change a rule
+    /// for its controller's opponents.
     static WALKER: CardDef = CardDef {
         name: "Walker",
         faces: &[Face {
@@ -536,6 +539,11 @@ mod tests {
                 Ability {
                     kind: AbilityKind::Static,
                     rule: Rule::InstantLoyaltyTheTurnItEntered,
+                    ..Ability::NONE
+                },
+                Ability {
+                    kind: AbilityKind::Static,
+                    rule: Rule::OpponentsCastAsSorceries,
                     ..Ability::NONE
                 },
                 Ability {
@@ -552,16 +560,26 @@ mod tests {
 
     #[test]
     fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
-        let all = [
-            Capability::RuleChanges,
-            Capability::EnteredThisTurn,
-            Capability::LoyaltyActivated,
-        ];
+        let all = [Capability::EnteredThisTurn, Capability::LoyaltyActivated];
         let plain = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(4, "Alpha")]]).unwrap();
         assert!(all.iter().all(|&c| !plain.can(c)));
         // One deck's card is enough: both players' games read the same table.
         let walker = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
         assert!(all.iter().all(|&c| walker.can(c)));
+    }
+
+    #[test]
+    fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
+        let t = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
+        let (alpha, walker) = (CardIx::from_index(0), CardIx::from_index(1));
+        assert_eq!(t.listens(alpha) & kind::RULE_CHANGE, 0);
+        assert_eq!(t.listens(walker), kind::RULE_CHANGE);
+        assert_eq!(t.listens_any(), kind::RULE_CHANGE);
+        // Its rule about itself is none of the players' rules.
+        assert_eq!(
+            t.may_have_rules(walker).common(Rules::OF_PLAYERS),
+            Rules::NONE.with(Rule::OpponentsCastAsSorceries)
+        );
     }
 
     #[test]

@@ -28,9 +28,10 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
+use crate::rule_change;
 use crate::state::{
-    CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry,
-    State, Target, TurnStep, Zone, ZoneKey,
+    Affects, CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending,
+    StackEntry, State, Target, TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 
@@ -87,46 +88,30 @@ pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
         && s.stack().is_empty()
 }
 
-/// Whether a permanent on the battlefield has a static ability with this rule.
-#[inline]
-fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, rule: Rule) -> bool {
-    let has = s.copiable(slot).has_rule(t, rule);
-    #[cfg(feature = "coverage")]
-    if has
-        && let Some(a) = crate::trigger::face(s, t, slot)
-            .abilities
-            .iter()
-            .find(|a| a.rule == rule)
-    {
-        crate::coverage::hit(a);
-    }
-    has
-}
-
-/// The first of an opponent's permanents that limits `player` to casting spells at sorcery
-/// speed, as Teferi, Time Raveler does, if one does. A prohibition beats a permission
+/// Whether a rule change limits `player` to casting spells at sorcery speed, as Teferi,
+/// Time Raveler's static ability does each opponent. A prohibition beats a permission
 /// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
-fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<L::Slot> {
-    // A permanent's derived characteristics, its controller among them, are at its place in
-    // the battlefield list.
-    s.permanents()
-        .find(|&(slot, d)| {
-            filter::is_an_opponent(player, d.controller)
-                && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
-        })
-        .map(|(slot, _)| slot)
+#[inline]
+fn sorcery_speed_only<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> bool {
+    rule_change::applies(
+        s,
+        t,
+        Rule::OpponentsCastAsSorceries,
+        Affects::Player(player),
+    )
 }
 
 /// Whether `player` may cast this face at instant speed: an instant
 /// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
-/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while an
-/// effect lets them cast sorceries as though they had flash.
-fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
+/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while a
+/// rule change lets them cast sorceries as though they had flash.
+fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
-        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash())
+        || (face.types.intersects(Types::SORCERY)
+            && rule_change::applies(s, t, Rule::SorceriesAsFlash, Affects::Player(player)))
 }
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
@@ -467,7 +452,6 @@ struct Situation<L: Layout = Small> {
     /// needed them.
     funds: OnceCell<Option<Funds<L>>>,
     full: Cell<bool>,
-    sorcery_speed_only: OnceCell<bool>,
 }
 
 impl<L: Layout> Situation<L> {
@@ -476,16 +460,7 @@ impl<L: Layout> Situation<L> {
             player,
             funds: OnceCell::new(),
             full: Cell::new(false),
-            sorcery_speed_only: OnceCell::new(),
         }
-    }
-
-    /// Whether an opponent's permanent limits the player to sorcery speed: read only for a
-    /// face that could otherwise be cast at instant speed.
-    fn sorcery_speed_only(&self, s: &State<L>, t: &GameTable) -> bool {
-        *self
-            .sorcery_speed_only
-            .get_or_init(|| sorcery_speed_limiter(s, t, self.player).is_some())
     }
 
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
@@ -525,11 +500,11 @@ fn in_time<L: Layout>(
     }
     match from {
         From::Priority => {
-            (instant_speed(s, face, now.player) && !now.sorcery_speed_only(s, t))
+            (instant_speed(s, t, face, now.player) && !sorcery_speed_only(s, t, now.player))
                 || sorcery_timing(s, now.player)
         }
         // During a resolution the stack is never empty, so a sorcery-speed limit forbids it.
-        From::Resolution { .. } => !now.sorcery_speed_only(s, t),
+        From::Resolution { .. } => !sorcery_speed_only(s, t, now.player),
     }
 }
 
@@ -632,11 +607,12 @@ pub(crate) fn refusal<L: Layout>(
     if most == Some(Refusal::Timing { by: None }) {
         let instant = def.face_ixs().any(|f| {
             let face = def.face(f);
-            !face.transformed && instant_speed(s, face, player)
+            !face.transformed && instant_speed(s, t, face, player)
         });
         if instant {
+            let limit = Rule::OpponentsCastAsSorceries;
             most = Some(Refusal::Timing {
-                by: sorcery_speed_limiter(s, t, player),
+                by: rule_change::maker(s, t, limit, Affects::Player(player)),
             });
         }
     }
@@ -804,8 +780,9 @@ fn activatable<L: Layout>(
         if i16::from(o.counters().loyalty) + i16::from(loyalty) < 0 {
             return false;
         }
+        let instant = Rule::InstantLoyaltyTheTurnItEntered;
         !(o.flags().has(ObjectFlags::ENTERED_THIS_TURN)
-            && has_rule(s, t, slot, Rule::InstantLoyaltyTheTurnItEntered))
+            && rule_change::applies(s, t, instant, Affects::object(s.object_ref(slot))))
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".

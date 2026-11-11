@@ -16,13 +16,13 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Face, Keywords, ManaColor, ManaCost, Replacement, Timing, Types,
+    Ability, AbilityKind, Face, Keywords, ManaColor, ManaCost, Replacement, Rule, Timing, Types,
 };
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone, ZoneKey};
+use crate::state::{Affects, Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 
@@ -769,13 +769,13 @@ fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
 
 /// Whether `player` may cast `face` at instant speed, as casting decides: an instant
 /// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
-/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while an
-/// effect lets them cast sorceries as though they had flash. Kept apart from casting's own
-/// check, which the hot priority path inlines.
-fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
+/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery given flash
+/// by a rule change. Casting's own check is kept apart: the hot priority path inlines it.
+fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
-        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash())
+        || (face.types.intersects(Types::SORCERY)
+            && s.rule_applies(t, Rule::SorceriesAsFlash, Affects::Player(player)))
 }
 
 /// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as
@@ -822,7 +822,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let castable = |face: &Face| {
         !face.transformed
             && !face.types.intersects(Types::LAND)
-            && (sorcery || instant_speed(s, face, player))
+            && (sorcery || instant_speed(s, t, face, player))
     };
     let activatable = |a: &Ability| sorcery || a.timing == Timing::Instant;
     // The hand by card, not by slot: [`Lookahead::together`]'s search is bounded, so the order

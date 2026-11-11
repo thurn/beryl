@@ -17,7 +17,7 @@ pub use crate::stack::{
 pub use crate::store::Duration;
 pub use crate::turn::Turn;
 
-use beryl_card::FaceIx;
+use beryl_card::{FaceIx, Rules};
 
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
@@ -120,6 +120,11 @@ pub struct State<L: Layout = Small> {
     pub(crate) outcome: Option<Outcome>,
     pub(crate) profile: Profile,
     pub(crate) flags: Flags,
+    /// The rules the permanents' static abilities change for each player
+    /// ([`beryl_card::Rule::whose`]), found with the layer results and current while they
+    /// are: half of what [`State::rule_applies`] reads, the Effects store's own index
+    /// being the other.
+    pub(crate) static_rules: L::PerPlayer<Rules>,
     /// Slots on the battlefield, in the order they entered.
     pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
     pub(crate) rng: Rng,
@@ -172,6 +177,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             outcome,
             profile,
             flags,
+            static_rules,
             battlefield,
             rng,
             knowledge,
@@ -191,6 +197,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         battlefield.hash(h);
         derived.hash(h);
         listening.hash(h);
+        static_rules.hash(h);
         zones.hash(h);
         players.hash(h);
         turn.hash(h);

@@ -9,19 +9,22 @@
 //! [`State::layer_effects`], a zone change for [`State::move_replacements`]. A kind with
 //! nothing live costs its reader one AND.
 //!
-//! Built so far (by-w8gv.7.2): an object as the affected side, and the layer change and the
-//! zone-change replacement as payloads. Players, the game and locked-in sets as sides, and
-//! rule changes, cost changes and permissions as payloads, are designed in the contract and
-//! built by by-w8gv.7.3 to by-w8gv.7.5.
+//! Built so far: an object (by-w8gv.7.2) and a player (by-w8gv.7.3) as the affected side,
+//! and the layer change, the zone-change replacement and the rule change as payloads. The
+//! game and locked-in sets as sides, and cost changes and permissions as payloads, are
+//! designed in the contract and built with their first users (by-w8gv.7.4, by-w8gv.7.5).
+//!
+//! [`State::rule_applies`] is the one question about a rule change, whether a static
+//! ability or one of these effects makes it.
 
-use beryl_card::{GrantIx, Keywords, Layer, Modification, Subtype, Types};
+use beryl_card::{GrantIx, Keywords, Layer, Modification, Rule, Rules, Subtype, Types};
 
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat, SlotId};
 use crate::invariants::{At, Violation, check};
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::relayout::{Relayout, card, queue, slot};
@@ -39,6 +42,9 @@ pub const EFFECTS: usize = 64;
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The fields are the
 /// variant's own rather than an [`ObjectRef`] so that the sides to come (a player, a
 /// locked-in set, the game) share its four bytes in [`Small`].
+///
+/// A player is affected by a rule change alone: a layer changes a permanent and a zone
+/// change is an object's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Affects<L: Layout = Small> {
     /// One object, as it was when the effect began
@@ -46,6 +52,8 @@ pub enum Affects<L: Layout = Small> {
     /// it affects is determined when that continuous effect begins. After that point, the set
     /// won't change."
     Object { slot: L::Slot, incarnation: u16 },
+    /// One player: "you may", "target player can't".
+    Player(Seat),
 }
 
 impl<L: Layout> Affects<L> {
@@ -63,7 +71,15 @@ impl<L: Layout> Affects<L> {
     pub fn as_object(self) -> Option<ObjectRef<L>> {
         match self {
             Affects::Object { slot, incarnation } => Some(ObjectRef { slot, incarnation }),
+            Affects::Player(_) => None,
         }
+    }
+}
+
+impl<L: Layout> From<ObjectRef<L>> for Affects<L> {
+    #[inline]
+    fn from(object: ObjectRef<L>) -> Affects<L> {
+        Affects::object(object)
     }
 }
 
@@ -147,6 +163,11 @@ pub enum Payload {
     Layer(LayerChange),
     /// Replaces a zone change of the affected object.
     Move(MoveReplacement),
+    /// Changes a rule of the game for what it affects
+    /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
+    /// effects affect game rules rather than objects." The rule is the vocabulary's own:
+    /// it names no player, and the affected side is who it applies to.
+    Rule(Rule),
 }
 
 impl Payload {
@@ -156,6 +177,7 @@ impl Payload {
         match self {
             Payload::Layer(_) => Kinds::LAYER,
             Payload::Move(_) => Kinds::MOVE,
+            Payload::Rule(_) => Kinds::RULE,
         }
     }
 }
@@ -168,6 +190,7 @@ struct Kinds(u16);
 impl Kinds {
     const LAYER: u16 = 1 << 0;
     const MOVE: u16 = 1 << 1;
+    const RULE: u16 = 1 << 2;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -204,17 +227,21 @@ impl<L: Layout> Default for ContinuousEffect<L> {
     }
 }
 
-/// The Effects store: the entries in the order they began, and the kinds among them.
+/// The Effects store: the entries in the order they began, and two indices of them, the
+/// kinds among them and the rules they change for each player.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Effects<L: Layout = Small> {
     entries: L::Queue<ContinuousEffect<L>, EFFECTS>,
     kinds: Kinds,
+    /// The rules the entries on each player change, so that whether one applies to a
+    /// player is one AND ([`State::rule_applies`]).
+    rules: L::PerPlayer<Rules>,
 }
 
 impl Copy for Effects<Small> {}
 
-/// The entries alone: the kinds are an index of them, and a hash of a state is a hash of
-/// the game.
+/// The entries alone: the kinds and the players' rules are indices of them, and a hash of
+/// a state is a hash of the game.
 impl<L: Layout> std::hash::Hash for Effects<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.entries.hash(h);
@@ -236,10 +263,14 @@ impl<L: Layout> Effects<L> {
     fn end(&mut self, keep: impl Fn(&ContinuousEffect<L>) -> bool) -> Ended {
         let mut done = Ended::default();
         let mut kinds = 0;
+        let mut rules: L::PerPlayer<Rules> = Table::filled(Rules::NONE);
         self.entries.retain(|e| {
             let kept = keep(e);
             if kept {
                 kinds |= e.payload.kind();
+                if let Some((player, rule)) = e.player_rule() {
+                    rules[player.index()] = rules[player.index()].with(rule);
+                }
             } else {
                 done.any = true;
                 done.layer_input |= matches!(e.payload, Payload::Layer(_));
@@ -247,7 +278,28 @@ impl<L: Layout> Effects<L> {
             kept
         });
         self.kinds = Kinds(kinds);
+        self.rules = rules;
         done
+    }
+
+    /// Whether an entry changes `rule` for exactly `affected`.
+    #[inline]
+    fn changes_rule(&self, rule: Rule, affected: Affects<L>) -> bool {
+        self.of(Kinds::RULE)
+            .iter()
+            .any(|e| e.payload == Payload::Rule(rule) && e.affected == affected)
+    }
+}
+
+impl<L: Layout> ContinuousEffect<L> {
+    /// The player it changes a rule for and the rule, if that is what it does: what the
+    /// store's index of the players' rules holds of it.
+    #[inline]
+    fn player_rule(&self) -> Option<(Seat, Rule)> {
+        match (self.affected, self.payload) {
+            (Affects::Player(player), Payload::Rule(rule)) => Some((player, rule)),
+            _ => None,
+        }
     }
 }
 
@@ -256,6 +308,7 @@ impl<L: Layout> Store<L> for Effects<L> {
         Effects {
             entries: Default::default(),
             kinds: Kinds::default(),
+            rules: Table::filled(Rules::NONE),
         }
     }
 
@@ -291,13 +344,22 @@ impl<L: Layout> Store<L> for Effects<L> {
 
     fn check(&self, s: &State<L>, t: &GameTable) -> Result<(), Violation> {
         let mut kinds = 0;
+        let mut rules: L::PerPlayer<Rules> = Table::filled(Rules::NONE);
         for e in self.entries.iter() {
             kinds |= e.payload.kind();
+            if let Some((player, rule)) = e.player_rule() {
+                rules[player.index()] = rules[player.index()].with(rule);
+            }
             let object = e.affected.as_object();
             let at = object.map(|r| At::Slot(r.slot.index()));
             check(
                 object.is_none_or(|r| s.is_current(r)),
                 "an effect on an object that has ended",
+                at,
+            )?;
+            check(
+                object.is_some() || matches!(e.payload, Payload::Rule(_)),
+                "an effect on a player that is no rule change",
                 at,
             )?;
             check(e.source.index() < t.len(), "an effect of no card", at)?;
@@ -306,17 +368,25 @@ impl<L: Layout> Store<L> for Effects<L> {
             kinds == self.kinds.0,
             "the kinds of effect disagree with the effects",
             None,
+        )?;
+        check(
+            rules == self.rules,
+            "the players' rules disagree with the effects",
+            None,
         )
     }
 
     fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String> {
-        let e = self.entries.as_slice().first()?;
-        let on = match e.affected {
-            Affects::Object { slot, .. } => t.def(s.card(slot)).name,
-        };
+        // The first entry about an object: a rule change on a player is listed after the
+        // permissions ([`State::rule_change_lingering`]), where saves have always had it.
+        let (e, on) = self
+            .entries
+            .iter()
+            .find_map(|e| Some((e, e.affected.as_object()?)))?;
         Some(format!(
-            "an effect of {} on {on} lasting {}",
+            "an effect of {} on {} lasting {}",
             t.def(e.source).name,
+            t.def(s.card(on.slot)).name,
             e.duration.words()
         ))
     }
@@ -338,6 +408,7 @@ impl<L: Layout> Relayout for ContinuousEffect<L> {
                     slot: slot(affected),
                     incarnation,
                 },
+                Affects::Player(player) => Affects::Player(player),
             },
             payload: self.payload,
         }
@@ -351,6 +422,7 @@ impl<L: Layout> Relayout for Effects<L> {
         Effects {
             entries: queue(self.entries.as_slice(), ContinuousEffect::relayout),
             kinds: self.kinds,
+            rules: Table::from_fn(|player| self.rules[player]),
         }
     }
 }
@@ -360,9 +432,10 @@ impl<L: Layout> State<L> {
     /// ([CR 611.2](https://yawgatog.com/resources/magic-rules/#R6112)): "A continuous effect
     /// may be generated by the resolution of a spell or ability."
     /// [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): an effect's timestamp
-    /// is the time it was created. An object it affects must be current. The layer results
-    /// are stale from here if it changes a layer. No event: the rules announce what the
-    /// effect is part of, as they do a change of control.
+    /// is the time it was created. An object it affects must be current, and a player is
+    /// affected by a rule change alone. The layer results are stale from here if it changes
+    /// a layer. No event: the rules announce what the effect is part of, as they do a
+    /// change of control.
     #[inline]
     pub fn start_effect(
         &mut self,
@@ -386,6 +459,13 @@ impl<L: Layout> State<L> {
                 Affects::Object { slot, incarnation } => {
                     debug_assert_eq!(self.object(slot).incarnation, incarnation);
                     self.keyed.insert(slot);
+                }
+                Affects::Player(player) => {
+                    debug_assert!(matches!(payload, Payload::Rule(_)));
+                    if let Payload::Rule(rule) = payload {
+                        let rules = &mut self.effects.rules[player.index()];
+                        *rules = rules.with(rule);
+                    }
                 }
             }
         }
@@ -411,7 +491,7 @@ impl<L: Layout> State<L> {
             .iter()
             .filter_map(|e| match e.payload {
                 Payload::Layer(change) => Some((e, change)),
-                Payload::Move(_) => None,
+                Payload::Move(_) | Payload::Rule(_) => None,
             })
     }
 
@@ -430,6 +510,63 @@ impl<L: Layout> State<L> {
                 _ => None,
             })
     }
+
+    /// The first rule change on a player that a turn-start checkpoint would lose, in words
+    /// ([`State::off_board`]): the words and the place in that list that saves hold for
+    /// one, which name the player and not the card it came from.
+    pub(crate) fn rule_change_lingering(&self) -> Option<String> {
+        self.effects.of(Kinds::RULE).iter().find_map(|e| {
+            let (player, rule) = e.player_rule()?;
+            let lasting = match e.duration {
+                Duration::UntilYourNextTurn(theirs) if theirs == player => {
+                    "until their next turn".to_owned()
+                }
+                other => other.words(),
+            };
+            Some(format!(
+                "player {} {} {lasting}",
+                player.get(),
+                rule.words()
+            ))
+        })
+    }
+
+    /// Whether the change `rule` makes to the game's rules applies to `to` now, a player
+    /// or a permanent, whoever makes it: a static ability of a permanent
+    /// ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041): "Static abilities do
+    /// something all the time rather than being activated or triggered.") or the
+    /// continuous effect of a resolved spell or ability
+    /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous
+    /// effects affect game rules rather than objects."). The one question the rules ask
+    /// about a rule change.
+    ///
+    /// For a player it is one AND of two sets: the rules the permanents' static abilities
+    /// change for them, which the layers found with control settled, and the rules the
+    /// effects on them change, which this store keeps as they start and end. A permanent
+    /// is asked for a rule about itself ([`Rule::whose`]): its copiable values answer for
+    /// its own static abilities, which a face-down permanent has none of
+    /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)), and the effects on
+    /// it for the rest, one AND while no effect changes a rule.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, for a player while the layer results are stale.
+    #[inline]
+    pub fn rule_applies(&self, t: &GameTable, rule: Rule, to: Affects<L>) -> bool {
+        match to {
+            Affects::Player(player) => {
+                debug_assert!(!self.flags.derived_dirty, "rules read while dirty");
+                let i = player.index();
+                self.static_rules[i]
+                    .union(self.effects.rules[i])
+                    .contains(rule)
+            }
+            Affects::Object { slot, .. } => {
+                (rule.whose().is_none() && self.copiable(slot).has_rule(t, rule))
+                    || self.effects.changes_rule(rule, to)
+            }
+        }
+    }
 }
 
 impl<'a, L: Layout> Observation<'a, L> {
@@ -442,155 +579,4 @@ impl<'a, L: Layout> Observation<'a, L> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::layout::Large;
-    use crate::profile::Profile;
-    use crate::{CardIx, LargeCardIx, LargeSlot, Slot};
-
-    const PUMP: Payload = Payload::Layer(LayerChange::ModifyPt(2, 2));
-    const EXILE: Payload = Payload::Move(MoveReplacement::ExileInsteadOfGraveyard);
-
-    /// The object in the `i`th slot of a state with no game in it: enough to key a store.
-    fn nth<L: Layout>(s: &State<L>, i: usize) -> ObjectRef<L> {
-        s.object_ref(L::Slot::from_index(i))
-    }
-
-    #[test]
-    fn an_effect_survives_small_to_large_and_back() {
-        let mut small: State<Small> = State::empty(Profile::EXACT);
-        let seventh = nth(&small, 7);
-        small
-            .start_effect(
-                CardIx::from_index(3),
-                Affects::object(seventh),
-                PUMP,
-                Duration::UntilYourNextTurn(Seat::P1),
-            )
-            .unwrap();
-        small
-            .start_effect(
-                CardIx::FIRST,
-                Affects::object(nth(&small, 200)),
-                EXILE,
-                Duration::Indefinite,
-            )
-            .unwrap();
-
-        let large: State<Large> = small.widen();
-        // A slot keeps its place, not its number: the 200th slot is in the pool.
-        let pooled = Slot::from_index(200).to::<LargeSlot>().unwrap();
-        assert_eq!(
-            large.effects(),
-            [
-                ContinuousEffect {
-                    source: LargeCardIx::from_index(3),
-                    timestamp: 0,
-                    duration: Duration::UntilYourNextTurn(Seat::P1),
-                    affected: Affects::object(nth(&large, 7)),
-                    payload: PUMP,
-                },
-                ContinuousEffect {
-                    source: LargeCardIx::FIRST,
-                    timestamp: 1,
-                    duration: Duration::Indefinite,
-                    affected: Affects::object(large.object_ref(pooled)),
-                    payload: EXILE,
-                },
-            ]
-        );
-        // The wide game reads by kind and ends an object's effects as the narrow one does.
-        assert_eq!(large.layer_effects().count(), 1);
-        assert_eq!(
-            large
-                .move_replacements(large.object_ref(pooled))
-                .collect::<Vec<_>>(),
-            [MoveReplacement::ExileInsteadOfGraveyard]
-        );
-
-        let back: State<Small> = large.relayout();
-        assert_eq!(back, small);
-        assert_eq!(back.effects.keys(), small.keyed);
-    }
-
-    #[test]
-    fn a_full_store_returns_full_and_a_wide_one_grows() {
-        let mut small: State<Small> = State::empty(Profile::EXACT);
-        let mut large: State<Large> = State::empty(Profile::EXACT);
-        for i in 0..EFFECTS {
-            let object = Affects::object(nth(&small, i));
-            assert_eq!(
-                small.start_effect(CardIx::FIRST, object, EXILE, Duration::EndOfTurn),
-                Ok(())
-            );
-        }
-        let one_more = Affects::object(nth(&small, EFFECTS));
-        assert_eq!(
-            small.start_effect(CardIx::FIRST, one_more, PUMP, Duration::EndOfTurn),
-            Err(Full)
-        );
-        assert_eq!(small.effects().len(), EFFECTS);
-        // What did not fit is in no index.
-        assert_eq!(small.layer_effects().count(), 0);
-        assert!(!small.keyed.contains(Slot::from_index(EFFECTS)));
-
-        for i in 0..=EFFECTS {
-            let object = Affects::object(nth(&large, i));
-            assert_eq!(
-                large.start_effect(LargeCardIx::FIRST, object, EXILE, Duration::EndOfTurn),
-                Ok(())
-            );
-        }
-        assert_eq!(large.effects().len(), EFFECTS + 1);
-        assert_eq!(
-            large.fits::<Small>(&GameTable::new(&NO_CARDS, [&[], &[]]).unwrap()),
-            Err(Misfit::ListTooLong {
-                list: "the continuous effects",
-                len: EFFECTS + 1,
-                capacity: EFFECTS,
-            })
-        );
-    }
-
-    static NO_CARDS: crate::table::CardTable = crate::table::CardTable::new(&[]);
-
-    #[test]
-    fn effects_end_with_their_duration_and_with_their_object() {
-        let mut s: State<Small> = State::empty(Profile::EXACT);
-        let (first, second) = (nth(&s, 1), nth(&s, 2));
-        let start = |s: &mut State<Small>, object, payload, duration| {
-            s.start_effect(CardIx::FIRST, Affects::object(object), payload, duration)
-                .unwrap();
-        };
-        start(&mut s, first, PUMP, Duration::EndOfTurn);
-        start(&mut s, first, EXILE, Duration::Indefinite);
-        start(&mut s, second, PUMP, Duration::UntilYourNextTurn(Seat::P0));
-        s.flags.derived_dirty = false;
-
-        // Another player's turn beginning ends nothing.
-        s.expire(Duration::UntilYourNextTurn(Seat::P1));
-        assert_eq!(s.effects().len(), 3);
-        assert!(!s.is_derived_stale());
-
-        s.expire(Duration::EndOfTurn);
-        assert_eq!(s.layer_effects().count(), 1);
-        assert_eq!(s.move_replacements(first).count(), 1);
-        assert!(s.is_derived_stale(), "a layer change ended");
-
-        // The second object ends: its effect with it, and the first's stays.
-        s.flags.derived_dirty = false;
-        s.forget_stored(second.slot);
-        assert_eq!(s.layer_effects().count(), 0);
-        assert!(s.is_derived_stale());
-        assert_eq!(s.effects().len(), 1);
-        assert_eq!(s.keyed, Bitboard::single(first.slot));
-
-        // Ending a replacement changes no layer result.
-        s.flags.derived_dirty = false;
-        s.forget_stored(first.slot);
-        assert!(s.effects().is_empty());
-        assert!(s.keyed.is_empty());
-        assert!(!s.is_derived_stale());
-        assert_eq!(s.move_replacements(first).count(), 0);
-    }
-}
+mod tests;

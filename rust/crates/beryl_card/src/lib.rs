@@ -34,7 +34,7 @@ pub mod trigger;
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use continuous::{
-    Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, StaticCondition,
+    Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules, StaticCondition,
 };
 pub use cost::{CastingKind, CastingOption, Castings, Cost};
 pub use definition::{

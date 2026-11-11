@@ -10,7 +10,7 @@
   "mechanics": [
     "Rule::OpponentsCastAsSorceries",
     "Rule::InstantLoyaltyTheTurnItEntered",
-    "Player::sorceries_as_flash",
+    "Rule::SorceriesAsFlash",
     "Replacement::WinInsteadOfDrawingFromEmptyLibrary",
     "Modification::PowerIsCreaturesYouControl",
     "Needs::ExiledWithSource",
