@@ -283,3 +283,34 @@ def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
     assert checks.changed_cards(None) == []
     lane = checks.card_oracle_lane(["Counterspell"])
     assert lane.steps[0].cmd[-4:] == ["--no-sim", "--lock-wait", "10", "Counterspell"]
+
+
+def test_a_symlink_checked_out_or_committed_as_a_file_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "core.symlinks=true", *args], cwd=tmp_path, check=True
+        )
+
+    git("init", "-q")
+    (tmp_path / "target").mkdir()
+    try:
+        (tmp_path / "link").symlink_to("target", target_is_directory=True)
+    except OSError:
+        pytest.skip("this machine cannot make symlinks")
+    git("add", "link")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feat: link")
+    monkeypatch.setattr(checks.paths, "REPO", tmp_path)
+    base = checks.git("rev-parse", "HEAD")
+    assert checks.symlink_problems(base) == []
+    (tmp_path / "link").unlink()
+    (tmp_path / "link").write_text("target")
+    assert [p.split(":")[0] for p in checks.symlink_problems(base)] == ["link"]
+    git("add", "link")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fix: oops")
+    assert "committed a symlink as a file" in " ".join(checks.symlink_problems(base))
+
+
+def test_the_checkout_keeps_its_symlinks() -> None:
+    assert checks.symlink_problems("") == []

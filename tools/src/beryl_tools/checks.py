@@ -468,6 +468,28 @@ def commit_problems(base: str) -> list[str]:
     return problems
 
 
+def symlink_problems(base: str) -> list[str]:
+    """Tracked symlinks checked out, or committed since `base`, as plain files. Git for Windows
+    writes a link's target into a file when `core.symlinks` is false, its system default.
+    """
+    fix = "git config --global core.symlinks true"
+    problems = []
+    for row in git("ls-files", "-s").splitlines():
+        mode, _, rest = row.partition(" ")
+        rel = rest.partition("\t")[2]
+        if mode == "120000" and not (paths.REPO / rel).is_symlink():
+            problems.append(
+                f"{rel}: a symlink checked out as a file; `{fix}`, then `git checkout -- {rel}`"
+            )
+    raw = git("diff", "--raw", "--no-renames", base, "HEAD") if base else ""
+    for row in raw.splitlines():
+        old, new = row[1:].split()[:2]
+        if old == "120000" and new not in ("120000", "000000"):
+            rel = row.partition("\t")[2]
+            problems.append(f"{rel}: committed a symlink as a file; `{fix}`")
+    return problems
+
+
 def markdown_files() -> list[str]:
     """Every Markdown file but the beads' and the agent skills' (whose YAML front matter
     mdformat would rewrite)."""
@@ -609,7 +631,9 @@ def fast(args: argparse.Namespace) -> int:
     def touched(pattern: str) -> bool:
         return every or any(re.match(pattern, p) for p in changed or [])
 
-    problems = conflict_markers(changed or []) + commit_problems(base)
+    problems = (
+        conflict_markers(changed or []) + commit_problems(base) + symlink_problems(base)
+    )
     for p in problems:
         print(f"check: {p}")
     if problems:
