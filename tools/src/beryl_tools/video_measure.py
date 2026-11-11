@@ -51,6 +51,8 @@ SPECK = 0.0005
 MINOR = 0.15
 # A blob changed over this share of its box is solid: a card, not a glow.
 SOLID = 0.6
+# A blob thinner than this, in working pixels, is an edge of a card, never a whole one.
+THIN = 3
 # The default width the crop is scaled to: enough for a card's size to 2%, cheap in Python.
 WORK_WIDTH = 480
 # Path samples the table prints for each card; JSON has every frame.
@@ -265,7 +267,7 @@ def measure(
         return [b for b in blobs(mask, clip.width, clip.height) if b.pixels >= speck]
 
     seen = [found(differ_both(f, first, last, threshold)) for f in clip.frames]
-    tracks = [t for t in track(seen) if len(t) >= 2]
+    tracks = [_body(clip, t) for t in track(seen) if len(t) >= 2]
     if landing is not None:
         x, y = landing
         tracks = [
@@ -289,16 +291,6 @@ def measure(
     change = differ(last, first, threshold)
     measured: list[Card] = []
     for n, t in enumerate(tracks, 1):
-        # A card entering at the crop's edge, or a glow lingering where it landed, leaves
-        # a track with little of the card in it at either end. A card that is small there,
-        # growing as it leaves or shrinking as it lands, is whole: solid and inside the crop.
-        heaviest = max(b.pixels for _, b in t)
-        heavy = [
-            k
-            for k, (_, b) in enumerate(t)
-            if b.pixels >= MINOR * heaviest or _whole(clip, b)
-        ]
-        t = t[heavy[0] : heavy[-1] + 1]
         begin, end = t[0][0], t[-1][0]
         # The first and last frames are the references, so a card moving between them and
         # their neighbors would look still: two still frames are needed at either end.
@@ -333,14 +325,29 @@ def measure(
     return measured
 
 
+def _body(clip: Clip, t: list[tuple[int, Blob]]) -> list[tuple[int, Blob]]:
+    """A track without its light ends. A card entering at the crop's edge, a glow lingering
+    where it landed, or an edge of the card left as it settles onto its rest leaves a track
+    with little of the card in it at either end. A card that is small there, growing as it
+    leaves or shrinking as it lands, is whole: solid and inside the crop."""
+    heaviest = max(b.pixels for _, b in t)
+    heavy = [
+        k
+        for k, (_, b) in enumerate(t)
+        if b.pixels >= MINOR * heaviest or _whole(clip, b)
+    ]
+    return t[heavy[0] : heavy[-1] + 1]
+
+
 def _whole(clip: Clip, blob: Blob) -> bool:
     """Whether a blob is a whole card rather than a piece of one or a glow: clear of the
-    crop's edges, and changed over most of its box."""
+    crop's edges, no mere line, and changed over most of its box."""
     inside = (
         blob.x0 > 0 and blob.y0 > 0 and blob.x1 < clip.width and blob.y1 < clip.height
     )
+    thick = min(blob.x1 - blob.x0, blob.y1 - blob.y0) >= THIN
     area = (blob.x1 - blob.x0) * (blob.y1 - blob.y0)
-    return inside and blob.pixels >= SOLID * area
+    return inside and thick and blob.pixels >= SOLID * area
 
 
 def _rest(clip: Clip, change: bytes, landed: Blob) -> Blob | None:

@@ -3,7 +3,7 @@ import math
 import random
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -114,6 +114,23 @@ def test_a_card_followed_to_where_it_lands_leaves_out_what_moves_around_it() -> 
     [card] = measure(clip, landing=DEAL[1].target)
     assert abs(card.start - DEAL[1].start) <= FRAME
     assert math.dist(card.blobs[-1].center, DEAL[1].target) < 10
+
+
+def test_a_card_whose_edge_flickers_as_it_settles_is_still_followed_to_its_landing() -> (
+    None
+):
+    clip = render([CAST], 1.5)
+    # A frame after it lands, a line along its top edge differs from the rest: all the
+    # tracker sees of the card settling, at the end of its track and clear of its landing.
+    settled = round((CAST.start + CAST.duration) / FRAME) + 1
+    frame = bytearray(clip.frames[-1])
+    top = round(CAST.target[1] - CARD_H / 2) - 1
+    left = round(CAST.target[0] - CARD_W / 2)
+    frame[top * WIDTH + left : top * WIDTH + left + CARD_W] = bytes([255] * CARD_W)
+    frames = list(clip.frames)
+    frames[settled] = bytes(frame)
+    [card] = measure(replace(clip, frames=frames), landing=CAST.target)
+    assert math.dist(card.blobs[-1].center, CAST.target) < 10
 
 
 def test_a_card_still_moving_at_the_end_cannot_be_measured() -> None:
