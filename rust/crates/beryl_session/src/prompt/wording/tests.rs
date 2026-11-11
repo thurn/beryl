@@ -3,7 +3,10 @@ use std::collections::BTreeSet;
 use beryl_engine::Zone;
 use beryl_engine::card::{Part, Place, Prompt, Purpose, Shape};
 
-use super::{Holes, Wording, cancel_word, pile_word, wording};
+use super::{
+    AIMED, Holes, OWN_TARGET, PassLeads, Wording, cancel_word, pass_words, pile_word, wording,
+};
+use crate::protocol::Step;
 
 /// The holes a template may have.
 const HOLES: [&str; 10] = [
@@ -200,9 +203,52 @@ fn holes_are_filled_from_the_record_and_the_view() {
     assert_eq!(Holes::default().title(&unless), "Pay {0}.");
 }
 
-/// Every template of the table, the piles' and the cancel's words among them.
+const STEPS: [Step; 13] = [
+    Step::Untap,
+    Step::Upkeep,
+    Step::Draw,
+    Step::PrecombatMain,
+    Step::BeginningOfCombat,
+    Step::DeclareAttackers,
+    Step::DeclareBlockers,
+    Step::FirstStrikeDamage,
+    Step::CombatDamage,
+    Step::EndOfCombat,
+    Step::PostcombatMain,
+    Step::End,
+    Step::Cleanup,
+];
+
+/// Every place a pass leads, on the viewer's turn and on an opponent's.
+fn passes() -> impl Iterator<Item = (&'static str, &'static str)> {
+    let leads = [
+        PassLeads::Halt,
+        PassLeads::Resolve,
+        PassLeads::CombatDamage,
+        PassLeads::NextTurn,
+    ]
+    .into_iter()
+    .chain(STEPS.map(PassLeads::Step));
+    leads.flat_map(|leads| [true, false].map(|yours| pass_words(leads, yours)))
+}
+
+/// The pass button always has a label, and a caption wherever passing leads on from the
+/// stack.
+#[test]
+fn the_pass_button_has_words_wherever_it_leads() {
+    for (label, caption) in passes() {
+        assert!(!label.is_empty());
+        assert_eq!(caption.is_empty(), label == "Resolve", "{label}");
+    }
+}
+
+/// Every template of the table: the piles', the cancel's and the pass button's words, and
+/// the target prompt's own, among them.
 fn table() -> BTreeSet<&'static str> {
     let mut words = BTreeSet::new();
+    words.extend(passes().flat_map(|(label, caption)| [label, caption]));
+    words.extend(templates(&OWN_TARGET));
+    words.extend(templates(&AIMED));
     for &purpose in Purpose::ALL {
         words.extend(entries(purpose).flat_map(|entry| templates(&entry)));
         words.extend(PLACES.map(|place| pile_word(purpose, place)));
