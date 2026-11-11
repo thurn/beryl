@@ -127,11 +127,10 @@
 //!
 //! ## The legacy accessor
 //!
-//! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
-//! (by-w8gv.7.1) deletes and has not yet moved to a store ("Stores"), which therefore gets
-//! no typed mutator: [`state::Counters`]' long-tail kind (`other_kind`, `other`).
-//! [`legacy::Legacy`]'s rustdoc says what replaces it. Reads use the getters. Milestone 4
-//! deletes the accessor with it (by-w8gv.7.10).
+//! [`State::legacy_mut`] lends a [`legacy::Legacy`], which wrote, raw, what milestone 4
+//! (by-w8gv.7.1) deletes, until each had moved to a store ("Stores"). Nothing is left
+//! behind it: the last was the counters no object keeps in a field (by-w8gv.7.9).
+//! Milestone 4 deletes the accessor (by-w8gv.7.10).
 //!
 //! ## Stores
 //!
@@ -150,7 +149,8 @@
 //! of memos (by-w8gv.7.6); what exiled a card, as memos of the card (by-w8gv.7.7); a
 //! locked-in set of objects as the affected side (by-w8gv.7.5); the Trackers store
 //! ([`trackers`]) with the two facts about a permanent that end with the turn
-//! (by-w8gv.7.8).
+//! (by-w8gv.7.8); the table of counters ([`counters`]), where each kind of counter on an
+//! object has its own count (by-w8gv.7.9).
 //!
 //! ### Where everything goes
 //!
@@ -167,7 +167,7 @@
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
-//! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table, keyed (object, kind), beside the three kinds every game reads, which stay in the object | by-w8gv.7.9 |
+//! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
 //! | `ObjectFlags::ONE_ONE` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
 //!
 //! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
@@ -190,7 +190,7 @@
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 1 for each eight rules of the list | 2 players, twice | 4 | the same |
 //! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
-//! | Counters | a queue of (slot, kind, count) | 3 | 32 | 104 | a `Vec` |
+//! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
 //! A store that fills returns [`fixed::Full`] and the game stalls into `Large`
 //! (`docs/rules-coverage.md`, principle 3). A locked-in set is 32 bytes, so the sets are a
@@ -205,7 +205,8 @@
 //! bytes, [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it
 //! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5,
 //! which landed after it, it is 20,016: the table of locked-in sets, 136. After
-//! by-w8gv.7.8 it is 20,080: the Trackers store's two sets of slots, 64.
+//! by-w8gv.7.8 it is 20,080: the Trackers store's two sets of slots, 64. After
+//! by-w8gv.7.9 it is 20,176: the table of counters, 96.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -218,7 +219,7 @@
 //! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
 //! | by-w8gv.7.7 | 0 (landed: 0) | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
-//! | by-w8gv.7.9 | +104 | the counters table |
+//! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
 //! | by-w8gv.7.10 | 0 or lower | deletes only |
 //!
 //! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
@@ -290,6 +291,12 @@
 //! "until" a permanent leaves needs no such end: the rules return it as the permanent
 //! leaves (CR 610.3), and the store's invariant holds that permanent to the battlefield.
 //!
+//! Counters end the same way
+//! ([CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an object
+//! are not retained if that object moves from one zone to another."): the move resets the
+//! object's fields and ends its rows of the table with everything else stored about it. A
+//! row also ends with its last counter, so the table holds no row of none.
+//!
 //! Trackers of this turn are cleared whole as the turn begins, inside
 //! [`State::begin_turn`] with the lands played, and a permanent's bits as it leaves the
 //! battlefield, in the arm of the move that already unlists it. So the Trackers store keys
@@ -321,6 +328,7 @@
 //! | "does this rule apply" ([`State::rule_applies`]) | for a player, their two sets of rules joined and one AND, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::kind::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
+//! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
 //!
 //! Measured for by-w8gv.7.2 on the rollout benchmark (404,858,188 instructions before):
 //! the bit test in the zone move and the turn's two expiries cost about 0.03%; the store
@@ -349,6 +357,15 @@
 //! more besides. It reads one tracker at most decisions, asking the timing first; with the
 //! store laid out at the far end of the state it counted 389,992,845, and with the check
 //! out of line 391,310,485.
+//!
+//! The table of counters has no mask of kinds and no capability bit: a read is of one
+//! object, and the keyed slots already say whether anything is stored about it.
+//!
+//! Measured for by-w8gv.7.9 (389,728,983 before, 389,975,802 after, 0.06% more): the
+//! benchmark's decks hold one card with counters of a kind of the table, an artifact that
+//! gains one as creatures enter and spends them to draw. Offering its ability reads the
+//! count behind the keyed bit where it read a field of the object in hand, and
+//! [`State::signature`] compares two objects' rows, nearly always none.
 //!
 //! ### Static rule changes
 //!
@@ -400,26 +417,27 @@
 //! | the copy | `Clone`, named once in [`Large::clone_state`]'s destructure, so the compiler finds a new store; `Small` copies the state whole |
 //! | the hash | `Hash` of the entries and not of the store's indices (its kinds, the keyed slots), so a hash of a state is a hash of the game: [`State`]'s own `Hash` feeds its fields in a fixed order whatever order they are laid out in, which `beryl_bench`'s pin of its corpus holds to |
 //! | another layout, and what does not fit one | [`relayout::Relayout`] and `Store::fits`, from [`State::fits`] |
-//! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, a tracker is of a permanent and of none in a game no card of which reads it, and the keyed slots are exactly the stores' keys |
-//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent |
-//! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`], [`Observation::memos`], [`Observation::tracked`]): an effect is public, a memo as public as its object, a tracker as public as the battlefield |
+//! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, a tracker is of a permanent and of none in a game no card of which reads it, a row of counters is of one kind once for an object, of a kind no object keeps in a field and never of none, and the keyed slots are exactly the stores' keys |
+//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent, as its counters are |
+//! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`], [`Observation::memos`], [`Observation::tracked`], [`Observation::counters`]): an effect is public, a memo and a counter as public as their object, a tracker as public as the battlefield |
 //! | an object ending, a duration ending | `Store::forget` and `Store::expire`, from the two moments above; the Trackers store's `forget` from the move's leaving of the battlefield, since it keys no slot |
-//! | [`State::signature`] | compares what the stores hold about the object for what its layer results do not already show: behind the keyed bit, its memos ([`memos::MemosOf`]); for a permanent, what is tracked of it ([`trackers::Tracked`]) |
+//! | [`State::signature`] | compares what the stores hold about the object for what its layer results do not already show: behind the keyed bit, its memos ([`memos::MemosOf`]) and the counters it keeps in no field ([`counters::CounterRows`]); for a permanent, what is tracked of it ([`trackers::Tracked`]) |
 //!
 //! ### The API
 //!
 //! A write is a [`State`] mutator, `#[inline]` and generic over the layout:
 //! [`State::start_effect`], [`State::start_effect_on_set`], [`State::remember`],
-//! [`State::track`] and [`State::expire`] so far. One whose change a player sees
+//! [`State::track`], [`State::add_counters`], [`State::remove_counters`] and
+//! [`State::expire`]. One whose change a player sees
 //! returns its [`event::Event`] and pushes nothing; starting or ending an effect is no
 //! event of its own, since the rules announce what it is part of, as they do a change of
 //! control. The mutator that changes a layer input sets `derived_dirty` itself. A store
 //! that is full returns [`fixed::Full`]. Reads are queries by kind
 //! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`],
 //! [`State::cast_permissions`], [`State::cost_increase`], [`State::paid`],
-//! [`State::x_of`], [`State::exiled_with`], [`State::exiled_until`], [`State::tracked`]),
-//! with [`State::effects`], [`State::memos`] and [`State::trackers`] for tools, tests and
-//! views. No `&mut` to a store leaves the crate.
+//! [`State::x_of`], [`State::exiled_with`], [`State::exiled_until`], [`State::tracked`],
+//! [`State::counters_of`]), with [`State::effects`], [`State::memos`], [`State::trackers`]
+//! and [`State::counters`] for tools, tests and views. No `&mut` to a store leaves the crate.
 //!
 //! ## Sets and orders
 //!
@@ -572,6 +590,7 @@
 pub mod bitboard;
 pub mod board;
 pub mod chance;
+pub mod counters;
 pub mod decision;
 pub mod derive;
 pub mod effects;

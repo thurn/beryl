@@ -10,9 +10,10 @@
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::event::{Event, Recipient};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Table};
-use crate::object::{Counters, ObjectFlags, ObjectRef};
+use crate::object::{ObjectFlags, ObjectRef};
 use crate::query::Copiable;
 use crate::state::State;
 use crate::table::GameTable;
@@ -31,7 +32,7 @@ pub struct Arrival<L: Layout> {
     pub controller: Option<Seat>,
     /// The face up.
     pub face: FaceIx,
-    /// Counters of a common kind it enters with
+    /// Counters it enters with
     /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)).
     pub counters: Option<(CounterKind, u8)>,
     /// The object an Aura attaches to as it enters
@@ -130,79 +131,6 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Puts counters of a common kind on an object
-    /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)). `layered` says
-    /// whether the layers read them, which is the rules' to say, with the card in hand: the
-    /// layer results are stale if so.
-    #[inline]
-    #[must_use]
-    pub fn add_counters(
-        &mut self,
-        object: ObjectRef<L>,
-        kind: CounterKind,
-        amount: u8,
-        layered: bool,
-    ) -> Event<L> {
-        debug_assert!(!Counters::is_long_tail(kind));
-        self.put_counters(object, kind, amount, layered)
-    }
-
-    /// Removes `amount` counters of a common kind from an object that has that many.
-    /// `layered` as for [`State::add_counters`].
-    #[inline]
-    #[must_use]
-    pub fn remove_counters(
-        &mut self,
-        object: ObjectRef<L>,
-        kind: CounterKind,
-        amount: u8,
-        layered: bool,
-    ) -> Event<L> {
-        debug_assert!(!Counters::is_long_tail(kind));
-        self.take_counters(object, kind, amount, layered)
-    }
-
-    #[inline]
-    pub(crate) fn put_counters(
-        &mut self,
-        object: ObjectRef<L>,
-        kind: CounterKind,
-        amount: u8,
-        layered: bool,
-    ) -> Event<L> {
-        debug_assert!(self.is_current(object));
-        let n = self.object_mut(object.slot).counters.get_mut(kind);
-        *n = n.saturating_add(amount);
-        if layered {
-            self.flags.derived_dirty = true;
-        }
-        Event::CountersAdded {
-            object,
-            kind,
-            amount,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn take_counters(
-        &mut self,
-        object: ObjectRef<L>,
-        kind: CounterKind,
-        amount: u8,
-        layered: bool,
-    ) -> Event<L> {
-        debug_assert!(self.is_current(object));
-        *self.object_mut(object.slot).counters.get_mut(kind) -= amount;
-        if layered {
-            self.flags.derived_dirty = true;
-        }
-        Event::CountersRemoved {
-            object,
-            kind,
-            amount,
-        }
-    }
-
     /// Turns the face-down permanent in `slot` face up. It stays the same object, with its
     /// counters, damage and status, and does not enter again
     /// ([CR 708.8](https://yawgatog.com/resources/magic-rules/#R7088)): "As a face-down
@@ -281,9 +209,10 @@ impl<L: Layout> State<L> {
 
     /// Gives the permanent that just entered in `slot` the status it enters with. Part of
     /// its zone change: no event of its own, and the move has already marked the layer
-    /// results stale.
+    /// results stale. [`Full`] if it enters with counters of a kind the table has no room
+    /// for a row of ([`crate::counters`]).
     #[inline]
-    pub fn arrive(&mut self, slot: L::Slot, how: Arrival<L>) {
+    pub fn arrive(&mut self, slot: L::Slot, how: Arrival<L>) -> Result<(), Full> {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         debug_assert!(self.flags.derived_dirty);
         let o = self.object_mut(slot);
@@ -293,12 +222,12 @@ impl<L: Layout> State<L> {
         if let Some(controller) = how.controller {
             o.base_controller = controller;
         }
-        if let Some((kind, n)) = how.counters {
-            debug_assert!(!Counters::is_long_tail(kind));
-            *o.counters.get_mut(kind) = n;
-        }
         if let Some(host) = how.attach {
             o.attached_to = Some(host);
+        }
+        match how.counters {
+            Some((kind, n)) => self.set_counters(slot, kind, n),
+            None => Ok(()),
         }
     }
 

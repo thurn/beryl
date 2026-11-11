@@ -37,8 +37,8 @@ pub use condition::{Comparison, Condition};
 pub use reference::{Objects, Players};
 
 use crate::continuous::{Duration, Modification};
+use crate::counter::CounterKind;
 use crate::definition::CardDef;
-use crate::ids::CounterKind;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::Takes;

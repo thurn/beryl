@@ -16,10 +16,11 @@
 use beryl_engine::card::{CastingKind, CastingKinds, FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Memo, Object, ObjectFlags};
+use beryl_engine::state::{CounterKind, Memo, ObjectFlags};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The board as a turn begins.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,55 +177,38 @@ pub struct Counter {
 }
 
 impl Counter {
-    /// The counters on `o`, a kind at a time.
-    pub fn on<L: Layout>(o: &Object<L>) -> Vec<Counter> {
-        CounterName::ALL
-            .into_iter()
-            .filter_map(|kind| {
-                let count = o.counters().get(kind.kind());
-                (count > 0).then_some(Counter { kind, count })
+    /// The counters on the object in `slot`, a kind at a time, in the order of the list of
+    /// kinds.
+    pub fn on<L: Layout>(s: &State<L>, slot: L::Slot) -> Vec<Counter> {
+        s.counters(slot)
+            .iter()
+            .map(|(kind, count)| Counter {
+                kind: CounterName(kind),
+                count,
             })
             .collect()
     }
 }
 
-/// A kind of counter, by its name in the rules
-/// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CounterName {
-    #[serde(rename = "+1/+1")]
-    PlusOne,
-    #[serde(rename = "-1/-1")]
-    MinusOne,
-    #[serde(rename = "loyalty")]
-    Loyalty,
-    #[serde(rename = "time")]
-    Time,
-    #[serde(rename = "story")]
-    Story,
-    #[serde(rename = "chorus")]
-    Chorus,
+/// A kind of counter as a save writes it: by its name in the rules
+/// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221): "Counters with the same
+/// name or description are interchangeable."), which the list of kinds gives each
+/// ([`CounterKind::name`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CounterName(pub CounterKind);
+
+impl Serialize for CounterName {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.0.name())
+    }
 }
 
-impl CounterName {
-    const ALL: [CounterName; 6] = [
-        CounterName::PlusOne,
-        CounterName::MinusOne,
-        CounterName::Loyalty,
-        CounterName::Time,
-        CounterName::Story,
-        CounterName::Chorus,
-    ];
-
-    fn kind(self) -> CounterKind {
-        match self {
-            CounterName::PlusOne => CounterKind::PlusOne,
-            CounterName::MinusOne => CounterKind::MinusOne,
-            CounterName::Loyalty => CounterKind::Loyalty,
-            CounterName::Time => CounterKind::Time,
-            CounterName::Story => CounterKind::Story,
-            CounterName::Chorus => CounterKind::Chorus,
-        }
+impl<'de> Deserialize<'de> for CounterName {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        CounterKind::named(&name)
+            .map(CounterName)
+            .ok_or_else(|| D::Error::custom(format!("no kind of counter is named {name:?}")))
     }
 }
 
@@ -309,7 +293,9 @@ impl Checkpoint {
             s.board().set_tapped(slot, b.tapped);
             s.board().set_sick(slot, b.sick);
             for c in &b.counters {
-                s.board().set_counters(slot, c.kind.kind(), c.count);
+                s.board()
+                    .set_counters(slot, c.kind.0, c.count)
+                    .map_err(full)?;
             }
             s.board().set_damage(slot, b.damage);
             if b.impending {
@@ -539,7 +525,7 @@ fn permanent<L: Layout>(
         one_one: o.flags().has(ObjectFlags::ONE_ONE),
         tapped: o.flags().has(ObjectFlags::TAPPED),
         sick: o.flags().has(ObjectFlags::SUMMONING_SICK),
-        counters: Counter::on(o),
+        counters: Counter::on(s, slot),
         damage: o.damage(),
         attached_to: o.attached_to().and_then(place),
         impending: s.paid(slot, CastingKind::Impending),
@@ -671,5 +657,36 @@ fn first_difference(path: &str, a: &serde_json::Value, b: &serde_json::Value) ->
         }
         _ if a == b => None,
         _ => Some(format!("{path}: the record has {a}, the replay {b}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_engine::state::CounterKind;
+
+    use super::CounterName;
+
+    /// A save names a kind of counter as the rules do, and every kind of the list is read
+    /// back from its name.
+    #[test]
+    fn every_kind_of_counter_round_trips_through_its_name_in_a_save() {
+        for &kind in CounterKind::ALL {
+            let saved = serde_json::to_string(&CounterName(kind)).unwrap();
+            assert_eq!(saved, format!("{:?}", kind.name()));
+            let read: CounterName = serde_json::from_str(&saved).unwrap();
+            assert_eq!(read, CounterName(kind));
+        }
+        assert!(serde_json::from_str::<CounterName>("\"no such\"").is_err());
+    }
+
+    /// The names saves were written with, which no change to the list may move.
+    #[test]
+    fn the_saved_names_of_the_kinds_stay() {
+        let names: Vec<&str> = CounterKind::ALL.iter().map(|k| k.name()).collect();
+        assert!(
+            ["+1/+1", "-1/-1", "loyalty", "time", "story", "chorus"]
+                .iter()
+                .all(|name| names.contains(name))
+        );
     }
 }

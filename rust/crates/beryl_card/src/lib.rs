@@ -21,6 +21,7 @@ pub mod ability;
 pub mod characteristics;
 pub mod continuous;
 pub mod cost;
+pub mod counter;
 pub mod definition;
 pub mod effect;
 pub mod filter;
@@ -37,6 +38,7 @@ pub use continuous::{
     Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules, StaticCondition,
 };
 pub use cost::{CastingKind, CastingKinds, CastingOption, Castings, Cost};
+pub use counter::CounterKind;
 pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility,
 };
@@ -44,7 +46,7 @@ pub use effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
 };
 pub use filter::{Filter, Whose};
-pub use ids::{CounterKind, Seat, TurnStep, Zone};
+pub use ids::{Seat, TurnStep, Zone};
 pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};

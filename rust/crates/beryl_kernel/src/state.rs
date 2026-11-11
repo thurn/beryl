@@ -3,12 +3,15 @@
 
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
+pub use crate::counters::{
+    COUNTERS, CounterRows, CounterTable, Counters, CountersHeld, CountersOf,
+};
 pub use crate::effects::{
     Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, LockedIn,
     MoveReplacement, Payload, Permission, Permitted, SETS,
 };
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
-pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
+pub use crate::object::{Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
@@ -162,6 +165,10 @@ pub struct State<L: Layout = Small> {
     /// The Memos store ([`crate::memos`]): [`State::remember`] writes it, and the zone
     /// move ends what it holds about an object.
     pub(crate) memos: Memos<L>,
+    /// The table of the counters no object keeps in a field ([`crate::counters`]):
+    /// [`State::add_counters`] and [`State::remove_counters`] write it, and the zone move
+    /// ends an object's rows.
+    pub(crate) counters: CounterTable<L>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -195,6 +202,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             effects,
             memos,
             trackers,
+            counters,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -210,6 +218,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         effects.hash(h);
         memos.hash(h);
         trackers.hash(h);
+        counters.hash(h);
         pending.hash(h);
         knowledge.hash(h);
         rng.hash(h);

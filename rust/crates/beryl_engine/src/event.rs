@@ -18,7 +18,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
 use crate::state::{
-    CounterKind, Counters, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Tracker, Zone,
+    CounterKind, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Tracker, Zone,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -51,8 +51,7 @@ pub(crate) struct Entry<L: Layout = Small> {
 
 /// Gives the permanent that just entered in `slot` what it enters with, has it remember
 /// what its spell was cast with, and notes that it entered this turn, in a game with a card
-/// that reads that. The kinds of counter milestone 4 (by-w8gv.7.1) moves to a store go raw,
-/// through the legacy accessor.
+/// that reads that.
 fn arrive<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -60,9 +59,6 @@ fn arrive<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     s.track(t, Tracker::EnteredThisTurn, slot);
-    let long_tail = entry
-        .counters
-        .filter(|&(kind, _)| Counters::is_long_tail(kind));
     s.arrive(
         slot,
         Arrival {
@@ -70,17 +66,10 @@ fn arrive<L: Layout>(
             attacking: entry.attacking,
             controller: entry.controller,
             face: entry.face,
-            counters: if long_tail.is_some() {
-                None
-            } else {
-                entry.counters
-            },
+            counters: entry.counters,
             attach: entry.attach,
         },
-    );
-    if let Some((kind, n)) = long_tail {
-        s.legacy_mut().set_counters(slot, kind, n);
-    }
+    )?;
     if !entry.paid.is_empty() {
         s.remember(slot, Memo::Paid(entry.paid))?;
     }
@@ -501,11 +490,7 @@ pub(crate) fn add_counters<L: Layout>(
         return Ok(());
     }
     let layered = layers::counters_matter(s, t, object.slot, kind);
-    let e = if Counters::is_long_tail(kind) {
-        s.legacy_mut().add_counters(object, kind, amount, layered)
-    } else {
-        s.add_counters(object, kind, amount, layered)
-    };
+    let e = s.add_counters(object, kind, amount, layered)?;
     settle(s, t, sink, e)
 }
 
@@ -521,19 +506,12 @@ pub(crate) fn remove_counters<L: Layout>(
     if !s.is_current(object) {
         return Ok(());
     }
-    // Read before writing: asking for the count to change would make `kind` the object's
-    // long-tail kind even when it has none to remove.
-    let amount = amount.min(s.object(object.slot).counters_of(kind));
+    let amount = amount.min(s.counters_of(object.slot, kind));
     if amount == 0 {
         return Ok(());
     }
     let layered = layers::counters_matter(s, t, object.slot, kind);
-    let e = if Counters::is_long_tail(kind) {
-        s.legacy_mut()
-            .remove_counters(object, kind, amount, layered)
-    } else {
-        s.remove_counters(object, kind, amount, layered)
-    };
+    let e = s.remove_counters(object, kind, amount, layered);
     settle(s, t, sink, e)
 }
 

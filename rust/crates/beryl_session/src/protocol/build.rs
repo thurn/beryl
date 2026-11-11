@@ -5,7 +5,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry};
+use beryl_engine::state::{ObjectFlags, ObjectRef, Pending, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, State,
@@ -311,23 +311,14 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
     let derived = on_battlefield.then(|| obs.derived(slot));
     let types = derived.map_or(Types::NONE, |d| d.types);
     let creature = types.contains(Types::CREATURE);
-    let counters = [
-        CounterKind::PlusOne,
-        CounterKind::MinusOne,
-        CounterKind::Loyalty,
-        CounterKind::Time,
-        CounterKind::Story,
-        CounterKind::Chorus,
-    ]
-    .into_iter()
-    .filter_map(|kind| {
-        let count = o.counters().get(kind);
-        (count > 0).then(|| CounterView {
+    let counters = obs
+        .counters(slot)
+        .iter()
+        .map(|(kind, count)| CounterView {
             kind: kind.into(),
             count,
         })
-    })
-    .collect();
+        .collect();
     let some = |s: Option<L::Slot>| s.map(SlotId::num);
     ObjectView {
         slot: slot.num(),

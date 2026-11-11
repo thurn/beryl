@@ -742,7 +742,9 @@ impl Game {
             let mut board = self.s.board();
             board.set_sick(slot, false);
             // CR 306.5b: it enters with its printed loyalty.
-            board.set_counters(slot, CounterKind::Loyalty, loyalty.unwrap_or(0));
+            board
+                .set_counters(slot, CounterKind::Loyalty, loyalty.unwrap_or(0))
+                .unwrap();
         }
         slot
     }

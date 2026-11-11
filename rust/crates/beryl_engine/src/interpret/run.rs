@@ -540,7 +540,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let permanents = self.permanents(objects);
         let counters = |run: &Self| -> u32 {
             let s = &*run.ctx.state;
-            permanents.sum(|slot| u32::from(s.object(slot).counters().get(kind)))
+            permanents.sum(|slot| u32::from(s.counters_of(slot, kind)))
         };
         let before = counters(self);
         self.each_permanent(permanents, |ctx, object| {

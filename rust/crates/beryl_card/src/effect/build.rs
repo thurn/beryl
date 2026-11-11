@@ -19,11 +19,11 @@
 //! ```
 
 use crate::continuous::{Duration, Modification};
+use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
 };
-use crate::ids::CounterKind;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 

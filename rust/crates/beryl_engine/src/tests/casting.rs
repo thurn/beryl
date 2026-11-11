@@ -324,7 +324,7 @@ fn impending_is_an_alternative_cost_that_enters_with_time_counters() {
     let o = g.s.object(overlord);
     assert_eq!(o.zone(), Zone::Battlefield);
     assert!(g.s.paid(overlord, CastingKind::Impending));
-    assert_eq!(o.counters().long_tail(), Some((CounterKind::Time, 4)));
+    assert_eq!(g.s.counters_of(overlord, CounterKind::Time), 4);
 }
 
 #[test]
@@ -362,7 +362,9 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
 fn loyalty_abilities_are_sorcery_speed_and_once_a_turn() {
     let mut g = Game::new(Profile::EXACT);
     let raveler = g.give(g.me, "Test Raveler", Zone::Battlefield);
-    g.s.board().set_counters(raveler, CounterKind::Loyalty, 2);
+    g.s.board()
+        .set_counters(raveler, CounterKind::Loyalty, 2)
+        .unwrap();
     let plus = Opt::Activate {
         slot: raveler,
         ability: ObjectAbility::own(1),

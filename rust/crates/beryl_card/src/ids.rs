@@ -86,20 +86,6 @@ impl Zone {
     }
 }
 
-/// A kind of counter ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)):
-/// "Counters with the same name or description are interchangeable."
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum CounterKind {
-    #[default]
-    PlusOne,
-    MinusOne,
-    Loyalty,
-    Time,
-    Story,
-    Chorus,
-}
-
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
 /// turn consists of five phases, in this order: beginning, precombat main, combat, postcombat
 /// main, and ending."

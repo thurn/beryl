@@ -1083,7 +1083,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
     put(&t, &mut s, &mut x, p, "Test Overlord");
     // Overlord's enters trigger makes two Insects: one event, one story counter.
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(staff).counters().get(CounterKind::Story), 1);
+    assert_eq!(s.counters_of(staff, CounterKind::Story), 1);
     // Noncreature tokens don't count.
     with_ctx(&t, &mut s, &mut x, staff, |ctx| {
         ctx.create_tokens(&MAP, 2, TokenEntry::default());
@@ -1196,7 +1196,7 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
         ctx.put_onto_battlefield(r, FaceIx::FRONT, Some((CounterKind::Time, 4)));
     });
-    assert_eq!(s.object(overlord).counters().get(CounterKind::Time), 4);
+    assert_eq!(s.counters_of(overlord, CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
     let r = s.object_ref(overlord);
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
@@ -1324,8 +1324,36 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
     with_ctx(&t, &mut s, &mut x, staff, |ctx| {
         ctx.remove_counters(r, CounterKind::Time, 1);
     });
-    assert_eq!(s.object(staff).counters().get(CounterKind::Story), 2);
+    assert_eq!(s.counters_of(staff, CounterKind::Story), 2);
     assert!(x.events.events().is_empty());
+}
+
+/// CR 122.1: counters of different names are different counters, so putting one kind on a
+/// permanent leaves its others alone, whichever kinds they are.
+#[test]
+fn a_permanent_has_counters_of_several_kinds_at_once() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    let staff = put(&t, &mut s, &mut x, p, "Test Staff");
+    let r = s.object_ref(staff);
+    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
+        ctx.add_counters(r, CounterKind::Story, 2);
+        ctx.add_counters(r, CounterKind::Time, 3);
+        ctx.add_counters(r, CounterKind::Loyalty, 1);
+        ctx.remove_counters(r, CounterKind::Story, 1);
+        // No more than it has (CR 609.3).
+        ctx.remove_counters(r, CounterKind::Time, 5);
+    });
+    let counts = [CounterKind::Story, CounterKind::Time, CounterKind::Loyalty]
+        .map(|kind| s.counters_of(staff, kind));
+    assert_eq!(counts, [1, 0, 1]);
+    let removed: Vec<(CounterKind, u8)> = (x.events.events().iter())
+        .filter_map(|e| match *e {
+            Event::CountersRemoved { kind, amount, .. } => Some((kind, amount)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(removed, [(CounterKind::Story, 1), (CounterKind::Time, 3)]);
 }
 
 #[test]

@@ -2,8 +2,8 @@
 //! may be cast with.
 
 use crate::characteristics::Colors;
+use crate::counter::CounterKind;
 use crate::definition::Face;
-use crate::ids::CounterKind;
 use crate::index::{AbilityIx, CastingIx};
 use crate::mana::ManaCost;
 

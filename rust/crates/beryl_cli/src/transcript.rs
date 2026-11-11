@@ -10,7 +10,7 @@ use std::fmt::Write;
 
 use beryl_engine::card::{CastingOption, FaceIx, ObjectAbility, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
-use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
+use beryl_engine::state::{ObjectFlags, ObjectRef};
 use beryl_engine::{
     Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, TurnStep, Zone,
     ZoneKey,
@@ -327,16 +327,8 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
     if d.types.intersects(Types::CREATURE) {
         let _ = write!(text, " {}/{}", d.power, d.toughness);
     }
-    let c = o.counters();
-    let common = [
-        (CounterKind::PlusOne, c.plus_one),
-        (CounterKind::MinusOne, c.minus_one),
-        (CounterKind::Loyalty, c.loyalty),
-    ];
-    for (kind, n) in common.into_iter().chain(c.long_tail()) {
-        if n > 0 {
-            let _ = write!(text, " [{n} {}]", counter(kind));
-        }
+    for (kind, n) in s.counters(slot).iter() {
+        let _ = write!(text, " [{n} {}]", kind.name());
     }
     if o.damage() > 0 {
         let _ = write!(text, " ({} damage)", o.damage());
@@ -348,17 +340,6 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
         let _ = write!(text, " (on {})", name(t, s, host));
     }
     text
-}
-
-fn counter(kind: CounterKind) -> &'static str {
-    match kind {
-        CounterKind::PlusOne => "+1/+1",
-        CounterKind::MinusOne => "-1/-1",
-        CounterKind::Loyalty => "loyalty",
-        CounterKind::Time => "time",
-        CounterKind::Story => "story",
-        CounterKind::Chorus => "chorus",
-    }
 }
 
 /// A short label for one option.

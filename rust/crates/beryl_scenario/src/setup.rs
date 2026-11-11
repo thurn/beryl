@@ -119,7 +119,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
                 .map(|c| (c.kind, c.count))
                 .or(printed.map(|n| (CounterKind::Loyalty, n)));
             if let Some((kind, n)) = counters {
-                s.board().set_counters(slot, kind, n);
+                s.board().set_counters(slot, kind, n).map_err(full)?;
             }
             for &name in b.exiled_with {
                 let card = library_slot(&s, t, p, name);

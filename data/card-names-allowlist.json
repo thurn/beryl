@@ -15,8 +15,6 @@
     "Modification::PowerIsCreaturesYouControl",
     "Needs::ExiledWithSource",
     "Face::exile_from_graveyard",
-    "CounterKind::Story",
-    "CounterKind::Chorus",
     "Cost::waterbend",
     "CastStep::Waterbend"
   ]

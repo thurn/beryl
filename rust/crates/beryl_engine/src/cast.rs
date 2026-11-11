@@ -761,7 +761,7 @@ fn activatable<L: Layout>(
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if a.cost.remove.is_some_and(|kind| o.counters_of(kind) == 0) {
+    if matches!(a.cost.remove, Some(kind) if s.counters_of(slot, kind) == 0) {
         return false;
     }
     let timely = if let Some(loyalty) = a.cost.loyalty {

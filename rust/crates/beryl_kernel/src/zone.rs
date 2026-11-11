@@ -7,6 +7,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::chance;
+use crate::counters::CounterRows;
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
@@ -18,8 +19,13 @@ use crate::store::Store;
 use beryl_card::FaceIx;
 
 /// What [`State::signature`] compares two objects by: the object, for a permanent its layer
-/// results and what is tracked of it, and its memos.
-pub type Signature<'a, L> = (Object<L>, Option<(Derived<L>, Tracked)>, MemosOf<'a, L>);
+/// results and what is tracked of it, its memos, and the counters it keeps in no field.
+pub type Signature<'a, L> = (
+    Object<L>,
+    Option<(Derived<L>, Tracked)>,
+    MemosOf<'a, L>,
+    CounterRows<'a, L>,
+);
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,6 +83,9 @@ impl<L: Layout> State<L> {
         // A token stays a token wherever it goes, until it ceases to exist (CR 111.7).
         o.flags = ObjectFlags(o.flags.0 & (ObjectFlags::TOKEN | ObjectFlags::ONE_ONE));
         o.damage = 0;
+        // [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
+        // object are not retained if that object moves from one zone to another." Those of
+        // the table's kinds ended with what the stores hold.
         o.counters = Counters::default();
         o.attached_to = None;
         o.face = FaceIx::FRONT;
@@ -255,7 +264,8 @@ impl<L: Layout> State<L> {
     /// it was cast, so two untapped basic lands match but a stolen Mana Crypt does not match
     /// your own, nor a creature that got -2/-0 one that didn't, nor a kicked creature one
     /// that was not, nor a planeswalker whose loyalty ability was activated one whose was
-    /// not. With nothing stored about the object, its memos cost one bit test.
+    /// not, nor a permanent with a counter one without it. With nothing stored about the
+    /// object, its memos and the counters it keeps in no field cost one bit test.
     pub fn signature(&self, slot: L::Slot) -> Signature<'_, L> {
         let o = self.object(slot);
         let permanent =
@@ -269,6 +279,7 @@ impl<L: Layout> State<L> {
             },
             permanent,
             self.memos(slot),
+            self.counter_rows(slot),
         )
     }
 

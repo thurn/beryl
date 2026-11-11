@@ -513,7 +513,7 @@ impl Runner {
                 count,
             } => {
                 let slot = self.permanent(player, card)?;
-                let n = s.object(slot).counters().get(kind);
+                let n = s.counters_of(slot, kind);
                 (n.to_string(), count.to_string())
             }
             _ => unreachable!("an assertion about permanents"),

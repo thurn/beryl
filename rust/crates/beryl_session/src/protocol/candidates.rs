@@ -5,7 +5,6 @@ use beryl_engine::card::{
     ManaCost, ObjectAbility, Types,
 };
 use beryl_engine::layout::Queue;
-use beryl_engine::state::CounterKind;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId, Zone, ZoneKey,
@@ -336,7 +335,7 @@ pub(super) fn cost_text(cost: &Cost) -> String {
         parts.push("Discard this card".to_owned());
     }
     if let Some(kind) = cost.remove {
-        parts.push(format!("Remove a {} counter", counter_name(kind)));
+        parts.push(format!("Remove a {} counter", kind.name()));
     }
     if parts.is_empty() {
         "Activate".to_owned()
@@ -358,17 +357,6 @@ pub(crate) fn mana_text(cost: ManaCost) -> String {
         text.push_str(&symbol.repeat(usize::from(count)));
     }
     text
-}
-
-fn counter_name(kind: CounterKind) -> &'static str {
-    match kind {
-        CounterKind::PlusOne => "+1/+1",
-        CounterKind::MinusOne => "-1/-1",
-        CounterKind::Loyalty => "loyalty",
-        CounterKind::Time => "time",
-        CounterKind::Story => "story",
-        CounterKind::Chorus => "chorus",
-    }
 }
 
 /// Activating ability `ability` of the object in `slot`.

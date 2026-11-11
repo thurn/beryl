@@ -16,7 +16,7 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{
-    Counters, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone, placed,
+    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -74,7 +74,7 @@ pub(super) struct Known {
     pub(super) power: i8,
     pub(super) toughness: i8,
     pub(super) mana_value: u8,
-    pub(super) counters: Counters,
+    pub(super) counters: CountersHeld,
 }
 
 /// What a resolution keeps between its instructions.
@@ -237,7 +237,7 @@ impl<L: Layout> Scene<'_, L> {
             power: self.s.power(self.t, slot),
             toughness: self.s.toughness(self.t, slot),
             mana_value: self.s.mana_value(self.t, slot),
-            counters: self.s.object(slot).counters(),
+            counters: self.s.counters(slot).held(),
         }
     }
 
@@ -278,7 +278,7 @@ impl<L: Layout> Scene<'_, L> {
             ),
             Amount::Counters(objects, kind) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.s.object(slot).counters().get(kind)),
+                |scene, slot| i32::from(scene.s.counters_of(slot, kind)),
                 |known| i32::from(known.counters.get(kind)),
             ),
         }

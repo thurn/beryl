@@ -619,7 +619,7 @@ impl Obj {
                 && o.flags().has(ObjectFlags::SUMMONING_SICK)
                 && s.derived(slot).types.contains(Types::CREATURE),
             counters: if permanent {
-                Counter::on(o)
+                Counter::on(s, slot)
             } else {
                 Vec::new()
             },

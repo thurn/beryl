@@ -1,7 +1,7 @@
 //! Amounts: how many, or how much.
 
+use crate::counter::CounterKind;
 use crate::effect::Objects;
-use crate::ids::CounterKind;
 
 /// A number an instruction uses, read as the instruction is reached
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires

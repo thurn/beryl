@@ -131,9 +131,10 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             let Some(spec) = ability.layer else { continue };
             let applies = match spec.condition {
                 StaticCondition::Always => true,
-                StaticCondition::HasCounter(kind) => o.counters().get(kind) > 0,
+                StaticCondition::HasCounter(kind) => s.counters_of(slot, kind) > 0,
                 StaticCondition::Impending => {
-                    o.counters().get(CounterKind::Time) > 0 && s.paid(slot, CastingKind::Impending)
+                    s.counters_of(slot, CounterKind::Time) > 0
+                        && s.paid(slot, CastingKind::Impending)
                 }
             };
             let target = match spec.affected {

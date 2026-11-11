@@ -2,8 +2,8 @@
 //! and layered modifications cards create.
 
 use crate::characteristics::{Keywords, Subtype, Types};
+use crate::counter::CounterKind;
 use crate::filter::Whose;
-use crate::ids::CounterKind;
 use crate::index::GrantIx;
 
 /// The rules, each with its words. A `const fn` cannot enumerate an enum's variants.

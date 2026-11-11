@@ -115,7 +115,8 @@ impl<L: Layout> State<L> {
             .effects
             .expire(ended)
             .and(self.memos.expire(ended))
-            .and(self.trackers.expire(ended));
+            .and(self.trackers.expire(ended))
+            .and(self.counters.expire(ended));
         self.settle_ended(done);
     }
 
@@ -137,7 +138,11 @@ impl<L: Layout> State<L> {
     #[cold]
     #[inline(never)]
     fn forget_keyed(&mut self, slot: L::Slot) {
-        let done = self.effects.forget(slot).and(self.memos.forget(slot));
+        let done = self
+            .effects
+            .forget(slot)
+            .and(self.memos.forget(slot))
+            .and(self.counters.forget(slot));
         self.settle_ended(done);
     }
 
@@ -167,14 +172,15 @@ impl<L: Layout> State<L> {
 
     /// The slots a store has an entry about as an object: what `keyed` holds.
     fn store_keys(&self) -> Bitboard<L::Slot> {
-        self.effects.keys() | self.memos.keys() | self.trackers.keys()
+        self.effects.keys() | self.memos.keys() | self.trackers.keys() | self.counters.keys()
     }
 
     /// Whether layout `M` has room for what the stores hold ([`State::fits`]).
     pub(crate) fn stores_fit<M: Layout>(&self) -> Result<(), Misfit> {
         self.effects.fits::<M>()?;
         self.memos.fits::<M>()?;
-        self.trackers.fits::<M>()
+        self.trackers.fits::<M>()?;
+        self.counters.fits::<M>()
     }
 
     /// The stores' invariants ([`State::check_invariants`]): each store's own, and that the
@@ -183,6 +189,7 @@ impl<L: Layout> State<L> {
         self.effects.check(self, t)?;
         self.memos.check(self, t)?;
         self.trackers.check(self, t)?;
+        self.counters.check(self, t)?;
         check(
             self.keyed == self.store_keys(),
             "the keyed slots disagree with the stores",
@@ -196,5 +203,6 @@ impl<L: Layout> State<L> {
             .lingering(self, t)
             .or_else(|| self.memos.lingering(self, t))
             .or_else(|| self.trackers.lingering(self, t))
+            .or_else(|| self.counters.lingering(self, t))
     }
 }

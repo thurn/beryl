@@ -242,7 +242,7 @@ object in a slot:
 | `zone`, `owner`, `controller` | 3    | Small enums; `controller` is the base one, the layer-2 result is in `Derived`               |
 | `flags`                       | 4    | tapped, summoning sick, attacking, blocking, face down, transformed, phased out, token, ... |
 | `damage: u8`                  | 1    | Marked damage this turn                                                                     |
-| `counters`                    | 5    | +1/+1, -1/-1, loyalty, and one (kind, count) pair for the long tail                         |
+| `counters`                    | 3    | +1/+1, -1/-1 and loyalty; any other kind is a row of a table keyed by object and kind       |
 | `attached_to`, `linked`       | 2    | `Option<Slot>`: equipment and auras; what exiled, imprinted or hid this card                |
 | `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
 | `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one        |

@@ -5,10 +5,9 @@
 //! chance chokepoints, the board door and the legacy accessor. No `&mut Object` leaves the
 //! crate. Other crates read an object through the getters below.
 
-use beryl_card::{
-    Colors, CounterKind, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone,
-};
+use beryl_card::{Colors, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone};
 
+use crate::counters::Counters;
 use crate::ids::{CardId, CardIx, Seat, Slot};
 use crate::layout::{Layout, Small};
 
@@ -73,66 +72,6 @@ impl ObjectFlags {
     }
 }
 
-/// Counters on an object: the common kinds, and one (kind, count) pair for the long tail,
-/// which milestone 4 (by-w8gv.7.1) moves to a store and only
-/// [`State::legacy_mut`](crate::State::legacy_mut) writes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Counters {
-    pub plus_one: u8,
-    pub minus_one: u8,
-    pub loyalty: u8,
-    pub(crate) other_kind: CounterKind,
-    pub(crate) other: u8,
-}
-
-impl Counters {
-    /// Whether a kind is one of the long tail, kept in the one (kind, count) pair.
-    #[inline]
-    pub const fn is_long_tail(kind: CounterKind) -> bool {
-        !matches!(
-            kind,
-            CounterKind::PlusOne | CounterKind::MinusOne | CounterKind::Loyalty
-        )
-    }
-
-    /// The long-tail kind this object has counters of, and how many.
-    #[inline]
-    pub fn long_tail(self) -> Option<(CounterKind, u8)> {
-        (self.other > 0).then_some((self.other_kind, self.other))
-    }
-
-    /// How many counters of a kind there are.
-    #[inline]
-    pub fn get(self, kind: CounterKind) -> u8 {
-        match kind {
-            CounterKind::PlusOne => self.plus_one,
-            CounterKind::MinusOne => self.minus_one,
-            CounterKind::Loyalty => self.loyalty,
-            _ if self.other_kind == kind => self.other,
-            _ => 0,
-        }
-    }
-
-    /// The count of a kind, to change. One object carries one long-tail kind at a time,
-    /// which the cube's cards never exceed; adding a second kind replaces the first.
-    #[inline]
-    pub(crate) fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
-        match kind {
-            CounterKind::PlusOne => &mut self.plus_one,
-            CounterKind::MinusOne => &mut self.minus_one,
-            CounterKind::Loyalty => &mut self.loyalty,
-            _ => {
-                if self.other_kind != kind {
-                    debug_assert_eq!(self.other, 0, "a second long-tail counter kind");
-                    self.other_kind = kind;
-                    self.other = 0;
-                }
-                &mut self.other
-            }
-        }
-    }
-}
-
 /// The base data of the object in one slot (architecture §4.2).
 ///
 /// The fields are `pub(crate)`: other crates read an object through its getters, and only
@@ -180,13 +119,7 @@ impl<L: Layout> Object<L> {
         base_controller: Seat::P0,
         flags: ObjectFlags(0),
         damage: 0,
-        counters: Counters {
-            plus_one: 0,
-            minus_one: 0,
-            loyalty: 0,
-            other_kind: CounterKind::PlusOne,
-            other: 0,
-        },
+        counters: Counters::NONE,
         attached_to: None,
         timestamp: 0,
         face: FaceIx::FRONT,
@@ -297,16 +230,11 @@ impl<L: Layout> Object<L> {
         self.damage
     }
 
+    /// Its counters of the kinds the rules themselves read; of any kind,
+    /// [`State::counters_of`](crate::State::counters_of).
     #[inline]
     pub fn counters(&self) -> Counters {
         self.counters
-    }
-
-    /// How many counters of a kind are on it
-    /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)).
-    #[inline]
-    pub fn counters_of(&self, kind: CounterKind) -> u8 {
-        self.counters.get(kind)
     }
 
     /// The object an Aura or Equipment is attached to

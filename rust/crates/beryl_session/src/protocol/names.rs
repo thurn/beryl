@@ -1,6 +1,6 @@
 //! The engine's enums mirrored under the protocol's wire names.
 
-use beryl_engine::card::{Keywords, ManaColor, Types};
+use beryl_engine::card::{Keywords, ManaColor, Types, counter_kinds};
 use beryl_engine::event::Reason;
 use beryl_engine::state::{CounterKind, MulliganStatus, TurnStep};
 use beryl_engine::{DecisionKind, StallReason, Zone};
@@ -71,10 +71,17 @@ mirror! {
     }
 }
 
-mirror! {
-    /// A kind of counter ([`CounterKind`]).
-    Counter from CounterKind { PlusOne, MinusOne, Loyalty, Time, Story, Chorus }
+/// Mirrors the kinds of counter from their one list (`beryl_card::counter_kinds`).
+macro_rules! counters {
+    ($($(#[$doc:meta])* $variant:ident = $name:literal),* $(,)?) => {
+        mirror! {
+            /// A kind of counter ([`CounterKind`]).
+            Counter from CounterKind { $($variant),* }
+        }
+    };
 }
+
+counter_kinds!(counters);
 
 mirror! {
     /// Why the engine gave up on a game ([`StallReason`]).

@@ -38,9 +38,9 @@ fn step_named(name: &str) -> Result<TurnStep, String> {
 }
 
 fn counter_named(name: &str) -> Result<CounterKind, String> {
-    use CounterKind::{Chorus, Loyalty, MinusOne, PlusOne, Story, Time};
-    [PlusOne, MinusOne, Loyalty, Time, Story, Chorus]
-        .into_iter()
+    CounterKind::ALL
+        .iter()
+        .copied()
         .find(|k| format!("{k:?}") == name)
         .ok_or_else(|| format!("no counter {name:?}"))
 }
@@ -94,7 +94,8 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
         s.board().set_sick(slot, m.sick);
         s.board().set_damage(slot, m.damage);
         for (kind, n) in &m.counters {
-            s.board().set_counters(slot, counter_named(kind)?, *n);
+            let kind = counter_named(kind)?;
+            s.board().set_counters(slot, kind, *n).map_err(full)?;
         }
         slots.push(slot);
     }

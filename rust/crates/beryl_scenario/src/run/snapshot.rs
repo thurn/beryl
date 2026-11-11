@@ -1,7 +1,7 @@
 //! The facts about a position that a scenario's own assertions may leave out.
 
 use beryl_engine::card::{AbilityKind, FaceIx, Types};
-use beryl_engine::state::{CounterKind, ObjectFlags};
+use beryl_engine::state::ObjectFlags;
 use beryl_engine::{Choice, Decision, DecisionKind, Seat, Slot, Step, Zone, ZoneKey};
 
 use super::{Runner, answer};
@@ -137,16 +137,14 @@ impl Runner {
                 }
             }
             if let [slot] = named[..] {
-                for kind in COUNTER_KINDS {
-                    let n = s.object(slot).counters().get(kind);
-                    if n > 0 {
-                        out.push(Assertion::Counters {
-                            player,
-                            card,
-                            kind,
-                            count: n,
-                        });
-                    }
+                // Each kind it has a counter of, in the order of the vocabulary's list.
+                for (kind, count) in s.counters(slot).iter() {
+                    out.push(Assertion::Counters {
+                        player,
+                        card,
+                        kind,
+                        count,
+                    });
                 }
             }
         }
@@ -170,16 +168,6 @@ impl Runner {
             .collect()
     }
 }
-
-/// The counter kinds a permanent can have, in a snapshot's order.
-const COUNTER_KINDS: [CounterKind; 6] = [
-    CounterKind::PlusOne,
-    CounterKind::MinusOne,
-    CounterKind::Loyalty,
-    CounterKind::Time,
-    CounterKind::Story,
-    CounterKind::Chorus,
-];
 
 /// The distinct names among `names`, in their first order.
 fn distinct(names: &[&'static str]) -> Vec<&'static str> {

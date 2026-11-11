@@ -115,7 +115,8 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
             counters: None,
             attach: None,
         },
-    );
+    )
+    .unwrap();
     slot
 }
 

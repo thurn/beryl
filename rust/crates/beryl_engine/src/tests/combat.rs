@@ -223,7 +223,8 @@ impl Game {
         if let Some(loyalty) = self.s.copiable(slot).face(&self.t).loyalty {
             self.s
                 .board()
-                .set_counters(slot, CounterKind::Loyalty, loyalty);
+                .set_counters(slot, CounterKind::Loyalty, loyalty)
+                .unwrap();
         }
         slot
     }

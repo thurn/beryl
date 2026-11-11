@@ -398,7 +398,7 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
         .filter(|&&slot| s.name(&t, slot) == "Test Insect" && s.controller(slot) == p)
         .count();
     assert_eq!(insects, 2);
-    assert_eq!(s.object(source.slot).counters().get(CounterKind::Story), 0);
+    assert_eq!(s.counters_of(source.slot, CounterKind::Story), 0);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (21, 16));
     assert!(!COUNT_UP.asks());
 }

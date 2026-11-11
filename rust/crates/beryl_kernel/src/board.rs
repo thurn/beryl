@@ -14,8 +14,8 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, Counters, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, Tracker,
-    TurnStep, Zone,
+    CounterKind, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, Tracker, TurnStep,
+    Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -257,13 +257,11 @@ impl<L: Layout> Board<'_, L> {
     }
 
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
-    pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
+    /// [`Full`] if the kind is new to it and the table of counters has no room for the row
+    /// ([`crate::counters`]).
+    pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) -> Result<(), Full> {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        if Counters::is_long_tail(kind) {
-            self.0.legacy_mut().set_counters(slot, kind, n);
-        } else {
-            *self.0.object_mut(slot).counters.get_mut(kind) = n;
-        }
+        self.0.set_counters(slot, kind, n)
     }
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered

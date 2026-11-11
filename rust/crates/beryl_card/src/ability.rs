@@ -9,9 +9,10 @@ use crate::continuous::{
     Affected, Duration, LayerSpec, Modification, Replacement, Rule, StaticCondition,
 };
 use crate::cost::{CastingKind, Cost};
+use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
 use crate::filter::{Filter, Whose};
-use crate::ids::{CounterKind, TurnStep};
+use crate::ids::TurnStep;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
