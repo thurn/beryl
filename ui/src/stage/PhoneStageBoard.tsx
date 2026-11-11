@@ -34,8 +34,8 @@ import { phoneLayout } from "../mobile/layout";
 import type { PhoneBoard } from "../mobile/PhoneBoard";
 import "../mobile/phone.css";
 import { Faces } from "./Faces.tsx";
-import { lifeChange } from "./notices.ts";
 import { useSurface } from "./mount.ts";
+import { lifeChange } from "./notices.ts";
 import { phone } from "./phone.ts";
 import {
   Inspected,

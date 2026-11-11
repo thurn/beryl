@@ -260,10 +260,13 @@ def test_a_card_that_comes_to_be_in_place_does_not_travel() -> None:
 
 def test_a_change_in_place_is_held_to_its_case() -> None:
     """A turn by which way it goes, a strike by what it lands on and a counter by its kind, as
-    the stage times them (ui/src/stage/timing.ts caseOf); a life total alone has no case."""
+    the stage times them (ui/src/stage/timing.ts caseOf); a life total alone has no case.
+    """
     tapped = {"verb": "tap", "object": {"tapped": True}}
     assert motion.case_of(tapped, "yours") == "tap"
-    assert motion.case_of({"verb": "tap", "object": {"tapped": False}}, "yours") == "untap"
+    assert (
+        motion.case_of({"verb": "tap", "object": {"tapped": False}}, "yours") == "untap"
+    )
     at_player = {"verb": "strike", "to": {"kind": "player", "player": "opponent"}}
     assert motion.case_of(at_player, "yours") == "unblocked attacker"
     at_blocker = {"verb": "strike", "to": {"kind": "object", "slot": 3}}
