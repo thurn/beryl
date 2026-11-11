@@ -356,6 +356,10 @@ test("creatures that strike one another meet half way, at one time", () => {
     assert.ok(made.pose(3).depth > made.pose(1).depth);
     assert.ok(made.pose(1).depth > made.pose(2).depth);
     assert.ok(made.pose(2).depth >= ALOFT);
+    // And as it draws back in its turn it is still over the fight before it.
+    made.clock.advance(300);
+    assert.ok(made.pose(3).depth > made.pose(1).depth);
+    assert.ok(made.pose(1).depth > made.pose(2).depth);
     made.settle();
     assert.equal(made.pose(1).x, 0);
     assert.equal(made.pose(2).x, 400);

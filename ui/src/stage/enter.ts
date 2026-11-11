@@ -14,6 +14,7 @@ import {
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import {
+  depths,
   drawsToRead,
   fade,
   FLIP,
@@ -218,7 +219,9 @@ function enters(
         y: unit.y * length,
       });
       const about = sized(layout, striker.resting);
-      const nth = Math.min(scene.beat.indexOf(act), 50);
+      const nth = scene.beat.indexOf(act);
+      const answers = meets(act, scene.beat[nth - 1]);
+      const deep = depths(answers ? nth - 1 : nth, answers);
       // What a blow does to a card shows as it lands: until then the card it strikes is
       // drawn from the record the step found, and so is one that strikes back, which the
       // other's step has covered already.
@@ -226,7 +229,7 @@ function enters(
       const lunging: Entering = {
         name: act.source,
         track: {
-          ...own(lunge(by(go), by(STRIKE.back * width), size, about, nth)),
+          ...own(lunge(by(go), by(STRIKE.back * width), size, about, deep)),
           turn: veiled ? STRIKE.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,

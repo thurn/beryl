@@ -674,12 +674,13 @@ export class ScriptStage {
         this.#stale = true;
       }
       if (start) {
-        // Only the card a `fly` is about travels over what rests; what another verb's
-        // change moves (a record that lays its card elsewhere) goes there as what makes room
-        // does. It turns over on the way if it leaves face down and lands face up.
+        // Only the card a `fly` is about, or a `count` (a number that lays its card
+        // elsewhere), travels over what rests; what another verb's change moves goes there as
+        // what makes room does. It turns over on the way if it lands face up from face down.
         // What makes room for a card that leaves, or one that taps, waits (tracks.ts).
         const toward = resting.object?.controller === "opponent" ? -1 : 1;
-        const flies = run!.verb === "fly" && subjectOf(run!.step.act) === name;
+        const about = run!.verb === "fly" || run!.verb === "count";
+        const flies = about && litBy(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
         this.#fly(name, entry, {
