@@ -552,10 +552,6 @@ export const choose = (
 export const click = (decision: DecisionId, revision: number, click: Click) =>
   call("click", { request: { decision, revision, click } });
 
-/** Computes a payment without changing the game. */
-export const previewWaterbend = (decision: DecisionId, selected: number[]) =>
-  call("preview_waterbend", { request: { decision, selected } });
-
 export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });
 

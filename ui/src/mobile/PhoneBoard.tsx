@@ -45,7 +45,7 @@ export function PhoneBoard({
   const status = view.status;
   const decision =
     status.kind === "deciding" && !waiting ? status.decision : undefined;
-  const waterbend = useWaterbend(decision, choose);
+  const waterbend = useWaterbend(decision);
   const [paymentPreview, setPaymentPreview] = useState<PlayerView>();
   const previewingPayment = paymentPreview === view;
   const shown = useMemo(

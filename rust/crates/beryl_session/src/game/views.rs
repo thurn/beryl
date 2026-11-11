@@ -118,7 +118,7 @@ impl Game {
             let shown = view(&b.state, &self.table, &mut b.scratch);
             let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
-            // Let the opponent watch the Waterbend payment before the activation
+            // Let the opponent watch permanents tapped in place of mana before the activation
             // lifts from its source. The controller's payment view still needs the
             // pending stack item to identify what they are paying for.
             if matches!(shown.pending(), Pending::Casting(_))
@@ -126,7 +126,7 @@ impl Game {
                     view.stack.last(),
                     Some(StackItem::Ability {
                         controller: Side::Opponent,
-                        waterbend: Some(true),
+                        taps_to_pay: Some(true),
                         ..
                     })
                 )

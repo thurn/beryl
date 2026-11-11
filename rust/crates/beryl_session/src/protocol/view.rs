@@ -277,10 +277,11 @@ pub enum StackItem {
         name: String,
         /// A triggered ability rather than an activated one.
         triggered: bool,
-        /// This activation has a Waterbend cost.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        waterbend: Option<bool>,
+        /// Its cost lets permanents be tapped in place of mana, each a pick of its
+        /// controller's: the taps are seen before the ability is.
+        #[serde(default, rename = "tapsToPay", skip_serializing_if = "Option::is_none")]
+        #[ts(optional, rename = "tapsToPay")]
+        taps_to_pay: Option<bool>,
         /// How many abilities of its kind (triggered, or activated) come before it in its
         /// list: the face's text says them in that order, so the UI finds its paragraph.
         nth: u8,

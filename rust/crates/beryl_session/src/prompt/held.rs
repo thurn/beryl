@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 
-use beryl_engine::card::{Part, Purpose};
+use beryl_engine::card::{ManaColor, Part, Purpose};
 use beryl_engine::layout::Queue as _;
 use beryl_engine::{
     Candidates, Choice, Decision, GameTable, Layout, Opt, Scratch, SlotId as _, State,
@@ -16,10 +16,12 @@ use beryl_engine::{
 };
 
 use super::catalog::Catalog;
+use super::declare::{Aims, Declare};
 use super::divide::Divide;
 use super::mode::Mode;
 use super::number::Number;
 use super::order::Order;
+use super::pay::Pay;
 use super::pick::Pick;
 use super::split::Split;
 use super::yes_no::YesNo;
@@ -47,6 +49,8 @@ enum Shaped {
     Mode(Mode),
     Catalog(Catalog),
     Divide(Divide),
+    Pay(Box<Pay>),
+    Declare(Declare),
 }
 
 /// What a click did to the prompt it was made on.
@@ -93,8 +97,8 @@ impl Held {
             ShapeName::Mode => Shaped::Mode(Mode::open(purpose, decision)),
             ShapeName::Catalog => Shaped::Catalog(Catalog::open(purpose, decision)?),
             ShapeName::Divide => Shaped::Divide(Divide::open(purpose, decision)?),
-            // Paying with permanents and combat's declarations are still a UI's to hold.
-            ShapeName::Pay | ShapeName::Declare => return None,
+            ShapeName::Pay => Shaped::Pay(Box::new(Pay::open(&table, purpose, decision)?)),
+            ShapeName::Declare => Shaped::Declare(Declare::open(&table, purpose, decision)?),
         };
         let mut held = Held {
             view: (*decision.prompt).clone(),
@@ -124,8 +128,16 @@ impl Held {
         &self.view
     }
 
-    /// Takes `click` and says what it did. A change counts a revision.
-    pub fn click(&mut self, click: Click) -> Clicked {
+    /// Takes `click`, made in the game `s` at the prompt's decision `d` (none at a halt),
+    /// and says what it did. A change counts a revision. Only a payment reads the game: what
+    /// its picks leave to pay is the engine's to say after each one.
+    pub fn click<L: Layout>(
+        &mut self,
+        s: &State<L>,
+        t: &GameTable,
+        d: Option<&Decision<L>>,
+        click: Click,
+    ) -> Clicked {
         let clicked = match &mut self.shape {
             Shaped::Pick(pick) => pick.click(click),
             Shaped::Order(order) => order.click(click),
@@ -135,6 +147,11 @@ impl Held {
             Shaped::Mode(mode) => mode.clicked(click),
             Shaped::Catalog(catalog) => catalog.click(click),
             Shaped::Divide(divide) => divide.click(click),
+            Shaped::Pay(pay) => match d {
+                Some(d) => pay.click(s, t, d, click),
+                None => Clicked::Same,
+            },
+            Shaped::Declare(declare) => declare.click(click),
         };
         if matches!(clicked, Clicked::Changed) {
             self.view.revision += 1;
@@ -162,6 +179,8 @@ impl Held {
             Shaped::Mode(mode) => mode.show(&mut self.view),
             Shaped::Catalog(catalog) => catalog.show(&mut self.view),
             Shaped::Divide(divide) => divide.show(&mut self.view),
+            Shaped::Pay(pay) => pay.show(&mut self.view),
+            Shaped::Declare(declare) => declare.show(&mut self.view),
         }
     }
 }
@@ -309,6 +328,8 @@ pub(crate) enum Step {
     Among(Part, Vec<Subject>),
     /// Each of these as a pick of this part, in this order: the picks put them in an order.
     InTurn(Part, VecDeque<Subject>),
+    /// Each of these declared and then aimed, as the engine asks for them ([`Aims`]).
+    Aimed(Aims),
 }
 
 /// An answer a run gives that names no object.
@@ -321,6 +342,15 @@ pub(crate) enum Want {
     /// Yes or no.
     Yes,
     No,
+    /// The mana ability of the permanent in this slot, for mana of this color.
+    Mana {
+        slot: u16,
+        color: ManaColor,
+    },
+    /// A unit of floating mana of this color.
+    Pool(ManaColor),
+    /// The payment plan at this index.
+    Plan(u16),
     /// The waiting trigger of this ability of the object in this slot, as a trigger is named
     /// from one decision to the next ([`Candidate::Trigger`]).
     Trigger {
@@ -368,9 +398,14 @@ impl Run {
         self.continues
     }
 
-    /// This run over `waiting`, a run waiting through the prompt this one answers.
+    /// This run over `waiting`, a run that goes on once this one and any already under it
+    /// have made their picks: one waiting through the prompt this one answers, or the picks
+    /// of the prompt's next purpose, as the payment plan that follows a cost paid by tapping.
     pub(crate) fn over(mut self, waiting: Option<Run>) -> Run {
-        self.under = waiting.map(Box::new);
+        self.under = match self.under.take() {
+            Some(under) => Some(Box::new(under.over(waiting))),
+            None => waiting.map(Box::new),
+        };
         self
     }
 
@@ -447,6 +482,14 @@ impl Step {
             Step::One(_, Want::Done) => position(Opt::Done),
             Step::One(_, Want::Yes) => position(Opt::Yes),
             Step::One(_, Want::No) => position(Opt::No),
+            Step::One(_, Want::Mana { slot, color }) => options.iter().position(
+                |&o| matches!(o, Opt::Mana { slot: s, color: c } if s.num() == *slot && c == *color),
+            ),
+            Step::One(_, Want::Pool(color)) => position(Opt::Pool(*color)),
+            Step::One(_, Want::Plan(plan)) => options.iter().position(
+                |&o| matches!(o, Opt::Plan(i) if Into::<usize>::into(i) == usize::from(*plan)),
+            ),
+            Step::Aimed(aims) => aims.answer(s, d, options),
             Step::One(_, Want::Trigger { source, ability }) => options.iter().position(|&o| {
                 let Opt::Trigger(i) = o else {
                     return false;
@@ -481,35 +524,48 @@ impl Step {
             Step::Index(_) | Step::One(..) => true,
             Step::Among(_, wanted) => wanted.is_empty(),
             Step::InTurn(_, wanted) => wanted.is_empty(),
+            Step::Aimed(aims) => aims.is_spent(),
         }
     }
 }
 
-/// The candidate among `options`, those of `d`, that names `on` itself: an object offered, or
-/// a blocker offered to be dealt lethal damage.
-fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject) -> Option<usize> {
+/// The candidate among `options`, those of `d`, that names `on` itself: an object offered, a
+/// blocker offered to be dealt lethal damage, a creature offered to attack or block with, or
+/// what an attacker is offered to attack.
+pub(crate) fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject) -> Option<usize> {
     options.iter().position(|&o| match (o, on) {
-        (Opt::Object(slot) | Opt::Lethal(slot), Subject::Object { slot: wanted }) => {
-            slot.num() == wanted
-        }
+        (
+            Opt::Object(slot)
+            | Opt::Lethal(slot)
+            | Opt::Attack(slot)
+            | Opt::Block(slot)
+            | Opt::Defender(Some(slot)),
+            Subject::Object { slot: wanted },
+        ) => slot.num() == wanted,
         // The player deciding is the viewer.
         (Opt::Player(player), Subject::Player { player: wanted }) => {
             (player == d.player) == (wanted == Side::You)
         }
+        // The defending player is not the one declaring the attack.
+        (Opt::Defender(None), Subject::Player { player }) => player == Side::Opponent,
         _ => false,
     })
 }
 
 /// The candidate among `options` that is an object interchangeable with `on` in `s`, which the
 /// engine offers in its place.
-fn alike<L: Layout>(s: &State<L>, options: &[Opt<L>], on: Subject) -> Option<usize> {
+pub(crate) fn alike<L: Layout>(s: &State<L>, options: &[Opt<L>], on: Subject) -> Option<usize> {
     let Subject::Object { slot } = on else {
         return None;
     };
     let wanted = L::Slot::from_num(slot)?;
-    options.iter().position(
-        |&o| matches!(o, Opt::Object(slot) | Opt::Lethal(slot) if interchangeable(s, slot, wanted)),
-    )
+    options.iter().position(|&o| {
+        matches!(
+            o,
+            Opt::Object(slot) | Opt::Lethal(slot) | Opt::Attack(slot) | Opt::Block(slot)
+                if interchangeable(s, slot, wanted)
+        )
+    })
 }
 
 /// A button with no caption.

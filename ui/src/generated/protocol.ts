@@ -31,16 +31,6 @@ decision: DecisionId, index: CandidateIndex,
  */
 continuation?: boolean, };
 
-export type WaterbendRequest = { decision: DecisionId, 
-/**
- * Only the permanents the player picked manually.
- */
-selected: Array<number>, };
-
-export type WaterbendPreview = { mana: Array<WaterbendMana>, benders: Array<number>, taps: Array<number>, plan: number | null, ready: boolean, eligible: Array<number>, };
-
-export type WaterbendMana = { slot: number, color: Mana, };
-
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 
 export type CancelRequest = { 
@@ -322,9 +312,10 @@ paid: Array<PaidCost>, } | { "kind": "ability", source: number | null, ability: 
  */
 triggered: boolean, 
 /**
- * This activation has a Waterbend cost.
+ * Its cost lets permanents be tapped in place of mana, each a pick of its
+ * controller's: the taps are seen before the ability is.
  */
-waterbend?: boolean, 
+tapsToPay?: boolean, 
 /**
  * How many abilities of its kind (triggered, or activated) come before it in its
  * list: the face's text says them in that order, so the UI finds its paragraph.
@@ -340,10 +331,6 @@ export type PaidCost = "kicker" | "offspring" | "impending" | "overload" | "evok
 export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: number, };
 
 export type DecisionView = { 
-/**
- * The initial Auto Pay proposal for Waterbend.
- */
-waterbend?: WaterbendPreview, 
 /**
  * What an answer names.
  */
@@ -835,7 +822,6 @@ export type Commands = {
   ui_ready: { args: Record<string, never>; result: null; error: never };
   list_agents: { args: Record<string, never>; result: Array<AgentView>; error: never };
   start_game: { args: { request: StartRequest }; result: SessionId; error: SessionError };
-  preview_waterbend: { args: { request: WaterbendRequest }; result: WaterbendPreview | null; error: SessionError };
   click: { args: { request: ClickRequest }; result: ClickReply; error: SessionError };
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };

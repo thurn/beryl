@@ -267,7 +267,7 @@ function waterbendCuts(events: GameEvent[]) {
       event.kind !== "ability" ||
       event.item.kind !== "ability" ||
       event.item.controller !== "opponent" ||
-      !event.item.waterbend
+      !event.item.tapsToPay
     )
       continue;
     let start = end;

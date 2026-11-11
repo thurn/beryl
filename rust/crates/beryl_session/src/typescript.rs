@@ -8,7 +8,7 @@ use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogReques
 use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    SetStopsRequest, UndoRequest, WaterbendMana, WaterbendPreview, WaterbendRequest,
+    SetStopsRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -63,9 +63,6 @@ pub fn typescript() -> String {
         FixtureMessage::decl(&cfg),
         StartRequest::decl(&cfg),
         ChooseRequest::decl(&cfg),
-        WaterbendRequest::decl(&cfg),
-        WaterbendPreview::decl(&cfg),
-        WaterbendMana::decl(&cfg),
         SetStopsRequest::decl(&cfg),
         CancelRequest::decl(&cfg),
         UndoRequest::decl(&cfg),

@@ -87,7 +87,7 @@ fn trigger(source: Option<u16>, name: &str, targets: Vec<TargetRef>) -> StackIte
         granted: false,
         name: name.to_owned(),
         triggered: true,
-        waterbend: None,
+        taps_to_pay: None,
         nth: 0,
         controller: Side::Opponent,
         targets,

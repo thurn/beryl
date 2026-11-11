@@ -26,37 +26,6 @@ pub const CHOOSE: &str = "choose";
 /// Takes a click on the human's open prompt ([`ClickRequest`]) and returns the prompt's state
 /// after it, or that the click answered it ([`ClickReply`]).
 pub const CLICK: &str = "click";
-/// Reads a proposed waterbend payment without changing the game.
-pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct WaterbendRequest {
-    pub decision: DecisionId,
-    /// Only the permanents the player picked manually.
-    pub selected: Vec<u16>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct WaterbendPreview {
-    #[serde(default)]
-    pub mana: Vec<WaterbendMana>,
-    pub benders: Vec<u16>,
-    pub taps: Vec<u16>,
-    pub plan: Option<u16>,
-    // Whether the proposed payment can pay the full cost.
-    pub ready: bool,
-    // Other permanents that could be added without a redundant contribution.
-    pub eligible: Vec<u16>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct WaterbendMana {
-    pub slot: u16,
-    pub color: crate::protocol::Mana,
-}
-
 /// Switches the human's priority stops.
 pub const SET_STOPS: &str = "set_stops";
 /// Takes back the spell the human is casting, or the ability they are activating, before its
@@ -220,12 +189,6 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             START_GAME,
             request(name::<StartRequest>(cfg)),
             name::<SessionId>(cfg),
-            error.clone(),
-        ),
-        (
-            PREVIEW_WATERBEND,
-            request(name::<WaterbendRequest>(cfg)),
-            name::<Option<WaterbendPreview>>(cfg),
             error.clone(),
         ),
         (

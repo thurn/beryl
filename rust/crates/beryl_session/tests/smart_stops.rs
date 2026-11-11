@@ -12,6 +12,7 @@ use beryl_engine::card::Purpose;
 use beryl_engine::state::{CounterKind, StackEntry};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
+use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
 use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::script::{Mark, Subject};
@@ -362,38 +363,50 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<(Kind, bool)> {
             }
         }
         if bending {
-            let suggested = decision.waterbend.as_deref().expect("a suggested payment");
-            assert!(suggested.benders.is_empty());
-            assert_eq!(suggested.taps.len(), 3);
+            // The lands pay by default, and nothing is picked.
+            let marked = |prompt: &PromptView, mark: Mark| -> Vec<Subject> {
+                let marks = prompt.marks.iter().filter(|m| m.mark == mark);
+                marks.map(|m| m.on).collect()
+            };
+            let opening = decision.prompt.as_ref().clone();
+            assert!(marked(&opening, Mark::Paying).is_empty());
+            assert_eq!(marked(&opening, Mark::Suggested).len(), 3);
             let jace = view
                 .objects
                 .iter()
                 .find(|o| o.name.as_deref() == Some(JACE_VRYNS_PRODIGY))
                 .unwrap()
                 .slot;
-            let request = beryl_session::ipc::WaterbendRequest {
+            let on = |slot: u16, revision: u32| ClickRequest {
                 decision: decision.id,
-                selected: vec![jace],
+                revision,
+                click: Click::On {
+                    on: Subject::Object { slot },
+                },
             };
-            let mut outdated = request.clone();
+            let mut outdated = on(jace, 0);
             outdated.decision.seq += 1;
-            assert!(game.preview_waterbend(&outdated).is_err());
-            let changed = game.preview_waterbend(&request).unwrap().unwrap();
-            assert_eq!(changed.benders, vec![jace]);
-            assert_eq!(changed.taps.len(), 3);
-            assert!(changed.taps.contains(&jace));
-            assert_eq!(changed.taps.iter().filter(|s| **s != jace).count(), 2);
-            let none = beryl_session::ipc::WaterbendRequest {
-                selected: Vec::new(),
-                ..request.clone()
+            assert!(game.click(outdated).is_err());
+            // The creature picked pays one, and two of the lands the rest.
+            let ClickReply::Open { prompt: changed } = game.click(on(jace, 0)).unwrap() else {
+                panic!("the payment stays open");
             };
-            let empty = game.preview_waterbend(&none).unwrap().unwrap();
-            assert_eq!(&empty, suggested);
-            let invalid = beryl_session::ipc::WaterbendRequest {
-                selected: vec![u16::MAX],
-                ..request
+            assert_eq!(
+                marked(&changed, Mark::Paying),
+                [Subject::Object { slot: jace }]
+            );
+            assert_eq!(marked(&changed, Mark::Suggested).len(), 2);
+            // A click on nothing that pays changes nothing; taking the pick back restores
+            // the default.
+            let ClickReply::Open { prompt: same } = game.click(on(u16::MAX, 1)).unwrap() else {
+                panic!("the payment stays open");
             };
-            assert!(game.preview_waterbend(&invalid).unwrap().is_none());
+            assert_eq!(same, changed);
+            let ClickReply::Open { prompt: empty } = game.click(on(jace, 1)).unwrap() else {
+                panic!("the payment stays open");
+            };
+            assert_eq!(empty.marks, opening.marks);
+            assert_eq!(empty.buttons, opening.buttons);
             assert!(game.answer(decision.id, CandidateIndex(0)).is_ok());
         }
         let iceberg = view

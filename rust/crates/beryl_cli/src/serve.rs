@@ -192,10 +192,6 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::START_GAME => answer(
             request::<StartRequest>(args).and_then(|r| sessions.start(&r).map_err(|e| json!(e))),
         ),
-        ipc::PREVIEW_WATERBEND => answer(
-            request::<ipc::WaterbendRequest>(args)
-                .and_then(|r| sessions.preview_waterbend(r).map_err(|e| json!(e))),
-        ),
         ipc::CLICK => answer(
             request::<ClickRequest>(args).and_then(|r| sessions.click(r).map_err(|e| json!(e))),
         ),

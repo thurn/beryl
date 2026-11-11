@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde_json::json;
 
 use crate::game::{Answer, Game, OpenDecision};
-use crate::ipc::{ChooseRequest, WaterbendPreview, WaterbendRequest};
+use crate::ipc::ChooseRequest;
 use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{DecisionId, PlayerView, Status, StopsSetting};
 use crate::sessions::LatestReplay;
@@ -30,10 +30,6 @@ pub(crate) struct GameSession {
 }
 
 enum Command {
-    PreviewWaterbend(
-        WaterbendRequest,
-        Sender<Result<Option<WaterbendPreview>, SessionError>>,
-    ),
     Choose(Answer),
     Click(ClickRequest, Sender<Result<ClickReply, SessionError>>),
     SetStops(StopsSetting),
@@ -121,23 +117,6 @@ impl GameSession {
         let (reply, received) = channel();
         self.commands
             .send(Command::Click(request, reply))
-            .map_err(|_| SessionError::Ended)?;
-        received.recv().map_err(|_| SessionError::Ended)?
-    }
-
-    /// Computes a payment while leaving the open decision and game untouched.
-    pub(crate) fn preview_waterbend(
-        &self,
-        request: WaterbendRequest,
-    ) -> Result<Option<WaterbendPreview>, SessionError> {
-        self.open
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .ok_or(SessionError::NotDeciding)?
-            .answer(request.decision, crate::CandidateIndex(0))?;
-        let (reply, received) = channel();
-        self.commands
-            .send(Command::PreviewWaterbend(request, reply))
             .map_err(|_| SessionError::Ended)?;
         received.recv().map_err(|_| SessionError::Ended)?
     }
@@ -278,9 +257,6 @@ fn run(
                 return "closed";
             };
             match command {
-                Command::PreviewWaterbend(request, response) => {
-                    let _ = response.send(game.preview_waterbend(&request));
-                }
                 // A click that answers its prompt plays the game on.
                 Command::Click(request, to) if click(&mut game, shared, request, &to) => break,
                 Command::Click(..) => {}

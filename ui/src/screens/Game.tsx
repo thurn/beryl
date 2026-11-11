@@ -191,13 +191,13 @@ function Playing({ playback }: { playback: Playback }) {
     }
     canAutoPick.current = true;
     play("select");
-    // Keep intermediate engine questions off the table for declarations and payments
-    // that the player confirmed as one action.
-    if (then.length > 0) {
-      if (decision.kind === "attacker" || decision.kind === "blocker")
-        gather("combat");
-      else if (decision.prompt.purpose === "waterbend") gather();
-    }
+    // Keep intermediate engine questions off the table for a declaration the player
+    // confirmed as one action.
+    if (
+      then.length > 0 &&
+      (decision.kind === "attacker" || decision.kind === "blocker")
+    )
+      gather("combat");
     send(index, then);
   };
   /** Sends an answer, the player's or one taken for them (a planned pick, a lone target). */

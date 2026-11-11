@@ -37,6 +37,12 @@ const SETUP: Scenario = Scenario::new("saved exile and mana choices")
     )
     .library(P0, &[names::ISLAND; 12])
     .library(P1, &[names::ISLAND; 12]);
+/// Whether the payment open in `v` offers Auto Pay: its default can pay the cost.
+fn auto_pays(v: &PlayerView) -> bool {
+    let buttons = &decision(v).prompt.buttons;
+    (buttons.iter()).any(|b| b.id == beryl_session::prompt::ButtonId::Auto && b.enabled)
+}
+
 fn decision(v: &PlayerView) -> &beryl_session::protocol::DecisionView {
     let Status::Deciding { decision } = &v.status else {
         panic!("a decision")
@@ -206,7 +212,7 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
         .unwrap();
     view = answer(&mut game, &view, activate);
     assert!(decision(&view).prompt.is(Purpose::Waterbend));
-    assert!(!decision(&view).waterbend.as_ref().unwrap().ready);
+    assert!(!auto_pays(&view));
     let after = answer(&mut game, &view, 0);
     let mut old = serde_json::to_value(game.replay()).unwrap();
     old["formatVersion"] = 7.into();
@@ -261,8 +267,7 @@ fn old_waterbend_saves_restore_an_automatic_mana_rock() {
         .unwrap();
     view = answer(&mut game, &view, activate);
     assert!(decision(&view).prompt.is(Purpose::Waterbend));
-    let suggested = decision(&view).waterbend.as_ref().unwrap();
-    assert!(!suggested.ready, "the rock needs to be picked manually");
+    assert!(!auto_pays(&view), "the rock needs to be picked manually");
     let rock = decision(&view)
         .candidates
         .iter()

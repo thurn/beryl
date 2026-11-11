@@ -356,19 +356,6 @@ impl Sessions {
         Ok(reply)
     }
 
-    /// Reads a proposed payment without answering the open decision.
-    pub fn preview_waterbend(
-        &self,
-        request: crate::ipc::WaterbendRequest,
-    ) -> Result<Option<crate::ipc::WaterbendPreview>, SessionError> {
-        self.with(
-            "preview_waterbend",
-            json!({"decision": request.decision.seq}),
-            request.decision.session,
-            |game| game.preview_waterbend(request),
-        )
-    }
-
     /// Takes back the cast the human's open decision `decision` is part of.
     pub fn cancel(&self, decision: DecisionId) -> Result<(), SessionError> {
         let data = json!({ "decision": decision.seq });

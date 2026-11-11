@@ -374,7 +374,7 @@ export function Board({
       ? previousGroup.slots
       : handlingSlots(view, standIns.order);
   heldGroup.current = { view, slots: handledSlots };
-  const waterbend = useWaterbend(deciding ? decision : undefined, choose);
+  const waterbend = useWaterbend(deciding ? decision : undefined);
   const [paymentPreview, setPaymentPreview] = useState<{
     view: PlayerView;
     slots?: number[];

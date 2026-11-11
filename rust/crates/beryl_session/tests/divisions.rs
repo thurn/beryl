@@ -262,8 +262,14 @@ fn an_amount_is_divided_among_recipients() {
         n,
         on: Some(card(on)),
     };
-    assert!(matches!(held.click(CONFIRM), Clicked::Same), "two are left");
-    assert!(matches!(held.click(share(3, a)), Clicked::Changed));
+    assert!(
+        matches!(held.click(&state, &table, Some(&d), CONFIRM), Clicked::Same),
+        "two are left"
+    );
+    assert!(matches!(
+        held.click(&state, &table, Some(&d), share(3, a)),
+        Clicked::Changed
+    ));
     assert_eq!(
         state_of(&held),
         format!(
@@ -274,13 +280,22 @@ fn an_amount_is_divided_among_recipients() {
     );
     // Nothing is left for another share to grow by, a share is at least one, and a number
     // that names no recipient sets nothing.
-    assert!(matches!(held.click(share(2, b)), Clicked::Same));
-    assert!(matches!(held.click(share(0, c)), Clicked::Same));
     assert!(matches!(
-        held.click(Click::Number { n: 2, on: None }),
+        held.click(&state, &table, Some(&d), share(2, b)),
         Clicked::Same
     ));
-    assert!(matches!(held.click(share(2, a)), Clicked::Changed));
+    assert!(matches!(
+        held.click(&state, &table, Some(&d), share(0, c)),
+        Clicked::Same
+    ));
+    assert!(matches!(
+        held.click(&state, &table, Some(&d), Click::Number { n: 2, on: None }),
+        Clicked::Same
+    ));
+    assert!(matches!(
+        held.click(&state, &table, Some(&d), share(2, a)),
+        Clicked::Changed
+    ));
     assert_eq!(
         state_of(&held),
         format!(
@@ -289,7 +304,10 @@ fn an_amount_is_divided_among_recipients() {
              confirm(Submit)\n"
         )
     );
-    assert!(matches!(held.click(share(2, b)), Clicked::Changed));
+    assert!(matches!(
+        held.click(&state, &table, Some(&d), share(2, b)),
+        Clicked::Changed
+    ));
     assert_eq!(
         state_of(&held),
         format!(
@@ -302,7 +320,7 @@ fn an_amount_is_divided_among_recipients() {
 
     // The picks: two for the first, then two of the three left for the second. The third's
     // share is what is left, which the engine does not ask.
-    let Clicked::Answers(mut run) = held.click(CONFIRM) else {
+    let Clicked::Answers(mut run) = held.click(&state, &table, Some(&d), CONFIRM) else {
         panic!("the button answers");
     };
     assert_eq!(run.answer(&state, &d), Some(Choice(1)), "the number 2");
@@ -326,19 +344,27 @@ fn a_color_is_chosen_from_its_catalog() {
          catalog White | Blue | Black | Red | Green\n\
          confirm(Submit 0)\n"
     );
-    assert!(matches!(held.click(CONFIRM), Clicked::Same), "none chosen");
+    assert!(
+        matches!(held.click(&state, &table, Some(&d), CONFIRM), Clicked::Same),
+        "none chosen"
+    );
     assert!(matches!(
-        held.click(Click::Entry { index: 5 }),
+        held.click(&state, &table, Some(&d), Click::Entry { index: 5 }),
         Clicked::Same
     ));
     assert!(matches!(
-        held.click(Click::On {
-            on: Subject::Player { player: Side::You }
-        }),
+        held.click(
+            &state,
+            &table,
+            Some(&d),
+            Click::On {
+                on: Subject::Player { player: Side::You }
+            }
+        ),
         Clicked::Same
     ));
     assert!(matches!(
-        held.click(Click::Entry { index: 3 }),
+        held.click(&state, &table, Some(&d), Click::Entry { index: 3 }),
         Clicked::Changed
     ));
     assert_eq!(
@@ -349,7 +375,7 @@ fn a_color_is_chosen_from_its_catalog() {
     );
     // Another entry takes its place.
     assert!(matches!(
-        held.click(Click::Entry { index: 1 }),
+        held.click(&state, &table, Some(&d), Click::Entry { index: 1 }),
         Clicked::Changed
     ));
     assert_eq!(
@@ -358,7 +384,7 @@ fn a_color_is_chosen_from_its_catalog() {
          catalog White | Blue* | Black | Red | Green\n\
          confirm[Submit 1]*\n"
     );
-    let Clicked::Answers(mut run) = held.click(CONFIRM) else {
+    let Clicked::Answers(mut run) = held.click(&state, &table, Some(&d), CONFIRM) else {
         panic!("the button answers");
     };
     assert_eq!(run.answer(&state, &d), Some(Choice(1)), "blue");

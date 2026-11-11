@@ -461,8 +461,16 @@ fn a_plain_may_is_two_buttons() {
     let confirm = Click::Button {
         button: ButtonId::Confirm,
     };
-    assert!(matches!(held.click(confirm), Clicked::Same), "it has none");
-    let Clicked::Answers(mut run) = held.click(Click::Button { button: option(1) }) else {
+    assert!(
+        matches!(held.click(&state, &table, Some(&d), confirm), Clicked::Same),
+        "it has none"
+    );
+    let Clicked::Answers(mut run) = held.click(
+        &state,
+        &table,
+        Some(&d),
+        Click::Button { button: option(1) },
+    ) else {
         panic!("declining answers");
     };
     assert_eq!(run.answer(&state, &d), Some(Choice(1)));

@@ -453,7 +453,7 @@ pub(super) fn stack_item<L: Layout>(
                 granted: matches!(ability, FaceAbility::Grant(_)),
                 name: t.def(e.card).face_name(e.face).to_owned(),
                 triggered: kind,
-                waterbend: (face.ability(ability).cost.waterbend > 0).then_some(true),
+                taps_to_pay: (face.ability(ability).cost.waterbend > 0).then_some(true),
                 nth,
                 controller: side(obs, e.controller),
                 targets,

@@ -51,15 +51,6 @@ pub fn click(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-pub fn preview_waterbend(
-    sessions: State<'_, Sessions>,
-    request: ipc::WaterbendRequest,
-) -> Result<Option<ipc::WaterbendPreview>, SessionError> {
-    sessions.preview_waterbend(request)
-}
-
-#[tauri::command]
-#[allow(clippy::needless_pass_by_value)]
 pub fn cancel(sessions: State<'_, Sessions>, request: CancelRequest) -> Result<(), SessionError> {
     sessions.cancel(request.decision)
 }

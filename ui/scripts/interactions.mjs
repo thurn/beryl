@@ -4873,7 +4873,7 @@ if (wanted(opponentWaterbend)) {
         ...payment.stack.at(-1),
         source: iceberg.slot,
         controller: "opponent",
-        waterbend: true,
+        tapsToPay: true,
     };
     const tap = (o) => ({ kind: "tap", slot: o.slot });
     const run = await motionFixture("opponent-waterbend-beats", [
@@ -10192,18 +10192,57 @@ await check(
     { fixture: "crew", at: crewAt + 2, ready: ".crew-meter" },
 );
 
-// Auto Pay previews on hover, with no selected permanents until the player picks.
+// Auto Pay previews on hover, with no selected permanents until the player picks. The
+// session holds the payment: a pick and the button are clicks it answers, so each fixture
+// here is `choice-scry` with the replies its clicks get.
 const scryViews = await load("choice-scry");
 const bendAt = scryViews.findIndex(
     (v) => v.status.decision?.prompt.purpose === "waterbend",
 );
 assert.ok(bendAt >= 0, "waterbend opens a payment review");
 const bending = scryViews[bendAt].status.decision;
-const suggested = bending.waterbend;
+const markedBy = (prompt, mark) =>
+    prompt.marks
+        .filter((m) => m.mark === mark && m.on.kind === "object")
+        .map((m) => m.on.slot);
+const suggestedTaps = markedBy(bending.prompt, "suggested");
+assert.ok(suggestedTaps.length > 0, "the payment opens with a default");
+/** `choice-scry` with `replies` to the clicks the page sends, in order. */
+async function bendFixture(name, replies) {
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "choice-scry.json"), "utf8"),
+    );
+    fixture.messages.unshift(
+        ...replies.map((value) => ({
+            kind: "response",
+            command: "click",
+            value,
+        })),
+    );
+    await writeFixture(name, fixture);
+}
+/** The clicks the page has sent, as recorded by the fixture transport. */
+const clicksSent = (page) =>
+    page.evaluate(() =>
+        window.berylFixture.calls
+            .filter((c) => c.command === "click")
+            .map((c) => c.args.request.click),
+    );
+/** The clicks sent once there are `count` of them, or as many as there are after a while. */
+async function clicked(page, count) {
+    for (let i = 0; i < 20 && (await clicksSent(page)).length < count; i++) {
+        await page.clock.runFor(100);
+    }
+    return clicksSent(page);
+}
+const AUTO = { kind: "button", button: { kind: "auto" } };
 const autoPayButton = (page) =>
     page.getByRole("button", { name: "Auto Pay", exact: true });
+const autoBend =
+    "waterbend Auto Pay highlights only on hover and accepts on click";
+await bendFixture("waterbend-auto", [{ kind: "answered" }]);
 await check(
-    "waterbend Auto Pay highlights only on hover and accepts on click",
+    autoBend,
     async (page) => {
         await page.clock.runFor(2000);
         const autoPay = autoPayButton(page);
@@ -10212,16 +10251,17 @@ await check(
         assert.deepEqual(await glowing(page, "target"), []);
         await autoPay.hover();
         await committed(page);
-        assert.deepEqual(await lit(page), ascending(suggested.taps));
+        assert.deepEqual(await lit(page), ascending(suggestedTaps));
         assert.deepEqual(await chosen(page), []);
         await page.mouse.move(0, 0);
         await committed(page);
         assert.deepEqual(await lit(page), []);
         await autoPay.click();
-        await settled(page, 1);
+        assert.deepEqual(await clicked(page, 1), [AUTO]);
         await until(page, ".choice");
+        assert.deepEqual(await chosen(page), [], "the session sends the picks");
     },
-    { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
+    { fixture: "waterbend-auto", at: bendAt + 1, ready: ".prompt-cost" },
 );
 
 const bendCost = "waterbend prompt renders its generic mana symbol";
@@ -10255,22 +10295,32 @@ const mixedBend = "waterbend Auto Pay keeps manual picks";
 if (wanted(mixedBend)) {
     const bender = bending.candidates.find((c) => c.option.kind === "object")
         .option.slot;
+    assert.ok(
+        markedBy(bending.prompt, "eligible").includes(bender),
+        "the creature can be picked",
+    );
+    // The creature picked pays one; the default taps two lands for the rest.
+    const rest = suggestedTaps.slice(0, 2);
+    const mark = (slot, mark) => ({ on: { kind: "object", slot }, mark });
     const mixed = {
-        ...suggested,
-        benders: [bender],
-        taps: [bender, ...suggested.taps.slice(0, 2)],
+        ...bending.prompt,
+        revision: 1,
+        marks: [
+            mark(bender, "paying"),
+            ...rest.map((slot) => mark(slot, "suggested")),
+        ],
     };
-    const fixture = JSON.parse(
-        await readFile(join(fixtures, "choice-scry.json"), "utf8"),
-    );
-    fixture.messages.unshift(
-        ...[mixed, suggested, mixed].map((value) => ({
-            kind: "response",
-            command: "preview_waterbend",
-            value,
-        })),
-    );
-    await writeFixture("waterbend-mixed", fixture);
+    const reply = (prompt, revision) => ({
+        kind: "open",
+        prompt: { ...prompt, revision },
+    });
+    await bendFixture("waterbend-mixed", [
+        reply(mixed, 1),
+        reply(bending.prompt, 2),
+        reply(mixed, 3),
+        { kind: "answered" },
+    ]);
+    const ON = { kind: "on", on: { kind: "object", slot: bender } };
     await check(
         mixedBend,
         async (page) => {
@@ -10281,20 +10331,19 @@ if (wanted(mixedBend)) {
             await marked.waitFor();
             assert.deepEqual(await lit(page), [bender]);
             await autoPay.hover();
-            assert.deepEqual(await lit(page), ascending(mixed.taps));
+            assert.deepEqual(await lit(page), ascending([bender, ...rest]));
             await permanent.click();
             await marked.waitFor({ state: "detached" });
             assert.deepEqual(await lit(page), []);
-            assert.deepEqual(await chosen(page), []);
             await permanent.click();
             await marked.waitFor();
             await autoPay.click();
-            assert.deepEqual(await settled(page, 1), [
-                bending.candidates.findIndex(
-                    (c) =>
-                        c.option.kind === "object" && c.option.slot === bender,
-                ),
-            ]);
+            assert.deepEqual(await clicked(page, 4), [ON, ON, ON, AUTO]);
+            assert.deepEqual(
+                await chosen(page),
+                [],
+                "the session sends the picks",
+            );
         },
         { fixture: "waterbend-mixed", at: bendAt + 1, ready: ".prompt-cost" },
     );
@@ -10307,16 +10356,17 @@ await check(
         assert.deepEqual(await lit(page), []);
         await autoPay.dispatchEvent("pointerdown", { pointerType: "touch" });
         await page.clock.runFor(500);
-        assert.deepEqual(await lit(page), ascending(suggested.taps));
+        assert.deepEqual(await lit(page), ascending(suggestedTaps));
         await autoPay.dispatchEvent("pointerup", { pointerType: "touch" });
         await autoPay.dispatchEvent("click", { detail: 1 });
         assert.deepEqual(await lit(page), []);
-        assert.deepEqual(await chosen(page), []);
+        assert.deepEqual(await clicksSent(page), []);
         await autoPay.tap();
-        assert.equal((await settled(page, 1)).length, 1);
+        assert.deepEqual(await clicked(page, 1), [AUTO]);
+        assert.deepEqual(await chosen(page), []);
     },
     {
-        fixture: "choice-scry",
+        fixture: "waterbend-auto",
         at: bendAt + 1,
         ready: ".phone-dock",
         phone: true,

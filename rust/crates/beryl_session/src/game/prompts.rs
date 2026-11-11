@@ -1,13 +1,12 @@
 //! The human's open prompt in a game: its state, which the session holds (plan K26), the
 //! clicks that change it, and the run of picks a click that answers it stands for.
 
-use beryl_engine::card::Purpose;
-use beryl_engine::{Choice, Decision, GameTable, Large, Layout, Relayout as _, State, view};
+use beryl_engine::{Choice, Decision, GameTable, Large, Layout, Relayout, State, view};
 
-use super::{Answer, At, Boards, Game, Open};
+use super::{Answer, At, Boards, Game, Open, on_board};
+use crate::SessionError;
 use crate::prompt::{ClickReply, ClickRequest, Clicked, Held, Run};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, Status};
-use crate::{SessionError, ipc};
 
 /// Makes the state of the prompt of `view`'s open decision, if it has none yet and the
 /// session holds its shape's, and writes the state as it stands into the view: a view drawn
@@ -57,7 +56,15 @@ impl Game {
                 open: revision,
             });
         }
-        let clicked = held.click(request.click);
+        // The game as it is played on from, at the decision the prompt is open for.
+        let asked = match &at {
+            Open::Decision(d) => Some(d),
+            Open::Halt => None,
+        };
+        let clicked = on_board!(&self.board, b => {
+            let d = asked.map(Relayout::relayout);
+            held.click(&b.state, &self.table, d.as_ref(), request.click)
+        });
         // The prompt as the click left it: what it was, unless the click changed it.
         let prompt = Box::new(held.view().clone());
         Ok(match clicked {
@@ -127,27 +134,5 @@ impl Game {
         let started = self.start_passing();
         debug_assert!(started, "a pass on is checked against the open decision");
         self.choose(answer);
-    }
-
-    /// Previews the human's selected waterbenders on a copy, without advancing the game.
-    pub fn preview_waterbend(
-        &self,
-        request: &ipc::WaterbendRequest,
-    ) -> Result<Option<ipc::WaterbendPreview>, SessionError> {
-        self.answer(request.decision, CandidateIndex(0))?;
-        let At::Human(_, Open::Decision(d)) = &self.at else {
-            return Err(SessionError::NotDeciding);
-        };
-        if d.prompt.purpose != Purpose::Waterbend {
-            return Ok(None);
-        }
-        Ok(match &self.board {
-            Boards::Small(b) => {
-                crate::preview::waterbend(&b.state, &self.table, &d.relayout(), &request.selected)
-            }
-            Boards::Large(b) => {
-                crate::preview::waterbend(&b.state, &self.table, &d.relayout(), &request.selected)
-            }
-        })
     }
 }

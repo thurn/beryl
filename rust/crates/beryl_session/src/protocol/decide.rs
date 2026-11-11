@@ -43,7 +43,6 @@ pub(super) fn decision_view<L: Layout>(
         _ => None,
     };
     DecisionView {
-        waterbend: None,
         id,
         kind: d.kind.into(),
         candidates,
@@ -98,7 +97,6 @@ pub(super) fn halt_view<L: Layout>(
     stops: StopsSetting,
 ) -> DecisionView {
     DecisionView {
-        waterbend: None,
         id,
         kind: Kind::Priority,
         candidates: vec![CandidateView {
