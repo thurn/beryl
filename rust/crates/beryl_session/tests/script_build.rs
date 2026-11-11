@@ -661,7 +661,10 @@ fn an_opening_hand_appears_and_a_mulligans_goes_back_first() {
         "& appear #39 (Counterspell) library>hand draw",
         "& set you library 33",
     ];
-    assert_eq!(scripts.last().unwrap().as_deref(), Some(text(&again).as_str()));
+    assert_eq!(
+        scripts.last().unwrap().as_deref(),
+        Some(text(&again).as_str())
+    );
 }
 
 /// The views of a seeded game of ten of the human's answers, each the first candidate, with
