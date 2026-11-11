@@ -16,14 +16,14 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Cost, Face, Keywords, ManaColor, ManaCost, Replacement, Timing, Types,
+    Ability, AbilityKind, Face, Keywords, ManaColor, ManaCost, Replacement, Timing, Types,
 };
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone};
-use crate::table::GameTable;
+use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
@@ -225,11 +225,6 @@ pub(crate) struct Sources<L: Layout = Small> {
     classes: L::Queue<Class<L>, CLASSES>,
 }
 
-/// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
-fn is_simple(a: &Ability) -> bool {
-    a.kind == AbilityKind::Mana && a.cost == Cost::TAP
-}
-
 /// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
 /// control" a kind of permanent needs one on the battlefield
 /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
@@ -242,73 +237,9 @@ fn allowed<L: Layout>(s: &State<L>, t: &GameTable, a: &Ability, player: Seat) ->
     })
 }
 
-/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
-/// as a Treasure's ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)):
-/// "{T}, Sacrifice this token: Add one mana of any color." Spending the permanent is a
-/// resource a plan consumes (§10): the solver taps such a source only when the cost needs it,
-/// or when sacrificing it keeps more later costs payable.
-fn is_sacrificed(a: &Ability) -> bool {
-    a.kind == AbilityKind::Mana
-        && a.cost
-            == Cost {
-                sacrifice_self: true,
-                ..Cost::TAP
-            }
-}
-
 /// The rank of every class a plan consumes, above any other source's: kinds count for at
 /// most five colors and {C}, two ranks each.
 const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
-
-/// What a face makes as a source, found once per game ([`GameTable::facts`]) for the
-/// many faces [`source`] reads: the cube's permanents are mostly not sources, or sources whose
-/// mana depends on nothing else.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ManaFace {
-    /// No mana ability the solver taps for: never a source.
-    Not,
-    /// Mana abilities the solver taps for, none limited to a kind of permanent you control:
-    /// the kinds they make, how much, and whether the face has another ability.
-    Plain { kinds: u8, amount: u8, other: bool },
-    /// Anything else, which [`source`] reads from the face.
-    Read,
-}
-
-impl ManaFace {
-    pub(crate) fn of(face: &Face) -> ManaFace {
-        let simple = || face.abilities.iter().filter(|a| is_simple(a));
-        if !face
-            .abilities
-            .iter()
-            .any(|a| is_simple(a) || is_sacrificed(a))
-        {
-            return ManaFace::Not;
-        }
-        if simple().next().is_none() || simple().any(|a| a.only_if_you_control.is_some()) {
-            return ManaFace::Read;
-        }
-        let kinds = simple().fold(0, |k, a| k | a.produces.colors);
-        let amount = simple().next_back().map_or(0, |a| a.produces.amount);
-        if kinds == 0 {
-            return ManaFace::Read;
-        }
-        ManaFace::Plain {
-            kinds,
-            amount,
-            other: has_other_ability(face),
-        }
-    }
-}
-
-/// Whether a face has an ability other than those the solver taps for, which tapping it for
-/// mana would cost. Abilities that work only from a hand, such as cycling, don't count.
-fn has_other_ability(face: &Face) -> bool {
-    face.abilities.iter().any(|a| {
-        matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
-            && !is_simple(a)
-            && !a.cost.discard_self
-    })
-}
 
 /// The permanents `player` controls, in battlefield order: read from their derived
 /// characteristics, which are at their places in the battlefield list.

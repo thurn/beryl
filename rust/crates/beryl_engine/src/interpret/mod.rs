@@ -34,7 +34,7 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: u8) -> Flow 
     match ability.body {
         Behavior::Custom(custom) => {
             let bodies = custom.get::<Bodies>().expect("a body made by bodies!");
-            L::body(bodies)(ctx)
+            bodies.of::<L>()(ctx)
         }
         Behavior::Data(effect) => data(ctx, effect, legal),
     }

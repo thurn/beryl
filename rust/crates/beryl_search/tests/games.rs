@@ -68,7 +68,7 @@ fn fuzz<L: Layout>(
     play(t, &mut s, &mut Scratch::new(), &mut agents(seed), |s, d| {
         *kinds.entry(format!("{:?}", d.kind)).or_default() += 1;
         assert!(!d.is_empty(), "seed {seed}: {d:?}");
-        if let Err(v) = s.check_references(t) {
+        if let Err(v) = beryl_engine::check_references(s, t) {
             panic!("a reference: {v:?}");
         }
     })

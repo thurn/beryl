@@ -1,12 +1,13 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{
-    AbilityKind, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, Rule, Trigger,
+use beryl_card::{
+    Ability, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, Rule,
+    Trigger,
 };
+
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
-use crate::mana::ManaFace;
 use crate::state::DECK_SLOTS;
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
@@ -24,6 +25,7 @@ impl CardTable {
         self.cards.iter().copied().find(|c| c.name == name)
     }
 
+    #[inline]
     pub fn cards(&self) -> &'static [&'static CardDef] {
         self.cards
     }
@@ -62,7 +64,7 @@ pub struct GameTable {
     /// The game index of [`FACE_DOWN_COPY`].
     face_down_copy: CardIx,
     /// Whether a card of the game has an activated ability that may do nothing
-    /// ([`crate::card::Needs`]), so that no other game pays to check.
+    /// ([`beryl_card::Needs`]), so that no other game pays to check.
     needy: bool,
 }
 
@@ -145,6 +147,7 @@ impl GameTable {
     }
 
     /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies.
+    #[inline]
     pub fn face_down_copy(&self) -> CardIx {
         self.face_down_copy
     }
@@ -158,13 +161,15 @@ impl GameTable {
     }
 
     /// The event kinds the triggered abilities of the card at `card` listen to.
-    pub(crate) fn listens(&self, card: CardIx) -> u16 {
+    #[inline]
+    pub fn listens(&self, card: CardIx) -> u16 {
         self.listens[card.index()]
     }
 
     /// The facts of the face `face` of the card at `card`: found once per game for its first
     /// two faces, and read from the face itself for any other, or face down.
-    pub(crate) fn facts(&self, card: CardIx, face: FaceIx) -> FaceFacts {
+    #[inline]
+    pub fn facts(&self, card: CardIx, face: FaceIx) -> FaceFacts {
         match self.faces[card.index()].get(usize::from(face.get())) {
             Some(&facts) => facts,
             None => FaceFacts::of(self.def(card).face(face)),
@@ -173,39 +178,47 @@ impl GameTable {
 
     /// Whether some face of the card at `card` has a static ability with `rule`: so whether it
     /// can, whichever face is up.
-    pub(crate) fn may_have_rule(&self, card: CardIx, rule: Rule) -> bool {
+    #[inline]
+    pub fn may_have_rule(&self, card: CardIx, rule: Rule) -> bool {
         self.rules[card.index()] & rule_bit(rule) != 0
     }
 
     /// The event kinds any card of this game listens to.
-    pub(crate) fn listens_any(&self) -> u16 {
+    #[inline]
+    pub fn listens_any(&self) -> u16 {
         self.listens_any
     }
 
     /// Whether a card of the game has an activated ability that may do nothing.
-    pub(crate) fn needy(&self) -> bool {
+    #[inline]
+    pub fn needy(&self) -> bool {
         self.needy
     }
 
+    #[inline]
     pub fn cards(&self) -> &'static CardTable {
         self.cards
     }
 
     /// The definition behind a game index.
+    #[inline]
     pub fn def(&self, card: CardIx) -> &'static CardDef {
         self.defs[card.index()]
     }
 
     /// How many distinct cards the game has.
+    #[inline]
     pub fn len(&self) -> usize {
         self.defs.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.defs.is_empty()
     }
 
     /// A player's deck as game indices, in decklist order.
+    #[inline]
     pub fn deck(&self, player: Seat) -> &[CardIx] {
         &self.decks[player.index()]
     }
@@ -214,11 +227,11 @@ impl GameTable {
 /// What the engine's scans over every permanent read of a face, found once per game rather
 /// than from its abilities each time.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct FaceFacts {
+pub struct FaceFacts {
     /// What it makes as a mana source.
-    pub(crate) mana: ManaFace,
+    pub mana: ManaFace,
     /// A bit per index of its activated abilities.
-    pub(crate) activated: u64,
+    pub activated: u64,
     /// A bit per [`Rule`] of its static abilities.
     rules: u8,
 }
@@ -231,6 +244,10 @@ impl FaceFacts {
         rules: 0,
     };
 
+    /// Out of line: [`GameTable::facts`] is inlined into the engine's scans of every
+    /// permanent, and this is its rare path (a face past the second, or face down). Inlined
+    /// there it costs the rollout benchmark 1.6% of its instructions.
+    #[inline(never)]
     fn of(face: &Face) -> FaceFacts {
         assert!(face.abilities.len() <= 64, "a face of at most 64 abilities");
         let mut facts = FaceFacts {
@@ -249,11 +266,13 @@ impl FaceFacts {
     }
 
     /// Whether one of its static abilities has `rule`.
-    pub(crate) fn has_rule(self, rule: Rule) -> bool {
+    #[inline]
+    pub fn has_rule(self, rule: Rule) -> bool {
         self.rules & rule_bit(rule) != 0
     }
 }
 
+#[inline]
 fn rule_bit(rule: Rule) -> u8 {
     1 << (rule as u8)
 }
@@ -278,4 +297,75 @@ fn listens(def: &CardDef) -> u16 {
         }
     }
     mask
+}
+
+/// What a face makes as a source, found once per game ([`GameTable::facts`]) for the
+/// many faces the mana solver reads: the cube's permanents are mostly not sources, or sources whose
+/// mana depends on nothing else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ManaFace {
+    /// No mana ability the solver taps for: never a source.
+    Not,
+    /// Mana abilities the solver taps for, none limited to a kind of permanent you control:
+    /// the kinds they make, how much, and whether the face has another ability.
+    Plain { kinds: u8, amount: u8, other: bool },
+    /// Anything else, which the solver reads from the face.
+    Read,
+}
+
+impl ManaFace {
+    pub fn of(face: &Face) -> ManaFace {
+        let simple = || face.abilities.iter().filter(|a| is_simple(a));
+        if !face
+            .abilities
+            .iter()
+            .any(|a| is_simple(a) || is_sacrificed(a))
+        {
+            return ManaFace::Not;
+        }
+        if simple().next().is_none() || simple().any(|a| a.only_if_you_control.is_some()) {
+            return ManaFace::Read;
+        }
+        let kinds = simple().fold(0, |k, a| k | a.produces.colors);
+        let amount = simple().next_back().map_or(0, |a| a.produces.amount);
+        if kinds == 0 {
+            return ManaFace::Read;
+        }
+        ManaFace::Plain {
+            kinds,
+            amount,
+            other: has_other_ability(face),
+        }
+    }
+}
+
+/// Whether a face has an ability other than those the solver taps for, which tapping it for
+/// mana would cost. Abilities that work only from a hand, such as cycling, don't count.
+pub fn has_other_ability(face: &Face) -> bool {
+    face.abilities.iter().any(|a| {
+        matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
+            && !is_simple(a)
+            && !a.cost.discard_self
+    })
+}
+
+/// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
+#[inline]
+pub fn is_simple(a: &Ability) -> bool {
+    a.kind == AbilityKind::Mana && a.cost == Cost::TAP
+}
+
+/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
+/// as a Treasure's ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)):
+/// "{T}, Sacrifice this token: Add one mana of any color." Spending the permanent is a
+/// resource a plan consumes (§10): the solver taps such a source only when the cost needs it,
+/// or when sacrificing it keeps more later costs payable.
+#[inline]
+pub fn is_sacrificed(a: &Ability) -> bool {
+    a.kind == AbilityKind::Mana
+        && a.cost
+            == Cost {
+                sacrifice_self: true,
+                ..Cost::TAP
+            }
 }

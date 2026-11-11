@@ -2,7 +2,6 @@
 //! (architecture §13, decision D9).
 
 use crate::bitboard::Bitboard;
-use crate::card::FaceIx;
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat};
@@ -13,14 +12,15 @@ use crate::state::{
     State, Turn, Zone, deck_slot,
 };
 use crate::table::GameTable;
+use beryl_card::FaceIx;
 
 /// The state as one player sees it. Slots are public handles; what is hidden is which card
 /// sits behind a slot the viewer has not seen. Agents, rollout policies and the UI read the
 /// game only through this.
 ///
 /// While a resolution is paused (§7.3) the position shown is not the committed one: the body
-/// has run in scratch up to its question ([`crate::view`]). The view keeps the committed
-/// state as its root, the position search plays on from; [`crate::observe`] builds such a
+/// has run in scratch up to its question (`beryl_engine::view`). The view keeps the committed
+/// state as its root, the position search plays on from; `beryl_engine::observe` builds such a
 /// view.
 #[derive(Clone, Copy)]
 pub struct Observation<'a, L: Layout = Small> {
@@ -41,7 +41,7 @@ impl<'a, L: Layout> Observation<'a, L> {
 
     /// The view of `shown`, the position a paused resolution's question is asked in, whose
     /// committed state is `root`.
-    pub(crate) fn paused(shown: &'a State<L>, root: &'a State<L>, viewer: Seat) -> Self {
+    pub fn paused(shown: &'a State<L>, root: &'a State<L>, viewer: Seat) -> Self {
         Self {
             state: shown,
             root,
@@ -50,7 +50,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// The position shown, for the engine's own reads of public facts about it.
-    pub(crate) fn shown(&self) -> &'a State<L> {
+    pub fn shown(&self) -> &'a State<L> {
         self.state
     }
 
@@ -153,7 +153,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// The triggered abilities waiting to be put on the stack. Each names its public source;
-    /// [`crate::DecisionKind::TriggerOrder`] options index this list.
+    /// [`crate::decision::DecisionKind::TriggerOrder`] options index this list.
     pub fn triggers(&self) -> &'a [PendingTrigger<L>] {
         self.state.triggers()
     }

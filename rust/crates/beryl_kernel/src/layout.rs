@@ -10,13 +10,10 @@ use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
 use crate::bitboard::Bitboard;
-use crate::card::Flow;
-use crate::effect::EffectCtx;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{LargeSlot, Slot, SlotId};
 use crate::relayout::Relayout;
-use crate::state::{PendingTrigger, State, TOKEN_SLOTS};
-use crate::table::GameTable;
+use crate::state::{State, TOKEN_SLOTS};
 
 /// What a layout's arrays and queues hold: in [`Small`], always `Copy` values; in [`Large`],
 /// values that may hold queues of their own.
@@ -75,55 +72,12 @@ pub trait Table<T: Item>:
     }
 }
 
-/// The body of an ability, run on a state of layout `L`.
-pub type Body<L = Small> = for<'a, 'b> fn(&'b mut EffectCtx<'a, L>) -> Flow;
-
-/// A triggered ability's intervening "if" clause, read on a state of layout `L`.
-pub type Condition<L = Small> = fn(&State<L>, &GameTable, &PendingTrigger<L>) -> bool;
-
-/// An ability's Rust body as each layout runs it: one generic function, instantiated once per
-/// layout, since a card's static data can hold only concrete function pointers. Card files
-/// write [`bodies!`](crate::bodies) around the generic function, which makes the ability's
-/// [`Behavior::Custom`](crate::card::Behavior::Custom) of them.
-#[derive(Clone, Copy, Debug)]
-pub struct Bodies {
-    pub small: Body<Small>,
-    pub large: Body<Large>,
-}
-
-/// An intervening "if" clause written in Rust, as each layout reads it, as [`Bodies`]; card
-/// files write [`conditions!`](crate::conditions), which makes the ability's
-/// [`Condition::Custom`](beryl_card::Condition::Custom) of them.
-#[derive(Clone, Copy, Debug)]
-pub struct Conditions {
-    pub small: Condition<Small>,
-    pub large: Condition<Large>,
-}
-
-/// The [`Behavior`](crate::card::Behavior) of a Rust function generic over the layout: its
-/// [`Bodies`], which the vocabulary carries without reading
-/// ([`Custom`](crate::card::Custom)).
-#[macro_export]
-macro_rules! bodies {
-    ($body:expr) => {
-        $crate::card::Behavior::Custom($crate::card::Custom::new(&$crate::layout::Bodies {
-            small: $body,
-            large: $body,
-        }))
-    };
-}
-
-/// The [`Condition`](beryl_card::Condition) of a Rust function generic over the layout: its
-/// [`Conditions`], as [`bodies!`](crate::bodies). A card definition holds a condition by
-/// reference, so this is one, for a `static` or `const` to hold.
-#[macro_export]
-macro_rules! conditions {
-    ($condition:expr) => {
-        &$crate::card::Condition::Custom($crate::card::Custom::new(&$crate::layout::Conditions {
-            small: $condition,
-            large: $condition,
-        }))
-    };
+/// A family of types with one member for each layout, such as "a function over a state of
+/// this layout". Static data that holds a value per layout, since it can hold only concrete
+/// types, names its family so [`Layout::of`] can hand a generic caller its own.
+pub trait PerLayout {
+    /// The family's member for layout `L`.
+    type Of<L: Layout>;
 }
 
 /// `i` as the layout's [`Layout::Index`].
@@ -132,7 +86,7 @@ macro_rules! conditions {
 ///
 /// If the layout's index cannot name `i`: never for an index into one of its queues.
 #[inline]
-pub(crate) fn index<L: Layout>(i: usize) -> L::Index {
+pub fn index<L: Layout>(i: usize) -> L::Index {
     L::Index::try_from(i).unwrap_or_else(|_| panic!("index {i} past the layout's"))
 }
 
@@ -142,7 +96,7 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// The object slots, and so how many objects a game holds.
     type Slot: SlotId;
     /// An index into a queue or a decision's options, as the state stores it: in a choice
-    /// record or an [`Opt::Trigger`](crate::Opt::Trigger).
+    /// record or an [`Opt::Trigger`](crate::decision::Opt::Trigger).
     type Index: Item + Copy + Default + Ord + Into<usize> + Into<u16> + TryFrom<usize>;
     type Queue<T: Item + Default, const N: usize>: Queue<T>;
     type Table<T: Item, const N: usize>: Table<T>;
@@ -153,13 +107,9 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// A copy of `state`: for [`Small`], one `memcpy`.
     fn clone_state(state: &State<Self>) -> State<Self>;
 
-    /// The instance of a Rust body for states of this layout. Card definitions are static
-    /// data, so each layout reads its own instance from them.
-    fn body(bodies: &Bodies) -> Body<Self>;
-
-    /// The instance of an intervening "if" clause for states of this layout, as
-    /// [`Self::body`].
-    fn condition(conditions: &Conditions) -> Condition<Self>;
+    /// Of a value written once for each layout, this layout's: how code generic over the
+    /// layout reads static data, which holds one concrete value per layout.
+    fn of<F: PerLayout>(small: F::Of<Small>, large: F::Of<Large>) -> F::Of<Self>;
 }
 
 /// Today's layout: [`Fixed`] queues and arrays, so a [`State<Small>`] is `Copy` and at most
@@ -182,13 +132,8 @@ impl Layout for Small {
     }
 
     #[inline]
-    fn body(bodies: &Bodies) -> Body<Self> {
-        bodies.small
-    }
-
-    #[inline]
-    fn condition(conditions: &Conditions) -> Condition<Self> {
-        conditions.small
+    fn of<F: PerLayout>(small: F::Of<Small>, _large: F::Of<Large>) -> F::Of<Small> {
+        small
     }
 }
 
@@ -261,13 +206,8 @@ impl Layout for Large {
     }
 
     #[inline]
-    fn body(bodies: &Bodies) -> Body<Self> {
-        bodies.large
-    }
-
-    #[inline]
-    fn condition(conditions: &Conditions) -> Condition<Self> {
-        conditions.large
+    fn of<F: PerLayout>(_small: F::Of<Small>, large: F::Of<Large>) -> F::Of<Large> {
+        large
     }
 }
 

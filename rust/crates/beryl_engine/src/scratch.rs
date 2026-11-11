@@ -6,6 +6,7 @@ use crate::decision::{Outcome, StallReason};
 use crate::event::Sink;
 use crate::layout::{Layout, Small};
 use crate::profile::Profile;
+use crate::reference::check_references;
 use crate::state::State;
 #[cfg(debug_assertions)]
 use crate::table::GameTable;
@@ -140,7 +141,7 @@ pub(crate) fn assert_sound<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scrat
     }
     x.checks = x.checks.wrapping_add(1);
     if x.checks.is_multiple_of(REFERENCES_EVERY)
-        && let Err(v) = s.check_references(t)
+        && let Err(v) = check_references(s, t)
     {
         panic!("the engine disagrees with a reference: {v:?}");
     }

@@ -2,11 +2,11 @@
 //! (§12.2).
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::state::{State, Zone};
+use beryl_card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
 /// value with its candidates inline, so it can live in the state and be copied with it.
@@ -355,7 +355,7 @@ pub enum Outcome {
 }
 
 /// Why a player can't cast a card from their hand or play it as a land at priority now
-/// ([`crate::refusal`]): the first rule its most nearly legal way of playing it breaks.
+/// (`beryl_engine::refusal`): the first rule its most nearly legal way of playing it breaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Refusal<L: Layout = Small> {
     /// Only at sorcery speed, which it is not: an opponent's permanent `by` limits the player

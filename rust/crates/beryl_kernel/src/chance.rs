@@ -133,7 +133,7 @@ fn unknown<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
 /// zone or a hand. Only a card no player knows yet is settled, and a token never is: what it
 /// is was never hidden.
 #[inline]
-pub(crate) fn settle<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, slot: L::Slot) {
+pub fn settle<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, slot: L::Slot) {
     settle_but(s, sink, slot, Bitboard::EMPTY);
 }
 
@@ -208,11 +208,7 @@ fn partner<L: Layout>(
 /// [`settle`] for each card in `cards`, those in a library from its top down and then the
 /// rest by slot: an order the game's randomness does not choose, as it chooses which slots
 /// are where in a library.
-pub(crate) fn settle_all<L: Layout>(
-    s: &mut State<L>,
-    sink: &mut Sink<L>,
-    cards: Bitboard<L::Slot>,
-) {
+pub fn settle_all<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, cards: Bitboard<L::Slot>) {
     if sink.chance.is_none() {
         return;
     }
@@ -234,7 +230,7 @@ pub(crate) fn settle_all<L: Layout>(
 
 /// Flips a coin for `player` and returns whether they won the flip: one draw from the game's
 /// randomness, or while replaying, the recorded result.
-pub(crate) fn flip<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, player: Seat) -> bool {
+pub fn flip<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, player: Seat) -> bool {
     let drawn = s.rng.other.below(2) == 0;
     let Some(chance) = sink.chance.as_deref_mut() else {
         return drawn;
@@ -257,6 +253,6 @@ pub(crate) fn flip<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, player: Seat
 
 /// Whether the sink holds a chance that is replaying a record, which may have bound
 /// identities.
-pub(crate) fn replaying<L: Layout>(sink: &Sink<L>) -> bool {
+pub fn replaying<L: Layout>(sink: &Sink<L>) -> bool {
     sink.chance.as_deref().is_some_and(Chance::replaying)
 }

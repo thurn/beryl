@@ -1,0 +1,13 @@
+[package]
+name = "beryl_kernel"
+version = "0.1.0"
+description = "The kernel: the game state, its storage layouts, and the only code that writes it"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_card = { path = "../beryl_card" }

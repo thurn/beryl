@@ -169,8 +169,7 @@ impl Runner {
         });
         loop {
             let step = next(&mut self.s, &self.t, &mut self.x, &mut Replay);
-            self.s
-                .check_references(&self.t)
+            beryl_engine::check_references(&self.s, &self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
             match step {
                 // A question with one answer, which the exact profile answers silently.

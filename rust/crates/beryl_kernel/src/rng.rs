@@ -6,10 +6,12 @@
 pub struct SplitMix64(u64);
 
 impl SplitMix64 {
+    #[inline]
     pub fn new(seed: u64) -> Self {
         Self(seed)
     }
 
+    #[inline]
     pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
@@ -19,11 +21,13 @@ impl SplitMix64 {
     }
 
     /// A value in `0..n`, by multiply-shift (biased by at most `n / 2^64`).
+    #[inline]
     pub fn below(&mut self, n: u64) -> u64 {
         ((u128::from(self.next_u64()) * u128::from(n)) >> 64) as u64
     }
 
     /// Shuffles `items` uniformly (Fisher-Yates).
+    #[inline]
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {
             let j = self.below(i as u64 + 1) as usize;
@@ -43,6 +47,7 @@ pub struct Rng {
 }
 
 impl Rng {
+    #[inline]
     pub fn new(seed: u64) -> Self {
         let mut seeder = SplitMix64::new(seed);
         Self {

@@ -12,7 +12,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
-use crate::profile::Stops;
+use crate::profile::{self, Stops};
 #[cfg(debug_assertions)]
 use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
@@ -194,8 +194,8 @@ fn advance<const STEPS: bool, L: Layout>(
         let priority = d.kind == DecisionKind::Priority;
         let forced = (d.len() == 1 || only_idle(s, t, &d))
             && (priority || s.profile.stops != Stops::Forced)
-            && !s.profile.asks_lone(s, &d);
-        let silent = (forced || (priority && !s.profile.stops_for(s, d.player)))
+            && !profile::asks_lone(s.profile, s, &d);
+        let silent = (forced || (priority && !profile::stops_for(s.profile, s, d.player)))
             && !(priority && s.profile.asks_pass(s.turn, d.player));
         if silent {
             x.counts.silent += 1;
@@ -229,7 +229,7 @@ fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
 fn passes_silently<L: Layout>(s: &State<L>) -> bool {
     s.pending == Pending::None
         && s.triggers.is_empty()
-        && !s.profile.stops_for(s, s.turn.priority)
+        && !profile::stops_for(s.profile, s, s.turn.priority)
         && !s.profile.breaks_at(s.turn)
 }
 

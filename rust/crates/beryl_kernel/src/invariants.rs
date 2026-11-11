@@ -2,11 +2,11 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
-use crate::card::FaceIx;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::state::{DECK_SLOTS, Object, ObjectFlags, Pending, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
+use beryl_card::FaceIx;
 
 /// Which invariant failed, and the slot or player it failed for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

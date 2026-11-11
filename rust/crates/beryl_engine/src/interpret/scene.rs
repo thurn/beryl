@@ -427,7 +427,7 @@ impl<L: Layout> Scene<'_, L> {
                 let conditions = custom
                     .get::<Conditions>()
                     .expect("a condition made by conditions!");
-                L::condition(conditions)(self.s, self.t, self.subject)
+                conditions.of::<L>()(self.s, self.t, self.subject)
             }
         }
     }

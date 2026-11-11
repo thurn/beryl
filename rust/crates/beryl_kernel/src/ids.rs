@@ -25,6 +25,7 @@ pub trait SlotId:
     fn from_index(index: usize) -> Self;
 
     /// The slot at `index`, if there is one.
+    #[inline]
     fn try_from_index(index: usize) -> Option<Self> {
         (index < Self::COUNT).then(|| Self::from_index(index))
     }
@@ -32,6 +33,7 @@ pub trait SlotId:
     fn index(self) -> usize;
 
     /// The slot's number, as the UI's protocol names it.
+    #[inline]
     fn num(self) -> u16 {
         u16::try_from(self.index()).expect("slot numbers fit 16 bits")
     }
@@ -56,6 +58,7 @@ impl Slot {
     /// # Panics
     ///
     /// If `index` is 255, which is no slot.
+    #[inline]
     pub const fn new(index: u8) -> Slot {
         match NonZeroU8::new(index.wrapping_add(1)) {
             Some(n) => Slot(n),
@@ -64,6 +67,7 @@ impl Slot {
     }
 
     /// The slot at `index`, if there is one.
+    #[inline]
     pub const fn try_new(index: u8) -> Option<Slot> {
         match NonZeroU8::new(index.wrapping_add(1)) {
             Some(n) => Some(Slot(n)),
@@ -71,10 +75,12 @@ impl Slot {
         }
     }
 
+    #[inline]
     pub const fn get(self) -> u8 {
         self.0.get() - 1
     }
 
+    #[inline]
     pub const fn index(self) -> usize {
         self.get() as usize
     }
@@ -107,6 +113,7 @@ impl SlotId for Slot {
 }
 
 impl From<Slot> for LargeSlot {
+    #[inline]
     fn from(slot: Slot) -> LargeSlot {
         LargeSlot::from_index(slot.index())
     }
@@ -136,6 +143,7 @@ impl SlotId for LargeSlot {
 
 /// Slot 0, as [`Slot`]'s default.
 impl Default for LargeSlot {
+    #[inline]
     fn default() -> LargeSlot {
         LargeSlot::from_index(0)
     }
@@ -155,6 +163,7 @@ impl fmt::Display for LargeSlot {
 
 /// Slot 0: filler for fixed-capacity arrays, never a meaning of its own.
 impl Default for Slot {
+    #[inline]
     fn default() -> Slot {
         Slot::new(0)
     }
@@ -187,6 +196,7 @@ impl CardIx {
     /// # Panics
     ///
     /// If `index` is 255, beyond any table.
+    #[inline]
     pub const fn new(index: u8) -> CardIx {
         match NonZeroU8::new(index.wrapping_add(1)) {
             Some(n) => CardIx(n),
@@ -195,6 +205,7 @@ impl CardIx {
     }
 
     /// The game index `index`, if there is one.
+    #[inline]
     pub const fn try_new(index: u8) -> Option<CardIx> {
         match NonZeroU8::new(index.wrapping_add(1)) {
             Some(n) => Some(CardIx(n)),
@@ -202,10 +213,12 @@ impl CardIx {
         }
     }
 
+    #[inline]
     pub const fn get(self) -> u8 {
         self.0.get() - 1
     }
 
+    #[inline]
     pub const fn index(self) -> usize {
         self.get() as usize
     }
@@ -213,6 +226,7 @@ impl CardIx {
 
 /// Index 0: filler for fixed-capacity arrays and unused slots, never a meaning of its own.
 impl Default for CardIx {
+    #[inline]
     fn default() -> CardIx {
         CardIx::new(0)
     }

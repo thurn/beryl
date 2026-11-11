@@ -4,16 +4,18 @@
 //! anything; the moves still go through the zone chokepoints, so identities, knowledge and
 //! zone membership stay in agreement.
 
-use crate::card::{FaceIx, Trigger};
+use beryl_card::{FaceIx, Trigger};
+
 use crate::event::Sink;
-use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Queue};
 use crate::state::{
-    CounterKind, Duration, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone, token_slots,
+    CounterKind, DECK_SLOTS, Duration, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone,
+    token_slots,
 };
 use crate::table::GameTable;
-use crate::{trigger, zone};
+use crate::zone;
 
 impl<L: Layout> State<L> {
     /// Skips the start of the game and puts it at `step` of turn `turn`, with `active` the
@@ -112,10 +114,8 @@ impl<L: Layout> State<L> {
             return Some(format!("a delayed trigger of {}", t.def(d.card).name));
         }
         if let Some(d) = self.triggers.as_slice().iter().find(|d| {
-            matches!(
-                trigger::ability(t, d.card, d.face, d.ability).trigger,
-                Trigger::Delayed(_)
-            )
+            let ability = &t.def(d.card).face(d.face).abilities[usize::from(d.ability)];
+            matches!(ability.trigger, Trigger::Delayed(_))
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.card).name));
         }
@@ -326,6 +326,65 @@ impl<L: Layout> State<L> {
         }
         for (i, &slot) in top_first.iter().rev().enumerate() {
             library.as_mut_slice()[i] = slot;
+        }
+    }
+
+    /// Settles who won the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
+    /// as a record says, rather than as the game's randomness drew it: "the players determine
+    /// which one of them will choose who takes the first turn". Only while the winner's choice
+    /// to play or draw is open.
+    ///
+    /// # Panics
+    ///
+    /// If the choice to play or draw is not open.
+    pub fn set_flip_winner(&mut self, chooser: Seat) {
+        assert!(
+            matches!(self.pending, Pending::PlayOrDraw { .. }),
+            "the choice to play or draw is open"
+        );
+        self.pending = Pending::PlayOrDraw { chooser };
+    }
+}
+
+impl State {
+    /// Renumbers each library's slots last first ([`State::renumber_deck_slots`]). For tests.
+    ///
+    /// # Panics
+    ///
+    /// If the game has begun: the choice to play or draw is not open.
+    #[doc(hidden)]
+    pub fn reverse_deck_slots(&mut self) {
+        self.renumber_deck_slots(<[Slot]>::reverse);
+    }
+
+    /// Renumbers each library's slots before the game begins: `order` rearranges the slots of
+    /// a library, and the card at each place in it moves to the slot now there. Each card
+    /// stays where [`State::new`] put it in its library, and the random streams are untouched,
+    /// so the game plays out the same under other slot numbers. Slot numbers are public
+    /// handles that say nothing about a card (architecture §13), so a save must replay the
+    /// same either way (§14), and so must a scenario. For tests.
+    ///
+    /// # Panics
+    ///
+    /// If the game has begun: the choice to play or draw is not open.
+    #[doc(hidden)]
+    pub fn renumber_deck_slots(&mut self, mut order: impl FnMut(&mut [Slot])) {
+        assert!(
+            matches!(self.pending, Pending::PlayOrDraw { .. }) && self.turn.number == 0,
+            "the game has not begun"
+        );
+        for player in Seat::BOTH {
+            let p = player.index();
+            let mut slots = self.zones.library[p];
+            let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
+            for &slot in &slots {
+                let _ = cards.push(self.object(slot).card);
+            }
+            order(slots.as_mut_slice());
+            for (&slot, &card) in slots.iter().zip(cards.iter()) {
+                self.object_mut(slot).card = card;
+            }
+            self.zones.library[p] = slots;
         }
     }
 }

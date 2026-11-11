@@ -47,107 +47,105 @@ const PROBES: &[ManaCost] = &[
     ManaCost::new(2, [1, 1, 0, 0, 0, 0]),
 ];
 
-impl<L: Layout> State<L> {
-    /// Checks the engine's fast paths against their reference implementations. It holds
-    /// wherever [`State::check_invariants`] does, and checks nothing once the game is over.
-    pub fn check_references(&self, t: &GameTable) -> Result<(), Violation> {
-        if self.outcome.is_some() || self.flags.derived_dirty {
-            return Ok(());
-        }
-        self.check_layers(t)?;
-        for p in Seat::BOTH {
-            self.check_payments(t, p)?;
-        }
-        Ok(())
+/// Checks the engine's fast paths against their reference implementations. It holds
+/// wherever [`State::check_invariants`] does, and checks nothing once the game is over.
+pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
+    if s.outcome.is_some() || s.flags.derived_dirty {
+        return Ok(());
     }
+    check_layers(s, t)?;
+    for p in Seat::BOTH {
+        check_payments(s, t, p)?;
+    }
+    Ok(())
+}
 
-    /// The layer results, the listeners and the knowledge the layers give, against a
-    /// recompute from base ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
-    /// "The values of an object's characteristics are determined by starting with the actual
-    /// object ... Then all applicable continuous effects are applied in a series of layers".
-    /// A chokepoint that changes a layer input without marking the results dirty leaves them
-    /// stale, which this sees and the dirty flag cannot.
-    fn check_layers(&self, t: &GameTable) -> Result<(), Violation> {
-        let mut fresh = self.clone();
-        fresh.flags.derived_dirty = true;
-        layers::refresh(&mut fresh, t, &mut Sink::default());
-        let n = self.battlefield.len();
-        for i in 0..n {
-            check(
-                fresh.derived[i] == self.derived[i],
-                "layer results differ from a fresh recompute",
-                Some(At::Slot(self.battlefield.as_slice()[i].index())),
-            )?;
-        }
+/// The layer results, the listeners and the knowledge the layers give, against a
+/// recompute from base ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
+/// "The values of an object's characteristics are determined by starting with the actual
+/// object ... Then all applicable continuous effects are applied in a series of layers".
+/// A chokepoint that changes a layer input without marking the results dirty leaves them
+/// stale, which this sees and the dirty flag cannot.
+fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
+    let mut fresh = s.clone();
+    fresh.flags.derived_dirty = true;
+    layers::refresh(&mut fresh, t, &mut Sink::default());
+    let n = s.battlefield.len();
+    for i in 0..n {
         check(
-            fresh.listening == self.listening,
-            "the trigger listeners differ from a fresh recompute",
-            None,
+            fresh.derived[i] == s.derived[i],
+            "layer results differ from a fresh recompute",
+            Some(At::Slot(s.battlefield.as_slice()[i].index())),
+        )?;
+    }
+    check(
+        fresh.listening == s.listening,
+        "the trigger listeners differ from a fresh recompute",
+        None,
+    )?;
+    check(
+        fresh.knowledge == s.knowledge,
+        "knowledge differs from a fresh layer recompute",
+        None,
+    )
+}
+
+/// Whether `player` can pay each cost of the cards they hold and control, and some
+/// probes, as the prefilter, the cached funds and the solver say, against
+/// [`reference_pays`].
+fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Result<(), Violation> {
+    let Some(units) = reference_units(s, t, player) else {
+        return Ok(());
+    };
+    let at = Some(At::Player(player));
+    let hand = s
+        .zone(player, Zone::Hand)
+        .iter()
+        .flat_map(|slot| t.def(s.card(slot)).faces.iter().map(|f| f.cost));
+    let abilities = s
+        .battlefield()
+        .iter()
+        .filter(|&&slot| s.controller(slot) == player)
+        .flat_map(|&slot| {
+            face(s, t, slot)
+                .abilities
+                .iter()
+                .filter(|a| a.kind == AbilityKind::Activated)
+                .map(|a| a.cost.mana)
+        });
+    let Ok(funds) = Funds::of(s, t, player) else {
+        return Ok(());
+    };
+    for cost in PROBES.iter().copied().chain(hand).chain(abilities) {
+        // X is announced before payment, as 0 here.
+        let cost = ManaCost { x: 0, ..cost };
+        let expected = reference_pays(units.as_slice(), cost);
+        let none = Bitboard::EMPTY;
+        let Ok(prefilter) = mana::payable(s, t, player, cost, none) else {
+            continue;
+        };
+        check(
+            prefilter == expected,
+            "the payability prefilter disagrees with the reference",
+            at,
         )?;
         check(
-            fresh.knowledge == self.knowledge,
-            "knowledge differs from a fresh layer recompute",
-            None,
-        )
-    }
-
-    /// Whether `player` can pay each cost of the cards they hold and control, and some
-    /// probes, as the prefilter, the cached funds and the solver say, against
-    /// [`reference_pays`].
-    fn check_payments(&self, t: &GameTable, player: Seat) -> Result<(), Violation> {
-        let Some(units) = reference_units(self, t, player) else {
-            return Ok(());
-        };
-        let at = Some(At::Player(player));
-        let hand = self
-            .zone(player, Zone::Hand)
-            .iter()
-            .flat_map(|slot| t.def(self.card(slot)).faces.iter().map(|f| f.cost));
-        let abilities = self
-            .battlefield()
-            .iter()
-            .filter(|&&slot| self.controller(slot) == player)
-            .flat_map(|&slot| {
-                face(self, t, slot)
-                    .abilities
-                    .iter()
-                    .filter(|a| a.kind == AbilityKind::Activated)
-                    .map(|a| a.cost.mana)
-            });
-        let Ok(funds) = Funds::of(self, t, player) else {
-            return Ok(());
-        };
-        for cost in PROBES.iter().copied().chain(hand).chain(abilities) {
-            // X is announced before payment, as 0 here.
-            let cost = ManaCost { x: 0, ..cost };
-            let expected = reference_pays(units.as_slice(), cost);
-            let none = Bitboard::EMPTY;
-            let Ok(prefilter) = mana::payable(self, t, player, cost, none) else {
-                continue;
-            };
-            check(
-                prefilter == expected,
-                "the payability prefilter disagrees with the reference",
-                at,
-            )?;
-            check(
-                funds.pays(self, t, cost, none) == expected,
-                "the cached funds disagree with the reference",
-                at,
-            )?;
-            for greedy in [false, true] {
-                let plans = mana::plans(self, t, &mut Sink::default(), player, cost, none, greedy);
-                if let Ok(plans) = plans {
-                    check(
-                        plans.is_empty() != expected,
-                        "the payment solver disagrees with the reference",
-                        at,
-                    )?;
-                }
+            funds.pays(s, t, cost, none) == expected,
+            "the cached funds disagree with the reference",
+            at,
+        )?;
+        for greedy in [false, true] {
+            let plans = mana::plans(s, t, &mut Sink::default(), player, cost, none, greedy);
+            if let Ok(plans) = plans {
+                check(
+                    plans.is_empty() != expected,
+                    "the payment solver disagrees with the reference",
+                    at,
+                )?;
             }
         }
-        Ok(())
     }
+    Ok(())
 }
 
 /// The most units of mana the reference matches: the debug builds of `next` and `apply` check

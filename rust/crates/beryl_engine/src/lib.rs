@@ -9,40 +9,47 @@
 //!
 //! Rules code cites the Comprehensive Rules at <https://yawgatog.com/resources/magic-rules/>.
 
-pub mod bitboard;
+mod bodies;
 pub mod card;
 mod cast;
-pub mod chance;
 mod combat;
 pub mod coverage;
-pub mod decision;
 pub mod effect;
 mod engine;
 pub mod event;
 mod face_down;
-pub mod filter;
-pub mod fixed;
-pub mod ids;
 mod interpret;
-mod invariants;
 mod layers;
-pub mod layout;
 mod mana;
-pub mod observation;
-pub mod profile;
 mod reference;
-pub mod relayout;
 mod resolve;
-pub mod rng;
 mod sba;
 mod scratch;
-mod setup;
 mod start;
-pub mod state;
-pub mod table;
+mod stops;
 mod trigger;
 mod turn;
-mod zone;
+
+// The game state and everything that writes it are the kernel's (`beryl_kernel`, plan K6).
+// The engine stays the facade other crates import until the last caller has moved, so each
+// moved module keeps its old path here.
+pub use beryl_kernel::{
+    bitboard, chance, decision, filter, fixed, ids, observation, relayout, rng, state, table,
+};
+pub(crate) use beryl_kernel::{invariants, zone};
+
+/// The kernel's storage layouts, and the rules' per-layout function tables beside them.
+pub mod layout {
+    pub use crate::bodies::{Bodies, Body, Condition, Conditions};
+    pub use beryl_kernel::layout::*;
+}
+
+/// The kernel's restriction profiles, and where they stop a player in a game.
+pub mod profile {
+    pub use crate::stops::{NextStop, can_declare_blockers, next_step_stop, next_stop};
+    pub(crate) use crate::stops::{asks_lone, stops_for};
+    pub use beryl_kernel::profile::*;
+}
 
 pub use bitboard::Bitboard;
 pub use cast::{cost_being_cast, pointless, target_removes_permanent};
@@ -64,6 +71,7 @@ pub use profile::{
     Breakpoint, Limits, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers,
     next_step_stop, next_stop,
 };
+pub use reference::check_references;
 pub use relayout::Relayout;
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};

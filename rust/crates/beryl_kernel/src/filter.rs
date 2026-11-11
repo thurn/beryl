@@ -103,7 +103,7 @@ impl Evaluate for Filter {
 /// comes here: the controller or owner of an object ([`Filter::Whose`]), a player a target
 /// may choose, and the player whose step begins.
 #[inline]
-pub(crate) fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
+pub fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
     match whose {
         // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
         // controller".
@@ -121,7 +121,7 @@ pub(crate) fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
 /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function changes
 /// then, and no card does.
 #[inline]
-pub(crate) fn is_an_opponent(player: Seat, you: Seat) -> bool {
+pub fn is_an_opponent(player: Seat, you: Seat) -> bool {
     player == you.opponent()
 }
 
@@ -138,7 +138,7 @@ pub(crate) fn is_an_opponent(player: Seat, you: Seat) -> bool {
 /// permanent is 0." A token with a double-faced card's faces is always such a copy (CR
 /// 707.8a): Fractured Identity on a transformed Jace.
 #[inline]
-pub(crate) fn mana_value<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> u8 {
+pub fn mana_value<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> u8 {
     let o = s.object(slot);
     let up = t.def(o.card).face(o.face);
     if !up.transformed {

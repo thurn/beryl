@@ -30,7 +30,7 @@ pub type Check = fn(&GameTable, &State) -> Result<(), String>;
 pub fn invariants(t: &GameTable, s: &State) -> Result<(), String> {
     s.check_invariants(t)
         .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
-    s.check_references(t)
+    beryl_engine::check_references(s, t)
         .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))
 }
 

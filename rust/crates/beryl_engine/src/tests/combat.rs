@@ -8,7 +8,7 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
 use crate::ids::{Seat, Slot};
-use crate::profile::Breakpoint;
+use crate::profile::{Breakpoint, stops_for};
 use crate::state::{ObjectFlags, Zone};
 use crate::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
@@ -793,11 +793,11 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     for step in [TurnStep::DeclareAttackers, TurnStep::DeclareBlockers] {
         g.s.turn.step = step;
         for player in [a, a.opponent()] {
-            assert!(smart.stops_for(&g.s, player), "{step:?}");
+            assert!(stops_for(smart, &g.s, player), "{step:?}");
         }
     }
     g.s.turn.step = TurnStep::BeginningOfCombat;
-    assert!(!smart.stops_for(&g.s, a));
+    assert!(!stops_for(smart, &g.s, a));
 }
 
 fn is_creature(g: &Game, slot: Slot) -> bool {

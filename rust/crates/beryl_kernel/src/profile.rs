@@ -1,13 +1,10 @@
 //! Restriction profiles: which decisions are offered, and the budgets (architecture §12.3,
 //! §15).
 
-use crate::combat;
-use crate::decision::{Decision, DecisionKind};
+use beryl_card::TurnStep;
+
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
-use crate::observation::Observation;
-use crate::state::{Pending, State, Turn, TurnStep};
-use crate::turn::any_attacking;
+use crate::player::Turn;
 
 /// Where players get priority as a decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -56,6 +53,7 @@ impl StepStops {
     };
 
     /// Whether the player stops in `step` of their own turn (`own`) or their opponent's.
+    #[inline]
     pub const fn has(self, step: TurnStep, own: bool) -> bool {
         (if own { self.own } else { self.theirs }) & bit(step) != 0
     }
@@ -86,7 +84,8 @@ impl StepStops {
 
     /// Whether a player who is the active player (`active`) or not stops in `step` with the
     /// stack empty, with creatures attacking (`attacking`, asked only for a combat step).
-    fn stops_in(self, step: TurnStep, active: bool, attacking: impl FnOnce() -> bool) -> bool {
+    #[inline]
+    pub fn stops_in(self, step: TurnStep, active: bool, attacking: impl FnOnce() -> bool) -> bool {
         self.has(step, active)
             && (!matches!(step, TurnStep::DeclareAttackers | TurnStep::DeclareBlockers)
                 || attacking())
@@ -131,6 +130,7 @@ impl Limits {
     /// offered this turn: the defaults, or, where a player game has gone past one, that much room
     /// again from where it stands, so search is not stalled before it plays.
     #[must_use]
+    #[inline]
     pub const fn search(turn: u16, decisions: u16) -> Limits {
         let d = Limits::DEFAULT;
         Limits {
@@ -226,7 +226,7 @@ pub struct Profile {
     ///   step and phase".
     pub taps_mana: Option<Seat>,
     /// By seat, whether the player isn't offered activations that would do nothing
-    /// ([`crate::card::Needs`]): everyone under the smart stops, search and rollouts included,
+    /// ([`beryl_card::Needs`]): everyone under the smart stops, search and rollouts included,
     /// which then spend no effort on them, and a human not in full control. Full control and
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
     /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
@@ -270,40 +270,23 @@ impl Profile {
         quiet_pointless: None,
     };
 
-    /// Whether `player`'s priority now is a decision, given they have a legal action.
-    pub(crate) fn stops_for<L: Layout>(self, s: &State<L>, player: Seat) -> bool {
-        match self.stops {
-            Stops::Exact | Stops::Forced => true,
-            Stops::Smart => is_smart_stop(s, player, self.step_stops[player.index()]),
-        }
-    }
-
     /// Whether `player`'s priority offers activating mana abilities on their own: under
     /// manual payment, or while [`Profile::taps_mana`] names them.
-    pub(crate) fn floats_for(self, player: Seat) -> bool {
+    #[inline]
+    pub fn floats_for(self, player: Seat) -> bool {
         self.payment == Payment::Manual || self.taps_mana == Some(player)
     }
 
     /// Whether `player`'s priority now is a decision even when passing is all they can do: at
     /// the breakpoint, or under their full control.
-    pub(crate) fn asks_pass(self, turn: Turn, player: Seat) -> bool {
+    #[inline]
+    pub fn asks_pass(self, turn: Turn, player: Seat) -> bool {
         self.breaks_at(turn) || self.full_control == Some(player)
     }
 
-    /// Whether `d`, a decision with one candidate, is still asked: a target of a spell its
-    /// player casts or an ability they activate, while [`Profile::asks_targets`] names them,
-    /// or a waterbend payment whose human must select even a required bender.
-    /// A triggered ability's lone target stays silent, as nothing can take it back
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
-    pub(crate) fn asks_lone<L: Layout>(self, s: &State<L>, d: &Decision<L>) -> bool {
-        (d.kind == DecisionKind::Waterbend && self.taps_mana == Some(d.player))
-            || d.kind == DecisionKind::Target
-                && self.asks_targets == Some(d.player)
-                && matches!(s.pending, Pending::Casting(c) if !c.triggered)
-    }
-
     /// Whether the open priority is the active player's first in the breakpoint's step.
-    pub(crate) fn breaks_at(self, turn: Turn) -> bool {
+    #[inline]
+    pub fn breaks_at(self, turn: Turn) -> bool {
         self.breakpoint.is_some_and(|b| {
             b.turn == turn.number
                 && b.step == turn.step
@@ -311,83 +294,4 @@ impl Profile {
                 && turn.passes == 0
         })
     }
-}
-
-/// The smart stops (§15): "their own main phases, after attackers and after blockers are
-/// declared, the opponent's end step, and whenever the stack is non-empty", with the steps
-/// the player's `steps` name in place of those.
-fn is_smart_stop<L: Layout>(s: &State<L>, player: Seat, steps: StepStops) -> bool {
-    !s.stack.is_empty() || steps.stops_in(s.turn.step, s.turn.active == player, || any_attacking(s))
-}
-
-/// Where passing priority now takes the viewer, as the pass button says (decision D13).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum NextStop {
-    /// The top of the stack resolves.
-    Resolve,
-    /// Combat damage is dealt.
-    CombatDamage,
-    /// The viewer next gets priority, or declares attackers, in this step of the turn.
-    Step(TurnStep),
-    /// The turn ends.
-    NextTurn,
-}
-
-/// Where passing priority now takes the viewer of `obs` under `stops`, if the other player
-/// passes too: the resolution of the top of the stack; combat damage once blockers are
-/// declared; under smart stops, the next step of the turn that is one of the viewer's `step_stops`
-/// ([`is_smart_stop`]), counting the combat in which the viewer, as the active player, can
-/// declare attackers; otherwise the next step.
-pub fn next_stop<L: Layout>(
-    obs: Observation<'_, L>,
-    stops: Stops,
-    step_stops: StepStops,
-) -> NextStop {
-    let s = obs.shown();
-    if !s.stack.is_empty() {
-        return NextStop::Resolve;
-    }
-    let step = s.turn.step;
-    let attacking = any_attacking(s);
-    if attacking
-        && matches!(
-            step,
-            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage
-        )
-    {
-        return NextStop::CombatDamage;
-    }
-    let later = TurnStep::ALL.into_iter().filter(|&l| l > step);
-    if stops != Stops::Smart {
-        return NextStop::Step(later.min().unwrap_or(TurnStep::Untap));
-    }
-    next_step_stop(obs, step_stops, step)
-}
-
-/// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
-/// stops with the stack empty, counting the combat in which the viewer, as the active player,
-/// can declare attackers.
-pub fn next_step_stop<L: Layout>(
-    obs: Observation<'_, L>,
-    steps: StepStops,
-    after: TurnStep,
-) -> NextStop {
-    let s = obs.shown();
-    let active = s.turn.active == obs.viewer();
-    let declares =
-        active && s.turn.step < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
-    let attacking = declares || any_attacking(s);
-    for l in TurnStep::ALL.into_iter().filter(|&l| l > after) {
-        if (l == TurnStep::BeginningOfCombat && declares) || steps.stops_in(l, active, || attacking)
-        {
-            return NextStop::Step(l);
-        }
-    }
-    NextStop::NextTurn
-}
-
-/// Whether the defending player in the position `obs` shows has a creature that can block
-/// now, so that declaring blockers would be a decision of theirs.
-pub fn can_declare_blockers<L: Layout>(obs: Observation<'_, L>) -> bool {
-    combat::can_declare_blockers(obs.shown())
 }

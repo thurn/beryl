@@ -3,11 +3,12 @@
 
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
-use crate::bitboard::Bitboard;
-use crate::card::{
+use beryl_card::{
     Castings, Colors, FaceAbility, FaceIx, Keywords, ManaColor, ManaCost, Modification, Subtypes,
     Supertypes, Types,
 };
+
+use crate::bitboard::Bitboard;
 use crate::decision::{Decision, Outcome};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, Slot, SlotId};
@@ -15,28 +16,8 @@ use crate::layout::{Layout, Queue, Small};
 use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
 
-/// Object slots: deck cards, tokens and spell copies.
-pub const SLOTS: usize = Slot::COUNT;
-/// Slots reserved for each player's deck: player `p`'s cards sit in
-/// `p * DECK_SLOTS .. p * DECK_SLOTS + deck size`.
-pub const DECK_SLOTS: usize = 60;
-/// The first slot of the shared pool for tokens and spell copies, after both decks'. Of the
-/// 255 slots, the decks reserve 120 and the pool has the other 135.
-pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
-/// Permanents on the battlefield at once.
-pub const BATTLEFIELD: usize = 128;
-/// The [`State::battlefield_index`] of a slot not on the battlefield.
+/// The [`Object::battlefield_index`] of a slot not on the battlefield.
 pub(crate) const OFF_BATTLEFIELD: u16 = u16::MAX;
-
-/// The slot of the `i`th card of `player`'s deck.
-pub(crate) fn deck_slot<S: SlotId>(player: Seat, i: usize) -> S {
-    S::from_index(player.index() * DECK_SLOTS + i)
-}
-
-/// The slots of the shared pool for tokens and spell copies ([`Layout::TOKEN_POOL`]).
-pub(crate) fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
-    (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
-}
 
 /// An object's status and combat flags, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -99,10 +80,12 @@ impl ObjectFlags {
     /// Its evoke cost was paid (CR 702.74a).
     pub const EVOKED: u32 = 1 << 21;
 
+    #[inline]
     pub fn has(self, flag: u32) -> bool {
         self.0 & flag != 0
     }
 
+    #[inline]
     pub fn set(&mut self, flag: u32, on: bool) {
         if on {
             self.0 |= flag;
@@ -124,6 +107,7 @@ pub struct Counters {
 
 impl Counters {
     /// How many counters of a kind there are.
+    #[inline]
     pub fn get(self, kind: CounterKind) -> u8 {
         match kind {
             CounterKind::PlusOne => self.plus_one,
@@ -136,7 +120,8 @@ impl Counters {
 
     /// The count of a kind, to change. One object carries one long-tail kind at a time,
     /// which the cube's cards never exceed; adding a second kind replaces the first.
-    pub(crate) fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
+    #[inline]
+    pub fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
         match kind {
             CounterKind::PlusOne => &mut self.plus_one,
             CounterKind::MinusOne => &mut self.minus_one,
@@ -154,19 +139,22 @@ impl Counters {
 }
 
 /// The base data of the object in one slot (architecture §4.2).
+///
+/// Transitional: the fields are `pub`. by-w8gv.5.3 makes every write a mutator of the
+/// kernel's, and by-w8gv.5.9 makes the fields private behind getters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: which card this is. Engine-only, since an
-    /// [`crate::Observation`] masks it; others read [`State::card`] or
+    /// [`crate::Observation`] masks it; others read [`State::card`](State::card) or
     /// [`crate::Observation::card`].
-    pub(crate) card: CardIx,
+    pub card: CardIx,
     /// Bumped on every zone change (CR 400.7), so stale references are detectable.
     pub incarnation: u16,
     pub zone: Zone,
     pub owner: Seat,
     /// The controller before continuous effects. A permanent's real controller is the layer-2
-    /// result, [`State::controller`].
-    pub(crate) base_controller: Seat,
+    /// result, [`State::controller`](State::controller).
+    pub base_controller: Seat,
     pub flags: ObjectFlags,
     /// Damage marked this turn.
     pub damage: u8,
@@ -281,28 +269,12 @@ pub struct Derived {
 }
 
 /// An ability one card grants to other objects: the card's game index and the index into its
-/// front face's [`crate::card::Face::grants`] (§9).
+/// front face's [`beryl_card::Face::grants`] (§9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GrantRef {
     pub card: CardIx,
     pub grant: u8,
 }
-
-/// Zone membership and the zones whose order the rules read (architecture §4.3).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Zones<L: Layout = Small> {
-    /// Membership by owner, indexed by `Zone as usize` for the owned zones.
-    pub members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
-    pub stack: Bitboard<L::Slot>,
-    /// Bottom first: the top card is the last.
-    pub library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
-    /// Bottom first: the top card is the last.
-    pub graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
-    /// The next battlefield timestamp.
-    pub next_timestamp: u16,
-}
-
-impl Copy for Zones<Small> {}
 
 /// Where a player is in the London mulligan (CR 103.5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -324,6 +296,7 @@ pub struct ManaPool([u8; 6]);
 
 impl ManaPool {
     /// The amounts, indexed as [`ManaColor::ALL`].
+    #[inline]
     pub fn amounts(self) -> [u8; 6] {
         self.0
     }
@@ -331,18 +304,23 @@ impl ManaPool {
 
 impl std::ops::Index<ManaColor> for ManaPool {
     type Output = u8;
+    #[inline]
     fn index(&self, color: ManaColor) -> &u8 {
         &self.0[color.index()]
     }
 }
 
 impl std::ops::IndexMut<ManaColor> for ManaPool {
+    #[inline]
     fn index_mut(&mut self, color: ManaColor) -> &mut u8 {
         &mut self.0[color.index()]
     }
 }
 
 /// One player (architecture §4.4).
+///
+/// Transitional: the fields are `pub`. by-w8gv.5.7 makes every write a mutator of the
+/// kernel's, and by-w8gv.5.9 makes the fields private behind getters.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Player<L: Layout = Small> {
     pub life: i16,
@@ -369,6 +347,9 @@ pub struct Player<L: Layout = Small> {
 impl Copy for Player<Small> {}
 
 /// Where the game is in its turns (architecture §4.4).
+///
+/// Transitional: the fields are `pub`. by-w8gv.5.7 makes every write a mutator of the
+/// kernel's, and by-w8gv.5.9 makes the fields private behind getters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Turn {
     /// 0 before the first turn.
@@ -510,6 +491,21 @@ pub struct TriggerInfo<L: Layout = Small> {
     pub lki: Lki,
 }
 
+/// An ability that has triggered and waits to be put on the stack.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PendingTrigger<L: Layout = Small> {
+    /// The object with the ability; an emblem's trigger has none.
+    pub source: Option<ObjectRef<L>>,
+    pub card: CardIx,
+    pub face: FaceIx,
+    /// The index of the ability among the face's own.
+    pub ability: u8,
+    /// The player who controlled the source when it triggered
+    /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
+    pub controller: Seat,
+    pub info: TriggerInfo<L>,
+}
+
 /// A permission to cast a card from a zone other than a hand
 /// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
 /// cast a spell only if a rule or effect allows that player to cast it". It names one
@@ -532,21 +528,6 @@ pub struct CastPermission<L: Layout = Small> {
     /// instant or sorcery spell by paying [cost] rather than paying its mana cost'". Paying it
     /// is an alternative cost, so the card's own can't be added.
     pub flashback: bool,
-}
-
-/// An ability that has triggered and waits to be put on the stack.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct PendingTrigger<L: Layout = Small> {
-    /// The object with the ability; an emblem's trigger has none.
-    pub source: Option<ObjectRef<L>>,
-    pub card: CardIx,
-    pub face: FaceIx,
-    /// The index of the ability among the face's own.
-    pub ability: u8,
-    /// The player who controlled the source when it triggered
-    /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
-    pub controller: Seat,
-    pub info: TriggerInfo<L>,
 }
 
 /// How long a floating effect lasts
@@ -674,7 +655,7 @@ pub struct Resolving<L: Layout = Small> {
     /// What each player knew as the resolution began. Every run of the body starts from it,
     /// not from what earlier runs showed, so a run asks its questions with the candidates the
     /// first run asked them with and each recorded index names the answer it named then.
-    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
+    pub knowledge: [Bitboard<L::Slot>; 2],
 }
 
 impl Copy for Resolving<Small> {}
@@ -697,7 +678,7 @@ pub enum Pending<L: Layout = Small> {
     /// far.
     LegendRule { kept: Bitboard<L::Slot> },
     /// A land being played asks whether its controller pays life so that it doesn't enter
-    /// tapped ([`crate::card::Replacement::EntersTappedUnlessPayLife`]).
+    /// tapped ([`beryl_card::Replacement::EntersTappedUnlessPayLife`]).
     EnterPayingLife { slot: L::Slot, life: u8 },
     /// The active player declares attackers (CR 508.1), one creature at a time: `attacker`
     /// is the creature just chosen, whose defender is still to choose, if any.
@@ -729,6 +710,44 @@ pub enum Pending<L: Layout = Small> {
 
 impl Copy for Pending<Small> {}
 
+/// Object slots: deck cards, tokens and spell copies.
+pub const SLOTS: usize = Slot::COUNT;
+/// Slots reserved for each player's deck: player `p`'s cards sit in
+/// `p * DECK_SLOTS .. p * DECK_SLOTS + deck size`.
+pub const DECK_SLOTS: usize = 60;
+/// The first slot of the shared pool for tokens and spell copies, after both decks'. Of the
+/// 255 slots, the decks reserve 120 and the pool has the other 135.
+pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
+/// Permanents on the battlefield at once.
+pub const BATTLEFIELD: usize = 128;
+/// The slot of the `i`th card of `player`'s deck.
+pub fn deck_slot<S: SlotId>(player: Seat, i: usize) -> S {
+    S::from_index(player.index() * DECK_SLOTS + i)
+}
+
+/// The slots of the shared pool for tokens and spell copies ([`Layout::TOKEN_POOL`]).
+pub fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
+    (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
+}
+
+/// Zone membership and the zones whose order the rules read (architecture §4.3).
+///
+/// Transitional: the fields are `pub`; by-w8gv.5.4 makes them private.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Zones<L: Layout = Small> {
+    /// Membership by owner, indexed by `Zone as usize` for the owned zones.
+    pub members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
+    pub stack: Bitboard<L::Slot>,
+    /// Bottom first: the top card is the last.
+    pub library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    /// Bottom first: the top card is the last.
+    pub graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    /// The next battlefield timestamp.
+    pub next_timestamp: u16,
+}
+
+impl Copy for Zones<Small> {}
+
 /// Counters toward the budgets of the profile (architecture §12.3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Budgets {
@@ -747,40 +766,64 @@ pub struct Flags {
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
 /// (architecture §4.1).
+///
+/// Transitional: every field is `pub` for the one push that moved the state into this crate,
+/// so `beryl_engine` builds against it as it did against its own module. Four beads make them
+/// private, each field naming its own (the crate's contract: only the kernel writes a
+/// field): objects, by-w8gv.5.3; zones, the battlefield, the derived cache, knowledge and
+/// listening, by-w8gv.5.4; players, the turn and the game-level fields, by-w8gv.5.7; the
+/// stack and the queues, by-w8gv.5.8. The fields keep their order: a state's hash feeds them
+/// in it.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
-    pub(crate) objects: L::Table<Object<L>, SLOTS>,
-    /// Slots on the battlefield, in the order they entered.
-    pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
-    /// Layer results, by battlefield index.
-    pub(crate) derived: L::Table<Derived, BATTLEFIELD>,
+    /// Private with by-w8gv.5.3.
+    pub objects: L::Table<Object<L>, SLOTS>,
+    /// Slots on the battlefield, in the order they entered. Private with by-w8gv.5.4.
+    pub battlefield: L::Queue<L::Slot, BATTLEFIELD>,
+    /// Layer results, by battlefield index. Private with by-w8gv.5.4.
+    pub derived: L::Table<Derived, BATTLEFIELD>,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
-    /// current while they are.
-    pub(crate) listening: u16,
-    pub(crate) zones: Zones<L>,
-    pub(crate) players: [Player<L>; 2],
-    pub(crate) turn: Turn,
-    pub(crate) stack: L::Queue<StackEntry<L>, 64>,
-    pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
+    /// current while they are. Private with by-w8gv.5.4.
+    pub listening: u16,
+    /// Private with by-w8gv.5.4.
+    pub zones: Zones<L>,
+    /// Private with by-w8gv.5.7.
+    pub players: [Player<L>; 2],
+    /// Private with by-w8gv.5.7.
+    pub turn: Turn,
+    /// Private with by-w8gv.5.8.
+    pub stack: L::Queue<StackEntry<L>, 64>,
+    /// Private with by-w8gv.5.8.
+    pub triggers: L::Queue<PendingTrigger<L>, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
-    /// ability's [`crate::card::Trigger::Delayed`] names.
-    pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
-    pub(crate) effects: L::Queue<FloatingEffect<L>, 64>,
-    pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
+    /// ability's [`beryl_card::Trigger::Delayed`] names. Private with by-w8gv.5.8.
+    pub delayed: L::Queue<PendingTrigger<L>, 32>,
+    /// Private with by-w8gv.5.8; milestone 4 (by-w8gv.7.1) replaces it with a store.
+    pub effects: L::Queue<FloatingEffect<L>, 64>,
+    /// Private with by-w8gv.5.8; milestone 4 (by-w8gv.7.1) replaces it with a store.
+    pub permissions: L::Queue<CastPermission<L>, 8>,
     /// The value of X the spells that became these permanents were cast with, for their
     /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
     /// "the value of X for that ability is the same as the value of X for that spell". Only
-    /// a nonzero X is kept, and only while the permanent stays.
-    pub(crate) entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
-    pub(crate) pending: Pending<L>,
+    /// a nonzero X is kept, and only while the permanent stays. Milestone 4 (by-w8gv.7.1)
+    /// deletes it.
+    pub entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
+    /// Private with by-w8gv.5.8.
+    pub pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
-    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
-    pub(crate) rng: Rng,
-    pub(crate) profile: Profile,
-    pub(crate) budgets: Budgets,
-    pub(crate) flags: Flags,
-    pub(crate) outcome: Option<Outcome>,
+    /// Private with by-w8gv.5.4.
+    pub knowledge: [Bitboard<L::Slot>; 2],
+    /// Private with by-w8gv.5.7.
+    pub rng: Rng,
+    /// Private with by-w8gv.5.7.
+    pub profile: Profile,
+    /// Private with by-w8gv.5.7.
+    pub budgets: Budgets,
+    /// Private with by-w8gv.5.7.
+    pub flags: Flags,
+    /// Private with by-w8gv.5.7.
+    pub outcome: Option<Outcome>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -927,7 +970,7 @@ impl<L: Layout> State<L> {
 
     /// The index of the permanent in `slot` in the battlefield list, if it is on the
     /// battlefield.
-    pub(crate) fn battlefield_position(&self, slot: L::Slot) -> Option<usize> {
+    pub fn battlefield_position(&self, slot: L::Slot) -> Option<usize> {
         let i = self.object(slot).battlefield_index;
         (i != OFF_BATTLEFIELD).then_some(usize::from(i))
     }
@@ -1008,11 +1051,13 @@ impl<L: Layout> State<L> {
         self.effects.as_slice()
     }
 
-    pub(crate) fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
+    /// Transitional: private with by-w8gv.5.3.
+    pub fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
         &mut self.objects[slot.index()]
     }
 
-    pub(crate) fn player_mut(&mut self, player: Seat) -> &mut Player<L> {
+    /// Transitional: private with by-w8gv.5.7.
+    pub fn player_mut(&mut self, player: Seat) -> &mut Player<L> {
         &mut self.players[player.index()]
     }
 }

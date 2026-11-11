@@ -1,9 +1,11 @@
 //! The zone-move chokepoints: every change of zone, every draw and every shuffle goes through
 //! here, so identities, knowledge and zone membership stay in agreement (architecture §4.3,
 //! §5, §13).
+//!
+//! Transitional: these are free functions, `pub` for `beryl_engine`'s event pipeline. They
+//! become the zone mutators of the crate's contract with by-w8gv.5.3 and by-w8gv.5.4.
 
 use crate::bitboard::Bitboard;
-use crate::card::FaceIx;
 use crate::chance;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
@@ -11,10 +13,11 @@ use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::rng::SplitMix64;
 use crate::state::{Counters, DECK_SLOTS, Derived, Object, ObjectFlags, State, Zone};
+use beryl_card::FaceIx;
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Place {
+pub enum Place {
     Top,
     Bottom,
     /// Under this many cards from the top, or at the bottom of a library with fewer: Oust's
@@ -33,7 +36,7 @@ pub(crate) enum Place {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone." Zones are kept by owner, so that holds by construction.
-pub(crate) fn move_to<L: Layout>(
+pub fn move_to<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
     slot: L::Slot,
@@ -43,7 +46,7 @@ pub(crate) fn move_to<L: Layout>(
 }
 
 /// Moves an object to the bottom of its owner's library.
-pub(crate) fn put_on_bottom<L: Layout>(
+pub fn put_on_bottom<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
     slot: L::Slot,
@@ -51,7 +54,7 @@ pub(crate) fn put_on_bottom<L: Layout>(
     move_to_place(s, sink, slot, Zone::Library, Place::Bottom)
 }
 
-pub(crate) fn move_to_place<L: Layout>(
+pub fn move_to_place<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
     slot: L::Slot,
@@ -222,11 +225,7 @@ fn remove_slot<S: SlotId>(list: &mut impl Queue<S>, slot: S) {
 /// [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
 /// draw a card from a library with no cards in it loses the game the next time a player would
 /// receive priority."
-pub(crate) fn draw<L: Layout>(
-    s: &mut State<L>,
-    sink: &mut Sink<L>,
-    player: Seat,
-) -> Result<(), Full> {
+pub fn draw<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
     let Some(&slot) = s.zones.library[player.index()].as_slice().last() else {
         s.player_mut(player).drew_from_empty = true;
         return Ok(());
@@ -237,7 +236,7 @@ pub(crate) fn draw<L: Layout>(
 /// Draws `n` cards, one at a time ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)):
 /// "If a player is instructed to draw multiple cards, that player performs that many
 /// individual card draws."
-pub(crate) fn draw_n<L: Layout>(
+pub fn draw_n<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
     player: Seat,
@@ -252,7 +251,7 @@ pub(crate) fn draw_n<L: Layout>(
 /// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
 /// card stays the same object and whoever knew it still does: a player who scries or looks
 /// knows where they put each card.
-pub(crate) fn reorder_library<L: Layout>(
+pub fn reorder_library<L: Layout>(
     s: &mut State<L>,
     slot: L::Slot,
     place: Place,
@@ -281,7 +280,7 @@ pub(crate) fn reorder_library<L: Layout>(
 /// reordered. [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in
 /// a player's library are shuffled or otherwise reordered, any revealed cards that are
 /// reordered stop being revealed and become new objects."
-pub(crate) fn shuffle_library<L: Layout>(s: &mut State<L>, player: Seat) {
+pub fn shuffle_library<L: Layout>(s: &mut State<L>, player: Seat) {
     let p = player.index();
     let library = s.zones.library[p].clone();
     let mut rng = s.rng.shuffle;
@@ -296,7 +295,7 @@ pub(crate) fn shuffle_library<L: Layout>(s: &mut State<L>, player: Seat) {
 /// object ([CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d)): "If cards in a
 /// player's library are shuffled or otherwise reordered, any revealed cards that are
 /// reordered stop being revealed and become new objects."
-pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[L::Slot], rng: &mut SplitMix64) {
+pub fn rebind<L: Layout>(s: &mut State<L>, slots: &[L::Slot], rng: &mut SplitMix64) {
     let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
     for &slot in slots {
         // A library never holds more than its owner's deck slots.
@@ -319,7 +318,7 @@ pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[L::Slot], rng: &mut S
 /// is in a zone other than the battlefield, it ceases to exist." The incarnation is kept and
 /// bumped, so references to the token stay stale after the slot is reused. The cards exiled
 /// with it are exiled with nothing any more.
-pub(crate) fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: L::Slot) {
+pub fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     leave(s, slot);
     let incarnation = s.object(slot).incarnation.wrapping_add(1);
     *s.object_mut(slot) = Object {
@@ -336,7 +335,7 @@ pub(crate) fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: L::Slot) {
 /// timestamp and the battlefield index, and for a permanent its characteristics after continuous effects, so two
 /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
 /// creature that got -2/-0 one that didn't.
-pub(crate) fn signature<L: Layout>(s: &State<L>, slot: L::Slot) -> (Object<L>, Option<Derived>) {
+pub fn signature<L: Layout>(s: &State<L>, slot: L::Slot) -> (Object<L>, Option<Derived>) {
     let o = s.object(slot);
     let derived = (o.zone == Zone::Battlefield).then(|| *s.derived(slot));
     (
@@ -351,6 +350,6 @@ pub(crate) fn signature<L: Layout>(s: &State<L>, slot: L::Slot) -> (Object<L>, O
 }
 
 /// The number of cards in a player's hand.
-pub(crate) fn hand_size<L: Layout>(s: &State<L>, player: Seat) -> u32 {
+pub fn hand_size<L: Layout>(s: &State<L>, player: Seat) -> u32 {
     s.zone(player, Zone::Hand).count()
 }
