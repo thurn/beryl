@@ -40,6 +40,57 @@ export function learnNames(names: Names, view: PlayerView): Names {
   return out;
 }
 
+/** A game's log as its views are shown, and what keeps it. */
+export interface Logged {
+  /** What has happened in the game so far, oldest first. */
+  log: LogEntry[];
+  /** For each decision, by how many of the player's answers stand before it
+   * (`DecisionView.undoDepth`), the key of the last log entry before it: an undo back to that
+   * decision goes back to there. None for a decision shown before the screen saw it. */
+  marks: (number | undefined)[];
+  /** The last key given a log entry: keys only grow, past entries an undo took back too. */
+  key: number;
+  names: Names;
+}
+
+/** The log of a game no view of which has shown. */
+export const UNLOGGED: Logged = {
+  log: [],
+  marks: [],
+  key: -1,
+  names: new Map(),
+};
+
+/** The log keeps this many entries. */
+const LOG_LENGTH = 200;
+
+/** `logged` once `views` have shown, in order. */
+export function logged(logged: Logged, views: PlayerView[]): Logged {
+  let { names, log, marks, key } = logged;
+  for (const view of views) {
+    const status = view.status;
+    const decision = status.kind === "deciding" ? status.decision : undefined;
+    // What happened since the decision asked again never did.
+    const kept =
+      decision && view.undone ? marks[decision.undoDepth] : undefined;
+    if (kept !== undefined) log = log.filter((e) => e.key <= kept);
+    names = learnNames(names, view);
+    const lines = logLines(view, names);
+    if (lines.length)
+      log = [...log, ...lines.map((l) => ({ ...l, key: ++key }))];
+    if (decision) {
+      marks = marks.slice(0, decision.undoDepth);
+      marks[decision.undoDepth] = key;
+    }
+  }
+  return {
+    names,
+    marks,
+    key,
+    log: log === logged.log ? log : log.slice(-LOG_LENGTH),
+  };
+}
+
 const who = (side: Side) => (side === "you" ? "You" : "Opponent");
 /** A player as the object of a sentence. */
 const whom = (side: Side) => (side === "you" ? "you" : "Opponent");

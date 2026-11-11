@@ -9,14 +9,10 @@ import {
   useEffect,
   useLayoutEffect,
   useReducer,
-  useState,
   useSyncExternalStore,
 } from "react";
 import { isFrozen, subscribeFrozen } from "../freeze";
 import {
-  currentGame,
-  onGameUpdate,
-  resumeGame,
   startGame,
   type GameUpdate,
   type PlayerView,
@@ -26,12 +22,10 @@ import { beats, eventsHold, HOLD, type Beat } from "./beats";
 import { FLIGHT_HOLD } from "./flight";
 import { soundBeat } from "../audio/events";
 import { liftsHandling, type Spotlight } from "./layout";
-import { learnNames, logLines, type LogEntry, type Names } from "./log";
+import { logged, UNLOGGED, type LogEntry, type Logged } from "./log";
+import { useGameUpdates, useShownToFrame } from "./updates";
 
 export { eventsHold, HOLD } from "./beats";
-
-/** The log keeps this many entries. */
-const LOG_LENGTH = 200;
 
 /** `window.berylShown` keeps this many views. */
 const SHOWN_LOG = 500;
@@ -95,7 +89,7 @@ export interface Playback {
   log: LogEntry[];
 }
 
-interface State {
+interface State extends Logged {
   shown?: GameUpdate;
   live: boolean;
   spotlight?: Spotlight;
@@ -103,14 +97,6 @@ interface State {
   /** When the view shown may give way to the next, on `Date.now()`'s clock. */
   until: number;
   queue: GameUpdate[];
-  log: LogEntry[];
-  /** For each decision, by how many of the player's answers stand before it
-   * (`DecisionView.undoDepth`), the key of the last log entry before it: an undo back to that
-   * decision goes back to there. None for a decision shown before the screen saw it. */
-  marks: (number | undefined)[];
-  /** The last key given a log entry: keys only grow, past entries an undo took back too. */
-  key: number;
-  names: Names;
   /** A game was asked to start and its first view has not arrived. */
   starting: boolean;
   /** The game in progress has not been asked for yet (`currentGame`). */
@@ -129,13 +115,10 @@ type Action =
   | { kind: "resume"; update?: GameUpdate; awaiting?: boolean; now: number };
 
 const INITIAL: State = {
+  ...UNLOGGED,
   live: false,
   until: 0,
   queue: [],
-  log: [],
-  marks: [],
-  key: -1,
-  names: new Map(),
   starting: false,
   resuming: true,
 };
@@ -148,23 +131,6 @@ function show(
   now: number,
   skipped = false,
 ): State {
-  let { names, log, marks, key } = state;
-  for (const u of updates) {
-    const status = u.view.status;
-    const decision = status.kind === "deciding" ? status.decision : undefined;
-    // What happened since the decision asked again never did.
-    const kept =
-      decision && u.view.undone ? marks[decision.undoDepth] : undefined;
-    if (kept !== undefined) log = log.filter((e) => e.key <= kept);
-    names = learnNames(names, u.view);
-    const lines = logLines(u.view, names);
-    if (lines.length)
-      log = [...log, ...lines.map((l) => ({ ...l, key: ++key }))];
-    if (decision) {
-      marks = marks.slice(0, decision.undoDepth);
-      marks[decision.undoDepth] = key;
-    }
-  }
   const last = updates.at(-1)!;
   // The views passed over lend the one shown their events, so it animates all of them.
   const update = merged(updates);
@@ -176,10 +142,10 @@ function show(
     spotlight: beat?.spotlight,
     triggerFlights: skipped ? undefined : beat?.triggerFlights,
     until: now + (live ? holdOf(last, skipped) : 0),
-    names,
-    marks,
-    key,
-    log: log === state.log ? log : log.slice(-LOG_LENGTH),
+    ...logged(
+      state,
+      updates.map((u) => u.view),
+    ),
   };
 }
 
@@ -299,36 +265,12 @@ export function usePlayback(): {
   start(agent: string, seed?: number): Promise<void>;
 } {
   const [state, dispatch] = useReducer(reduce, INITIAL);
-  const [resumed, setResumed] = useState<SessionId>();
-  useEffect(() => {
-    // Stopping a listener takes a moment, in which it may still hear views (StrictMode's
-    // second mount hears them too): only the effect still mounted acts on them.
-    let mounted = true;
-    const act = (action: Action) => mounted && dispatch(action);
-    const unlisten = onGameUpdate((update, past) =>
-      act({ kind: "arrive", update, past, now: Date.now() }),
-    );
-    // Once listening, so no view falls between: a reloaded page takes up the game where it is,
-    // and a launched app the newest unfinished game saved.
-    void unlisten
-      .then(() => currentGame())
-      .then(
-        async (update) => {
-          if (update) {
-            act({ kind: "resume", update, now: Date.now() });
-            return;
-          }
-          const session = await resumeGame().catch(() => null);
-          if (mounted && session !== null) setResumed(session);
-          act({ kind: "resume", awaiting: session !== null, now: Date.now() });
-        },
-        () => act({ kind: "resume", now: Date.now() }),
-      );
-    return () => {
-      mounted = false;
-      void unlisten.then((stop) => stop());
-    };
-  }, []);
+  const resumed = useGameUpdates({
+    arrive: (update, past) =>
+      dispatch({ kind: "arrive", update, past, now: Date.now() }),
+    resume: (update, awaiting) =>
+      dispatch({ kind: "resume", update, awaiting, now: Date.now() }),
+  });
   // The next queued view takes over once the one shown has had its time.
   const { queue, until, shown } = state;
   // Whether views wait to be shown, for a capture that waits for the table to settle
@@ -353,16 +295,7 @@ export function usePlayback(): {
     // What it shows sounds as it shows; a view from the past is silent, as it is still.
     if (state.live) soundBeat(shown.view, at);
   }, [shown]);
-  // A spec page framing the game shows it once it has a view (screens/Testing.tsx).
-  const showing = shown !== undefined;
-  useEffect(() => {
-    if (showing && window.parent !== window) {
-      window.parent.postMessage(
-        { kind: "beryl-shown" },
-        window.location.origin,
-      );
-    }
-  }, [showing]);
+  useShownToFrame(shown !== undefined);
   // A frozen page (a bug report, freeze.ts) shows no next view until it thaws.
   const frozen = useSyncExternalStore(subscribeFrozen, isFrozen);
   useEffect(() => {
