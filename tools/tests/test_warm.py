@@ -29,7 +29,7 @@ def test_a_saved_worktree_seeds_the_next_one(
     assert not (first / "rust" / "target").exists() and not modules.exists()
 
     second = checkout(tmp_path / "second", "lock-v1")
-    warm.ensure(second)
+    assert warm.ensure(second) is False
     assert (second / "rust" / "target" / "debug" / "beryl").read_text() == "binary"
     assert (second / "ui" / "node_modules" / "react").read_text() == "react"
 
@@ -40,6 +40,17 @@ def write(path: Path, text: str = "", age: float = 0) -> Path:
     stamp = time.time() - age
     os.utime(path, (stamp, stamp))
     return path
+
+
+def test_a_target_with_nothing_to_clone_is_reported_cold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    tree = checkout(tmp_path / "tree", "lock-v1")
+    write(tree / "ui" / "node_modules" / warm.STAMP, warm.lock_key(tree))
+    assert warm.ensure(tree) is True
+    write(tree / "rust" / "target" / "debug" / "beryl", "built cold")
+    assert warm.ensure(tree) is False
 
 
 def test_the_tauri_target_is_cloned_only_for_the_tauri_cli(

@@ -38,6 +38,8 @@ OUTCOMES = ("pass", "fail", "skip")
 # A record backfilled from history (`backfilled`) of a commit that rewrote a check after the
 # commit that added it: no run, but one stale update in the check's record (K18's prune).
 REWRITE = "rewrite"
+# The script of a slow-CI failure's bisection reruns (bisect.py).
+BISECT = "bisect"
 # What a check on the pending list (verdicts.PENDING) logs instead of a pass or a fail.
 PENDING_OUTCOMES = {"pass": "pending-pass", "fail": "pending-fail"}
 
@@ -299,10 +301,14 @@ def tally(
     since: datetime,
 ) -> tuple[dict[str, Tally], dict[str, Tally]]:
     """Per check and per lane, costliest first: runs and seconds from the run log, verdicts
-    since `since` from the checks' beads (verdicts.py)."""
+    since `since` from the checks' beads (verdicts.py). A bisection's reruns at older commits
+    (bisect.py, script `bisect`) say nothing of the check's own record and are left out.
+    """
     checks: dict[str, Tally] = {}
     lanes: dict[str, Tally] = {}
     for r in records:
+        if r.get("script") == BISECT:
+            continue
         checks.setdefault(str(r.get("check")), Tally()).add(r)
         lanes.setdefault(str(r.get("lane")), Tally()).add(r)
     for check, found in history.items():

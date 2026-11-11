@@ -162,10 +162,12 @@ def clone_into(source: Path, dest: Path, leave_out: str | None = None) -> bool:
     return True
 
 
-def ensure_target(checkout: Path, tauri: bool) -> None:
+def ensure_target(checkout: Path, tauri: bool) -> bool:
+    """Whether it left cargo to build `rust/target` cold: there was none and nothing to clone
+    it from."""
     target = checkout / "rust" / "target"
     if target.exists() and (not tauri or (target / TAURI).exists()):
-        return
+        return False
     main = main_checkout(checkout)
     sources = [
         source
@@ -178,18 +180,21 @@ def ensure_target(checkout: Path, tauri: bool) -> None:
     if not target.exists():
         leave_out = None if tauri else TAURI
         if not any(clone_into(source, target, leave_out) for source in sources):
-            return
+            return True
     if tauri and not (target / TAURI).exists():
         for source in sources:
             if (source / TAURI).is_dir() and clone_into(source / TAURI, target / TAURI):
-                return
+                return False
+        return True
+    return False
 
 
-def ensure_node_modules(checkout: Path) -> None:
+def ensure_node_modules(checkout: Path) -> bool:
+    """Whether it had to install `ui/node_modules` cold (`npm ci`), with none to clone."""
     node_modules = checkout / "ui" / "node_modules"
     key = lock_key(checkout)
     if stamped(node_modules, key):
-        return
+        return False
     if not node_modules.exists():
         main = main_checkout(checkout)
         for source in (
@@ -197,7 +202,7 @@ def ensure_node_modules(checkout: Path) -> None:
             main / "ui" / "node_modules" if main else None,
         ):
             if source and stamped(source, key) and clone_into(source, node_modules):
-                return
+                return False
     log("npm ci")
     subprocess.run(
         [
@@ -212,14 +217,16 @@ def ensure_node_modules(checkout: Path) -> None:
         check=True,
     )
     (node_modules / STAMP).write_text(key + "\n")
+    return True
 
 
-def ensure(checkout: Path = REPO, tauri: bool = False) -> None:
+def ensure(checkout: Path = REPO, tauri: bool = False) -> bool:
     """Gives the checkout a `rust/target`, with the Tauri CLI's target directory if `tauri`, and
-    an up-to-date `ui/node_modules`."""
+    an up-to-date `ui/node_modules`. Whether either was built cold, with nothing to clone: a run
+    over budget then reruns once (checks.py, `slow`)."""
     with locked():
-        ensure_target(checkout, tauri)
-        ensure_node_modules(checkout)
+        cold_target = ensure_target(checkout, tauri)
+        return ensure_node_modules(checkout) or cold_target
 
 
 def replace(source: Path, dest: Path) -> bool:

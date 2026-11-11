@@ -9,6 +9,10 @@ from collections.abc import Callable
 
 from . import paths
 
+# A step's exit code when it failed to build or start (a compile error, a UiError, an oracle not
+# built at its pin): its checks never ran, so a failure on rerun would only cost the time.
+CANNOT_RUN = 125
+
 # Given a failed step's output, the checks it names as failed, each an argument the step takes
 # to run only that check; none to rerun the step whole.
 Failed = Callable[[str], list[str]]

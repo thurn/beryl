@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles
+from beryl_tools import checks, oracles, reruns
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -217,7 +217,7 @@ def test_failed_rust_tests_are_named_as_nextest_filters() -> None:
         " | (binary_id(beryl_engine) & test(=tests::crashes))"
     )
     # The allocations harness runs beside nextest, so its failure reruns the lot.
-    assert checks.failed_tests(output + checks.ALLOCATIONS_FAILED) == []
+    assert checks.failed_tests(output + reruns.ALLOCATIONS_FAILED) == []
 
 
 def test_failed_shots_and_oracle_cards_are_named() -> None:

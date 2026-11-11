@@ -389,11 +389,15 @@ class Beads:
     def steward(self, commits: set[str]) -> tuple[str, list[str]]:
         """The Steward bead that delivered one of `commits`, with those of its commits among
         them; empty when none did."""
+        return self.delivered(commits, "--label", "role:steward")
+
+    def delivered(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
+        """The bead whose Enact metadata lists one of `commits` as delivered, of those `bd list`
+        selects with `only`, with those of its commits among them; empty when none does.
+        """
         if not commits:
             return "", []
-        _, out = self.bd(
-            "list", "--label", "role:steward", "--all", "-n", "0", "--json"
-        )
+        _, out = self.bd("list", *only, "--all", "-n", "0", "--json")
         beads = parse_json(out)
         for b in beads if isinstance(beads, list) else []:
             meta = b.get("metadata") if isinstance(b, dict) else None

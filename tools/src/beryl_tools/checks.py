@@ -21,6 +21,10 @@ failed where it can name them: a pass on the rerun passes the lane and prints a 
 (exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
 After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
 failing checks are quarantined or pending fails no lane.
+
+Slow CI bisects a failure that survives its rerun over the commits since master (bisect.py). A run
+over budget with nothing failed reruns once if the machine was loaded or the cache cold, and is
+excused if the rerun is over budget under load too.
 """
 
 from __future__ import annotations
@@ -28,16 +32,14 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -52,7 +54,7 @@ from . import (
     warm,
 )
 from .reruns import (
-    ALLOCATIONS_FAILED,
+    CANNOT_RUN,
     Failed,
     failed_cards,
     failed_shots,
@@ -61,6 +63,7 @@ from .reruns import (
     unproven,
     whole,
 )
+from .rust_tests import junit_results, nextest_filter, rust_tests_step
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -75,9 +78,6 @@ COMMIT_MAX = 60
 TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", ".html")
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
-# A step's exit code when it failed to build or start (a compile error, a UiError, an oracle not
-# built at its pin): its checks never ran, so a failure on rerun would only cost the time.
-CANNOT_RUN = 125
 
 
 @dataclass
@@ -108,6 +108,19 @@ class Lane:
 
 
 @dataclass
+class Failure:
+    """A step that failed after its rerun, as bisect.py reruns it: the arguments that narrow it
+    to the checks it named as failed (none to run it whole) and its last run's records.
+    """
+
+    step: Step
+    args: list[str]
+    records: list[dict[str, object]]
+    # Whether its lane builds, so needs warm caches (`Lane.warm`).
+    warm: bool = False
+
+
+@dataclass
 class Outcome:
     lane: str
     ok: bool
@@ -118,6 +131,8 @@ class Outcome:
     flaky: list[str] = field(default_factory=list)
     # Failures that failed no step: why (quarantined or pending), and the check.
     excused: list[tuple[str, str]] = field(default_factory=list)
+    # The step that failed the lane, when it is one a rerun can narrow (`Step.failed`).
+    failure: Failure | None = None
 
 
 def stretch(load: float, cpus: int) -> float:
@@ -142,16 +157,31 @@ class Clock:
         self.wall_start: float = time.perf_counter()
         self.last: float = self.wall_start
         self.adjusted: float = 0.0
+        # The highest load average it read: whether the run was ever slowed (`loaded`).
+        self.peak: float = 0.0
 
     def now(self) -> float:
         with self.lock:
             t = time.perf_counter()
-            self.adjusted += (t - self.last) / stretch(system.loadavg()[0], self.cpus)
+            load = system.loadavg()[0]
+            self.peak = max(self.peak, load)
+            self.adjusted += (t - self.last) / stretch(load, self.cpus)
             self.last = t
             return self.adjusted
 
     def wall(self) -> float:
         return time.perf_counter() - self.wall_start
+
+    def loaded(self) -> bool:
+        """Whether the load average went over the cores while it ran."""
+        return self.peak > self.cpus
+
+
+class WallClock(Clock):
+    """Wall seconds, for a deadline that someone else's wall clock enforces (bisect.py)."""
+
+    def now(self) -> float:
+        return self.wall()
 
 
 def took(wall: float, adjusted: float) -> str:
@@ -165,9 +195,9 @@ class Steps:
     """A run's steps, each started in its own session, so that once the run's deadline passes,
     or the run is interrupted, a step can be killed with everything it started."""
 
-    def __init__(self, deadline: float) -> None:
+    def __init__(self, deadline: float, clock: Clock | None = None) -> None:
         self.deadline = deadline
-        self.clock = Clock()
+        self.clock: Clock = clock or Clock()
         self.stopped = threading.Event()
         self.lock = threading.Lock()
         # Popen's type depends on its arguments, which pyre reads differently per platform.
@@ -233,9 +263,9 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
 
     def attempt(
         step: Step, cmd: list[str]
-    ) -> tuple[int | None, list[dict[str, object]]]:
-        """Runs `cmd` for `step`, logging its output and how it ended; its exit code and the
-        records it logged."""
+    ) -> tuple[int | None, list[dict[str, object]], str]:
+        """Runs `cmd` for `step`, logging its output and how it ended; its exit code, the
+        records it logged and the output that names its failed checks."""
         t, wall = clock.now(), clock.wall()
         with run.step(env) as (step_env, results):
             code, output = steps.run(cmd, step.cwd, step_env)
@@ -255,7 +285,9 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
             checks = step.failed(output)
             ended += f"; rerunning {', '.join(checks) if checks else 'it'} once"
             log.append(ended)
-            again, rerun = attempt(Step(step.name, step.cmd, step.cwd), cmd + checks)
+            again, rerun, output_again = attempt(
+                Step(step.name, step.cmd, step.cwd), cmd + checks
+            )
             # A narrowed rerun is a flake only if it ran each check that failed and it passed:
             # a filter that reaches none of them passes having proved nothing.
             missed = (
@@ -266,18 +298,18 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
                     f"{ended.split(';')[0]}; the rerun did not pass {', '.join(missed)}:"
                     " the failure stands"
                 )
-                return code, records
+                return code, records, output
             if again == 0:
                 flaky.extend(checks or [step.name])
                 for r in records:
                     r["flaky"] = r["outcome"] == "fail"
-            return again, rerun
+            return again, rerun, output_again
         log.append(ended)
-        return code, records
+        return code, records, output
 
     for step in lane.steps:
         t, flakes = clock.now(), len(flaky)
-        code, records = attempt(step, step.cmd)
+        code, records, output = attempt(step, step.cmd)
         why = verdicts.excused(records) if code not in (0, None, CANNOT_RUN) else []
         if why:
             excused.extend(why)
@@ -287,6 +319,9 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
             continue
         if code != 0:
             timings.append(f"{step.name} {'TIMED OUT' if code is None else 'FAILED'}")
+            failure = None
+            if step.failed and code not in (None, CANNOT_RUN):
+                failure = Failure(step, step.failed(output), records, lane.warm)
             return Outcome(
                 lane.name,
                 False,
@@ -295,6 +330,7 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
                 timings,
                 flaky,
                 excused,
+                failure,
             )
         rerun = " after a rerun" if len(flaky) > flakes else ""
         timings.append(f"{step.name} {clock.now() - t:.0f} s{rerun}")
@@ -303,10 +339,24 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
     )
 
 
+@dataclass
+class Report:
+    code: int
+    outcomes: list[Outcome]
+    over: bool
+    # Whether the load went over the cores (`Clock.loaded`), or the caches were built cold.
+    loaded: bool
+    cold: bool
+    wall: float
+
+
 def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
+    return run_all(lanes, script, budget, strict).code
+
+
+def run_all(lanes: list[Lane], script: str, budget: int, strict: bool) -> Report:
     steps = Steps(float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)))
-    if any(lane.warm for lane in lanes):
-        warm.ensure()
+    cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
     with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
@@ -344,7 +394,9 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
         # A run slowed by other work (a game, `just longthink` at full power) looks like a slow
         # step in every lane at once; the load says which it was before anyone bisects.
         print(f"{script}: {load_note()}")
-    return 1 if failed or (over and strict) else 0
+    code = 1 if failed or (over and strict) else 0
+    clock = steps.clock
+    return Report(code, outcomes, over, clock.loaded(), cold, clock.wall())
 
 
 def load_note() -> str:
@@ -579,6 +631,7 @@ def changed_cards(changed: list[str] | None) -> list[str]:
 
 
 def slow(args: argparse.Namespace) -> int:
+    started = time.monotonic()
     lanes = {
         "repo": repo_lane(),
         "python": python_lane(),
@@ -602,7 +655,32 @@ def slow(args: argparse.Namespace) -> int:
     if unknown:
         raise SystemExit(f"unknown lanes {sorted(unknown)}; lanes: {' '.join(lanes)}")
     budget = int(os.environ.get("CI_BUDGET_S", SLOW_BUDGET))
-    return run_lanes([lanes[n] for n in chosen], "ci", budget, strict=True)
+    return slow_run([lanes[n] for n in chosen], budget, started)
+
+
+def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
+    """Slow CI on `lanes`, begun at `started` (time.monotonic). A run over budget with nothing
+    failed, on a loaded machine or a cold cache, reruns once; over budget under load again, it
+    is excused and files nothing. A failure that survived its rerun is bisected (bisect.py).
+    """
+    from . import bisect  # It imports this module.
+
+    report = run_all(lanes, "ci", budget, strict=True)
+    failed = [o for o in report.outcomes if not o.ok]
+    if report.over and not failed and (report.loaded or report.cold):
+        why = "under load" if report.loaded else "on a cold cache"
+        if bisect.time_left(started) < report.wall:
+            print(f"excused: over budget {why}, with no time left to rerun")
+            return 0
+        print(f"ci: over budget {why}: rerunning the whole run once")
+        report = run_all(lanes, "ci", budget, strict=True)
+        failed = [o for o in report.outcomes if not o.ok]
+        if report.over and not failed and report.loaded:
+            print("excused: over budget under load")
+            return 0
+    if failed:
+        bisect.after(failed, started)
+    return report.code
 
 
 # `env!` of a build path fixes the compiling worktree's absolute path into the binary. The warm
@@ -650,104 +728,6 @@ def pytest_step() -> int:
         [sys.executable, "-m", "pytest", "-q"], cwd=paths.TOOLS, check=False
     ).returncode
     return 0 if code == 5 else code  # 5: no tests collected
-
-
-def nextest_filter(tests: Iterable[str]) -> str:
-    """A filterset of exactly `tests`, each `<binary> <test>` as nextest names a failure."""
-    return " | ".join(
-        f"(binary_id({binary}) & test(={name}))"
-        for binary, name in (t.split(" ", 1) for t in tests)
-    )
-
-
-def rust_tests_step(*only: str) -> int:
-    """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`).
-    cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
-    it cannot list the harness-less `allocations` targets, so cargo test runs those beside it
-    once everything is built. Plain cargo test where cargo-nextest is missing. Each test's result
-    goes to the run log: nextest's from its JUnit report (rust/.config/nextest.toml), the
-    `allocations` targets' as one check."""
-    cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
-    if shutil.which("cargo-nextest") is None:
-        return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
-    build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
-    if build.returncode != 0:
-        return CANNOT_RUN
-    # Every test runs past a failure, so that a rerun of those named failed covers the run:
-    # nextest would otherwise cancel the rest unrun.
-    nextest = [
-        "cargo",
-        "nextest",
-        "run",
-        "--locked",
-        f"--profile={NEXTEST_PROFILE}",
-        "--workspace",
-        "--cargo-quiet",
-        "--no-fail-fast",
-        "--status-level=fail",
-        "--final-status-level=fail",
-        "-E",
-        nextest_filter(only) if only else "not binary(allocations)",
-    ]
-    allocations = [*cargo, "--test", "allocations"]
-    jobs = [nextest] if only else [nextest, allocations]
-    junit = nextest_junit()
-    junit.unlink(missing_ok=True)
-
-    def run(cmd: list[str]) -> tuple[subprocess.CompletedProcess[str], float]:
-        started = time.perf_counter()
-        done = subprocess.run(
-            cmd,
-            cwd=paths.RUST,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            errors="replace",
-            check=False,
-        )
-        return done, time.perf_counter() - started
-
-    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-        runs = list(pool.map(run, jobs))
-    for cmd, (r, seconds) in zip(jobs, runs):
-        print(r.stdout.rstrip(), flush=True)
-        if cmd is allocations:
-            if r.returncode != 0:
-                print(ALLOCATIONS_FAILED, flush=True)
-            runlog.result(
-                "rust:allocations", "pass" if r.returncode == 0 else "fail", seconds
-            )
-    try:
-        for check, outcome, took in junit_results(junit.read_text()):
-            runlog.result(check, outcome, took)
-    except (OSError, ET.ParseError) as e:
-        print(f"rust-tests: no per-test results for the run log: {e}")
-    return next((r.returncode for r, _ in runs if r.returncode != 0), 0)
-
-
-NEXTEST_PROFILE = "check"
-
-
-def nextest_junit() -> Path:
-    """Where nextest's `check` profile writes its JUnit report (rust/.config/nextest.toml)."""
-    target = Path(os.environ.get("CARGO_TARGET_DIR") or paths.RUST / "target")
-    return target / "nextest" / NEXTEST_PROFILE / "junit.xml"
-
-
-def junit_results(xml: str) -> list[tuple[str, str, float]]:
-    """Each test in nextest's JUnit report as a run-log check, `rust:<binary>::<test path>`,
-    with its outcome and seconds. A test that failed and then passed on a retry passed.
-    """
-    found: list[tuple[str, str, float]] = []
-    for case in ET.fromstring(xml).iter("testcase"):
-        outcome = "pass"
-        if case.find("failure") is not None or case.find("error") is not None:
-            outcome = "fail"
-        elif case.find("skipped") is not None:
-            outcome = "skip"
-        check = f"rust:{case.get('classname')}::{case.get('name')}"
-        found.append((check, outcome, float(case.get("time") or 0)))
-    return found
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
