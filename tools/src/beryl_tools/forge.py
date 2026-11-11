@@ -200,8 +200,10 @@ def permanent_text(
     return "|".join(parts)
 
 
-def step(action: JsonObject) -> JsonObject | None:
-    """One Beryl action as a harness step, or None for an assert left unchecked."""
+def step(action: JsonObject, purpose: object = None) -> JsonObject | None:
+    """One Beryl action as a harness step, or None for an assert left unchecked. `purpose` is
+    what the prompt of the decision an answer answers is for, as the trace names it: a kind
+    says only the form of the answer."""
     kind = action["action"]
     if kind == "PlayLand":
         return {"op": "play_land", "player": action["player"], "card": action["card"]}
@@ -254,7 +256,7 @@ def step(action: JsonObject) -> JsonObject | None:
             raise Unsupported("a chosen payment plan")
         if action["kind"] == "Priority" and pick["pick"] == "Card":
             raise Unsupported("a mana ability activated at priority")
-        if action["kind"] == "ExileCost":
+        if purpose == "exile-cost":
             # Forge's AI pays a spell's costs itself (AiCostDecision), asking its controller
             # nothing.
             raise Unsupported("a choice of the cards an exile cost takes")
@@ -262,6 +264,7 @@ def step(action: JsonObject) -> JsonObject | None:
             "op": "answer",
             "player": action["player"],
             "kind": action["kind"],
+            "purpose": purpose,
             "pick": pick,
         }
     if kind == "Assert":
@@ -303,7 +306,7 @@ def export(
                 # for Thieving Skydiver's kicker {X} with one mana to pay it.
                 if i < len(trace):
                     steps.extend(
-                        cast(JsonObject, step(forced))
+                        cast(JsonObject, step(forced, forced.get("purpose")))
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
                         if forced["kind"] in ("Target", "X")
                     )
@@ -315,7 +318,8 @@ def export(
                 if action["action"] == "Cast" and action["card"] in flashback:
                     # The harness finds Forge's flashback spell but fails to play it.
                     raise Unsupported(f"casting {action['card']} with flashback")
-                converted = step(action)
+                purpose = trace[i].get("purpose") if i < len(trace) else None
+                converted = step(action, purpose)
                 if converted is None:
                     unchecked += 1
                 else:

@@ -341,6 +341,19 @@ public final class BerylForgeHarness {
         }
 
         /**
+         * Whether `step` answers a question of `player`'s whose prompt is for `purpose`, as
+         * Beryl's trace names it: a kind says only the form of the answer.
+         */
+        boolean isAnswerFor(JsonObject step, Player player, String purpose) {
+            return step != null
+                    && op(step).equals("answer")
+                    && step.get("player").getAsInt() == seat(player)
+                    && step.has("purpose")
+                    && !step.get("purpose").isJsonNull()
+                    && purpose.equals(step.get("purpose").getAsString());
+        }
+
+        /**
          * At a question Forge asks `player` other than priority: if the script's next step (past
          * asserts) answers it, checks those asserts here, ends a Resolve and returns the pick;
          * otherwise returns null and the AI answers.
@@ -378,6 +391,14 @@ public final class BerylForgeHarness {
         /** Takes the next answer only if it is one, without checking asserts first. */
         JsonObject takeFollowing(Player player, Set<String> kinds) {
             if (next < steps.size() && isAnswer(steps.get(next), player, kinds)) {
+                return steps.get(next++).getAsJsonObject("pick");
+            }
+            return null;
+        }
+
+        /** Takes the next answer only if its prompt is for `purpose`, without checking asserts first. */
+        JsonObject takeFollowingFor(Player player, String purpose) {
+            if (next < steps.size() && isAnswerFor(steps.get(next), player, purpose)) {
                 return steps.get(next++).getAsJsonObject("pick");
             }
             return null;
@@ -926,9 +947,9 @@ public final class BerylForgeHarness {
 
     /** The AI's controller, with the script's answers where it has them. */
     static final class ScriptedController extends PlayerControllerAi {
-        private static final Set<String> YES_NO = Set.of("YesNo", "PayLife");
-        private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "Discard", "AttackTarget", "CastOffer");
-        private static final Set<String> OPTIONAL_OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "Discard", "AttackTarget", "CastOffer", "YesNo");
+        private static final Set<String> YES_NO = Set.of("YesNo");
+        private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer");
+        private static final Set<String> OPTIONAL_OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer", "YesNo");
 
         private final Run run;
         // What the script picked since this player's last priority, in its order.
@@ -1335,13 +1356,13 @@ public final class BerylForgeHarness {
 
         @Override
         public Map<Card, forge.card.mana.ManaCostShard> chooseCardsForConvokeOrImprovise(SpellAbility sa, forge.card.mana.ManaCost manaCost, CardCollectionView untapped, boolean artifacts, boolean creatures, Integer maxReduction) {
-            if (!run.isAnswer(run.peekPastAsserts(), player, Set.of("Waterbend"))) {
+            if (!run.isAnswerFor(run.peekPastAsserts(), player, "waterbend")) {
                 return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untapped, artifacts, creatures, maxReduction);
             }
             run.checkAsserts();
             Map<Card, forge.card.mana.ManaCostShard> tapped = new java.util.LinkedHashMap<>();
             List<Card> remaining = new ArrayList<>(untapped);
-            for (JsonObject pick = run.takeFollowing(player, Set.of("Waterbend")); pick != null && pick.get("pick").getAsString().equals("Card"); pick = run.takeFollowing(player, Set.of("Waterbend"))) {
+            for (JsonObject pick = run.takeFollowingFor(player, "waterbend"); pick != null && pick.get("pick").getAsString().equals("Card"); pick = run.takeFollowingFor(player, "waterbend")) {
                 Card card = (Card) run.resolvePick(pick, remaining);
                 remaining.remove(card);
                 tapped.put(card, forge.card.mana.ManaCostShard.GENERIC);

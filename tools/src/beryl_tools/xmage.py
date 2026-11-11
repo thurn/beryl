@@ -185,12 +185,13 @@ MAY_CHOOSE: dict[str, tuple[bool, str]] = {
     "Thundertrap Trainer": (True, "addTarget"),
 }
 
-# Questions with one answer, which Beryl answers silently, that XMage asks anyway: targets (with
-# none to choose too), X, whose limit XMage leaves to the payment, and the permanents to tap
-# for a crew or waterbend cost.
-FORCED_ASKED = ("Target", "TargetCount", "X", "Crew", "Waterbend", "ExileCost")
+# Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
+# targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
+# prompt is for (the trace's `purpose`), the permanents to tap or cards to exile for a cost.
+FORCED_ASKED = ("Target", "TargetCount", "X")
+FORCED_COSTS = ("crew", "waterbend", "exile-cost")
 # Others XMage asks when the one answer stands for several identical cards.
-FORCED_CHOICES = ("Discard", "ChooseObject", "ChooseUpTo")
+FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 
 # Counterspells whose "unless its controller pays" XMage asks even of a controller who cannot
 # pay, where Beryl asks nothing (CR 118.3): XMage's mana costs can always be paid as far as its
@@ -218,17 +219,10 @@ SCRIES = ("Aang's Iceberg",)
 # unasked where XMage asks for them, so the scenario cannot name the answer.
 TAKES: dict[str, int] = {"Stock Up": 2}
 
-# The answers XMage takes from the choice queue, by Beryl decision kind.
-CHOICE_KINDS = (
-    "ChooseUpTo",
-    "ChooseObject",
-    "Discard",
-    "TriggerOrder",
-    "Crew",
-    "Waterbend",
-    "ExileCost",
-)
-YES_NO_KINDS = ("YesNo", "PayLife", "CastOffer")
+# The answers XMage takes from the choice queue, by Beryl decision kind: with these, a
+# waterbend's permanents, which Beryl asks as a payment whose purpose says so.
+CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
+YES_NO_KINDS = ("YesNo", "CastOffer")
 
 
 class Unsupported(Exception):
@@ -288,6 +282,8 @@ class Position:
     step: str
     decider: int | None
     kind: str | None
+    # What the open decision's prompt is for: a kind says only the form of its answer.
+    purpose: str | None
     stack: list[Json]
     flips: list[Json]
     taps: list[str]
@@ -439,7 +435,8 @@ class Exporter:
         answer where XMage asks it too, optional where it may not."""
         kind = answer["kind"]
         scrying = self.scry is not None and kind == "ChooseObject"
-        if kind in FORCED_ASKED or self.may_choose is not None or scrying:
+        asked = kind in FORCED_ASKED or answer.get("purpose") in FORCED_COSTS
+        if asked or self.may_choose is not None or scrying:
             self.answer(answer, p)
             return
         pick = cast(Json, answer["pick"])
@@ -464,6 +461,7 @@ class Exporter:
             step=cast(str, t["step"]),
             decider=cast("int | None", t["decider"]),
             kind=cast("str | None", t["kind"]),
+            purpose=cast("str | None", t.get("purpose")),
             stack=cast(list[Json], t["stack"]),
             flips=cast(list[Json], t["flips"]),
             taps=cast(list[str], t["taps"]),
@@ -759,6 +757,8 @@ class Exporter:
             return
         who = self.player(action["player"])
         kind = cast(str, action["kind"])
+        # A forced answer says its own; a scripted one answers the decision open at `p`.
+        bending = action.get("purpose", p.purpose) == "waterbend"
         source = cast(str, p.stack[-1]["name"]) if p.stack else None
         if kind == "YesNo" and source is not None:
             self.unless_pays.pop(source, None)
@@ -832,10 +832,10 @@ class Exporter:
             )
         elif kind == "TriggerOrder" and card in TRIGGERS_FIRST:
             self.emit(f"setChoice({who}, {java_string(TRIGGERS_FIRST[card])});")
-        elif kind in CHOICE_KINDS and card is not None:
+        elif (kind in CHOICE_KINDS or bending) and card is not None:
             name = java_string(self.object_name(card, p))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
-        elif kind in ("ChooseUpTo", "Waterbend") and what == "Done":
+        elif (kind == "ChooseUpTo" or bending) and what == "Done":
             if self.choice_command(source, kind) == "addTarget":
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
             else:

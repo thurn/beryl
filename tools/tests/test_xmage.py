@@ -232,6 +232,7 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> N
         step="End",
         decider=0,
         kind="ChooseUpTo",
+        purpose="untap",
         stack=[{"name": source}],
         flips=[],
         taps=[],
@@ -249,4 +250,45 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> N
         'setOptionalChoice(playerA, 1, PhaseStep.END_TURN, "No");',
         'setChoice(playerA, "Tundra");',
         'setChoice(playerA, "Island");',
+    ]
+
+
+def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
+    # Beryl asks a waterbend's permanents as a mana payment and a crew's creatures as a choice
+    # of an object, as it asks an effect's: the trace's purpose says which they are.
+    entry: xmage.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+    }
+    export = xmage.Export(card="Aang's Iceberg", scenario="costs", method="costs")
+    writer = xmage.Exporter(entry, xmage.Faces.load(cards.OUTPUT), export)
+    position = xmage.Position(
+        turn=1,
+        step="PrecombatMain",
+        decider=0,
+        kind="ManaPayment",
+        purpose="waterbend",
+        stack=[{"name": "Aang's Iceberg"}],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[1, 0],
+    )
+    crypt: xmage.Json = {"pick": "Card", "card": "Mana Crypt"}
+    writer.answer({"player": 0, "kind": "ManaPayment", "pick": crypt}, position)
+    writer.answer(
+        {"player": 0, "kind": "ManaPayment", "pick": {"pick": "Done"}}, position
+    )
+    # XMage asks a cost's one answer, and an effect's only when it stands for several cards.
+    forced: xmage.Json = {"player": 0, "kind": "ChooseObject", "turn": 1}
+    forced |= {"step": "PrecombatMain", "pick": {"pick": "Card", "card": "Island"}}
+    writer.forced(forced | {"purpose": "crew"}, position)
+    writer.forced(forced | {"purpose": "discard"}, position)
+    assert export.body == [
+        'setChoice(playerA, "Mana Crypt");',
+        "setChoice(playerA, TestPlayer.CHOICE_SKIP);",
+        'setChoice(playerA, "Island");',
+        'setOptionalChoice(playerA, 1, PhaseStep.PRECOMBAT_MAIN, "Island");',
     ]
