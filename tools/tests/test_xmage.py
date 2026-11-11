@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import cards, checks, oracles, xmage
+from beryl_tools import card_store, checks, oracles, xmage
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-xmage.json"
 XMAGE_CARDS = {
@@ -27,7 +27,7 @@ XMAGE_CARDS = {
 
 def exports(known: set[str] = XMAGE_CARDS) -> dict[str, xmage.Export]:
     dump = json.loads(FIXTURE.read_text())
-    faces = xmage.Faces.load(cards.OUTPUT)
+    faces = xmage.Faces.load(card_store.STORE)
     return {e.scenario: e for e in xmage.export_all(dump, faces, known)}
 
 
@@ -226,7 +226,7 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> N
         "actions": [],
     }
     export = xmage.Export(card=source, scenario="untap choices", method="untap_choices")
-    writer = xmage.Exporter(entry, xmage.Faces.load(cards.OUTPUT), export)
+    writer = xmage.Exporter(entry, xmage.Faces.load(card_store.STORE), export)
     position = xmage.Position(
         turn=1,
         step="End",
@@ -261,7 +261,7 @@ def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
         "actions": [],
     }
     export = xmage.Export(card="Aang's Iceberg", scenario="costs", method="costs")
-    writer = xmage.Exporter(entry, xmage.Faces.load(cards.OUTPUT), export)
+    writer = xmage.Exporter(entry, xmage.Faces.load(card_store.STORE), export)
     position = xmage.Position(
         turn=1,
         step="PrecombatMain",

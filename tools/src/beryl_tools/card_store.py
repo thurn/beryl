@@ -146,6 +146,17 @@ class Store:
         """The tokens and emblems named `name`."""
         return self.records("token", name)
 
+    def made_by(self, record: Json) -> list[Json]:
+        """The token and emblem records a card's record says it makes."""
+        out: list[Json] = []
+        for part in cast(list[Json], record.get("tokens", [])):
+            out += [
+                t
+                for t in self.tokens(str(part["name"]))
+                if t["scryfall_id"] == part["scryfall_id"]
+            ]
+        return out
+
     def cards(self, names: Iterable[str]) -> list[Json]:
         """The cards of `names`, in order; a LookupError names those the store lacks."""
         found = {n: self.card(n) for n in dict.fromkeys(names)}

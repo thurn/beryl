@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import paths
+from . import card_store, cards, paths
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
 HARNESS_CLASS = "beryl.BerylForgeHarness"
@@ -130,31 +130,35 @@ class Card:
     loyalty: int | None
 
 
-def card_faces(cards_json: Path) -> dict[str, Card]:
-    """Every face name in data/cards.json with what a GameState line needs: its printed
-    loyalty, which GameState does not supply on its own."""
-    data = json.loads(cards_json.read_text())
+def card_faces(store: Path) -> dict[str, Card]:
+    """Every face name of the decks' cards and their tokens in the card store with what a
+    GameState line needs: its printed loyalty, which GameState does not supply on its own.
+    """
     faces: dict[str, Card] = {}
-    for card in [*data["cards"], *data["tokens"]]:
-        for face in card["faces"]:
+    listed, tokens = cards.listed(store)
+    for record in [*listed, *tokens]:
+        for face in cast(list[JsonObject], record["faces"]):
             loyalty = face.get("loyalty")
-            faces[face["name"]] = Card(int(loyalty) if loyalty is not None else None)
+            faces[cast(str, face["name"])] = Card(
+                int(cast(str, loyalty)) if loyalty is not None else None
+            )
     return faces
 
 
-def face_name(card: str, face: int, faces: Mapping[str, Card], cards_json: Path) -> str:
+def face_name(card: str, face: int, faces: Mapping[str, Card], store: Path) -> str:
     """The name of face `face` of the card named `card`."""
     if face == 0:
         return card
-    data = json.loads(cards_json.read_text())
-    for entry in data["cards"]:
-        names = [f["name"] for f in entry["faces"]]
+    with card_store.Store(store) as cards_store:
+        record = cards_store.card(card)
+    if record is not None:
+        names = [cast(str, f["name"]) for f in cast(list[JsonObject], record["faces"])]
         if names[0] == card and face < len(names):
             return names[face]
     raise Unsupported(f"no face {face} of {card}")
 
 
-def state_text(setup: JsonObject, faces: Mapping[str, Card], cards_json: Path) -> str:
+def state_text(setup: JsonObject, faces: Mapping[str, Card], store: Path) -> str:
     """The scenario's setup as a GameState text: one `key=value` line each."""
     players = cast(list[JsonObject], setup["players"])
     lines = [
@@ -172,13 +176,13 @@ def state_text(setup: JsonObject, faces: Mapping[str, Card], cards_json: Path) -
             lines.append(f"p{seat}{zone}={';'.join(names)}")
         permanents = []
         for permanent in cast(list[JsonObject], player["battlefield"]):
-            permanents.append(permanent_text(permanent, faces, cards_json))
+            permanents.append(permanent_text(permanent, faces, store))
         lines.append(f"p{seat}battlefield={';'.join(permanents)}")
     return "\n".join(lines)
 
 
 def permanent_text(
-    permanent: JsonObject, faces: Mapping[str, Card], cards_json: Path
+    permanent: JsonObject, faces: Mapping[str, Card], store: Path
 ) -> str:
     card = cast(str, permanent["card"])
     face = cast(int, permanent["face"])
@@ -188,7 +192,7 @@ def permanent_text(
     if face:
         parts.append("Transformed")
     counters = cast(JsonObject | None, permanent["counters"])
-    up = faces.get(face_name(card, face, faces, cards_json))
+    up = faces.get(face_name(card, face, faces, store))
     if counters is not None:
         parts.append(
             f"Counters:{COUNTERS[cast(str, counters['kind'])]}={counters['count']}"
@@ -285,10 +289,10 @@ def step(action: JsonObject, purpose: object = None) -> JsonObject | None:
 
 
 def export(
-    entries: Sequence[JsonObject], cards_json: Path
+    entries: Sequence[JsonObject], store: Path
 ) -> tuple[list[JsonObject], list[JsonObject]]:
     """The dump's scenarios as harness input, and the unsupported ones with their reasons."""
-    faces = card_faces(cards_json)
+    faces = card_faces(store)
     exported: list[JsonObject] = []
     skipped: list[JsonObject] = []
     for entry in entries:
@@ -329,7 +333,7 @@ def export(
                 "card": entry["card"],
                 "name": entry["name"],
                 "seed": setup["seed"],
-                "state": state_text(setup, faces, cards_json),
+                "state": state_text(setup, faces, store),
                 "steps": steps,
                 "unchecked": unchecked,
             }

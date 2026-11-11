@@ -18,6 +18,7 @@ import tokenize
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
+from typing import cast
 
 from . import cards, paths
 
@@ -255,11 +256,13 @@ def all_card_names() -> set[str]:
     """The cards and tokens of the card data, but a token named by one word, such as Copy,
     which is no name in prose, and the basic land types."""
     names: set[str] = set()
-    data = json.loads(cards.OUTPUT.read_text())
-    tokens = {t["name"] for t in data["tokens"]}
-    for entry in [*data["cards"], *data["tokens"]]:
-        names.add(entry["name"])
-        names.update(face["name"] for face in entry.get("faces", []))
+    deck_cards, deck_tokens = cards.listed()
+    tokens = {str(t["name"]) for t in deck_tokens}
+    for entry in [*deck_cards, *deck_tokens]:
+        names.add(str(entry["name"]))
+        names.update(
+            str(face["name"]) for face in cast(list[dict[str, object]], entry["faces"])
+        )
     return {
         n for n in names if (" " in n or n not in tokens) and n not in BASIC_LAND_TYPES
     }

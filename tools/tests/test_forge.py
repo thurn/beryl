@@ -2,10 +2,9 @@ import json
 from pathlib import Path
 from typing import cast
 
-from beryl_tools import forge, paths
+from beryl_tools import card_store, forge, paths
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-forge.json"
-CARDS: Path = paths.REPO / "data" / "cards.json"
 
 
 def dumped() -> list[dict[str, object]]:
@@ -21,7 +20,7 @@ def steps(scenario: Json) -> list[Json]:
 
 
 def exported() -> dict[str, Json]:
-    scenarios, skipped = forge.export(dumped(), CARDS)
+    scenarios, skipped = forge.export(dumped(), card_store.STORE)
     assert skipped == []
     return {str(s["card"]): s for s in scenarios}
 
@@ -82,7 +81,7 @@ def test_coin_flips_come_from_the_trace() -> None:
 
 def test_without_a_trace_flips_are_unknown() -> None:
     entries = [{k: v for k, v in e.items() if k != "trace"} for e in dumped()]
-    scenarios, _ = forge.export(entries, CARDS)
+    scenarios, _ = forge.export(entries, card_store.STORE)
     assert all("flips" not in s for s in scenarios)
 
 
@@ -92,7 +91,7 @@ def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
     actions.insert(
         0, {"action": "Cast", "player": 0, "card": "Oust", "face": 1, "costs": 0}
     )
-    scenarios, skipped = forge.export([{**entry, "actions": actions}], CARDS)
+    scenarios, skipped = forge.export([{**entry, "actions": actions}], card_store.STORE)
     assert scenarios == []
     assert skipped == [
         {

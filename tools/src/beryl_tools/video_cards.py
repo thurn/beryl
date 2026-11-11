@@ -2,7 +2,7 @@
 
 Both read every index in ~/arena (video.py) and match the text on screen against card names.
 
-- `cards` counts, for each card of Beryl's own (data/cards.json), its casts, its abilities and
+- `cards` counts, for each card of Beryl's own (data/card-store.tsv), its casts, its abilities and
   where else it is seen. `--top N` ranks every Magic card instead, by Scryfall's list of names,
   fetched once into the cache.
 - `card NAME` writes everything about one card to ~/arena/cards/: each time it is cast or one
@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import cast
 
 from . import scryfall
-from .cards import OUTPUT as CARDS_JSON
+from .cards import listed
 from . import paths, video
 from .video import Event, Frame, Line
 
@@ -201,9 +201,12 @@ def find(recordings: list[Recording], names: Names) -> dict[str, Card]:
 
 def pool() -> list[str]:
     """The names of Beryl's cards, a name per face."""
-    data = json.loads(CARDS_JSON.read_text())
     return sorted(
-        {str(face["name"]) for card in data["cards"] for face in card["faces"]}
+        {
+            str(face["name"])
+            for card in listed()[0]
+            for face in cast(list[dict[str, object]], card["faces"])
+        }
     )
 
 

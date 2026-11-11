@@ -128,6 +128,18 @@ def m1_names() -> list[str]:
     )
 
 
+def listed(path: Path = card_store.STORE) -> tuple[list[Json], list[Json]]:
+    """The store's records for `m1_names`' cards, each once, and for the tokens and emblems
+    they make: what data/cards.json holds, which the tools read from the store instead.
+    """
+    with card_store.Store(path) as store:
+        found = {str(r["scryfall_id"]): r for r in store.cards(m1_names())}
+        tokens = {
+            str(t["scryfall_id"]): t for r in found.values() for t in store.made_by(r)
+        }
+    return list(found.values()), list(tokens.values())
+
+
 def printings(path: Path) -> dict[str, Printing]:
     """Pinned printings by card name, the basics' among them."""
     pins = dict(BASIC_PRINTINGS)

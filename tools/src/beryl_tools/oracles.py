@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import cards, checks, forge, paths, runlog, system, xmage
+from . import card_store, cards, checks, forge, paths, runlog, system, xmage
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -500,7 +500,7 @@ def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
 
 def check_forge(entries: list[dict[str, object]], work: Path) -> dict[str, object]:
     """Plays the scenarios in Forge; the summary of `forge.summarize`."""
-    exported, skipped = forge.export(entries, paths.REPO / "data" / "cards.json")
+    exported, skipped = forge.export(entries, card_store.STORE)
     scenarios = work / "forge-scenarios.json"
     scenarios.write_text(json.dumps(exported, indent=1))
     classes = root() / "forge-harness"
@@ -550,7 +550,7 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
     (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
     """
-    faces = xmage.Faces.load(cards.OUTPUT)
+    faces = xmage.Faces.load(card_store.STORE)
     exports = xmage.export_all(entries, faces, xmage.xmage_cards(checkout(XMAGE)))
     classes = xmage.write(exports, xmage_tests())
     for old in reports().glob(f"TEST-{xmage.PACKAGE}.*.xml"):

@@ -39,6 +39,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from . import cards
+
 Json = dict[str, object]
 
 PACKAGE = "org.mage.test.beryl"
@@ -231,8 +233,9 @@ class Unsupported(Exception):
 
 @dataclass(frozen=True)
 class Faces:
-    """What the exporter needs from data/cards.json: each card's back face, the back faces that
-    are lands, printed loyalty by face name, and each card's front mana cost."""
+    """What the exporter needs from the card store: each card's back face, the back faces that
+    are lands, printed loyalty by face name, and each card's front mana cost, for the cards of
+    the decks."""
 
     back: dict[str, str]
     land_back: dict[str, str]
@@ -240,13 +243,13 @@ class Faces:
     mana_cost: dict[str, str]
 
     @staticmethod
-    def load(path: Path) -> Faces:
-        data = cast(Json, json.loads(path.read_text()))
+    def load(store: Path) -> Faces:
+        listed, _ = cards.listed(store)
         back: dict[str, str] = {}
         land_back: dict[str, str] = {}
         loyalty: dict[str, int] = {}
         mana_cost: dict[str, str] = {}
-        for card in cast(list[Json], data["cards"]):
+        for card in listed:
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
             mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))

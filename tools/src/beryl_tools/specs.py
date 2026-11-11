@@ -21,7 +21,6 @@ specced cards nearest it in rules text. Each card's film and shots replace only 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import shutil
@@ -33,8 +32,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import cast
 
-from . import cards, paths, scryfall, system, warm
+from . import card_store, cards, paths, scryfall, system, warm
 from .shots import (
     UiError,
     free_port,
@@ -119,12 +119,22 @@ def words(text: str, name: str) -> set[str]:
     return set(found) | {f"{a} {b}" for a, b in zip(found, found[1:])}
 
 
+def rules_text(record: card_store.Json) -> str:
+    """The rules text of each face of a card's record."""
+    return "\n".join(
+        str(f.get("oracle_text", ""))
+        for f in cast(list[card_store.Json], record["faces"])
+    )
+
+
 def oracle(name: str) -> str | None:
-    """A card's rules text: data/cards.json's, else Scryfall's; None offline or unknown."""
-    data = json.loads(cards.OUTPUT.read_text())
-    for card in data["cards"]:
-        if slug(card["name"]) == slug(name):
-            return "\n".join(f.get("oracle_text", "") for f in card["faces"])
+    """A card's rules text: the card store's (by its name, or the slug of a deck card's), else
+    Scryfall's; None offline or unknown."""
+    with card_store.Store() as store:
+        deck = {slug(n): n for n in cards.m1_names()}
+        record = store.card(deck.get(slug(name), name))
+    if record is not None:
+        return rules_text(record)
     url = "https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(name)
     try:
         found = scryfall.http_get(url)
@@ -142,17 +152,18 @@ def nearest(name: str, specced: set[str], most: int = 5) -> list[str]:
     if text is None:
         return []
     mine = words(text, name)
-    data = json.loads(cards.OUTPUT.read_text())
     scored: list[tuple[float, str]] = []
-    for card in data["cards"]:
-        if slug(card["name"]) not in specced or slug(card["name"]) == slug(name):
-            continue
-        theirs = words(
-            "\n".join(f.get("oracle_text", "") for f in card["faces"]), card["name"]
-        )
-        shared = len(mine & theirs) / max(1, len(mine | theirs))
-        if shared > 0:
-            scored.append((shared, card["name"]))
+    with card_store.Store() as store:
+        # The decks' cards, asked of the store one by one: never the whole pool.
+        for card in store.cards(cards.m1_names()):
+            if slug(str(card["name"])) not in specced or slug(
+                str(card["name"])
+            ) == slug(name):
+                continue
+            theirs = words(rules_text(card), str(card["name"]))
+            shared = len(mine & theirs) / max(1, len(mine | theirs))
+            if shared > 0:
+                scored.append((shared, str(card["name"])))
     return [n for _, n in sorted(scored, reverse=True)[:most]]
 
 
