@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from . import cards
+from .cards import listed
 
 Json = dict[str, object]
 
@@ -233,9 +233,7 @@ class Unsupported(Exception):
 
 @dataclass(frozen=True)
 class Faces:
-    """What the exporter needs from the card store: each card's back face, the back faces that
-    are lands, printed loyalty by face name, and each card's front mana cost, for the cards of
-    the decks."""
+    """What the exporter needs of the decks' cards in the store: backs, land backs, loyalty, cost."""
 
     back: dict[str, str]
     land_back: dict[str, str]
@@ -244,12 +242,11 @@ class Faces:
 
     @staticmethod
     def load(store: Path) -> Faces:
-        listed, _ = cards.listed(store)
         back: dict[str, str] = {}
         land_back: dict[str, str] = {}
         loyalty: dict[str, int] = {}
         mana_cost: dict[str, str] = {}
-        for card in listed:
+        for card in listed(store)[0]:
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
             mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))
