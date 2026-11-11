@@ -99,7 +99,7 @@ fn crewing() -> Play {
 /// attack before those that could and as little power as covers it, and confirms by its
 /// button once the power is met
 /// ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a): "Tap any number of
-/// untapped creatures you control other than this permanent with total power N or greater").
+/// other untapped creatures you control with total power N or greater").
 #[test]
 fn a_crew_cost_is_paid_by_picking_creatures_and_confirmed() {
     let mut play = crewing();

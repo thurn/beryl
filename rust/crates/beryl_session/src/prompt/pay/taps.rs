@@ -39,7 +39,7 @@ struct Activation {
 /// untapped artifact or creature you control rather than pay that mana") or counts what the
 /// tapped permanent has
 /// ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a): "Tap any number of
-/// untapped creatures you control other than this permanent with total power N or greater").
+/// other untapped creatures you control with total power N or greater").
 #[derive(Clone, Debug)]
 struct Contribution {
     mana: Option<Activation>,
@@ -266,11 +266,10 @@ fn in_turn(
 /// `picked`: the set that costs their controller least, creatures that could not attack this
 /// turn before those that could, and as little attacking power and as few permanents as
 /// cover it
-/// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
-/// ability with the tap symbol or the untap symbol in its activation cost can't be activated
-/// unless the creature has been under its controller's control continuously since their most
-/// recent turn began", and such a creature can't attack either; tapping it for another
-/// permanent's cost is allowed).
+/// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature can't attack
+/// unless it has been under its controller's control continuously since their most recent
+/// turn began"; tapping one for another permanent's cost is not an ability of its own, so
+/// nothing stops it).
 fn cover<L: Layout>(
     before: &State<L>,
     due: &Due,
@@ -607,7 +606,7 @@ fn line<L: Layout>(
             };
             (index, None)
         };
-        line.take(offered[index], picked);
+        line.take(*offered.get(index)?, picked);
         apply(&mut copy, t, &mut scratch, &mut Replay, choice(index));
         match next(&mut copy, t, &mut scratch, &mut Replay) {
             Step::Decide(next) => decision = next,

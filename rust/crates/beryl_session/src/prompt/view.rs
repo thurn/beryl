@@ -190,9 +190,11 @@ pub enum ButtonId {
     Confirm,
     /// Answers with nothing: pass priority, find nothing, no attackers. Where the prompt asks
     /// about a pick before it answers ([`ShapeView::Pick`]'s `warned`), it takes the pick back;
-    /// on the choice among a card's ways, open over a priority, it goes back to the priority.
+    /// on the choice among a card's ways, open over a priority, it goes back to the priority;
+    /// with attackers or blockers declared, it takes the declaration back.
     Decline,
-    /// Answers with what the marks suggest, as Auto Pay does.
+    /// Takes the session's default: Auto Pay answers with the payment the marks suggest, and
+    /// All Attack declares every creature that can attack, still to be confirmed.
     Auto,
     /// Passes priority on to the viewer's next stop in a later step.
     PassOn,
@@ -258,14 +260,19 @@ pub enum ShapeView {
         left: u8,
         shares: Vec<Share>,
     },
-    /// A cost paid with permanents: the marks say which pay and which the default would use.
+    /// A cost paid with permanents: the marks say which are picked to pay (`paying`), which
+    /// the default would tap for the rest (`suggested`) and which else a click can add
+    /// (`eligible`). A click on a permanent picks it or takes it back.
     Pay {
         /// The whole cost, and what of it is still to pay, each as the screen writes it: a
         /// mana cost as Oracle text does, a crew cost as its power.
         cost: String,
         left: String,
     },
-    /// Objects each aimed at something.
+    /// Objects each aimed at something: the marks say which can be declared (`eligible`) and
+    /// which are (`selected`), and, while some await their aim, what they can be aimed at
+    /// (`eligible`). A click on a creature declares it or takes it back; one on an aim aims
+    /// those awaiting it.
     Declare {
         /// The line drawn from each object to what it is aimed at.
         arrow: Arrow,

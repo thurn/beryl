@@ -7,8 +7,9 @@
 mod play;
 
 use beryl_cards::names::{
-    ELITE_SPELLBINDER, ISLAND, OVERLORD_OF_THE_MISTMOORS, SNAPCASTER_MAGE, TEFERI_TIME_RAVELER,
-    THIEVING_SKYDIVER, THUNDERTRAP_TRAINER, TRINKET_MAGE,
+    ADELINE_RESPLENDENT_CATHAR, ELITE_SPELLBINDER, ISLAND, OVERLORD_OF_THE_MISTMOORS,
+    SNAPCASTER_MAGE, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
+    THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
 use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue as _;
@@ -484,4 +485,62 @@ fn two_blockers_aimed_at_one_of_two_attackers_alike_block_the_same_one() {
     let left = play.named(SNAPCASTER_MAGE, ZoneName::Battlefield, Side::Opponent);
     assert_eq!(left.len(), 1);
     assert_eq!(play.view.players.you.life, 18);
+}
+
+/// The human's turn with Adeline, Resplendent Cathar, whose attack makes a Human token
+/// attacking, and The Wandering Emperor across the table for it to attack.
+const TOKEN: Scenario = Scenario::new("a token made attacking")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .battlefield(P0, &[Permanent::new(ADELINE_RESPLENDENT_CATHAR)])
+    .battlefield(P1, &[Permanent::new(THE_WANDERING_EMPEROR)])
+    .library(P0, &[ISLAND; 6])
+    .library(P1, &[ISLAND; 6]);
+
+/// Attacks the defending player with Adeline, to the choice of what her token attacks.
+fn token_made() -> Play {
+    let mut play = Play::scenario(&TOKEN);
+    pass_to(&mut play, Kind::Attacker);
+    let adeline = play.named(ADELINE_RESPLENDENT_CATHAR, ZoneName::Battlefield, Side::You)[0];
+    assert!(play.on(adeline).is_some());
+    assert!(play.click(Click::On { on: OPPONENT }).is_some());
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    while play.decision().kind != Kind::AttackTarget {
+        play.choose(|c| *c == Candidate::Pass);
+    }
+    play
+}
+
+/// A creature put onto the battlefield attacking is aimed and nothing else
+/// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084): "its controller chooses
+/// which defending player, planeswalker a defending player controls, or battle a defending
+/// player protects it's attacking as it enters the battlefield"): the prompt opens with it
+/// awaiting its aim, and the click that gives it answers.
+#[test]
+fn a_creature_made_attacking_is_aimed_by_one_click() {
+    let mut play = token_made();
+    let emperor = play.named(THE_WANDERING_EMPEROR, ZoneName::Battlefield, Side::Opponent)[0];
+    let token = play.decision().prompt.about[0];
+    let open = format!(
+        "declare attack: Choose attack target\n\
+         declare attack:\n\
+         aiming #{token}\n\
+         eligible #{emperor} opponent\n\
+         selected #{token}\n"
+    );
+    assert_eq!(play.prompt(), open);
+    // There is nothing to declare or take back: only an aim is a click.
+    assert_eq!(play.on(token).as_deref(), Some(open.as_str()));
+    assert_eq!(
+        play.press(ButtonId::Decline).as_deref(),
+        Some(open.as_str())
+    );
+    let mut picked = token_made();
+    picked.choose(|c| {
+        *c == Candidate::Defender {
+            planeswalker: Some(emperor),
+        }
+    });
+    assert_eq!(play.on(emperor), None, "the aim answers");
+    assert_eq!(play.game.state(), picked.game.state());
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
 }
