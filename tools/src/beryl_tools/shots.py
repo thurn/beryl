@@ -34,7 +34,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import checks, paths, system, warm
+from . import checks, paths, selection, system, warm
 
 SERVER_TIMEOUT = 60.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
@@ -182,6 +182,10 @@ def fixture_views(name: str) -> int:
 def ui_shots(args: argparse.Namespace) -> int:
     if args.views:
         return fixture_views(args.views)
+    chooser = selection.Chooser("shots") if args.select else None
+    if chooser and chooser.choice.idle():
+        print("shots: the change reaches no shot")
+        return 0
     out = out_dir()
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
@@ -189,11 +193,13 @@ def ui_shots(args: argparse.Namespace) -> int:
         env = browser_env()
         # Recording builds and plays the fixtures; failing that, no shot was taken.
         code = checks.CANNOT_RUN if record_fixtures() else 0
-        if code == 0:
+        only = list(args.only)
+        if code == 0 and chooser:
+            only = chooser.run([RECORDED], only)
+        if code == 0 and (only or not chooser):
             with served_ui(env) as url:
                 code = subprocess.run(
-                    ["node", "scripts/shots.mjs", url, str(out), "shots.json"]
-                    + list(args.only),
+                    ["node", "scripts/shots.mjs", url, str(out), "shots.json"] + only,
                     cwd=paths.UI,
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -202,6 +208,9 @@ def ui_shots(args: argparse.Namespace) -> int:
     except UiError as e:
         print(f"ui-shots: {e}", file=sys.stderr)
         code = checks.CANNOT_RUN
+    finally:
+        if chooser:
+            chooser.label()
     if code != 0:
         print("ui-shots: FAILED", file=sys.stderr)
     return code
@@ -268,27 +277,52 @@ INTERACTION_FIXTURES = [
 
 def ui_test(args: argparse.Namespace) -> int:
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
+    chooser = selection.Chooser("ui-test") if args.select else None
+    if chooser and chooser.choice.idle():
+        print("ui-test: the change reaches no check")
+        return 0
     try:
         env = browser_env()
-        code = (
-            checks.CANNOT_RUN if record_fixtures(recorded, INTERACTION_FIXTURES) else 0
-        )
-        if code == 0:
-            with served_ui(env) as url:
-                code = subprocess.run(
-                    ["node", "scripts/interactions.mjs", url, str(recorded)]
-                    + list(args.only),
-                    cwd=paths.UI,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    check=False,
-                ).returncode
+        if record_fixtures(recorded, INTERACTION_FIXTURES):
+            code = checks.CANNOT_RUN
+        else:
+            code = interactions(env, recorded, list(args.only), chooser)
     except UiError as e:
         print(f"ui-test: {e}", file=sys.stderr)
         code = checks.CANNOT_RUN
+    finally:
+        if chooser:
+            chooser.label()
     if code != 0:
         print("ui-test: FAILED", file=sys.stderr)
     return code
+
+
+def interactions(
+    env: dict[str, str],
+    recorded: Path,
+    only: list[str],
+    chooser: selection.Chooser | None,
+) -> int:
+    """Plays interactions.mjs' checks: those `only` names, or with `chooser`, those it chose,
+    which the script matches exactly so that a rerun's filters narrow them."""
+    with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
+        if chooser:
+            titles = chooser.run([recorded], only)
+            if not titles:
+                return 0
+            if not only:
+                chosen = Path(tmp) / "chosen.txt"
+                chosen.write_text("".join(f"{t}\n" for t in titles))
+                env = {**env, selection.CHOSEN_ENV: str(chosen)}
+        with served_ui(env) as url:
+            return subprocess.run(
+                ["node", "scripts/interactions.mjs", url, str(recorded)] + only,
+                cwd=paths.UI,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            ).returncode
 
 
 def ui_live(args: argparse.Namespace) -> int:
@@ -365,6 +399,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("ui-shots", help="screenshot UI states headless (ui/shots.json)")
     p.add_argument("only", nargs="*", help="shot names; all of them by default")
     p.add_argument(
+        "--select",
+        action="store_true",
+        help="only the shots the branch's change can break, as many as fit (selection.py)",
+    )
+    p.add_argument(
         "--views",
         metavar="FIXTURE",
         help="list a fixture's views with the index each route's &at= takes",
@@ -377,6 +416,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "only",
         nargs="*",
         help="run only the checks whose titles contain one of these (any case)",
+    )
+    p.add_argument(
+        "--select",
+        action="store_true",
+        help="only the checks the branch's change can break, as many as fit (selection.py)",
     )
     p.set_defaults(func=ui_test)
     p = sub.add_parser(

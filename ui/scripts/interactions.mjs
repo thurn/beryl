@@ -32,15 +32,30 @@ import {
 import { audit, collect, record } from "./audit.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
-/** Whether the check `title` runs: every check, or those a filter names. A filter longer than
- * `title` that contains it opens a block of checks named after it (`${title} (variant)`), so the
- * K21 rerun, which passes the failed checks' full titles, reaches each one. */
-const wanted = (title) =>
-    filters.length === 0 ||
-    filters.some((f) => {
+/** The checks the fast check chose (`by ui-test --select`, tools' selection.py), by exact title,
+ * from the file `BERYL_CHECKS` names, one a line; null to run every check filters reach. */
+const chosenTitles = process.env.BERYL_CHECKS
+    ? new Set(
+          (await readFile(process.env.BERYL_CHECKS, "utf8"))
+              .split("\n")
+              .filter(Boolean),
+      )
+    : null;
+/** Whether `title` is reached: by any filter it contains or that contains it, and when checks
+ * were chosen, by one that contains it. A filter longer than `title` that contains it opens a
+ * block of checks named after it (`${title} (variant)`), so the K21 rerun, which passes the
+ * failed checks' full titles, reaches each one. */
+const reaches = (title, among) =>
+    among.some((f) => {
         const [t, g] = [title.toLowerCase(), f.toLowerCase()];
         return t.includes(g) || g.includes(t);
     });
+const wanted = (title) =>
+    (filters.length === 0 || reaches(title, filters)) &&
+    (!chosenTitles ||
+        [...chosenTitles].some((c) =>
+            c.toLowerCase().includes(title.toLowerCase()),
+        ));
 let ran = 0;
 if (!base || !fixtures) {
     console.error(
@@ -191,7 +206,7 @@ async function check(
         clock = "paused",
     } = {},
 ) {
-    if (!wanted(title)) return;
+    if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
     ran += 1;
     await queue(async () => {
         // A page whose boot lost one of its modules to the network (Windows now and then
@@ -829,7 +844,8 @@ await check(
 // The log names what an ability did and to what: an activation its source, its loyalty cost
 // (the counters paid go unsaid) and its targets, and a trigger with targets its source and them,
 // so a mill or a bounce that follows has its cause.
-{
+const abilityLog = "the log names an ability's source, cost and targets";
+if (wanted(abilityLog)) {
     const started = performance.now();
     const ability = (source, name, targets, triggered = false) => ({
         kind: "ability",
@@ -899,7 +915,8 @@ await check(
             "Subtlety triggered targeting Snapcaster Mage",
         ],
     );
-    const title = "the log names an ability's source, cost and targets";
+    const title = abilityLog;
+    ran += 1;
     console.log(`ok: ${title}`);
     recordResult(
         `ui-test:${title}`,
@@ -11051,13 +11068,17 @@ for (const next of ["player", "object", "attack"]) {
 await queue.drain();
 await browser.close();
 // A run of every check plays views and answers: none sounding means the sounds are unwired.
-if (filters.length === 0 && (sounded.views === 0 || sounded.heard === 0)) {
+if (
+    filters.length === 0 &&
+    !chosenTitles &&
+    (sounded.views === 0 || sounded.heard === 0)
+) {
     failed = true;
     console.error(
         `sound: ${JSON.stringify(sounded)} checked; expected some of each`,
     );
 }
-if (ran === 0) {
+if (ran === 0 && !chosenTitles) {
     failed = true;
     console.error(`no check's title contains ${filters.join(" or ")}`);
 }

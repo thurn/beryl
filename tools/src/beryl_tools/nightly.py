@@ -1,6 +1,7 @@
 """`by nightly`: the work that runs once a night on the development machine, from a launchd
-agent (`just nightly-install`): today, coverage of origin/staging (`by coverage`). It costs no
-agent tokens and needs no session open. Its record is this machine's, in
+agent (`just nightly-install`): today, coverage of origin/staging (`by coverage`) and the checks'
+verdicts the fast check orders by (`by ci-history`). It costs no agent tokens and needs no
+session open. Its record is this machine's, in
 `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and `last-output.txt`
 (the last run's output). More nightly work, such as the presentation track's motion captures and
 the nightly fuzz, joins as another [`Step`] in [`STEPS`].
@@ -76,7 +77,19 @@ def coverage_step(commit: str, out: IO[str]) -> int:
     ).returncode
 
 
-STEPS: list[Step] = [Step("coverage", coverage_step)]
+def history_step(commit: str, out: IO[str]) -> int:
+    """The checks' verdicts from the beads, kept for the fast check's ordering (verdicts.py)."""
+    command = [sys.executable, "-m", "beryl_tools.cli", "ci-history"]
+    return subprocess.run(
+        command,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).returncode
+
+
+STEPS: list[Step] = [Step("coverage", coverage_step), Step("history", history_step)]
 
 
 def read_log() -> list[dict[str, object]]:

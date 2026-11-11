@@ -176,8 +176,11 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   the burn-down list `data/card-names-allowlist.json`, whose counts only fall;
   `python -m beryl_tools.checks card-names --shrink` lowers them) and `oracle`
   (each changed card file's scenarios in XMage and Forge, skipped when another
-  oracle run holds the oracles past 10 s). It also refuses conflict markers and
-  bad commit subjects.
+  oracle run holds the oracles past 10 s). For a change to `ui/` or `rust/` it
+  also runs `ui-test` and `shots` on the browser checks the change can break, by
+  the nightly coverage (`just coverage`), worst failure record first, as many as
+  fit; the run log's `chosen` says why each ran, and `cut` marks those left to
+  slow CI. It also refuses conflict markers and bad commit subjects.
 - `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
   `shots` (`just ui-shots`, which fails on any page error), `ui-test`
   (`just ui-test`, which plays the game screen through a fixture), `oracle`

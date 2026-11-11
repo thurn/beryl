@@ -429,6 +429,40 @@ class Beads:
 STORE: Beads = Beads()
 
 
+def history_path() -> Path:
+    return paths.cache_root() / "ci" / "history.json"
+
+
+def save_history(history: dict[str, list[Entry]]) -> None:
+    """Keeps the checks' verdicts for the fast check's ordering (selection.py), which cannot wait
+    on bd: `by ci-report` and the nightly write it."""
+    try:
+        path = history_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(history))
+        tmp.replace(path)
+    except OSError as e:
+        warn(e)
+
+
+def cached_history() -> dict[str, list[Entry]]:
+    """The verdicts `save_history` last kept, or none."""
+    try:
+        found = json.loads(history_path().read_text())
+    except (OSError, ValueError):
+        return {}
+    return found if isinstance(found, dict) else {}
+
+
+def refresh_history() -> int:
+    """Fetches every check's verdicts from the beads and keeps them (`save_history`)."""
+    history = STORE.history(STORE.checks())
+    save_history(history)
+    print(f"verdicts: kept the verdicts of {len(history)} checks in {history_path()}")
+    return 0
+
+
 # Quarantine.
 
 
@@ -584,3 +618,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("check", help="the check's id, as `by ci-report` prints it")
     p.add_argument("verdict", choices=VERDICTS)
     p.set_defaults(func=correct)
+    p = sub.add_parser(
+        "ci-history",
+        help="keep the checks' verdicts from the beads for the fast check's ordering",
+    )
+    p.set_defaults(func=lambda args: refresh_history())

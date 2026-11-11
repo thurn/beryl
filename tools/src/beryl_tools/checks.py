@@ -8,12 +8,13 @@ Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work 
 the machine (other sessions' checks, a game, `just longthink`), the clock runs slower, so a run
 is held to what it would take on a machine to itself, and a hung step still dies.
 
-The fast check runs the lanes whose files changed since the branch left origin/staging, and
-`oracle` on the scenarios of each card whose file changed, without Forge's AI games. Slow
-CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
-`shots` (the screens rendered headless), `ui-test` (the game screen played headless),
-`oracle` (the card scenarios checked against XMage and Forge) and `counts` (the rollout
-benchmark's instruction count held to its bar).
+The fast check runs the lanes whose files changed since the branch left origin/staging,
+`oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
+change to ui/ or rust/, `ui-test` and `shots` on the browser checks it can break, as many as fit
+its budget (selection.py). Slow CI runs every lane plus `app` (the debug app built and launched
+headless until its UI loads), `shots` (the screens rendered headless), `ui-test` (the game screen
+played headless), `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the
+rollout benchmark's instruction count held to its bar).
 
 A step that fails is rerun once before its lane fails (plan K21), narrowed to the checks it says
 failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
@@ -554,19 +555,19 @@ def app_lane() -> Lane:
     return Lane("app", warm=True).step("smoke", [*BY, "smoke"], rerun=whole)
 
 
-def shots_lane() -> Lane:
-    """Renders every screen in ui/shots.json headless; a page error or a crash fails it."""
-    return Lane("shots", warm=True).step(
-        "ui-shots", [*BY, "ui-shots"], rerun=failed_shots
-    )
+def shots_lane(select: bool = False) -> Lane:
+    """Renders every screen in ui/shots.json headless, or with `select` those the change can
+    break (selection.py); a page error or a crash fails it."""
+    cmd = [*BY, "ui-shots", *(["--select"] if select else [])]
+    return Lane("shots", warm=True).step("ui-shots", cmd, rerun=failed_shots)
 
 
-def ui_test_lane() -> Lane:
+def ui_test_lane(select: bool = False) -> Lane:
     """Plays the game screen through fixtures it records apart from `shots`' (shots.py), so
-    the two run at once; a page error or a failed interaction fails it."""
-    return Lane("ui-test", warm=True).step(
-        "ui-test", [*BY, "ui-test"], rerun=failed_titles
-    )
+    the two run at once, every check or with `select` those the change can break; a page
+    error or a failed interaction fails it."""
+    cmd = [*BY, "ui-test", *(["--select"] if select else [])]
+    return Lane("ui-test", warm=True).step("ui-test", cmd, rerun=failed_titles)
 
 
 def oracle_lane() -> Lane:
@@ -625,6 +626,9 @@ def fast(args: argparse.Namespace) -> int:
         lanes.append(ui_lane())
     if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
         lanes.append(names_lane())
+    # The browser checks the change can break, as many as fit the budget (plan K19).
+    if not every and touched(r"^(rust|ui)/"):
+        lanes += [ui_test_lane(select=True), shots_lane(select=True)]
     if cards := changed_cards(changed):
         lanes.append(card_oracle_lane(cards))
     return run_lanes(lanes, "check", FAST_BUDGET, strict=False)

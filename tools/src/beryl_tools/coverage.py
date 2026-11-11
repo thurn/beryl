@@ -6,7 +6,8 @@ It plays every ui-test check and every shot in Chromium, one page each, with the
 ui/src and the CSS rules each page used. Vite's dev server serves each module, and each
 stylesheet a module imports, with an inline source map, through which this maps the byte ranges
 that ran to the lines of ui/src's files: JavaScript and CSS both at line granularity. Each check
-also names the fixtures its page fetched, for changes to the Rust that records them.
+also names the fixtures its page fetched, and the file each fixture's recording's hash, for
+changes to the Rust that records them (selection.py).
 
 By default it measures origin/staging in a detached worktree of its own, which it removes after;
 `--commit` names another commit, and `--here` measures this checkout as it is. The result goes to
@@ -35,7 +36,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import paths, runlog, shots, system, warm
+from . import paths, runlog, selection, shots, system, warm
 
 FORMAT = 1
 # The browser with a coverage API: Playwright measures coverage only in Chromium.
@@ -250,12 +251,15 @@ def write(
     dirty: bool,
     lanes: dict[str, int],
     seconds: float,
+    recordings: dict[str, str] | None = None,
 ) -> Path:
     """Writes the coverage file for `commit`, and points latest.json at it if the tree was
-    clean. Returns its path."""
+    clean. Returns its path. `recordings` hashes each fixture as recorded (selection.hashes),
+    against which the fast check finds the fixtures a Rust change re-recorded otherwise.
+    """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     failed = sorted(c for c, e in checks.items() if e["outcome"] != "pass")
-    document = {
+    document: dict[str, object] = {
         "format": FORMAT,
         "commit": commit,
         "dirty": dirty,
@@ -265,6 +269,8 @@ def write(
         "failed": failed,
         "checks": checks,
     }
+    if recordings is not None:
+        document["recordings"] = recordings
     name = f"{commit}{'-dirty' if dirty else ''}.json"
     path = folder() / name
     tmp = path.with_suffix(".tmp")
@@ -302,6 +308,7 @@ def measure_here() -> int:
         ):
             print("coverage: recording the fixtures failed", file=sys.stderr)
             return 1
+        recordings = selection.hashes(shots.RECORDED) | selection.hashes(recorded)
         lanes: dict[str, int] = {}
         try:
             with shots.served_ui(env) as url:
@@ -323,7 +330,7 @@ def measure_here() -> int:
             print(f"coverage: {e}", file=sys.stderr)
             return 1
         checks = build(raw, paths.REPO)
-    path = write(checks, commit, dirty, lanes, time.monotonic() - started)
+    path = write(checks, commit, dirty, lanes, time.monotonic() - started, recordings)
     failed = sum(e["outcome"] != "pass" for e in checks.values())
     print(
         f"coverage: {len(checks)} checks ({failed} failed) in "

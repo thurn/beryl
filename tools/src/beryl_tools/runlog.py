@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -121,6 +121,24 @@ def read_results(path: Path) -> list[dict[str, object]]:
     return found
 
 
+def label(path: Path, chosen: Mapping[str, str], cut: Iterable[str]) -> None:
+    """Writes into a step's results why each check ran (`chosen`, selection.py), and a `skip`
+    for each one it chose but `cut`; a check it ran though it chose none keeps the run's.
+    """
+    try:
+        results = read_results(path)
+        for r in results:
+            if r["check"] in chosen:
+                r["chosen"] = chosen[str(r["check"])]
+        for c in cut:
+            results.append(
+                {"check": c, "outcome": "skip", "seconds": 0.0, "chosen": "cut"}
+            )
+        path.write_text("".join(json.dumps(r) + "\n" for r in results))
+    except OSError as e:
+        warn(e)
+
+
 def place(script: str) -> str:
     """Where a run's checks ran, so a pass settles only failures from the same place
     (verdicts.settle): the branch, or for slow CI on a detached staging tip, `staging`, else the
@@ -140,6 +158,7 @@ class Run:
     tree: str = ""
     place: str = ""
     host: str = field(default_factory=platform.node)
+    # Why a check ran, unless its step says (`label`): slow CI runs them all.
     chosen: str = "all"
     logged: list[dict[str, object]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -195,7 +214,7 @@ class Run:
                 "outcome": c["outcome"],
                 "seconds": c["seconds"],
                 "load": load,
-                "chosen": self.chosen,
+                "chosen": c.get("chosen", self.chosen),
             }
             for c in checks
         ]
@@ -336,6 +355,7 @@ def report(args: argparse.Namespace) -> int:
         return pending_report(records, args.json)
     store = verdicts.STORE
     history = store.history(store.checks())
+    verdicts.save_history(history)
     if args.quarantined:
         return quarantined_report(history, args.json)
     if args.prune:
