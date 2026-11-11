@@ -1176,6 +1176,17 @@ async function until(page, selector, step = 100) {
     throw new Error(`${selector} never appeared`);
 }
 
+/** Steps the clock until nothing matches `selector`, failing if it outlasts `limit` ms. A
+ * timer set in a React effect starts when the effect flushes, which is real time and not the
+ * paused clock's, so a fixed `runFor` past its duration can land before it fires. */
+async function untilGone(page, selector, limit, step = 16) {
+    for (let ran = 0; ran <= limit; ran += step) {
+        if (!(await page.$(selector))) return ran;
+        await page.clock.runFor(step);
+    }
+    throw new Error(`${selector} outlasted ${limit} ms`);
+}
+
 /** Drags the element `from` matches by its center to `to`'s center, or by `by`, in steps. */
 async function drag(page, from, { to, by }) {
     const start = center(await page.locator(from).boundingBox());
@@ -5666,8 +5677,7 @@ if (wanted(opponentScry)) {
             await until(page, '.library-choice-hud:has-text("2 top")', 16);
             await page.clock.runFor(1100);
             assert.equal(await caption.innerText(), "Scry · 2 top · 0 bottom");
-            await page.clock.runFor(850);
-            assert.equal(await caption.count(), 0);
+            await untilGone(page, ".library-choice-hud", 1800);
         },
         { ...run, ready: ".turn-action button" },
     );
