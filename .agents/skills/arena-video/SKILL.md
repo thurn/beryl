@@ -113,6 +113,22 @@ The kinds of event:
    what eases. `--crop x,y,w,h` is in the recording's own pixels. Keep a sheet
    to about 16 frames, or its text stops being readable.
 
+   To put numbers on a motion, measure it instead of counting frames:
+
+   ```
+   just video measure SswBO8aOOgc 20:29.15 --span 1 --crop 1250,200,670,880
+   ```
+
+   It tracks the moving card and prints when it starts (and its delay from
+   `--since`, default the clip's start), how long it moves, its path as
+   fractions of the table, and its peak size over its size at rest, with an
+   overlay of what it tracked. `--cards 3` measures a deal and its stagger. A
+   folder of Beryl frames named by their time in ms measures the same way
+   (`--glob "*-yours.jpg"`). The first two and last two frames must show the
+   card at rest. When the clip shows more movers than cards (a hand making
+   room, a banner, a glow) it says so and draws what moved: crop closer or
+   move the span, and where that fails, read the motion from a filmstrip.
+
 5. **Compare with Beryl.** Reach the same moment in Beryl with the `specs`
    skill (`just specs --film`, `--motion`) or `just ui-shots`, and put the two
    side by side: what is highlighted and when, what the prompt says, which
@@ -187,8 +203,9 @@ filmstrip: they stay outside the tree.
 
 ## Extending the index
 
-The tool is `tools/src/beryl_tools/video.py` (regions, event rules, commands)
-and `video_cards.py` (matching card names across recordings), with the
+The tool is `tools/src/beryl_tools/video.py` (regions, event rules, commands),
+`video_cards.py` (matching card names across recordings) and
+`video_measure.py` (tracking a moving card), with the
 recognizer in `video_ocr.swift` and tests on synthetic screens in
 `tools/tests/test_video.py`. A new kind of event is a `Box` for where its text
 appears and a function from frames to events: check the region against

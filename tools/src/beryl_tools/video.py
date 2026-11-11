@@ -678,7 +678,7 @@ def film(args: argparse.Namespace) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from . import video_cards  # It imports this module.
+    from . import video_cards, video_measure  # They import this module.
 
     video = sub.add_parser("video", help="index an Arena recording as a UI reference")
     commands = video.add_subparsers(dest="video_command", required=True)
@@ -712,3 +712,5 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--width", default="480", help="each frame's width (default 480)")
     p.add_argument("--crop", help="x,y,w,h in the recording's pixels")
     p.set_defaults(func=film)
+
+    video_measure.register(commands)
