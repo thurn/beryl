@@ -1,18 +1,20 @@
 //! The pick shape: objects picked one click at a time, where they lie or from a tray.
 //!
-//! A priority is a pick of what to use ([`Priority`]). A choice of targets, an untap of lands
-//! and a choice among permanents are picks of objects ([`Objects`]): each click picks or
-//! unpicks one, and the prompt answers by a button, or by the click itself where one object
-//! on the table is all it takes.
+//! A priority is a pick of what to use ([`Priority`]). A choice of targets, an untap of lands,
+//! a choice among permanents and a choice of cards from a hand, a library or a graveyard
+//! (`zone.rs`) are picks of objects ([`Objects`]): each click picks or unpicks one, and the
+//! prompt answers by a button, or by the click itself where one object on the table is all it
+//! takes.
 
 mod priority;
 mod untap;
+mod zone;
 
 use beryl_engine::card::{Part, Purpose};
 use beryl_engine::{Layout, target_removes_permanent};
 
 use self::priority::Priority;
-use super::held::{Clicked, Run, Step, Table, Want};
+use super::held::{Clicked, Run, Step, Table, Want, offered};
 use super::wording::{AIMED, Holes, OWN_TARGET, Wording};
 use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeName, ShapeView};
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
@@ -26,7 +28,7 @@ const ON_THE_TABLE: usize = 5;
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
     Priority(Priority),
-    Objects(Objects),
+    Objects(Box<Objects>),
 }
 
 impl Pick {
@@ -44,11 +46,23 @@ impl Pick {
         match (purpose, prompt.part) {
             (Purpose::Priority, _) => Some(Pick::Priority(Priority::open(table, decision))),
             (Purpose::Target, PartName::Count | PartName::Pick) => {
-                Some(Pick::Objects(Objects::targets(table, decision)))
+                Some(Pick::Objects(Box::new(Objects::targets(table, decision))))
             }
-            (Purpose::Untap | Purpose::LegendRule | Purpose::Choose, PartName::Pick) => {
-                Some(Pick::Objects(Objects::on_table(table, purpose, decision)))
-            }
+            (Purpose::Untap | Purpose::LegendRule | Purpose::Choose, PartName::Pick) => Some(
+                Pick::Objects(Box::new(Objects::on_table(table, purpose, decision))),
+            ),
+            (
+                Purpose::Search
+                | Purpose::Look
+                | Purpose::Discard
+                | Purpose::Cleanup
+                | Purpose::PutOnBottom
+                | Purpose::ExileCost
+                | Purpose::ManifestDread,
+                _,
+            ) => Objects::from_zone(table, purpose, decision)
+                .map(Box::new)
+                .map(Pick::Objects),
             _ => None,
         }
     }
@@ -89,13 +103,15 @@ pub(crate) struct Objects {
     least: u8,
     most: u8,
     picked: Vec<Subject>,
-    /// The run opens with the number picked: a count of targets
-    /// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "If the spell has a
-    /// variable number of targets, the player announces how many targets they will choose
-    /// before they announce those targets").
-    counted: bool,
+    /// What the run opens with, before its picks.
+    opens: Opens,
     /// The decision offers an end to the picks, which the run ends with.
     ends: bool,
+    /// The prompt answers by its button alone, never by a click on a card: the cards are not
+    /// on the table for every player to see, and a card clicked is looked over first.
+    confirmed: bool,
+    /// The cards lie in a pile the engine takes them from in order (`zone.rs`).
+    pile: Option<zone::Pile>,
     /// For targets: those the viewer controls, which a pick marks as theirs.
     friendly: Option<Vec<Subject>>,
     /// Those the prompt asks about before it answers with them, each with its question.
@@ -107,6 +123,27 @@ pub(crate) struct Objects {
     confirm: String,
     several: String,
     decline: String,
+}
+
+/// What a pick's run opens with, before the picks of its objects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Opens {
+    /// Nothing: the picks are all there is.
+    Picks,
+    /// The number picked: a count of targets
+    /// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "If the spell has a
+    /// variable number of targets, the player announces how many targets they will choose
+    /// before they announce those targets").
+    Count,
+    /// Whether to pick at all: yes with something picked, no with nothing.
+    Whether,
+    /// Whether to answer with one of these alone in place of the picks the prompt takes: yes
+    /// with one of them picked and nothing else, no otherwise
+    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "Some spells,
+    /// activated abilities, and triggered abilities read, '[Do something]. If [a player]
+    /// [does or doesn't], [effect].' or '[A player] may [do something]. If [that player]
+    /// [does or doesn't], [effect].'").
+    Instead(Vec<Subject>),
 }
 
 fn card(slot: u16) -> Subject {
@@ -192,8 +229,10 @@ impl Objects {
             least,
             most,
             picked: preset.into_iter().collect(),
-            counted,
+            opens: if counted { Opens::Count } else { Opens::Picks },
             ends: false,
+            confirmed: false,
+            pile: None,
             friendly: Some(friendly),
             warned,
             aimed,
@@ -214,12 +253,7 @@ impl Objects {
         decision: &DecisionView,
     ) -> Objects {
         let prompt = &decision.prompt;
-        let offered: Vec<u16> = (decision.candidates.iter())
-            .filter_map(|c| match c.option {
-                Candidate::Object { slot } => Some(slot),
-                _ => None,
-            })
-            .collect();
+        let offered = offered(decision);
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
         let objects = &table.view.objects;
         let public = |&slot: &u16| {
@@ -252,8 +286,10 @@ impl Objects {
             least: if ends { 0 } else { most },
             most,
             picked,
-            counted: false,
+            opens: Opens::Picks,
             ends,
+            confirmed: false,
+            pile: None,
             friendly: None,
             warned: Vec::new(),
             aimed: Vec::new(),
@@ -265,10 +301,20 @@ impl Objects {
 
     /// Whether a click on an object answers: one object, with no end to the picks offered, in
     /// a prompt that did not open with one picked. A target answers wherever it is picked;
-    /// another card only where it lies, since a tray's cards are looked over first.
+    /// another card only where it lies on the table, since a tray's cards and a hand's are
+    /// looked over first.
     fn answers_by_click(&self) -> bool {
-        let lies = self.tray.is_empty() || self.friendly.is_some();
+        let lies = (self.tray.is_empty() && !self.confirmed) || self.friendly.is_some();
         self.most == 1 && lies && !self.ends && self.aimed.is_empty()
+    }
+
+    /// Whether one of the cards the prompt takes alone in place of its picks is all that is
+    /// picked.
+    fn alone(&self) -> bool {
+        match (&self.opens, &self.picked[..]) {
+            (Opens::Instead(about), [one]) => about.contains(one),
+            _ => false,
+        }
     }
 
     /// What `of` says of the one object picked, if it says anything of it.
@@ -284,17 +330,22 @@ impl Objects {
         self.says(&self.warned).filter(|_| self.answers_by_click())
     }
 
-    /// Whether the prompt may answer with nothing: no target, or no pick where the decision
-    /// offers an end.
+    /// Whether the prompt may answer with nothing: no target, no pick where the decision
+    /// offers an end, or a no to whether to pick at all.
     fn declines(&self) -> bool {
-        self.ends || (self.counted && self.least == 0)
+        match self.opens {
+            Opens::Whether => true,
+            Opens::Count => self.ends || self.least == 0,
+            Opens::Picks | Opens::Instead(_) => self.ends,
+        }
     }
 
     /// Whether what is picked answers the prompt.
     fn ready(&self) -> bool {
         let picked = self.picked.len();
-        (usize::from(self.least)..=usize::from(self.most)).contains(&picked)
-            && (picked > 0 || !self.declines())
+        let enough = (usize::from(self.least)..=usize::from(self.most)).contains(&picked)
+            && (picked > 0 || !self.declines());
+        enough || self.alone()
     }
 
     fn pick(&mut self, on: Subject) -> Clicked {
@@ -346,15 +397,28 @@ impl Objects {
         }
     }
 
-    /// The picks that answer with what is picked: the count where the prompt opened at one,
-    /// each object as the engine offers it, and the end where the decision offers one.
+    /// The picks that answer with what is picked: what the run opens with (the count, or the
+    /// yes or no), each object as the engine offers it, and the end where the decision offers
+    /// one and more could be picked.
     fn run(&self) -> Run {
         let count = u8::try_from(self.picked.len()).expect("at most 255 picks");
+        let yes = |yes: bool| if yes { Want::Yes } else { Want::No };
+        let opens = match &self.opens {
+            Opens::Picks => None,
+            Opens::Count => Some(Step::One(Part::Count, Want::Number(count))),
+            Opens::Whether => Some(Step::One(Part::Whether, yes(count > 0))),
+            Opens::Instead(_) => Some(Step::One(Part::Instead, yes(self.alone()))),
+        };
+        let picks = match &self.pile {
+            Some(pile) => Step::InTurn(Part::Pick, pile.asked(&self.picked)),
+            None => Step::Among(Part::Pick, self.picked.clone()),
+        };
         let steps = [
-            self.counted
-                .then_some(Step::One(Part::Count, Want::Number(count))),
-            (!self.picked.is_empty()).then(|| Step::Among(Part::Pick, self.picked.clone())),
-            self.ends.then_some(Step::One(Part::Pick, Want::Done)),
+            opens,
+            (!self.picked.is_empty()).then_some(picks),
+            // The engine asks for no end once it has as many as the prompt takes.
+            (self.ends && self.picked.len() < usize::from(self.most))
+                .then_some(Step::One(Part::Pick, Want::Done)),
         ];
         Run::new(self.purpose, steps.into_iter().flatten())
     }

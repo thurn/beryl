@@ -219,9 +219,13 @@ pub enum ShapeView {
         /// picks it and puts the question; the confirm button then answers.
         warned: Vec<Subject>,
     },
-    /// Things in an order the player changes, first to last.
+    /// Things in an order the player changes, first to last: waiting triggered abilities as
+    /// they will resolve. A waiting trigger is not on the stack yet, so each is named as an
+    /// ability whose number is the index of its candidate in the open decision, which says
+    /// its source and which of the source's abilities it is.
     Order { items: Vec<Subject> },
-    /// Cards dealt out between piles.
+    /// Cards dealt out between two piles, the first destination's and then the second's. A
+    /// click on a card sends it to the other pile, at its end.
     Split { piles: Vec<Pile> },
     /// A question with two answers, each a button.
     YesNo {

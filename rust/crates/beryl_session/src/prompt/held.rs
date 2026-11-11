@@ -15,9 +15,11 @@ use beryl_engine::{
     interchangeable,
 };
 
+use super::order::Order;
 use super::pick::Pick;
-use super::{Click, PromptView};
-use crate::protocol::{DecisionView, PlayerView, Side, Status, ZoneName};
+use super::split::Split;
+use super::{Click, Lies, PromptView, ShapeName};
+use crate::protocol::{Candidate, DecisionView, ObjectView, PlayerView, Side, Status, ZoneName};
 use crate::script::Subject;
 
 /// The open prompt's state.
@@ -33,6 +35,8 @@ pub(crate) struct Held {
 #[derive(Clone, Debug)]
 enum Shaped {
     Pick(Pick),
+    Order(Order),
+    Split(Split),
 }
 
 /// What a click did to the prompt it was made on.
@@ -72,7 +76,12 @@ impl Held {
             d,
             view,
         };
-        let shape = Shaped::Pick(Pick::open(&table, purpose, decision)?);
+        let shape = match decision.prompt.shape {
+            ShapeName::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
+            ShapeName::Order => Shaped::Order(Order::open(&table, decision)?),
+            ShapeName::Split => Shaped::Split(Split::open(&table, decision)?),
+            _ => return None,
+        };
         let mut held = Held {
             view: (*decision.prompt).clone(),
             shape,
@@ -88,8 +97,11 @@ impl Held {
 
     /// Takes `click` and says what it did. A change counts a revision.
     pub(crate) fn click(&mut self, click: Click) -> Clicked {
-        let Shaped::Pick(pick) = &mut self.shape;
-        let clicked = pick.click(click);
+        let clicked = match &mut self.shape {
+            Shaped::Pick(pick) => pick.click(click),
+            Shaped::Order(order) => order.click(click),
+            Shaped::Split(split) => split.click(click),
+        };
         if matches!(clicked, Clicked::Changed) {
             self.view.revision += 1;
             self.show();
@@ -100,14 +112,18 @@ impl Held {
     /// Words the prompt again for `decision`, the open decision drawn again: a priority's pass
     /// button says where passing leads, which a change of stops changes.
     pub(crate) fn reword(&mut self, decision: &DecisionView) {
-        let Shaped::Pick(pick) = &mut self.shape;
-        pick.reword(decision);
+        if let Shaped::Pick(pick) = &mut self.shape {
+            pick.reword(decision);
+        }
         self.show();
     }
 
     fn show(&mut self) {
-        let Shaped::Pick(pick) = &self.shape;
-        pick.show(&mut self.view);
+        match &self.shape {
+            Shaped::Pick(pick) => pick.show(&mut self.view),
+            Shaped::Order(order) => order.show(&mut self.view),
+            Shaped::Split(split) => split.show(&mut self.view),
+        }
     }
 }
 
@@ -144,32 +160,90 @@ pub(crate) struct Table<'a, L: Layout> {
 }
 
 impl<L: Layout> Table<'_, L> {
-    /// The cards a click takes as one of `offered`: each on the battlefield or in the viewer's
-    /// hand, not offered itself, with the first of `offered` it is interchangeable with, which
-    /// the decision offers in its place (architecture §7.2: the engine offers one candidate
-    /// for interchangeable objects).
-    pub(crate) fn stand_ins(&self, offered: &[u16]) -> Vec<(u16, u16)> {
+    /// The object in `slot` as the viewer sees it.
+    pub(crate) fn object(&self, slot: u16) -> Option<&ObjectView> {
+        self.view.objects.iter().find(|o| o.slot == slot)
+    }
+
+    /// The first of `offered` that the card `o` stands for: one it is interchangeable with,
+    /// which the decision offers in its place (architecture §7.2: the engine offers one
+    /// candidate for interchangeable objects). Only a card the viewer knows by name stands for
+    /// another: whether two cards they cannot tell apart are alike is not theirs to learn.
+    fn stands_for(&self, o: &ObjectView, offered: &[u16]) -> Option<u16> {
         let slot = |num: u16| L::Slot::from_num(num);
-        let named = |num: u16| self.view.objects.iter().find(|o| o.slot == num);
+        o.name.as_ref()?;
+        offered.iter().copied().find(|&c| {
+            // Interchangeable objects are of one card, so of one name: most are told apart
+            // without asking the engine.
+            (self.object(c)).is_some_and(|c| c.name == o.name && c.zone == o.zone)
+                && slot(o.slot)
+                    .zip(slot(c))
+                    .is_some_and(|(a, b)| interchangeable(self.shown, a, b))
+        })
+    }
+
+    /// The cards a click takes as one of `offered`: each not offered itself, with the first of
+    /// `offered` it stands for.
+    pub(crate) fn stand_ins(&self, offered: &[u16]) -> Vec<(u16, u16)> {
         (self.view.objects.iter())
-            .filter(|o| {
-                !offered.contains(&o.slot)
-                    && (o.zone == ZoneName::Battlefield
-                        || (o.zone == ZoneName::Hand && o.owner == Side::You))
-            })
-            .filter_map(|o| {
-                let stands = offered.iter().copied().find(|&c| {
-                    // Interchangeable objects are of one card, so of one name: most are told
-                    // apart without asking the engine.
-                    named(c).is_some_and(|c| c.name == o.name && c.zone == o.zone)
-                        && slot(o.slot)
-                            .zip(slot(c))
-                            .is_some_and(|(a, b)| interchangeable(self.shown, a, b))
-                })?;
-                Some((o.slot, stands))
-            })
+            .filter(|o| !offered.contains(&o.slot))
+            .filter_map(|o| Some((o.slot, self.stands_for(o, offered)?)))
             .collect()
     }
+
+    /// Those of `cards` a pick among `offered` can take: the cards offered and those that
+    /// stand for one of them.
+    pub(crate) fn takes(&self, cards: &[u16], offered: &[u16]) -> Vec<u16> {
+        let stands = |&slot: &u16| {
+            (self.object(slot)).is_some_and(|o| self.stands_for(o, offered).is_some())
+        };
+        (cards.iter().copied())
+            .filter(|slot| offered.contains(slot) || stands(slot))
+            .collect()
+    }
+
+    /// The cards a prompt among the cards that lie as `lies` says shows its viewer, those they
+    /// know: the top `count` of a library from the top down, or all of it for no count, as a
+    /// search looks through; a hand; a graveyard from the top down, its cards alone
+    /// ([CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116): "A token isn't a
+    /// card").
+    pub(crate) fn laid_out(&self, lies: Lies, count: u8) -> Vec<u16> {
+        let players = &self.view.players;
+        let player = match lies.player {
+            Side::You => &players.you,
+            Side::Opponent => &players.opponent,
+        };
+        let known = |slot: &u16| self.object(*slot).is_some_and(|o| o.name.is_some());
+        match lies.zone {
+            ZoneName::Library => {
+                let top = if count == 0 {
+                    usize::MAX
+                } else {
+                    usize::from(count)
+                };
+                let library = player.library.iter().rev().take(top);
+                library.copied().filter(known).collect()
+            }
+            ZoneName::Graveyard => (player.graveyard.iter().rev().copied())
+                .filter(|&slot| self.object(slot).is_some_and(|o| !o.token))
+                .collect(),
+            ZoneName::Hand => (self.view.objects.iter())
+                .filter(|o| o.zone == ZoneName::Hand && o.owner == lies.player)
+                .map(|o| o.slot)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// The cards `decision` offers, in its order.
+pub(crate) fn offered(decision: &DecisionView) -> Vec<u16> {
+    (decision.candidates.iter())
+        .filter_map(|c| match c.option {
+            Candidate::Object { slot } => Some(slot),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The picks that answer a prompt, in the engine's order, still to be made: the first answers
@@ -178,6 +252,11 @@ impl<L: Layout> Table<'_, L> {
 pub(crate) struct Run {
     purpose: Purpose,
     steps: VecDeque<Step>,
+    /// The run goes on after a choice of targets asked between its picks.
+    waits: bool,
+    /// The run that waits for this one to end: this one answers a prompt opened between that
+    /// one's picks.
+    under: Option<Box<Run>>,
 }
 
 /// One step of a run.
@@ -189,6 +268,8 @@ pub(crate) enum Step {
     One(Part, Want),
     /// Each of these as a pick of this part, in whatever order the engine offers them.
     Among(Part, Vec<Subject>),
+    /// Each of these as a pick of this part, in this order: the picks put them in an order.
+    InTurn(Part, VecDeque<Subject>),
 }
 
 /// An answer a run gives that names no object.
@@ -198,6 +279,15 @@ pub(crate) enum Want {
     Number(u8),
     /// No more picks.
     Done,
+    /// Yes or no.
+    Yes,
+    No,
+    /// The waiting trigger of this ability of the object in this slot, as a trigger is named
+    /// from one decision to the next ([`Candidate::Trigger`]).
+    Trigger {
+        source: Option<u16>,
+        ability: u8,
+    },
 }
 
 impl Run {
@@ -206,22 +296,57 @@ impl Run {
         Run {
             purpose,
             steps: steps.into_iter().collect(),
+            waits: false,
+            under: None,
         }
     }
 
-    /// Whether every pick is made.
-    pub(crate) fn is_done(&self) -> bool {
-        self.steps.is_empty()
+    /// The run goes on after a choice of targets asked between its picks: a triggered ability
+    /// put on the stack has its targets chosen before the next is
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "The remainder of
+    /// the process for putting a triggered ability on the stack is identical to the process
+    /// for casting a spell listed in rules 601.2c-d"), and that choice is a prompt of its
+    /// own.
+    pub(crate) fn waiting(mut self) -> Run {
+        self.waits = true;
+        self
+    }
+
+    /// This run over `waiting`, a run waiting through the prompt this one answers.
+    pub(crate) fn over(mut self, waiting: Option<Run>) -> Run {
+        self.under = waiting.map(Box::new);
+        self
+    }
+
+    /// The run with picks still to make: this one, or once it has made its own, the one
+    /// that waited for it.
+    pub(crate) fn rest(self) -> Option<Run> {
+        if self.steps.is_empty() {
+            self.under.and_then(|under| under.rest())
+        } else {
+            Some(self)
+        }
+    }
+
+    /// Whether `d`, a decision the run does not answer, leaves it waiting for its next pick.
+    fn waits_through<L: Layout>(&self, d: &Decision<L>) -> bool {
+        self.waits && !self.steps.is_empty() && d.prompt.purpose == Purpose::Target
     }
 
     /// The run's answer to `d`, the next decision of its player in the game `s`, if `d`
     /// belongs to the run's prompt and a step answers it. A step the engine did not ask,
     /// having one answer left (architecture §7.2), is passed over. With no answer the run is
-    /// over: the decision opens as a prompt of its own.
+    /// over, unless it waits through `d`: the decision opens as a prompt of its own.
     pub(crate) fn answer<L: Layout>(&mut self, s: &State<L>, d: &Decision<L>) -> Option<Choice> {
         if d.prompt.purpose != self.purpose {
+            if self.waits_through(d) {
+                return None;
+            }
+            // This run is over: one that waited for it goes on.
             self.steps.clear();
-            return None;
+            let waiting = self.under.take()?;
+            *self = *waiting;
+            return self.answer(s, d);
         }
         let options = options(d);
         while let Some(step) = self.steps.front_mut() {
@@ -257,9 +382,29 @@ impl Step {
         let position = |wanted: Opt<L>| options.iter().position(|&o| o == wanted);
         match self {
             Step::Index(i) => Some(usize::from(*i)).filter(|&i| i < options.len()),
-            Step::One(part, _) | Step::Among(part, _) if *part != d.prompt.part => None,
+            Step::One(part, _) | Step::Among(part, _) | Step::InTurn(part, _)
+                if *part != d.prompt.part =>
+            {
+                None
+            }
             Step::One(_, Want::Number(n)) => position(Opt::Number(*n)),
             Step::One(_, Want::Done) => position(Opt::Done),
+            Step::One(_, Want::Yes) => position(Opt::Yes),
+            Step::One(_, Want::No) => position(Opt::No),
+            Step::One(_, Want::Trigger { source, ability }) => options.iter().position(|&o| {
+                let Opt::Trigger(i) = o else {
+                    return false;
+                };
+                let trigger = &s.triggers()[Into::<usize>::into(i)];
+                trigger.source.map(|r| r.slot.num()) == *source && trigger.ability.get() == *ability
+            }),
+            Step::InTurn(_, wanted) => {
+                // The next in turn itself, or else one the engine offers in its place.
+                let &on = wanted.front()?;
+                let found = named(d, options, on).or_else(|| alike(s, options, on))?;
+                wanted.pop_front();
+                Some(found)
+            }
             Step::Among(_, wanted) => {
                 // The object itself, or else one the engine offers in its place.
                 let (i, found) = (wanted.iter().enumerate())
@@ -276,7 +421,11 @@ impl Step {
 
     /// Whether the step has no pick left to make.
     fn is_spent(&self) -> bool {
-        !matches!(self, Step::Among(_, wanted) if !wanted.is_empty())
+        match self {
+            Step::Index(_) | Step::One(..) => true,
+            Step::Among(_, wanted) => wanted.is_empty(),
+            Step::InTurn(_, wanted) => wanted.is_empty(),
+        }
     }
 }
 

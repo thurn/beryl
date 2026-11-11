@@ -568,15 +568,17 @@ pub(crate) const fn cancel_word(purpose: Purpose) -> &'static str {
 /// and "TOP" (`IHPV6yRaFlk 19:58.0`, `jD7VqaT8VC8 29:41.5`); cards being ordered lie between
 /// "Bottom" and "Top" (`yvNZVakbnrQ 22:50.5`, `SN9QFe2kM4Y 29:52.0`); a pile that is a zone
 /// has the zone's name ("Graveyard" and "Library" under an explore, `RwKoGGUmw2k 23:00.5`,
-/// `gIhJjyoJ0_M 27:44.0`). "Hand", "Exile" and "Battlefield" are composed on those.
+/// `gIhJjyoJ0_M 27:44.0`). "Hand", "Exile" and "Battlefield" are composed on those, and so is
+/// the pile of the cards that go nowhere: the hand cards are put back from.
 pub(crate) const fn pile_word(purpose: Purpose, place: Place) -> &'static str {
     match (place, purpose) {
+        // Cards put back come from the hand, where the rest of them stay.
+        (Place::Hand, _) | (Place::None, Purpose::PutBack) => "Hand",
         (Place::None, _) => "",
         (Place::Top | Place::OnTop, Purpose::Scry) => "TOP",
         (Place::Bottom, Purpose::Scry) => "BOTTOM",
         (Place::Top | Place::OnTop, _) => "Top",
         (Place::Bottom, _) => "Bottom",
-        (Place::Hand, _) => "Hand",
         (Place::Graveyard, _) => "Graveyard",
         (Place::Exile, _) => "Exile",
         (Place::Battlefield, _) => "Battlefield",

@@ -135,9 +135,12 @@ fn every_purpose_and_button_has_words() {
         }
         if purpose.shape() == Shape::Split {
             for place in PLACES {
+                // No place has no word, but for the cards that stay where a split found them:
+                // the hand cards are put back from.
+                let nowhere = place == Place::None && purpose != Purpose::PutBack;
                 assert_eq!(
                     pile_word(purpose, place).is_empty(),
-                    place == Place::None,
+                    nowhere,
                     "{purpose:?} {place:?}"
                 );
             }

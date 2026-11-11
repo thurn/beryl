@@ -4,8 +4,7 @@ use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue;
 use beryl_engine::state::StackEntry;
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Large, Layout, Opt, Relayout, State,
-    Step, TurnStep,
+    Candidates, Choice, Decision, DecisionKind, Large, Layout, Opt, Relayout, State, Step, TurnStep,
 };
 
 use crate::checkpoint::Checkpoint;
@@ -92,10 +91,10 @@ impl Game {
     /// The session's own answer to the human's decision `d`, if it gives one: under the
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
-    /// orders their simultaneous triggers ([`trigger_to_stack`]), searches their library
-    /// whenever they may ([`Game::searches_unasked`]), and takes unambiguous lethal combat
-    /// assignments ([`beryl_engine::preferred_damage`]). Waterbend remains a human payment
-    /// choice even when mana alone could pay it.
+    /// orders their simultaneous triggers ([`crate::prompt::trigger_to_stack`]), searches
+    /// their library whenever they may ([`Game::searches_unasked`]), and takes unambiguous
+    /// lethal combat assignments ([`beryl_engine::preferred_damage`]). Waterbend remains a
+    /// human payment choice even when mana alone could pay it.
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
@@ -115,7 +114,7 @@ impl Game {
                 Some(Choice(0))
             }
             DecisionKind::TriggerOrder => Some(on_board!(&self.board, b => {
-                trigger_to_stack(&b.state, &self.table, &d.relayout())
+                crate::prompt::trigger_to_stack(&b.state, &self.table, &d.relayout())
             })),
             DecisionKind::DamageDivision if !replaying => on_board!(&self.board, b => {
                 beryl_engine::preferred_damage(&b.state, &d.relayout())
@@ -209,46 +208,6 @@ impl Game {
             None => true,
         }
     }
-}
-
-/// Which of the human's waiting triggers to put on the stack next, under the smart stops. Each
-/// pick goes on the stack above the ones before, so the first picked resolves last
-/// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
-/// order, puts each triggered ability they control with a trigger condition that has been
-/// met on the stack in any order they choose").
-///
-/// The heuristic, by what the engine knows of each ability, resolves:
-///
-/// 1. first, the triggers with neither targets nor a question as they resolve: plain effects
-///    (cards, tokens, counters, life, a sacrifice), whose results the others may act on;
-/// 2. then the ones with targets, which were chosen as they went on the stack (CR 603.3d);
-/// 3. last, the ones that ask their controller something as they resolve, so the answer is
-///    made seeing everything the others did;
-///
-/// and, within each group, in the order they triggered.
-pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Choice {
-    let resolves_late = |opt: Opt<L>| {
-        let Opt::Trigger(i) = opt else {
-            unreachable!("a trigger-order decision offers only triggers");
-        };
-        let tr = &s.triggers()[Into::<usize>::into(i)];
-        let ability = &t.def(tr.card).face(tr.face).abilities[tr.ability.index()];
-        let group = if ability.asks() {
-            2
-        } else {
-            u8::from(!ability.targets.is_empty())
-        };
-        (group, i)
-    };
-    let Candidates::Options(triggers) = &d.candidates else {
-        unreachable!("a trigger-order decision offers options");
-    };
-    let (last, _) = triggers
-        .iter()
-        .enumerate()
-        .max_by_key(|&(_, &opt)| resolves_late(opt))
-        .expect("a decision has a candidate");
-    Choice(u16::try_from(last).expect("a choice names its candidate"))
 }
 
 /// A payment that v8 completed without a prompt: it needs no benders and none of its

@@ -53,8 +53,9 @@
 //! left it. A click names the state it was made on and is refused on any other; one on a
 //! prompt whose state the session does not hold is refused too.
 //!
-//! One module holds each shape's state (`pick.rs` and those beside it): what it opens as,
-//! what each click does to it, the marks and buttons it shows, and the picks it answers with.
+//! One module holds each shape's state (`pick.rs`, `order.rs`, `split.rs`): what it opens
+//! as, what each click does to it, the marks and buttons it shows, and the picks it answers
+//! with.
 //!
 //! # Text
 //!
@@ -63,7 +64,9 @@
 
 mod held;
 mod open;
+mod order;
 mod pick;
+mod split;
 mod text;
 mod view;
 mod wording;
@@ -71,6 +74,7 @@ mod wording;
 pub use held::add_opening_state;
 pub(crate) use held::{Clicked, Held, Run};
 pub(crate) use open::{halt_prompt, prompt_view};
+pub use order::trigger_to_stack;
 pub use view::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
     PromptButton, PromptView, ShapeName, ShapeView, Share, Words,

@@ -86,6 +86,7 @@ impl Game {
             .take()
             .expect("a cancellable cast began somewhere");
         self.board.restore(&before.state);
+        self.run = None;
         self.answered = before.answered;
         self.replay.log.truncate(before.log);
         self.undo
@@ -137,6 +138,8 @@ impl Game {
             point = previous;
         }
         self.board.restore(&point.state);
+        // A run of picks waiting to go on belongs to the game taken back.
+        self.run = None;
         self.answered = point.answered;
         self.seen = point.seen;
         self.before_cast = point.before_cast;

@@ -41,7 +41,6 @@ mod views;
 
 use boards::{Boards, Snapshot, on_board};
 use passing::PassingOn;
-pub use playing::trigger_to_stack;
 use playing::without_floating;
 pub use undo::UNDO_POINTS;
 use undo::{BeforeCast, UndoPoint};

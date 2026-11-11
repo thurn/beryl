@@ -76,12 +76,14 @@ impl Game {
                 let Some(choice) = choice else {
                     return Ok(ClickReply::Open { prompt });
                 };
+                // A run waiting through this prompt goes on once this one's picks are made.
+                let waiting = self.run.take();
                 self.choose(Answer {
                     id,
                     choice,
                     continuation: false,
                 });
-                self.run = (!run.is_done()).then_some(run);
+                self.run = run.over(waiting).rest();
                 ClickReply::Answered
             }
         })
@@ -97,12 +99,14 @@ impl Game {
 
     /// The answer the run of picks in progress gives the human's decision `d`, if a run is in
     /// progress and `d` is its next: the session makes it as it does its automatic answers,
-    /// with no view sent. A decision the run does not answer ends it.
+    /// with no view sent. A decision the run does not answer ends it, unless the run waits
+    /// through it: an order of triggers, through the targets of the one just put on the
+    /// stack.
     pub(super) fn pick_in_run(&mut self, d: &Decision<Large>) -> Option<Choice> {
         let mut run = self.run.take()?;
-        let choice = self.run_pick(&mut run, d)?;
-        self.run = (!run.is_done()).then_some(run);
-        Some(choice)
+        let choice = self.run_pick(&mut run, d);
+        self.run = run.rest();
+        choice
     }
 
     /// Checks `index` as an answer to the human's open decision `id`.
