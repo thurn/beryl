@@ -4,6 +4,7 @@
 // design language's effects and looks from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { GONE } from "../src/stage/tracks.ts";
 import { object, reach, stage, view } from "./stage-table.mjs";
 
 const even = (progress) => progress;
@@ -99,19 +100,21 @@ for (const tick of [16, 100, 1000]) {
         assert.equal(surface.effects.size, 0);
     });
 
-    test(`an effect with no time of its own lasts as long as its step: ticks of ${tick} ms`, () => {
+    test(`an effect with no time of its own lasts while its step shows its card: ticks of ${tick} ms`, () => {
         const { stage: made, surface } = stage(TIMES, EFFECTS);
         made.play(view([1, 2]));
         made.play(view([1]), {
             beats: [[destroy(2, object(2, "graveyard"))], [token(3)]],
         });
-        reach(made.clock, 300, tick);
-        if (made.clock.now === 300) {
+        // A card that leaves is gone at GONE of its step, and has broken up by then.
+        const gone = 600 * GONE;
+        reach(made.clock, gone / 2, tick);
+        if (made.clock.now === gone / 2) {
             assert.deepEqual(made.effect(2), [
                 { name: "dissolve", layer: "over", progress: 0.5 },
             ]);
         }
-        reach(made.clock, 600, tick);
+        reach(made.clock, gone, tick);
         assert.deepEqual(made.effect(2), []);
         assert.equal(surface.effects.has("2 dissolve over"), false);
     });

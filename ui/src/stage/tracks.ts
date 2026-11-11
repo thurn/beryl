@@ -5,8 +5,27 @@
 import type { Act } from "../generated/protocol";
 import { abilityName, type Name, type Point } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
-import type { Timing } from "./stage.ts";
 import type { Table } from "./table.ts";
+
+/** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
+ * turn comes it begins, how long the next step of its beat waits for it, and its curve from 0
+ * to 1. The numbers are the design language's (data/ui-conventions.json, timing.ts). */
+export interface Timing {
+  duration: number;
+  delay: number;
+  stagger: number;
+  ease(progress: number): number;
+  /** For a step that moves several cards one after another (a lift), how long each moves. */
+  each?: number;
+}
+
+/** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
+export const SNAP: Timing = {
+  duration: 0,
+  delay: 0,
+  stagger: 0,
+  ease: (progress) => progress,
+};
 
 /** An entry's pose `progress` of the way along its track, resting at `rest`. */
 export type Path = (progress: number, rest: Pose) => Pose;

@@ -523,10 +523,10 @@ export const CASES = {
                         `${what}: how it goes`,
                     );
                 }
-                // What lasts as long as the step is half way through when the step is.
+                // It has broken up by the time it is gone, before its step is over.
                 if (gone.at.middle && !(kind in LEAVES)) {
                     const [{ progress }] = gone.at.middle.effects[name];
-                    assert.equal(progress, 0.5, what);
+                    assert.ok(progress > 0.5 && progress < 1, what);
                 }
                 if (gone.at.from) {
                     assert.equal(gone.at.from.poses[name].opacity, lay.opacity);

@@ -62,35 +62,20 @@ import {
   dissolve,
   drawsToRead,
   glide,
+  GONE,
   later,
   shareOf,
   moverOf,
   subjectOf,
   along,
   TURN,
+  SNAP,
   turning,
+  type Timing,
   type Track,
 } from "./tracks.ts";
 
-/** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
- * turn comes it begins, how long the next step of its beat waits for it, and its curve from 0
- * to 1. The numbers are the design language's (data/ui-conventions.json, timing.ts). */
-export interface Timing {
-  duration: number;
-  delay: number;
-  stagger: number;
-  ease(progress: number): number;
-  /** For a step that moves several cards one after another (a lift), how long each moves. */
-  each?: number;
-}
-
-/** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
-export const SNAP: Timing = {
-  duration: 0,
-  delay: 0,
-  stagger: 0,
-  ease: (progress) => progress,
-};
+export { SNAP, type Timing } from "./tracks.ts";
 
 /** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
@@ -566,15 +551,16 @@ export class ScriptStage {
   }
 
   /** Begins the effects the step `run` has at this `edge` of it on what it is about, if the
-   * stage holds that. Time passed over (`skip`) begins none. */
+   * stage holds that: one that lasts its step, for as long as its subject is seen in it. Time
+   * passed over (`skip`) begins none. */
   #affect(run: Run, edge: Edge["edge"]) {
     const on = subjectOf(run.step.act);
     if (this.#skipping || on === undefined || !this.#entries.has(on)) return;
+    const seen = (run.verb === "vanish" ? GONE : 1) * (run.to - run.from);
     const at = edge === "start" ? run.from : run.to;
-    for (const effect of this.effects(run.step.act, run.found!.view)) {
-      if (effect.when === edge) {
-        this.#effects.begin(on, effect, at, run.to - run.from);
-      }
+    const begun = this.effects(run.step.act, run.found!.view);
+    for (const effect of begun.filter((effect) => effect.when === edge)) {
+      this.#effects.begin(on, effect, at, seen);
     }
   }
 
