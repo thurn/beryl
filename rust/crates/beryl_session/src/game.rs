@@ -1140,6 +1140,8 @@ impl Game {
                 let answer = OpenDecision::new(id, &open, false, false)
                     .answer(id, CandidateIndex(c.0))
                     .expect("a found candidate is in range");
+                // The record says whether it joined the answer before it: a later pick of a
+                // prompt's run did, in a cast or out of one.
                 self.answer_as(answer, chosen.continuation);
             }
             (At::Human(..), Entry::Stops(stops)) => self.change_stops(*stops),

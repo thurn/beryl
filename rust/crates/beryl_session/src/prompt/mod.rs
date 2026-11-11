@@ -45,6 +45,17 @@
 //! the clicks. The first pick is the player's answer and the rest are its continuations, so
 //! an undo takes back the whole prompt and a replay needs no prompt state.
 //!
+//! The state is the game's (`held.rs`): made as the view of a decision is drawn, changed by
+//! each click, and gone with the decision, whether it is answered, taken back or undone. It is
+//! a function of the open decision and the clicks since, so it is never saved, and a game
+//! resumed or replayed to a decision opens its prompt afresh. A view drawn again, as a change
+//! of stops draws it, and the view a UI takes a game up from show the prompt as the clicks
+//! left it. A click names the state it was made on and is refused on any other; one on a
+//! prompt whose state the session does not hold is refused too.
+//!
+//! One module holds each shape's state (`pick.rs` and those beside it): what it opens as,
+//! what each click does to it, the marks and buttons it shows, and the picks it answers with.
+//!
 //! # Text
 //!
 //! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written

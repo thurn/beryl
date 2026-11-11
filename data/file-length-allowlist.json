@@ -13,7 +13,7 @@
   "rust/crates/beryl_search/src/mcts.rs": 902,
   "rust/crates/beryl_search/src/rollout.rs": 1175,
   "rust/crates/beryl_session/src/bugs.rs": 838,
-  "rust/crates/beryl_session/src/game.rs": 2222,
+  "rust/crates/beryl_session/src/game.rs": 2224,
   "rust/crates/beryl_session/src/preview.rs": 1170,
   "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/game/Board.tsx": 3514,
