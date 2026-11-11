@@ -84,17 +84,3 @@ export function castName(act: Act, card: string): string {
     : rest;
   return extra.charAt(0).toUpperCase() + extra.slice(1);
 }
-
-/** Names of permanents as a list that counts repeats: two lands of one name and an artifact
- * read "2 <land>s, <artifact>". For a payment plan the engine asks about outside the cast
- * step. */
-export function tapList(names: string[]): string {
-  const counts = new Map<string, number>();
-  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
-  return [...counts]
-    .map(([name, n]) => (n === 1 ? name : `${n} ${plural(name)}`))
-    .join(", ");
-}
-
-const plural = (name: string) =>
-  /(s|x|ch|sh)$/.test(name) ? `${name}es` : `${name}s`;
