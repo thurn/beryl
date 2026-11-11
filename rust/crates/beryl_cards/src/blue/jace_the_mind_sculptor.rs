@@ -7,9 +7,11 @@
 //! −12: Exile all cards from target player's library, then that player shuffles their hand
 //! into their library."
 
+use beryl_card::Effect;
+use beryl_card::effect::build::{TARGET, return_to_hand};
 use beryl_engine::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
     Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
@@ -52,11 +54,11 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-1),
-                targets: &[
-                    TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::CREATURE))
-                        .removal(),
-                ],
-                body: bodies!(bounce),
+                targets: &[TargetSpec::one(
+                    TargetKind::Permanent,
+                    Filter::Types(Types::CREATURE),
+                )],
+                body: Behavior::Data(&BOUNCE),
                 ..Ability::NONE
             },
             Ability {
@@ -116,12 +118,7 @@ fn brainstorm<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone."
-fn bounce<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(creature) = ctx.target_object(0) {
-        ctx.return_to_hand(creature);
-    }
-    Ok(())
-}
+static BOUNCE: Effect = return_to_hand(TARGET);
 
 /// "−12: Exile all cards from target player's library, then that player shuffles their hand
 /// into their library." [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a):

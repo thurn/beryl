@@ -1401,22 +1401,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 }
 
-/// The body of a mana ability: add what it produces, of the kind its activator chose
-/// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability that
-/// produces mana instructs a player to add that mana."
-pub fn add_produced_mana<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let produces = ctx.ability.produces;
-    debug_assert!(produces.includes(ctx.mana));
-    ctx.add_mana(ctx.controller(), ctx.mana, produces.amount);
-    Ok(())
-}
-
-/// "Draw a card."
-pub fn draw_a_card<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.draw(ctx.controller(), 1);
-    Ok(())
-}
-
 /// Whether the cost a permanent's spell was cast with, marked by `flag`, was paid, for an
 /// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
 /// and never changes while it stays; once it has left, the answer is what it was as the

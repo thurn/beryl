@@ -5,9 +5,10 @@
 //! −3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw a
 //! card."
 
+use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Rule, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Rule, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -45,6 +46,10 @@ pub static CARD: CardDef = CardDef {
                 body: bodies!(sorceries_as_flash),
                 ..Ability::NONE
             },
+            // "−3: Return up to one target artifact, creature, or enchantment to its owner's
+            // hand. Draw a card." With no target chosen it still draws; with its one target
+            // illegal, it doesn't resolve at all
+            // ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-3),
@@ -55,9 +60,8 @@ pub static CARD: CardDef = CardDef {
                             .union(Types::CREATURE)
                             .union(Types::ENCHANTMENT),
                     ),
-                )
-                .removal()],
-                body: bodies!(bounce_and_draw),
+                )],
+                body: Behavior::Data(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
                 ..Ability::NONE
             },
         ],
@@ -71,17 +75,6 @@ pub static CARD: CardDef = CardDef {
 /// play this card any time you could cast an instant.'"
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.allow_sorceries_as_flash(ctx.controller());
-    Ok(())
-}
-
-/// "−3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw
-/// a card." With no target chosen it still draws; with its one target illegal, it doesn't
-/// resolve at all ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
-fn bounce_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
-        ctx.return_to_hand(permanent);
-    }
-    ctx.draw(ctx.controller(), 1);
     Ok(())
 }
 

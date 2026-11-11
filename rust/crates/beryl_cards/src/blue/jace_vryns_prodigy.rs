@@ -10,13 +10,15 @@
 //! spell would be put into your graveyard, exile it instead.
 //! −9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
 
+use beryl_card::effect::build::{TARGET, TARGET_PLAYER, mill, modify};
+use beryl_card::{Duration, Effect};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::state::{Continuous, CounterKind, Duration};
+use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -63,7 +65,7 @@ pub static CARD: CardDef = CardDef {
                         TargetKind::Permanent,
                         Filter::Types(Types::CREATURE),
                     )],
-                    body: bodies!(weaken),
+                    body: Behavior::Data(&WEAKEN),
                     ..Ability::NONE
                 },
                 Ability {
@@ -104,7 +106,7 @@ pub static EMBLEM: CardDef = CardDef {
                 TargetKind::Player,
                 Filter::Whose(Whose::Opponent),
             )],
-            ..Ability::triggered(Trigger::YouCast, bodies!(mill_five))
+            ..Ability::triggered(Trigger::YouCast, Behavior::Data(&MILL_FIVE))
         }],
         ..Face::EMPTY
     }],
@@ -130,16 +132,11 @@ fn loot_and_transform<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// that modify power and/or toughness (but don't set power and/or toughness to a specific
 /// number or value) are applied." It lasts "as long as stated by the spell or ability creating
 /// it" ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
-fn weaken<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(creature) = ctx.target_object(0) {
-        ctx.add_effect(
-            creature,
-            Continuous::Layer(Modification::ModifyPt(-2, 0)),
-            Duration::UntilYourNextTurn(ctx.controller()),
-        );
-    }
-    Ok(())
-}
+static WEAKEN: Effect = modify(
+    TARGET,
+    Modification::ModifyPt(-2, 0),
+    Duration::UntilYourNextTurn,
+);
 
 /// "−3: You may cast target instant or sorcery card from your graveyard this turn. If that
 /// spell would be put into your graveyard, exile it instead." The permission carries the
@@ -167,12 +164,7 @@ fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// [CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a): "For a player to mill a
 /// number of cards, that player puts that many cards from the top of their library into their
 /// graveyard."
-fn mill_five<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(player) = ctx.target_player(0) {
-        ctx.mill(player, 5);
-    }
-    Ok(())
-}
+static MILL_FIVE: Effect = mill(TARGET_PLAYER, 5);
 
 const JACE: &str = names::JACE_VRYNS_PRODIGY;
 /// The back face's name, which the transformed permanent has (CR 712.8e).

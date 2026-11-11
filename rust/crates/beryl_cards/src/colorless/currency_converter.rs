@@ -3,9 +3,11 @@
 //! with this artifact into its owner's graveyard. If it's a land card, create a Treasure
 //! token. If it's a nonland card, create a 2/2 black Rogue creature token."
 
+use beryl_card::Effect;
+use beryl_card::effect::build::{YOU, discard, draw, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Subtype, Subtypes,
-    Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Subtype,
+    Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
@@ -60,12 +62,7 @@ fn exile_discarded<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
-fn loot<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 1);
-    ctx.discard_a_card(you)?;
-    Ok(())
-}
+static LOOT: Effect = sequence(&[draw(YOU, 1), discard(YOU, 1)]);
 
 /// One of the cards exiled with this Converter, its controller's choice, goes to its owner's
 /// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a
@@ -106,8 +103,7 @@ pub static CARD: CardDef = CardDef {
                     mana: ManaCost::generic(2),
                     ..Cost::TAP
                 },
-                may_pause: true,
-                body: bodies!(loot),
+                body: Behavior::Data(&LOOT),
                 ..Ability::NONE
             },
             Ability {

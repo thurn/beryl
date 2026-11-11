@@ -1,33 +1,15 @@
 //! Reprieve. {1}{W} Instant. "Return target spell to its owner's hand. Draw a card."
 
+use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, TargetKind,
+    Ability, AbilityKind, Behavior, CardDef, Castings, Colors, Face, FaceIx, ManaCost, TargetKind,
     TargetSpec, Types,
 };
-use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::REPRIEVE,
-    faces: &[Face {
-        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: bodies!(return_and_draw),
-            ..Ability::NONE
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
 
 /// The spell leaves the stack without resolving, to its owner's hand
 /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
@@ -40,13 +22,22 @@ pub static CARD: CardDef = CardDef {
 /// A copy of a spell returned this way would cease to exist
 /// ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell
 /// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
-fn return_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(0) {
-        ctx.return_to_hand(spell);
-    }
-    ctx.draw(ctx.controller(), 1);
-    Ok(())
-}
+pub static CARD: CardDef = CardDef {
+    name: names::REPRIEVE,
+    faces: &[Face {
+        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
+        types: Types::INSTANT,
+        colors: Colors::WHITE,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
+            body: Behavior::Data(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
 
 const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Count {

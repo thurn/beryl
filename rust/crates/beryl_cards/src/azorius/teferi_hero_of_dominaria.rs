@@ -5,12 +5,13 @@
 //! −8: You get an emblem with 'Whenever you draw a card, exile target permanent an opponent
 //! controls.'"
 
+use beryl_card::effect::build::{TARGET, exile, put_into_library};
+use beryl_card::{Effect, LibraryPosition};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Delayed, Face, Flow, ManaCost, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Delayed, Face, Flow, ManaCost, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
@@ -44,9 +45,8 @@ pub static CARD: CardDef = CardDef {
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
-                )
-                .removal()],
-                body: bodies!(third_from_the_top),
+                )],
+                body: Behavior::Data(&THIRD_FROM_THE_TOP),
                 ..Ability::NONE
             },
             Ability {
@@ -75,10 +75,11 @@ pub static EMBLEM: CardDef = CardDef {
     name: "Teferi, Hero of Dominaria Emblem",
     faces: &[Face {
         abilities: &[Ability {
-            targets: &[
-                TargetSpec::one(TargetKind::Permanent, Filter::Whose(Whose::Opponent)).removal(),
-            ],
-            ..Ability::triggered(Trigger::YouDraw, bodies!(exile_target))
+            targets: &[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Whose(Whose::Opponent),
+            )],
+            ..Ability::triggered(Trigger::YouDraw, Behavior::Data(&EXILE_TARGET))
         }],
         ..Face::EMPTY
     }],
@@ -109,12 +110,7 @@ fn untap_two_lands<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// player to put a card into a library 'Nth from the top,' and that library has fewer than N
 /// cards in it, the player puts that card on the bottom of that library." It goes to its
 /// owner's library ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)).
-fn third_from_the_top<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
-        ctx.put_into_library(permanent, 2);
-    }
-    Ok(())
-}
+static THIRD_FROM_THE_TOP: Effect = put_into_library(TARGET, LibraryPosition::FromTop(3));
 
 /// "−8: You get an emblem with ..."
 /// [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that [player]
@@ -128,12 +124,7 @@ fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "Whenever you draw a card, exile target permanent an opponent controls."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
-        ctx.move_to(permanent, Zone::Exile, Reason::Exile);
-    }
-    Ok(())
-}
+static EXILE_TARGET: Effect = exile(TARGET);
 
 const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
 const ISLAND: &str = names::ISLAND;

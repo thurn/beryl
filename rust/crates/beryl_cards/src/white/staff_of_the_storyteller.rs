@@ -4,15 +4,14 @@
 //! Whenever you create one or more creature tokens, put a story counter on this artifact.
 //! {W}, {T}, Remove a story counter from this artifact: Draw a card."
 
+use beryl_card::Effect;
+use beryl_card::effect::build::{THIS, YOU, add_counters, create_tokens, draw};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Keywords, ManaCost, Subtype,
+    Subtypes, Trigger, Types,
 };
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -24,10 +23,14 @@ pub static CARD: CardDef = CardDef {
         types: Types::ARTIFACT,
         colors: Colors::WHITE,
         abilities: &[
-            Ability::triggered(Trigger::Enters, bodies!(spirit)),
+            Ability::triggered(Trigger::Enters, Behavior::Data(&CREATE_SPIRIT)),
+            // "Whenever you create one or more creature tokens, put a story counter on this
+            // artifact." One event creating several tokens triggers it once
+            // ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability
+            // triggers only once each time its trigger event occurs."
             Ability::triggered(
                 Trigger::YouCreateTokens(Types::CREATURE),
-                bodies!(story_counter),
+                Behavior::Data(&add_counters(THIS, CounterKind::Story, 1)),
             ),
             Ability {
                 kind: AbilityKind::Activated,
@@ -37,7 +40,7 @@ pub static CARD: CardDef = CardDef {
                     remove: Some(CounterKind::Story),
                     ..Cost::NONE
                 },
-                body: bodies!(beryl_engine::effect::draw_a_card),
+                body: Behavior::Data(&draw(YOU, 1)),
                 ..Ability::NONE
             },
         ],
@@ -68,19 +71,7 @@ pub static SPIRIT: CardDef = CardDef {
 /// "When this artifact enters, create a 1/1 white Spirit creature token with flying."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-fn spirit<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens(&SPIRIT, 1, TokenEntry::default());
-    Ok(())
-}
-
-/// "Whenever you create one or more creature tokens, put a story counter on this artifact."
-/// One event creating several tokens triggers it once
-/// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
-/// only once each time its trigger event occurs."
-fn story_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.add_counters(ctx.source(), CounterKind::Story, 1);
-    Ok(())
-}
+static CREATE_SPIRIT: Effect = create_tokens(YOU, &SPIRIT, 1);
 
 const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
 const EMPEROR: &str = names::THE_WANDERING_EMPEROR;

@@ -1,17 +1,23 @@
 //! Oust. {W} Sorcery. "Put target creature into its owner's library second from the top. Its
 //! controller gains 3 life."
 
+use beryl_card::LibraryPosition;
+use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, gain_life, put_into_library, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
 };
-use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
 
+/// "Second from the top" is under one card, or the top of an empty library. "Its controller"
+/// is the creature's as it was on the battlefield: in a library it has no controller
+/// ([CR 108.4a](https://yawgatog.com/resources/magic-rules/#R1084a)): "If anything asks for
+/// the controller of a card that doesn't have one (because it's not a permanent or spell),
+/// use its owner instead." Owner and controller differ only for a stolen creature, which
+/// goes to its owner's library while its controller gains the life.
 pub static CARD: CardDef = CardDef {
     name: names::OUST,
     faces: &[Face {
@@ -20,32 +26,20 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         abilities: &[Ability {
             kind: AbilityKind::Spell,
-            targets: &[
-                TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::CREATURE)).removal(),
-            ],
-            body: bodies!(oust),
+            targets: &[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::CREATURE),
+            )],
+            body: Behavior::Data(&sequence(&[
+                put_into_library(TARGET, LibraryPosition::FromTop(2)),
+                gain_life(ITS_CONTROLLER, 3),
+            ])),
             ..Ability::NONE
         }],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-/// "Second from the top" is under one card, or the top of an empty library. "Its controller"
-/// is the creature's as it was on the battlefield: in a library it has no controller
-/// ([CR 108.4a](https://yawgatog.com/resources/magic-rules/#R1084a)): "If anything asks for
-/// the controller of a card that doesn't have one (because it's not a permanent or spell),
-/// use its owner instead." Owner and controller differ only for a stolen creature, which
-/// goes to its owner's library while its controller gains the life.
-fn oust<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(0) else {
-        return Ok(());
-    };
-    let controller = ctx.state().controller(creature.slot);
-    ctx.put_into_library(creature, 1);
-    ctx.gain_life(controller, 3);
-    Ok(())
-}
 
 const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 

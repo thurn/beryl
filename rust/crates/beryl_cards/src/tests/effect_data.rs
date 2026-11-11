@@ -23,8 +23,32 @@ use crate::{CARDS, SCENARIOS};
 struct Twin {
     card: &'static CardDef,
     body: Behavior,
+    /// What the ability declares beside its body, which data says itself.
+    declares: Declares,
     data: &'static Effect,
 }
+
+/// What an ability with a Rust body declares by hand.
+#[derive(Clone, Copy, Default)]
+struct Declares {
+    /// That resolving it may ask a player to choose.
+    may_pause: bool,
+    /// That it removes the permanent it targets.
+    removal: bool,
+}
+
+const NOTHING: Declares = Declares {
+    may_pause: false,
+    removal: false,
+};
+const MAY_PAUSE: Declares = Declares {
+    may_pause: true,
+    removal: false,
+};
+const REMOVAL: Declares = Declares {
+    may_pause: false,
+    removal: true,
+};
 
 fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(0) else {
@@ -86,6 +110,7 @@ const TWINS: &[Twin] = &[
     Twin {
         card: &mana_tithe::CARD,
         body: bodies!(counter_unless_pays_one),
+        declares: MAY_PAUSE,
         data: &unless_pays(&counter(TARGET), ITS_CONTROLLER, mana("{1}")),
     },
     // "Put target creature into its owner's library second from the top. Its controller
@@ -93,6 +118,7 @@ const TWINS: &[Twin] = &[
     Twin {
         card: &oust::CARD,
         body: bodies!(second_from_the_top),
+        declares: REMOVAL,
         data: &sequence(&[
             put_into_library(TARGET, LibraryPosition::FromTop(2)),
             gain_life(ITS_CONTROLLER, 3),
@@ -103,6 +129,7 @@ const TWINS: &[Twin] = &[
     Twin {
         card: &get_lost::CARD,
         body: bodies!(destroy_and_map),
+        declares: REMOVAL,
         data: &DESTROY_AND_MAP,
     },
     // "When this artifact enters, exile target nonland permanent an opponent controls with
@@ -110,31 +137,33 @@ const TWINS: &[Twin] = &[
     Twin {
         card: &portable_hole::CARD,
         body: bodies!(exile_until_it_leaves),
+        declares: REMOVAL,
         data: &exile_until_this_leaves(TARGET),
     },
     // "Return target spell to its owner's hand. Draw a card."
     Twin {
         card: &reprieve::CARD,
         body: bodies!(return_and_draw),
+        declares: NOTHING,
         data: &sequence(&[return_to_hand(TARGET), draw(YOU, 1)]),
     },
 ];
 
-/// `card` with `body` for its first ability's. With `declared` false the ability declares
-/// nothing beside it, neither that it may pause nor that it removes its target: data says
-/// both itself.
-fn written_as(card: &'static CardDef, body: Behavior, declared: bool) -> &'static CardDef {
+/// `card` with `body` for its first ability's, declaring `declares` beside it whatever the
+/// card's own file does: an ability written as data declares nothing, as data says both
+/// itself.
+fn written_as(card: &'static CardDef, body: Behavior, declares: Declares) -> &'static CardDef {
     let front = &card.faces[0];
     let original = &front.abilities[0];
     let targets: Vec<TargetSpec> = (original.targets.iter())
         .map(|&spec| TargetSpec {
-            removes_permanent: declared && spec.removes_permanent,
+            removes_permanent: declares.removal,
             ..spec
         })
         .collect();
     let ability = Ability {
         body,
-        may_pause: declared && original.may_pause,
+        may_pause: declares.may_pause,
         targets: targets.leak(),
         ..*original
     };
@@ -177,8 +206,8 @@ fn played(
 fn a_card_written_as_data_plays_its_scenarios_as_its_body_does() {
     for twin in TWINS {
         let name = twin.card.name;
-        let as_body = written_as(twin.card, twin.body, true);
-        let as_data = written_as(twin.card, Behavior::Data(twin.data), false);
+        let as_body = written_as(twin.card, twin.body, twin.declares);
+        let as_data = written_as(twin.card, Behavior::Data(twin.data), NOTHING);
         let (bodies, data) = (table_with(as_body), table_with(as_data));
         let scenarios = (SCENARIOS.iter())
             .find(|&&(card, _)| card == name)

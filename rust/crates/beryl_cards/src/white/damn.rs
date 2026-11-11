@@ -2,47 +2,20 @@
 //! regenerated. Overload {2}{W}{W} (You may cast this spell for its overload cost. If you do,
 //! change "target" in its text to "each.")"
 
+use beryl_card::Objects;
+use beryl_card::effect::build::{TARGET, destroy};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, ManaCost,
-    TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, CastingOption, Castings, Colors, Face, FaceIx,
+    ManaCost, TargetKind, TargetSpec, Types,
 };
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::{Evaluate, Filter};
+use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
 use crate::white::adeline_resplendent_cathar::HUMAN_TOKEN;
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
-
-/// "Can't be regenerated" ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)):
-/// such effects "cause regeneration shields to not be applied." No card in the cube
-/// regenerates, so destroying is all it takes.
-fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(creature) = ctx.target_object(0) {
-        ctx.destroy(creature);
-    }
-    Ok(())
-}
-
-/// Overloaded, "Destroy each creature" ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
-/// It targets nothing, so hexproof and protection don't stop it
-/// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)): "If a player
-/// chooses to pay the overload cost of a spell, that spell won't require any targets."
-/// The creatures are destroyed at once.
-fn destroy_each<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let s = ctx.state();
-    let creatures = CREATURES.select(
-        s,
-        ctx.table(),
-        s.battlefield().iter().copied().collect(),
-        ctx.controller(),
-    );
-    ctx.destroy_all(creatures);
-    Ok(())
-}
 
 /// Its color is its mana cost's, black: the overload cost doesn't change it
 /// ([CR 202.2](https://yawgatog.com/resources/magic-rules/#R2022)): "An object is the color or
@@ -55,15 +28,28 @@ pub static CARD: CardDef = CardDef {
         types: Types::SORCERY,
         colors: Colors::BLACK,
         abilities: &[
+            // "Can't be regenerated"
+            // ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): such
+            // effects "cause regeneration shields to not be applied." No card in the cube
+            // regenerates, so destroying is all it takes.
             Ability {
                 kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES).removal()],
-                body: bodies!(destroy_target),
+                targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES)],
+                body: Behavior::Data(&destroy(TARGET)),
                 ..Ability::NONE
             },
+            // Overloaded, "Destroy each creature"
+            // ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)). It targets
+            // nothing, so hexproof and protection don't stop it
+            // ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)): "If a
+            // player chooses to pay the overload cost of a spell, that spell won't require
+            // any targets." The creatures are destroyed at once.
             Ability {
                 kind: AbilityKind::Spell,
-                body: bodies!(destroy_each),
+                body: Behavior::Data(&destroy(Objects::All {
+                    zone: Zone::Battlefield,
+                    filter: CREATURES,
+                })),
                 ..Ability::NONE
             },
         ],

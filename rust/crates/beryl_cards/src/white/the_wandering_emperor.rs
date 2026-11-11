@@ -8,16 +8,17 @@
 //! −1: Create a 2/2 white Samurai creature token with vigilance.
 //! −2: Exile target tapped creature. You gain 2 life."
 
+use beryl_card::effect::build::{
+    TARGET, YOU, add_counters, create_tokens, exile, gain_life, modify, sequence,
+};
+use beryl_card::{Duration, Effect};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, Keywords, ManaCost, Modification,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Keywords, ManaCost, Modification,
     Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::{Reason, TokenEntry};
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{Continuous, CounterKind, Duration};
+use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -45,13 +46,13 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Types(Types::CREATURE),
                 )],
-                body: bodies!(counter_and_first_strike),
+                body: Behavior::Data(&COUNTER_AND_FIRST_STRIKE),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-1),
-                body: bodies!(samurai),
+                body: Behavior::Data(&CREATE_SAMURAI),
                 ..Ability::NONE
             },
             Ability {
@@ -60,9 +61,8 @@ pub static CARD: CardDef = CardDef {
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::CREATURE), Filter::Tapped]),
-                )
-                .removal()],
-                body: bodies!(exile_and_gain),
+                )],
+                body: Behavior::Data(&EXILE_AND_GAIN),
                 ..Ability::NONE
             },
         ],
@@ -94,36 +94,24 @@ pub static SAMURAI: CardDef = CardDef {
 /// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of
 /// turn." [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
 /// a static ability that modifies the rules for the combat damage step."
-fn counter_and_first_strike<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(creature) = ctx.target_object(0) {
-        ctx.add_counters(creature, CounterKind::PlusOne, 1);
-        ctx.add_effect(
-            creature,
-            Continuous::Layer(Modification::AddKeywords(Keywords::FIRST_STRIKE)),
-            Duration::EndOfTurn,
-        );
-    }
-    Ok(())
-}
+static COUNTER_AND_FIRST_STRIKE: Effect = sequence(&[
+    add_counters(TARGET, CounterKind::PlusOne, 1),
+    modify(
+        TARGET,
+        Modification::AddKeywords(Keywords::FIRST_STRIKE),
+        Duration::EndOfTurn,
+    ),
+]);
 
 /// "−1: Create a 2/2 white Samurai creature token with vigilance."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-fn samurai<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens(&SAMURAI, 1, TokenEntry::default());
-    Ok(())
-}
+static CREATE_SAMURAI: Effect = create_tokens(YOU, &SAMURAI, 1);
 
 /// "−2: Exile target tapped creature. You gain 2 life."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_and_gain<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(creature) = ctx.target_object(0) {
-        ctx.move_to(creature, Zone::Exile, Reason::Exile);
-    }
-    ctx.gain_life(ctx.controller(), 2);
-    Ok(())
-}
+static EXILE_AND_GAIN: Effect = sequence(&[exile(TARGET), gain_life(YOU, 2)]);
 
 const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
 const JACE: &str = names::JACE_VRYNS_PRODIGY;

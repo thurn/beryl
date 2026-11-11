@@ -1,17 +1,22 @@
 //! Portable Hole. {W} Artifact. "When this artifact enters, exile target nonland permanent an
 //! opponent controls with mana value 2 or less until this artifact leaves the battlefield."
 
+use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Trigger, Types,
+    Ability, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Trigger, Types,
 };
-use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
+/// "Exile target ... until this artifact leaves the battlefield"
+/// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
+/// is created immediately after the specified event. This second one-shot effect returns the
+/// object to its previous zone." A target gone, or no longer matching, by resolution stops
+/// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
+/// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
 pub static CARD: CardDef = CardDef {
     name: names::PORTABLE_HOLE,
     faces: &[Face {
@@ -26,27 +31,16 @@ pub static CARD: CardDef = CardDef {
                     Filter::Whose(Whose::Opponent),
                     Filter::ManaValueAtMost(2),
                 ]),
+            )],
+            ..Ability::triggered(
+                Trigger::Enters,
+                Behavior::Data(&exile_until_this_leaves(TARGET)),
             )
-            .removal()],
-            ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
         }],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-/// "Exile target ... until this artifact leaves the battlefield"
-/// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
-/// is created immediately after the specified event. This second one-shot effect returns the
-/// object to its previous zone." A target gone, or no longer matching, by resolution stops
-/// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
-/// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
-        ctx.exile_until_source_leaves(permanent);
-    }
-    Ok(())
-}
 
 const HOLE: &str = names::PORTABLE_HOLE;
 const JACE: &str = names::JACE_VRYNS_PRODIGY;

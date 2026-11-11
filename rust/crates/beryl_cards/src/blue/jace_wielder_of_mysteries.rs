@@ -4,9 +4,11 @@
 //! +1: Target player mills two cards. Draw a card.
 //! −8: Draw seven cards. Then if your library has no cards in it, you win the game."
 
+use beryl_card::Effect;
+use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, mill, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Replacement, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Replacement,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -35,7 +37,7 @@ pub static CARD: CardDef = CardDef {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
                 targets: &[TargetSpec::one(TargetKind::Player, Filter::Any)],
-                body: bodies!(mill_two_and_draw),
+                body: Behavior::Data(&MILL_TWO_AND_DRAW),
                 ..Ability::NONE
             },
             Ability {
@@ -55,13 +57,7 @@ pub static CARD: CardDef = CardDef {
 /// empty, Jace draws from an empty library and his controller wins instead.
 /// [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b): "A player can't mill a
 /// number of cards greater than the number of cards in their library."
-fn mill_two_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(player) = ctx.target_player(0) {
-        ctx.mill(player, 2);
-    }
-    ctx.draw(ctx.controller(), 1);
-    Ok(())
-}
+static MILL_TWO_AND_DRAW: Effect = sequence(&[mill(TARGET_PLAYER, 2), draw(YOU, 1)]);
 
 /// "−8: Draw seven cards. Then if your library has no cards in it, you win the game." Jace
 /// with exactly eight loyalty is gone by then (CR 704.5i), and his controller draws what is

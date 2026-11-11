@@ -1,10 +1,6 @@
 //! Predefined tokens more than one card creates.
 
-use beryl_engine::bodies;
-use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Cost, Face, ManaSet, Subtype, Subtypes, Types,
-};
-use beryl_engine::effect::add_produced_mana;
+use beryl_engine::card::{Ability, CardDef, Cost, Face, ManaSet, Subtype, Subtypes, Types};
 
 /// The Treasure token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
@@ -23,18 +19,15 @@ pub static TREASURE: CardDef = CardDef {
         types: Types::ARTIFACT,
         subtypes: Subtypes::of(&[Subtype::Treasure]),
         abilities: &[Ability {
-            kind: AbilityKind::Mana,
             cost: Cost {
                 sacrifice_self: true,
                 ..Cost::TAP
             },
             // W, U, B, R and G.
-            produces: ManaSet {
+            ..Ability::tap_for_mana(ManaSet {
                 colors: 0b1_1111,
                 amount: 1,
-            },
-            body: bodies!(add_produced_mana),
-            ..Ability::NONE
+            })
         }],
         ..Face::EMPTY
     }],

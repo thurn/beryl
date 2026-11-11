@@ -1,12 +1,11 @@
 //! Counterspell. {U}{U} Instant. "Counter target spell."
 
+use beryl_card::effect::build::{TARGET, counter};
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
 };
-use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
-use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -20,23 +19,16 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: bodies!(counter),
+            // CR 701.6a: "To counter a spell or ability means to cancel it, removing it from
+            // the stack. It doesn't resolve and none of its effects occur. A countered spell
+            // is put into its owner's graveyard."
+            body: Behavior::Data(&counter(TARGET)),
             ..Ability::NONE
         }],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-/// [CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell or
-/// ability means to cancel it, removing it from the stack. It doesn't resolve and none of its
-/// effects occur. A countered spell is put into its owner's graveyard."
-fn counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(0) {
-        ctx.counter(spell, false);
-    }
-    Ok(())
-}
 
 const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)];
 
