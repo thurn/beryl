@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Declared attackers tapped in slot order (`combat::finish_attack` walked the
+  attackers' `Bitboard`), so the order of the tap events, which the UI animates
+  and a "becomes tapped" trigger would follow, depended on slot numbers. The
+  taps are simultaneous under
+  [CR 508.1f](https://yawgatog.com/resources/magic-rules/#R5081f): "The active
+  player taps the chosen creatures." They now go in battlefield order. Found by
+  running Teferi, Time Raveler's scenarios with the decks' slots renumbered.
+  Prevention: every card's scenarios now run under three slot numberings
+  (`every_card_has_scenarios_and_they_pass`) and must trace the same; never let
+  a `Bitboard`'s iteration order reach an event.
+
 - Casting Abhorrent Oculus exiled graveyard cards before activating the mana
   abilities used to pay for it. This violated
   [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "Mana

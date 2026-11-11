@@ -203,10 +203,30 @@ fn finish_attack<L: Layout>(
 ) -> Result<(), Full> {
     s.pending = Pending::None;
     let attackers = with_flag(s, ObjectFlags::ATTACKING);
-    for slot in attackers.iter() {
-        if !has(s, slot, Keywords::VIGILANCE) {
-            event::set_tapped(s, t, sink, s.object_ref(slot), true)?;
+    // In battlefield order, never slot order: the taps' events are seen in this order, and a
+    // slot number says nothing about a card (architecture §13). Tapping moves nothing. One
+    // attacker has no order, and needs no walk of the battlefield.
+    let tap = |s: &mut State<L>, sink: &mut Sink<L>, slot| {
+        if has(s, slot, Keywords::VIGILANCE) {
+            return Ok(());
         }
+        event::set_tapped(s, t, sink, s.object_ref(slot), true)
+    };
+    let mut untapped = attackers;
+    if attackers.count() > 1 {
+        for i in 0..s.battlefield().len() {
+            let slot = s.battlefield()[i];
+            if untapped.contains(slot) {
+                untapped.remove(slot);
+                tap(s, sink, slot)?;
+                if untapped.is_empty() {
+                    break;
+                }
+            }
+        }
+    }
+    for slot in untapped.iter() {
+        tap(s, sink, slot)?;
     }
     if attackers.is_empty() {
         return Ok(());
