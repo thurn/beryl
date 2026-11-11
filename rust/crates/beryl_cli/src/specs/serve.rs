@@ -40,7 +40,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use beryl_scenario::Action;
-use beryl_session::bugs::{self, BugReport, Images, PageInfo, SpecMoment};
+use beryl_session::bugs::SpecMoment;
 use beryl_session::ipc;
 use beryl_session::protocol::{Candidate, GameEvent, PlayerView, Side};
 use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
@@ -208,7 +208,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         return respond(&mut stream, "200 OK", &answer.to_string());
     }
     if method == "POST" && path == "/report" {
-        let answer = report(instances, &body);
+        let answer = reports::report(instances, &body);
         return respond(&mut stream, "200 OK", &answer.to_string());
     }
     if let ("GET", Some(page)) = (method.as_str(), path.strip_prefix("/stream/")) {
@@ -313,7 +313,7 @@ fn handle_moment(
                             moment: name.to_owned(),
                             view: view.to_owned(),
                         };
-                        write_report(&i.sessions, args, spec, false)
+                        reports::write_report(&i.sessions, args, spec, false)
                     } else {
                         invoke(&i.sessions, command, args)
                     }
@@ -352,107 +352,6 @@ fn review(card: &str, body: &[u8]) -> Value {
             json!({ "ok": { "reviewed": all.get(spec.card), "next": next } })
         }
         Err(message) => json!({ "err": { "kind": "io", "message": message } }),
-    }
-}
-
-/// `POST /report`: a note from the spec page about the moment an instance plays, written as a
-/// bug report with what its game knows, if it still runs.
-fn report(instances: &Instances, body: &[u8]) -> Value {
-    let request: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
-    let (Some(key), Some(description)) = (request["key"].as_str(), request["description"].as_str())
-    else {
-        return json!({ "err": { "kind": "badRequest", "message": "want key and description" } });
-    };
-    if description.trim().is_empty() {
-        return json!({ "err": { "kind": "badRequest", "message": "an empty note" } });
-    }
-    let mut parts = key.splitn(4, '/');
-    let (Some(card), Some(moment), Some(view), Some(id)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
-        return json!({ "err": { "kind": "badRequest", "message": format!("no moment in {key}") } });
-    };
-    if (find(card, moment).is_none()
-        && checkpoint(card, moment).is_none()
-        && super::playground::find(card, moment).is_none())
-        || View::parse(view).is_none()
-    {
-        return json!({ "err": { "kind": "spec", "message": format!("no moment {key}") } });
-    }
-    let spec = SpecMoment {
-        card: card.to_owned(),
-        moment: moment.to_owned(),
-        view: view.to_owned(),
-    };
-    let viewer_page: Option<PageInfo> = match serde_json::from_value(request["viewerPage"].clone())
-    {
-        Ok(page) => page,
-        Err(e) => return json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
-    };
-    let spec_viewer = viewer_page.is_some();
-    let page = viewer_page.unwrap_or_else(|| PageInfo {
-        url: format!(
-            "/{}/{spec}",
-            if moment.starts_with("playground-") {
-                "playground"
-            } else {
-                "scenarios"
-            }
-        ),
-        width: 0.0,
-        height: 0.0,
-        scale: 1.0,
-    });
-    let args = json!({ "request": {
-        "description": description,
-        "ai": false,
-        "snapshot": null,
-        "region": null,
-        "page": page,
-        "uiLog": [],
-        "updates": [],
-    }});
-    let list = lock(instances);
-    match list
-        .iter()
-        .find(|i| i.key == instance_key(card, moment, view, id))
-    {
-        Some(i) => {
-            let feed = if view == "theirs" {
-                i.mirror.as_ref().unwrap_or(&i.feed)
-            } else {
-                &i.feed
-            };
-            let mut args = args;
-            args["request"]["updates"] = json!(lock(&feed.0).history);
-            write_report(&i.sessions, args, spec, spec_viewer)
-        }
-        None => {
-            json!({ "err": { "kind": "ended", "message": "This board expired. Reset it before reporting." } })
-        }
-    }
-}
-
-/// Writes the `report_bug` request in `args` as a report about `spec`, with what `sessions`
-/// knows of its game.
-fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment, spec_viewer: bool) -> Value {
-    #[derive(serde::Deserialize)]
-    struct Request {
-        request: BugReport,
-    }
-    let mut report = match serde_json::from_value::<Request>(args) {
-        Ok(r) => r.request,
-        Err(e) => return json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
-    };
-    report.spec = Some(spec);
-    report.spec_viewer = spec_viewer;
-    let root = bugs::dir();
-    match bugs::write(&root, &report, &Images::default(), sessions) {
-        Ok(saved) => {
-            bugs::filing::enqueue(&root, &saved.id, None);
-            json!({ "ok": saved })
-        }
-        Err(e) => json!({ "err": e }),
     }
 }
 
