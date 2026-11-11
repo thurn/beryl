@@ -149,6 +149,14 @@ export function timingOf(act: Act, table?: PlayerView): Timing {
     (found === undefined ? undefined : cases.get(act.verb)?.get(found)) ??
     verbs.get(act.verb) ??
     SNAP;
+  // A look at several cards of a library takes them off it one after another, each as long
+  // as one alone (Arena's leave about 0.5 s apart: the data's stagger).
+  const look = act.verb === "lift" && act.span === "begin" && act.handling;
+  const count = look && look.zone === "library" ? (look.count ?? 0) : 0;
+  if (count > 1 && own.duration > 0) {
+    const duration = own.duration + (count - 1) * own.stagger;
+    return { ...own, duration, each: own.duration };
+  }
   return found === "exiled" ? { ...own, stagger: BATCH_EXILE } : own;
 }
 

@@ -214,12 +214,12 @@
     {
       "kind": "settled",
       "name": "Permanents that leave",
-      "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile.",
+      "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile. What it leaves room for closes up only once it has gone.",
       "reports": [
         "by-1ug"
       ],
       "arena": {
-        "does": "A destroyed creature glows and falls to ash over about 1 s; the spell then goes to its graveyard.",
+        "does": "A destroyed creature glows and falls to ash over about 1 s; the spell then goes to its graveyard. The row closes up after the permanent is gone.",
         "evidence": [
           {
             "recording": "RwKoGGUmw2k",
@@ -236,6 +236,10 @@
           {
             "recording": "5UHzpVvUkfI",
             "time": "58:17.0"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "24:49.6"
           }
         ]
       }
@@ -806,6 +810,11 @@
       "kind": "not-seen",
       "name": "The opponent's draws and discards",
       "rule": "A card the opponent draws flies face down from their library to their hand. One they discard flies to their graveyard and turns face up on the way, as their spells do. Only the player's own are seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A mulligan's hand",
+      "rule": "It goes from sight where it lies, every card of it, as a permanent that leaves does; then the next hand is dealt as an opening hand is. No mulligan is filmed."
     },
     {
       "kind": "not-seen",

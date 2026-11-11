@@ -57,6 +57,8 @@ import {
   dissolve,
   drawsToRead,
   glide,
+  later,
+  shareOf,
   moverOf,
   subjectOf,
   along,
@@ -73,6 +75,8 @@ export interface Timing {
   delay: number;
   stagger: number;
   ease(progress: number): number;
+  /** For a step that moves several cards one after another (a lift), how long each moves. */
+  each?: number;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -159,6 +163,7 @@ interface Entry {
 /** One step of the beat under way. */
 interface Run extends Playing {
   ease(progress: number): number;
+  each?: number;
   begun: boolean;
   /** The table as the step found it, once it has begun. */
   found?: Table;
@@ -509,6 +514,7 @@ export class ScriptStage {
         to,
         step,
         ease: timing.ease,
+        each: timing.each,
         begun: false,
         ended: false,
       };
@@ -673,7 +679,9 @@ export class ScriptStage {
           pose:
             run!.verb === "vanish"
               ? closing(start, run!.ease)
-              : glide(start, run!.ease, flies, turns),
+              : run!.each
+                ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
+                : glide(start, run!.ease, flies, turns),
           turn: turns ? TURN : undefined,
           own: flies,
         });

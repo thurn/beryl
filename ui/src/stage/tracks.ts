@@ -6,6 +6,7 @@ import type { Act } from "../generated/protocol";
 import { abilityName, type Name, type Point } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import type { Timing } from "./stage.ts";
+import type { Table } from "./table.ts";
 
 /** An entry's pose `progress` of the way along its track, resting at `rest`. */
 export type Path = (progress: number, rest: Pose) => Pose;
@@ -44,14 +45,40 @@ export const dissolve =
     opacity: start.opacity * (1 - ease(Math.min(1, progress / GONE))),
   });
 
-/** An entry that was at `start` and makes room as a card leaves: it stays there until the card
- * has gone (`GONE`), then glides to where it rests, at its resting depth. */
-export const closing =
-  (start: Pose, ease: Timing["ease"]): Path =>
+/** The glide of an entry that was at `start` and stays there until `from` of its step, then
+ * glides to where it rests by `to`, at its resting depth. */
+export const later =
+  (start: Pose, ease: Timing["ease"], from: number, to = 1): Path =>
   (progress, rest) =>
-    progress < GONE
+    progress <= from
       ? start
-      : between(start, rest, ease((progress - GONE) / (1 - GONE)), false);
+      : between(
+          start,
+          rest,
+          ease(Math.min(1, (progress - from) / (to - from))),
+          false,
+        );
+
+/** The share of a step moving cards one after another, each for `each` of its stage
+ * milliseconds, in which the card `name` moves: the cards a look handles, in the order they
+ * come off their pile. */
+export function shareOf(
+  step: { from: number; to: number; each?: number },
+  table: Table,
+  name: Name,
+): [number, number] {
+  const handled = table.handled ?? [];
+  const length = step.to - step.from;
+  const each = step.each ?? length;
+  const gap = handled.length > 1 ? (length - each) / (handled.length - 1) : 0;
+  const from = Math.max(0, handled.indexOf(name as number)) * gap;
+  return [from / length, (from + each) / length];
+}
+
+/** An entry that was at `start` and makes room as a card leaves: it stays there until the card
+ * has gone (`GONE`), then glides to where it rests. */
+export const closing = (start: Pose, ease: Timing["ease"]): Path =>
+  later(start, ease, GONE);
 
 /** How a card held up on its way is shared out over its step: the share of the time it
  * flies in, and the share it is held. Arena's draw at a turn's start flies in for about 600

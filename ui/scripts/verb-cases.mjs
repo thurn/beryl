@@ -534,8 +534,9 @@ export const CASES = {
         );
     },
 
-    // The cards the opponent looks at come off their library face down and lie beside it
-    // for as long as the look lasts, and are back on it when it ends; nothing else moves.
+    // The cards the opponent looks at come off their library face down, one after another,
+    // and lie beside it for as long as the look lasts, and are back on it when it ends;
+    // nothing else moves.
     // Your own look lifts nothing: its cards are shown by its prompt, and none leaves your
     // library before or after you answer (the scry flight, one of the five repeated themes:
     // by-8qq, by-2wn7, by-kyig, by-1mrh, by-pv6p, by-yfb2, by-nva).
@@ -596,6 +597,14 @@ export const CASES = {
         }
         const [a, b] = lifted.map((name) => up[name]);
         assert.notDeepEqual(placeOf(a), placeOf(b), "they lie side by side");
+        // They come off one after another: half way, one has and the other waits on the pile.
+        const half = begin.at.middle?.poses;
+        if (half) {
+            const waiting = lifted.filter((name) =>
+                beside(half[name], lay[name]),
+            );
+            assert.equal(waiting.length, 1, `waiting half way: ${waiting}`);
+        }
         // The pile they left settles under them; nothing else moves.
         for (const [name, pose] of Object.entries(begin.at.from.poses)) {
             if (lifted.includes(name) || !up[name]) continue;

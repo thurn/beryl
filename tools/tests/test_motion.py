@@ -142,6 +142,25 @@ def test_a_step_is_held_to_its_duration_and_a_batch_to_its_stagger() -> None:
     assert failed(apart) == [(0, "duration")]
 
 
+def test_a_look_at_several_cards_lifts_them_one_after_another() -> None:
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+    lift = next(v for v in data["verbs"] if v["name"] == "lift")["values"]
+    one, apart = lift["duration"], lift["stagger"]
+
+    def failed(count: int, took: float) -> list[str]:
+        handling = {"zone": "library", "side": "opponent", "count": count}
+        act = {"verb": "lift", "span": "begin", "handling": handling}
+        steps = [{"n": 3, "verb": "lift", "act": act, "from": 100, "to": 100 + took}]
+        captured = {"seat": "yours", "tick": 1000 / 60, "steps": steps}
+        verdicts = motion.timing_verdicts(data, reference, captured)
+        return [v.measure for vs in verdicts for v in vs if v.failed]
+
+    assert failed(1, one) == []
+    assert failed(2, one + apart) == []
+    assert failed(2, one) == ["duration"]
+
+
 def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown() -> (
     None
 ):

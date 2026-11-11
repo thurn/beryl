@@ -113,6 +113,24 @@ def values_of(verb: dict[str, Any], case: str | None) -> dict[str, Any]:
     }
 
 
+def duration_of(act: dict[str, Any], values: dict[str, Any]) -> float:
+    """How long the stage plays the step `act` with `values`: its duration, but for a look at
+    several cards of a library, which lifts them one after another, each as long as one
+    alone (ui/src/stage/timing.ts `timingOf`)."""
+    duration = float(values.get("duration") or 0)
+    handling: dict[str, Any] = act.get("handling") or {}
+    count = int(handling.get("count") or 0)
+    if (
+        act.get("verb") == "lift"
+        and act.get("span") == "begin"
+        and handling.get("zone") == "library"
+        and count > 1
+        and duration > 0
+    ):
+        return duration + (count - 1) * float(values.get("stagger") or 0)
+    return duration
+
+
 def arena_of(
     reference: dict[str, Any], verb: str, measure: str, case: str | None
 ) -> str | None:
@@ -230,7 +248,7 @@ def timing_verdicts(
                 step["verb"],
                 "duration",
                 step["to"] - step["from"],
-                values["duration"] or 0,
+                duration_of(step["act"], values),
                 case,
                 tick,
             )

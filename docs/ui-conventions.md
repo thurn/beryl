@@ -68,9 +68,11 @@ restore the old behavior.
   17:38.4, WQiYBv23buw 23:57.0, iRr-GeSF0lI 21:58.3).
 - **Permanents that leave.** A permanent that is not a token dissolves where it
   is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
-  there. Nothing flies to the pile (by-1ug). A destroyed creature glows and
-  falls to ash over about 1 s; the spell then goes to its graveyard (RwKoGGUmw2k
-  27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37, 5UHzpVvUkfI 58:17.0).
+  there. Nothing flies to the pile. What it leaves room for closes up only once
+  it has gone (by-1ug). A destroyed creature glows and falls to ash over about 1
+  s; the spell then goes to its graveyard. The row closes up after the permanent
+  is gone (RwKoGGUmw2k 27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37,
+  5UHzpVvUkfI 58:17.0, 3sEoP_s4DQE 24:49.6).
 - **Choosing how to cast.** A card or permanent with more than one way to cast
   or use it opens a modal, "Choose One", showing the card once per option, with
   Cancel: an adventure, an alternative cost, a land's abilities (by-lzl,
@@ -222,6 +224,9 @@ recordings do not show them.
   down from their library to their hand. One they discard flies to their
   graveyard and turns face up on the way, as their spells do. Only the player's
   own are seen.
+- **A mulligan's hand.** It goes from sight where it lies, every card of it, as
+  a permanent that leaves does; then the next hand is dealt as an opening hand
+  is. No mulligan is filmed.
 - **Milled cards.** They fly from the library to the graveyard face up, one
   after another as draws do. None is held up large first. No mill is seen.
 - **Cards leaving a graveyard.** A card returned to the battlefield or to a hand
