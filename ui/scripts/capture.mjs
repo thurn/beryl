@@ -22,11 +22,11 @@ export function recordResult(check, outcome, seconds) {
     }
 }
 
-/** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default 4) at a time, each on its own
- * browser context. Awaiting a hand-off waits for a free worker, not for the task, so a script
- * reads on while its pages play; `drain` waits for every task. A task must not throw. */
-export function workers() {
-    const limit = Number(process.env.BERYL_UI_WORKERS) || 4;
+/** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default `limit`) at a time, each on
+ * its own browser context. Awaiting a hand-off waits for a free worker, not for the task, so a
+ * script reads on while its pages play; `drain` waits for every task. A task must not throw. */
+export function workers(limit = 4) {
+    limit = Number(process.env.BERYL_UI_WORKERS) || limit;
     const running = new Set();
     const run = async (task) => {
         while (running.size >= limit) await Promise.race(running);

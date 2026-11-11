@@ -141,7 +141,9 @@ const browser = await launch();
 const errors = [];
 let failed = false;
 
-const queue = workers();
+// Six pages at once, not four: ui-test is slow CI's longest lane, and on Windows it finished
+// alone on 8 of 20 cores, 12 s over the suite's budget. Six cut a run from 148 s to 125 s here.
+const queue = workers(6);
 
 /** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches, alongside
  * other checks (capture.mjs' workers): awaiting it waits only for a free worker. The page's
