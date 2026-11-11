@@ -8,9 +8,11 @@ use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use beryl_search::Search;
+use beryl_engine::GameTable;
+use beryl_search::{Budget, GameAgent, Search};
 use serde::Serialize;
 
+use crate::SessionError;
 use crate::protocol::{Kind, Step};
 
 /// How many of the agent's latest decisions a game keeps.
@@ -150,6 +152,18 @@ impl AgentMove {
         }
         out
     }
+}
+
+/// A new agent of the kind named `name`, deciding from `seed`.
+pub(crate) fn new_agent(
+    name: &str,
+    t: &GameTable,
+    seed: u64,
+) -> Result<Box<dyn GameAgent + Send>, SessionError> {
+    let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
+        name: name.to_owned(),
+    })?;
+    Ok((agent.new)(t, seed, Budget::DEFAULT))
 }
 
 #[cfg(test)]

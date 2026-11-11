@@ -137,6 +137,47 @@ pub enum Act {
 }
 
 impl Act {
+    /// The object whose record the step carries, if it carries one.
+    pub fn object(&self) -> Option<&ObjectView> {
+        match self {
+            Act::Fly { object, .. }
+            | Act::Appear { object, .. }
+            | Act::Flip { object }
+            | Act::Tap { object }
+            | Act::Showcase { object }
+            | Act::Count {
+                tally: Tally::Counters { object, .. } | Tally::Stats { object },
+            }
+            | Act::Set {
+                fact: Fact::Object { object },
+            } => Some(object),
+            Act::Vanish { object, .. }
+            | Act::Strike { object, .. }
+            | Act::Streak { object, .. } => object.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub(super) fn object_mut(&mut self) -> Option<&mut ObjectView> {
+        match self {
+            Act::Fly { object, .. }
+            | Act::Appear { object, .. }
+            | Act::Flip { object }
+            | Act::Tap { object }
+            | Act::Showcase { object }
+            | Act::Count {
+                tally: Tally::Counters { object, .. } | Tally::Stats { object },
+            }
+            | Act::Set {
+                fact: Fact::Object { object },
+            } => Some(object),
+            Act::Vanish { object, .. }
+            | Act::Strike { object, .. }
+            | Act::Streak { object, .. } => object.as_mut(),
+            _ => None,
+        }
+    }
+
     pub const fn verb(&self) -> Verb {
         match self {
             Act::Fly { .. } => Verb::Fly,

@@ -162,6 +162,30 @@ fn a_cast_taken_back_at_its_target_returns_to_priority_as_it_was() {
     assert_eq!(replayed, view);
 }
 
+/// A cast taken back has no event: the script beside its view puts the card in the hand
+/// again, by what the two tables differ in.
+#[test]
+fn a_cast_taken_back_flies_its_card_to_the_hand_again() {
+    let mut game = new_game();
+    let (before, cast) = to_a_targeted_cast(&mut game);
+    let Candidate::Cast { slot, .. } = deciding(&before).unwrap().candidates[cast].option else {
+        unreachable!("a cast");
+    };
+    let card = before.objects.iter().find(|o| o.slot == slot).unwrap();
+    let name = card.name.as_deref().expect("the human's own card");
+    let casting = answer(&mut game, &before, cast);
+    let text = |view: &PlayerView| view.script.as_ref().expect("a script").to_string();
+    assert_eq!(
+        text(&casting),
+        format!("fly #{slot} ({name}) hand>stack cast <- you\n")
+    );
+    let back = game.cancel().unwrap();
+    assert_eq!(
+        text(&back),
+        format!("fly #{slot} ({name}) stack>hand return\n")
+    );
+}
+
 use beryl_cards::names;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 

@@ -22,7 +22,7 @@ use beryl_engine::{
     StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
     view,
 };
-use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
+use beryl_search::{Agent, AgentDecision, GameAgent};
 use serde_json::json;
 
 use crate::ai::{self, AgentMove, AgentMoves, SearchView};
@@ -603,6 +603,8 @@ pub struct Game {
     replay: ReplayFile,
     /// Set from another thread to stop the agent at its next decision.
     stop: Arc<AtomicBool>,
+    /// What each seat's screen last showed, which its next script starts from.
+    screens: [crate::script::Screen; 2],
     /// The engine's events the latest view reported.
     events: Vec<Event<Large>>,
     /// The events of the paused resolution the latest view was in, which it reported: the
@@ -654,7 +656,7 @@ impl Game {
         };
         let (table, state) = replay.setup(cards)?;
         // The agent draws from its own stream, apart from the game's.
-        let agent = new_agent(
+        let agent = ai::new_agent(
             &start.opponent,
             &table,
             SplitMix64::new(start.seed).next_u64(),
@@ -755,6 +757,7 @@ impl Game {
             seq: 0,
             replay,
             stop: Arc::default(),
+            screens: Default::default(),
             events: Vec::new(),
             paused: Vec::new(),
             hurt_by: [None; 2],
@@ -772,7 +775,7 @@ impl Game {
     /// [`Game::answer_by_stand_in`] plays each.
     pub fn set_stand_in(&mut self, name: &str) -> Result<(), SessionError> {
         // The stand-in draws from its own stream, apart from the game's and the agent's.
-        self.stand_in = Some(new_agent(
+        self.stand_in = Some(ai::new_agent(
             name,
             &self.table,
             SplitMix64::new(self.replay.seed ^ 0x9e37_79b9).next_u64(),
@@ -982,6 +985,7 @@ impl Game {
         }
         self.chance_spent()?;
         self.chance.stop_replaying();
+        self.screens = Default::default();
         if drift != Drift::default() {
             journal::info(
                 "replay",
@@ -1408,6 +1412,10 @@ impl Game {
         self.at = At::Human(self.decision_id(), open);
         self.board.drain_events();
         self.events.clear();
+        // The table goes back with the game: each seat's next script starts over.
+        self.screens
+            .iter_mut()
+            .for_each(crate::script::Screen::forget);
         let mut view = self.draw();
         view.undone = true;
         Ok(view)
@@ -1673,6 +1681,8 @@ impl Game {
         }
         if self.cancellable() {
             self.cancel().expect("a cancellable cast can be taken back");
+            // That view is never sent: the end starts each screen over.
+            self.screens = Default::default();
         }
         self.before_cast = None;
         on_board!(&mut self.board, b => beryl_engine::concede(&mut b.state, &mut b.scratch, self.human));
@@ -2105,19 +2115,9 @@ impl Game {
             };
             decision.undo_depth = u32::try_from(self.undo_depth()).unwrap_or(u32::MAX);
         }
+        view.script = Some(self.screens[viewer.index()].script(&view, resolving.is_some()));
         view
     }
-}
-
-fn new_agent(
-    name: &str,
-    t: &GameTable,
-    seed: u64,
-) -> Result<Box<dyn GameAgent + Send>, SessionError> {
-    let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
-        name: name.to_owned(),
-    })?;
-    Ok((agent.new)(t, seed, Budget::DEFAULT))
 }
 
 /// Which of the human's waiting triggers to put on the stack next, under the smart stops. Each

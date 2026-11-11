@@ -18,7 +18,7 @@
   "rust/crates/beryl_session/src/bugs.rs": 838,
   "rust/crates/beryl_session/src/game.rs": 2225,
   "rust/crates/beryl_session/src/preview.rs": 1209,
-  "rust/crates/beryl_session/src/protocol.rs": 2489,
+  "rust/crates/beryl_session/src/protocol.rs": 2465,
   "rust/crates/beryl_session/src/save.rs": 839,
   "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/design/components.css": 1810,

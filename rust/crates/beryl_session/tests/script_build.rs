@@ -1,0 +1,592 @@
+//! The scripts the session builds (plan K23, K24), a hand-written expectation per verb, from
+//! both seats: small scripted positions played through the engine, each seat's views fed to
+//! its screen, the script between two of them read as text.
+
+use beryl_cards::decks::WU_CONTROL;
+use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_engine::{Observation, Seat};
+use beryl_session::protocol::{Moment, PlayerView, Why, ZoneName, player_view};
+use beryl_session::script::{Act, Screen, Script, Step, Subject, Table, failure, replay};
+use beryl_session::{CandidateIndex, Game, SessionId, StartGame, Status, StopsSetting};
+
+/// Each seat's scripts as `card`'s scenario named `name` plays: the first is the reset its
+/// screen starts from, and script `n` is what action `n` of the scenario did, with the forced
+/// answers after it, in the first player's text and then the second's.
+fn scripts(card: &str, name: &str) -> Vec<[String; 2]> {
+    let (_, scenarios) = SCENARIOS
+        .iter()
+        .find(|&&(c, _)| c == card)
+        .expect("the card's scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.name == name)
+        .expect("the scenario");
+    let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
+    let mut screens: [Screen; 2] = Default::default();
+    let mut scripts = Vec::new();
+    beryl_scenario::watch(&CARDS, scenario, |state, events| {
+        scripts.push([0, 1].map(|seat| {
+            let view = player_view(
+                &table,
+                Observation::new(state, Seat::new(seat)),
+                Moment::Thinking {
+                    resolving: None,
+                    decision: None,
+                },
+                StopsSetting::SMART,
+                events,
+            );
+            screens[usize::from(seat)].script(&view, false).to_string()
+        }));
+    })
+    .unwrap_or_else(|e| panic!("{e:?}"));
+    scripts
+}
+
+/// Script `n` of `card`'s scenario `name`, for the player who goes first and for the other.
+fn script(card: &str, name: &str, n: usize) -> [String; 2] {
+    scripts(card, name).swap_remove(n)
+}
+
+/// A script's text from its lines.
+fn text<S: AsRef<str>>(lines: &[S]) -> String {
+    let mut text = String::new();
+    for line in lines {
+        text.push_str(line.as_ref());
+        text.push('\n');
+    }
+    text
+}
+
+/// Prints every script of a scenario, to read what a change does to them:
+/// `SCRIPT_DUMP="card|scenario" cargo test -p beryl_session --test script_build dump --
+/// --ignored --nocapture`.
+#[test]
+#[ignore = "prints the scripts of the scenario SCRIPT_DUMP names"]
+fn dump() {
+    let which = std::env::var("SCRIPT_DUMP").expect("SCRIPT_DUMP=card|scenario");
+    let (card, name) = which.split_once('|').expect("card|scenario");
+    for (n, [first, second]) in scripts(card, name).into_iter().enumerate() {
+        println!("== {n}\n-- first\n{first}-- second\n{second}");
+    }
+}
+
+#[test]
+fn a_seats_first_script_starts_its_screen_over() {
+    let [first, second] = script(
+        names::MANA_CRYPT,
+        "Mana Crypt's flip lost: 3 damage to its controller",
+        0,
+    );
+    // The upkeep trigger is on the stack as the scenario begins: each seat numbers it.
+    assert_eq!(first, "reset a1\n");
+    assert_eq!(second, "reset a1\n");
+}
+
+/// `fly`, `tap`, `dwell` and `vanish`: a spell is cast, and a counterspell takes it off the
+/// stack and follows it.
+#[test]
+fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
+    let name = "Counterspell counters a spell into its owner's graveyard";
+    // The second player casts Mana Crypt for nothing.
+    let [first, second] = script(names::COUNTERSPELL, name, 1);
+    assert_eq!(first, "fly #60 (Mana Crypt) hand>stack cast <- opponent\n");
+    assert_eq!(second, "fly #60 (Mana Crypt) hand>stack cast <- you\n");
+    // The first answers. Their Islands tap together; the spell is read by the player who did
+    // not cast it; the countered spell and the counterspell leave in one beat.
+    let [first, second] = script(names::COUNTERSPELL, name, 2);
+    assert_eq!(
+        first,
+        text(&[
+            "fly #1 (Counterspell) hand>stack cast at #60 <- you",
+            "tap #0 (Island) <- you",
+            "& tap #2 (Island) <- you",
+            "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
+            "& vanish #1 (Counterspell) stack>graveyard resolve",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #1 (Counterspell) hand>stack cast at #60 <- opponent",
+            "tap #0 (Island) <- opponent",
+            "& tap #2 (Island) <- opponent",
+            "dwell #1",
+            "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
+            "& vanish #1 (Counterspell) stack>graveyard resolve",
+        ])
+    );
+}
+
+/// `set`, `emerge`, `appear` and `count`: an attacker with vigilance is declared, its trigger
+/// lifts out of it, and the token the trigger makes is there, which raises the attacker's
+/// power.
+#[test]
+fn an_attack_trigger_emerges_and_its_token_appears() {
+    let name = "Adeline's Human arrives attacking";
+    for (n, lines) in [
+        (
+            4,
+            vec!["set #0 (Adeline, Resplendent Cathar) battlefield 2/4 attacking"],
+        ),
+        (
+            7,
+            vec![
+                "appear #120 (Human Token) nowhere>battlefield created <- a1",
+                "vanish a1 stack>gone resolve",
+                "count #0 (Adeline, Resplendent Cathar) pt 3/4",
+            ],
+        ),
+    ] {
+        let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, n);
+        assert_eq!(first, text(&lines), "script {n}");
+        assert_eq!(second, text(&lines), "script {n}");
+    }
+    // No event says a triggered ability with no target went on the stack: the view has it.
+    let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, 5);
+    assert_eq!(
+        first,
+        "emerge a1 (Adeline, Resplendent Cathar, triggered) you from #0\n"
+    );
+    assert_eq!(
+        second,
+        "emerge a1 (Adeline, Resplendent Cathar, triggered) opponent from #0\n"
+    );
+}
+
+/// `strike`: the attackers deal their combat damage at once, each with the life it takes.
+#[test]
+fn combat_damage_strikes_and_counts_life() {
+    let [first, second] = script(
+        names::ADELINE_RESPLENDENT_CATHAR,
+        "Adeline's Human arrives attacking",
+        12,
+    );
+    assert_eq!(
+        first,
+        text(&[
+            "set turn 1 you declareBlockers",
+            "set turn 1 you combatDamage",
+            "strike #0 > opponent 3",
+            "& count opponent life 17",
+            "& strike #120 > opponent 1",
+            "& count opponent life 16",
+            "set turn 1 you endOfCombat",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "set turn 1 opponent declareBlockers",
+            "set turn 1 opponent combatDamage",
+            "strike #0 > you 3",
+            "& count you life 17",
+            "& strike #120 > you 1",
+            "& count you life 16",
+            "set turn 1 opponent endOfCombat",
+        ])
+    );
+}
+
+/// `announce` and `streak`: a coin a permanent's trigger flips, and the damage the trigger
+/// then deals, from the ability to the player, with the life it takes.
+#[test]
+fn a_coin_is_announced_and_noncombat_damage_streaks() {
+    let [first, second] = script(
+        names::MANA_CRYPT,
+        "Mana Crypt's flip lost: 3 damage to its controller",
+        2,
+    );
+    assert_eq!(
+        first,
+        text(&[
+            "announce coin you lost <- #1",
+            "streak a1 > you damage 3 <- a1",
+            "& count you life 17 <- a1",
+            "vanish a1 stack>gone resolve",
+            "set turn 3 you draw",
+            "fly #0 (Island) library>hand draw",
+            "set turn 3 you precombatMain",
+        ])
+    );
+    // The opponent's draw has no name.
+    assert_eq!(
+        second,
+        text(&[
+            "announce coin opponent lost <- #1",
+            "streak a1 > opponent damage 3 <- a1",
+            "& count opponent life 17 <- a1",
+            "vanish a1 stack>gone resolve",
+            "set turn 3 opponent draw",
+            "fly #0 library>hand draw",
+            "set turn 3 opponent precombatMain",
+        ])
+    );
+}
+
+/// `emerge` and `count`, in Arena's order: a loyalty ability is on the stack before its cost
+/// shows on the planeswalker, though the cost is paid first. Then the turn passes: `set`,
+/// the banner, and the lands untapping together.
+#[test]
+fn a_loyalty_cost_counts_after_its_ability_emerges() {
+    let [first, second] = script(
+        names::THE_WANDERING_EMPEROR,
+        "flashed in during combat, \u{2212}2 exiles the tapped attacker",
+        5,
+    );
+    assert_eq!(
+        first,
+        text(&[
+            "emerge a1 (The Wandering Emperor, activated) you from #1 at #61 <- you",
+            "count #1 (The Wandering Emperor) loyalty 1 <- you",
+            "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "count you life 22 <- a1",
+            "vanish a1 stack>gone resolve",
+            "set turn 2 opponent declareBlockers",
+            "set turn 2 opponent combatDamage",
+            "set turn 2 opponent endOfCombat",
+            "set turn 2 opponent postcombatMain",
+            "set turn 2 opponent end",
+            "set turn 2 opponent cleanup",
+            "set turn 3 you untap",
+            "& announce turn you",
+            "untap #0 (Plains)",
+            "& untap #2 (Plains)",
+            "& untap #3 (Plains)",
+            "& untap #4 (Plains)",
+            "set turn 3 you upkeep",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "emerge a1 (The Wandering Emperor, activated) opponent from #1 at #61 <- opponent",
+            "count #1 (The Wandering Emperor) loyalty 1 <- opponent",
+            "dwell a1",
+            "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "count opponent life 22 <- a1",
+            "vanish a1 stack>gone resolve",
+            "set turn 2 you declareBlockers",
+            "set turn 2 you combatDamage",
+            "set turn 2 you endOfCombat",
+            "set turn 2 you postcombatMain",
+            "set turn 2 you end",
+            "set turn 2 you cleanup",
+            "set turn 3 opponent untap",
+            "& announce turn opponent",
+            "untap #0 (Plains)",
+            "& untap #2 (Plains)",
+            "& untap #3 (Plains)",
+            "& untap #4 (Plains)",
+            "set turn 3 opponent upkeep",
+        ])
+    );
+}
+
+/// `count`: a counter put on a permanent by its own trigger.
+#[test]
+fn a_counter_counts() {
+    let [first, second] = script(
+        names::STAFF_OF_THE_STORYTELLER,
+        "its own Spirit and a Samurai each add a story counter, spent to draw",
+        4,
+    );
+    let lines = [
+        "count #2 (Staff of the Storyteller) story 1 <- a2",
+        "vanish a2 stack>gone resolve",
+    ];
+    assert_eq!(first, text(&lines));
+    assert_eq!(second, text(&lines));
+}
+
+/// `fly` within the battlefield: a permanent changes sides.
+#[test]
+fn a_stolen_permanent_flies_to_its_new_side() {
+    let [first, second] = script(
+        names::THIEVING_SKYDIVER,
+        "Thieving Skydiver kicked steals Mana Crypt over a Map",
+        10,
+    );
+    assert_eq!(
+        first,
+        text(&[
+            "fly #60 (Mana Crypt) battlefield>battlefield you effect <- a1",
+            "vanish a1 stack>gone resolve",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #60 (Mana Crypt) battlefield>battlefield opponent effect <- a1",
+            "vanish a1 stack>gone resolve",
+        ])
+    );
+}
+
+/// `vanish` in a batch: a sweeper's creatures leave in one beat, the token with no record
+/// and the face-down one under its name.
+#[test]
+fn a_sweepers_creatures_vanish_together() {
+    let [first, second] = script(
+        names::DAMN,
+        "Damn overloaded takes tokens and face-down creatures at once",
+        2,
+    );
+    let lines = [
+        "vanish #4 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #0",
+        "& vanish #120 battlefield>gone destroy <- #0",
+        "& vanish #62 (Elite Spellbinder) battlefield>graveyard destroy <- #0",
+        "& vanish #61 (Snapcaster Mage) battlefield>graveyard destroy <- #0",
+        "vanish #0 (Damn) stack>graveyard resolve",
+    ];
+    assert_eq!(first, text(&lines));
+    assert_eq!(second, text(&lines));
+}
+
+/// `vanish` into a library: the place the card takes in it, and no name there.
+#[test]
+fn a_permanent_put_into_a_library_takes_its_place() {
+    let [first, second] = script(
+        names::OUST,
+        "Oust puts the creature second from the top and its controller gains 3",
+        1,
+    );
+    assert_eq!(
+        first,
+        text(&[
+            "fly #0 (Oust) hand>stack cast at #60 <- you",
+            "tap #2 (Plains) <- you",
+            "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
+            "count opponent life 23 <- #0",
+            "vanish #0 (Oust) stack>graveyard resolve",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #0 (Oust) hand>stack cast at #60 <- opponent",
+            "tap #2 (Plains) <- opponent",
+            "dwell #0",
+            "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
+            "count you life 23 <- #0",
+            "vanish #0 (Oust) stack>graveyard resolve",
+        ])
+    );
+}
+
+/// `flip`: a manifested card comes onto the battlefield face down, named only for its
+/// controller, and turns face up where it lies. No event says that it turned: the step closes
+/// the script.
+#[test]
+fn a_face_down_permanent_flips() {
+    let name = "A manifested creature turns face up for its mana cost, entering no more";
+    let [first, second] = script(names::ABHORRENT_OCULUS, name, 3);
+    assert_eq!(
+        first,
+        text(&[
+            "fly #2 (Snapcaster Mage, face down) library>battlefield effect <- a1",
+            "fly #4 (Island) library>graveyard effect <- a1",
+            "vanish a1 stack>gone resolve",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #2 (face down) library>battlefield effect <- a1",
+            "fly #4 (Island) library>graveyard effect <- a1",
+            "vanish a1 stack>gone resolve",
+        ])
+    );
+    let [first, second] = script(names::ABHORRENT_OCULUS, name, 4);
+    assert_eq!(
+        first,
+        text(&[
+            "tap #1 (Island) <- you",
+            "& tap #3 (Island) <- you",
+            "set turn 2 opponent draw",
+            "fly #60 library>hand draw",
+            "set turn 2 opponent precombatMain",
+            "flip #2 (Snapcaster Mage)",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "tap #1 (Island) <- opponent",
+            "& tap #3 (Island) <- opponent",
+            "set turn 2 you draw",
+            "fly #60 (Plains) library>hand draw",
+            "set turn 2 you precombatMain",
+            "flip #2 (Snapcaster Mage)",
+        ])
+    );
+}
+
+/// `set` of a library: both hands go into their libraries together, each library is
+/// shuffled with nothing to show, and each player's seven are drawn in a beat.
+#[test]
+fn a_shuffle_sets_the_library() {
+    let [first, second] = script(names::TIMETWISTER, "Timetwister with empty graveyards", 1);
+    let cast = |who: &str| {
+        vec![
+            format!("fly #1 (Timetwister) hand>stack cast <- {who}"),
+            format!("tap #0 (Island) <- {who}"),
+            format!("& tap #5 (Island) <- {who}"),
+            format!("& tap #9 (Island) <- {who}"),
+        ]
+    };
+    let draws = |slots: [u16; 7], card: Option<&str>| -> Vec<String> {
+        slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                let join = if i == 0 { "" } else { "& " };
+                let card = card.map_or_else(String::new, |card| format!(" ({card})"));
+                format!("{join}fly #{slot}{card} library>hand draw <- #1")
+            })
+            .collect()
+    };
+    let wheel = [
+        "fly #60 hand>library top effect <- #1",
+        "& fly #61 hand>library top effect <- #1",
+        "& fly #2 hand>library top effect <- #1",
+    ]
+    .map(str::to_owned);
+    let (own, theirs) = ([3, 11, 8, 4, 10, 7, 2], [67, 62, 65, 64, 60, 63, 61]);
+    let mut expected = cast("you");
+    expected.extend(wheel.clone());
+    expected.push("set you library 8 <- #1".to_owned());
+    expected.push("set opponent library 8 <- #1".to_owned());
+    expected.extend(draws(own, Some("Plains")));
+    expected.extend(draws(theirs, None));
+    expected.push("vanish #1 (Timetwister) stack>graveyard resolve".to_owned());
+    assert_eq!(first, text(&expected));
+    let mut expected = cast("opponent");
+    expected.push("dwell #1".to_owned());
+    expected.extend(wheel);
+    expected.push("set opponent library 8 <- #1".to_owned());
+    expected.push("set you library 8 <- #1".to_owned());
+    expected.extend(draws(own, None));
+    expected.extend(draws(theirs, Some("Island")));
+    expected.push("vanish #1 (Timetwister) stack>graveyard resolve".to_owned());
+    assert_eq!(second, text(&expected));
+}
+
+/// The views of a seeded game of ten of the human's answers, each the first candidate, with
+/// the last of them then taken back.
+fn game_views() -> Vec<PlayerView> {
+    let deck = || -> Vec<(u8, String)> {
+        let cards = WU_CONTROL.iter();
+        cards.map(|&(n, name)| (n, name.to_owned())).collect()
+    };
+    let start = StartGame {
+        seed: 3,
+        decks: [deck(), deck()],
+        human: Seat::P0,
+        opponent: "greedy".to_owned(),
+        stops: StopsSetting::SMART,
+    };
+    let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
+    let mut views = Vec::new();
+    for _ in 0..10 {
+        while let Some(view) = game.next_view() {
+            views.push(view);
+        }
+        let Some(Status::Deciding { decision }) = views.last().map(|v| &v.status) else {
+            break;
+        };
+        game.choose(game.answer(decision.id, CandidateIndex(0)).unwrap());
+    }
+    while let Some(view) = game.next_view() {
+        views.push(view);
+    }
+    views.push(game.undo().expect("an answer to take back"));
+    views
+}
+
+/// Every view a game sends has its seat's script; the first starts the screen over, and so
+/// does a view that takes an answer back; and each of the others, replayed over the table of
+/// the view before, gives its own view's table (the check every debug build runs as it
+/// builds one).
+#[test]
+fn every_view_of_a_game_carries_a_script_that_replays_to_it() {
+    let views = game_views();
+    let script = |view: &PlayerView| view.script.clone().expect("a view's script");
+    assert!(script(&views[0]).reset.is_some());
+    let mut played = 0;
+    for pair in views.windows(2) {
+        let (before, view) = (&pair[0], &pair[1]);
+        let script = script(view);
+        assert_eq!(
+            script.reset.is_some(),
+            view.undone,
+            "only an undo starts over"
+        );
+        played += script.beats.len();
+        // The abilities' numbers are the scripts' own, so a table is carried forward only by
+        // replay: here each script is checked from its view before, whose stack is empty.
+        if before.stack.is_empty() && !view.undone {
+            assert_eq!(failure(&Table::of(before), &script, view), None);
+        }
+    }
+    assert!(
+        played > 20,
+        "the game's scripts say what happened: {played} beats"
+    );
+    // On the wire a view's script is its `script` field, and a view without one still reads.
+    let last = views.last().unwrap();
+    let mut wire = serde_json::to_value(last).unwrap();
+    assert!(wire["script"]["reset"].is_object());
+    wire.as_object_mut().unwrap().remove("script");
+    let read: PlayerView = serde_json::from_value(wire).unwrap();
+    assert_eq!(read.script, None);
+    // Views are equal by what they show, their scripts aside.
+    assert_eq!(&read, last);
+}
+
+/// A script that leaves a change out fails the replay check, which names the first part of
+/// the table that differs and prints the script.
+#[test]
+fn a_script_that_leaves_a_change_out_fails_the_replay_check() {
+    let views = game_views();
+    let (before, view) = views
+        .windows(2)
+        .map(|pair| (&pair[0], &pair[1]))
+        .find(|(before, view)| {
+            before.stack.is_empty() && !view.undone && before.turn.step != view.turn.step
+        })
+        .expect("a step begins");
+    let whole = view.script.clone().unwrap();
+    assert_eq!(failure(&Table::of(before), &whole, view), None);
+    // Without its `set turn` steps, the script leaves the table in the step before.
+    let turn = |text: String| text.starts_with("set turn");
+    let mut cut = whole.clone();
+    for beat in &mut cut.beats {
+        beat.retain(|step| !turn(step.to_string()));
+    }
+    let wrong = failure(&Table::of(before), &cut, view).expect("the check fails");
+    assert!(
+        wrong.starts_with("table.turn.") && wrong.contains("in the script\n"),
+        "{wrong}"
+    );
+    // A step the table cannot take is named too: an ability that is not on the stack.
+    let vanish = Step {
+        act: Act::Vanish {
+            subject: Subject::Ability { id: 1 },
+            from: ZoneName::Stack,
+            why: Why::Resolve,
+            object: None,
+            at: None,
+        },
+        cause: None,
+    };
+    let bad = Script {
+        reset: None,
+        beats: vec![vec![vanish]],
+    };
+    let error = replay(Table::of(before), &bad).unwrap_err();
+    assert_eq!(
+        error,
+        "`vanish a1 stack>gone resolve`: no ability a1 is on the stack"
+    );
+}

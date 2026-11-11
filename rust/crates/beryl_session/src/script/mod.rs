@@ -24,12 +24,15 @@
 //!
 //! # The table and replay
 //!
-//! The *table* is the part of a [`PlayerView`] a script accounts for: `objects`,
+//! The *table* ([`Table`]) is the part of a [`PlayerView`] a script accounts for: `objects`,
 //! `battlefield`, `stack`, each player's `life`, `mana`, `library` and `graveyard`, and the
-//! turn's `number`, `active` and `step`. Replaying a script over the table of the view before
-//! gives the table of the view it came with, exactly (K24), so a change no step shows is a
-//! failed check. The stage holds the same table and shows it after every step, without the
-//! view that follows.
+//! turn's `number`, `active` and `step`. Its stack is the view's made the same for both seats
+//! ([`Table::of`]): a spell or ability is on it until it has resolved, also while its
+//! resolution asks the viewer something, and a spell only while its card is on the stack.
+//! Replaying a script over the table of the view before gives the table of the view it came
+//! with, exactly (K24), so a change no step shows is a failed check ([`failure`]), which a
+//! debug build runs on every script it builds. The stage holds the same table and shows it
+//! after every step, without the view that follows.
 //!
 //! Each step carries all of what it changes. A step with an object's record replaces that
 //! slot's record; one that changes the object's zone also takes it out of its old zone's order
@@ -53,7 +56,18 @@
 //!
 //! A seat's first script, and the script beside an undone view, has [`Script::reset`]: the
 //! stage drops its table and every span and takes the view's table as it stands, with no
-//! motion. The script's steps are then only the spans to show, begun at once.
+//! motion. The script's steps are then only the spans to show, begun at once. A stage with no
+//! table yet does the same with whatever view it first gets (a page reloaded into a game in
+//! progress), whose script was written for a screen that had the view before.
+//!
+//! # Building
+//!
+//! A [`Screen`] is what one seat last showed; the session keeps one per seat and asks it for
+//! the script beside each view. The events become steps in order, played on the table as
+//! they are written (`build.rs`, `moves.rs`); what the view's table then has that no event
+//! told closes the script (`settle.rs`). What an event came from, which events happen
+//! together and which stack entry an event is about are guesses, all made in `infer.rs`
+//! (see Cause).
 //!
 //! # Hidden information
 //!
@@ -75,6 +89,12 @@
 //! table's value, and whose doing it is, by its cause or its record's controller.
 
 mod act;
+mod build;
+mod infer;
+mod moves;
+mod replay;
+mod settle;
+mod table;
 mod text;
 mod verb;
 
@@ -82,6 +102,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use act::{Act, Fact, Notice, Stream, Tally};
+pub use build::Screen;
+pub use replay::{failure, replay};
+pub use table::{Entry, Piles, Table, Turn};
 pub use verb::{Arrow, Mark, Span, Verb};
 
 use crate::protocol::Side;

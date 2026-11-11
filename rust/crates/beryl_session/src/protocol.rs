@@ -20,6 +20,8 @@ use beryl_engine::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+mod shown;
+
 /// Everything the UI draws for one player at one moment: the game as they see it, where it
 /// stands (their open decision, the opponent deciding, a step beginning, a stop or the end),
 /// and what happened since the previous view. Players are named relative to the viewer.
@@ -27,7 +29,7 @@ use ts_rs::TS;
 /// A session emits a view as the game starts, as each step of the turn begins, before and so
 /// after each of the opponent's decisions, at each of the viewer's, and at the end: every
 /// event of the game is in exactly one view.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerView {
     pub status: Status,
@@ -55,6 +57,12 @@ pub struct PlayerView {
     /// The viewer's latest answer was taken back (`undo`): what happened since the decision
     /// asked again never did.
     pub undone: bool,
+    /// What the viewer's screen does between the view before and this one
+    /// ([`crate::script`]): every view a game in progress sends has one. A view built on its
+    /// own, and one recorded before scripts were, has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub script: Option<crate::script::Script>,
 }
 
 /// Where the game stands for the viewer.
@@ -1175,6 +1183,7 @@ pub fn player_view<L: Layout>(
         stops,
         events: game_events(t, obs, events),
         undone: false,
+        script: None,
     }
 }
 
@@ -2453,37 +2462,4 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn costs_read_as_printed() {
-        let mana = |generic, symbols, x| ManaCost {
-            generic,
-            symbols,
-            x,
-        };
-        // Jace, the Mind Sculptor's -1, Map's cost, Staff of the Storyteller's, kicker {X}.
-        let loyalty = Cost {
-            loyalty: Some(-1),
-            ..Cost::NONE
-        };
-        assert_eq!(cost_text(&loyalty), "\u{2212}1");
-        let map = Cost {
-            mana: mana(1, [0; 6], 0),
-            tap: true,
-            sacrifice_self: true,
-            ..Cost::NONE
-        };
-        assert_eq!(cost_text(&map), "{1}, {T}, Sacrifice this");
-        let staff = Cost {
-            mana: mana(0, [1, 0, 0, 0, 0, 0], 0),
-            tap: true,
-            remove: Some(CounterKind::Story),
-            ..Cost::NONE
-        };
-        assert_eq!(cost_text(&staff), "{W}, {T}, Remove a story counter");
-        assert_eq!(mana_text(mana(0, [0; 6], 1)), "{X}");
-        assert_eq!(mana_text(mana(2, [0, 2, 0, 0, 0, 0], 0)), "{2}{U}{U}");
-    }
-}
+mod tests;

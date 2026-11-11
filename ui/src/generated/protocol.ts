@@ -169,7 +169,13 @@ events: Array<GameEvent>,
  * The viewer's latest answer was taken back (`undo`): what happened since the decision
  * asked again never did.
  */
-undone: boolean, };
+undone: boolean, 
+/**
+ * What the viewer's screen does between the view before and this one
+ * ([`crate::script`]): every view a game in progress sends has one. A view built on its
+ * own, and one recorded before scripts were, has none.
+ */
+script?: Script, };
 
 export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
 
