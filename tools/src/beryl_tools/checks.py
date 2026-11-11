@@ -533,6 +533,24 @@ def python_lane() -> Lane:
     )
 
 
+# The Python tests that read card and vocabulary files, which `scale_lane` runs alone for a Rust
+# change (tests/test_scale.py reads the cards and beryl_cards/Cargo.toml; tests/test_card_names.py
+# reads every card file). Others read files outside tools/ too (test_forge: data/cards.json and
+# oracle-divergences.json; test_runlog: git), but never what a card or vocabulary change touches.
+CARD_READERS = ["tests/test_scale.py", "tests/test_card_names.py"]
+CARD_FILES = r"^rust/crates/beryl_cards?/"
+
+
+def scale_lane() -> Lane:
+    """Only the Python tests that read card and vocabulary files: a change to those, which does
+    not touch tools/, can break them and slow CI would be the first to say so."""
+    return Lane("scale").step(
+        "pytest",
+        [sys.executable, "-m", "beryl_tools.checks", "pytest", *CARD_READERS],
+        rerun=whole,
+    )
+
+
 def rust_lane(fast: bool = False) -> Lane:
     """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY."""
     return (
@@ -627,11 +645,6 @@ def counts_lane() -> Lane:
 def fast(args: argparse.Namespace) -> int:
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
-    every: bool = changed is None
-
-    def touched(pattern: str) -> bool:
-        return every or any(re.match(pattern, p) for p in changed or [])
-
     problems = (
         conflict_markers(changed or []) + commit_problems(base) + symlink_problems(base)
     )
@@ -640,11 +653,23 @@ def fast(args: argparse.Namespace) -> int:
     if problems:
         return 1
     print(
-        f"check: {'every lane (no base)' if every else f'{len(changed or [])} paths changed since {base[:8]}'}"
+        f"check: {'every lane (no base)' if changed is None else f'{len(changed)} paths changed since {base[:8]}'}"
     )
+    return run_lanes(fast_lanes(changed), "check", FAST_BUDGET, strict=False)
+
+
+def fast_lanes(changed: list[str] | None) -> list[Lane]:
+    """The fast check's lanes for the paths changed since the branch base; None: every lane."""
+    every: bool = changed is None
+
+    def touched(pattern: str) -> bool:
+        return every or any(re.match(pattern, p) for p in changed or [])
+
     lanes = [repo_lane()]
     if touched(r"^tools/"):
         lanes.append(python_lane())
+    elif touched(CARD_FILES):
+        lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/"):
         lanes.append(rust_lane(fast=True))
     if touched(r"^ui/"):
@@ -656,7 +681,7 @@ def fast(args: argparse.Namespace) -> int:
         lanes += [ui_test_lane(select=True), shots_lane(select=True)]
     if cards := changed_cards(changed):
         lanes.append(card_oracle_lane(cards))
-    return run_lanes(lanes, "check", FAST_BUDGET, strict=False)
+    return lanes
 
 
 def changed_cards(changed: list[str] | None) -> list[str]:
@@ -763,9 +788,10 @@ def build_paths_step() -> int:
     return 1 if found else 0
 
 
-def pytest_step() -> int:
+def pytest_step(*tests: str) -> int:
+    """Pytest on `tests` (paths under tools/), or on all of them."""
     code = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q"], cwd=paths.TOOLS, check=False
+        [sys.executable, "-m", "pytest", "-q", *tests], cwd=paths.TOOLS, check=False
     ).returncode
     return 0 if code == 5 else code  # 5: no tests collected
 

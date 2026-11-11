@@ -285,6 +285,53 @@ def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
     assert lane.steps[0].cmd[-4:] == ["--no-sim", "--lock-wait", "10", "Counterspell"]
 
 
+def lanes_for(
+    monkeypatch: pytest.MonkeyPatch, changed: list[str]
+) -> dict[str, list[list[str]]]:
+    """The fast check's lanes for `changed`, as each lane's step commands."""
+    monkeypatch.setattr(oracles, "built", lambda oracle: False)
+    return {
+        lane.name: [s.cmd for s in lane.steps] for lane in checks.fast_lanes(changed)
+    }
+
+
+def scale_tests_run(lanes: dict[str, list[list[str]]]) -> int:
+    return sum("tests/test_scale.py" in cmd for cmds in lanes.values() for cmd in cmds)
+
+
+def test_a_card_or_vocabulary_change_runs_the_tests_that_read_card_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for path in [
+        "rust/crates/beryl_cards/src/blue/counterspell.rs",
+        "rust/crates/beryl_card/src/effect/mod.rs",
+        "rust/crates/beryl_cards/Cargo.toml",
+    ]:
+        lanes = lanes_for(monkeypatch, [path])
+        assert scale_tests_run(lanes) == 1, path
+        assert "python" not in lanes  # No black or pyre for a Rust-only change.
+    # The engine's files are not read by any Python test.
+    assert (
+        scale_tests_run(
+            lanes_for(monkeypatch, ["rust/crates/beryl_engine/src/turn.rs"])
+        )
+        == 0
+    )
+
+
+def test_a_change_under_tools_runs_the_python_lane_and_the_scale_tests_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lanes = lanes_for(
+        monkeypatch,
+        ["tools/src/beryl_tools/scale.py", "rust/crates/beryl_cards/src/blue/a.rs"],
+    )
+    assert "scale" not in lanes
+    # The python lane's pytest names no files, so it runs every test, test_scale's once.
+    assert lanes["python"][-1][-2:] == ["beryl_tools.checks", "pytest"]
+    assert scale_tests_run(lanes) == 0
+
+
 def test_a_symlink_checked_out_or_committed_as_a_file_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
