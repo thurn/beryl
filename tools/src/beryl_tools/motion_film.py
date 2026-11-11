@@ -159,6 +159,8 @@ def arena_shape(take: Retake) -> str:
         return f"cannot follow it ({str(error).split(':')[0]}): read the contact sheet"
     except (video.VideoError, OSError) as error:
         return f"not read ({str(error).splitlines()[0]})"
+    if motion.distance(card.blobs[0], card.blobs[-1]) < card.rest.size:
+        return "in place: nothing travels its own size"
     return said(
         video_shape.words(
             video_shape.card_bow(clip, card), video_shape.shape(clip, card)
