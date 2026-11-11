@@ -77,8 +77,9 @@ fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         Prompt::new(Purpose::Choose).most(1),
     )?;
     let card = ctx.state().object_ref(slot);
-    let def = ctx.table().def(ctx.state().card(slot));
-    let land = def.front().types.contains(Types::LAND);
+    // A card in exile has its front face's characteristics (CR 712.8a).
+    let face = ctx.state().copiable(slot).face(ctx.table());
+    let land = face.types.contains(Types::LAND);
     ctx.move_to(card, Zone::Graveyard, Reason::Effect);
     if land {
         ctx.create_tokens(&TREASURE, 1, TokenEntry::default());

@@ -297,10 +297,9 @@ fn list(items: &[String]) -> String {
 /// The name of the card in a slot, by the face it has up; a face-down permanent, which has no
 /// name, by its card's, and a copy of one, a token with no name (CR 708.2), as such.
 fn name(t: &GameTable, s: &State, slot: Slot) -> String {
-    let def = t.def(s.card(slot));
     match s.object(slot).face {
-        FaceIx::DOWN => format!("face-down {}", def.name),
-        face => match def.face_name(face) {
+        FaceIx::DOWN => format!("face-down {}", s.definition_name(t, slot)),
+        _ => match s.copiable(slot).name(t) {
             "" => "nameless token".to_owned(),
             name => name.to_owned(),
         },
@@ -382,9 +381,9 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Block(slot) => format!("block with {}", named(slot)),
         Opt::Lethal(slot) => format!("lethal to {}", named(slot)),
         Opt::Cast { slot, face, costs } => {
-            let def = t.def(s.card(slot));
-            let mut text = format!("cast {}", def.face_name(face));
-            for option in costs.paid(def.face(face)) {
+            let spell = s.copiable(slot).turned(face);
+            let mut text = format!("cast {}", spell.name(t));
+            for option in costs.paid(spell.face(t)) {
                 text.push_str(match option {
                     CastingOption::Kicker { .. } => " kicked",
                     CastingOption::Offspring(_) => " with offspring",
@@ -395,20 +394,16 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
             }
             text
         }
-        Opt::Activate { slot, ability } => {
-            let def = t.def(s.card(slot));
-            match ability {
-                ObjectAbility::Own(i) => {
-                    let face = def.face(s.object(slot).face);
-                    let a = &face.abilities[i.index()];
-                    match a.cost.loyalty {
-                        Some(l) => format!("{} {l:+}", named(slot)),
-                        None => format!("activate {} #{i}", named(slot)),
-                    }
+        Opt::Activate { slot, ability } => match ability {
+            ObjectAbility::Own(i) => {
+                let a = &s.copiable(slot).face(t).abilities[i.index()];
+                match a.cost.loyalty {
+                    Some(l) => format!("{} {l:+}", named(slot)),
+                    None => format!("activate {} #{i}", named(slot)),
                 }
-                ObjectAbility::Granted(k) => format!("activate {} granted #{k}", named(slot)),
             }
-        }
+            ObjectAbility::Granted(k) => format!("activate {} granted #{k}", named(slot)),
+        },
         Opt::Mana { slot, color } => format!("tap {} for {}", named(slot), color.index()),
         Opt::Pool(color) => format!("spend pool {}", color.index()),
         Opt::Number(n) => n.to_string(),

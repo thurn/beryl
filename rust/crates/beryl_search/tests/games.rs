@@ -225,7 +225,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
                     Step::Over(o) => panic!("seed {seed}: the determinized game ended: {o:?}"),
                 }
                 decisions += 1;
-                if Slot::all().any(|slot| det.card(slot) != s.card(slot)) {
+                if Slot::all().any(|slot| det.card_behind(slot) != s.card_behind(slot)) {
                     redealt += 1;
                 }
             },
@@ -246,7 +246,7 @@ fn determinization_keeps_the_size_of_every_hidden_group() {
                     .filter(|&slot| {
                         s.object(slot).owner == p && s.object(slot).zone != Zone::Nowhere
                     })
-                    .map(|slot| s.card(slot))
+                    .filter_map(|slot| s.card_behind(slot))
                     .collect();
                 v.sort_unstable();
                 v

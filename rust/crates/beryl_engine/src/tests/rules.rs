@@ -158,6 +158,11 @@ fn a_player_at_zero_life_loses_and_two_at_once_draw() {
     }
 }
 
+/// The card behind a slot of a deck.
+fn card(s: &State, slot: Slot) -> CardIx {
+    s.card_behind(slot).expect("a card")
+}
+
 #[test]
 fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let t = table([MIXED, MIXED]);
@@ -178,10 +183,10 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let before: Vec<(Slot, CardIx, u16)> = s
         .library(p)
         .iter()
-        .map(|&slot| (slot, s.object(slot).card, s.object(slot).incarnation))
+        .map(|&slot| (slot, card(&s, slot), s.object(slot).incarnation))
         .collect();
     s.shuffle_library(p);
-    let after = |slot: Slot| (s.object(slot).card, s.object(slot).incarnation);
+    let after = |slot: Slot| (card(&s, slot), s.object(slot).incarnation);
     let mut cards_before: Vec<CardIx> = before.iter().map(|b| b.1).collect();
     let mut cards_after: Vec<CardIx> = before.iter().map(|b| after(b.0).0).collect();
     assert_ne!(cards_before, cards_after, "identities were dealt anew");
@@ -211,7 +216,7 @@ fn filters_select_by_type_and_owner() {
     assert_eq!((lands | others), hand);
     assert!((lands & others).is_empty());
     for slot in lands.iter() {
-        assert_eq!(t.def(s.object(slot).card).name, "Test Land");
+        assert_eq!(s.definition_name(&t, slot), "Test Land");
     }
     assert_eq!(Filter::Whose(Whose::You).select(&s, &t, hand, p), hand);
     assert!(

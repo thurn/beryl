@@ -690,7 +690,7 @@ impl Runner {
                 count: count(named.len()),
             });
             let makes_mana = named.iter().any(|&slot| {
-                let face = self.t.def(s.card(slot)).face(s.object(slot).face);
+                let face = s.copiable(slot).face(&self.t);
                 face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
             });
             if !makes_mana {

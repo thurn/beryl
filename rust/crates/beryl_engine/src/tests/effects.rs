@@ -58,7 +58,7 @@ fn resolve(
     let mut entry = StackEntry {
         object: Some(source),
         controller: s.object(source.slot).owner,
-        card: s.object(source.slot).card,
+        card: s.copiable(source.slot).record(t).0,
         ability: Some(FaceAbility::own(0)),
         ..StackEntry::default()
     };
@@ -408,7 +408,8 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
         .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .collect();
     assert_eq!(copies.len(), 1);
-    assert_eq!(s.card(copies[0]), s.card(bear));
+    assert_eq!(s.copiable(copies[0]), s.copiable(bear));
+    assert_eq!(s.card_behind(copies[0]), None);
     assert_eq!(s.controller(copies[0]), p);
     assert!(!COPY.removes_target(SpecIx::new(0)));
 }

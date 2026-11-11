@@ -7,6 +7,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
+use beryl_engine::query::Copiable;
 use beryl_engine::state::{PendingTrigger, State};
 use beryl_engine::{DecisionKind, GameTable, TurnStep, Zone};
 use beryl_engine::{Layout, bodies, conditions};
@@ -32,7 +33,8 @@ fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -
 /// "Create a token that's a copy of it": its copiable values are its card's
 /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
 fn copy_of_it<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens_of(ctx.trigger().lki.card, 1, TokenEntry::default());
+    let dead = Copiable::of_card(ctx.trigger().lki.card);
+    ctx.create_tokens_of(dead, 1, TokenEntry::default());
     Ok(())
 }
 

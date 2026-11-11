@@ -12,7 +12,7 @@ use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::cast;
 use crate::effect::entered_with;
-use crate::filter::{self, Evaluate, Filter};
+use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{Counters, ObjectFlags, PendingTrigger, State, TARGETS, Target, Zone};
@@ -215,24 +215,6 @@ impl<L: Layout> Scene<'_, L> {
         }
     }
 
-    /// Who controls the object in `slot` now: a permanent's or a spell's controller, and
-    /// anywhere else its owner
-    /// ([CR 108.4a](https://yawgatog.com/resources/magic-rules/#R1084a)): "If anything asks
-    /// for the controller of a card that doesn't have one (because it's not a permanent or
-    /// spell), use its owner instead."
-    fn controller(&self, slot: L::Slot) -> Seat {
-        let s = self.s;
-        match s.object(slot).zone {
-            Zone::Battlefield => s.controller(slot),
-            Zone::Stack => s
-                .stack()
-                .iter()
-                .find(|entry| entry.spell().is_some_and(|spell| spell.slot == slot))
-                .map_or(s.object(slot).owner, |entry| entry.controller),
-            _ => s.object(slot).owner,
-        }
-    }
-
     /// The players `players` names.
     pub(super) fn players(&self, players: Players) -> Who {
         match players {
@@ -253,7 +235,7 @@ impl<L: Layout> Scene<'_, L> {
             Players::ControllerOf(objects) => {
                 let mut who = Who::NOBODY;
                 for slot in self.objects(objects).iter() {
-                    who.insert(self.controller(slot));
+                    who.insert(self.s.controller(slot));
                 }
                 for known in self.moved(objects) {
                     who.insert(known.controller);
@@ -287,56 +269,11 @@ impl<L: Layout> Scene<'_, L> {
     /// What is known of the object in `slot` as it is now, for an effect about to move it.
     pub(super) fn known(&self, slot: L::Slot) -> Known {
         Known {
-            controller: self.controller(slot),
-            power: self.power(slot),
-            toughness: self.toughness(slot),
-            mana_value: self.mana_value(slot),
+            controller: self.s.controller(slot),
+            power: self.s.power(self.t, slot),
+            toughness: self.s.toughness(self.t, slot),
+            mana_value: self.s.mana_value(self.t, slot),
             counters: self.s.object(slot).counters,
-        }
-    }
-
-    /// A permanent's power after continuous effects, and elsewhere what its card says
-    /// ([CR 208.1](https://yawgatog.com/resources/magic-rules/#R2081)): "A creature card has
-    /// two numbers separated by a slash printed in its lower right corner. The first number
-    /// is its power".
-    fn power(&self, slot: L::Slot) -> i8 {
-        let o = self.s.object(slot);
-        if o.zone == Zone::Battlefield {
-            self.s.derived(slot).power
-        } else {
-            self.t.def(o.card).face(o.face).power.unwrap_or(0)
-        }
-    }
-
-    /// [`Scene::power`] for toughness (CR 208.1): "the second is its toughness".
-    fn toughness(&self, slot: L::Slot) -> i8 {
-        let o = self.s.object(slot);
-        if o.zone == Zone::Battlefield {
-            self.s.derived(slot).toughness
-        } else {
-            self.t.def(o.card).face(o.face).toughness.unwrap_or(0)
-        }
-    }
-
-    /// An object's mana value, a spell's with its X
-    /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as
-    /// the number chosen for it while the object is on the stack."
-    fn mana_value(&self, slot: L::Slot) -> u8 {
-        let s = self.s;
-        if s.object(slot).zone != Zone::Stack {
-            return filter::mana_value(s, self.t, slot);
-        }
-        let spell = s
-            .stack()
-            .iter()
-            .find(|entry| entry.spell().is_some_and(|spell| spell.slot == slot));
-        match spell {
-            Some(entry) => {
-                let cost = self.t.def(entry.card).face(entry.face).cost;
-                cost.mana_value()
-                    .saturating_add(cost.x.saturating_mul(entry.x))
-            }
-            None => filter::mana_value(s, self.t, slot),
         }
     }
 
@@ -366,17 +303,17 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             Amount::Power(objects) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.power(slot)),
+                |scene, slot| i32::from(scene.s.power(scene.t, slot)),
                 |known| i32::from(known.power),
             ),
             Amount::Toughness(objects) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.toughness(slot)),
+                |scene, slot| i32::from(scene.s.toughness(scene.t, slot)),
                 |known| i32::from(known.toughness),
             ),
             Amount::ManaValue(objects) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.mana_value(slot)),
+                |scene, slot| i32::from(scene.s.mana_value(scene.t, slot)),
                 |known| i32::from(known.mana_value),
             ),
             Amount::Counters(objects, kind) => self.total(

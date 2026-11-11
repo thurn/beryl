@@ -103,7 +103,6 @@ fn recruit<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         TokenEntry {
             tapped: true,
             attacking: true,
-            ..TokenEntry::default()
         },
     );
     Ok(())
@@ -205,7 +204,7 @@ impl Game {
         (self.s.zone(ZoneKey::Of(player, Zone::Library))
             | self.s.zone(ZoneKey::Of(player, Zone::Hand)))
         .iter()
-        .filter(|&slot| self.t.def(self.s.object(slot).card).name == name)
+        .filter(|&slot| self.s.definition_name(&self.t, slot) == name)
         .collect()
     }
 
@@ -219,7 +218,7 @@ impl Game {
             )
             .unwrap();
         self.s.board().set_sick(slot, false);
-        if let Some(loyalty) = self.t.def(self.s.card(slot)).front().loyalty {
+        if let Some(loyalty) = self.s.copiable(slot).face(&self.t).loyalty {
             self.s
                 .board()
                 .set_counters(slot, CounterKind::Loyalty, loyalty);
@@ -778,7 +777,7 @@ fn a_creature_put_onto_the_battlefield_attacking_was_never_declared() {
         g.s.battlefield()
             .iter()
             .copied()
-            .find(|&slot| g.t.def(g.s.object(slot).card).name == "Recruit")
+            .find(|&slot| g.s.definition_name(&g.t, slot) == "Recruit")
             .unwrap();
     let flags = g.s.object(recruit).flags;
     assert!(flags.has(ObjectFlags::ATTACKING) && flags.has(ObjectFlags::TAPPED));
@@ -902,7 +901,7 @@ fn random_combat_games_keep_the_invariants() {
         for player in Seat::BOTH {
             for _ in 0..8 {
                 let slot = *g.s.library(player).last().unwrap();
-                let name = g.t.def(g.s.object(slot).card).name;
+                let name = g.s.definition_name(&g.t, slot);
                 g.put(player, name);
             }
         }

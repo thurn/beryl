@@ -77,7 +77,9 @@ pub(crate) fn manifest<L: Layout>(
 /// turned face up, it will have its front face up." No creature card in the cube costs {0},
 /// so a cost of nothing is no mana cost.
 fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<ManaCost> {
-    let front = t.def(s.card(slot)).front();
+    // Only a card is turned face up: a token copy of a face-down permanent has no card
+    // behind it (CR 707.2, 708.2).
+    let front = s.card_def(t, slot)?.front();
     (front.types.contains(Types::CREATURE) && !front.cost.is_zero()).then(|| front.cost.with_x(0))
 }
 

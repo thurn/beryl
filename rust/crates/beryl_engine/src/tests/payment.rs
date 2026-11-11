@@ -372,7 +372,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             if g.s
                 .library(g.me)
                 .iter()
-                .any(|&slot| g.t.def(g.s.object(slot).card).name == name)
+                .any(|&slot| g.s.definition_name(&g.t, slot) == name)
             {
                 slots.push(g.give(g.me, name, Zone::Battlefield));
                 names.push(name);

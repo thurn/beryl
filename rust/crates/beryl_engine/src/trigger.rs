@@ -14,10 +14,10 @@ use crate::state::{
 use crate::table::GameTable;
 use crate::turn::apnap;
 
-/// The printed face of a permanent, or of the card a token copies.
+/// The face a permanent has up, or a face-down one's blank characteristics: its copiable
+/// values (CR 707.2).
 pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static Face {
-    let o = s.object(slot);
-    t.def(o.card).face(o.face)
+    s.copiable(slot).face(t)
 }
 
 /// The ability a pending trigger or stack entry names.
@@ -60,13 +60,13 @@ pub(crate) fn match_event<L: Layout>(
         if listening & k != 0 {
             for i in 0..s.battlefield().len() {
                 let slot = s.battlefield()[i];
-                let card = s.object(slot).card;
-                if t.listens(card) & k == 0 {
+                let what = s.copiable(slot);
+                if what.may_listen(t) & k == 0 {
                     continue;
                 }
                 let source = s.object_ref(slot);
                 let controller = s.controller(slot);
-                let face = s.object(slot).face;
+                let (card, face) = what.record(t);
                 for (a, ability) in face_abilities(t, card, face) {
                     if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
                         for _ in 0..times(ability.trigger, e) {
@@ -213,16 +213,16 @@ pub(crate) fn match_leaving<L: Layout>(
     slot: L::Slot,
     to: Zone,
 ) -> Result<(), Full> {
-    let card = s.object(slot).card;
-    if t.listens(card) & kind::DIES == 0 || to != Zone::Graveyard {
+    let what = s.copiable(slot);
+    if what.may_listen(t) & kind::DIES == 0 || to != Zone::Graveyard {
         return Ok(());
     }
-    let lki = lki(s, slot);
+    let lki = lki(s, t, slot);
     if !lki.types.contains(Types::CREATURE) {
         return Ok(());
     }
     let source = s.object_ref(slot);
-    let face = s.object(slot).face;
+    let (card, face) = what.record(t);
     for (a, ability) in face_abilities(t, card, face) {
         if ability.trigger == Trigger::Dies {
             let info = TriggerInfo {
@@ -238,11 +238,11 @@ pub(crate) fn match_leaving<L: Layout>(
 }
 
 /// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki<L: Layout>(s: &State<L>, slot: L::Slot) -> Lki {
+pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki {
     let d = s.derived(slot);
     let o = s.object(slot);
     Lki {
-        card: o.card,
+        card: s.copiable(slot).record(t).0,
         power: d.power,
         toughness: d.toughness,
         types: d.types,

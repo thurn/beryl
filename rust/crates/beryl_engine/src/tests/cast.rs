@@ -726,13 +726,13 @@ impl Game {
             .s
             .library(player)
             .iter()
-            .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
+            .find(|&&slot| self.s.definition_name(&self.t, slot) == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
         self.s
             .move_object(&mut crate::event::Sink::off(), slot, zone, Place::Top)
             .unwrap();
         if zone == Zone::Battlefield {
-            let loyalty = self.t.def(self.s.object(slot).card).front().loyalty;
+            let loyalty = self.s.copiable(slot).face(&self.t).loyalty;
             let mut board = self.s.board();
             board.set_sick(slot, false);
             // CR 306.5b: it enters with its printed loyalty.
@@ -748,7 +748,7 @@ impl Game {
             .s
             .library(player)
             .iter()
-            .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
+            .find(|&&slot| self.s.definition_name(&self.t, slot) == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
         self.s
             .move_object(

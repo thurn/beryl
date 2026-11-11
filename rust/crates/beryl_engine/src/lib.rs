@@ -34,7 +34,7 @@ mod turn;
 // The engine stays the facade other crates import until the last caller has moved, so each
 // moved module keeps its old path here.
 pub use beryl_kernel::{
-    bitboard, chance, decision, filter, fixed, ids, observation, relayout, rng, state, table,
+    bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state, table,
 };
 pub(crate) use beryl_kernel::{invariants, zone};
 

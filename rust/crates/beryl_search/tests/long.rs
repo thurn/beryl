@@ -72,7 +72,7 @@ fn the_hidden_searches_decide_the_same_on_a_redeterminized_state() {
     let mut omniscient_differs = false;
     for (i, (s, d)) in positions(&t, &[23, 12, 5]).iter().enumerate() {
         let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
-        assert!(Slot::all().any(|slot| det.card(slot) != s.card(slot)));
+        assert!(Slot::all().any(|slot| det.card_behind(slot) != s.card_behind(slot)));
         for family in ["ismcts2/hidden/rollout/tuned", "pimc2/hidden/cut1/estimate"] {
             let set = settings(family, 4_000, 1);
             assert_eq!(
@@ -101,12 +101,12 @@ fn the_hands_sight_keeps_the_hands_and_deals_the_libraries() {
         let det = obs.determinize_libraries(&t, &mut SplitMix64::new(seed));
         for p in Seat::BOTH {
             for slot in s.zone(ZoneKey::Of(p, Zone::Hand)).iter() {
-                assert_eq!(det.card(slot), s.card(slot));
+                assert_eq!(det.card_behind(slot), s.card_behind(slot));
             }
             libraries_differ |= s
                 .library(p)
                 .iter()
-                .any(|&slot| det.card(slot) != s.card(slot));
+                .any(|&slot| det.card_behind(slot) != s.card_behind(slot));
         }
     }
     assert!(libraries_differ);

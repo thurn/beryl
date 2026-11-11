@@ -442,7 +442,7 @@ fn to_value(value: &impl Serialize) -> serde_json::Value {
 
 /// The name of the card in `slot`.
 fn name<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> String {
-    t.def(s.card(slot)).name.to_owned()
+    s.definition_name(t, slot).to_owned()
 }
 
 /// Player `p`'s cards off the battlefield and their life; `place` finds a permanent's place
@@ -572,7 +572,7 @@ fn arrange_library(
     for k in &side.known {
         let i = rest
             .iter()
-            .position(|&slot| t.def(s.card(slot)).name == k.card)
+            .position(|&slot| s.definition_name(t, slot) == k.card)
             .ok_or_else(|| format!("player {}'s library has no {}", p.get(), k.card))?;
         let slot = rest.swap_remove(i);
         let at = order
@@ -615,7 +615,7 @@ fn from_library(
     s.library(player)
         .iter()
         .copied()
-        .find(|&slot| t.def(s.card(slot)).name == name)
+        .find(|&slot| s.definition_name(t, slot) == name)
         .ok_or_else(|| format!("player {}'s deck has no {name} left", player.get()))
 }
 

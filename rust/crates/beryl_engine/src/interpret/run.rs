@@ -16,6 +16,7 @@ use crate::event::{self, Entry, Reason, TokenEntry};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
+use crate::query::Copiable;
 use crate::state::{
     self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, Zone, ZoneKey,
 };
@@ -512,9 +513,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     ) -> Outcome<L> {
         // CR 707.9b: "The final set of values for that characteristic becomes part of the
         // copiable values of the copy."
-        let one_one = match except {
-            CopyException::None => false,
-            CopyException::PowerToughness(1, 1) => true,
+        let excepted = |what: Copiable| match except {
+            CopyException::None => what,
+            CopyException::PowerToughness(1, 1) => what.except_one_one(),
             CopyException::PowerToughness(..) => no_primitive(&except),
         };
         if count == 0 {
@@ -523,22 +524,18 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let who = self.scene().players(players);
         let active = self.ctx.state.turn().active();
         let mut tokens = Bitboard::EMPTY;
-        let mut copy = |ctx: &mut EffectCtx<'a, L>, card, how: TokenEntry| {
-            let how = TokenEntry {
-                one_one: how.one_one || one_one,
-                ..how
-            };
+        let mut copy = |ctx: &mut EffectCtx<'a, L>, what: Copiable| {
             for player in who.in_turn_order(active) {
-                tokens |= ctx.create_tokens_of_for(player, card, count, how);
+                let how = TokenEntry::default();
+                tokens |= ctx.create_tokens_of_for(player, excepted(what), count, how);
             }
         };
         let originals = self.permanents(of);
         if originals.is_empty() && matches!(of, Objects::This) {
-            copy(self.ctx, self.ctx.entry.card, TokenEntry::default());
+            copy(self.ctx, Copiable::of_card(self.ctx.entry.card));
         }
         self.each_permanent(originals, |ctx, object| {
-            let (card, how) = ctx.copiable_values(object);
-            copy(ctx, card, how);
+            copy(ctx, ctx.state.copiable(object.slot));
         });
         Outcome::acted_on(tokens)
     }

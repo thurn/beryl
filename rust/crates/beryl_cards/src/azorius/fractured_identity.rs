@@ -5,7 +5,7 @@ use beryl_engine::card::{
     Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
+use beryl_engine::event::{Reason, TokenEntry};
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{Layout, bodies};
@@ -44,20 +44,20 @@ pub static CARD: CardDef = CardDef {
 /// current information of that object if it's in the public zone it was expected to be in;
 /// if it's no longer in that zone, ... the effect uses the object's last known information."
 /// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy
-/// has the permanent's copiable values ([`EffectCtx::copiable_values`], CR 707.2): not its
+/// has the permanent's copiable values ([`beryl_engine::State::copiable`], CR 707.2): not its
 /// counters, so a planeswalker's copy enters with its printed loyalty (CR 306.5b).
 fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(permanent) = ctx.target_object(0) else {
         return Ok(());
     };
     let controller = ctx.state().controller(permanent.slot);
-    let (card, how) = ctx.copiable_values(permanent);
+    let what = ctx.state().copiable(permanent.slot);
     ctx.move_to(permanent, Zone::Exile, Reason::Exile);
     // CR 111.2: "The player who creates a token is its owner. The token enters the
     // battlefield under that player's control."
     for player in Seat::BOTH {
         if player != controller {
-            ctx.create_tokens_of_for(player, card, 1, how);
+            ctx.create_tokens_of_for(player, what, 1, TokenEntry::default());
         }
     }
     Ok(())

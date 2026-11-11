@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Three reads answered one rules question differently, depending on who asked: a
+  filter's mana value left out a spell's X where the interpreter's counted it
+  ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e): "X is
+  treated as the number chosen for it while the object is on the stack"); a
+  token that was 1/1 by a copy's exception read as its card's size once it left
+  the battlefield (CR 707.9b); and last-known information of a face-down
+  permanent named its hidden card, which a copy made from it would have been (CR
+  707.2, 708.2). No card of the pool reached any of them. Found moving the reads
+  into `beryl_kernel::query`. Prevention: one query per rules question, named
+  for its rule, with the definition index private to the kernel, so a second
+  answer cannot be written beside the first.
+
 - Declared attackers tapped in slot order (`combat::finish_attack` walked the
   attackers' `Bitboard`), so the order of the tap events, which the UI animates
   and a "becomes tapped" trigger would follow, depended on slot numbers. The

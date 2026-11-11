@@ -13,7 +13,9 @@ use crate::event::{Event, Recipient};
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
+use crate::query::Copiable;
 use crate::state::State;
+use crate::table::GameTable;
 
 /// How a permanent enters the battlefield, as the rules decided once its replacement effects
 /// applied ([CR 614.12](https://yawgatog.com/resources/magic-rules/#R61412)): "Some
@@ -244,13 +246,35 @@ impl<L: Layout> State<L> {
         o.base_controller = controller;
     }
 
-    /// Readies a free slot of the token pool to be a token of the game-table card `card`
-    /// ([CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112)): "The player who
-    /// creates a token is its owner." `one_one` for a copy that is 1/1 by exception
-    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)). The token exists
-    /// once it is moved onto the battlefield.
+    /// Readies a free slot of the token pool to be a token with the copiable values `what`:
+    /// a predefined token's ([`Copiable::of_card`]) or a copy's
+    /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072): "the copy acquires
+    /// the copiable values of the original object's characteristics"), so never a hidden
+    /// card's ([`Copiable::record`]).
+    /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who
+    /// creates a token is its owner." The token exists once it is moved onto the
+    /// battlefield, where it enters with the face returned up
+    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)): "If the token is a
+    /// copy of a double-faced permanent with its back face up, the token enters the
+    /// battlefield with its back face up."
     #[inline]
-    pub fn make_token(&mut self, slot: L::Slot, owner: Seat, card: CardIx, one_one: bool) {
+    #[must_use]
+    pub fn make_token(
+        &mut self,
+        t: &GameTable,
+        slot: L::Slot,
+        owner: Seat,
+        what: Copiable,
+    ) -> FaceIx {
+        let (card, face) = what.record(t);
+        self.ready_token(slot, owner, card, what.is_one_one());
+        face
+    }
+
+    /// [`State::make_token`] of the definition at `card`, `one_one` for a copy that is 1/1 by
+    /// exception ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
+    #[inline]
+    pub(crate) fn ready_token(&mut self, slot: L::Slot, owner: Seat, card: CardIx, one_one: bool) {
         debug_assert_eq!(self.object(slot).zone, Zone::Nowhere);
         let o = self.object_mut(slot);
         o.card = card;

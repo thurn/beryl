@@ -13,9 +13,10 @@ use beryl_kernel::mutate::Arrival;
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
+use crate::query::Copiable;
 use crate::state::{
     Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, ZoneKey, token_slots,
 };
@@ -157,7 +158,7 @@ fn in_order<L: Layout>(
     }
     // Copies of a card alike but for their slots are interchangeable wherever they go.
     if ordered.as_slice().len() - first > 1 {
-        ordered.as_mut_slice()[first..].sort_by_key(|&slot| t.def(s.object(slot).card).name);
+        ordered.as_mut_slice()[first..].sort_by_key(|&slot| s.definition_name(t, slot));
     }
     Ok(ordered)
 }
@@ -313,7 +314,7 @@ fn enter_replacements<L: Layout>(
     mut entry: Entry<L>,
 ) -> Entry<L> {
     let o = s.object(slot);
-    let face = t.def(o.card).face(entry.face);
+    let face = s.copiable(slot).turned(entry.face).face(t);
     let controller = entry.controller.unwrap_or(o.owner);
     for ability in face.abilities {
         if ability.kind != AbilityKind::Replacement {
@@ -363,7 +364,7 @@ fn pay_life_to_enter<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     let o = s.object(slot);
-    let face = t.def(o.card).face(entry.face);
+    let face = s.copiable(slot).turned(entry.face).face(t);
     let player = entry.controller.unwrap_or(o.owner);
     for ability in face.abilities {
         if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement {
@@ -374,9 +375,9 @@ fn pay_life_to_enter<L: Layout>(
 }
 
 /// The life an entering replacement of the face asks for, if any.
-pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: FaceIx) -> Option<u8> {
-    t.def(card)
-        .face(face)
+pub(crate) fn life_to_enter(t: &GameTable, entering: Copiable) -> Option<u8> {
+    entering
+        .face(t)
         .abilities
         .iter()
         .find_map(|a| match a.replacement {
@@ -477,11 +478,11 @@ fn wins_instead_of_drawing<L: Layout>(
                 .enumerate()
                 .find(|(_, a)| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)?;
             crate::coverage::hit(a);
-            let o = s.object(slot);
+            let (card, face) = s.copiable(slot).record(t);
             Some(LossCause::Effect {
                 source: Some(s.object_ref(slot)),
-                card: o.card,
-                face: o.face,
+                card,
+                face,
                 ability: Some(FaceAbility::Own(AbilityIx::new(
                     u8::try_from(index).expect("a face has fewer than 256 abilities"),
                 ))),
@@ -602,22 +603,16 @@ pub struct TokenEntry {
     pub tapped: bool,
     /// Created attacking (CR 508.4): never declared, so no attack triggers.
     pub attacking: bool,
-    /// A copy that is 1/1 by exception (an offspring token, CR 707.9b).
-    pub one_one: bool,
-    /// The face up of a copy of a double-faced permanent
-    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)): "If the token is a
-    /// copy of a double-faced permanent with its back face up, the token enters the
-    /// battlefield with its back face up."
-    pub face: FaceIx,
 }
 
-/// Creates `count` tokens of the game-table card `card` under `controller`'s control.
+/// Creates `count` tokens with the copiable values `what` under `controller`'s control: a
+/// predefined token's, or those of what the tokens copy.
 ///
 /// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "Some effects put tokens
 /// onto the battlefield." [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The
-/// player who creates a token is its owner." A token copy of a card uses the card's own
-/// index: its copiable values are the card's
-/// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
+/// player who creates a token is its owner."
+/// [CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072): "the copy acquires the
+/// copiable values of the original object's characteristics".
 ///
 /// The tokens take free slots from the shared pool (architecture §4.2) and enter as one
 /// event; then one `TokensCreated` event follows for "whenever you create one or more".
@@ -626,7 +621,7 @@ pub(crate) fn create_tokens<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     controller: Seat,
-    card: CardIx,
+    what: Copiable,
     count: u8,
     how: TokenEntry,
 ) -> Result<Bitboard<L::Slot>, Full> {
@@ -636,8 +631,10 @@ pub(crate) fn create_tokens<L: Layout>(
         let slot = free.next().ok_or(Full)?;
         tokens.insert(slot);
     }
+    // A copy of a double-faced permanent enters with the same face up (CR 707.8a).
+    let mut face = FaceIx::FRONT;
     for slot in tokens.iter() {
-        s.make_token(slot, controller, card, how.one_one);
+        face = s.make_token(t, slot, controller, what);
     }
     move_batch(
         s,
@@ -649,7 +646,7 @@ pub(crate) fn create_tokens<L: Layout>(
         Entry {
             tapped: how.tapped,
             attacking: how.attacking,
-            face: how.face,
+            face,
             ..Entry::default()
         },
     )?;

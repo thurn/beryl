@@ -676,7 +676,7 @@ fn a_paused_body_answers_each_question_with_the_card_first_chosen() {
         g.s.library(g.me)
             .iter()
             .copied()
-            .filter(|&slot| g.t.def(g.s.object(slot).card).name == "Test Land")
+            .filter(|&slot| g.s.definition_name(&g.t, slot) == "Test Land")
             .collect();
     lands.sort_unstable();
     let [seen, mine, drawn] = [lands[0], lands[1], lands[2]];

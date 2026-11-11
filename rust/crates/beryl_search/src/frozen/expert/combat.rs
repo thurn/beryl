@@ -152,7 +152,7 @@ impl Sim<'_> {
             .into_iter()
             .filter(|&a| {
                 !self.dies_for_nothing(start, a)
-                    && self.t.def(start.card(a)).name != names::JACE_VRYNS_PRODIGY
+                    && start.definition_name(self.t, a) != names::JACE_VRYNS_PRODIGY
             })
             .collect();
         let mut plans = Vec::new();
@@ -465,7 +465,7 @@ impl Sim<'_> {
             s.battlefield()
                 .iter()
                 .filter(|&&c| {
-                    s.controller(c) == p && self.t.def(s.card(c)).name == names::MANA_CRYPT
+                    s.controller(c) == p && s.definition_name(self.t, c) == names::MANA_CRYPT
                 })
                 .count() as i16
         };
@@ -512,7 +512,7 @@ impl Sim<'_> {
     fn exiled_next(&self, s: &State, p: &super::super::rollout::Policy<'_>, ours: bool) -> i32 {
         let emperor = s.battlefield().iter().any(|&w| {
             s.controller(w) != self.me
-                && self.t.def(s.card(w)).name == names::THE_WANDERING_EMPEROR
+                && s.definition_name(self.t, w) == names::THE_WANDERING_EMPEROR
                 && s.object(w).counters.loyalty >= 3
         });
         if !ours || !emperor {
@@ -630,7 +630,7 @@ fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<S
 fn like(s: &State, a: Slot, b: Slot) -> bool {
     a == b
         || (s.controller(a) == s.controller(b)
-            && s.card(a) == s.card(b)
+            && s.copiable(a).key() == s.copiable(b).key()
             && s.derived(a).power == s.derived(b).power
             && s.derived(a).toughness == s.derived(b).toughness
             && s.object(a).flags.has(ObjectFlags::TAPPED)

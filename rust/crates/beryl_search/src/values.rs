@@ -6,6 +6,7 @@
 
 use beryl_cards::names;
 use beryl_engine::card::{Face, Keywords, Replacement, Types};
+use beryl_engine::query::DefinitionKey;
 use beryl_engine::{CardIx, GameTable};
 
 /// Hand-tuned values: roughly how much a strong player would rather have the card than not,
@@ -196,6 +197,13 @@ impl CardValues {
     #[inline]
     pub fn get(&self, card: CardIx) -> CardInfo {
         self.cards[card.index()]
+    }
+
+    /// What is known of the definition an object's values are read from
+    /// ([`beryl_engine::State::copiable`]).
+    #[inline]
+    pub fn of(&self, key: DefinitionKey) -> CardInfo {
+        self.cards[key.index()]
     }
 }
 

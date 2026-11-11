@@ -109,7 +109,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
             s.board().set_sick(slot, b.sick);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
-            let printed = t.def(s.card(slot)).face(b.face).loyalty;
+            let printed = s.copiable(slot).turned(b.face).face(t).loyalty;
             let counters = b
                 .counters
                 .map(|c| (c.kind, c.count))

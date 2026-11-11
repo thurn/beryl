@@ -93,7 +93,9 @@
 //! entities: private fields, read through `#[inline]` getters (by-w8gv.5.9 for the readers in
 //! other crates), written by mutators. An object has its getters, one for each field and one
 //! for each status flag, and so do a player and the turn, one for each field; their fields
-//! stay `pub` to read until by-w8gv.5.9, and nothing outside the crate can write one.
+//! stay `pub` to read until by-w8gv.5.9, and nothing outside the crate can write one. An
+//! object's definition index and base controller are private already: they are read
+//! through the queries below.
 //!
 //! Records stay plain data with `pub` fields. The rules build one and hand it to a mutator;
 //! the kernel stores it and gives it back whole: [`state::StackEntry`],
@@ -154,25 +156,38 @@
 //!
 //! ## Queries
 //!
-//! Other crates read derived answers, not fields (by-w8gv.5.5):
+//! Other crates read derived answers, not fields ([`query`]). A slot's definition index and
+//! its base controller have no getter outside the crate: each is asked for by the rule that
+//! wants it.
 //!
-//! ```text
-//! fn card_behind(&self, slot: L::Slot) -> Option<CardIx>
-//! fn copiable(&self, t: &GameTable, slot: L::Slot) -> Copiable
-//! fn mana_value(&self, t: &GameTable, slot: L::Slot) -> u8
-//! fn controller(&self, slot: L::Slot) -> Seat
-//! fn power(&self, t: &GameTable, slot: L::Slot) -> i8
-//! fn toughness(&self, t: &GameTable, slot: L::Slot) -> i8
-//! ```
+//! | The rules ask | Query |
+//! | --- | --- |
+//! | the card that represents an object: nothing for a token (CR 111.1, 111.6) | [`State::card_behind`] |
+//! | what it is before any other effect, and what a copy of it would be (CR 707.2) | [`State::copiable`], a [`Copiable`] |
+//! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.8e) | [`State::mana_value`] |
+//! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
+//! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
 //!
-//! `card_behind` is the card that represents the object, and nothing for a token or a copy
-//! of a spell (CR 111.1, 707.10). `copiable` is what a copy of it would have (CR 707.2): the
-//! definition and face, with a copy effect's exceptions (CR 707.9b). `mana_value` counts a
-//! spell's X (CR 202.3e), a transformed permanent's front face and a copied back face's 0
-//! (CR 712.8e). `controller` is a permanent's layer result, a spell's stack entry's, and
-//! elsewhere the owner (CR 108.4a). `power` and `toughness` are the layer results on the
-//! battlefield and the copiable values elsewhere. [`State::card`], the raw definition index,
-//! is then the kernel's own.
+//! A [`Copiable`] is a definition, the face of it that is up and a copy effect's exception
+//! (CR 707.9b). It answers with the face's characteristics ([`Copiable::face`], the blank
+//! ones of CR 708.2 for a face-down permanent), the table's facts about that face, its name,
+//! and its power and toughness. It never hands out the index it holds:
+//!
+//! - [`Copiable::record`] is the index and face a record keeps and a token copy is made of,
+//!   which for a face-down permanent are the public blank card's, never its hidden card's.
+//!   [`State::make_token`] takes a `Copiable`, so no token is made of an index read off an
+//!   object.
+//! - [`Copiable::key`] is a [`query::DefinitionKey`]: it compares, orders and indexes a
+//!   table kept per definition, and names no card.
+//! - [`Copiable::turned`] asks the same of another face: the spell a card would be cast as,
+//!   or the permanent it would enter as.
+//!
+//! What only a card has is asked of [`State::card_behind`], which a caller must answer for a
+//! token too: the faces it may be cast or played with, the cost to turn it face up.
+//! [`State::definition_name`] is the definition's name whichever face is up, for an order
+//! no seed decides and for tools. A player's view goes through [`Observation::card`], which
+//! is nothing for a card its viewer does not know. The queries cost what the reads they
+//! replaced did: none caches anything in the state.
 //!
 //! ## Players
 //!
@@ -213,6 +228,7 @@ pub mod observation;
 mod pending;
 mod player;
 pub mod profile;
+pub mod query;
 pub mod relayout;
 pub mod rng;
 mod stack;
@@ -225,5 +241,6 @@ pub use bitboard::Bitboard;
 pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
+pub use query::Copiable;
 pub use state::State;
 pub use table::GameTable;

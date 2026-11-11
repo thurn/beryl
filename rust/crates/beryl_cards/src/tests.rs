@@ -398,7 +398,7 @@ fn a_question_after_a_look_keeps_the_look() {
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     for player in Seat::BOTH {
         for slot in s.library(player).to_vec() {
-            let land = t.def(s.card(slot)).front().types.contains(Types::LAND);
+            let land = s.copiable(slot).face(&t).types.contains(Types::LAND);
             let zone = if player == Seat::P0 && land {
                 Zone::Battlefield
             } else {
@@ -585,10 +585,10 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .expect("the scenario");
     let mut last = None;
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
-        last = Some((t.face_down_copy(), *s, *d));
+        last = Some((t.clone(), *s, *d));
     })
     .unwrap();
-    let (face_down_copy, s, d) = last.expect("a decision");
+    let (t, s, d) = last.expect("a decision");
     let copy = s
         .battlefield()
         .iter()
@@ -597,7 +597,8 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .expect("the copy");
     assert_eq!(s.controller(copy), Seat::P1);
     assert_eq!(s.object(copy).face, FaceIx::FRONT);
-    assert_eq!(s.card(copy), face_down_copy);
+    assert_eq!(s.copiable(copy).record(&t).0, t.face_down_copy());
+    assert_eq!(s.card_behind(copy), None);
     assert!(s.knows(Seat::P0, copy) && s.knows(Seat::P1, copy));
     let derived = s.derived(copy);
     assert_eq!((derived.power, derived.toughness), (2, 2));
@@ -670,7 +671,7 @@ fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
     s.battlefield()
         .iter()
         .copied()
-        .find(|&slot| t.def(s.card(slot)).name == name)
+        .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap()
 }
 

@@ -1143,7 +1143,8 @@ impl<L: Layout> Tree<L> {
             Sight::Omniscient => true,
         };
         Seat::BOTH.iter().all(|&p| s.library(p) == truth.library(p))
-            && L::Slot::all().all(|slot| !shown(slot) || s.card(slot) == truth.card(slot))
+            && L::Slot::all()
+                .all(|slot| !shown(slot) || s.card_behind(slot) == truth.card_behind(slot))
     }
 
     /// The keys of root decision `d`'s candidates, read in a world: the fixed one, or one
@@ -1447,7 +1448,7 @@ fn keys<L: Layout>(
         d.kind.hash(&mut h);
         let named = |slot: L::Slot, shows: bool| -> (Option<L::Slot>, u8) {
             if !known.contains(slot) && (shows || world.knows(viewer, slot)) {
-                (None, world.card(slot).index() as u8)
+                (None, world.copiable(slot).key().index() as u8)
             } else {
                 (Some(slot), 0)
             }

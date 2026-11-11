@@ -167,17 +167,17 @@ impl Counters {
 /// `&mut Object` leaves the crate; by-w8gv.5.9 makes the fields private behind the getters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Object<L: Layout = Small> {
-    /// Index into the game table: which card this is. Engine-only, since an
-    /// [`crate::Observation`] masks it; others read [`State::card`](crate::State::card) or
-    /// [`crate::Observation::card`].
-    pub card: CardIx,
+    /// Index into the game table: the definition its values are read from. The kernel's
+    /// own: others ask a query ([`crate::query`]) or [`crate::Observation::card`].
+    pub(crate) card: CardIx,
     /// Bumped on every zone change (CR 400.7), so stale references are detectable.
     pub incarnation: u16,
     pub zone: Zone,
     pub owner: Seat,
-    /// The controller before continuous effects. A permanent's real controller is the layer-2
-    /// result, [`State::controller`](crate::State::controller).
-    pub base_controller: Seat,
+    /// The controller before continuous effects: the owner, but for a spell and a permanent
+    /// ([`State::controller`](crate::State::controller),
+    /// [`State::base_controller`](crate::State::base_controller)).
+    pub(crate) base_controller: Seat,
     pub flags: ObjectFlags,
     /// Damage marked this turn.
     pub damage: u8,
@@ -227,15 +227,9 @@ impl<L: Layout> Object<L> {
 }
 
 /// What the rules give an object, to read. A field has one getter, and a status flag one
-/// each.
+/// each, but its definition's index and its base controller: those are answered by
+/// [`State`](crate::State)'s queries ([`crate::query`]).
 impl<L: Layout> Object<L> {
-    /// Index into the game table: which card this is. Players read it through
-    /// [`crate::Observation::card`], which masks what they do not know.
-    #[inline]
-    pub fn card(&self) -> CardIx {
-        self.card
-    }
-
     /// Bumped on every zone change
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that moves
     /// from one zone to another becomes a new object".
@@ -254,13 +248,6 @@ impl<L: Layout> Object<L> {
     #[inline]
     pub fn owner(&self) -> Seat {
         self.owner
-    }
-
-    /// The controller before continuous effects
-    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)).
-    #[inline]
-    pub fn base_controller(&self) -> Seat {
-        self.base_controller
     }
 
     /// Every status and combat flag at once.

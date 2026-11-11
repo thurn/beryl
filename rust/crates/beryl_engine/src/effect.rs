@@ -19,6 +19,7 @@ use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Queue, Small, index};
 use crate::mana;
 use crate::profile::Payment;
+use crate::query::Copiable;
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, ObjectFlags, ObjectRef, PendingTrigger,
     StackEntry, State, Target, TriggerInfo, Zone, ZoneKey,
@@ -560,8 +561,14 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let top = self.state.library(player).last().copied();
         if let Some(slot) = top {
             self.reveal(slot);
-            let card = self.state.object(slot).card;
-            if self.table.def(card).front().types.contains(Types::LAND) {
+            // A card in a library has its front face's characteristics (CR 712.8a).
+            if self
+                .state
+                .copiable(slot)
+                .face(self.table)
+                .types
+                .contains(Types::LAND)
+            {
                 self.move_to(self.state.object_ref(slot), Zone::Hand, Reason::Effect);
                 return Ok(());
             }
@@ -930,70 +937,43 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
         let card = self.game_index(def);
-        self.tokens(player, card, count, how)
+        self.tokens(player, Copiable::of_card(card), count, how)
     }
 
-    /// Creates `count` tokens that are copies of the card with this game index, such as the
-    /// card a last-known-information record names (CR 707.2).
+    /// Creates `count` tokens that are copies of what has the copiable values `what`: a
+    /// permanent's ([`State::copiable`]), or those of the card a last-known-information
+    /// record names ([`Copiable::of_card`]). CR 707.2.
     pub fn create_tokens_of(
         &mut self,
-        card: CardIx,
+        what: Copiable,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
-        self.tokens(self.entry.controller, card, count, how)
+        self.tokens(self.entry.controller, what, count, how)
     }
 
-    /// Creates `count` tokens that are copies of the card with this game index under
+    /// Creates `count` tokens that are copies of what has the copiable values `what` under
     /// `player`'s control, as Fractured Identity's "Each player other than its controller
     /// creates a token that's a copy of it" (CR 111.2, 707.2).
     pub fn create_tokens_of_for(
         &mut self,
         player: Seat,
-        card: CardIx,
+        what: Copiable,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
-        self.tokens(player, card, count, how)
-    }
-
-    /// The copiable values of a permanent, for tokens that copy it: its card, and how such a
-    /// token enters ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "the
-    /// copy acquires the copiable values of the original object's characteristics ... Other
-    /// effects (including type-changing and text-changing effects), status, counters, and
-    /// stickers are not copied." A token's are those its own creation defined
-    /// ([CR 111.3](https://yawgatog.com/resources/magic-rules/#R1113)), including a copy's
-    /// 1/1 exception ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "The
-    /// final set of values for that characteristic becomes part of the copiable values of the
-    /// copy." A double-faced permanent's copy has both faces, the same one up
-    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)). A face-down
-    /// permanent's are the 2/2 with no text
-    /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed
-    /// characteristics are the copiable values of that object's characteristics." Being face
-    /// down is a status, which isn't copied, so its copy is a face-up token of
-    /// [`crate::card::FACE_DOWN_COPY`], not of the hidden card.
-    pub fn copiable_values(&self, object: ObjectRef<L>) -> (CardIx, TokenEntry) {
-        let o = self.state.object(object.slot);
-        if o.face == FaceIx::DOWN {
-            return (self.table.face_down_copy(), TokenEntry::default());
-        }
-        let how = TokenEntry {
-            one_one: o.flags.has(ObjectFlags::ONE_ONE),
-            face: o.face,
-            ..TokenEntry::default()
-        };
-        (o.card, how)
+        self.tokens(player, what, count, how)
     }
 
     fn tokens(
         &mut self,
         player: Seat,
-        card: CardIx,
+        what: Copiable,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
         let created =
-            event::create_tokens(self.state, self.table, self.sink, player, card, count, how);
+            event::create_tokens(self.state, self.table, self.sink, player, what, count, how);
         created.unwrap_or_else(|Full| {
             self.full = true;
             Bitboard::EMPTY
@@ -1025,7 +1005,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             TokenEntry {
                 tapped: true,
                 attacking,
-                ..TokenEntry::default()
             },
         );
         if attacking {

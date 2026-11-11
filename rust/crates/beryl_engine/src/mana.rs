@@ -20,7 +20,7 @@ use crate::card::{
 };
 use crate::decision::Opt;
 use crate::event::{self, Sink};
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
@@ -204,7 +204,7 @@ struct Class<L: Layout = Small> {
     /// permanents it consumes (§10).
     consumed: bool,
     /// The least card among the members, which orders classes of one rank.
-    least: CardIx,
+    least: crate::query::DefinitionKey,
 }
 
 impl<L: Layout> Class<L> {
@@ -263,8 +263,8 @@ fn source<L: Layout>(
 ) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     // Looked up only past the table's facts, which most permanents stop at.
-    let face = || t.def(o.card).face(o.face);
-    let mana = t.facts(o.card, o.face).mana;
+    let face = || s.copiable(slot).face(t);
+    let mana = s.copiable(slot).facts(t).mana;
     // The table's facts stand in for reading the face: they must say what reading it would.
     debug_assert!(
         mana != ManaFace::Not || read_source(s, t, player, face()).is_none(),
@@ -372,11 +372,12 @@ impl<L: Layout> Sources<L> {
                     rank: CONSUMED_RANK,
                     members: Bitboard::single(slot),
                     consumed: true,
-                    least: s.card(slot),
+                    least: s.copiable(slot).key(),
                 };
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
-                let same = |c: &Class<L>| c.consumed && c.has_room() && c.least == s.card(slot);
+                let same =
+                    |c: &Class<L>| c.consumed && c.has_room() && c.least == s.copiable(slot).key();
                 if let Some(i) = classes.iter().position(same) {
                     classes.as_mut_slice()[i].members.insert(slot);
                 } else {
@@ -397,7 +398,7 @@ impl<L: Layout> Sources<L> {
             }) {
                 let c = &mut classes.as_mut_slice()[i];
                 c.members.insert(slot);
-                c.least = c.least.min(s.card(slot));
+                c.least = c.least.min(s.copiable(slot).key());
             } else {
                 let mut members = Bitboard::EMPTY;
                 members.insert(slot);
@@ -407,7 +408,7 @@ impl<L: Layout> Sources<L> {
                     rank,
                     members,
                     consumed: false,
-                    least: s.card(slot),
+                    least: s.copiable(slot).key(),
                 })?;
             }
         }
@@ -489,13 +490,14 @@ impl<L: Layout> Funds<L> {
         let mut slots = Bitboard::EMPTY;
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
-        let mut classes: L::Queue<(u8, u8, bool, Option<CardIx>), CLASSES> = Default::default();
+        let mut classes: L::Queue<_, CLASSES> = Default::default();
         for (slot, d) in controlled(s, player) {
             if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot, d) {
                 slots.insert(slot);
                 units.add(kinds, u16::from(amount));
                 // Sources a plan consumes are a class per card.
-                let class = (kinds, amount, other, consumed.then(|| s.card(slot)));
+                let card = consumed.then(|| s.copiable(slot).key());
+                let class = (kinds, amount, other, card);
                 if other || !classes.iter().any(|&c| c == class) {
                     classes.push(class)?;
                 }
@@ -802,8 +804,8 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
             let _ = later.push(l);
         }
     };
-    for slot in s.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
-        let def = t.def(s.object(slot).card);
+    let hand = s.zone(ZoneKey::Of(player, Zone::Hand));
+    for def in hand.iter().filter_map(|slot| s.card_def(t, slot)) {
         for face in def.faces {
             if !face.types.intersects(Types::LAND) {
                 add(Later {
@@ -826,7 +828,7 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
         if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
             continue;
         }
-        for a in t.def(o.card).face(o.face).abilities {
+        for a in s.copiable(slot).face(t).abilities {
             if a.kind == AbilityKind::Activated && !a.is_loyalty() {
                 add(Later {
                     cost: a.cost.mana.with_x(0),
@@ -977,9 +979,9 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     for slot in s.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
         let _ = hand.push(slot);
     }
-    hand.as_mut_slice().sort_by_key(|&slot| s.object(slot).card);
-    for &slot in hand.as_slice() {
-        let card = s.object(slot).card;
+    hand.as_mut_slice()
+        .sort_by_key(|&slot| s.copiable(slot).key());
+    for card in hand.iter().filter_map(|&slot| s.card_behind(slot)) {
         let def = t.def(card);
         for f in def.face_ixs() {
             let face = def.face(f);
@@ -1002,11 +1004,11 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             }
         }
     }
-    for p in s.permissions() {
-        if p.player != player || !s.is_current(p.object) {
-            continue;
-        }
-        for face in t.def(s.object(p.object.slot).card).faces {
+    let mine = |p: &&crate::state::CastPermission<L>| p.player == player && s.is_current(p.object);
+    for p in s.permissions().iter().filter(mine) {
+        // Only a card is cast (CR 601.2a).
+        let faces = s.card_def(t, p.object.slot).map_or_default(|def| def.faces);
+        for face in faces {
             if castable(face) {
                 let cost = face.cost;
                 ahead.add(
@@ -1024,7 +1026,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
         if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
             continue;
         }
-        for a in t.def(o.card).face(o.face).abilities {
+        for a in s.copiable(slot).face(t).abilities {
             if a.kind == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
                 ahead.add(a.cost.mana, a.cost.tap.then_some(slot));
             }
@@ -1432,8 +1434,8 @@ pub(crate) fn pay<L: Layout>(
 /// it dealt the cards to them; copies of one card are alike to it.
 fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
     let mut v: L::Queue<L::Slot, 64> = Default::default();
-    let first = c.members.iter().next().map(|m| s.card(m));
-    if c.members.iter().all(|m| Some(s.card(m)) == first) {
+    let first = c.members.iter().next().map(|m| s.copiable(m).key());
+    if c.members.iter().all(|m| Some(s.copiable(m).key()) == first) {
         for slot in c.members.iter().take(usize::from(n)) {
             v.push(slot)?;
         }
@@ -1442,7 +1444,7 @@ fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::S
     for slot in c.members.iter() {
         v.push(slot)?;
     }
-    v.as_mut_slice().sort_by_key(|&slot| s.card(slot));
+    v.as_mut_slice().sort_by_key(|&slot| s.copiable(slot).key());
     while v.len() > usize::from(n) {
         v.pop();
     }
@@ -1551,10 +1553,8 @@ pub(crate) fn activate<L: Layout>(
     slot: L::Slot,
     color: ManaColor,
 ) -> Result<(), Full> {
-    let o = *s.object(slot);
-    let face = t.def(o.card).face(o.face);
-    let (index, ability) = face
-        .abilities
+    let (card, face) = s.copiable(slot).record(t);
+    let (index, ability) = (s.copiable(slot).face(t).abilities)
         .iter()
         .enumerate()
         .find(|(_, a)| {
@@ -1577,8 +1577,8 @@ pub(crate) fn activate<L: Layout>(
         source: Some(source),
         controller,
         ability: crate::card::AbilityIx::new(index as u8),
-        card: o.card,
-        face: o.face,
+        card,
+        face,
         ..PendingTrigger::default()
     };
     crate::interpret::mana_ability(s, t, sink, activation, ability, color)

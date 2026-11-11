@@ -654,7 +654,7 @@ fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<
         o.zone == Zone::Battlefield && !o.flags.has(ObjectFlags::TAPPED)
     };
     let sacrifices_for_mana = |slot: L::Slot| {
-        let face = t.def(before.card(slot)).face(before.object(slot).face);
+        let face = before.copiable(slot).face(t);
         face.abilities
             .iter()
             .any(|a| a.kind == AbilityKind::Mana && a.cost.sacrifice_self)
@@ -703,7 +703,7 @@ mod tests {
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
             panic!("priority");
         };
-        let activate = (0..d.len()).find(|&i| matches!(d.candidates.option(choice(i)), Some(Opt::Activate { slot, .. }) if t.def(s.card(slot)).name == names::AANGS_ICEBERG)).unwrap();
+        let activate = (0..d.len()).find(|&i| matches!(d.candidates.option(choice(i)), Some(Opt::Activate { slot, .. }) if s.definition_name(&t, slot) == names::AANGS_ICEBERG)).unwrap();
         apply(&mut s, &t, &mut scratch, &mut Replay, choice(activate));
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
             panic!("waterbend");
@@ -712,7 +712,7 @@ mod tests {
         let benders: Vec<_> = s
             .battlefield()
             .iter()
-            .filter(|&&slot| t.def(s.card(slot)).name == names::SNAPCASTER_MAGE)
+            .filter(|&&slot| s.definition_name(&t, slot) == names::SNAPCASTER_MAGE)
             .map(|slot| slot.num())
             .collect();
         let automatic = waterbend(&s, &t, &d, &[]).unwrap();
@@ -759,7 +759,7 @@ mod tests {
         };
         let activate = (0..d.len()).find(|&i| matches!(
             d.candidates.option(choice(i)),
-            Some(Opt::Activate { slot, .. }) if t.def(s.card(slot)).name == names::AANGS_ICEBERG
+            Some(Opt::Activate { slot, .. }) if s.definition_name(&t, slot) == names::AANGS_ICEBERG
         )).unwrap();
         apply(&mut s, &t, &mut scratch, &mut Replay, choice(activate));
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
@@ -769,7 +769,7 @@ mod tests {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| t.def(s.card(slot)).name == names::MANA_CRYPT)
+            .find(|&slot| s.definition_name(&t, slot) == names::MANA_CRYPT)
             .unwrap()
             .num();
         let automatic = waterbend(&s, &t, &d, &[]).unwrap();
@@ -780,7 +780,7 @@ mod tests {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| t.def(s.card(slot)).name == beryl_cards::tokens::TREASURE_TOKEN)
+            .find(|&slot| s.definition_name(&t, slot) == beryl_cards::tokens::TREASURE_TOKEN)
             .unwrap()
             .num();
         assert_eq!(automatic.benders, vec![treasure]);
@@ -800,14 +800,14 @@ mod tests {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| t.def(s.card(slot)).name == names::CURRENCY_CONVERTER)
+            .find(|&slot| s.definition_name(&t, slot) == names::CURRENCY_CONVERTER)
             .unwrap()
             .num();
         assert!(!alternate.eligible.contains(&tapped));
         let lands: Vec<_> = s
             .battlefield()
             .iter()
-            .filter(|&&slot| t.def(s.card(slot)).name == names::PLAINS)
+            .filter(|&&slot| s.definition_name(&t, slot) == names::PLAINS)
             .map(|slot| slot.num())
             .collect();
         let paid = waterbend(&s, &t, &d, &lands).unwrap();
@@ -839,7 +839,7 @@ mod tests {
         let Candidates::Options(opts) = d.candidates else {
             panic!("options");
         };
-        let named = |slot: Slot| t.def(s.card(slot)).name;
+        let named = |slot: Slot| s.definition_name(&t, slot);
         Paid(
             opts.iter()
                 .zip(payments)
@@ -1012,7 +1012,7 @@ mod tests {
             ]);
         let mut taps = Vec::new();
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-            let named = |slot: u16| t.def(s.card(Slot::from_index(usize::from(slot)))).name;
+            let named = |slot: u16| s.definition_name(t, Slot::from_index(usize::from(slot)));
             taps = payments(s, t, d)
                 .into_iter()
                 .zip((0..d.len()).map(|i| d.candidates.option(choice(i))))
@@ -1093,7 +1093,7 @@ mod tests {
             .battlefield(P0, ATTACKERS)
             .battlefield(P1, BLOCKERS);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
-        let named = |s: &State, slot: Slot| t.def(s.card(slot)).name;
+        let named = |s: &State, slot: Slot| s.definition_name(&t, slot);
         let mut scratch = Scratch::new();
         // Pass to combat and attack with both; the defending player's block declaration opens.
         let d = loop {
@@ -1155,7 +1155,7 @@ mod tests {
             .battlefield(P0, TEFERI)
             .battlefield(P1, STAFF);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
-        let named = |s: &State, slot: u16| t.def(s.card(Slot::from_index(usize::from(slot)))).name;
+        let named = |s: &State, slot: u16| s.definition_name(&t, Slot::from_index(slot.into()));
         let mut scratch = Scratch::new();
         // Teferi's −3, its third ability: "Return up to one target artifact, creature, or
         // enchantment to its owner's hand."

@@ -100,7 +100,8 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
     let hand = s
         .zone(ZoneKey::Of(player, Zone::Hand))
         .iter()
-        .flat_map(|slot| t.def(s.card(slot)).faces.iter().map(|f| f.cost));
+        .filter_map(|slot| s.card_def(t, slot))
+        .flat_map(|def| def.faces.iter().map(|f| f.cost));
     let abilities = s
         .battlefield()
         .iter()

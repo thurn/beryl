@@ -170,9 +170,9 @@ impl<L: Layout> State<L> {
         &self.objects[slot.index()]
     }
 
-    /// The game index of the card in a slot. Players read it through
-    /// [`crate::Observation::card`], which masks what they do not know.
-    pub fn card(&self, slot: L::Slot) -> CardIx {
+    /// The game index of the definition behind a slot: the kernel's own. Others ask a query
+    /// ([`crate::query`]) or [`crate::Observation::card`].
+    pub(crate) fn card(&self, slot: L::Slot) -> CardIx {
         self.object(slot).card
     }
 
@@ -369,22 +369,13 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Who controls an object: for a permanent the layer-2 result, otherwise the base
-    /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)).
-    pub fn controller(&self, slot: L::Slot) -> Seat {
-        let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
-            self.derived(slot).controller
-        } else {
-            o.base_controller
-        }
-    }
-
-    /// Who controls an object before continuous effects: for a permanent, the player who put
-    /// it onto the battlefield, usually its owner
+    /// Who controls an object before continuous effects, which is what the layers start
+    /// from and a saved position keeps: for a permanent, the player who put it onto the
+    /// battlefield, usually its owner
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's owner
     /// is the same as the owner of the card that represents it ... A permanent's controller
-    /// is, by default, the player under whose control it entered the battlefield."
+    /// is, by default, the player under whose control it entered the battlefield." Who
+    /// controls it now is [`State::controller`].
     pub fn base_controller(&self, slot: L::Slot) -> Seat {
         self.object(slot).base_controller
     }

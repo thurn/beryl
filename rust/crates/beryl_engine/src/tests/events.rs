@@ -16,6 +16,7 @@ use crate::filter::{Evaluate, Filter, Whose};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
+use crate::query::Copiable;
 use crate::state::{
     Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
     ZoneKey,
@@ -207,8 +208,8 @@ fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -
 }
 
 fn copy_the_dead<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    let card = ctx.trigger().lki.card;
-    ctx.create_tokens_of(card, 1, TokenEntry::default());
+    let dead = Copiable::of_card(ctx.trigger().lki.card);
+    ctx.create_tokens_of(dead, 1, TokenEntry::default());
     Ok(())
 }
 
@@ -275,7 +276,6 @@ fn human_attacking<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
         TokenEntry {
             tapped: true,
             attacking: true,
-            ..TokenEntry::default()
         },
     );
     Ok(())
@@ -516,7 +516,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     for player in Seat::BOTH {
         let land = (s.zone(ZoneKey::Of(player, Zone::Library)))
             .iter()
-            .find(|&slot| t.def(s.object(slot).card).name == "Test Land")
+            .find(|&slot| s.definition_name(&t, slot) == "Test Land")
             .unwrap();
         s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
             .unwrap();
@@ -529,7 +529,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
     (s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand)))
         .iter()
-        .find(|&slot| t.def(s.object(slot).card).name == name)
+        .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap_or_else(|| panic!("no {name}"))
 }
 
@@ -550,7 +550,7 @@ pub(super) fn with_ctx(
 ) {
     let trigger = PendingTrigger {
         source: Some(s.object_ref(slot)),
-        card: s.object(slot).card,
+        card: s.copiable(slot).record(t).0,
         controller: s.controller(slot),
         ..PendingTrigger::default()
     };
@@ -617,7 +617,7 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
     let lands: Vec<Slot> = s
         .zone(ZoneKey::Of(p, Zone::Library))
         .iter()
-        .filter(|&slot| t.def(s.object(slot).card).name == "Test Land")
+        .filter(|&slot| s.definition_name(&t, slot) == "Test Land")
         .take(2)
         .collect();
     for &land in &lands {
@@ -628,7 +628,7 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
         let d = decide_with(&t, s, x);
         (0..d.len() as u16)
             .filter_map(|i| match d.candidates.option(Choice(i)) {
-                Some(Opt::PlayLand(slot)) if t.def(s.object(slot).card).name == "Test Land" => {
+                Some(Opt::PlayLand(slot)) if s.definition_name(&t, slot) == "Test Land" => {
                     Some(slot)
                 }
                 _ => None,
@@ -696,7 +696,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
         .iter()
         .find(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .expect("a token copy");
-    assert_eq!(t.def(s.object(token).card).name, "Test Sphinx");
+    assert_eq!(s.definition_name(&t, token), "Test Sphinx");
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (3, 3));
     // The copy is a token: when it dies it triggers nothing, and then ceases to exist.
     let token_ref = s.object_ref(token);
@@ -712,11 +712,11 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
-    let card = s.object(bear).card;
+    let values = s.copiable(bear);
     let mut token = None;
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         token = ctx
-            .create_tokens_of(card, 1, TokenEntry::default())
+            .create_tokens_of(values, 1, TokenEntry::default())
             .iter()
             .next();
     });
@@ -797,7 +797,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let human = *s
         .battlefield()
         .iter()
-        .find(|&&slot| t.def(s.object(slot).card).name == "Test Human")
+        .find(|&&slot| s.definition_name(&t, slot) == "Test Human")
         .unwrap();
     let o = s.object(human);
     assert!(o.flags.has(ObjectFlags::TAPPED) && o.flags.has(ObjectFlags::ATTACKING));
@@ -1039,7 +1039,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
     let insects = s
         .battlefield()
         .iter()
-        .filter(|&&slot| t.def(s.object(slot).card).name == "Test Insect")
+        .filter(|&&slot| s.definition_name(&t, slot) == "Test Insect")
         .count();
     assert_eq!(insects, 2);
 }
@@ -1164,7 +1164,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(d.types, Types::ARTIFACT);
     assert!(d.subtypes.contains(Subtype::Vehicle));
     let grant = d.granted[0].unwrap();
-    assert_eq!(grant.card, s.object(aura).card);
+    assert_eq!(grant.card, s.copiable(aura).record(&t).0);
     let granted = &t.def(grant.card).front().grants[grant.grant.index()];
     assert_eq!(granted.kind, AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
@@ -1328,7 +1328,7 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
     .unwrap();
     let other = (s.zone(ZoneKey::Of(p, Zone::Library)))
         .iter()
-        .find(|&slot| s.object(slot).card != s.object(mine).card)
+        .find(|&slot| s.card_behind(slot) != s.card_behind(mine))
         .unwrap();
     s.board().swap_cards(mine, other);
     let turn = s.turn().number + 1;
@@ -1385,17 +1385,10 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     let trainer = put(&t, &mut s, &mut x, p, "Test Trainer");
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.player(p).life, 21);
-    let card = s.object(trainer).card;
+    let values = s.copiable(trainer).except_one_one();
     let mut token = Bitboard::EMPTY;
     with_ctx(&t, &mut s, &mut x, trainer, |ctx| {
-        token = ctx.create_tokens_of(
-            card,
-            1,
-            TokenEntry {
-                one_one: true,
-                ..TokenEntry::default()
-            },
-        );
+        token = ctx.create_tokens_of(values, 1, TokenEntry::default());
     });
     let token = token.first().unwrap();
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (1, 1));
@@ -1528,7 +1521,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| t.def(s.object(slot).card).name == "Test Human");
+            .find(|&slot| s.definition_name(&t, slot) == "Test Human");
         if let Some(human) = human {
             break human;
         }
@@ -1557,7 +1550,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
                     .battlefield()
                     .iter()
                     .copied()
-                    .find(|&slot| t.def(paused.object(slot).card).name == "Test Human")
+                    .find(|&slot| paused.definition_name(&t, slot) == "Test Human")
                     .expect("the Human on the battlefield as it is asked about");
                 assert_eq!(
                     (d.prompt, d.about),
@@ -1696,7 +1689,7 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
             apply(&mut s, &t, &mut scratch, &mut Replay, choice);
         }
         for rock in rocks {
-            let name = t.def(s.object(rock).card).name;
+            let name = s.definition_name(&t, rock);
             let expected = if name == stolen { Seat::P0 } else { Seat::P1 };
             assert_eq!(s.controller(rock), expected, "{name}, kicked for {x}");
         }
@@ -1751,9 +1744,9 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let mut copy = None;
     with_ctx(&t, &mut s, &mut x, prodigy, |ctx| {
-        let (card, how) = ctx.copiable_values(ctx.state().object_ref(prodigy));
+        let values = ctx.state().copiable(prodigy);
         copy = ctx
-            .create_tokens_of_for(Seat::P1, card, 1, how)
+            .create_tokens_of_for(Seat::P1, values, 1, TokenEntry::default())
             .iter()
             .next();
     });

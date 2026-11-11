@@ -129,10 +129,10 @@ fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_libra
                 assert_eq!(obs.card(slot), None);
             }
             for slot in obs.zone(ZoneKey::Of(viewer, Zone::Hand)).iter() {
-                assert_eq!(obs.card(slot), Some(s.card(slot)));
+                assert_eq!(obs.card(slot), s.card_behind(slot));
             }
             for &slot in obs.battlefield() {
-                assert_eq!(obs.card(slot), Some(s.card(slot)));
+                assert_eq!(obs.card(slot), s.card_behind(slot));
             }
             checked += 1;
         }

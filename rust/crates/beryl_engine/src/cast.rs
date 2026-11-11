@@ -23,7 +23,7 @@ use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
@@ -59,16 +59,16 @@ fn activated<L: Layout>(
     s: &State<L>,
     slot: L::Slot,
     ability: ObjectAbility,
-) -> Option<(CardIx, FaceIx, FaceAbility)> {
-    let o = s.object(slot);
+) -> Option<(crate::query::Copiable, FaceAbility)> {
     match ability {
-        ObjectAbility::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
+        ObjectAbility::Own(i) => Some((s.copiable(slot), FaceAbility::Own(i))),
         ObjectAbility::Granted(k) => {
-            if o.zone != Zone::Battlefield {
+            if s.object(slot).zone != Zone::Battlefield {
                 return None;
             }
             let grant = s.derived(slot).granted[usize::from(k)]?;
-            Some((grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant)))
+            let granter = crate::query::Copiable::of_card(grant.card);
+            Some((granter, FaceAbility::Grant(grant.grant)))
         }
     }
 }
@@ -89,8 +89,7 @@ pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
 /// Whether a permanent on the battlefield has a static ability with this rule.
 #[inline]
 fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, rule: Rule) -> bool {
-    let o = s.object(slot);
-    let has = t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule);
+    let has = s.copiable(slot).has_rule(t, rule);
     #[cfg(feature = "coverage")]
     if has
         && let Some(a) = crate::trigger::face(s, t, slot)
@@ -204,11 +203,10 @@ impl ExileCost {
             ExileCost::Graveyard(n) => {
                 let mut graveyard = s.zone(ZoneKey::Of(player, Zone::Graveyard));
                 graveyard.remove(itself);
-                graveyard
+                let cards = graveyard
                     .iter()
-                    .filter(|&slot| !s.object(slot).flags.has(ObjectFlags::TOKEN))
-                    .count()
-                    >= usize::from(n)
+                    .filter(|&slot| s.card_behind(slot).is_some());
+                cards.count() >= usize::from(n)
             }
         }
     }
@@ -225,7 +223,7 @@ fn hand_cards<L: Layout>(
     let mut hand = s.zone(ZoneKey::Of(player, Zone::Hand));
     hand.remove(itself);
     hand.iter()
-        .filter(|&slot| t.def(s.object(slot).card).front().colors.intersects(colors))
+        .filter(|&slot| s.copiable(slot).face(t).colors.intersects(colors))
         .collect()
 }
 
@@ -245,7 +243,7 @@ fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboar
             // A sacrificed mana token remains here until state-based actions, but
             // [CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116):
             // "A token isn't a card". Count and offer only cards for this cost.
-            let card = |slot| !s.object(slot).flags.has(ObjectFlags::TOKEN);
+            let card = |slot| s.card_behind(slot).is_some();
             let last = graveyard
                 .iter()
                 .enumerate()
@@ -569,7 +567,7 @@ fn refused<L: Layout>(
     from: From,
 ) -> Option<Refusal<L>> {
     let player = now.player;
-    let face = t.def(s.object(slot).card).face(face_index);
+    let face = s.copiable(slot).turned(face_index).face(t);
     if !in_time(s, t, now, face, from) {
         return Some(Refusal::Timing { by: None });
     }
@@ -628,7 +626,9 @@ pub(crate) fn refusal<L: Layout>(
     land: Option<Refusal<L>>,
 ) -> Result<Option<Refusal<L>>, Full> {
     let now = Situation::of(player);
-    let def = t.def(s.object(slot).card);
+    let Some(def) = s.card_def(t, slot) else {
+        return Ok(land);
+    };
     let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
     let mut most = land;
     for f in def.face_ixs() {
@@ -689,15 +689,16 @@ fn cast_options<L: Layout>(
     let cards: Bitboard<L::Slot> = cards
         .iter()
         .filter(|&slot| {
-            let def = t.def(s.object(slot).card);
-            def.face_ixs().any(|f| {
-                let face = def.face(f);
-                !face.transformed && in_time(s, t, now, face, from)
+            s.card_def(t, slot).is_some_and(|def| {
+                def.face_ixs().any(|f| {
+                    let face = def.face(f);
+                    !face.transformed && in_time(s, t, now, face, from)
+                })
             })
         })
         .collect();
-    for slot in collapse(s, cards).iter() {
-        let def = t.def(s.object(slot).card);
+    let with_def = |slot| Some((slot, s.card_def(t, slot)?));
+    for (slot, def) in collapse(s, cards).iter().filter_map(with_def) {
         let flashback =
             from == From::Priority && permission(s, player, slot).is_some_and(|p| p.flashback);
         for f in def.face_ixs() {
@@ -771,10 +772,10 @@ fn activatable<L: Layout>(
 ) -> bool {
     let player = now.player;
     let o = s.object(slot);
-    let Some((card, face, index)) = activated(s, slot, ability) else {
+    let Some((source, index)) = activated(s, slot, ability) else {
         return false;
     };
-    let a = t.def(card).face(face).ability(index);
+    let a = source.face(t).ability(index);
     if a.kind != AbilityKind::Activated {
         return false;
     }
@@ -893,10 +894,10 @@ pub fn pointless<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> bool {
-    let Some((card, face, index)) = activated(s, slot, ability) else {
+    let Some((source, index)) = activated(s, slot, ability) else {
         return false;
     };
-    match t.def(card).face(face).ability(index).needs {
+    match source.face(t).ability(index).needs {
         Needs::Nothing => false,
         // CR 607.2a: a linked ability finds only the cards exiled with its own source.
         Needs::ExiledWithSource => s.exiled_with(slot).is_empty(),
@@ -923,10 +924,7 @@ fn activation_options<L: Layout>(
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
-    let facts = |slot: L::Slot| {
-        let o = s.object(slot);
-        t.facts(o.card, o.face)
-    };
+    let facts = |slot: L::Slot| s.copiable(slot).facts(t);
     let objects: Bitboard<L::Slot> = objects
         .iter()
         .filter(|&slot| {
@@ -993,7 +991,7 @@ pub(crate) fn begin_cast<L: Layout>(
     };
     let permission = permission(s, player, slot);
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
-    let card = s.object(slot).card;
+    let (card, _) = s.copiable(slot).record(t);
     s.become_spell(slot, face, player);
     s.put_on_stack(StackEntry {
         object: Some(s.object_ref(slot)),
@@ -1041,8 +1039,9 @@ pub(crate) fn begin_activate<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Result<(), Full> {
-    let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
-    let a = t.def(card).face(face).ability(index);
+    let (source, index) = activated(s, slot, ability).expect("an ability offered");
+    let a = source.face(t).ability(index);
+    let (card, face) = source.record(t);
     if a.is_loyalty() {
         s.legacy_mut()
             .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, true);

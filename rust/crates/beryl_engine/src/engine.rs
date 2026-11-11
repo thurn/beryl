@@ -474,7 +474,7 @@ fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
 fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {
-    let def = t.def(s.object(slot).card);
+    let def = s.card_def(t, slot)?;
     def.face_ixs()
         .find(|&f| def.face(f).types.intersects(Types::LAND))
 }
@@ -721,7 +721,7 @@ fn play_land<L: Layout>(
     s.count_land_played(player);
     s.give_priority(player);
     let face = land_face(s, t, slot).expect("a land face");
-    match event::life_to_enter(t, s.object(slot).card, face) {
+    match event::life_to_enter(t, s.copiable(slot).turned(face)) {
         Some(life) if s.player(player).life >= i16::from(life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
@@ -811,8 +811,8 @@ fn collapse_ordered<L: Layout>(
     for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
-        let card = s.object(slot).card;
-        if s.object(slot).face == FaceIx::DOWN || !kept.iter().any(|k| s.object(k).card == card) {
+        let of_card = |k: L::Slot| s.copiable(k).key() == s.copiable(slot).key();
+        if s.object(slot).face == FaceIx::DOWN || !kept.iter().any(of_card) {
             kept.insert(slot);
             continue;
         }
@@ -822,7 +822,7 @@ fn collapse_ordered<L: Layout>(
         if referenced.contains(slot)
             || !kept.iter().any(|k| {
                 !referenced.contains(k)
-                    && s.object(k).card == card
+                    && of_card(k)
                     && known(k) == known(slot)
                     && signature(k) == *own.get_or_insert_with(|| signature(slot))
             })

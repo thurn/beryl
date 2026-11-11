@@ -235,7 +235,7 @@ impl<L: Layout> Board<'_, L> {
         let slot = token_slots()
             .find(|&slot: &L::Slot| self.0.object(slot).zone == Zone::Nowhere)
             .ok_or(Full)?;
-        self.0.make_token(slot, owner, card, one_one);
+        self.0.ready_token(slot, owner, card, one_one);
         self.place(slot, Zone::Battlefield)?;
         if face != FaceIx::FRONT {
             self.set_face(slot, face);

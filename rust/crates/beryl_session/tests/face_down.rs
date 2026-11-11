@@ -95,8 +95,12 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
     let snapcaster = t
         .index_of(CARDS.get(names::SNAPCASTER_MAGE).unwrap())
         .unwrap();
-    assert_eq!(s.card(copy), t.face_down_copy());
-    assert_ne!(s.card(copy), snapcaster);
+    assert_eq!(
+        s.copiable(copy).record(&t),
+        (t.face_down_copy(), beryl_engine::card::FaceIx::FRONT)
+    );
+    assert_ne!(s.copiable(copy).record(&t).0, snapcaster);
+    assert_eq!(s.card_behind(copy), None);
     for viewer in Seat::BOTH {
         let obs = Observation::new(&s, viewer);
         assert_eq!(obs.card(copy), Some(t.face_down_copy()), "{viewer:?}");

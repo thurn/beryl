@@ -54,7 +54,7 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
     f[1] = f64::from(hand.count());
     f[2] = hand
         .iter()
-        .map(|slot| f64::from(values.get(s.card(slot)).value))
+        .map(|slot| f64::from(values.of(s.copiable(slot).key()).value))
         .sum();
     for &slot in s.battlefield() {
         if s.controller(slot) != p {
@@ -65,7 +65,7 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
             f[3] += 1.0;
             continue;
         }
-        f[4] += f64::from(values.get(s.card(slot)).value);
+        f[4] += f64::from(values.of(s.copiable(slot).key()).value);
         if d.types.intersects(Types::CREATURE) {
             f[5] += f64::from(d.power.max(0));
         }

@@ -131,7 +131,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         s.library(Seat::P0)
             .iter()
             .copied()
-            .find(|&slot| t.def(s.card(slot)).name == name)
+            .find(|&slot| s.definition_name(&t, slot) == name)
             .unwrap()
     };
     let iceberg = named(&s, AANGS_ICEBERG);
@@ -179,7 +179,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         .library(Seat::P0)
         .iter()
         .rev()
-        .map(|&slot| t.def(s.card(slot)).name)
+        .map(|&slot| s.definition_name(&t, slot))
         .collect();
     assert_eq!(top_first, [JACE_THE_MIND_SCULPTOR, ISLAND, PLAINS]);
 }

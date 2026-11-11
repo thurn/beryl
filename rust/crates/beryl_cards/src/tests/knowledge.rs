@@ -48,7 +48,7 @@ fn slots(s: &State, owner: Seat, zone: Zone) -> Vec<Slot> {
 fn slot_of(t: &GameTable, s: &State, owner: Seat, zone: Zone, name: &str) -> Slot {
     slots(s, owner, zone)
         .into_iter()
-        .find(|&slot| t.def(s.card(slot)).name == name)
+        .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap_or_else(|| panic!("no {name} in {owner:?}'s {zone:?}"))
 }
 
@@ -62,12 +62,12 @@ fn worlds(t: &GameTable, s: &State, viewer: Seat) -> Vec<State> {
 
 /// `viewer` knows the card in `slot`, and every world dealt from their view keeps it there.
 fn kept(t: &GameTable, s: &State, viewer: Seat, slot: Slot) {
-    let name = t.def(s.card(slot)).name;
+    let name = s.definition_name(t, slot);
     assert!(s.knows(viewer, slot), "{viewer:?} doesn't know {name}");
     for (seed, world) in worlds(t, s, viewer).iter().enumerate() {
         assert_eq!(
-            world.card(slot),
-            s.card(slot),
+            world.card_behind(slot),
+            s.card_behind(slot),
             "world {seed} for {viewer:?} lost {name}"
         );
     }
@@ -80,10 +80,12 @@ fn varies(t: &GameTable, s: &State, viewer: Seat, hidden: &[Slot]) {
         assert!(
             !s.knows(viewer, slot),
             "{viewer:?} knows the {} in slot {slot}",
-            t.def(s.card(slot)).name
+            s.definition_name(t, slot)
         );
     }
-    let deal = |w: &State| -> Vec<CardIx> { hidden.iter().map(|&slot| w.card(slot)).collect() };
+    let deal = |w: &State| -> Vec<Option<CardIx>> {
+        hidden.iter().map(|&slot| w.card_behind(slot)).collect()
+    };
     let worlds = worlds(t, s, viewer);
     assert!(
         worlds.iter().any(|w| deal(w) != deal(&worlds[0])),
@@ -228,7 +230,7 @@ fn a_permanent_put_into_a_library_stays_known_there() {
     let (t, s) = at_last_action(&OUST);
     let library = slots(&s, Seat::P1, Zone::Library);
     let spellbinder = library[1];
-    assert_eq!(t.def(s.card(spellbinder)).name, names::ELITE_SPELLBINDER);
+    assert_eq!(s.definition_name(&t, spellbinder), names::ELITE_SPELLBINDER);
     for viewer in Seat::BOTH {
         kept(&t, &s, viewer, spellbinder);
         let rest: Vec<Slot> = library
@@ -274,7 +276,7 @@ fn brainstorm_put_backs_are_known_to_their_owner_alone() {
     let library = slots(&s, Seat::P0, Zone::Library);
     let names_on_top: Vec<&str> = library[..2]
         .iter()
-        .map(|&slot| t.def(s.card(slot)).name)
+        .map(|&slot| s.definition_name(&t, slot))
         .collect();
     assert_eq!(
         names_on_top,
@@ -323,7 +325,7 @@ fn a_fatesealed_card_stays_known_once_drawn() {
     let (t, states) = at_each_action(&FATESEAL);
     let s = &states[4];
     let library = slots(s, Seat::P1, Zone::Library);
-    assert_eq!(t.def(s.card(library[0])).name, names::COUNTERSPELL);
+    assert_eq!(s.definition_name(&t, library[0]), names::COUNTERSPELL);
     kept(&t, s, Seat::P0, library[0]);
     varies(&t, s, Seat::P0, &library[1..]);
     varies(&t, s, Seat::P1, &library);
@@ -434,8 +436,8 @@ fn scried_cards_are_known_where_they_went() {
     let (t, s) = at_last_action(&SCRY);
     let library = slots(&s, Seat::P0, Zone::Library);
     let (top, bottom) = (library[0], library[library.len() - 1]);
-    assert_eq!(t.def(s.card(top)).name, names::PLAINS);
-    assert_eq!(t.def(s.card(bottom)).name, names::ISLAND);
+    assert_eq!(s.definition_name(&t, top), names::PLAINS);
+    assert_eq!(s.definition_name(&t, bottom), names::ISLAND);
     kept(&t, &s, Seat::P0, top);
     kept(&t, &s, Seat::P0, bottom);
     varies(&t, &s, Seat::P0, &library[1..library.len() - 1]);

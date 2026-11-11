@@ -85,7 +85,7 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
     for (i, (s, d)) in positions(&t, [24, 5]).iter().enumerate() {
         let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
         assert!(
-            Slot::all().any(|slot| det.card(slot) != s.card(slot)),
+            Slot::all().any(|slot| det.card_behind(slot) != s.card_behind(slot)),
             "position {i}: hidden cards were dealt anew"
         );
         // One tree that plays every candidate and then some, so its counts follow the

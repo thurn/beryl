@@ -191,8 +191,7 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: [Option<LossCaus
 
 /// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
 fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
-    let o = s.object(slot);
-    t.def(o.card).face_name(o.face)
+    s.copiable(slot).name(t)
 }
 
 /// The legendary permanents each player controls.
@@ -211,8 +210,8 @@ fn legendary<L: Layout>(s: &State<L>) -> [Bitboard<L::Slot>; 2] {
 /// Whether the permanents in `a` and `b` have the same name. The same card with the same face
 /// up does without comparing the names.
 fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> bool {
-    let (oa, ob) = (s.object(a), s.object(b));
-    (oa.card == ob.card && oa.face == ob.face) || name(s, t, a) == name(s, t, b)
+    let (ca, cb) = (s.copiable(a), s.copiable(b));
+    ca == cb || ca.name(t) == cb.name(t)
 }
 
 /// Whether some player controls two legendary permanents of `legendary` with the same name:

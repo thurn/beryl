@@ -1,7 +1,7 @@
 //! Derived characteristics: continuous effects applied in layers, recomputed from base when
 //! dirty (architecture §9, decision D5, CR 613).
 
-use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
+use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
 use crate::ids::CardIx;
 use crate::layout::{Layout, Queue};
@@ -37,14 +37,13 @@ pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sin
 /// The kinds of event the permanents on the battlefield have triggered abilities for. A
 /// face-down permanent has none, whichever card it is
 /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it has "no text, no
-/// name, no subtypes, and no mana cost". So it counts for nothing, and masking or
-/// determinizing its hidden identity leaves this unchanged.
+/// name, no subtypes, and no mana cost". So it counts for nothing
+/// ([`crate::query::Copiable::may_listen`]), and masking or determinizing its hidden
+/// identity leaves this unchanged.
 pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> u16 {
     s.battlefield()
         .iter()
-        .map(|&slot| s.object(slot))
-        .filter(|o| o.face != FaceIx::DOWN)
-        .fold(0, |k, o| k | t.listens(o.card))
+        .fold(0, |k, &slot| k | s.copiable(slot).may_listen(t))
 }
 
 /// Whether a change in the number of `kind` counters on the object in `slot` can change its
@@ -101,21 +100,17 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
-        let f = face(&s, t, slot);
-        // Layer 1: the copiable values. A token copy points at the card it copies, so its
-        // values are the card's, with the 1/1 exception of CR 707.9b.
-        let (power, toughness) = if o.flags.has(ObjectFlags::ONE_ONE) {
-            (1, 1)
-        } else {
-            (f.power.unwrap_or(0), f.toughness.unwrap_or(0))
-        };
+        // Layer 1: the copiable values (CR 613.2a). A token copy's are those of what it
+        // copies, with the 1/1 exception of CR 707.9b.
+        let what = s.copiable(slot);
+        let f = what.face(t);
         s.results()[i] = Derived {
-            power,
-            toughness,
+            power: what.power(t),
+            toughness: what.toughness(t),
             types: f.types,
             supertypes: f.supertypes,
             colors: f.colors,
-            controller: o.base_controller,
+            controller: s.base_controller(slot),
             protection: Colors::NONE,
             keywords: f.keywords,
             subtypes: f.subtypes,
@@ -143,7 +138,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
                     timestamp: o.timestamp,
                     order: n as u8,
                     target: target as u8,
-                    source: o.card,
+                    source: what.record(t).0,
                     modification: Some(spec.modification),
                 });
             }
