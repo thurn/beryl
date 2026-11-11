@@ -334,7 +334,7 @@ def clone_seconds(cards: dict[str, float], pool: list[Source], count: int) -> fl
     [`generate`] picks them, and costs what its original does."""
     each = [cards.get(nearest.slug(s.name), 0.0) for s in pool]
     rounds, rest = divmod(count, len(each))
-    return rounds * sum(each) + sum(each[:rest])
+    return rounds * math.fsum(each) + math.fsum(each[:rest])
 
 
 def measure_scripts(pool: list[Source]) -> Scripts:
