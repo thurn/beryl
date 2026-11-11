@@ -10,7 +10,7 @@ use beryl_card::effect::build::{
     ITS_CONTROLLER, TARGET, YOU, counter, create_tokens, destroy, draw, exile_until_this_leaves,
     gain_life, put_into_library, return_to_hand, sequence, unless_pays,
 };
-use beryl_card::{Effect, LibraryPosition, SpecIx};
+use beryl_card::{Effect, LibraryPosition, SpecIx, Takes};
 use beryl_engine::card::{Ability, Behavior, CardDef, Face, Flow, ManaCost, TargetSpec, mana};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Event, TokenEntry};
@@ -34,25 +34,21 @@ struct Twin {
 struct Declares {
     /// That resolving it may ask a player to choose.
     may_pause: bool,
-    /// That it removes the permanent it targets.
-    removal: bool,
-    /// That it counters the spell it targets.
-    counter: bool,
+    /// How it takes what it targets from its controller.
+    takes: Option<Takes>,
 }
 
 const NOTHING: Declares = Declares {
     may_pause: false,
-    removal: false,
-    counter: false,
+    takes: None,
 };
 const PAUSING_COUNTER: Declares = Declares {
     may_pause: true,
-    counter: true,
-    ..NOTHING
+    takes: Some(Takes::Counter),
 };
 const REMOVAL: Declares = Declares {
-    removal: true,
-    ..NOTHING
+    may_pause: false,
+    takes: Some(Takes::Removal),
 };
 
 fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
@@ -162,8 +158,7 @@ fn written_as(card: &'static CardDef, body: Behavior, declares: Declares) -> &'s
     let original = &front.abilities[0];
     let targets: Vec<TargetSpec> = (original.targets.iter())
         .map(|&spec| TargetSpec {
-            removes_permanent: declares.removal,
-            counters_spell: declares.counter,
+            takes: declares.takes,
             ..spec
         })
         .collect();
@@ -250,15 +245,12 @@ fn a_card_written_as_data_plays_its_scenarios_as_its_body_does() {
             &as_data.faces[0].abilities[0],
         );
         assert_eq!(data.asks(), body.asks(), "{name}: whether it may pause");
-        let (declared, derived) = (
-            body.removes_target(SpecIx::new(0)),
-            data.removes_target(SpecIx::new(0)),
-        );
-        assert_eq!(derived, declared, "{name}: whether it is removal");
-        let (declared, derived) = (
-            body.counters_target(SpecIx::new(0)),
-            data.counters_target(SpecIx::new(0)),
-        );
-        assert_eq!(derived, declared, "{name}: whether it counters its target");
+        for how in [Takes::Removal, Takes::Counter] {
+            let (declared, derived) = (
+                body.takes_target(SpecIx::new(0), how),
+                data.takes_target(SpecIx::new(0), how),
+            );
+            assert_eq!(derived, declared, "{name}: whether it is a {how:?}");
+        }
     }
 }

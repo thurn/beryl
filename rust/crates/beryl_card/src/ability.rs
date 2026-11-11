@@ -14,7 +14,7 @@ use crate::filter::{Filter, Whose};
 use crate::ids::{CounterKind, TurnStep};
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
-use crate::target::{TargetKind, TargetSpec};
+use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
@@ -353,30 +353,22 @@ impl Ability {
         }
     }
 
-    /// Whether this removes the permanent chosen for its `target`th instance of the word
-    /// "target" from the battlefield: what its effect data does to a target that may be a
-    /// permanent ([`Effect::removes`]), or what its card declared with
-    /// [`TargetSpec::removal`].
-    pub fn removes_target(&self, target: SpecIx) -> bool {
+    /// Whether this takes what is chosen for its `target`th instance of the word "target"
+    /// from its controller in the way `how` names, a permanent removed from the battlefield
+    /// or a spell countered: what its effect data does to a target that may be one
+    /// ([`Effect::takes`]), or what its card declared with [`TargetSpec::removal`] or
+    /// [`TargetSpec::counter`].
+    pub fn takes_target(&self, target: SpecIx, how: Takes) -> bool {
         let Some(spec) = self.targets.get(target.index()) else {
             return false;
         };
-        let permanent = matches!(
-            spec.kind,
-            TargetKind::Permanent | TargetKind::SpellOrPermanent
-        );
-        spec.removes_permanent
-            || permanent && matches!(self.body, Behavior::Data(effect) if effect.removes(target))
-    }
-
-    /// Whether this counters the spell chosen for its `target`th instance of the word
-    /// "target" ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter
-    /// a spell or ability means to cancel it, removing it from the stack. It doesn't resolve
-    /// and none of its effects occur"): what its effect data does to that target
-    /// ([`Effect::counters`]), or what its card declared with [`TargetSpec::counter`].
-    pub fn counters_target(&self, target: SpecIx) -> bool {
-        (self.targets.get(target.index())).is_some_and(|spec| spec.counters_spell)
-            || matches!(self.body, Behavior::Data(effect) if effect.counters(target))
+        let may_be = match how {
+            Takes::Removal => TargetKind::Permanent,
+            Takes::Counter => TargetKind::Spell,
+        };
+        spec.takes == Some(how)
+            || (spec.kind == may_be || spec.kind == TargetKind::SpellOrPermanent)
+                && matches!(self.body, Behavior::Data(effect) if effect.takes(target, how))
     }
 
     /// Whether this is a loyalty ability

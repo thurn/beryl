@@ -18,6 +18,20 @@ pub enum TargetKind {
     Player,
 }
 
+/// How an effect takes what it targets from its controller, which a player is told as they
+/// choose the target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Takes {
+    /// A permanent, from the battlefield: destroyed, exiled, sacrificed, returned to a hand
+    /// or put into a library.
+    Removal,
+    /// A spell, from the stack
+    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)): "To counter a spell
+    /// or ability means to cancel it, removing it from the stack. It doesn't resolve and none
+    /// of its effects occur."
+    Counter,
+}
+
 /// One instance of the word "target" in a spell or ability: what it may choose and how many
 /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
 #[derive(Clone, Copy, Debug)]
@@ -31,14 +45,10 @@ pub struct TargetSpec {
     pub optional: bool,
     /// "Other target": not the object whose ability this is.
     pub other: bool,
-    /// This effect removes a targeted permanent from the battlefield. Presentation metadata
-    /// for confirming a player's own target, independent of target legality (CR 115.1).
-    pub removes_permanent: bool,
-    /// This effect counters a targeted spell
-    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
-    /// or ability means to cancel it, removing it from the stack"). Presentation metadata, as
-    /// `removes_permanent` is.
-    pub counters_spell: bool,
+    /// How this effect takes what it targets from its controller, declared for an effect
+    /// nothing can read ([`crate::Ability::takes_target`]). Presentation metadata for
+    /// confirming a player's own target, independent of target legality (CR 115.1).
+    pub takes: Option<Takes>,
 }
 
 impl TargetSpec {
@@ -50,8 +60,7 @@ impl TargetSpec {
             count: 1,
             optional: false,
             other: false,
-            removes_permanent: false,
-            counters_spell: false,
+            takes: None,
         }
     }
 
@@ -67,7 +76,7 @@ impl TargetSpec {
     #[must_use]
     pub const fn removal(self) -> Self {
         Self {
-            removes_permanent: true,
+            takes: Some(Takes::Removal),
             ..self
         }
     }
@@ -76,7 +85,7 @@ impl TargetSpec {
     #[must_use]
     pub const fn counter(self) -> Self {
         Self {
-            counters_spell: true,
+            takes: Some(Takes::Counter),
             ..self
         }
     }

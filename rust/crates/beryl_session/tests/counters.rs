@@ -1,17 +1,17 @@
 //! Which cards counter the spell they target, as the engine knows it
-//! ([`Ability::counters_target`]), against their Oracle text: the fact is read from effect
+//! ([`Ability::takes_target`]), against their Oracle text: the fact is read from effect
 //! data or declared beside a Rust body, and a body nothing declares for would aim at the
 //! viewer's own spell unasked (UI Conventions, exception 7).
 
 use beryl_card_store::STORE;
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::{Ability, Behavior, SpecIx};
+use beryl_engine::card::{Ability, Behavior, SpecIx, Takes};
 
 /// Whether `ability` counters what is chosen for one of its targets.
 fn counters(ability: &Ability) -> bool {
     (0..ability.targets.len()).any(|target| {
         let target = u8::try_from(target).expect("a few targets");
-        ability.counters_target(SpecIx::new(target))
+        ability.takes_target(SpecIx::new(target), Takes::Counter)
     })
 }
 

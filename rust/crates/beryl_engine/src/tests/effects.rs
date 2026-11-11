@@ -12,7 +12,7 @@ use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPositio
 
 use crate::card::{
     Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Prompt, Purpose,
-    SpecIx, TargetKind, TargetSpec, Types,
+    SpecIx, Takes, TargetKind, TargetSpec, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
@@ -297,7 +297,7 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     assert!(resolve(&t, &mut s, &mut x, source, &SWORDS, &targets, &[]).is_none());
     assert_eq!(zone_of(&s, bear), Zone::Exile);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (17, 20));
-    assert!(SWORDS.removes_target(SpecIx::new(0)));
+    assert!(SWORDS.takes_target(SpecIx::new(0), Takes::Removal));
 }
 
 #[test]
@@ -352,7 +352,10 @@ fn an_illegal_target_is_not_acted_on_and_names_nobody() {
     assert_eq!(zone_of(&s, bears[0]), Zone::Battlefield);
     assert_eq!(zone_of(&s, bears[1]), Zone::Graveyard);
     assert_eq!((life(&s, p), life(&s, them)), (20, 23));
-    assert!(BOTH.removes_target(SpecIx::new(0)) && !BOTH.removes_target(SpecIx::new(2)));
+    assert!(
+        BOTH.takes_target(SpecIx::new(0), Takes::Removal)
+            && !BOTH.takes_target(SpecIx::new(2), Takes::Removal)
+    );
 }
 
 #[test]
@@ -412,5 +415,5 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     assert_eq!(s.copiable(copies[0]), s.copiable(bear));
     assert_eq!(s.card_behind(copies[0]), None);
     assert_eq!(s.controller(copies[0]), p);
-    assert!(!COPY.removes_target(SpecIx::new(0)));
+    assert!(!COPY.takes_target(SpecIx::new(0), Takes::Removal));
 }

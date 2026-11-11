@@ -9,7 +9,7 @@ pub use beryl_card::{
     CastingOption, Castings, Colors, Condition, Cost, Custom, Delayed, FACE_DOWN, FACE_DOWN_COPY,
     Face, FaceAbility, FaceIx, GrantIx, Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet,
     Modification, Needs, ObjectAbility, Part, Place, Prompt, Purpose, Replacement, Rule, Shape,
-    SpecIx, StaticCondition, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Timing,
+    SpecIx, StaticCondition, Subtype, Subtypes, Supertypes, Takes, TargetKind, TargetSpec, Timing,
     Trigger, Types, mana,
 };
 

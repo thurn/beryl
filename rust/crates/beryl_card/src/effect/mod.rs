@@ -41,6 +41,7 @@ use crate::definition::CardDef;
 use crate::ids::CounterKind;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
+use crate::target::Takes;
 
 /// One instruction, or several composed
 /// ([CR 609.1](https://yawgatog.com/resources/magic-rules/#R6091)): "An effect is something
@@ -271,26 +272,12 @@ impl Effect {
         }
     }
 
-    /// Whether this moves what was chosen for the `target`th instance of the word "target"
-    /// out of the zone it is in: it destroys, exiles, sacrifices or returns it, or puts it
-    /// into a library. Of a permanent, that is removal, which a player is told as they
-    /// choose the target ([`crate::Ability::removes_target`]).
-    pub const fn removes(&self, target: SpecIx) -> bool {
-        self.takes(target, Takes::Moved)
-    }
-
-    /// Whether this counters what was chosen for the `target`th instance of the word "target"
-    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
-    /// or ability means to cancel it, removing it from the stack"), which a player is told as
-    /// they choose the target ([`crate::Ability::counters_target`]).
-    pub const fn counters(&self, target: SpecIx) -> bool {
-        self.takes(target, Takes::Countered)
-    }
-
     /// Whether this takes what was chosen for the `target`th instance of the word "target"
     /// from where it is in the way `how` names, whatever else it does and whatever it asks
-    /// first.
-    const fn takes(&self, target: SpecIx, how: Takes) -> bool {
+    /// first: a removal destroys, exiles, sacrifices or returns it, or puts it into a
+    /// library, and a counter counters it. A player is told as they choose the target
+    /// ([`crate::Ability::takes_target`]).
+    pub const fn takes(&self, target: SpecIx, how: Takes) -> bool {
         match *self {
             Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -298,11 +285,9 @@ impl Effect {
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
             | Effect::PutIntoLibrary { objects, .. } => {
-                matches!(how, Takes::Moved) && is_target(objects, target)
+                matches!(how, Takes::Removal) && is_target(objects, target)
             }
-            Effect::Counter(objects) => {
-                matches!(how, Takes::Countered) && is_target(objects, target)
-            }
+            Effect::Counter(objects) => matches!(how, Takes::Counter) && is_target(objects, target),
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -344,15 +329,6 @@ impl Effect {
 /// Whether `objects` is what was chosen for the `target`th instance of the word "target".
 const fn is_target(objects: Objects, target: SpecIx) -> bool {
     matches!(objects, Objects::Target(n) if n.get() == target.get())
-}
-
-/// How an effect takes an object from where it is ([`Effect::takes`]).
-#[derive(Clone, Copy)]
-enum Takes {
-    /// To another zone: destroyed, exiled, sacrificed, returned or put into a library.
-    Moved,
-    /// Off the stack, countered.
-    Countered,
 }
 
 /// Where in a library a card is put.
