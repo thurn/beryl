@@ -6,13 +6,11 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause, Types,
-};
+use crate::card::{Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Pause, Types};
 use crate::chance;
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
-use crate::filter::Filter;
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Queue, Small, index};
@@ -556,15 +554,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
     /// instructs a player to add mana, that mana goes into a player's mana pool."
     pub fn add_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
-        let pool = &mut self.state.player_mut(player).mana[color];
-        *pool = pool.saturating_add(amount);
-        // Nothing triggers on adding mana, so it skips the rest of the pipeline.
-        self.sink.note(event::Event::Mana {
-            player,
-            source: self.entry.object,
-            color,
-            amount,
-        });
+        let source = self.entry.object;
+        crate::interpret::add_mana(self.state, self.sink, player, source, color, amount);
     }
 
     /// Deals noncombat damage from this ability's source.
@@ -1410,22 +1401,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 }
 
-/// The body of crew ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)):
-/// "This permanent becomes an artifact creature until end of turn." It keeps its other types
-/// and subtypes ([CR 205.1b](https://yawgatog.com/resources/magic-rules/#R2051b)): "Some
-/// effects state that an object becomes an 'artifact creature'; these effects also allow the
-/// object to retain all of its prior card types and subtypes."
-pub fn becomes_artifact_creature<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.add_effect(
-        ctx.source(),
-        Continuous::Layer(Modification::AddTypes(
-            Types::ARTIFACT.union(Types::CREATURE),
-        )),
-        Duration::EndOfTurn,
-    );
-    Ok(())
-}
-
 /// The body of a mana ability: add what it produces, of the kind its activator chose
 /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability that
 /// produces mana instructs a player to add that mana."
@@ -1433,11 +1408,6 @@ pub fn add_produced_mana<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let produces = ctx.ability.produces;
     debug_assert!(produces.includes(ctx.mana));
     ctx.add_mana(ctx.controller(), ctx.mana, produces.amount);
-    Ok(())
-}
-
-/// The body of an ability that does nothing when it resolves, such as a static ability.
-pub fn nothing<L: Layout>(_: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
@@ -1451,7 +1421,7 @@ pub fn draw_a_card<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
 /// and never changes while it stays; once it has left, the answer is what it was as the
 /// ability triggered, and it triggered only if the cost was paid.
-fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> bool {
+pub(crate) fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> bool {
     match tr.source {
         Some(r) if s.is_current(r) => s.object(r.slot).flags.has(flag),
         _ => true,
@@ -1463,58 +1433,4 @@ fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> b
 /// that spell has been 'kicked.'"
 pub fn kicked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     entered_with(s, tr, ObjectFlags::KICKED)
-}
-
-/// Offspring's "if its offspring cost was paid" (CR 702.175a).
-pub fn offspring_paid<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
-    entered_with(s, tr, ObjectFlags::OFFSPRING)
-}
-
-/// Offspring's "create a token that's a copy of it, except it's 1/1" (CR 702.175a): the
-/// copiable values are its card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
-/// with the 1/1 exception of [CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b),
-/// whether or not it is still on the battlefield.
-pub fn offspring_copy<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens_of(
-        ctx.entry.card,
-        1,
-        TokenEntry {
-            one_one: true,
-            ..TokenEntry::default()
-        },
-    );
-    Ok(())
-}
-
-/// Evoke's "if its evoke cost was paid" (CR 702.74a).
-pub fn evoked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
-    entered_with(s, tr, ObjectFlags::EVOKED)
-}
-
-/// Evoke's "its controller sacrifices it" (CR 702.74a): the permanent the ability belongs to,
-/// if it is still that object on the battlefield.
-pub fn sacrifice_itself<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.sacrifice(ctx.source());
-    Ok(())
-}
-
-/// Impending's "if this permanent's impending cost was paid and it has a time counter on it"
-/// (CR 702.176a), on the permanent itself.
-pub fn impending_counting_down<L: Layout>(
-    s: &State<L>,
-    _: &GameTable,
-    tr: &PendingTrigger<L>,
-) -> bool {
-    tr.source.is_some_and(|r| {
-        let o = s.object(r.slot);
-        s.is_current(r)
-            && o.flags.has(ObjectFlags::IMPENDING)
-            && o.counters.get(CounterKind::Time) > 0
-    })
-}
-
-/// Impending's "remove a time counter from it" (CR 702.176a).
-pub fn remove_a_time_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.remove_counters(ctx.source(), CounterKind::Time, 1);
-    Ok(())
 }

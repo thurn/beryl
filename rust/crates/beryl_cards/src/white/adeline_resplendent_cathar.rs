@@ -60,7 +60,7 @@ pub static CARD: CardDef = CardDef {
             // layer 7a ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)):
             // "Effects from characteristic-defining abilities that define power and/or
             // toughness are applied."
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Itself,
                 condition: StaticCondition::Always,
                 modification: Modification::PowerIsCreaturesYouControl,

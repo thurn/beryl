@@ -4,7 +4,7 @@ use super::{DUAL, LANDS, MIXED, begin, decide, table};
 use crate::card::{ManaColor, Types};
 use crate::effect::EffectCtx;
 use crate::event::Sink;
-use crate::filter::{Filter, Whose};
+use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{ObjectFlags, PendingTrigger, Zone};
 use crate::{
@@ -225,7 +225,7 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
         };
         let mut ctx = EffectCtx::new(&mut s, &t, &mut sink, &trigger, ability);
         ctx.mana = color;
-        (ability.body.small)(&mut ctx).unwrap();
+        crate::interpret::resolve(&mut ctx).unwrap();
     }
     assert_eq!(s.player(Seat::P0).mana.amounts(), [1, 1, 0, 0, 0, 0]);
 }

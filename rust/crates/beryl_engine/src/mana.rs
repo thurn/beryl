@@ -19,13 +19,12 @@ use crate::card::{
     Ability, AbilityKind, Cost, Face, Keywords, ManaColor, ManaCost, Replacement, Timing, Types,
 };
 use crate::decision::Opt;
-use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
-use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone};
 use crate::table::GameTable;
+use crate::{filter::Evaluate, fixed::Full};
 
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
 const KINDS: usize = 6;
@@ -1650,7 +1649,7 @@ pub(crate) fn activate<L: Layout>(
     if ability.cost.sacrifice_self {
         event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
     }
-    let activation = PendingTrigger {
+    let activation = || PendingTrigger {
         source: Some(source),
         controller,
         ability: index as u8,
@@ -1658,12 +1657,7 @@ pub(crate) fn activate<L: Layout>(
         face: o.face,
         ..PendingTrigger::default()
     };
-    let mut ctx = EffectCtx::new(s, t, sink, &activation, ability);
-    ctx.mana = color;
-    crate::coverage::hit(ability);
-    // A mana ability never asks a question.
-    let _ = L::body(ability)(&mut ctx);
-    ctx.finish()
+    crate::interpret::mana_ability(s, t, sink, activation, ability, color)
 }
 
 /// Pays one unit toward `remaining`: a colored or colorless symbol of its kind if one is

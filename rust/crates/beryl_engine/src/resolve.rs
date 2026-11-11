@@ -19,6 +19,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
+use crate::interpret;
 use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
 use crate::state::{
@@ -216,9 +217,9 @@ fn condition_fails<L: Layout>(
     if ability.kind != AbilityKind::Triggered {
         return false;
     }
-    let Some(condition) = L::condition(ability) else {
+    if ability.condition.is_none() {
         return false;
-    };
+    }
     let Some(FaceAbility::Own(index)) = entry.ability else {
         unreachable!("a triggered ability is one of its face's own");
     };
@@ -230,7 +231,7 @@ fn condition_fails<L: Layout>(
         controller: entry.controller,
         info: entry.info,
     };
-    !condition(s, t, &pending)
+    !interpret::intervening_if(s, t, &pending, ability)
 }
 
 /// Resolves `entry`, the top of `s`'s stack, answering from `record` and then `answers`.
@@ -265,7 +266,7 @@ fn run<L: Layout>(
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
             let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry.clone(), ability);
             crate::coverage::hit(ability);
-            let flow = L::body(ability)(&mut ctx);
+            let flow = interpret::resolve(&mut ctx);
             let question = ctx.question.take();
             offer = ctx.offer;
             ctx.finish()?;

@@ -20,7 +20,7 @@ use crate::card::{
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
-use crate::filter::{Filter, Whose};
+use crate::filter::{Evaluate, Filter, Whose};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};

@@ -1,60 +1,65 @@
-//! `Filter`: the predicates targets and affected sets are written in (architecture §6.2).
+//! Evaluating a [`Filter`], the predicates targets and affected sets are written in
+//! (architecture §6.2), against a game state.
+
+pub use beryl_card::{Filter, Whose};
 
 use crate::bitboard::Bitboard;
-use crate::card::{Subtype, Supertypes, Types};
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
 
-/// Whose objects a filter accepts, relative to the player the filter is evaluated for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Whose {
-    You,
-    Opponent,
-}
-
-/// A predicate over objects. Evaluating one is a pass over a candidate set; the hot ones
-/// become ANDs over per-slot attribute bitboards as the cards that need them arrive.
+/// What a [`Filter`] accepts in a game. Evaluating one is a pass over a candidate set; the
+/// hot ones become ANDs over per-slot attribute bitboards as the cards that need them arrive.
 ///
-/// A permanent's characteristics and controller are its derived ones, after continuous
-/// effects (§9); elsewhere they are the face's.
-#[derive(Clone, Copy, Debug)]
-pub enum Filter {
-    Any,
-    /// Has at least one of these card types.
-    Types(Types),
-    Supertypes(Supertypes),
-    Subtype(Subtype),
-    /// Controlled by (on the battlefield or stack) or owned by (elsewhere) this player
-    /// ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)): "Only objects on the
-    /// stack or on the battlefield have a controller."
-    Whose(Whose),
-    Tapped,
-    ManaValueAtMost(u8),
-    /// Mana value X or less, X being the value of the spell or ability whose target this is
-    /// (Thieving Skydiver's "target artifact with mana value X or less").
-    ManaValueAtMostX,
-    Not(&'static Filter),
-    All(&'static [Filter]),
-    AnyOf(&'static [Filter]),
-}
-
-impl Filter {
+/// The filter is vocabulary (`beryl_card`), which knows nothing of the state, so its meaning
+/// is this trait: bring it into scope to evaluate one.
+pub trait Evaluate {
     /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
-    pub fn matches<L: Layout>(
-        &self,
-        s: &State<L>,
-        t: &GameTable,
-        slot: L::Slot,
-        you: Seat,
-    ) -> bool {
+    fn matches<L: Layout>(&self, s: &State<L>, t: &GameTable, slot: L::Slot, you: Seat) -> bool {
         self.matches_x(s, t, slot, you, 0)
     }
 
     /// Whether the object in `slot` passes, evaluated for player `you` and the value `x` of
     /// X.
-    pub fn matches_x<L: Layout>(
+    fn matches_x<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        slot: L::Slot,
+        you: Seat,
+        x: u8,
+    ) -> bool;
+
+    /// The members of `within` that pass, where X is 0.
+    fn select<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        within: Bitboard<L::Slot>,
+        you: Seat,
+    ) -> Bitboard<L::Slot> {
+        self.select_x(s, t, within, you, 0)
+    }
+
+    /// The members of `within` that pass, for the value `x` of X.
+    fn select_x<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        within: Bitboard<L::Slot>,
+        you: Seat,
+        x: u8,
+    ) -> Bitboard<L::Slot> {
+        within
+            .iter()
+            .filter(|&slot| self.matches_x(s, t, slot, you, x))
+            .collect()
+    }
+}
+
+impl Evaluate for Filter {
+    fn matches_x<L: Layout>(
         &self,
         s: &State<L>,
         t: &GameTable,
@@ -112,31 +117,5 @@ impl Filter {
             Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, x)),
             Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),
         }
-    }
-
-    /// The members of `within` that pass, where X is 0.
-    pub fn select<L: Layout>(
-        &self,
-        s: &State<L>,
-        t: &GameTable,
-        within: Bitboard<L::Slot>,
-        you: Seat,
-    ) -> Bitboard<L::Slot> {
-        self.select_x(s, t, within, you, 0)
-    }
-
-    /// The members of `within` that pass, for the value `x` of X.
-    pub fn select_x<L: Layout>(
-        &self,
-        s: &State<L>,
-        t: &GameTable,
-        within: Bitboard<L::Slot>,
-        you: Seat,
-        x: u8,
-    ) -> Bitboard<L::Slot> {
-        within
-            .iter()
-            .filter(|&slot| self.matches_x(s, t, slot, you, x))
-            .collect()
     }
 }

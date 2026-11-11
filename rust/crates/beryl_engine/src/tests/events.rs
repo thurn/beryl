@@ -12,7 +12,7 @@ use crate::card::{
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
-use crate::filter::{Filter, Whose};
+use crate::filter::{Evaluate, Filter, Whose};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
@@ -288,7 +288,7 @@ static ADELINE: CardDef = CardDef {
         power: Some(0),
         toughness: Some(4),
         abilities: &[
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Itself,
                 condition: StaticCondition::Always,
                 modification: Modification::PowerIsCreaturesYouControl,
@@ -334,7 +334,7 @@ static OVERLORD: CardDef = CardDef {
         power: Some(5),
         toughness: Some(5),
         abilities: &[
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Itself,
                 condition: StaticCondition::HasCounter(CounterKind::Time),
                 modification: Modification::RemoveTypes(Types::CREATURE),
@@ -402,17 +402,17 @@ static RECONFIG: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         subtypes: Subtypes::of(&[Subtype::Aura]),
         abilities: &[
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Enchanted,
                 condition: StaticCondition::Always,
                 modification: Modification::SetTypes(Types::ARTIFACT),
             }),
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Enchanted,
                 condition: StaticCondition::Always,
                 modification: Modification::AddSubtype(Subtype::Vehicle),
             }),
-            Ability::statik(LayerSpec {
+            Ability::static_ability(LayerSpec {
                 affected: Affected::Enchanted,
                 condition: StaticCondition::Always,
                 modification: Modification::Grant(0),

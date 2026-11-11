@@ -17,7 +17,7 @@ use crate::names;
 
 /// A static ability of the Aura over the permanent it enchants.
 const fn enchanted(modification: Modification) -> Ability {
-    Ability::statik(LayerSpec {
+    Ability::static_ability(LayerSpec {
         affected: Affected::Enchanted,
         condition: StaticCondition::Always,
         modification,

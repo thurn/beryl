@@ -6,6 +6,8 @@ use std::fmt;
 use std::hash::Hash;
 use std::num::{NonZeroU8, NonZeroU16};
 
+pub use beryl_card::Seat;
+
 /// An object slot type, as a [`crate::Layout`] numbers its objects: [`Slot`] for
 /// [`crate::Small`], [`LargeSlot`] for [`crate::Large`]. Both number slots from 0, so
 /// widening a game keeps every slot's number.
@@ -165,66 +167,6 @@ impl fmt::Debug for Slot {
 }
 
 impl fmt::Display for Slot {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.get().fmt(f)
-    }
-}
-
-/// One of the two players, by seat: the first decklist's and the second's.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(u8)]
-pub enum Seat {
-    #[default]
-    P0,
-    P1,
-}
-
-impl Seat {
-    /// Both seats, in order.
-    pub const BOTH: [Seat; 2] = [Seat::P0, Seat::P1];
-
-    /// The seat at `index`.
-    ///
-    /// # Panics
-    ///
-    /// If `index` is neither 0 nor 1.
-    pub const fn new(index: u8) -> Seat {
-        match index {
-            0 => Seat::P0,
-            1 => Seat::P1,
-            _ => panic!("a seat is 0 or 1"),
-        }
-    }
-
-    /// The seat at `index`, if there is one.
-    pub const fn try_new(index: u8) -> Option<Seat> {
-        match index {
-            0 => Some(Seat::P0),
-            1 => Some(Seat::P1),
-            _ => None,
-        }
-    }
-
-    /// The other player.
-    #[must_use]
-    pub const fn opponent(self) -> Seat {
-        match self {
-            Seat::P0 => Seat::P1,
-            Seat::P1 => Seat::P0,
-        }
-    }
-
-    pub const fn get(self) -> u8 {
-        self as u8
-    }
-
-    /// The index of this seat's entry in a per-player array.
-    pub const fn index(self) -> usize {
-        self as usize
-    }
-}
-
-impl fmt::Display for Seat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.get().fmt(f)
     }

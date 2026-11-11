@@ -9,6 +9,9 @@ publish = false
 [lints]
 workspace = true
 
+[dependencies]
+beryl_card = { path = "../beryl_card" }
+
 [features]
 # Records which abilities a game exercised (`coverage`), for the card tests.
 coverage = []

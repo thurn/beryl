@@ -10,6 +10,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Cost, ManaCost, Types};
 use crate::event::Sink;
+use crate::filter::Evaluate;
 use crate::fixed::Fixed;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation};

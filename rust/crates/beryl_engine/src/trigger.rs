@@ -278,9 +278,7 @@ fn enqueue<L: Layout>(
         controller,
         info,
     };
-    if let Some(condition) = L::condition(self::ability(t, card, face, ability))
-        && !condition(s, t, &pending)
-    {
+    if !crate::interpret::intervening_if(s, t, &pending, self::ability(t, card, face, ability)) {
         return Ok(());
     }
     s.triggers.push(pending)

@@ -154,6 +154,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl_card"
+version = "0.1.0"
+
+[[package]]
 name = "beryl_cards"
 version = "0.1.0"
 dependencies = [
@@ -183,6 +187,9 @@ dependencies = [
 [[package]]
 name = "beryl_engine"
 version = "0.1.0"
+dependencies = [
+ "beryl_card",
+]
 
 [[package]]
 name = "beryl_scenario"

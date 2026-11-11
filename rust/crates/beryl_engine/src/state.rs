@@ -1,6 +1,8 @@
 //! The game state, stored as its [`Layout`] says: in [`Small`], one flat `Copy` value with
 //! fixed capacities and no heap (architecture §4, decisions D3 and D4).
 
+pub use beryl_card::{CounterKind, TurnStep, Zone};
+
 use crate::bitboard::Bitboard;
 use crate::card::{
     Castings, Colors, FaceAbility, FaceIx, Keywords, ManaColor, ManaCost, Modification, Subtypes,
@@ -34,35 +36,6 @@ pub(crate) fn deck_slot<S: SlotId>(player: Seat, i: usize) -> S {
 /// The slots of the shared pool for tokens and spell copies ([`Layout::TOKEN_POOL`]).
 pub(crate) fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
     (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
-}
-
-/// Where an object is. Objects in [`Zone::Nowhere`] are unused slots.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum Zone {
-    Library,
-    Hand,
-    Battlefield,
-    Graveyard,
-    Exile,
-    Stack,
-    #[default]
-    Nowhere,
-}
-
-impl Zone {
-    /// Zones with a membership bitboard per owner.
-    pub const OWNED: usize = 5;
-
-    /// [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Graveyard, battlefield,
-    /// stack, exile, ante, and command are public zones. ... Library and hand are hidden
-    /// zones."
-    pub fn is_public(self) -> bool {
-        matches!(
-            self,
-            Zone::Battlefield | Zone::Graveyard | Zone::Exile | Zone::Stack
-        )
-    }
 }
 
 /// An object's status and combat flags, one bit each.
@@ -137,20 +110,6 @@ impl ObjectFlags {
             self.0 &= !flag;
         }
     }
-}
-
-/// A kind of counter ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)):
-/// "Counters with the same name or description are interchangeable."
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum CounterKind {
-    #[default]
-    PlusOne,
-    MinusOne,
-    Loyalty,
-    Time,
-    Story,
-    Chorus,
 }
 
 /// Counters on an object: the common kinds, and one (kind, count) pair for the long tail.
@@ -408,47 +367,6 @@ pub struct Player<L: Layout = Small> {
 }
 
 impl Copy for Player<Small> {}
-
-/// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
-/// turn consists of five phases, in this order: beginning, precombat main, combat, postcombat
-/// main, and ending."
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TurnStep {
-    Untap,
-    Upkeep,
-    Draw,
-    PrecombatMain,
-    BeginningOfCombat,
-    DeclareAttackers,
-    DeclareBlockers,
-    /// The first of two combat damage steps, which exists only when a creature in combat has
-    /// first strike ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
-    FirstStrikeDamage,
-    CombatDamage,
-    EndOfCombat,
-    PostcombatMain,
-    End,
-    Cleanup,
-}
-
-impl TurnStep {
-    /// Every step, in turn order.
-    pub const ALL: [TurnStep; 13] = [
-        TurnStep::Untap,
-        TurnStep::Upkeep,
-        TurnStep::Draw,
-        TurnStep::PrecombatMain,
-        TurnStep::BeginningOfCombat,
-        TurnStep::DeclareAttackers,
-        TurnStep::DeclareBlockers,
-        TurnStep::FirstStrikeDamage,
-        TurnStep::CombatDamage,
-        TurnStep::EndOfCombat,
-        TurnStep::PostcombatMain,
-        TurnStep::End,
-        TurnStep::Cleanup,
-    ];
-}
 
 /// Where the game is in its turns (architecture §4.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -2,7 +2,7 @@
 
 use super::{LANDS, MIXED, fingerprint, land_go, play, table};
 use crate::card::Types;
-use crate::filter::Filter;
+use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::profile::Limits;
 use crate::state::Zone;

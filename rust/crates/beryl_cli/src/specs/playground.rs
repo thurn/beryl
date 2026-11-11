@@ -8,6 +8,7 @@ use std::sync::Arc;
 use beryl_cards::CARDS;
 use beryl_engine::Seat;
 use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types};
+use beryl_engine::filter::Evaluate;
 use beryl_scenario::{Action, Permanent, Scenario};
 use beryl_search::Agent;
 use beryl_session::{GameUpdate, Prepared, Sessions, StopsSetting};

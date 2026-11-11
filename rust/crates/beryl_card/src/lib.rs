@@ -1,0 +1,43 @@
+//! Beryl's card vocabulary: the types a card definition is written in
+//! (`docs/project-50k.md`, Crates).
+//!
+//! A card is a [`CardDef`] of [`Face`]s, each with its printed characteristics and its
+//! [`Ability`]s. What an ability does is its [`Behavior`]: [`Effect`] data, which the engine's
+//! interpreter runs and which tools read, or a [`Custom`] Rust function for what the
+//! vocabulary cannot say yet. Everything here is `'static` data built in `const` context, so
+//! a definition is a `static` with no startup cost.
+//!
+//! This crate knows nothing of the game state. It depends on no other crate (plan K12), and
+//! holds the few identifiers definitions share with the state ([`ids`]) until the kernel
+//! crate takes them.
+//!
+//! Each entry cites the Comprehensive Rules it says, at
+//! <https://yawgatog.com/resources/magic-rules/>.
+
+pub mod ability;
+pub mod characteristics;
+pub mod continuous;
+pub mod cost;
+pub mod definition;
+pub mod effect;
+pub mod filter;
+pub mod ids;
+pub mod mana;
+pub mod target;
+pub mod trigger;
+
+pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
+pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
+pub use continuous::{
+    Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, StaticCondition,
+};
+pub use cost::{CastingKind, CastingOption, Castings, Cost};
+pub use definition::{AbilityIx, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx};
+pub use effect::{
+    Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
+};
+pub use filter::{Filter, Whose};
+pub use ids::{CounterKind, Seat, TurnStep, Zone};
+pub use mana::{ManaColor, ManaCost, ManaSet, mana};
+pub use target::{TargetKind, TargetSpec};
+pub use trigger::{Delayed, Trigger};

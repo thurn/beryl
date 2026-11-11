@@ -1,0 +1,376 @@
+//! An ability of a face: its interface as data, and what it does.
+
+use std::any::Any;
+use std::fmt;
+use std::panic::RefUnwindSafe;
+
+use crate::characteristics::Types;
+use crate::continuous::{
+    Affected, Duration, LayerSpec, Modification, Replacement, Rule, StaticCondition,
+};
+use crate::cost::{CastingKind, Cost};
+use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
+use crate::filter::{Filter, Whose};
+use crate::ids::{CounterKind, TurnStep};
+use crate::mana::{ManaCost, ManaSet};
+use crate::target::TargetSpec;
+use crate::trigger::Trigger;
+
+/// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
+/// "There are four general categories of abilities": spell, activated, triggered and static.
+/// Mana abilities ([CR 605](https://yawgatog.com/resources/magic-rules/#R605)) are activated
+/// or triggered abilities with special rules, so they are a kind of their own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AbilityKind {
+    Spell,
+    Activated,
+    Mana,
+    Triggered,
+    Static,
+    /// A static ability that creates a replacement effect (CR 614).
+    Replacement,
+}
+
+/// When an ability may be activated or a spell cast.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Timing {
+    /// Any time its controller has priority
+    /// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)): "A player may cast an
+    /// instant spell any time they have priority."
+    Instant,
+    /// Only during its controller's main phase while the stack is empty
+    /// ([CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071)).
+    Sorcery,
+}
+
+/// What an ability does as it resolves (plan K1): effect data, or a Rust function where the
+/// vocabulary cannot say it yet.
+#[derive(Clone, Copy, Debug)]
+pub enum Behavior {
+    /// Typed data, which the engine's interpreter runs and which tools read: what the engine,
+    /// AI and UI need to know about the ability comes from here, not from a declaration
+    /// beside it.
+    Data(&'static Effect),
+    /// The escape hatch: a Rust function only the engine can run and nothing can read.
+    Custom(Custom),
+}
+
+/// A value this crate carries without knowing its type: the engine's function pointers for
+/// an ability's Rust body or condition, which take engine types this crate cannot name. The
+/// crate that made one reads it back with [`Custom::get`].
+#[derive(Clone, Copy)]
+pub struct Custom(&'static (dyn Any + Send + Sync + RefUnwindSafe));
+
+impl Custom {
+    pub const fn new<T: Any + Send + Sync + RefUnwindSafe>(value: &'static T) -> Custom {
+        Custom(value)
+    }
+
+    /// The value, if it is a `T`.
+    pub fn get<T: Any>(self) -> Option<&'static T> {
+        let value: &'static dyn Any = self.0;
+        value.downcast_ref()
+    }
+}
+
+impl fmt::Debug for Custom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Custom(..)")
+    }
+}
+
+/// Crew's effect (CR 702.122a): "This permanent becomes an artifact creature until end of
+/// turn."
+const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
+    objects: Objects::This,
+    modification: Modification::AddTypes(Types::ARTIFACT.union(Types::CREATURE)),
+    duration: Duration::EndOfTurn,
+};
+
+/// The most mana of one kind [`Ability::tap_for_mana`] makes.
+const MOST_MANA: usize = 3;
+
+/// "Add [mana]" for every [`ManaSet`] of up to [`MOST_MANA`] mana, by amount less one and
+/// then by its kinds. An ability holds its effect by reference, and a `const fn` cannot
+/// make a reference to a value it builds from an argument, so [`Ability::tap_for_mana`]
+/// points here instead.
+static ADD_MANA: [[Effect; 64]; MOST_MANA] = {
+    let mut table = [[Effect::NOTHING; 64]; MOST_MANA];
+    let mut amount = 0;
+    while amount < MOST_MANA {
+        let mut colors = 0;
+        while colors < 64 {
+            table[amount][colors] = Effect::AddMana {
+                player: Players::You,
+                mana: ManaSet {
+                    colors: colors as u8,
+                    amount: amount as u8 + 1,
+                },
+            };
+            colors += 1;
+        }
+        amount += 1;
+    }
+    table
+};
+
+/// "Add [mana]", for the controller of the ability.
+const fn add_mana(mana: ManaSet) -> &'static Effect {
+    assert!(
+        mana.amount >= 1 && mana.amount as usize <= MOST_MANA && mana.colors < 64,
+        "more mana than this builder makes: write the ability's effect out"
+    );
+    &ADD_MANA[mana.amount as usize - 1][mana.colors as usize]
+}
+
+/// One ability of a face: its interface as data, and what it does.
+///
+/// The engine scans a face's abilities for every decision it builds, so the size is kept a
+/// power of two, which makes stepping through them a shift: at 120 bytes the rollout
+/// benchmark counted 0.11% more instructions than at 128.
+#[derive(Debug)]
+#[repr(align(16))]
+pub struct Ability {
+    pub kind: AbilityKind,
+    pub cost: Cost,
+    pub timing: Timing,
+    pub targets: &'static [TargetSpec],
+    /// Mana abilities: what they produce.
+    pub produces: ManaSet,
+    /// Whether the body may ask its controller a question mid-resolution.
+    pub may_pause: bool,
+    pub body: Behavior,
+    /// Triggered abilities: the event they trigger on.
+    pub trigger: Trigger,
+    /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
+    /// and again as it resolves
+    /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
+    /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
+    /// stated condition again as it resolves."
+    pub condition: Option<&'static Condition>,
+    /// Replacement abilities: the event they modify.
+    pub replacement: Replacement,
+    /// Static abilities: the continuous effect they generate on the battlefield.
+    pub layer: Option<LayerSpec>,
+    /// Static abilities: the rule they change.
+    pub rule: Rule,
+    /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
+    /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
+    /// to activate an ability that's prohibited from being activated."
+    pub only_if_you_control: Option<Filter>,
+    /// Activated abilities: what the effect needs to do anything, so that a human isn't
+    /// offered an activation that would do nothing ([`Needs`]).
+    pub needs: Needs,
+}
+
+/// What an activated ability's effect needs to do anything. Ability bodies are code, which
+/// nothing can read, so a card says it as data: one variant for each way an effect can be
+/// empty, shared by every card whose effect is empty that way.
+///
+/// Activating such an ability is legal whatever it would do
+/// ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022): "To activate an ability is
+/// to put it onto the stack and pay its costs"), and paying its cost (tapping, say) still
+/// changes the game, so full control and the exact stops offer it. No player under the smart
+/// stops is offered it, search and rollouts included:
+/// every line stays legal, since a player may always pass instead ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Needs {
+    /// Nothing: the effect may do something whatever the game.
+    #[default]
+    Nothing,
+    /// A card exiled with the ability's source, which the effect chooses among
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+    /// refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." With none, it does nothing, as
+    /// Currency Converter's "{T}: Put a card exiled with this artifact into its owner's
+    /// graveyard. ..."
+    ExiledWithSource,
+}
+
+const _: () = assert!(size_of::<Ability>().is_power_of_two());
+
+impl Ability {
+    /// An ability with no cost, interface or effect, for `..Ability::NONE` in card files.
+    pub const NONE: Ability = Ability {
+        kind: AbilityKind::Static,
+        cost: Cost::NONE,
+        timing: Timing::Instant,
+        targets: &[],
+        produces: ManaSet::NONE,
+        may_pause: false,
+        body: Behavior::Data(&Effect::NOTHING),
+        trigger: Trigger::None,
+        condition: None,
+        replacement: Replacement::None,
+        layer: None,
+        rule: Rule::None,
+        only_if_you_control: None,
+        needs: Needs::Nothing,
+    };
+
+    /// A triggered ability.
+    pub const fn triggered(trigger: Trigger, body: Behavior) -> Ability {
+        Ability {
+            kind: AbilityKind::Triggered,
+            trigger,
+            body,
+            ..Ability::NONE
+        }
+    }
+
+    /// A static ability generating a continuous effect.
+    pub const fn static_ability(layer: LayerSpec) -> Ability {
+        Ability {
+            layer: Some(layer),
+            ..Ability::NONE
+        }
+    }
+
+    /// A static ability creating a replacement effect.
+    pub const fn replacing(replacement: Replacement) -> Ability {
+        Ability {
+            kind: AbilityKind::Replacement,
+            replacement,
+            ..Ability::NONE
+        }
+    }
+
+    /// Cycling ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)): "Cycling
+    /// is an activated ability that functions only while the card with cycling is in a
+    /// player's hand. 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"
+    pub const fn cycling(mana: ManaCost) -> Ability {
+        Ability {
+            kind: AbilityKind::Activated,
+            cost: Cost {
+                mana,
+                discard_self: true,
+                ..Cost::NONE
+            },
+            body: Behavior::Data(&Effect::Draw {
+                player: Players::You,
+                count: Amount::Fixed(1),
+            }),
+            ..Ability::NONE
+        }
+    }
+
+    /// Crew N (CR 702.122a), an activated ability any time its controller has priority:
+    /// "This permanent becomes an artifact creature until end of turn." It keeps its other
+    /// types and subtypes
+    /// ([CR 205.1b](https://yawgatog.com/resources/magic-rules/#R2051b)): "Some effects state
+    /// that an object becomes an 'artifact creature'; these effects also allow the object to
+    /// retain all of its prior card types and subtypes."
+    pub const fn crew(n: u8) -> Ability {
+        Ability {
+            kind: AbilityKind::Activated,
+            cost: Cost {
+                crew: n,
+                ..Cost::NONE
+            },
+            body: Behavior::Data(&BECOME_ARTIFACT_CREATURE),
+            ..Ability::NONE
+        }
+    }
+
+    /// Offspring's triggered ability
+    /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "When this
+    /// permanent enters, if its offspring cost was paid, create a token that's a copy of it,
+    /// except it's 1/1." The face lists [`CastingOption::Offspring`] too.
+    pub const fn offspring() -> Ability {
+        Ability {
+            condition: Some(&Condition::Paid(CastingKind::Offspring)),
+            ..Ability::triggered(
+                Trigger::Enters,
+                Behavior::Data(&Effect::CreateCopies {
+                    player: Players::You,
+                    of: Objects::This,
+                    count: Amount::Fixed(1),
+                    except: CopyException::PowerToughness(1, 1),
+                }),
+            )
+        }
+    }
+
+    /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
+    /// was paid and it has a time counter on it, it's not a creature." The face lists
+    /// [`CastingOption::Impending`], whose counters the permanent enters with, and
+    /// [`Ability::impending_countdown`].
+    pub const fn impending() -> Ability {
+        Ability::static_ability(LayerSpec {
+            affected: Affected::Itself,
+            condition: StaticCondition::Impending,
+            modification: Modification::RemoveTypes(Types::CREATURE),
+        })
+    }
+
+    /// Impending's triggered ability (CR 702.176a): "At the beginning of your end step, if
+    /// this permanent's impending cost was paid and it has a time counter on it, remove a
+    /// time counter from it."
+    pub const fn impending_countdown() -> Ability {
+        Ability {
+            condition: Some(&Condition::All(&[
+                Condition::Paid(CastingKind::Impending),
+                Condition::Compare(
+                    Amount::Counters(Objects::This, CounterKind::Time),
+                    Comparison::AtLeast,
+                    Amount::Fixed(1),
+                ),
+            ])),
+            ..Ability::triggered(
+                Trigger::Step(TurnStep::End, Whose::You),
+                Behavior::Data(&Effect::RemoveCounters {
+                    objects: Objects::This,
+                    kind: CounterKind::Time,
+                    count: Amount::Fixed(1),
+                }),
+            )
+        }
+    }
+
+    /// Evoke's triggered ability
+    /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)): "When this
+    /// permanent enters, if its evoke cost was paid, its controller sacrifices it." The face
+    /// lists [`CastingOption::Evoke`] too.
+    pub const fn evoke() -> Ability {
+        Ability {
+            condition: Some(&Condition::Paid(CastingKind::Evoke)),
+            ..Ability::triggered(
+                Trigger::Enters,
+                Behavior::Data(&Effect::Sacrifice(Objects::This)),
+            )
+        }
+    }
+
+    /// Whether this is a loyalty ability
+    /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
+    pub fn is_loyalty(&self) -> bool {
+        self.cost.loyalty.is_some()
+    }
+
+    /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
+    /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the
+    /// land card type and a basic land type has the intrinsic ability '{T}: Add [mana
+    /// symbol],' even if the text box doesn't actually contain that text."
+    pub const fn tap_for_mana(produces: ManaSet) -> Ability {
+        Ability {
+            kind: AbilityKind::Mana,
+            cost: Cost::TAP,
+            produces,
+            body: Behavior::Data(add_mana(produces)),
+            ..Ability::NONE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Custom;
+
+    #[test]
+    fn custom_gives_back_only_the_type_it_was_made_of() {
+        static BODY: fn() -> u8 = || 7;
+        let custom = Custom::new(&BODY);
+        assert_eq!(custom.get::<fn() -> u8>().map(|body| body()), Some(7));
+        assert!(custom.get::<u8>().is_none());
+    }
+}

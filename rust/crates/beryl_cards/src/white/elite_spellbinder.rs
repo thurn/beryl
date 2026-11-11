@@ -9,7 +9,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::{Evaluate, Filter, Whose};
 use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};

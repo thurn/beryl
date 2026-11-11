@@ -7,7 +7,7 @@ use beryl_engine::card::{
     TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
+use beryl_engine::filter::{Evaluate, Filter};
 use beryl_engine::{DecisionKind, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};

@@ -1,0 +1,10 @@
+[package]
+name = "beryl_card"
+version = "0.1.0"
+description = "The card vocabulary: the types a card definition is written in"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
