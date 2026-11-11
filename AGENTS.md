@@ -41,9 +41,11 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   printings it pins; `oracle-divergences.json`, the scenarios where an oracle is
   wrong, each with its CR citation; `card-names-allowlist.json`, the generic
   files that still name cards and the one-card mechanics still in the engine;
-  `save-breaks.json`, the corpus saves no migration carries past a change. The
-  app downloads images on demand into its cache (`beryl_app`'s `art.rs`); none
-  are committed.
+  `save-breaks.json`, the corpus saves no migration carries past a change;
+  `ui-conventions.json`, the design language that `just conventions` renders
+  into `docs/ui-conventions.md` (edit the data, never the page). The app
+  downloads images on demand into its cache (`beryl_app`'s `art.rs`); none are
+  committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
