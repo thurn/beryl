@@ -1,12 +1,30 @@
 {
-  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat of `moment` and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. `moment` is what they all watch, a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), as fixtures of ui/fixtures.json for each seat: `whole`, the moment in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). A verb listed here has a case of its name in verbs.mjs, and a layout an entry of its name in that script's LAYOUTS: the windows it is checked at (a phone's are the phone sizes of ui/shots.json) and what differs in it.",
-  "verbs": ["fly", "emerge", "appear", "vanish"],
+  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. Each watches moments recorded as fixtures of ui/fixtures.json for each seat: yours, the seat that plays the moment, and theirs, the seat across from it. `moment` is the first, which every verb watched until there were more: a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), `whole`, in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). `more` are the others, each played to its recording's end: `zones`, cards changing zone (the board verbs-zones: draws alone and together, a discard, spells countered, resolved and returned, a creature and a token destroyed, a permanent exiled), and `scry`, a scry of two with one put on the bottom (the board verbs-scry). `watches` names the moments of `more` a verb's check also plays. A verb listed here has a case of its name in verbs.mjs, and a layout an entry of its name in that script's LAYOUTS: the windows it is checked at (a phone's are the phone sizes of ui/shots.json) and what differs in it.",
+  "verbs": ["fly", "emerge", "appear", "vanish", "lift"],
   "layouts": ["desktop", "phone"],
   "moment": {
-    "yours": { "whole": "combat-declare", "cut": "verbs-cast-stops" },
+    "yours": {
+      "whole": "combat-declare",
+      "cut": "verbs-cast-stops"
+    },
     "theirs": {
       "whole": "verbs-cast-theirs",
       "cut": "verbs-cast-theirs-stops"
     }
+  },
+  "more": {
+    "zones": {
+      "yours": "verbs-zones",
+      "theirs": "verbs-zones-theirs"
+    },
+    "scry": {
+      "yours": "verbs-scry",
+      "theirs": "verbs-scry-theirs"
+    }
+  },
+  "watches": {
+    "fly": ["zones"],
+    "vanish": ["zones", "scry"],
+    "lift": ["scry"]
   }
 }

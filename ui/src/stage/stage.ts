@@ -62,8 +62,10 @@ import {
   HELD_TURN,
   heldUp,
   subjectOf,
+  along,
   TURN,
-  type Path,
+  turning,
+  type Track,
 } from "./tracks.ts";
 
 /** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
@@ -133,21 +135,6 @@ export interface Edge {
   table: Table;
   /** The steps of its beat before it, in order. */
   earlier: readonly ScriptStep[];
-}
-
-/** An entry's motion over a step: where it is `progress` of the way through, given where it
- * now rests, which a later step may have moved. */
-interface Track {
-  from: number;
-  to: number;
-  pose: Path;
-  /** How far along it turns face up, if it leaves face down for a place where its face
-   * shows: until then it is dressed as a card back. */
-  turn?: number;
-  /** A card let go where its drop was taken, kept there with no end of its own until what the
-   * drop did has played: a step that moves it starts from there, and otherwise it glides home
-   * when the script is over. */
-  stays?: boolean;
 }
 
 interface Entry {
@@ -565,6 +552,7 @@ export class ScriptStage {
       from: run.from,
       to: run.to,
       pose,
+      own: true,
     });
     switch (act.verb) {
       case "emerge": {
@@ -656,7 +644,9 @@ export class ScriptStage {
       const dress = sameDress(before.dress, resting.dress);
       const still = samePose(before.pose, resting.pose);
       if (still && face && dress) continue;
-      const moves = !still && run !== undefined && run.to > at;
+      // What is on its own step's track goes on along it, to wherever it now rests.
+      const flying = entry.track?.own && at < entry.track.to;
+      const moves = !still && !flying && run !== undefined && run.to > at;
       const start = moves ? this.#poseOf(name, entry, at) : undefined;
       // What did not change stays the very same, so that nothing drawn from it is drawn again.
       entry.resting = {
@@ -665,25 +655,28 @@ export class ScriptStage {
         dress: dress ? before.dress : resting.dress,
       };
       if (!face || !dress) {
-        entry.covered = undefined;
-        this.#surface?.dress(name, entry.resting);
+        entry.covered &&= {
+          ...entry.resting,
+          dress: { ...entry.resting.dress, back: true },
+        };
+        this.#surface?.dress(name, entry.covered ?? entry.resting);
         // A frame of another width scales otherwise for the same pose.
         entry.moved = true;
         this.#stale = true;
       }
       if (start) {
-        const flies = subjectOf(run!.step.act) === name;
-        // The card a `fly` is about turns over on the way if it lands face up.
+        // Only the card a `fly` is about travels over what rests; what another verb's
+        // change moves (a record that lays its card elsewhere) goes there as what makes room
+        // does. It turns over on the way if it leaves face down and lands face up.
+        const flies = run!.verb === "fly" && subjectOf(run!.step.act) === name;
         const turns =
-          flies &&
-          run!.verb === "fly" &&
-          start.face === "back" &&
-          resting.pose.face === "front";
+          flies && start.face === "back" && resting.pose.face === "front";
         this.#fly(name, entry, {
           from: at,
           to: run!.to,
           pose: glide(start, run!.ease, flies, turns),
           turn: turns ? TURN : undefined,
+          own: flies,
         });
       }
       entry.moved ||= !still;
@@ -777,14 +770,6 @@ export class ScriptStage {
     for (const resolve of watching) resolve();
   }
 }
-
-/** How far along `track` stage time `at` is. */
-const along = (track: Track, at: number) =>
-  Math.max(0, (at - track.from) / (track.to - track.from));
-
-/** Whether `track` has yet to turn its card face up at stage time `at`. */
-const turning = (track: Track | undefined, at: number) =>
-  track?.turn !== undefined && at < track.to && along(track, at) < track.turn;
 
 /** Where an entry is at stage time `at`: on its track while one runs, else at rest. */
 function poseAt(entry: Entry, at: number): Pose {

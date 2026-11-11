@@ -419,9 +419,12 @@ def verb_checks() -> list[str]:
 
 
 def verb_fixtures() -> list[str]:
-    """The fixtures the verb suite plays."""
-    moment = verb_suite().get("moment")
-    seats = moment.values() if isinstance(moment, dict) else []
+    """The fixtures the verb suite plays: its first moment's, whole and cut, and those of the
+    moments its verbs watch besides (`more`), one a seat."""
+    suite = verb_suite()
+    moment, more = suite.get("moment"), suite.get("more")
+    seats = list(moment.values()) if isinstance(moment, dict) else []
+    seats += list(more.values()) if isinstance(more, dict) else []
     return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
 
 

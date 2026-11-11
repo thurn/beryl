@@ -273,18 +273,25 @@ test("the opponent's draw flies face down, and is not held up", () => {
     assert.equal(made.pose(9).width, 100);
 });
 
-test("a lift's beginning and end put the opponent's handling on the table and take it off", () => {
+test("a lift keeps the cards it began with lifted until it ends", () => {
     const handling = {
         zone: "library",
         side: "opponent",
         count: 2,
         scry: true,
     };
-    const table = tableOf(view([1]));
+    const start = view([1]);
+    start.players.opponent.library = [5, 6, 7];
+    const table = tableOf(start);
     const lift = (span) => ({ verb: "lift", span, handling });
     const lifted = apply(table, lift("begin"));
     assert.deepEqual(lifted.view.handling, handling);
+    // The top two, top first.
+    assert.deepEqual(lifted.handled, [7, 6]);
+    // The look puts one on the bottom: the same two are still the ones handled.
+    const order = { kind: "library", player: "opponent", order: [7, 5, 6] };
+    const ordered = apply(lifted, { verb: "set", fact: order });
+    assert.deepEqual(ordered.handled, [7, 6]);
     const lowered = apply(lifted, lift("end"));
-    assert.equal("handling" in lowered.view, false);
     assert.deepEqual(lowered, table);
 });

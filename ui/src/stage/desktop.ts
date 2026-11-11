@@ -3,7 +3,7 @@
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import type { HandHold } from "../game/handLayout";
-import { handlingSlots, layout, STACK_Z } from "../game/layout";
+import { layout, STACK_Z } from "../game/layout";
 import { fromMiddle } from "../game/perspective";
 import { FULL_WIDTH, type Placement } from "../game/placement";
 import { stackPlace } from "../game/stackLayout";
@@ -114,7 +114,7 @@ export interface Around {
 }
 
 function rest(
-  { view, abilities }: Table,
+  { view, abilities, handled }: Table,
   { hold, logOpen }: Around,
 ): Map<Name, Resting> {
   const placements = layout(
@@ -125,7 +125,7 @@ function rest(
     NO_ORDER,
     NONE,
     zonePiles(view, NO_ORDER),
-    handlingSlots(view, NO_ORDER),
+    handled ?? [],
   );
   const out = new Map<Name, Resting>();
   for (const object of [...view.objects, ...emblemObjects(view)]) {

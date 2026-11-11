@@ -53,6 +53,8 @@ const upright = (place: Place, depth: number, face: Pose["face"]): Pose => ({
   face,
 });
 
+/** Cards lifted off a library: how far from its pile they lie, and the step between them. */
+const LIFTED = { gap: 4, step: 12 };
 const dressed = (
   zone: Dress["zone"],
   look: Dress["look"],
@@ -80,7 +82,7 @@ function fanned(spot: Spot, depth: number, face: Pose["face"]): Pose {
 const pileOf = (zone: ObjectView["zone"]) =>
   zone === "library" ? "library" : "graveyard";
 
-function rest({ view, abilities }: Table, viewport: Viewport) {
+function rest({ view, abilities, handled }: Table, viewport: Viewport) {
   const { bands, cards, stack } = phoneLayout(view, viewport);
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out = new Map<Name, Resting>();
@@ -117,6 +119,27 @@ function rest({ view, abilities }: Table, viewport: Viewport) {
       dress: dressed("hand", "held", BACKS.width, true),
     });
   });
+  // The cards the opponent is looking at lie beside their library, toward the table, face
+  // down at its size (UI Conventions, "Cards the opponent looks at").
+  const handling = view.handling;
+  if (handling?.zone === "library") {
+    const spot = pileSpot(bands, handling.side, "library");
+    const toward = handling.side === "you" ? -1 : 1;
+    (handled ?? []).forEach((slot, i) => {
+      const object = objects.get(slot);
+      if (object?.zone !== "library") return;
+      const place = {
+        ...spot,
+        x: spot.x + i * LIFTED.step,
+        y: spot.y + toward * (PILE.height + LIFTED.gap),
+      };
+      out.set(slot, {
+        object,
+        pose: upright(place, DEPTH.backs + i, "back"),
+        dress: dressed("library", "pile", PILE.width, true),
+      });
+    });
+  }
   for (const object of view.objects) {
     if (out.has(object.slot) || object.zone === "stack") continue;
     const pile = pileOf(object.zone);

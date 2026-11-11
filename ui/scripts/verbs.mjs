@@ -3,7 +3,7 @@
 // which the cut-over retires. Usage:
 //   node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]
 // A check is `verb:<verb>/<seat>/<layout>` (ui/verbs.json lists them), named whole or in
-// part to run it alone, and logged by that name. Each opens the moment's fixture with `?stage`
+// part to run it alone, and logged by that name. Each opens its moments' fixtures with `?stage`
 // in its layout's windows (the desktop's, or each phone size ui/shots.json has with `?phone`),
 // holds the stage's clock, plays the recording on as its seat did, and steps the clock inside
 // one `page.evaluate`, reading `stage.step` and `stage.pose`: no check waits on the page's
@@ -14,6 +14,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import {
     coverage,
     launch,
@@ -30,7 +31,7 @@ if (!base || !fixtures) {
     );
     process.exit(2);
 }
-const { verbs, layouts, moment } = JSON.parse(
+const { verbs, layouts, moment, more, watches } = JSON.parse(
     await readFile(new URL("../verbs.json", import.meta.url), "utf8"),
 );
 /** The checks the fast check chose (`by ui-test --select`, tools' selection.py), from the file
@@ -91,14 +92,15 @@ const CARD_ASPECT = 63 / 88;
 /** Plays the moment on the page's stage, in the page: holds the stage's clock, answers as the
  * recording's seat did (the fixture transport plays the recorded views on at each `choose`,
  * src/ipc.ts) and walks the clock from step to step in ticks of `tick`, until an ability has
- * come onto the stack and gone. Returns each step `stage.step` showed, in order, with every
+ * come onto the stack and gone, or with `whole`, for all of its `answers`: to the recording's
+ * end, which the view the stage then shows tells (`shows`). Returns each step `stage.step` showed, in order, with every
  * node's pose by `stage.pose` before it, as it began, half way and as it ended, where a tick
  * landed there; and how the page's nodes differed from the model at any of those. A step that
  * takes no time shows only in what the samples around it hold. Also every edge of a step the
  * stage told (`stage.follow`) with the sounds that step asks for (src/audio/steps.ts), and
  * the sounds the page was asked for meanwhile (`window.berylSounds`), all in stage time; and
  * where the two halves of the table meet. */
-async function walk({ tick, gap, answers, middle }) {
+async function walk({ tick, gap, answers, middle, whole }) {
     const stage = window.berylStage;
     const { clock } = stage;
     clock.hold();
@@ -121,6 +123,7 @@ async function walk({ tick, gap, answers, middle }) {
             edge: edge.edge,
             at: edge.at - origin,
             verb: edge.step.act.verb,
+            act: edge.step.act,
             cues: window.berylStepSounds(edge),
         }),
     );
@@ -145,6 +148,10 @@ async function walk({ tick, gap, answers, middle }) {
         }
         if (Number(node.style.zIndex) !== Math.round(pose.depth)) {
             return `is drawn at depth ${node.style.zIndex}`;
+        }
+        // A node dressed with its card's name shows its face (src/stage/dom.ts).
+        if (pose.face === "back" && node.dataset.card) {
+            return `shows the face of ${node.dataset.card}`;
         }
         // Where the browser put it: an upright node's corner is the pose's.
         if (pose.rotation === 0 && pose.skew === 0) {
@@ -182,7 +189,7 @@ async function walk({ tick, gap, answers, middle }) {
         const abilities = [...resting.keys()].some(
             (n) => typeof n === "string",
         );
-        done ||= lifted && !abilities;
+        done ||= !whole && lifted && !abilities;
         lifted ||= abilities;
         return { at: clock.now - origin, poses, zones };
     };
@@ -221,13 +228,15 @@ async function walk({ tick, gap, answers, middle }) {
         if (!done) reach(clock.now + gap);
     }
     unfollow();
+    const shown = stage.shown.view;
     const band = document
         .querySelector(".phone-middle")
         ?.getBoundingClientRect();
     return {
         steps,
         faults,
-        done,
+        done: done || (whole && !stage.shown.busy),
+        shows: shown && [shown.turn.number, shown.turn.step, shown.status],
         edges,
         sounds: window.berylSounds
             .slice(heard)
@@ -244,16 +253,34 @@ async function walk({ tick, gap, answers, middle }) {
     };
 }
 
-/** The steps of a recorded fixture's scripts after its first view, in order. */
-async function recorded(fixture) {
+/** The views a recorded fixture shows, in order. */
+async function views(fixture) {
     const { messages } = JSON.parse(
         await readFile(join(fixtures, `${fixture}.json`), "utf8"),
     );
     return messages
         .filter((m) => m.kind === "event")
+        .map((m) => m.payload.view);
+}
+
+/** The steps of a recorded fixture's scripts after its first view, in order. */
+async function recorded(fixture) {
+    return (await views(fixture))
         .slice(1)
-        .flatMap((m) => m.payload.view.script.beats.flat())
+        .flatMap((view) => view.script.beats.flat())
         .map((step) => step.act);
+}
+
+/** What a recorded fixture ends on, as `walk` tells what the stage shows (`shows`), and how
+ * many answers of its seat lead there: one for each view that waits on one. */
+async function ending(fixture) {
+    const shown = await views(fixture);
+    const { turn, status } = shown.at(-1);
+    return {
+        shows: [turn.number, turn.step, status],
+        answers:
+            1 + shown.filter((view) => view.status.kind === "deciding").length,
+    };
 }
 
 const where = ({ x, y, width, rotation, skew, opacity }) => ({
@@ -268,6 +295,53 @@ const middleOf = (pose) => ({
     x: pose.x + pose.width / 2,
     y: pose.y + pose.width / CARD_ASPECT / 2,
 });
+
+const placeOf = ({ x, y, width }) => ({ x, y, width });
+/** Whether two poses lie within a card's width of one another. */
+const beside = (a, b) =>
+    Math.abs(a.x - b.x) < a.width && Math.abs(a.y - b.y) < a.width;
+
+/** `run` with the steps its walk did not see: `stage.step` shows one step at a time, the
+ * first not over, so a step that plays wholly while an earlier one of its beat does is never
+ * the one shown. Each is put together from what the stage told of it (`edges`) and the
+ * samples the walk took at its times, where it took any; one with no sample at its end is
+ * left out. */
+function complete(run) {
+    const samples = new Map();
+    for (const step of run.steps) {
+        for (const sample of [step.before, ...Object.values(step.at)]) {
+            samples.set(sample.at, sample);
+        }
+    }
+    const seen = new Set(
+        run.steps.map((s) => `${s.from} ${JSON.stringify(s.act)}`),
+    );
+    const open = [];
+    const steps = [...run.steps];
+    for (const { edge, at, act, verb } of run.edges) {
+        if (edge === "start") {
+            open.push({ from: at, act, verb });
+            continue;
+        }
+        const told = JSON.stringify(act);
+        const at0 = open.findIndex((o) => JSON.stringify(o.act) === told);
+        if (at0 < 0) continue;
+        const [{ from }] = open.splice(at0, 1);
+        const sampled = samples.get(at);
+        if (at === from || seen.has(`${from} ${told}`) || !sampled) continue;
+        const step = { verb, act, from, to: at, at: { to: sampled } };
+        for (const [name, time] of [
+            ["from", from],
+            ["middle", (from + at) / 2],
+        ]) {
+            if (samples.has(time)) step.at[name] = samples.get(time);
+        }
+        step.before = before(run, step);
+        steps.push(step);
+    }
+    steps.sort((a, b) => a.from - b.from);
+    return { ...run, steps };
+}
 
 /** The first step of `run` playing `verb`. */
 function stepOf(run, verb) {
@@ -343,7 +417,14 @@ const CASES = {
     // and the permanent from the stack to its side of the battlefield.
     // The spell sounds as it is cast, and the permanent is placed as it lands: at the end of
     // its flight, whenever that is.
-    fly({ whole, seat }) {
+    // Then the cards that change zone otherwise (`zones`): every flight leaves from where its
+    // card lay and lands where it then lies. A card you draw alone is held up large over its
+    // place in your hand on the way, and cards drawn together begin one after another and
+    // are not; the opponent's draw stays face down at its size. A card that leaves face down
+    // for a place where its face shows (your draw, the opponent's spell, their discard) is
+    // still face down half way and face up as it lands. Your own spell returned to your hand
+    // flies there.
+    fly({ whole, zones, seat }) {
         const flights = whole.steps.filter((s) => s.verb === "fly");
         const [cast, resolve] = flights;
         assert.deepEqual(
@@ -393,6 +474,111 @@ const CASES = {
             before(whole, lift).poses[card],
             resolve.at.to.poses[card],
         );
+
+        const flew = zones.steps.filter((s) => s.verb === "fly");
+        const draws = flew.filter((s) => s.act.why === "draw");
+        const seen = {
+            held: 0,
+            together: 0,
+            hidden: 0,
+            discarded: 0,
+            turned: 0,
+            returned: 0,
+        };
+        for (const flight of flew) {
+            const { from, object } = flight.act;
+            const name = object.slot;
+            const route = `${from}>${object.zone}`;
+            const what = `${route} of ${name} at ${flight.from} ms`;
+            const start = flight.at.from?.poses[name];
+            const half = flight.at.middle?.poses[name];
+            const end = flight.at.to.poses[name];
+            assert.equal(flight.at.to.zones[name], object.zone, what);
+            assert.ok(end.depth < ALOFT, `${what}: it lands among what rests`);
+            if (start) {
+                const was = before(zones, flight);
+                assert.equal(was.zones[name], from, what);
+                assert.deepEqual(
+                    where(start),
+                    where(was.poses[name]),
+                    `${what}: it leaves from where it lay`,
+                );
+            }
+            if (half) assert.ok(half.depth >= ALOFT, `${what}: it flies`);
+            const larger = (pose) =>
+                pose.width > Math.max(start.width, end.width) + 0.01;
+            // A step a tick found already under way was sampled only as it ended.
+            const turns = start?.face === "back" && end.face === "front";
+            if (turns) seen.turned += 1;
+            const others = draws.filter(
+                (other) =>
+                    other !== flight &&
+                    other.act.object.name !== null &&
+                    other.from < flight.to &&
+                    flight.from < other.to,
+            );
+            // A card held up to be read has turned over by the time it is.
+            const read =
+                route === "library>hand" &&
+                object.name !== null &&
+                others.length === 0;
+            if (turns) {
+                assert.equal(
+                    half.face,
+                    read ? "front" : "back",
+                    `${what}: its face half way`,
+                );
+            }
+            if (route === "library>hand" && object.name === null) {
+                seen.hidden += 1;
+                assert.equal(end.face, "back", what);
+                if (half) {
+                    assert.equal(half.face, "back", what);
+                    assert.ok(!larger(half), `${what}: it is not held up`);
+                }
+            } else if (route === "library>hand") {
+                assert.equal(end.face, "front", what);
+                if (!read) {
+                    seen.together += 1;
+                    if (half) assert.ok(!larger(half), `${what}: not held up`);
+                } else {
+                    seen.held += 1;
+                    assert.ok(larger(half), `${what}: it is held up large`);
+                    assert.ok(
+                        middleOf(half).y < middleOf(end).y,
+                        `${what}: over its place in the hand`,
+                    );
+                    onSide(zones, end, "yours", "your hand");
+                }
+            } else if (route === "hand>graveyard") {
+                seen.discarded += 1;
+            } else if (route === "stack>hand") {
+                seen.returned += 1;
+            }
+        }
+        // Cards drawn together begin one after another.
+        const batch = draws.filter(
+            (s) => s.act.object.name !== null || seat === "theirs",
+        );
+        const starts = batch.slice(0, 3).map((s) => s.from);
+        assert.ok(
+            starts[0] < starts[1] && starts[1] < starts[2],
+            `three draws begin at ${starts}`,
+        );
+        const { held, together, hidden, discarded, turned, returned } = seen;
+        assert.ok(held >= 1, "no draw was held up");
+        assert.equal(discarded, 1);
+        if (seat === "yours") {
+            assert.equal(together, 3, "your three draws together");
+            assert.ok(hidden >= 1, "the opponent's draw");
+            // Your draws, and the opponent's two spells.
+            assert.ok(turned >= held + 2, `${turned} cards turned over`);
+        } else {
+            assert.ok(hidden >= 3, "the opponent's three draws");
+            // Your draws, and the card the opponent discards.
+            assert.ok(turned >= held + 1, `${turned} cards turned over`);
+            assert.equal(returned, 1, "your spell flies back to your hand");
+        }
     },
 
     // A trigger lifts out of its source: it begins small in the source's middle, wherever the
@@ -515,7 +701,12 @@ const CASES = {
     // A finished ability is gone at once: whole on the stack in every sample up to the end of
     // the step before its `vanish`, and nowhere from that one on, with no fade between, and
     // no sound of its own.
-    vanish({ whole, script }) {
+    // A card that leaves (`zones`, and the permanent sacrificed in `scry`) goes from sight
+    // where it lay, dressed as it was and never aloft, and only as its step ends is it in its
+    // new zone, with no flight; a token is then no more. Every way of leaving is seen: a
+    // spell countered and spells resolved, a creature and a token destroyed, a permanent
+    // exiled and one sacrificed, and the opponent's spell returned to their hand.
+    vanish({ whole, script, zones, scry, seat }) {
         const lift = stepOf(whole, "emerge");
         const ability = `a${lift.act.id}`;
         const end = lift.at.to.poses[ability];
@@ -544,6 +735,154 @@ const CASES = {
             told.flatMap((edge) => edge.cues),
             [],
         );
+
+        const seen = {};
+        for (const run of [zones, scry]) {
+            const left = run.steps.filter(
+                (s) => s.verb === "vanish" && s.act.subject.kind === "object",
+            );
+            for (const gone of left) {
+                const { subject, from, why, object } = gone.act;
+                const name = subject.slot;
+                const what = `${why} of ${name} at ${gone.from} ms`;
+                const lay = before(run, gone).poses[name];
+                const kind =
+                    object?.zone === "hand"
+                        ? "returned"
+                        : object
+                          ? why
+                          : `${why}Token`;
+                seen[kind] = (seen[kind] ?? 0) + 1;
+                // A spell whose own question was open as it resolved has no node to go: the
+                // view of a decision leaves the spell that asks it off its stack, and the
+                // prompt shows it (the prompt shapes' beads, by-w8gv.21.26 and .27).
+                if (!lay && from === "stack" && why === "resolve") continue;
+                assert.ok(lay, `${what}: it was nowhere`);
+                for (const at of ["from", "middle"]) {
+                    const sample = gone.at[at];
+                    if (!sample) continue;
+                    const pose = sample.poses[name];
+                    assert.deepEqual(
+                        placeOf(pose),
+                        placeOf(lay),
+                        `${what}: it stays where it lay`,
+                    );
+                    assert.equal(sample.zones[name], from, what);
+                    assert.ok(pose.depth < ALOFT, `${what}: it never flies`);
+                }
+                if (gone.at.from) {
+                    assert.equal(gone.at.from.poses[name].opacity, lay.opacity);
+                }
+                if (gone.at.middle) {
+                    const { opacity } = gone.at.middle.poses[name];
+                    assert.ok(
+                        opacity > 0 && opacity < lay.opacity,
+                        `${what}: half way its opacity is ${opacity}`,
+                    );
+                }
+                const after = gone.at.to;
+                if (object) {
+                    assert.equal(after.zones[name], object.zone, what);
+                    assert.notDeepEqual(
+                        placeOf(after.poses[name]),
+                        placeOf(lay),
+                        `${what}: it is at its new place`,
+                    );
+                } else {
+                    assert.equal(after.poses[name], undefined, what);
+                }
+            }
+        }
+        // A spell that resolves in the beat of the one it countered, and is gone before it,
+        // is over between two samples of the walk: it is not among those seen.
+        assert.deepEqual(
+            {
+                ...seen,
+                resolve: Math.min(seen.resolve, 3),
+            },
+            {
+                counter: 1,
+                resolve: 3,
+                destroy: 1,
+                destroyToken: 1,
+                exile: 1,
+                sacrifice: 1,
+                ...(seat === "yours" ? { returned: 1 } : {}),
+            },
+        );
+    },
+
+    // The cards the opponent looks at come off their library face down and lie beside it
+    // for as long as the look lasts, and are back on it when it ends; nothing else moves.
+    // Your own look lifts nothing: its cards are shown by its prompt, and none leaves your
+    // library before or after you answer (the scry flight, one of the five repeated themes:
+    // by-8qq, by-2wn7, by-kyig, by-1mrh, by-pv6p, by-yfb2, by-nva).
+    lift({ scry, seat }) {
+        const lifts = scry.steps.filter((s) => s.verb === "lift");
+        if (seat === "yours") {
+            assert.deepEqual(lifts, [], "your own look lifts nothing");
+            const looked = scry.steps
+                .filter((s) => s.verb === "flip")
+                .map((s) => s.act.object.slot);
+            assert.equal(looked.length, 2, "the scry looks at two cards");
+            const told = stepOf(scry, "announce");
+            const until = scry.steps.indexOf(told);
+            const lay = before(scry, scry.steps[0]).poses;
+            for (const step of scry.steps.slice(0, until + 1)) {
+                for (const sample of [step.before, ...Object.values(step.at)]) {
+                    for (const name of looked) {
+                        assert.equal(sample.zones[name], "library");
+                        assert.ok(
+                            beside(sample.poses[name], lay[name]),
+                            `at ${sample.at} ms ${name} has left your library`,
+                        );
+                        assert.ok(sample.poses[name].depth < ALOFT);
+                    }
+                }
+            }
+            return;
+        }
+        const [begin, end] = ["begin", "end"].map((span) =>
+            lifts.find((s) => s.act.span === span),
+        );
+        assert.ok(begin && end, "the look begins and ends");
+        const { handling } = begin.act;
+        assert.deepEqual(end.act.handling, handling);
+        const lay = before(scry, begin).poses;
+        const up = begin.at.to.poses;
+        const lifted = Object.keys(up).filter(
+            (name) =>
+                begin.at.from.zones[name] === "library" &&
+                !beside(up[name], lay[name]),
+        );
+        assert.equal(lifted.length, handling.count, `lifted: ${lifted}`);
+        for (const name of lifted) {
+            assert.equal(begin.at.to.zones[name], "library");
+            for (const sample of Object.values(begin.at)) {
+                assert.equal(sample.poses[name].face, "back");
+            }
+            assert.deepEqual(
+                before(scry, end).poses[name],
+                up[name],
+                "it lies there while the look lasts",
+            );
+            assert.ok(
+                beside(end.at.to.poses[name], lay[name]),
+                `${name} is back on the library as the look ends`,
+            );
+        }
+        const [a, b] = lifted.map((name) => up[name]);
+        assert.notDeepEqual(placeOf(a), placeOf(b), "they lie side by side");
+        // The pile they left settles under them; nothing else moves.
+        for (const [name, pose] of Object.entries(begin.at.from.poses)) {
+            if (lifted.includes(name) || !up[name]) continue;
+            assert.ok(
+                begin.at.to.zones[name] === "library"
+                    ? beside(up[name], pose)
+                    : isDeepStrictEqual(placeOf(up[name]), placeOf(pose)),
+                `${name} moved as the cards lifted`,
+            );
+        }
     },
 };
 assert.deepEqual(Object.keys(CASES), verbs, "ui/verbs.json and the cases");
@@ -581,10 +920,10 @@ async function open(size) {
 
 /** Plays `fixture` from its first view on the stage of a page of its own in `context`, asked
  * for by `query`, which `watch` is shown first and returns what to do before the page closes,
- * in ticks of `tick`; and checks what holds of every run: the page drew what the model said,
+ * in ticks of `tick`, to its `end` if given one (`ending`); and checks what holds of every run: the page drew what the model said,
  * nothing but the stage's clock moved a node, its sounds were its steps', and the old
  * playback and card layer took no part. */
-async function play(context, watch, query, fixture, tick) {
+async function play(context, watch, query, fixture, tick, end) {
     const page = await context.newPage();
     const done = await watch(page);
     let hung = false;
@@ -599,8 +938,9 @@ async function play(context, watch, query, fixture, tick) {
         const run = await page.evaluate(walk, {
             tick,
             gap: GAP,
-            answers: ANSWERS,
+            answers: end?.answers ?? ANSWERS,
             middle: MIDDLE,
+            whole: end !== undefined,
         });
         assert.deepEqual(
             run.faults.slice(0, 5),
@@ -614,6 +954,13 @@ async function play(context, watch, query, fixture, tick) {
             "the old playback or card layer ran",
         );
         assert.equal(run.done, true, "the moment did not play out");
+        if (end) {
+            assert.deepEqual(
+                run.shows,
+                end.shows,
+                "the stage did not come to the recording's end",
+            );
+        }
         soundsFollowSteps(run);
         return run;
     };
@@ -676,9 +1023,21 @@ for (const verb of verbs) {
                     };
                 };
                 try {
-                    // Only the lift is asked how its views were batched.
-                    const names =
-                        verb === "emerge" ? ["whole", "cut"] : ["whole"];
+                    // Only the lift is asked how its views were batched; the moments a
+                    // verb watches besides are each played to their recordings' ends.
+                    const names = [
+                        ...(verb === "emerge" ? ["whole", "cut"] : ["whole"]),
+                        ...(watches[verb] ?? []),
+                    ];
+                    const played = {
+                        ...fixture,
+                        ...Object.fromEntries(
+                            Object.entries(more).map(([name, by]) => [
+                                name,
+                                by[seat],
+                            ]),
+                        ),
+                    };
                     const script = await recorded(fixture.whole);
                     for (const [i, size] of windows.entries()) {
                         const at = `${size.width}x${size.height}`;
@@ -693,8 +1052,11 @@ for (const verb of verbs) {
                                         context,
                                         watch,
                                         query,
-                                        fixture[name],
+                                        played[name],
                                         tick,
+                                        name in more
+                                            ? await ending(played[name])
+                                            : undefined,
                                     ),
                                 );
                             }
@@ -705,8 +1067,9 @@ for (const verb of verbs) {
                                     `${name} at ${at}: ticks of ${TICKS[1]} ms read otherwise than ${TICKS[0]}`,
                                 );
                             }
-                            inOrder(each[0], await recorded(fixture[name]));
-                            runs[name] = each[0];
+                            inOrder(each[0], await recorded(played[name]));
+                            runs[name] =
+                                name in more ? complete(each[0]) : each[0];
                         }
                         try {
                             CASES[verb](runs);

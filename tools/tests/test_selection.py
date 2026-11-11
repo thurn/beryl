@@ -326,6 +326,8 @@ VERBS = {
         "yours": {"whole": "combat-declare", "cut": "verbs-cast-stops"},
         "theirs": {"whole": "verbs-cast-theirs", "cut": "verbs-cast-stops"},
     },
+    "more": {"zones": {"yours": "verbs-zones", "theirs": "verbs-zones-theirs"}},
+    "watches": {"fly": ["zones"]},
 }
 VERB_CHECKS = [
     "verb:fly/yours/desktop",
@@ -344,6 +346,8 @@ def test_the_verb_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
         "combat-declare",
         "verbs-cast-stops",
         "verbs-cast-theirs",
+        "verbs-zones",
+        "verbs-zones-theirs",
     ]
     # They are the lane's checks beside those interactions.mjs gives.
     found = selection.lane_checks("ui-test", [], None)

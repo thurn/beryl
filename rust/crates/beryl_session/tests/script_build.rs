@@ -334,6 +334,95 @@ fn a_sweepers_creatures_vanish_together() {
     assert_eq!(second, text(&lines));
 }
 
+/// `fly` out of a library and a hand, and `lift`: cards drawn together fly in one beat, face
+/// down for the seat that does not see them, and the cards discarded after them fly to the
+/// graveyard in the next. The look the opponent's seat saw lifted ends before they move.
+#[test]
+fn cards_drawn_and_discarded_fly_from_both_seats() {
+    let [first, second] = script(
+        names::THIRST_FOR_DISCOVERY,
+        "Thirst for Discovery: discarding two cards with a basic land in hand",
+        5,
+    );
+    let lines = [
+        "fly #6 (Plains) library>hand draw <- #2",
+        "& fly #7 (Mana Crypt) library>hand draw <- #2",
+        "& fly #3 (Counterspell) library>hand draw <- #2",
+        "fly #7 (Mana Crypt) hand>graveyard discard <- #2",
+        "& fly #6 (Plains) hand>graveyard discard <- #2",
+        "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
+    ];
+    assert!(first.starts_with(&text(&lines)), "{first}");
+    // The opponent's seat knows only the card it was shown, until the others are discarded.
+    let lines = [
+        "-lift opponent library all",
+        "fly #6 library>hand draw <- #2",
+        "& fly #7 (Mana Crypt) library>hand draw <- #2",
+        "& fly #3 library>hand draw <- #2",
+        "fly #7 (Mana Crypt) hand>graveyard discard <- #2",
+        "& fly #6 (Plains) hand>graveyard discard <- #2",
+        "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
+    ];
+    assert!(second.starts_with(&text(&lines)), "{second}");
+}
+
+/// A spell returned to its owner's hand: its owner's seat sees it `fly` there, and the seat
+/// across from it sees it `vanish` on the stack (UI Conventions, "An opponent's spell
+/// returned to hand", "Your own spell returned to hand"). The card drawn after flies to its
+/// hand, unseen by the other seat.
+#[test]
+fn a_returned_spell_flies_for_its_owner_and_vanishes_for_the_other_seat() {
+    let name = "Reprieve returns a spell with X to its owner's hand and draws";
+    let [first, second] = script(names::REPRIEVE, name, 3);
+    assert_eq!(
+        first,
+        text(&[
+            "fly #258 (Reprieve) hand>stack cast at #1 <- opponent",
+            "& +point hostile-target #258 > #1",
+            "tap #256 (Plains) <- opponent",
+            "& streak #256 > #258 white 1 <- opponent",
+            "& tap #257 (Island) <- opponent",
+            "& streak #257 > #258 blue 1 <- opponent",
+            "dwell #258",
+            "-point hostile-target #258 > #1",
+            "fly #1 (Thieving Skydiver) stack>hand effect <- #258",
+            "fly #259 library>hand draw <- #258",
+            "vanish #258 (Reprieve) stack>graveyard resolve",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #258 (Reprieve) hand>stack cast at #1 <- you",
+            "& +point hostile-target #258 > #1",
+            "tap #256 (Plains) <- you",
+            "& streak #256 > #258 white 1 <- you",
+            "& tap #257 (Island) <- you",
+            "& streak #257 > #258 blue 1 <- you",
+            "-point hostile-target #258 > #1",
+            "vanish #1 (Thieving Skydiver) stack>hand effect <- #258",
+            "fly #259 (Plains) library>hand draw <- #258",
+            "vanish #258 (Reprieve) stack>graveyard resolve",
+        ])
+    );
+}
+
+/// `vanish` into exile: the permanent goes where it lay, for both seats, and the ability
+/// that took it after it.
+#[test]
+fn an_exiled_permanent_vanishes() {
+    let name = "Portable Hole exiles until it leaves the battlefield";
+    let [first, second] = script(names::PORTABLE_HOLE, name, 3);
+    let lines = [
+        "-point hostile-target a1 > #257",
+        "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+        "-point source a1 > #2",
+        "vanish a1 stack>gone resolve",
+    ];
+    assert_eq!(first, text(&lines));
+    assert_eq!(second, text(&lines));
+}
+
 /// `vanish` into a library: the place the card takes in it, and no name there.
 #[test]
 fn a_permanent_put_into_a_library_takes_its_place() {

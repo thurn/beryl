@@ -19,6 +19,25 @@ import type {
 export interface Table {
   view: PlayerView;
   abilities: readonly number[];
+  /** The cards the opponent is handling, as they were when the look began: the same cards
+   * stay lifted while it lasts, whatever order it leaves their pile in. */
+  handled?: readonly number[];
+}
+
+/** The cards a look that begins at `view` handles: the top `count` of a library, top first,
+ * or your hand, which the opponent looks at; of their own hand, none shows. */
+function handledAt(
+  view: PlayerView,
+  handling: NonNullable<PlayerView["handling"]>,
+): number[] {
+  if (handling.zone === "library") {
+    const library = view.players[handling.side].library;
+    return handling.count ? library.slice(-handling.count).reverse() : [];
+  }
+  if (handling.side !== "you") return [];
+  return view.objects
+    .filter((o) => o.owner === "you" && o.zone === "hand")
+    .map((o) => o.slot);
 }
 
 /** The table of a view the stage starts over from. */
@@ -255,14 +274,17 @@ export function apply(table: Table, act: Act): Table {
       }
     }
     // The cards the opponent is handling, from the step that begins the look to the one that
-    // ends it: the view's own word for it (`PlayerView.handling`), which a layout lifts them
-    // by.
+    // ends it: the view's own word for it (`PlayerView.handling`), and which cards they are.
     case "lift": {
       const { handling: _, ...rest } = view;
-      return {
-        ...table,
-        view: act.span === "begin" ? { ...rest, handling: act.handling } : rest,
-      };
+      const { handled: __, ...other } = table;
+      return act.span === "begin"
+        ? {
+            ...other,
+            view: { ...rest, handling: act.handling },
+            handled: handledAt(view, act.handling),
+          }
+        : { ...other, view: rest };
     }
     // Waits, words and the other spans change nothing on the table.
     case "dwell":

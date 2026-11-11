@@ -92,6 +92,28 @@
       "until": "first priority decision for seat 1 from turn 6"
     },
     {
+      "name": "verbs-zones",
+      "board": "verbs-zones",
+      "until": "first priority decision for seat 0 from turn 4",
+      "after": 1
+    },
+    {
+      "name": "verbs-zones-theirs",
+      "board": "verbs-zones",
+      "until": "first priority decision for seat 1 from turn 5"
+    },
+    {
+      "name": "verbs-scry",
+      "board": "verbs-scry",
+      "until": "first halt for seat 0 from turn 4"
+    },
+    {
+      "name": "verbs-scry-theirs",
+      "board": "verbs-scry",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
       "name": "combat-double-block",
       "board": "combat-double-block",
       "until": "first blocker decision for seat 0",

@@ -85,3 +85,29 @@ export const drawsToRead = (act: Act) =>
   act.object.zone === "hand" &&
   act.object.owner === "you" &&
   act.object.name !== null;
+
+/** An entry's motion over a step: where it is `progress` of the way through, given where it
+ * now rests, which a later step may have moved. */
+export interface Track {
+  from: number;
+  to: number;
+  pose: Path;
+  /** How far along it turns face up, if it leaves face down for a place where its face
+   * shows: until then it is dressed as a card back. */
+  turn?: number;
+  /** The track of the step that is about it. A later step that moves where it rests does
+   * not take it over: it ends there instead. */
+  own?: boolean;
+  /** A card let go where its drop was taken, kept there with no end of its own until what the
+   * drop did has played: a step that moves it starts from there, and otherwise it glides home
+   * when the script is over. */
+  stays?: boolean;
+}
+
+/** How far along `track` stage time `at` is. */
+export const along = (track: Track, at: number) =>
+  Math.max(0, (at - track.from) / (track.to - track.from));
+
+/** Whether `track` has yet to turn its card face up at stage time `at`. */
+export const turning = (track: Track | undefined, at: number) =>
+  track?.turn !== undefined && at < track.to && along(track, at) < track.turn;

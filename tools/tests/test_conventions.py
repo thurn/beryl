@@ -195,6 +195,20 @@ def test_a_verbs_values_are_the_medians_of_its_instances() -> None:
     }
     assert flip["values"] == VERB["values"]
     assert "Measured: 600 ms, 330 ms apart, ease-out." in words(conventions_data)
+    # Each case has its own, which the stage plays a step of that case with.
+    assert fly["cases"] == {
+        "land played": {
+            "duration": 550,
+            "delay": None,
+            "stagger": None,
+            "curve": "ease-out",
+        },
+        "draw": {"duration": 900, "delay": None, "stagger": 330, "curve": "ease-in"},
+    }
+    assert "cases" not in flip
+    # A case's values that are not its instances' are as stale as the verb's.
+    fly["cases"]["draw"]["duration"] = 450
+    assert len(conventions.motion_problems(motion, conventions_data)) == 1
 
 
 def test_an_exempt_verb_keeps_its_own_values() -> None:

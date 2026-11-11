@@ -11,6 +11,7 @@ mod stack;
 mod table;
 mod tables;
 mod targets;
+mod verbs;
 
 use beryl_scenario::Scenario;
 
@@ -23,6 +24,7 @@ pub const BOARDS: &[&[Scenario]] = &[
     targets::TARGETS,
     choices::CHOICES,
     table::TABLE,
+    verbs::VERBS,
 ];
 
 /// The board named `name`.
