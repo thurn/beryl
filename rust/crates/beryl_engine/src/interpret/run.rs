@@ -348,21 +348,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// Takes the spells among `objects` off the stack, for an effect that moves their cards
-    /// elsewhere without their resolving. One cast with flashback is exiled instead
-    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "If the flashback
-    /// cost was paid, exile this card instead of putting it anywhere else any time it would
-    /// leave the stack." Returns the objects still to move.
-    fn unstack(&mut self, objects: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
+    /// to `to` without their resolving, and exiles those that are exiled instead
+    /// ([`crate::cast::exiled_instead`]). Returns the objects still to move.
+    fn unstack(&mut self, objects: Bitboard<L::Slot>, to: Zone) -> Bitboard<L::Slot> {
         let mut flashback = Bitboard::EMPTY;
-        self.ctx.state.stack.retain(|entry| match entry.spell() {
-            Some(spell) if objects.contains(spell.slot) => {
-                if entry.flashback {
-                    flashback.insert(spell.slot);
-                }
-                false
+        for slot in (objects & crate::cast::spells(self.ctx.state)).iter() {
+            let spell = self.ctx.state.object_ref(slot);
+            let entry = self.ctx.state.take_off_stack(spell);
+            if entry.is_some_and(|entry| crate::cast::exiled_instead(&entry, to)) {
+                flashback.insert(slot);
             }
-            _ => true,
-        });
+        }
         if !flashback.is_empty() {
             self.ctx.move_all(flashback, Zone::Exile, Reason::Effect);
         }
@@ -376,7 +372,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             return Outcome::NOTHING;
         }
         self.remember(objects);
-        let rest = self.unstack(objects);
+        let rest = self.unstack(objects, Zone::Exile);
         self.ctx.move_all(rest, Zone::Exile, Reason::Exile);
         self.now_in(objects, Zone::Exile)
     }
@@ -390,7 +386,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             return Outcome::NOTHING;
         }
         self.remember(objects);
-        let rest = self.unstack(objects);
+        let rest = self.unstack(objects, to);
         let ctx = &mut *self.ctx;
         let entry = Entry::default();
         let moved = event::move_batch_to(

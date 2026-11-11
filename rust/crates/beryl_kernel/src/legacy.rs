@@ -6,19 +6,28 @@ use beryl_card::CounterKind;
 
 use crate::event::Event;
 use crate::fixed::Full;
-use crate::floating::{Continuous, Duration, FloatingEffect};
-use crate::ids::{CardIx, Seat};
+use crate::floating::{CastPermission, Continuous, Duration, FloatingEffect};
+use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::state::State;
 
-/// Lent by [`State::legacy_mut`]. Deleted by milestone 4 with the last of what it writes.
+/// Lent by [`State::legacy_mut`]. Deleted by milestone 4 with the last of what it writes,
+/// each of which a store replaces (by-w8gv.7.1):
+///
+/// | Behind the accessor | Written by | Replaced by |
+/// | --- | --- | --- |
+/// | the `effects` queue of floating continuous effects | [`Legacy::start_effect`], [`Legacy::end_effects`], and [`State::drop_stale_effects`] beside it | the Effects store, whose effects affect an object, a player, a locked-in set or the game |
+/// | the `permissions` queue, with [`CastPermission`]'s `extra`, `exile` and `flashback` | [`Legacy::add_permission`], [`Legacy::end_permissions_of_turn`] | permission, cost-change and replacement payloads in the Effects store |
+/// | `Player::sorceries_as_flash` | [`Legacy::set_sorceries_as_flash`] | a rule change in the Effects store |
+/// | `entered_x` | [`Legacy::remember_x`] | a memo of the permanent in the Memos store |
+/// | the [`ObjectFlags::LEGACY`] flags: `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH`, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | memos of the object in the Memos store |
+/// | [`Counters`]' long-tail kind (`other_kind`, `other`) | [`Legacy::add_counters`], [`Legacy::remove_counters`], [`Legacy::set_counters`] | counter kinds generated from a list, each with its own count |
 pub struct Legacy<'a, L: Layout>(&'a mut State<L>);
 
 impl<L: Layout> State<L> {
-    /// Lends the raw writes of what milestone 4 (by-w8gv.7.1) moves to memos and stores: the
-    /// [`ObjectFlags::LEGACY`] flags, [`Counters`]' long-tail kind and
-    /// [`crate::state::Player::sorceries_as_flash`].
+    /// Lends the raw writes of what milestone 4 (by-w8gv.7.1) moves to memos and stores:
+    /// [`Legacy`] lists them.
     #[inline]
     pub fn legacy_mut(&mut self) -> Legacy<'_, L> {
         Legacy(self)
@@ -121,5 +130,35 @@ impl<L: Layout> Legacy<'_, L> {
     #[inline]
     pub fn set_sorceries_as_flash(&mut self, player: Seat, on: bool) {
         self.0.player_mut(player).sorceries_as_flash = on;
+    }
+
+    /// Lets a player cast a card from a zone it could not otherwise be cast from, or on
+    /// other terms than its own.
+    #[inline]
+    pub fn add_permission(&mut self, permission: CastPermission<L>) -> Result<(), Full> {
+        self.0.permissions.push(permission)
+    }
+
+    /// Ends the permissions that last this turn, and those whose card has left its zone
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    #[inline]
+    pub fn end_permissions_of_turn(&mut self) {
+        let s = &mut *self.0;
+        let objects = &s.objects;
+        s.permissions.retain(|p| {
+            !p.this_turn && objects[p.object.slot.index()].incarnation == p.object.incarnation
+        });
+    }
+
+    /// Remembers the nonzero X the spell that became the permanent `object` was cast with
+    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)), forgetting those of
+    /// permanents that have left.
+    #[inline]
+    pub fn remember_x(&mut self, object: ObjectRef<L>, x: u8) -> Result<(), Full> {
+        let s = &mut *self.0;
+        let objects = &s.objects;
+        s.entered_x
+            .retain(|&(r, _)| objects[r.slot.index()].incarnation == r.incarnation);
+        s.entered_x.push((object, x))
     }
 }

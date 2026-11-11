@@ -14,9 +14,8 @@
 //!
 //! Only the kernel writes a field. This is the design every bead of milestone 3 (epic
 //! by-w8gv.5) builds on, written as it will stand when they land; a bead that builds a part
-//! amends its text. Each part names its bead. Until then the fields it closes are `pub` and
-//! say which bead makes them private, and the mutators, sets, queries and player API below
-//! exist only where a link names them.
+//! amends its text. Each part names its bead. Every field of [`State`] is private now; the
+//! sets, queries and player API below exist only where a link names them.
 //!
 //! ## Mutators
 //!
@@ -55,7 +54,9 @@
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
-//! | use the stack and the queues (by-w8gv.5.8) | `put_on_stack`, `take_off_stack`, which returns the entries, `queue_trigger`, `take_triggers`, `delay_trigger`, `ask`, `settle_question` | the stack queue and the stack's bitboard hold the same spells; a question is open or priority is |
+//! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
+//! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
+//! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began |
 //!
 //! ## Events
 //!
@@ -117,17 +118,15 @@
 //! ## The legacy accessor
 //!
 //! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
-//! (by-w8gv.7.1) deletes, which therefore
-//! gets no typed mutator: the `effects` and `permissions` queues, which become stores whose
-//! payload is a resolved form of `Modification`; `entered_x`; `Player::sorceries_as_flash`;
-//! [`state::CastPermission`]'s `extra`, `exile` and `flashback`; the [`state::ObjectFlags`]
-//! `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and
-//! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
-//! Reads use the getters. Milestone 4 deletes the accessor with the last of them. It writes
-//! the object flags, the long-tail counters, `sorceries_as_flash` and the floating effects it
-//! starts and ends today; the bead that closes the queues (by-w8gv.5.8) adds the rest. The
-//! zone move and the turn's resets clear those flags inside the kernel, with everything else
-//! an object forgets.
+//! (by-w8gv.7.1) deletes, which therefore gets no typed mutator: the `effects` and
+//! `permissions` queues, which become stores whose payload is a resolved form of
+//! `Modification`; `entered_x`; `Player::sorceries_as_flash`; [`state::CastPermission`]'s
+//! `extra`, `exile` and `flashback`; the [`state::ObjectFlags`] `KICKED`, `OFFSPRING`,
+//! `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and `LOYALTY_ACTIVATED`; and
+//! [`state::Counters`]' long-tail kind (`other_kind`, `other`). [`legacy::Legacy`]'s rustdoc
+//! lists each with the store that replaces it. Reads use the getters. Milestone 4 deletes
+//! the accessor with the last of them. The zone move and the turn's resets clear those flags
+//! inside the kernel, with everything else an object forgets.
 //!
 //! ## Sets and orders
 //!

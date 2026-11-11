@@ -833,7 +833,7 @@ impl Game {
     }
 
     pub fn is_paused(&self) -> bool {
-        matches!(self.s.pending, Pending::Resolving(_))
+        matches!(self.s.pending(), Pending::Resolving(_))
     }
 }
 

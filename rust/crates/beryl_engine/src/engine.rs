@@ -23,7 +23,7 @@ use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger,
 /// a resolution is paused (§7.3): the committed state is then the one before the resolution
 /// began, so the paused body is replayed into scratch up to its question.
 pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>) -> &'a State<L> {
-    if matches!(s.pending, Pending::Resolving(_))
+    if matches!(s.pending(), Pending::Resolving(_))
         && let Ok(paused) = resolve::replay_to_question(s, t, x, None)
     {
         return paused;
@@ -49,7 +49,7 @@ pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
 /// They are executed again, and so emitted, once the answers let the body finish.
 pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Event<L>> {
     let mut seen = Vec::new();
-    if matches!(s.pending, Pending::Resolving(_)) {
+    if matches!(s.pending(), Pending::Resolving(_)) {
         let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
     }
     seen
@@ -145,7 +145,7 @@ fn advance<const STEPS: bool, L: Layout>(
         if STEPS && (s.turn().number(), s.turn().step()) != seen {
             return None;
         }
-        if s.pending == Pending::None {
+        if *s.pending() == Pending::None {
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
             x.counts.state_based_checks += 1;
@@ -168,7 +168,7 @@ fn advance<const STEPS: bool, L: Layout>(
                 s.set_cleanup_check(false);
                 // CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
-                if s.triggers.is_empty() {
+                if s.triggers().is_empty() {
                     if turn::begin_turn(s, t, &mut x.events).is_err() {
                         stall(s, StallReason::Capacity);
                     }
@@ -220,14 +220,14 @@ fn advance<const STEPS: bool, L: Layout>(
 /// in turn order receives priority." The first of two passes in succession resolves nothing
 /// and ends no step.
 fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
-    passes == 0 && s.turn().passes() == 1 && s.outcome().is_none() && s.pending == Pending::None
+    passes == 0 && s.turn().passes() == 1 && s.outcome().is_none() && *s.pending() == Pending::None
 }
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
 /// whatever else they could do, so `next` passes without listing their options.
 fn passes_silently<L: Layout>(s: &State<L>) -> bool {
-    s.pending == Pending::None
-        && s.triggers.is_empty()
+    *s.pending() == Pending::None
+        && s.triggers().is_empty()
         && !profile::stops_for(s.profile(), s, s.turn().priority())
         && !s.profile().breaks_at(*s.turn())
 }
@@ -306,7 +306,7 @@ pub(crate) fn decision<L: Layout>(
     sink: &mut Sink<L>,
 ) -> Result<Decision<L>, Full> {
     // Each arm returns its result as it is, so a decision is built once, in place.
-    match s.pending {
+    match *s.pending() {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
                 let mut list: L::Queue<Opt<L>, 64> = Default::default();
@@ -514,14 +514,10 @@ fn perform_machine<L: Layout>(
     d: &Decision<L>,
     c: Choice,
 ) -> Option<Result<(), Full>> {
-    Some(match s.pending {
-        Pending::Resolving(ref r) => {
-            let mut r = r.clone();
-            r.record.push(index::<L>(usize::from(c.0))).and_then(|()| {
-                s.pending = Pending::Resolving(r);
-                resolve::resolve(s, t, x, a)
-            })
-        }
+    Some(match *s.pending() {
+        Pending::Resolving(_) => s
+            .record_answer(index::<L>(usize::from(c.0)))
+            .and_then(|()| resolve::resolve(s, t, x, a)),
         Pending::Casting(casting) => cast::perform(
             s,
             t,
@@ -539,7 +535,7 @@ fn perform_machine<L: Layout>(
             d.candidates.option(c).expect("a payment"),
         ),
         Pending::CastOffer { player, free, .. } => {
-            s.pending = Pending::None;
+            s.settle_question();
             match d.candidates.option(c).expect("an option choice") {
                 Opt::Pass => Ok(()),
                 cast_option => {
@@ -606,10 +602,10 @@ fn perform<L: Layout>(
             _ => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::PayLife => {
-            let Pending::EnterPayingLife { slot, .. } = s.pending else {
+            let Pending::EnterPayingLife { slot, .. } = *s.pending() else {
                 unreachable!("a pay-life decision without its pending state");
             };
-            s.pending = Pending::None;
+            s.settle_question();
             enter_from_hand(s, t, sink, slot, option() == Opt::Yes)
         }
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
@@ -625,7 +621,7 @@ fn perform<L: Layout>(
             Ok(())
         }
         DecisionKind::DamageDivision => {
-            let Pending::CombatDamage { done, lethal } = s.pending else {
+            let Pending::CombatDamage { done, lethal } = *s.pending() else {
                 unreachable!("a damage division without its pending state");
             };
             combat::divide(s, t, sink, done, lethal, option())
@@ -656,12 +652,12 @@ fn perform<L: Layout>(
         DecisionKind::PutOnBottom => start::put_on_bottom(s, t, sink, d.player, object()),
         DecisionKind::Discard => turn::cleanup_discard(s, t, sink, object()),
         DecisionKind::LegendRule => {
-            let Pending::LegendRule { mut kept } = s.pending else {
+            let Pending::LegendRule { mut kept } = *s.pending() else {
                 unreachable!("a legend-rule decision without its pending state");
             };
             kept.insert(object());
             if sba::unresolved_legends(s, t, kept).is_some() {
-                s.pending = Pending::LegendRule { kept };
+                s.ask(Pending::LegendRule { kept });
                 Ok(())
             } else {
                 sba::apply_legend_rule(s, t, sink, kept)
@@ -692,7 +688,7 @@ fn pass<L: Layout>(
     if !s.pass_priority() {
         return Ok(());
     }
-    if s.stack.is_empty() {
+    if s.stack().is_empty() {
         turn::end_step(s, t, &mut x.events)
     } else {
         // The passes are spent: a resolution that pauses for a question waits over this
@@ -727,7 +723,7 @@ fn play_land<L: Layout>(
     let face = land_face(s, t, slot).expect("a land face");
     match event::life_to_enter(t, s.object(slot).card, face) {
         Some(life) if s.player(player).life >= i16::from(life) => {
-            s.pending = Pending::EnterPayingLife { slot, life };
+            s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }
         _ => enter_from_hand(s, t, sink, slot, false),

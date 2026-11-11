@@ -250,15 +250,7 @@ pub(crate) fn move_batch_to<L: Layout>(
             arrive(s, slot, entry);
             if entry.x > 0 {
                 let r = s.object_ref(slot);
-                let mut i = 0;
-                while i < s.entered_x.len() {
-                    if s.is_current(s.entered_x.as_slice()[i].0) {
-                        i += 1;
-                    } else {
-                        s.entered_x.remove(i);
-                    }
-                }
-                s.entered_x.push((r, entry.x))?;
+                s.legacy_mut().remember_x(r, entry.x)?;
             }
         }
         sink.push(changed(s.object_ref(slot), from, dest));
@@ -290,7 +282,7 @@ pub(crate) fn move_batch_to<L: Layout>(
 fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
     let r = s.object_ref(slot);
     let exiled = to == Zone::Graveyard
-        && s.effects
+        && s.effects()
             .iter()
             .any(|e| e.affected == r && e.effect == Continuous::ExileInsteadOfGraveyard);
     if exiled { Zone::Exile } else { to }

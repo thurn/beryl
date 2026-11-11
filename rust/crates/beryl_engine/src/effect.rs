@@ -330,7 +330,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         this_turn: bool,
         exile: bool,
     ) {
-        let r = self.state.permissions.push(CastPermission {
+        let r = self.state.legacy_mut().add_permission(CastPermission {
             object,
             player,
             extra,
@@ -350,7 +350,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// it would leave the stack.'" Only its owner can cast it from their graveyard, so
     /// `player` is its owner.
     pub fn grant_flashback(&mut self, object: ObjectRef<L>, player: Seat) {
-        let r = self.state.permissions.push(CastPermission {
+        let r = self.state.legacy_mut().add_permission(CastPermission {
             object,
             player,
             extra: 0,
@@ -448,16 +448,15 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Returns a spell or a permanent to its owner's hand
     /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go
     /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
-    /// corresponding zone." A spell leaves the stack without resolving, and one cast with
-    /// flashback is exiled instead (CR 702.34a).
+    /// corresponding zone." A spell leaves the stack without resolving, or is exiled instead
+    /// ([`cast::exiled_instead`]).
     pub fn return_to_hand(&mut self, object: ObjectRef<L>) {
         if !self.state.is_current(object) {
             return;
         }
         let to = match self.state.object(object.slot).zone {
             Zone::Battlefield => Some(Zone::Hand),
-            Zone::Stack => cast::take_spell(self.state, object)
-                .map(|e| if e.flashback { Zone::Exile } else { Zone::Hand }),
+            Zone::Stack => cast::unstack(self.state, object, Zone::Hand),
             _ => None,
         };
         if let Some(to) = to {
@@ -466,18 +465,15 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Puts a spell on top of its owner's library, or on the bottom unless `top`. It leaves
-    /// the stack without resolving, and one cast with flashback is exiled instead
-    /// (CR 702.34a).
+    /// the stack without resolving, or is exiled instead ([`cast::exiled_instead`]).
     pub fn put_spell_into_library(&mut self, spell: ObjectRef<L>, top: bool) {
         if !self.state.is_current(spell) {
             return;
         }
-        let Some(entry) = cast::take_spell(self.state, spell) else {
-            return;
-        };
-        if entry.flashback {
-            self.move_to(spell, Zone::Exile, Reason::Effect);
-            return;
+        match cast::unstack(self.state, spell, Zone::Library) {
+            Some(Zone::Library) => {}
+            Some(to) => return self.move_to(spell, to, Reason::Effect),
+            None => return,
         }
         let r = event::move_batch_to(
             self.state,

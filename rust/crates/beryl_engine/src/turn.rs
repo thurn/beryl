@@ -6,7 +6,7 @@ use crate::event::{self, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 
@@ -167,7 +167,7 @@ pub(crate) fn end_step<L: Layout>(
 /// time; [`finish_cleanup`] follows them.
 fn cleanup<L: Layout>(s: &mut State<L>) {
     if s.hand_size(s.turn().active()) > MAX_HAND_SIZE {
-        s.pending = Pending::Discard;
+        s.ask(Pending::Discard);
     } else {
         finish_cleanup(s);
     }
@@ -185,7 +185,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
     if s.hand_size(s.turn().active()) <= MAX_HAND_SIZE {
-        s.pending = Pending::None;
+        s.settle_question();
         finish_cleanup(s);
     }
     Ok(())
@@ -206,15 +206,7 @@ fn finish_cleanup<L: Layout>(s: &mut State<L>) {
     s.clear_damage();
     s.legacy_mut().end_effects(Duration::EndOfTurn);
     // Permissions that last this turn end, and those whose card has left its zone are gone.
-    let mut i = 0;
-    while i < s.permissions.len() {
-        let p = s.permissions.as_slice()[i];
-        if p.this_turn || !s.is_current(p.object) {
-            s.permissions.remove(i);
-        } else {
-            i += 1;
-        }
-    }
+    s.legacy_mut().end_permissions_of_turn();
     s.set_cleanup_check(true);
 }
 
@@ -232,7 +224,7 @@ pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
             s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
-        && s.stack.is_empty()
+        && s.stack().is_empty()
         && s.player(player).lands_played < 1
 }
 

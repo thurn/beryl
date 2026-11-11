@@ -140,10 +140,10 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
             return Ok(());
         }
     }
-    s.pending = Pending::TurningFaceUp {
+    s.ask(Pending::TurningFaceUp {
         slot,
         remaining: cost,
-    };
+    });
     Ok(())
 }
 
@@ -200,10 +200,10 @@ pub(crate) fn perform<L: Layout>(
         option => mana::manual_pay(s, t, sink, player, remaining, option)?,
     };
     if remaining.is_zero() {
-        s.pending = Pending::None;
+        s.settle_question();
         s.turn_face_up(slot);
     } else {
-        s.pending = Pending::TurningFaceUp { slot, remaining };
+        s.ask(Pending::TurningFaceUp { slot, remaining });
     }
     Ok(())
 }

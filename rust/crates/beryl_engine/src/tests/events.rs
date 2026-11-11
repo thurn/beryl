@@ -971,10 +971,10 @@ fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
     let mut x = Scratch::new();
     put(&t, &mut s, &mut x, p, "Test Drain Land");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.delayed.len(), 1);
+    assert_eq!(s.delayed().len(), 1);
     // Created in the precombat main phase: the next main phase is the postcombat one.
     advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
-    assert!(s.delayed.is_empty());
+    assert!(s.delayed().is_empty());
     assert_eq!(s.player(p).mana[ManaColor::Colorless], 2);
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
     assert_eq!(

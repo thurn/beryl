@@ -5,7 +5,7 @@
 use crate::combat;
 use crate::decision::{Decision, DecisionKind};
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::observation::Observation;
 use crate::profile::{Profile, StepStops, Stops};
 use crate::state::{Pending, State, TurnStep};
@@ -28,14 +28,14 @@ pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<
     (d.kind == DecisionKind::Waterbend && profile.taps_mana == Some(d.player))
         || d.kind == DecisionKind::Target
             && profile.asks_targets == Some(d.player)
-            && matches!(s.pending, Pending::Casting(c) if !c.triggered)
+            && matches!(s.pending(), Pending::Casting(c) if !c.triggered)
 }
 
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are
 /// declared, the opponent's end step, and whenever the stack is non-empty", with the steps
 /// the player's `steps` name in place of those.
 fn is_smart_stop<L: Layout>(s: &State<L>, player: Seat, steps: StepStops) -> bool {
-    !s.stack.is_empty()
+    !s.stack().is_empty()
         || steps.stops_in(s.turn().step(), s.turn().active() == player, || {
             any_attacking(s)
         })
@@ -65,7 +65,7 @@ pub fn next_stop<L: Layout>(
     step_stops: StepStops,
 ) -> NextStop {
     let s = obs.shown();
-    if !s.stack.is_empty() {
+    if !s.stack().is_empty() {
         return NextStop::Resolve;
     }
     let step = s.turn().step();

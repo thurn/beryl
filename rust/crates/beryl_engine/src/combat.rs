@@ -93,7 +93,7 @@ pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>) -> bool {
 /// declares attackers. This turn-based action doesn't use the stack."
 pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
     if can_declare_attackers(s) {
-        s.pending = Pending::DeclareAttackers { attacker: None };
+        s.ask(Pending::DeclareAttackers { attacker: None });
     }
 }
 
@@ -160,20 +160,20 @@ pub(crate) fn attack<L: Layout>(
             // CR 508.1k: "Each chosen creature still controlled by the active player becomes
             // an attacking creature."
             s.declare_attacker(slot);
-            s.pending = Pending::DeclareAttackers {
+            s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
-            };
+            });
             Ok(())
         }
         Opt::Defender(target) => {
             let Pending::DeclareAttackers {
                 attacker: Some(attacker),
-            } = s.pending
+            } = *s.pending()
             else {
                 unreachable!("an attack target without an attacker");
             };
             s.choose_attacked(attacker, target);
-            s.pending = Pending::DeclareAttackers { attacker: None };
+            s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
         }
         _ => finish_attack(s, t, sink),
@@ -198,7 +198,7 @@ fn finish_attack<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    s.pending = Pending::None;
+    s.settle_question();
     let attackers = with_flag(s, ObjectFlags::ATTACKING);
     // In battlefield order, never slot order: the taps' events are seen in this order, and a
     // slot number says nothing about a card (architecture §13). Tapping moves nothing. One
@@ -276,7 +276,7 @@ pub(crate) fn can_declare_blockers<L: Layout>(s: &State<L>) -> bool {
 /// player declares blockers. This turn-based action doesn't use the stack."
 pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>) {
     if can_declare_blockers(s) {
-        s.pending = Pending::DeclareBlockers { blocker: None };
+        s.ask(Pending::DeclareBlockers { blocker: None });
     }
 }
 
@@ -329,9 +329,9 @@ pub(crate) fn block_decision<L: Layout>(
 /// still controlled by the defending player becomes a blocking creature."
 pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
     s.declare_blocker(blocker);
-    s.pending = Pending::DeclareBlockers {
+    s.ask(Pending::DeclareBlockers {
         blocker: Some(blocker),
-    };
+    });
 }
 
 /// Has the blocker just declared block `attacker`.
@@ -343,17 +343,17 @@ pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
 pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) {
     let Pending::DeclareBlockers {
         blocker: Some(blocker),
-    } = s.pending
+    } = *s.pending()
     else {
         unreachable!("a block target without a blocker");
     };
     s.block(blocker, attacker);
-    s.pending = Pending::DeclareBlockers { blocker: None };
+    s.ask(Pending::DeclareBlockers { blocker: None });
 }
 
 /// Finishes the block declaration.
 pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>) {
-    s.pending = Pending::None;
+    s.settle_question();
 }
 
 /// Whether the combat damage step gets a first-strike step before it
@@ -433,10 +433,10 @@ pub(crate) fn begin_damage<L: Layout>(
         }
     }
     if next_division(s, Bitboard::EMPTY).is_some() {
-        s.pending = Pending::CombatDamage {
+        s.ask(Pending::CombatDamage {
             done: Bitboard::EMPTY,
             lethal: Bitboard::EMPTY,
-        };
+        });
         Ok(())
     } else {
         deal(s, t, sink, Bitboard::EMPTY)
@@ -494,7 +494,7 @@ pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Cho
     let Pending::CombatDamage {
         done,
         lethal: chosen,
-    } = s.pending
+    } = *s.pending()
     else {
         return None;
     };
@@ -541,14 +541,14 @@ pub(crate) fn divide<L: Layout>(
         let attacker = next_division(s, done).expect("a division without an attacker");
         done.insert(attacker);
         if next_division(s, done).is_none() {
-            s.pending = Pending::None;
+            s.settle_question();
             return deal(s, t, sink, chosen);
         }
     }
-    s.pending = Pending::CombatDamage {
+    s.ask(Pending::CombatDamage {
         done,
         lethal: chosen,
-    };
+    });
     Ok(())
 }
 

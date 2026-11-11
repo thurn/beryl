@@ -30,7 +30,7 @@ pub(crate) fn set_starting_player<L: Layout>(
     for player in [starting, starting.opponent()] {
         s.draw_n(sink, player, STARTING_HAND)?;
     }
-    s.pending = Pending::Mulligans;
+    s.ask(Pending::Mulligans);
     advance_mulligans(s, t, sink)
 }
 
@@ -136,7 +136,7 @@ fn advance_mulligans<L: Layout>(
             s.count_mulligan(p);
         }
         if !any {
-            s.pending = Pending::None;
+            s.settle_question();
             return turn::begin_turn(s, t, sink);
         }
     }

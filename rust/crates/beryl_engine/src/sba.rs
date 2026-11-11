@@ -47,9 +47,9 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     if graveyard.is_empty() && tokens.is_empty() {
-        s.pending = Pending::LegendRule {
+        s.ask(Pending::LegendRule {
             kept: Bitboard::EMPTY,
-        };
+        });
         return Ok(true);
     }
     for slot in tokens.iter() {
@@ -301,7 +301,7 @@ pub(crate) fn apply_legend_rule<L: Layout>(
             doomed |= group & !kept;
         }
     }
-    s.pending = Pending::None;
+    s.settle_question();
     event::move_batch(
         s,
         t,

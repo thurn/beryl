@@ -22,9 +22,7 @@ use crate::fixed::Full;
 use crate::interpret;
 use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
-use crate::state::{
-    CounterKind, ObjectFlags, Pending, PendingTrigger, Resolving, StackEntry, State, Zone,
-};
+use crate::state::{CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, Zone};
 use crate::table::GameTable;
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
@@ -34,14 +32,9 @@ pub(crate) fn resolve<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
-    let entry = s
-        .stack
-        .as_slice()
-        .last()
-        .expect("a stack entry to resolve")
-        .clone();
+    let entry = s.stack().last().expect("a stack entry to resolve").clone();
     let ability = entry_ability(t, &entry);
-    let (record, knowledge) = match s.pending {
+    let (record, knowledge) = match *s.pending() {
         Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge)),
         _ => (Default::default(), None),
     };
@@ -51,7 +44,7 @@ pub(crate) fn resolve<L: Layout>(
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.
-        s.pending = Pending::None;
+        s.settle_question();
         if let Some(knowledge) = knowledge {
             rewind(s, &mut x.events, knowledge);
         }
@@ -73,7 +66,7 @@ pub(crate) fn resolve<L: Layout>(
         return Ok(());
     }
     let (spare, sink) = x.copy_to_spare(s);
-    spare.pending = Pending::None;
+    spare.settle_question();
     if let Some(knowledge) = knowledge {
         rewind(spare, sink, knowledge);
     }
@@ -92,11 +85,7 @@ pub(crate) fn resolve<L: Layout>(
             // While the question is open no one holds priority; the finished resolution gives
             // it to the active player (CR 117.3b).
             s.reset_passes();
-            s.pending = Pending::Resolving(Resolving {
-                record,
-                question,
-                knowledge: knowledge.unwrap_or(s.knowledge()),
-            });
+            s.pause_resolution(record, question);
         }
     }
     Ok(())
@@ -148,18 +137,13 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     x: &'a mut Scratch<L>,
     seen: Option<&mut Vec<Event<L>>>,
 ) -> Result<&'a State<L>, Full> {
-    let Pending::Resolving(r) = s.pending.clone() else {
+    let Pending::Resolving(r) = s.pending().clone() else {
         unreachable!("a paused resolution");
     };
-    let entry = s
-        .stack
-        .as_slice()
-        .last()
-        .expect("a stack entry to resolve")
-        .clone();
+    let entry = s.stack().last().expect("a stack entry to resolve").clone();
     let ability = entry_ability(t, &entry);
     let (spare, sink) = x.copy_to_spare(s);
-    spare.pending = Pending::None;
+    spare.settle_question();
     rewind(spare, sink, r.knowledge);
     let mark = sink.len();
     let paused = run(spare, t, sink, None, r.record.as_slice(), &entry, ability);
@@ -234,7 +218,7 @@ fn run<L: Layout>(
     entry: &StackEntry<L>,
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision<L>>, Full> {
-    s.stack.pop();
+    s.take_top_of_stack();
     let face = t.def(entry.card).face(entry.face);
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
@@ -242,7 +226,7 @@ fn run<L: Layout>(
     let legal = ability.map_or(0, |ability| legal_targets(s, t, entry, ability));
     if ability.is_some() && !entry.targets.is_empty() && legal == 0 {
         if entry.is_spell() {
-            cast::leave_stack(s, t, sink, entry, false, Reason::Resolve)?;
+            cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
     } else if entry.is_spell() && !face.is_instant_or_sorcery() {
         // An Aura's spell ability, which says what it targets, does its work by entering.
@@ -275,14 +259,14 @@ fn run<L: Layout>(
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
         if entry.is_spell() && entry.object.is_some_and(|r| s.is_current(r)) {
-            cast::leave_stack(s, t, sink, entry, false, Reason::Resolve)?;
+            cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
         if let Some((object, player, free)) = offer {
-            s.pending = Pending::CastOffer {
+            s.ask(Pending::CastOffer {
                 object,
                 player,
                 free,
-            };
+            });
         }
     }
     if !entry.is_spell() {

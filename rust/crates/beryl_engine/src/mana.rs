@@ -1002,7 +1002,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             }
         }
     }
-    for p in s.permissions.iter() {
+    for p in s.permissions() {
         if p.player != player || !s.is_current(p.object) {
             continue;
         }

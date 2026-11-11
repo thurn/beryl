@@ -608,7 +608,7 @@ fn a_paused_resolution_leaves_the_committed_state_unchanged_and_view_replays_it(
     let candidate = d.candidates.object(Choice(0)).unwrap();
     assert_eq!(view.object(candidate).zone, Zone::Hand);
     g.choose(Choice(0));
-    assert!(matches!(g.s.pending, Pending::None));
+    assert!(matches!(g.s.pending(), Pending::None));
     assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 1);
     assert_eq!(g.s.library(g.me).last(), Some(&candidate));
 }

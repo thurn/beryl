@@ -82,7 +82,7 @@ pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
             s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
-        && s.stack.is_empty()
+        && s.stack().is_empty()
 }
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
@@ -130,7 +130,7 @@ fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
 fn permission<L: Layout>(s: &State<L>, player: Seat, slot: L::Slot) -> Option<CastPermission<L>> {
-    s.permissions
+    s.permissions()
         .iter()
         .copied()
         .find(|p| p.object.slot == slot && p.player == player && s.is_current(p.object))
@@ -323,7 +323,7 @@ fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
 
 /// The spells on the stack, as objects.
 pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
-    s.stack
+    s.stack()
         .iter()
         .filter_map(StackEntry::spell)
         .map(|r| r.slot)
@@ -663,7 +663,7 @@ pub(crate) fn refusal<L: Layout>(
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
 fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
-    for p in s.permissions.iter() {
+    for p in s.permissions() {
         if p.player == player && s.is_current(p.object) {
             cards.insert(p.object.slot);
         }
@@ -1001,7 +1001,7 @@ pub(crate) fn begin_cast<L: Layout>(
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let card = s.object(slot).card;
     s.become_spell(slot, face, player);
-    s.stack.push(StackEntry {
+    s.put_on_stack(StackEntry {
         object: Some(s.object_ref(slot)),
         controller: player,
         ability: None,
@@ -1052,7 +1052,7 @@ pub(crate) fn begin_activate<L: Layout>(
         s.legacy_mut()
             .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, true);
     }
-    s.stack.push(StackEntry {
+    s.put_on_stack(StackEntry {
         object: Some(s.object_ref(slot)),
         controller: player,
         ability: Some(index),
@@ -1111,7 +1111,7 @@ pub(crate) fn target_trigger<L: Layout>(
         entry.x,
         source_of(&entry),
     ) {
-        s.stack.pop();
+        s.take_top_of_stack();
         return Ok(());
     }
     let c = Casting {
@@ -1130,18 +1130,10 @@ pub(crate) fn target_trigger<L: Layout>(
 }
 
 fn top<L: Layout>(s: &State<L>) -> StackEntry<L> {
-    s.stack
-        .as_slice()
+    s.stack()
         .last()
         .expect("the spell or ability being cast")
         .clone()
-}
-
-fn top_mut<L: Layout>(s: &mut State<L>) -> &mut StackEntry<L> {
-    s.stack
-        .as_mut_slice()
-        .last_mut()
-        .expect("the spell or ability being cast")
 }
 
 /// The target specs of the spell or ability being cast.
@@ -1152,7 +1144,7 @@ fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpe
 /// Whether the target currently being announced (CR 601.2c, 603.3d) is for a removal
 /// effect. This describes the choice without running the effect or changing legality.
 pub fn target_removes_permanent<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    let Pending::Casting(c) = s.pending else {
+    let Pending::Casting(c) = *s.pending() else {
         return false;
     };
     matches!(c.step, CastStep::TargetCount | CastStep::Target)
@@ -1178,7 +1170,7 @@ fn total_cost<L: Layout>(t: &GameTable, entry: &StackEntry<L>, c: &Casting) -> M
 /// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
 /// cost increases, and minus all cost reductions."
 pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<ManaCost> {
-    match s.pending {
+    match *s.pending() {
         Pending::Casting(c) => Some(total_cost(t, &StackEntry { x, ..top(s) }, &c)),
         _ => None,
     }
@@ -1213,7 +1205,7 @@ fn advance<L: Layout>(
                 let specs = specs(t, &entry);
                 let Some(spec) = specs.get(usize::from(c.spec)) else {
                     if c.triggered {
-                        s.pending = Pending::None;
+                        s.settle_question();
                         sink.push(ability_event(&entry));
                         return Ok(());
                     }
@@ -1243,7 +1235,7 @@ fn advance<L: Layout>(
             }
         }
     }
-    s.pending = Pending::Casting(c);
+    s.ask(Pending::Casting(c));
     Ok(())
 }
 
@@ -1290,7 +1282,7 @@ fn begin_payment<L: Layout>(
             c.left = a.cost.waterbend.min(total_cost(t, &entry, &c).generic);
             if c.left > 0 && !waterbend_options(s, t, &c)?.is_empty() {
                 c.step = CastStep::Waterbend;
-                s.pending = Pending::Casting(c);
+                s.ask(Pending::Casting(c));
                 return Ok(());
             }
         }
@@ -1363,7 +1355,7 @@ fn pay_mana<L: Layout>(
                 return after_mana(s, t, sink, c);
             }
             c.step = CastStep::Manual;
-            s.pending = Pending::Casting(c);
+            s.ask(Pending::Casting(c));
             Ok(())
         }
         payment => {
@@ -1379,7 +1371,7 @@ fn pay_mana<L: Layout>(
             debug_assert!(!plans.is_empty(), "a spell offered is payable");
             if plans.len() > 1 {
                 c.step = CastStep::Plan;
-                s.pending = Pending::Casting(c);
+                s.ask(Pending::Casting(c));
                 return Ok(());
             }
             if let Some(plan) = plans.as_slice().first() {
@@ -1408,7 +1400,7 @@ fn after_mana<L: Layout>(
             c.step = CastStep::Exile;
             c.left = cost.count();
             c.spec = 0;
-            s.pending = Pending::Casting(c);
+            s.ask(Pending::Casting(c));
             return Ok(());
         }
     }
@@ -1428,7 +1420,7 @@ fn finish<L: Layout>(
     sink: &mut Sink<L>,
     c: Casting,
 ) -> Result<(), Full> {
-    s.pending = Pending::None;
+    s.settle_question();
     let active = s.turn().active();
     s.give_priority(if c.resolving { active } else { c.player });
     let entry = top(s);
@@ -1637,7 +1629,7 @@ pub(crate) fn perform<L: Layout>(
             let Some(Opt::Number(x)) = option else {
                 unreachable!("an X answer");
             };
-            top_mut(s).x = x;
+            s.announce_x(x);
             c.step = CastStep::TargetCount;
         }
         CastStep::TargetCount => {
@@ -1653,7 +1645,7 @@ pub(crate) fn perform<L: Layout>(
                 (_, Some(slot)) => Target::object(c.spec, s.object_ref(slot)),
                 _ => unreachable!("a target"),
             };
-            top_mut(s).targets.push(target)?;
+            s.announce_target(target)?;
             c.left -= 1;
         }
         CastStep::Plan => {
@@ -1693,7 +1685,7 @@ pub(crate) fn perform<L: Layout>(
                 if waterbend_options(s, t, &c)?.is_empty() {
                     return pay_mana(s, t, sink, c);
                 }
-                s.pending = Pending::Casting(c);
+                s.ask(Pending::Casting(c));
                 return Ok(());
             }
             let Some(Opt::Object(slot)) = option else {
@@ -1705,7 +1697,7 @@ pub(crate) fn perform<L: Layout>(
             if waterbend_options(s, t, &c)?.is_empty() {
                 return pay_mana(s, t, sink, c);
             }
-            s.pending = Pending::Casting(c);
+            s.ask(Pending::Casting(c));
             return Ok(());
         }
         CastStep::Exile => {
@@ -1719,7 +1711,7 @@ pub(crate) fn perform<L: Layout>(
             event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile)?;
             c.left -= 1;
             if c.left > 0 {
-                s.pending = Pending::Casting(c);
+                s.ask(Pending::Casting(c));
                 return Ok(());
             }
             return finish(s, t, sink, c);
@@ -1765,38 +1757,41 @@ pub(crate) fn counter<L: Layout>(
     spell: ObjectRef<L>,
     exile: bool,
 ) -> Result<bool, Full> {
-    let Some(entry) = take_spell(s, spell) else {
+    let Some(entry) = s.take_off_stack(spell) else {
         return Ok(false);
     };
-    leave_stack(s, t, sink, &entry, exile, Reason::Counter)?;
+    let to = if exile { Zone::Exile } else { Zone::Graveyard };
+    leave_stack(s, t, sink, &entry, to, Reason::Counter)?;
     Ok(true)
 }
 
-/// Removes a spell's entry from the stack, if it is there, for an effect that moves the
-/// spell's card elsewhere.
-pub(crate) fn take_spell<L: Layout>(
-    s: &mut State<L>,
-    spell: ObjectRef<L>,
-) -> Option<StackEntry<L>> {
-    let i = s.stack.iter().position(|e| e.spell() == Some(spell))?;
-    Some(s.stack.remove(i))
+/// Whether a spell that leaves the stack for `to` is exiled instead: one cast with flashback
+/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback
+/// cost was paid, exile this card instead of putting it anywhere else any time it would
+/// leave the stack."), and one its permission exiles rather than put into a graveyard.
+pub(crate) fn exiled_instead<L: Layout>(entry: &StackEntry<L>, to: Zone) -> bool {
+    entry.flashback || (entry.exile && to == Zone::Graveyard)
 }
 
-/// Puts a spell that leaves the stack without becoming a permanent into its owner's
-/// graveyard, or exile when `exile` or its entry says so.
+/// Takes a spell off the stack for an effect that moves its card to `to` without its
+/// resolving: where the card goes, or nothing if the spell is not on the stack.
+pub(crate) fn unstack<L: Layout>(s: &mut State<L>, spell: ObjectRef<L>, to: Zone) -> Option<Zone> {
+    let exiled = exiled_instead(&s.take_off_stack(spell)?, to);
+    Some(if exiled { Zone::Exile } else { to })
+}
+
+/// Moves the card of a spell whose entry is off the stack, and which did not become a
+/// permanent, to `to`, or to exile instead ([`exiled_instead`]).
 pub(crate) fn leave_stack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     entry: &StackEntry<L>,
-    exile: bool,
+    to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
-    let to = if exile || entry.exile {
-        Zone::Exile
-    } else {
-        Zone::Graveyard
-    };
+    let exiled = exiled_instead(entry, to);
+    let to = if exiled { Zone::Exile } else { to };
     let spell = entry.spell().expect("a spell leaving the stack");
     event::move_one(s, t, sink, spell.slot, to, reason)
 }
@@ -1813,7 +1808,7 @@ pub(crate) fn leave_stack<L: Layout>(
 /// does nothing; targeting its twin destroys the twin.
 pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     let mut b = Bitboard::EMPTY;
-    for e in s.stack.iter() {
+    for e in s.stack() {
         if let Some(source) = e.object.filter(|_| !e.is_spell()) {
             b.insert(source.slot);
         }
@@ -1823,7 +1818,7 @@ pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
             }
         }
     }
-    for p in s.permissions.iter() {
+    for p in s.permissions() {
         b.insert(p.object.slot);
     }
     b

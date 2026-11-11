@@ -105,13 +105,8 @@ pub struct Flags {
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
 /// (architecture §4.1).
 ///
-/// Transitional: the fields that are still `pub` are so from the one push that moved the
-/// state into this crate, so `beryl_engine` builds against it as it did against its own
-/// module. Each names the bead that makes it private (the crate's contract: only the kernel
-/// writes a field): the stack and the queues, by-w8gv.5.8. The objects, zones, the
-/// battlefield, the derived cache, knowledge, listening, the players, the turn and the
-/// game-level fields already are (by-w8gv.5.3, by-w8gv.5.4, by-w8gv.5.7). The fields keep
-/// their order: a state's hash feeds them in it.
+/// Every field is private to the crate (its contract: only the kernel writes a field). The
+/// fields keep their order: a state's hash feeds them in it.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
     /// Written through [`State::object_mut`] alone, which stays in the crate.
@@ -127,25 +122,27 @@ pub struct State<L: Layout = Small> {
     pub(crate) zones: Zones<L>,
     pub(crate) players: [Player<L>; 2],
     pub(crate) turn: Turn,
-    /// Private with by-w8gv.5.8.
-    pub stack: L::Queue<StackEntry<L>, 64>,
-    /// Private with by-w8gv.5.8.
-    pub triggers: L::Queue<PendingTrigger<L>, 64>,
+    /// The stack's entries, bottom first: [`State::put_on_stack`] and its kin write it.
+    pub(crate) stack: L::Queue<StackEntry<L>, 64>,
+    /// The abilities that have triggered and wait to be put on the stack.
+    pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
-    /// ability's [`beryl_card::Trigger::Delayed`] names. Private with by-w8gv.5.8.
-    pub delayed: L::Queue<PendingTrigger<L>, 32>,
-    /// Private with by-w8gv.5.8; milestone 4 (by-w8gv.7.1) replaces it with a store.
-    pub effects: L::Queue<FloatingEffect<L>, 64>,
-    /// Private with by-w8gv.5.8; milestone 4 (by-w8gv.7.1) replaces it with a store.
-    pub permissions: L::Queue<CastPermission<L>, 8>,
+    /// ability's [`beryl_card::Trigger::Delayed`] names.
+    pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
+    /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
+    /// store.
+    pub(crate) effects: L::Queue<FloatingEffect<L>, 64>,
+    /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
+    /// store.
+    pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
     /// The value of X the spells that became these permanents were cast with, for their
     /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
     /// "the value of X for that ability is the same as the value of X for that spell". Only
     /// a nonzero X is kept, and only while the permanent stays. Milestone 4 (by-w8gv.7.1)
-    /// deletes it.
-    pub entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
-    /// Private with by-w8gv.5.8.
-    pub pending: Pending<L>,
+    /// deletes it; written through [`State::legacy_mut`].
+    pub(crate) entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
+    /// The open question of a machine step: [`State::ask`] and its kin write it.
+    pub(crate) pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
     pub(crate) knowledge: [Bitboard<L::Slot>; 2],
     pub(crate) rng: Rng,
@@ -276,6 +273,7 @@ impl<L: Layout> State<L> {
         self.battlefield.as_slice()
     }
 
+    #[inline]
     pub fn pending(&self) -> &Pending<L> {
         &self.pending
     }
@@ -407,21 +405,25 @@ impl<L: Layout> State<L> {
     }
 
     /// The abilities waiting to be put on the stack.
+    #[inline]
     pub fn triggers(&self) -> &[PendingTrigger<L>] {
         self.triggers.as_slice()
     }
 
     /// The stack, bottom first.
+    #[inline]
     pub fn stack(&self) -> &[StackEntry<L>] {
         self.stack.as_slice()
     }
 
     /// The permissions to cast a card from a zone it could not otherwise be cast from.
+    #[inline]
     pub fn permissions(&self) -> &[CastPermission<L>] {
         self.permissions.as_slice()
     }
 
     /// The floating continuous effects.
+    #[inline]
     pub fn effects(&self) -> &[FloatingEffect<L>] {
         self.effects.as_slice()
     }

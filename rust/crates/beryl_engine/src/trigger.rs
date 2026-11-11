@@ -272,7 +272,7 @@ fn enqueue<L: Layout>(
     if !crate::interpret::intervening_if(s, t, &pending, self::ability(t, card, face, ability)) {
         return Ok(());
     }
-    s.triggers.push(pending)
+    s.queue_trigger(pending)
 }
 
 /// Fires the delayed triggers waiting for this step, each once
@@ -283,25 +283,14 @@ fn fire_delayed<L: Layout>(
     step: TurnStep,
     active: Seat,
 ) -> Result<(), Full> {
-    let mut i = 0;
-    while i < s.delayed.len() {
-        let d = s.delayed.as_slice()[i];
-        let due = match ability(t, d.card, d.face, d.ability).trigger {
-            Trigger::Delayed(Delayed::YourNextMainPhase) => {
-                matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
-                    && active == d.controller
-            }
-            Trigger::Delayed(Delayed::NextEndStep) => step == TurnStep::End,
-            _ => unreachable!("a delayed trigger's ability is a delayed one"),
-        };
-        if due {
-            s.delayed.remove(i);
-            s.triggers.push(d)?;
-        } else {
-            i += 1;
+    s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger {
+        Trigger::Delayed(Delayed::YourNextMainPhase) => {
+            matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
+                && active == d.controller
         }
-    }
-    Ok(())
+        Trigger::Delayed(Delayed::NextEndStep) => step == TurnStep::End,
+        _ => unreachable!("a delayed trigger's ability is a delayed one"),
+    })
 }
 
 /// The player who puts the next waiting trigger on the stack, and the triggers they choose
@@ -313,10 +302,10 @@ fn fire_delayed<L: Layout>(
 pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
     let player = apnap(s)
         .into_iter()
-        .find(|&p| s.triggers.iter().any(|tr| tr.controller == p))?;
+        .find(|&p| s.triggers().iter().any(|tr| tr.controller == p))?;
     let mut kept: L::Queue<L::Index, 64> = Default::default();
     let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
-    for (i, tr) in s.triggers.iter().enumerate() {
+    for (i, tr) in s.triggers().iter().enumerate() {
         if tr.controller != player || firsts.iter().any(|k| equivalent(s, k, tr)) {
             continue;
         }
@@ -351,10 +340,10 @@ pub(crate) fn put_on_stack<L: Layout>(
     sink: &mut Sink<L>,
     index: L::Index,
 ) -> Result<(), Full> {
-    let tr = s.triggers.remove(index.into());
+    let tr = s.take_trigger(index.into());
     // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
     let entering = ability(t, tr.card, tr.face, tr.ability).trigger == Trigger::Enters;
-    s.stack.push(StackEntry {
+    s.put_on_stack(StackEntry {
         object: tr.source,
         controller: tr.controller,
         ability: Some(FaceAbility::Own(tr.ability)),
@@ -369,5 +358,5 @@ pub(crate) fn put_on_stack<L: Layout>(
 
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
 pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {
-    s.delayed.push(trigger)
+    s.delay_trigger(trigger)
 }

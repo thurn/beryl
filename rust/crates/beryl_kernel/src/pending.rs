@@ -1,15 +1,16 @@
 //! The open question of a machine step, a spell being cast and a paused resolution
-//! (architecture §7.3).
-//!
-//! Transitional: by-w8gv.5.8 gives the pending question its mutators.
+//! (architecture §7.3), with the mutators that open and settle it (the crate's contract,
+//! "Mutators"). Its payloads are records: the rules build one and hand it over whole.
 
 use beryl_card::ManaCost;
 
 use crate::bitboard::Bitboard;
 use crate::decision::Decision;
+use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Small};
+use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
+use crate::state::State;
 
 /// The step a spell's casting or an ability's activation has reached (CR 601.2, 602.2). The
 /// spell or ability is already the top of the stack.
@@ -131,3 +132,52 @@ pub enum Pending<L: Layout = Small> {
 }
 
 impl Copy for Pending<Small> {}
+
+impl<L: Layout> State<L> {
+    /// Opens the question of a machine step, or replaces the one open with its next: a
+    /// casting that reached its next step is asked again whole. A resolution pauses through
+    /// [`State::pause_resolution`], which keeps what it must remember.
+    #[inline]
+    pub fn ask(&mut self, question: Pending<L>) {
+        debug_assert!(
+            !matches!(question, Pending::None | Pending::Resolving(_)),
+            "a question to open"
+        );
+        self.pending = question;
+    }
+
+    /// Settles the open question: priority, or nothing, is what is asked next.
+    #[inline]
+    pub fn settle_question(&mut self) {
+        self.pending = Pending::None;
+    }
+
+    /// Pauses the resolution of the stack's top at `question`, with the answers its body has
+    /// been given so far (architecture §7.3). What each player knew as the resolution began
+    /// is kept from its first pause: every run of the body starts from that.
+    #[inline]
+    pub fn pause_resolution(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
+        let knowledge = match &self.pending {
+            Pending::Resolving(r) => r.knowledge,
+            _ => self.knowledge,
+        };
+        self.pending = Pending::Resolving(Resolving {
+            record,
+            question,
+            knowledge,
+        });
+    }
+
+    /// Records the answer to a paused resolution's question, for its body to run again with.
+    ///
+    /// # Panics
+    ///
+    /// If no resolution is paused.
+    #[inline]
+    pub fn record_answer(&mut self, answer: L::Index) -> Result<(), Full> {
+        let Pending::Resolving(r) = &mut self.pending else {
+            unreachable!("a paused resolution");
+        };
+        r.record.push(answer)
+    }
+}
