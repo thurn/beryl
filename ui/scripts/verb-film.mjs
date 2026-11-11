@@ -28,17 +28,16 @@ import { isDeepStrictEqual } from "node:util";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { launch } from "./capture.mjs";
+import { ending } from "./fixture-views.mjs";
 import {
     ANSWERS,
     differing,
     EDGE,
-    ending,
     GAP,
     openStage,
-    subjectOf,
     TICK,
     walk,
-} from "./stepping.mjs";
+} from "./film-walk.mjs";
 
 const args = process.argv.slice(2);
 /** Takes the flag `name` and its value out of the arguments; its value, or undefined. */
@@ -117,20 +116,12 @@ const tickAt = (ticks, at) => {
     return found < 0 ? ticks.length - 1 : found;
 };
 
-/** The box a subject of `step` has at `tick`: its card's or ability's, grown to the square it
- * turns within while it is turned or leaning; a player's life total, for a count of life. */
+/** The box a subject of `step` has at `tick`: its card's or ability's, or a player's life
+ * total, for a count of life. */
 function boxOf(step, tick, orbs) {
     const player = step.act.tally?.kind === "life" && step.act.tally.player;
     if (player) return orbs[player] ?? null;
-    const name = subjectOf(step.act);
-    const box = name === null ? null : tick.boxes[name];
-    if (!box) return null;
-    const pose = tick.poses[name];
-    const reach =
-        pose.turn || pose.rotation
-            ? (box[3] - box[1] - (box[2] - box[0])) / 2
-            : 0;
-    return [box[0] - reach, box[1], box[2] + reach, box[3]];
+    return (step.subject !== null && tick.boxes[step.subject]) || null;
 }
 
 /** The window around `boxes` with `pad` about them, on whole pixels within `size`. */
@@ -183,7 +174,7 @@ function takesOf(steps) {
 function changeOf(take, before, after) {
     let change = 0;
     for (const step of take.steps) {
-        const name = subjectOf(step.act);
+        const name = step.subject;
         const a = name === null ? null : before.poses[name];
         const b = name === null ? null : after.poses[name];
         if (!a !== !b) change += 100;
@@ -462,7 +453,7 @@ function told(take, { layout, seat, moment, fixture, learned, folder }) {
         crop: take.shots.close,
         action: take.shots.action,
         steps: take.steps.map((step, k) => {
-            const name = subjectOf(step.act);
+            const name = step.subject;
             return {
                 n: step.n,
                 case: step.case,
@@ -502,7 +493,16 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                 ? moment.seats[seat]
                 : moment.seats[seat].whole;
             const folder = join(out, layout, seat);
-            const end = moment.whole ? await ending(fixtures, fixture) : null;
+            const end = moment.whole
+                ? ending(
+                      JSON.parse(
+                          await readFile(
+                              join(fixtures, `${fixture}.json`),
+                              "utf8",
+                          ),
+                      ),
+                  )
+                : null;
             const open = async () => ({
                 ...(await openStage(browser, {
                     base,

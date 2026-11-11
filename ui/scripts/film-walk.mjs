@@ -1,10 +1,12 @@
-// What the stepped capture (stepped.mjs) and the verbs' films (verb-film.mjs) share: a moment
-// of the verb suite (ui/verbs.json) played on the stage under `?stage`, its clock held and
-// stepped in ticks on whole milliseconds, with each tick's time and where everything drawn
-// then lay. Nothing here reads the page's own time, so nothing a play finds depends on the
-// machine's speed, and two plays of one moment read the same to the bit.
+// How a verb's films are taken (verb-film.mjs): a moment of the verb suite (ui/verbs.json)
+// played on the stage under `?stage`, its clock held and stepped in ticks on whole
+// milliseconds, with each tick's time and where everything drawn then lay. The stepped capture
+// (stepped.mjs) walks a moment the same way for `by motion`'s check, where it shoots each
+// step's subject alone for the tracker; a film shoots the table as a player sees it, and
+// paces the page by the stage's clock (`walk`'s `paced`) so that a moment in which a choice
+// opens plays the same twice. Nothing here reads the page's own time, so nothing a play finds
+// depends on the machine's speed.
 import { isDeepStrictEqual } from "node:util";
-import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 /** A tick of stage time in ms: a sixtieth of a second. */
@@ -21,11 +23,10 @@ export const EDGE = 3;
  * until an ability has come onto the stack and gone and `edge` ticks after, or with `whole`,
  * for all of its `answers`: to the recording's end, which the view the stage then shows tells
  * (`shows`). Before each tick whose number is in `shoot` it waits on
- * `window.berylShoot(number, time)`. Returns every step the stage told of, with its stage
- * times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
- * with the box on the page of everything drawn then (a card's frame is 63 by 88, taken as it
- * lies upright) and its pose as the stage has it; and where each player's life total is
- * drawn.
+ * `window.berylShoot(number, time)`. Returns every step the stage told of, with its subject,
+ * its stage times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
+ * with the box on the page of everything drawn then and its pose as the stage has it; and
+ * where each player's life total is drawn.
  *
  * With `paced`, on a page `openStage` opened so, the page's own time is the stage's while the
  * moment plays. The screen waits on the page's clock before it shows a choice (screens/
@@ -37,6 +38,26 @@ export const EDGE = 3;
  * read, as it has between two frames, in which React draws without ever running out of
  * time. A moment in which a choice opens needs it to play the same twice. */
 export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
+    /** What a step is about, by the name the stage gives it: its card, or the ability; for a
+     * look, the top one of the library cards it lifts, or none where it lifts none
+     * (stepped.mjs's `subjectOf`); a strike's source, and the card a tally is on. None for a
+     * count of life, which is about a player. */
+    const subjectOf = (act, view) => {
+        if (act.verb === "emerge") return `a${act.id}`;
+        if (act.verb === "strike") return String(act.source);
+        if (act.verb === "lift") {
+            const { zone, side, count } = act.handling;
+            const top =
+                zone === "library" && count
+                    ? view.players[side].library.at(-1)
+                    : undefined;
+            return top === undefined ? null : String(top);
+        }
+        if (act.subject?.kind === "ability") return `a${act.subject.id}`;
+        if (act.subject?.kind === "object") return String(act.subject.slot);
+        const object = act.object ?? act.tally?.object;
+        return object ? String(object.slot) : null;
+    };
     const stage = window.berylStage;
     const { clock } = stage;
     const live = window.berylTimers;
@@ -56,9 +77,11 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
         const at = e.at - origin;
         if (e.edge === "start") {
             open.set(e.step, steps.length);
+            const { act } = e.step;
             steps.push({
-                act: e.step.act,
-                case: window.berylCase(e.step.act, e.table.view) ?? null,
+                act,
+                subject: subjectOf(act, e.table.view),
+                case: window.berylCase(act, e.table.view) ?? null,
                 from: at,
                 to: at,
             });
@@ -123,10 +146,30 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
             abilities ||= typeof name === "string";
             const pose = stage.pose(name);
             if (!pose || pose.opacity === 0) continue;
-            const x = table.left + pose.x * by;
-            const y = table.top + pose.y * by;
-            const width = pose.width * by;
-            boxes[name] = [x, y, x + width, y + (width * 88) / 63];
+            // As the node is drawn (src/stage/pose.ts transformOf, as stepped.mjs reads it): a
+            // card's frame, 63 by 88, leaned and turned about its top-left corner, which lies
+            // at the pose's place; the box around it, widened to the square it turns within
+            // while its card turns about its own middle (a permanent tapping).
+            const [w, h] = [pose.width, (pose.width * 88) / 63];
+            const lean = Math.tan((pose.skew * Math.PI) / 180);
+            const [cos, sin] = [Math.cos, Math.sin].map((f) =>
+                f((pose.rotation * Math.PI) / 180),
+            );
+            const reach = pose.turn ? (h - w) / 2 : 0;
+            const corners = [
+                [-reach, 0],
+                [w + reach, 0],
+                [-reach, h],
+                [w + reach, h],
+            ].map(([x, y]) => [x + y * lean, y]);
+            const xs = corners.map(([x, y]) => pose.x + x * cos - y * sin);
+            const ys = corners.map(([x, y]) => pose.y + x * sin + y * cos);
+            boxes[name] = [
+                table.left + Math.min(...xs) * by,
+                table.top + Math.min(...ys) * by,
+                table.left + Math.max(...xs) * by,
+                table.top + Math.max(...ys) * by,
+            ];
             poses[name] = pose;
         }
         const at = clock.now - origin;
@@ -180,39 +223,6 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
         orbs,
         done: whole ? !stage.shown.busy : after >= edge,
         shows: shown && [shown.turn.number, shown.turn.step, shown.status],
-    };
-}
-
-/** What a step is about, by the name the stage gives it: its card, or the ability. */
-export function subjectOf(act) {
-    if (act.verb === "emerge") return `a${act.id}`;
-    if (act.verb === "strike") return String(act.source);
-    if (act.subject?.kind === "ability") return `a${act.subject.id}`;
-    if (act.subject?.kind === "object") return String(act.subject.slot);
-    const object = act.object ?? act.tally?.object;
-    return object ? String(object.slot) : null;
-}
-
-/** The views a recorded fixture of `fixtures` shows, in order. */
-async function views(fixtures, fixture) {
-    const { messages } = JSON.parse(
-        await readFile(join(fixtures, `${fixture}.json`), "utf8"),
-    );
-    return messages
-        .filter((m) => m.kind === "event")
-        .map((m) => m.payload.view);
-}
-
-/** What a recorded fixture ends on, as `walk` tells what the stage shows (`shows`), and how
- * many answers of its seat lead there: one for each view that waits on one (verbs.mjs
- * `ending`). */
-export async function ending(fixtures, fixture) {
-    const shown = await views(fixtures, fixture);
-    const { turn, status } = shown.at(-1);
-    return {
-        shows: [turn.number, turn.step, status],
-        answers:
-            1 + shown.filter((view) => view.status.kind === "deciding").length,
     };
 }
 

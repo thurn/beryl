@@ -85,7 +85,7 @@ MORE_ONLY: dict[str, str] = {
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
 INPUTS = (
-    r"^ui/src/stage/|^ui/scripts/(stepped|stepping)\.mjs$|^ui/verbs\.json$"
+    r"^ui/src/stage/|^ui/scripts/stepped\.mjs$|^ui/verbs\.json$"
     r"|^data/(ui-conventions|arena-motion)\.json$"
     r"|^tools/src/beryl_tools/(motion|video_measure|video_shape)\.py$"
 )
