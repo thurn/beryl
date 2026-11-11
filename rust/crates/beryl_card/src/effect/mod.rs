@@ -39,6 +39,7 @@ pub use reference::{Objects, Players};
 use crate::continuous::{Duration, Modification};
 use crate::definition::CardDef;
 use crate::ids::CounterKind;
+use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 
 /// One instruction, or several composed
@@ -274,7 +275,7 @@ impl Effect {
     /// out of the zone it is in: it destroys, exiles, sacrifices or returns it, or puts it
     /// into a library. Of a permanent, that is removal, which a player is told as they
     /// choose the target ([`crate::Ability::removes_target`]).
-    pub const fn removes(&self, target: u8) -> bool {
+    pub const fn removes(&self, target: SpecIx) -> bool {
         match *self {
             Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -282,7 +283,7 @@ impl Effect {
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
             | Effect::PutIntoLibrary { objects, .. } => {
-                matches!(objects, Objects::Target(n) if n == target)
+                matches!(objects, Objects::Target(n) if n.get() == target.get())
             }
             Effect::Sequence(effects) => {
                 let mut i = 0;

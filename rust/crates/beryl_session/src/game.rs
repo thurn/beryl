@@ -2141,7 +2141,7 @@ pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             unreachable!("a trigger-order decision offers only triggers");
         };
         let tr = &s.triggers()[Into::<usize>::into(i)];
-        let ability = &t.def(tr.card).face(tr.face).abilities[usize::from(tr.ability)];
+        let ability = &t.def(tr.card).face(tr.face).abilities[tr.ability.index()];
         let group = if ability.asks() {
             2
         } else {

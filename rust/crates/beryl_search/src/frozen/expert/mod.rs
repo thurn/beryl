@@ -947,7 +947,7 @@ impl Expert<'_> {
             Opt::Activate {
                 slot,
                 ability: ObjectAbility::Own(i),
-            } => self.main_activate(slot, i, precombat),
+            } => self.main_activate(slot, i.get(), precombat),
             // Crewing a Vehicle of ours: only for an attack that kills.
             Opt::Activate {
                 slot,
@@ -2224,7 +2224,7 @@ impl Expert<'_> {
                 slot,
                 ability: ObjectAbility::Own(i),
             } if self.has_type(slot, Types::PLANESWALKER)
-                && self.walker_ability(slot) == Some(i) =>
+                && self.walker_ability(slot) == Some(i.get()) =>
             {
                 800
             }
@@ -2279,7 +2279,7 @@ impl Expert<'_> {
                 if self.obs().object(slot).zone == Zone::Battlefield
                     && self.has_type(slot, Types::PLANESWALKER)
                 {
-                    return if self.walker_ability(slot) == Some(i) {
+                    return if self.walker_ability(slot) == Some(i.get()) {
                         800
                     } else {
                         0

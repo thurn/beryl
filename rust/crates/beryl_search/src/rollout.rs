@@ -497,7 +497,7 @@ impl<L: Layout> Policy<'_, L> {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
             Opt::Activate { slot, ability } => match ability {
-                ObjectAbility::Own(i) => self.activate(slot, i),
+                ObjectAbility::Own(i) => self.activate(slot, i.get()),
                 ObjectAbility::Granted(_) => 0,
             },
             _ => 0,
@@ -758,7 +758,7 @@ impl<L: Layout> Policy<'_, L> {
         };
         let spec = a.targets.first()?;
         let index = match e.ability {
-            Some(FaceAbility::Own(i)) => i,
+            Some(FaceAbility::Own(i)) => i.get(),
             Some(FaceAbility::Grant(_)) => u8::MAX,
             None => index_of(face, a),
         };

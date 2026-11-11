@@ -10,7 +10,7 @@ use beryl_card::effect::build::{
     ITS_CONTROLLER, TARGET, YOU, counter, create_tokens, destroy, draw, exile_until_this_leaves,
     gain_life, put_into_library, return_to_hand, sequence, unless_pays,
 };
-use beryl_card::{Effect, LibraryPosition};
+use beryl_card::{Effect, LibraryPosition, SpecIx};
 use beryl_engine::card::{Ability, Behavior, CardDef, Face, Flow, ManaCost, TargetSpec, mana};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Event, TokenEntry};
@@ -244,7 +244,10 @@ fn a_card_written_as_data_plays_its_scenarios_as_its_body_does() {
             &as_data.faces[0].abilities[0],
         );
         assert_eq!(data.asks(), body.asks(), "{name}: whether it may pause");
-        let (declared, derived) = (body.removes_target(0), data.removes_target(0));
+        let (declared, derived) = (
+            body.removes_target(SpecIx::new(0)),
+            data.removes_target(SpecIx::new(0)),
+        );
         assert_eq!(derived, declared, "{name}: whether it is removal");
     }
 }

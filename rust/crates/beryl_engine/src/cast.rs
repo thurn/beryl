@@ -14,9 +14,9 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx, Keywords,
-    ManaCost, Needs, ObjectAbility, Part, Prompt, Purpose, Rule, TargetKind, TargetSpec, Timing,
-    Types,
+    Ability, AbilityKind, CastingIx, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
+    Keywords, ManaCost, Needs, ObjectAbility, Part, Prompt, Purpose, Rule, SpecIx, TargetKind,
+    TargetSpec, Timing, Types,
 };
 use crate::decision::{Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
@@ -256,7 +256,7 @@ fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboar
                 .0;
             collapse_in_order(
                 s,
-                graveyard[usize::from(c.spec)..=last]
+                graveyard[usize::from(c.graveyard_from)..=last]
                     .iter()
                     .copied()
                     .filter(|&slot| card(slot)),
@@ -460,7 +460,7 @@ pub(crate) fn still_legal<L: Layout>(
     ability: &Ability,
     target: Target<L>,
 ) -> bool {
-    let spec = &ability.targets[usize::from(target.spec)];
+    let spec = &ability.targets[target.spec.index()];
     let you = entry.controller;
     let Some(r) = target.as_object() else {
         return target
@@ -923,14 +923,14 @@ fn activation_options<L: Layout>(
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
-    let activated = |slot: L::Slot| {
+    let facts = |slot: L::Slot| {
         let o = s.object(slot);
-        t.facts(o.card, o.face).activated
+        t.facts(o.card, o.face)
     };
     let objects: Bitboard<L::Slot> = objects
         .iter()
         .filter(|&slot| {
-            activated(slot) != 0
+            facts(slot).activates()
                 || (s.object(slot).zone == Zone::Battlefield
                     && s.derived(slot).granted.iter().any(Option::is_some))
         })
@@ -943,15 +943,8 @@ fn activation_options<L: Layout>(
         };
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
         // rest are not checked; granted ones are checked whatever they are.
-        let mut own = activated(slot);
-        let own = std::iter::from_fn(move || {
-            (own != 0).then(|| {
-                let i = own.trailing_zeros() as u8;
-                own &= own - 1;
-                i
-            })
-        });
-        let abilities = own
+        let abilities = facts(slot)
+            .activated()
             .map(ObjectAbility::Own)
             .chain((0..granted).map(ObjectAbility::Granted));
         for ability in abilities {
@@ -1022,7 +1015,8 @@ pub(crate) fn begin_cast<L: Layout>(
         } else {
             CastStep::TargetCount
         },
-        spec: 0,
+        spec: SpecIx::default(),
+        graveyard_from: 0,
         left: 0,
         extra: permission.map_or(0, |p| p.extra),
         free,
@@ -1068,7 +1062,8 @@ pub(crate) fn begin_activate<L: Layout>(
         } else {
             CastStep::TargetCount
         },
-        spec: 0,
+        spec: SpecIx::default(),
+        graveyard_from: 0,
         left: 0,
         extra: 0,
         free: false,
@@ -1118,7 +1113,8 @@ pub(crate) fn target_trigger<L: Layout>(
     let c = Casting {
         player: entry.controller,
         step: CastStep::TargetCount,
-        spec: 0,
+        spec: SpecIx::default(),
+        graveyard_from: 0,
         left: 0,
         extra: 0,
         free: false,
@@ -1204,7 +1200,7 @@ fn advance<L: Layout>(
             CastStep::TargetCount | CastStep::Target => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
-                let Some(spec) = specs.get(usize::from(c.spec)) else {
+                let Some(spec) = specs.get(c.spec.index()) else {
                     if c.triggered {
                         s.settle_question();
                         sink.push(ability_event(&entry));
@@ -1231,7 +1227,7 @@ fn advance<L: Layout>(
                 if c.left > 0 {
                     break;
                 }
-                c.spec += 1;
+                c.spec = c.spec.next();
                 c.step = CastStep::TargetCount;
             }
         }
@@ -1400,7 +1396,7 @@ fn after_mana<L: Layout>(
         if let Some(cost) = ExileCost::of(face, entry.costs) {
             c.step = CastStep::Exile;
             c.left = cost.count();
-            c.spec = 0;
+            c.graveyard_from = 0;
             s.ask(Pending::Casting(c));
             return Ok(());
         }
@@ -1428,7 +1424,7 @@ fn finish<L: Layout>(
     if let Some(spell) = entry.spell() {
         let face = t.def(entry.card).face(entry.face);
         for (i, option) in face.casting.iter().enumerate() {
-            if entry.costs.contains(i) {
+            if entry.costs.contains(CastingIx::new(i as u8)) {
                 crate::coverage::hit(option);
             }
         }
@@ -1495,7 +1491,7 @@ fn x_options<L: Layout>(
 /// for it.
 fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> TargetSet<L> {
     let entry = top(s);
-    let spec = &specs(t, &entry)[usize::from(c.spec)];
+    let spec = &specs(t, &entry)[c.spec.index()];
     let itself = entry.spell().map(|r| r.slot);
     match candidates(s, t, spec, c.player, itself, entry.x, source_of(&entry)) {
         TargetSet::Objects(mut b) => {
@@ -1541,7 +1537,7 @@ pub(crate) fn decision<L: Layout>(
         ),
         CastStep::TargetCount => {
             let entry = top(s);
-            let spec = &specs(t, &entry)[usize::from(c.spec)];
+            let spec = &specs(t, &entry)[c.spec.index()];
             let most = target_options(s, t, c).count().min(u32::from(spec.count));
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for n in 0..=most {
@@ -1707,7 +1703,7 @@ pub(crate) fn perform<L: Layout>(
             let slot = object.expect("a card to exile");
             if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
                 // The cards above it move down one, so the next pick starts here.
-                c.spec = i as u8;
+                c.graveyard_from = i as u8;
             }
             event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile)?;
             c.left -= 1;

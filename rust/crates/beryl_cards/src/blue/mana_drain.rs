@@ -3,8 +3,8 @@
 
 use beryl_engine::card::ManaColor as Color;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Delayed, Face, Flow, ManaColor, ManaCost, TargetKind,
-    TargetSpec, Trigger, Types,
+    Ability, AbilityIx, AbilityKind, CardDef, Colors, Delayed, Face, Flow, ManaColor, ManaCost,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -48,7 +48,7 @@ fn counter_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     };
     let value = ctx.spell_mana_value(spell).unwrap_or(0);
     ctx.counter(spell, false);
-    ctx.delay(1, value);
+    ctx.delay(AbilityIx::new(1), value);
     Ok(())
 }
 

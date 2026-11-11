@@ -6,9 +6,9 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed, Face, FaceIx,
-    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Prompt, Purpose, Replacement,
-    StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityIx, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed,
+    Face, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Prompt, Purpose,
+    Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
@@ -132,7 +132,7 @@ static ENDER: CardDef = CardDef {
 };
 
 fn drain_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.delay(1, 2);
+    ctx.delay(AbilityIx::new(1), 2);
     Ok(())
 }
 
@@ -417,7 +417,7 @@ static RECONFIG: CardDef = CardDef {
             Ability::static_ability(LayerSpec {
                 affected: Affected::Enchanted,
                 condition: StaticCondition::Always,
-                modification: Modification::Grant(0),
+                modification: Modification::grant(0),
             }),
         ],
         grants: &[CREW],
@@ -1165,7 +1165,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert!(d.subtypes.contains(Subtype::Vehicle));
     let grant = d.granted[0].unwrap();
     assert_eq!(grant.card, s.object(aura).card);
-    let granted = &t.def(grant.card).front().grants[usize::from(grant.grant)];
+    let granted = &t.def(grant.card).front().grants[grant.grant.index()];
     assert_eq!(granted.kind, AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");

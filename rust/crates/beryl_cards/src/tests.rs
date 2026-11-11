@@ -689,7 +689,7 @@ fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
         if d.kind == DecisionKind::Priority && d.player == Seat::P0 {
             let converter = permanent_named(t, s, names::CURRENCY_CONVERTER);
             seen.push((
-                beryl_engine::pointless(s, t, converter, ObjectAbility::Own(2)),
+                beryl_engine::pointless(s, t, converter, ObjectAbility::own(2)),
                 s.exiled_with(converter).count(),
             ));
         }
@@ -728,7 +728,7 @@ fn a_hidden_pointless_activation_is_left_out() {
             d.candidates.option(Choice(i))
                 == Some(Opt::Activate {
                     slot: converter,
-                    ability: ObjectAbility::Own(2),
+                    ability: ObjectAbility::own(2),
                 })
         })
     };
@@ -772,7 +772,7 @@ fn a_quiet_pointless_activation_makes_no_stop() {
                     d.candidates.option(Choice(i))
                         == Some(Opt::Activate {
                             slot: converter,
-                            ability: ObjectAbility::Own(2),
+                            ability: ObjectAbility::own(2),
                         })
                 });
                 return (s.turn().number, s.turn().step, offered);

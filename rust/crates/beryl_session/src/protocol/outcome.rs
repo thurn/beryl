@@ -140,8 +140,8 @@ pub(super) fn outcome_view<L: Layout>(
 /// Where the rules text of `face` says ability `a`: the how-manyth of its kind.
 fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
     let (list, index) = match a {
-        FaceAbility::Own(i) => (face.abilities, i),
-        FaceAbility::Grant(i) => (face.grants, i),
+        FaceAbility::Own(i) => (face.abilities, i.index()),
+        FaceAbility::Grant(i) => (face.grants, i.index()),
     };
     let class = |a: &Ability| match a.kind {
         AbilityKind::Triggered => Some(AbilityClass::Triggered),
@@ -150,12 +150,12 @@ fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
         AbilityKind::Spell => None,
     };
     let kind = list
-        .get(usize::from(index))
+        .get(index)
         .and_then(class)
         .unwrap_or(AbilityClass::Static);
     let nth = list
         .iter()
-        .take(usize::from(index))
+        .take(index)
         .filter(|a| class(a) == Some(kind))
         .count();
     AbilityRef {

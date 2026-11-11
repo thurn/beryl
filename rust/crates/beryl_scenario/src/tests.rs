@@ -172,7 +172,7 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
             Action::Activate {
                 player: P0,
                 card: "Test Cycler",
-                ability: ObjectAbility::Own(0),
+                ability: ObjectAbility::own(0),
             },
             Action::Resolve,
             count(P0, Zone::Hand, 1),

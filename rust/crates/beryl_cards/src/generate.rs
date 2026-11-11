@@ -178,9 +178,7 @@ fn taps_a_mana_source(
         .filter(|&&slot| s.controller(slot) == player && live.name(slot) == card)
         .any(|&slot| {
             let face = live.table().def(s.card(slot)).face(s.object(slot).face);
-            face.abilities
-                .get(usize::from(i))
-                .is_some_and(|a| a.cost.tap)
+            face.abilities.get(i.index()).is_some_and(|a| a.cost.tap)
                 && face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
         })
 }

@@ -6,7 +6,7 @@
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
 
-use beryl_card::{Amount, CastingKind, Comparison, Condition, Objects, Players};
+use beryl_card::{Amount, CastingKind, Comparison, Condition, Objects, Players, SpecIx};
 
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
@@ -159,7 +159,7 @@ impl<L: Layout> Scene<'_, L> {
 
     /// The targets chosen for the `spec`th instance of the word "target" that were legal as
     /// the resolution began, with their places in the entry's list.
-    fn targets(&self, spec: u8) -> impl Iterator<Item = (usize, Target<L>)> + '_ {
+    fn targets(&self, spec: SpecIx) -> impl Iterator<Item = (usize, Target<L>)> + '_ {
         self.targets
             .iter()
             .copied()

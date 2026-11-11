@@ -123,7 +123,7 @@ pub fn source(action: &Action) -> String {
             player,
             card,
             ability: ObjectAbility::Own(i),
-        } => format!("Action::activate({}, {card:?}, {i})", seat(player)),
+        } => format!("Action::activate({}, {card:?}, {})", seat(player), i.get()),
         Action::Activate {
             player,
             card,

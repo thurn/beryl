@@ -6,7 +6,9 @@
 //! crate. Transitional: the fields are still `pub` to read; by-w8gv.5.9 moves the readers in
 //! other crates to the getters below and makes the fields private.
 
-use beryl_card::{Colors, CounterKind, FaceIx, Keywords, Subtypes, Supertypes, Types, Zone};
+use beryl_card::{
+    Colors, CounterKind, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone,
+};
 
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Small};
@@ -464,5 +466,5 @@ pub struct Derived {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GrantRef {
     pub card: CardIx,
-    pub grant: u8,
+    pub grant: GrantIx,
 }

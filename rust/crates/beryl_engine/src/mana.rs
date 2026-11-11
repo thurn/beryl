@@ -1576,7 +1576,7 @@ pub(crate) fn activate<L: Layout>(
     let activation = || PendingTrigger {
         source: Some(source),
         controller,
-        ability: index as u8,
+        ability: crate::card::AbilityIx::new(index as u8),
         card: o.card,
         face: o.face,
         ..PendingTrigger::default()

@@ -7,7 +7,7 @@
 //! mutators keep. The entry goes on once the object is there and comes off before the object
 //! leaves; the invariants hold a state to it ([`crate::invariants`]).
 
-use beryl_card::{Castings, FaceAbility, FaceIx, Types};
+use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx, Types};
 
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
@@ -24,7 +24,7 @@ pub const TARGETS: usize = 8;
 /// and the player in place of the incarnation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Target<L: Layout = Small> {
-    pub spec: u8,
+    pub spec: SpecIx,
     slot: Option<L::Slot>,
     incarnation: u16,
 }
@@ -32,7 +32,7 @@ pub struct Target<L: Layout = Small> {
 const _: () = assert!(size_of::<Target<Small>>() == 4);
 
 impl<L: Layout> Target<L> {
-    pub fn object(spec: u8, object: ObjectRef<L>) -> Target<L> {
+    pub fn object(spec: SpecIx, object: ObjectRef<L>) -> Target<L> {
         Target {
             spec,
             slot: Some(object.slot),
@@ -40,7 +40,7 @@ impl<L: Layout> Target<L> {
         }
     }
 
-    pub fn player(spec: u8, player: Seat) -> Target<L> {
+    pub fn player(spec: SpecIx, player: Seat) -> Target<L> {
         Target {
             spec,
             slot: None,
@@ -143,8 +143,8 @@ pub struct PendingTrigger<L: Layout = Small> {
     pub source: Option<ObjectRef<L>>,
     pub card: CardIx,
     pub face: FaceIx,
-    /// The index of the ability among the face's own.
-    pub ability: u8,
+    /// The ability, among the face's own.
+    pub ability: AbilityIx,
     /// The player who controlled the source when it triggered
     /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
     pub controller: Seat,

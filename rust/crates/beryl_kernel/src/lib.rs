@@ -105,6 +105,11 @@
 //! [`State::is_current`] checks; where a record is filed is the mutator's to keep. The kernel
 //! fills [`state::Resolving`]'s knowledge itself as a resolution pauses.
 //!
+//! Where a record names an entry of one of a definition's lists, the field has that list's
+//! index type ([`beryl_card::index`]): a target's [`beryl_card::SpecIx`], a trigger's
+//! [`beryl_card::AbilityIx`], a grant's [`beryl_card::GrantIx`]. None is a bare byte, so one
+//! cannot be read as another.
+//!
 //! ## The board door
 //!
 //! [`State::board`] lends a [`board::Board`], the one handle that arranges a position with no

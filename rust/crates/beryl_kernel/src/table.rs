@@ -2,8 +2,8 @@
 //! decision D20).
 
 use beryl_card::{
-    Ability, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, Rule,
-    Trigger,
+    Ability, AbilityIx, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs,
+    Rule, Trigger,
 };
 
 use crate::event::kind;
@@ -230,8 +230,8 @@ impl GameTable {
 pub struct FaceFacts {
     /// What it makes as a mana source.
     pub mana: ManaFace,
-    /// A bit per index of its activated abilities.
-    pub activated: u64,
+    /// A bit per [`AbilityIx`] of its activated abilities.
+    activated: u64,
     /// A bit per [`Rule`] of its static abilities.
     rules: u8,
 }
@@ -243,6 +243,27 @@ impl FaceFacts {
         activated: 0,
         rules: 0,
     };
+
+    /// Whether it has an activated ability
+    /// ([CR 602.1](https://yawgatog.com/resources/magic-rules/#R6021)): "Activated abilities
+    /// have a cost and an effect."
+    #[inline]
+    pub fn activates(self) -> bool {
+        self.activated != 0
+    }
+
+    /// Its activated abilities, in the face's order.
+    #[inline]
+    pub fn activated(self) -> impl Iterator<Item = AbilityIx> {
+        let mut left = self.activated;
+        std::iter::from_fn(move || {
+            (left != 0).then(|| {
+                let i = left.trailing_zeros() as u8;
+                left &= left - 1;
+                AbilityIx::new(i)
+            })
+        })
+    }
 
     /// Out of line: [`GameTable::facts`] is inlined into the engine's scans of every
     /// permanent, and this is its rare path (a face past the second, or face down). Inlined

@@ -1283,8 +1283,8 @@ pub(super) fn label_of(def: &'static CardDef, action: &Action) -> Option<String>
         } if card == def.name => Some(
             def.front()
                 .abilities
-                .get(usize::from(k))
-                .map_or_else(|| format!("Ability {k}"), |a| cost_label(a, k)),
+                .get(k.index())
+                .map_or_else(|| format!("Ability {k}"), |a| cost_label(a, k.get())),
         ),
         _ => None,
     }

@@ -824,7 +824,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
         DecisionKind::Priority,
         Opt::Activate {
             slot: wagon,
-            ability: ObjectAbility::Own(0),
+            ability: ObjectAbility::own(0),
         },
     );
     // The Wagon can't crew itself; both creatures are needed for power 3.
@@ -865,7 +865,7 @@ fn crew_is_offered_only_with_enough_power() {
     let priority = g.expect(DecisionKind::Priority);
     let crew = Opt::Activate {
         slot: wagon,
-        ability: ObjectAbility::Own(0),
+        ability: ObjectAbility::own(0),
     };
     assert!(!options(&priority).contains(&crew));
     g.s.board().set_tapped(bear, true);

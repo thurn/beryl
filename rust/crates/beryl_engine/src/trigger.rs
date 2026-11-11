@@ -1,7 +1,7 @@
 //! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
-use crate::card::{Ability, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
+use crate::card::{Ability, AbilityIx, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
 use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter;
 use crate::fixed::Full;
@@ -21,8 +21,13 @@ pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'s
 }
 
 /// The ability a pending trigger or stack entry names.
-pub(crate) fn ability(t: &GameTable, card: CardIx, face: FaceIx, ability: u8) -> &'static Ability {
-    &t.def(card).face(face).abilities[usize::from(ability)]
+pub(crate) fn ability(
+    t: &GameTable,
+    card: CardIx,
+    face: FaceIx,
+    ability: AbilityIx,
+) -> &'static Ability {
+    &t.def(card).face(face).abilities[ability.index()]
 }
 
 /// Matches an executed event against every triggered ability that could listen to it: the
@@ -109,13 +114,13 @@ fn face_abilities(
     t: &GameTable,
     card: CardIx,
     face: FaceIx,
-) -> impl Iterator<Item = (u8, &'static Ability)> {
+) -> impl Iterator<Item = (AbilityIx, &'static Ability)> {
     t.def(card)
         .face(face)
         .abilities
         .iter()
         .enumerate()
-        .map(|(i, a)| (i as u8, a))
+        .map(|(i, a)| (AbilityIx::new(i as u8), a))
 }
 
 /// Whether a trigger of a source controlled by `you` fires on `e`, and with what.
@@ -257,7 +262,7 @@ fn enqueue<L: Layout>(
     source: Option<ObjectRef<L>>,
     card: CardIx,
     face: FaceIx,
-    ability: u8,
+    ability: AbilityIx,
     controller: Seat,
     info: TriggerInfo<L>,
 ) -> Result<(), Full> {

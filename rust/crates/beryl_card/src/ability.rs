@@ -12,6 +12,7 @@ use crate::cost::{CastingKind, Cost};
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
 use crate::filter::{Filter, Whose};
 use crate::ids::{CounterKind, TurnStep};
+use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{TargetKind, TargetSpec};
 use crate::trigger::Trigger;
@@ -356,8 +357,8 @@ impl Ability {
     /// "target" from the battlefield: what its effect data does to a target that may be a
     /// permanent ([`Effect::removes`]), or what its card declared with
     /// [`TargetSpec::removal`].
-    pub fn removes_target(&self, target: u8) -> bool {
-        let Some(spec) = self.targets.get(target as usize) else {
+    pub fn removes_target(&self, target: SpecIx) -> bool {
+        let Some(spec) = self.targets.get(target.index()) else {
             return false;
         };
         let permanent = matches!(

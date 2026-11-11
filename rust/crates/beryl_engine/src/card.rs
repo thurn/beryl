@@ -5,11 +5,12 @@
 //! one; it stores game-table indices (§6.4) and ability indices instead.
 
 pub use beryl_card::{
-    Ability, AbilityKind, Affected, Behavior, CardDef, CastingKind, CastingOption, Castings,
-    Colors, Condition, Cost, Custom, Delayed, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx,
-    Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet, Modification, Needs, ObjectAbility,
-    Part, Place, Prompt, Purpose, Replacement, Rule, Shape, StaticCondition, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Timing, Trigger, Types, mana,
+    Ability, AbilityIx, AbilityKind, Affected, Behavior, CardDef, CastingIx, CastingKind,
+    CastingOption, Castings, Colors, Condition, Cost, Custom, Delayed, FACE_DOWN, FACE_DOWN_COPY,
+    Face, FaceAbility, FaceIx, GrantIx, Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet,
+    Modification, Needs, ObjectAbility, Part, Place, Prompt, Purpose, Replacement, Rule, Shape,
+    SpecIx, StaticCondition, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Timing,
+    Trigger, Types, mana,
 };
 
 /// The result of a body. `Err(Pause)` means the body asked a question its answer source could

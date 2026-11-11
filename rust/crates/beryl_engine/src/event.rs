@@ -11,7 +11,7 @@ pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, k
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
+use crate::card::{AbilityIx, AbilityKind, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
@@ -482,9 +482,9 @@ fn wins_instead_of_drawing<L: Layout>(
                 source: Some(s.object_ref(slot)),
                 card: o.card,
                 face: o.face,
-                ability: Some(FaceAbility::Own(
+                ability: Some(FaceAbility::Own(AbilityIx::new(
                     u8::try_from(index).expect("a face has fewer than 256 abilities"),
-                )),
+                ))),
             })
         })
 }

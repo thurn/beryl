@@ -24,18 +24,19 @@ use crate::effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
 };
 use crate::ids::CounterKind;
+use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 
 /// "This creature", "this spell": [`Objects::This`].
 pub const THIS: Objects = Objects::This;
 /// The first target: [`Objects::Target`].
-pub const TARGET: Objects = Objects::Target(0);
+pub const TARGET: Objects = target(0);
 /// "It", "them", "that card": [`Objects::Those`].
 pub const THOSE: Objects = Objects::Those;
 
 /// The `n`th target, counting from 0.
 pub const fn target(n: u8) -> Objects {
-    Objects::Target(n)
+    Objects::Target(SpecIx::new(n))
 }
 
 /// "You": [`Players::You`].
@@ -45,7 +46,7 @@ pub const EACH_OPPONENT: Players = Players::EachOpponent;
 /// "Each player": [`Players::EachPlayer`].
 pub const EACH_PLAYER: Players = Players::EachPlayer;
 /// "Target player" or "target opponent", where it is the first target: [`Players::Target`].
-pub const TARGET_PLAYER: Players = Players::Target(0);
+pub const TARGET_PLAYER: Players = target_player(0);
 /// The first target's controller, "its controller": [`Players::ControllerOf`].
 pub const ITS_CONTROLLER: Players = Players::ControllerOf(TARGET);
 /// The first target's owner, "its owner": [`Players::OwnerOf`].
@@ -55,7 +56,7 @@ pub const THAT_PLAYER: Players = Players::ThatPlayer;
 
 /// The player chosen for the `n`th target, counting from 0.
 pub const fn target_player(n: u8) -> Players {
-    Players::Target(n)
+    Players::Target(SpecIx::new(n))
 }
 
 /// "Its controller", of any objects.

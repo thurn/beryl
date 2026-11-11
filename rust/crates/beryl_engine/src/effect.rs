@@ -7,8 +7,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Part, Pause, Prompt, Purpose,
-    Types,
+    Ability, AbilityIx, CardDef, CastingIx, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Part,
+    Pause, Prompt, Purpose, Types,
 };
 use crate::chance;
 use crate::decision::{Answers, Decision, DecisionKind, Opt, StallReason};
@@ -151,9 +151,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.entry.x
     }
 
-    /// Whether the casting option at `index` in the face's list was paid.
-    pub fn paid(&self, index: u8) -> bool {
-        self.entry.costs.contains(usize::from(index))
+    /// Whether the casting option at `option` in the face's list was paid.
+    pub fn paid(&self, option: CastingIx) -> bool {
+        self.entry.costs.contains(option)
     }
 
     /// The `i`th chosen target if it is still legal, `None` if it was not chosen or is
@@ -1114,7 +1114,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// triggering once at the moment its [`crate::card::Trigger::Delayed`] names, controlled
     /// by this ability's controller, carrying `amount`
     /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
-    pub fn delay(&mut self, ability: u8, amount: u8) {
+    pub fn delay(&mut self, ability: AbilityIx, amount: u8) {
         let trigger = PendingTrigger {
             source: self.entry.object,
             card: self.entry.card,

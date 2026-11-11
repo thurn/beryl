@@ -310,7 +310,7 @@ fn jace_bounces_only_when_that_saves_him() {
             slot,
             ability: ObjectAbility::Own(i),
         } if name(t, s, slot) == names::JACE_THE_MIND_SCULPTOR => {
-            t.def(s.card(slot)).front().abilities[usize::from(i)]
+            t.def(s.card(slot)).front().abilities[i.index()]
                 .cost
                 .loyalty
         }
@@ -669,7 +669,7 @@ fn teferi_hero_does_not_draw_from_a_thin_library() {
         matches!(
             chosen(&d, c),
             Opt::Activate { slot, ability: ObjectAbility::Own(i) }
-                if t.def(s.card(slot)).front().abilities[usize::from(i)].cost.loyalty == Some(1)
+                if t.def(s.card(slot)).front().abilities[i.index()].cost.loyalty == Some(1)
         )
     };
     assert!(plus_one(&scenario(DEEP)));

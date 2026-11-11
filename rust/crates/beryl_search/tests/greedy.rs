@@ -155,7 +155,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
     };
     let waterbend = Opt::Activate {
         slot: iceberg,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     };
     let mut activated = false;
     while s.object(iceberg).zone != Zone::Graveyard {

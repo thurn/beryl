@@ -4,6 +4,7 @@
 use crate::characteristics::Colors;
 use crate::definition::Face;
 use crate::ids::CounterKind;
+use crate::index::{AbilityIx, CastingIx};
 use crate::mana::ManaCost;
 
 /// An activation cost: mana, and the other things paying it takes.
@@ -92,7 +93,7 @@ pub enum CastingOption {
     /// chose to pay this spell's overload cost, change its text by replacing all instances of
     /// the word 'target' with the word 'each.'" The changed text is the face's spell ability
     /// at index `ability`, an untargeted [`AbilityKind::Spell`] the face lists after its own.
-    Overload { cost: ManaCost, ability: u8 },
+    Overload { cost: ManaCost, ability: AbilityIx },
     /// [CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a): "Evoke [cost]" means
     /// "You may cast this card by paying [cost] rather than paying its mana cost" and "When
     /// this permanent enters, if its evoke cost was paid, its controller sacrifices it." The
@@ -114,6 +115,15 @@ pub enum CastingKind {
 }
 
 impl CastingOption {
+    /// "Overload [cost]", whose changed text is the face's ability at `ability`, counting
+    /// from 0: [`CastingOption::Overload`], as a card file writes it.
+    pub const fn overload(cost: ManaCost, ability: u8) -> CastingOption {
+        CastingOption::Overload {
+            cost,
+            ability: AbilityIx::new(ability),
+        }
+    }
+
     /// Which keyword it is.
     pub const fn kind(self) -> CastingKind {
         match self {
@@ -157,7 +167,8 @@ pub struct Castings(u8);
 impl Castings {
     pub const NONE: Castings = Castings(0);
 
-    /// The option at index `i` in [`Face::casting`] alone.
+    /// The option at index `i` in [`Face::casting`] alone, counting from 0, as a scenario
+    /// writes it.
     pub const fn only(i: u8) -> Castings {
         assert!(i < 8, "eight options at most");
         Castings(1 << i)
@@ -170,9 +181,9 @@ impl Castings {
         (0..(1u16 << n)).map(|m| Castings(u8::try_from(m).expect("eight options at most")))
     }
 
-    /// Whether it has the option at index `i` in [`Face::casting`].
-    pub fn contains(self, i: usize) -> bool {
-        i < 8 && self.0 & (1 << i) != 0
+    /// Whether it has the option at `option` in [`Face::casting`].
+    pub fn contains(self, option: CastingIx) -> bool {
+        option.get() < 8 && self.0 & (1 << option.get()) != 0
     }
 
     pub fn is_empty(self) -> bool {
@@ -185,8 +196,10 @@ impl Castings {
     }
 
     /// The indices in [`Face::casting`] of its options, in order.
-    pub fn indices(self) -> impl Iterator<Item = u8> {
-        (0..8).filter(move |&i| self.0 & (1 << i) != 0)
+    pub fn indices(self) -> impl Iterator<Item = CastingIx> {
+        (0..8)
+            .filter(move |&i| self.0 & (1 << i) != 0)
+            .map(CastingIx::new)
     }
 
     /// The options of `face` it has, in the face's order.
@@ -194,7 +207,7 @@ impl Castings {
         face.casting
             .iter()
             .enumerate()
-            .filter(move |&(i, _)| self.contains(i))
+            .filter(move |&(i, _)| i < 8 && self.0 & (1 << i) != 0)
             .map(|(_, &o)| o)
     }
 }

@@ -25,6 +25,7 @@ pub mod definition;
 pub mod effect;
 pub mod filter;
 pub mod ids;
+pub mod index;
 pub mod mana;
 pub mod prompt;
 pub mod target;
@@ -44,6 +45,7 @@ pub use effect::{
 };
 pub use filter::{Filter, Whose};
 pub use ids::{CounterKind, Seat, TurnStep, Zone};
+pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{TargetKind, TargetSpec};

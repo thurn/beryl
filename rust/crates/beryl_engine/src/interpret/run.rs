@@ -10,7 +10,7 @@ use beryl_card::{
 };
 
 use crate::bitboard::Bitboard;
-use crate::card::{CardDef, FaceAbility, Flow, ManaCost, ManaSet, Modification};
+use crate::card::{AbilityIx, CardDef, FaceAbility, Flow, ManaCost, ManaSet, Modification};
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Reason, TokenEntry};
 use crate::ids::Seat;
@@ -45,7 +45,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             face: entry.face,
             ability: match entry.ability {
                 Some(FaceAbility::Own(index)) => index,
-                _ => 0,
+                _ => AbilityIx::default(),
             },
             controller: entry.controller,
             info: entry.info,

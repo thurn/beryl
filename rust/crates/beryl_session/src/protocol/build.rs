@@ -429,8 +429,8 @@ pub(super) fn stack_item<L: Layout>(
         Some(ability) => {
             let face = t.def(e.card).face(e.face);
             let (list, index) = match ability {
-                FaceAbility::Own(i) => (face.abilities, i),
-                FaceAbility::Grant(i) => (face.grants, i),
+                FaceAbility::Own(i) => (face.abilities, i.get()),
+                FaceAbility::Grant(i) => (face.grants, i.get()),
             };
             let (kind, nth) = ability_order(list, index);
             StackItem::Ability {

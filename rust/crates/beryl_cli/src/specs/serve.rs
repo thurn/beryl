@@ -709,7 +709,7 @@ pub(super) fn recorded_cast_moves(
     };
     let mut choices = decision.candidates.iter().enumerate().filter(|(_, c)| {
         matches!(&c.option, Candidate::Cast { slot, face: f, costs: paid }
-            if *f == face.get() && paid.iter().copied().eq(costs.indices()) && named(view, *slot, card))
+            if *f == face.get() && paid.iter().copied().eq(costs.indices().map(beryl_engine::card::CastingIx::get)) && named(view, *slot, card))
     });
     let mut moves = [None; 2];
     if let Some((i, _)) = choices.next()

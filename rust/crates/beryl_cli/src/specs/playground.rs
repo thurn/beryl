@@ -172,7 +172,7 @@ fn fold_loyalty_abilities(
         else {
             return true;
         };
-        let Some(ability) = def.front().abilities.get(usize::from(index)) else {
+        let Some(ability) = def.front().abilities.get(index.index()) else {
             return true;
         };
         let Some(loyalty) = ability.cost.loyalty else {

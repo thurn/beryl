@@ -111,10 +111,10 @@ pub static CARD: CardDef = CardDef {
                 ..Ability::NONE
             },
         ],
-        casting: &[CastingOption::Overload {
-            cost: ManaCost::new(4, [2, 0, 0, 0, 0, 0]),
-            ability: 1,
-        }],
+        casting: &[CastingOption::overload(
+            ManaCost::new(4, [2, 0, 0, 0, 0, 0]),
+            1,
+        )],
         ..Face::EMPTY
     }],
     tokens: &[],

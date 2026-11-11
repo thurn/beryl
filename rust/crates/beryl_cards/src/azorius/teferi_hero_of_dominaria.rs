@@ -8,8 +8,8 @@
 use beryl_card::effect::build::{TARGET, exile, put_into_library};
 use beryl_card::{Effect, LibraryPosition};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Delayed, Face, Flow, ManaCost, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Colors, Cost, Delayed, Face, Flow,
+    ManaCost, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
@@ -21,7 +21,7 @@ use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 use crate::names;
 
 /// The index of the delayed untap among the face's abilities.
-const UNTAP: u8 = 3;
+const UNTAP: AbilityIx = AbilityIx::new(3);
 
 pub static CARD: CardDef = CardDef {
     name: names::TEFERI_HERO_OF_DOMINARIA,

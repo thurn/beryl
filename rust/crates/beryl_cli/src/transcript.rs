@@ -400,7 +400,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
             match ability {
                 ObjectAbility::Own(i) => {
                     let face = def.face(s.object(slot).face);
-                    let a = &face.abilities[usize::from(i)];
+                    let a = &face.abilities[i.index()];
                     match a.cost.loyalty {
                         Some(l) => format!("{} {l:+}", named(slot)),
                         None => format!("activate {} #{i}", named(slot)),

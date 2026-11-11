@@ -290,7 +290,7 @@ impl Action {
         Action::Activate {
             player,
             card,
-            ability: ObjectAbility::Own(ability),
+            ability: ObjectAbility::own(ability),
         }
     }
 
@@ -470,7 +470,7 @@ fn variant<T: std::fmt::Debug, S: Serializer>(value: &T, s: S) -> Result<S::Ok, 
 #[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
 fn ability_ix<S: Serializer>(ability: &ObjectAbility, s: S) -> Result<S::Ok, S::Error> {
     match *ability {
-        ObjectAbility::Own(i) => s.serialize_newtype_variant("ObjectAbility", 0, "Own", &i),
+        ObjectAbility::Own(i) => s.serialize_newtype_variant("ObjectAbility", 0, "Own", &i.get()),
         ObjectAbility::Granted(k) => s.serialize_newtype_variant("ObjectAbility", 1, "Granted", &k),
     }
 }

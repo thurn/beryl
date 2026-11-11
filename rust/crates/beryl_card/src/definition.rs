@@ -4,6 +4,7 @@
 use crate::ability::{Ability, AbilityKind};
 use crate::characteristics::{Colors, Keywords, Subtypes, Supertypes, Types};
 use crate::cost::{CastingOption, Castings};
+use crate::index::{AbilityIx, GrantIx};
 use crate::mana::ManaCost;
 
 /// One card: its name and its faces.
@@ -137,9 +138,7 @@ impl Face {
         costs
             .paid(self)
             .find_map(|o| match o {
-                CastingOption::Overload { ability, .. } => {
-                    Some(&self.abilities[usize::from(ability)])
-                }
+                CastingOption::Overload { ability, .. } => Some(&self.abilities[ability.index()]),
                 _ => None,
             })
             .or_else(|| self.spell_ability())
@@ -208,8 +207,8 @@ impl Face {
     /// One of this face's own abilities or of those it grants.
     pub fn ability(&'static self, ability: FaceAbility) -> &'static Ability {
         match ability {
-            FaceAbility::Own(i) => &self.abilities[usize::from(i)],
-            FaceAbility::Grant(i) => &self.grants[usize::from(i)],
+            FaceAbility::Own(i) => &self.abilities[i.index()],
+            FaceAbility::Grant(i) => &self.grants[i.index()],
         }
     }
 }
@@ -219,15 +218,30 @@ impl Face {
 /// [`Face::grants`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FaceAbility {
-    Own(u8),
-    Grant(u8),
+    Own(AbilityIx),
+    Grant(GrantIx),
 }
 
-/// An ability of a permanent, as a decision to activate it names it: one of its face
-/// up's own, by its index in [`Face::abilities`], or the `k`th ability other objects grant
-/// it, by its index among them.
+impl FaceAbility {
+    /// The face's own ability at `index`, counting from 0.
+    pub const fn own(index: u8) -> FaceAbility {
+        FaceAbility::Own(AbilityIx::new(index))
+    }
+}
+
+/// An ability of an object, as a decision to activate it names it: one of its face up's
+/// own, by its index in [`Face::abilities`], or the `k`th ability other objects grant it,
+/// counting those in the order they were granted. That count is the state's, an index into
+/// no list of a definition, so it is a plain number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ObjectAbility {
-    Own(u8),
+    Own(AbilityIx),
     Granted(u8),
+}
+
+impl ObjectAbility {
+    /// The object's own ability at `index` of its face up, counting from 0.
+    pub const fn own(index: u8) -> ObjectAbility {
+        ObjectAbility::Own(AbilityIx::new(index))
+    }
 }

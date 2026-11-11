@@ -2,7 +2,7 @@
 //! (architecture §7.3), with the mutators that open and settle it (the crate's contract,
 //! "Mutators"). Its payloads are records: the rules build one and hand it over whole.
 
-use beryl_card::ManaCost;
+use beryl_card::{ManaCost, SpecIx};
 
 use crate::bitboard::Bitboard;
 use crate::decision::Decision;
@@ -36,7 +36,8 @@ pub enum CastStep {
     /// from your hand", or one of the cards from the graveyard of an additional cost such as
     /// Abhorrent Oculus's "exile six cards from your graveyard". `left` is the number still to
     /// exile. Graveyard cards are chosen in graveyard order, bottom first, each above the one
-    /// before, from position `spec` up, so each set of cards is one sequence of answers (§7.2).
+    /// before, from position `graveyard_from` up, so each set of cards is one sequence of
+    /// answers (§7.2).
     Exile,
 }
 
@@ -45,9 +46,10 @@ pub enum CastStep {
 pub struct Casting {
     pub player: Seat,
     pub step: CastStep,
-    /// The target spec being chosen; for [`CastStep::Exile`], the graveyard position picks
-    /// continue from.
-    pub spec: u8,
+    /// The target spec being chosen (CR 601.2c).
+    pub spec: SpecIx,
+    /// For [`CastStep::Exile`], the graveyard position picks continue from.
+    pub graveyard_from: u8,
     /// Targets still to choose for it, or what another step still has to pay.
     pub left: u8,
     /// Generic mana a permission adds to the cost.

@@ -3,6 +3,7 @@
 
 use crate::characteristics::{Keywords, Subtype, Types};
 use crate::ids::{CounterKind, Seat};
+use crate::index::GrantIx;
 
 /// A static ability that changes a rule of the game rather than an object's characteristics
 /// ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041)): "Static abilities do
@@ -91,7 +92,7 @@ pub enum Modification {
     AddKeywords(Keywords),
     /// Layer 6: "has [ability]": the ability at this index of the effect source's front
     /// face's [`Face::grants`], such as the crew ability Swift Reconfiguration grants.
-    Grant(u8),
+    Grant(GrantIx),
     /// Layer 7a: a characteristic-defining ability, "power is equal to the number of
     /// creatures you control" (Adeline).
     PowerIsCreaturesYouControl,
@@ -115,6 +116,12 @@ pub enum Layer {
 }
 
 impl Modification {
+    /// "Has [ability]", the ability at `index` of the source's [`Face::grants`], counting
+    /// from 0: [`Modification::Grant`], as a card file writes it.
+    pub const fn grant(index: u8) -> Modification {
+        Modification::Grant(GrantIx::new(index))
+    }
+
     pub fn layer(self) -> Layer {
         match self {
             Modification::Control(_) => Layer::Control,

@@ -360,11 +360,11 @@ fn loyalty_abilities_are_sorcery_speed_and_once_a_turn() {
     g.s.board().set_counters(raveler, CounterKind::Loyalty, 2);
     let plus = Opt::Activate {
         slot: raveler,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     };
     let minus = Opt::Activate {
         slot: raveler,
-        ability: ObjectAbility::Own(2),
+        ability: ObjectAbility::own(2),
     };
     let d = g.current();
     assert!(index_of(&d, plus).is_some());
@@ -398,7 +398,7 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     assert_eq!(g.s.object(emperor).counters.loyalty, 3, "CR 306.5b");
     let plus = Opt::Activate {
         slot: emperor,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     };
     // The active player gets priority after the resolution and passes.
     g.choose(Choice(0));
@@ -440,7 +440,7 @@ fn sorceries_can_be_cast_as_though_they_had_flash_until_your_next_turn() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(Opt::Activate {
         slot: raveler,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     });
     g.pass_both();
     g.at(g.them, TurnStep::End);
@@ -465,7 +465,7 @@ fn cycling_discards_from_hand_as_a_cost_and_draws_on_resolution() {
     g.at(g.me, TurnStep::Upkeep);
     g.pick(Opt::Activate {
         slot: hq,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     });
     assert_eq!(g.s.object(hq).zone, Zone::Graveyard);
     assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 0);
@@ -480,7 +480,7 @@ fn an_ability_whose_source_was_sacrificed_still_resolves() {
     let land = g.give(g.them, "Test Land", Zone::Battlefield);
     g.pick(Opt::Activate {
         slot: strip,
-        ability: ObjectAbility::Own(1),
+        ability: ObjectAbility::own(1),
     });
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::Target, "its own land is a target too");

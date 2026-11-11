@@ -2,6 +2,7 @@
 
 use crate::filter::Filter;
 use crate::ids::Zone;
+use crate::index::SpecIx;
 
 /// Which objects: none, one or several
 /// ([CR 109.1](https://yawgatog.com/resources/magic-rules/#R1091)): "An object is an ability
@@ -23,7 +24,7 @@ pub enum Objects {
     /// object(s) and/or player(s) the spell or ability will affect." Only those still legal
     /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "A target that's no
     /// longer in the zone it was in when it was targeted is illegal."
-    Target(u8),
+    Target(SpecIx),
     /// What the instruction before acted on: "it", "them", "that card", "those tokens" (the
     /// [module](crate::effect) says which instruction that is).
     Those,
@@ -57,7 +58,7 @@ pub enum Players {
     /// 115.1): "target player", "target opponent". Its [`crate::TargetSpec`] says which
     /// players may be chosen: any for "target player", and for "target opponent" those
     /// [`crate::Whose::AnOpponent`] accepts.
-    Target(u8),
+    Target(SpecIx),
     /// "Its controller", "their controllers"
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's
     /// controller is, by default, the player under whose control it entered the battlefield."

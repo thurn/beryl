@@ -1,8 +1,8 @@
 //! Building each candidate answer of a decision, with its label.
 
 use beryl_engine::card::{
-    AbilityKind, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx, ManaColor, ManaCost,
-    ObjectAbility, Types,
+    AbilityKind, CastingIx, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx, ManaColor,
+    ManaCost, ObjectAbility, Types,
 };
 use beryl_engine::layout::Queue;
 use beryl_engine::state::CounterKind;
@@ -167,7 +167,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
         }
         _ => return None,
     };
-    Some(ability_order(face.abilities, i).1)
+    Some(ability_order(face.abilities, i.get()).1)
 }
 
 /// The name of the face of the card in `slot` it is played with as a land, if the viewer knows
@@ -201,7 +201,7 @@ fn cast_candidate<L: Layout>(
         Candidate::Cast {
             slot: slot.num(),
             face: face.get(),
-            costs: costs.indices().collect(),
+            costs: costs.indices().map(CastingIx::get).collect(),
         },
     )
 }
@@ -360,7 +360,7 @@ fn counter_name(kind: CounterKind) -> &'static str {
 /// Activating ability `ability` of the object in `slot`.
 pub(super) fn activate<S: SlotId>(slot: S, ability: ObjectAbility) -> Candidate {
     let (ability, granted) = match ability {
-        ObjectAbility::Own(i) => (i, false),
+        ObjectAbility::Own(i) => (i.get(), false),
         ObjectAbility::Granted(k) => (k, true),
     };
     Candidate::Activate {
@@ -385,7 +385,7 @@ pub(super) fn trigger<L: Layout>(
         Candidate::Trigger {
             index: index.into(),
             source: trigger.source.map(|r| r.slot.num()),
-            ability: trigger.ability,
+            ability: trigger.ability.get(),
         },
     )
 }

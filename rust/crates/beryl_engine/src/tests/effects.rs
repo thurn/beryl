@@ -12,7 +12,7 @@ use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPositio
 
 use crate::card::{
     Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Prompt, Purpose,
-    TargetKind, TargetSpec, Types,
+    SpecIx, TargetKind, TargetSpec, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
@@ -59,7 +59,7 @@ fn resolve(
         object: Some(source),
         controller: s.object(source.slot).owner,
         card: s.object(source.slot).card,
-        ability: Some(FaceAbility::Own(0)),
+        ability: Some(FaceAbility::own(0)),
         ..StackEntry::default()
     };
     for &target in targets {
@@ -292,11 +292,11 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     with_ctx(&t, &mut s, &mut x, source.slot, |ctx| {
         ctx.gain_control(stolen, crate::state::Duration::Indefinite);
     });
-    let targets = [Target::object(0, s.object_ref(bear))];
+    let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &SWORDS, &targets, &[]).is_none());
     assert_eq!(zone_of(&s, bear), Zone::Exile);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (17, 20));
-    assert!(SWORDS.removes_target(0));
+    assert!(SWORDS.removes_target(SpecIx::new(0)));
 }
 
 #[test]
@@ -315,7 +315,7 @@ fn a_target_an_instruction_could_not_move_is_read_where_it_is() {
     );
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
-    let targets = [Target::object(0, s.object_ref(bear))];
+    let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     let to = Zone::Graveyard;
     event::move_one(&mut s, &t, &mut x.events, source.slot, to, Reason::Effect).unwrap();
     assert!(resolve(&t, &mut s, &mut x, source, &HOLE, &targets, &[]).is_none());
@@ -343,15 +343,15 @@ fn an_illegal_target_is_not_acted_on_and_names_nobody() {
         event::move_one(&mut s, &t, &mut x.events, bears[0], to, Reason::Effect).unwrap();
     }
     let targets = [
-        Target::object(0, chosen[0]),
-        Target::object(1, chosen[1]),
-        Target::player(2, them),
+        Target::object(SpecIx::new(0), chosen[0]),
+        Target::object(SpecIx::new(1), chosen[1]),
+        Target::player(SpecIx::new(2), them),
     ];
     assert!(resolve(&t, &mut s, &mut x, source, &BOTH, &targets, &[]).is_none());
     assert_eq!(zone_of(&s, bears[0]), Zone::Battlefield);
     assert_eq!(zone_of(&s, bears[1]), Zone::Graveyard);
     assert_eq!((life(&s, p), life(&s, them)), (20, 23));
-    assert!(BOTH.removes_target(0) && !BOTH.removes_target(2));
+    assert!(BOTH.removes_target(SpecIx::new(0)) && !BOTH.removes_target(SpecIx::new(2)));
 }
 
 #[test]
@@ -402,7 +402,7 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
-    let targets = [Target::object(0, s.object_ref(bear))];
+    let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &COPY, &targets, &[]).is_none());
     let copies: Vec<Slot> = (s.battlefield().iter().copied())
         .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
@@ -410,5 +410,5 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     assert_eq!(copies.len(), 1);
     assert_eq!(s.card(copies[0]), s.card(bear));
     assert_eq!(s.controller(copies[0]), p);
-    assert!(!COPY.removes_target(0));
+    assert!(!COPY.removes_target(SpecIx::new(0)));
 }

@@ -54,7 +54,7 @@ pub static CARD: CardDef = CardDef {
             enchanted(Modification::SetTypes(Types::ARTIFACT)),
             enchanted(Modification::AddSubtype(Subtype::Vehicle)),
             // Layer 6: "with crew 5".
-            enchanted(Modification::Grant(0)),
+            enchanted(Modification::grant(0)),
         ],
         grants: &[Ability::crew(5)],
         ..Face::EMPTY

@@ -1172,7 +1172,7 @@ mod tests {
             let minus = opts
                 .iter()
                 .position(
-                    |o| matches!(o, Opt::Activate { ability, .. } if *ability == ObjectAbility::Own(2)),
+                    |o| matches!(o, Opt::Activate { ability, .. } if *ability == ObjectAbility::own(2)),
                 )
                 .expect("Teferi's −3");
             apply(&mut s, &t, &mut scratch, &mut Replay, choice(minus));
