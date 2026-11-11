@@ -1,10 +1,10 @@
 """`by cards` on tests/fixtures/scryfall-sample.jsonl, a pruned sample of Scryfall's bulk file:
-the printings data/cards.json reads, the pinned ones, and every printing of a few cards the
-pool rule drops or keeps. After `just cards` changes data/cards.json, regenerate it with
+the printings of the decks' cards (`cards.m1_names`), the pinned ones, and every printing of a
+few cards the pool rule drops or keeps. After `just cards` changes those cards' records in
+data/card-store.tsv, regenerate it with
 `just cards --sample tools/tests/fixtures/scryfall-sample.jsonl "Falling Star" Shahrazad
 "Fire // Ice" "Kemba's Outfitter" "Goblin Bowling Team"`."""
 
-import json
 from pathlib import Path
 from typing import cast
 
@@ -25,30 +25,32 @@ def sample_pool() -> cards.Pool:
     )
 
 
-def run(tmp_path: Path) -> tuple[Path, Path]:
-    out, store = tmp_path / "cards.json", tmp_path / "store.tsv"
-    argv = ["cards", "--bulk", str(SAMPLE), "--output", str(out), "--store", str(store)]
-    assert main(argv) == 0
-    return out, store
+def run(tmp_path: Path) -> Path:
+    store = tmp_path / "store.tsv"
+    assert main(["cards", "--bulk", str(SAMPLE), "--store", str(store)]) == 0
+    return store
 
 
-def test_the_sample_regenerates_the_data_file(tmp_path: Path) -> None:
-    out, _ = run(tmp_path)
-    assert out.read_bytes() == cards.OUTPUT.read_bytes()
+def first_face(record: cards.Json) -> cards.Json:
+    return cast(list[cards.Json], record["faces"])[0]
 
-    data = json.loads(out.read_text())
+
+def test_the_sample_s_store_holds_the_decks_cards_and_their_tokens(
+    tmp_path: Path,
+) -> None:
+    found, made = cards.listed(run(tmp_path))
     deck = set(cards.m1_names())
     assert len(deck) == 49
     assert {"Swamp", "Mountain", "Forest"} <= deck
-    assert {c["faces"][0]["name"] for c in data["cards"]} == deck
+    assert {first_face(c)["name"] for c in found} == deck
     # Pinned printings are honored: the basics are John Avon's Unstable full arts.
-    island = next(c for c in data["cards"] if c["name"] == "Island")
+    island = next(c for c in found if c["name"] == "Island")
     assert (island["set"], island["collector_number"]) == ("ust", "213")
-    copy = next(t for t in data["tokens"] if t["name"] == "Copy")
+    copy = next(t for t in made if t["name"] == "Copy")
     assert (copy["set"], copy["collector_number"]) == ("t2xm", "31")
     tokens = {
-        (t["name"], t["faces"][0].get("power"), t["faces"][0].get("toughness"))
-        for t in data["tokens"]
+        (t["name"], first_face(t).get("power"), first_face(t).get("toughness"))
+        for t in made
     }
     assert {
         ("Map Token", None, None),
@@ -62,7 +64,7 @@ def test_the_sample_regenerates_the_data_file(tmp_path: Path) -> None:
 
 
 def test_the_store_answers_every_name_a_card_goes_by(tmp_path: Path) -> None:
-    _, path = run(tmp_path)
+    path = run(tmp_path)
     with card_store.Store(path) as store:
         jace = store.card("Jace, Vryn's Prodigy")
         assert jace is not None
@@ -116,7 +118,7 @@ def test_the_store_answers_every_name_a_card_goes_by(tmp_path: Path) -> None:
 
 
 def test_the_store_keeps_no_volatile_fields(tmp_path: Path) -> None:
-    _, path = run(tmp_path)
+    path = run(tmp_path)
     text = path.read_text()
     for field in ("prices", "legalities", "edhrec_rank", "image_uris", "images"):
         assert f'"{field}"' not in text
@@ -281,13 +283,11 @@ def omenpaths(lang: str) -> cards.Json:
 
 
 def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
-    card = cards.entry(omenpaths("en"))
-    assert card["name"] == "Goben // Fleem"
-    faces = cast(list[cards.Json], card["faces"])
-    assert [f["name"] for f in faces] == ["Goben", "Fleem"]
-    assert faces[0]["oracle_text"] == "Goben can't be blocked."
     record = cards.store_record(omenpaths("en"), token=False)
     assert record["name"] == "Goben // Fleem"
+    faces = cast(list[cards.Json], record["faces"])
+    assert [f["name"] for f in faces] == ["Goben", "Fleem"]
+    assert faces[0]["oracle_text"] == "Goben can't be blocked."
     assert cards.aliases(omenpaths("en"), record) == [
         "Goben",
         "Fleem",
@@ -296,34 +296,13 @@ def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
         "Green Goblin",
     ]
     # A translation's printed name is not the card's.
-    assert cards.entry(omenpaths("ja"))["name"] == "Norman Osborn // Green Goblin"
-
-
-def test_a_name_outside_the_pool_fails_the_run() -> None:
-    pool = sample_pool()
-    built = cards.build_store(pool)
-    with pytest.raises(LookupError, match="Nonexistent Card"):
-        cards.build_cards_json(["Island", "Nonexistent Card"], built, pool)
-
-
-def test_the_back_is_the_one_most_cards_have() -> None:
-    standard = "0aeebaf5-8c7d-4636-9e82-8c27447861f7"
-    found: list[cards.Json] = [
-        {"card_back_id": standard},
-        {"card_back_id": standard},
-        {"card_back_id": "1234"},
-        {"layout": "transform"},
-    ]
-    assert cards.card_back(found) == (
-        f"https://backs.scryfall.io/large/0/a/{standard}.jpg"
-    )
-    with pytest.raises(LookupError):
-        cards.card_back([{"layout": "transform"}])
+    translated = cards.store_record(omenpaths("ja"), token=False)
+    assert translated["name"] == "Norman Osborn // Green Goblin"
 
 
 def test_the_committed_store_holds_the_sample_s_records(tmp_path: Path) -> None:
-    """data/card-store.tsv and data/cards.json come from the same bulk file."""
-    _, path = run(tmp_path)
+    """data/card-store.tsv is built as the sample's store is: the fixture is not stale."""
+    path = run(tmp_path)
     with card_store.Store(path) as sample, card_store.Store() as committed:
         for kind, record in sample:
             name = str(record["name"])

@@ -142,7 +142,7 @@ count-gate:
 card command *args:
     {{ by }} card "$@"
 
-# Build the card store and data/cards.json from Scryfall's bulk data (--refresh)
+# Build the card store from Scryfall's bulk data (--refresh)
 [group('data')]
 cards *args:
     {{ by }} cards "$@"

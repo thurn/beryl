@@ -1,7 +1,7 @@
 //! Card images, served to the UI over the `beryl-art` URI scheme from a disk cache.
 //!
-//! `data/cards.json` (written by `by cards`) lists each face's image URLs on Scryfall's image
-//! host, such as `https://cards.scryfall.io/art_crop/front/a/b/ab12….jpg?1700000000`, and the
+//! A card's record (`beryl_session::card_records`) gives each face's image URLs on Scryfall's
+//! image host, such as `https://cards.scryfall.io/art_crop/front/a/b/ab12….jpg`, and the
 //! card back's on its card back host, `https://backs.scryfall.io/large/0/a/0aee….jpg`. The UI
 //! asks for the same path under `beryl-art://localhost/`, a back's under
 //! `beryl-art://localhost/backs/`. A hit is read from the cache; a miss

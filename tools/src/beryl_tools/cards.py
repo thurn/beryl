@@ -1,13 +1,10 @@
 """`by cards`: the card pool from Scryfall's bulk data. Reads `default_cards`, every printing
 of every card (scryfall.py downloads it into the cache and reuses it for a week, or until
-`--refresh`), in one pass with no per-card request, and writes:
-
-- data/card-store.tsv, the card store (card_store.py specifies it): a record for every card in
-  the pool and every token or emblem a pool card makes (its `all_parts`).
-- data/cards.json, which the UI still bundles: for the main decks of the mirror and of the
-  Vintage deck before it, and the basic lands, each card's printing, artist and per face the
-  display text and image URLs, the tokens they make, and the image of Magic's card back. The
-  app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
+`--refresh`), in one pass with no per-card request, and writes data/card-store.tsv, the card
+store (card_store.py specifies it): a record for every card in the pool and every token or
+emblem a pool card makes (its `all_parts`). The app serves the UI the records it asks for by
+name (rust/crates/beryl_session/src/card_records.rs) and downloads the images themselves on
+demand (rust/crates/beryl_app/src/art.rs).
 
 The pool is every card in Scryfall's Oracle data except un-set, dexterity and Alchemy cards: a
 card whose Vintage legality is anything but not_legal (which drops un-cards, Alchemy and other
@@ -24,8 +21,8 @@ are John Avon's full-art lands from Unstable. An English printing with a name of
 as a Through the Omenpaths card that Arena names differently from Scryfall's oracle, takes its
 printed name and text, so it is keyed by the name the engine knows.
 
-`--sample FILE NAME...` writes the printings data/cards.json reads, and every printing of each
-NAME, in the bulk file's shape: the tests' fixture.
+`--sample FILE NAME...` writes the printings of the decks' cards (`m1_names`) and the pinned
+ones, and every printing of each NAME, in the bulk file's shape: the tests' fixture.
 """
 
 from __future__ import annotations
@@ -43,7 +40,6 @@ from typing import cast
 from . import card_store, paths, scryfall
 
 # Scryfall's card back images: /<size>/<id[0]>/<id[1]>/<card_back_id>.jpg.
-BACKS = "https://backs.scryfall.io/large"
 DATA: Path = paths.REPO / "data"
 # The Milestone 1 mirror deck.
 DECK: Path = (
@@ -92,12 +88,18 @@ TREATMENTS: frozenset[str] = frozenset(
 )
 PRINTINGS: Path = DATA / "card-printings.csv"
 EXCLUSIONS: Path = DATA / "card-pool-exclusions.json"
-OUTPUT: Path = DATA / "cards.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
-FACE_FIELDS = ("mana_cost", "type_line", "oracle_text", "power", "toughness", "loyalty")
 # The characteristics a store record's face keeps (CR 109.3), less name, colors and color
 # indicator, which follow.
-STORE_FACE_FIELDS: tuple[str, ...] = (*FACE_FIELDS, "defense")
+STORE_FACE_FIELDS: tuple[str, ...] = (
+    "mana_cost",
+    "type_line",
+    "oracle_text",
+    "power",
+    "toughness",
+    "loyalty",
+    "defense",
+)
 NOT_LEGAL = "not legal in Vintage"
 
 # Prefer the Double Masters Copy illustration over the generic token Scryfall links.
@@ -130,7 +132,7 @@ def m1_names() -> list[str]:
 
 def listed(path: Path = card_store.STORE) -> tuple[list[Json], list[Json]]:
     """The store's records for `m1_names`' cards, each once, and for the tokens and emblems
-    they make: what data/cards.json holds, which the tools read from the store instead.
+    they make: the cards the tools work on.
     """
     with card_store.Store(path) as store:
         found = {str(r["scryfall_id"]): r for r in store.cards(m1_names())}
@@ -232,8 +234,8 @@ def drop_reason(card: Json, excluded: dict[str, str]) -> str | None:
     return excluded.get(str(card["name"]))
 
 
-# The fields the pool, the printing rule, the records and data/cards.json read, so a run keeps
-# only these of each printing, and so does the tests' sample.
+# The fields the pool, the printing rule and the records read, so a run keeps only these of
+# each printing, and so does the tests' sample.
 BULK_FIELDS: tuple[str, ...] = (
     "id",
     "oracle_id",
@@ -370,27 +372,6 @@ def raw_faces(card: Json) -> list[Json]:
     return cast(list[Json], card.get("card_faces") or [card])
 
 
-def faces(card: Json) -> list[Json]:
-    """Per face its display text and images. Single-faced cards keep these on the card;
-    split and adventure faces share the card's single image and, sometimes, its colors.
-    A printing's own name and text, where Scryfall gives them, replace the oracle's.
-    """
-    printed = is_printed(card)
-    out: list[Json] = []
-    for face in raw_faces(card):
-        images = cast(Json, face.get("image_uris") or card["image_uris"])
-        entry: Json = {"name": face_name(face, printed)}
-        for name in FACE_FIELDS:
-            if name in face:
-                entry[name] = face[name]
-        if printed and "printed_text" in face:
-            entry["oracle_text"] = face["printed_text"]
-        entry["colors"] = face.get("colors", card.get("colors", []))
-        entry["images"] = {v: images[v] for v in IMAGE_VERSIONS}
-        out.append(entry)
-    return out
-
-
 def face_name(face: Json, printed: bool) -> str:
     return str(face.get("printed_name", face["name"]) if printed else face["name"])
 
@@ -405,19 +386,6 @@ def display_name(card: Json) -> str:
     if has_own_name(card):
         return " // ".join(face_name(f, True) for f in raw_faces(card))
     return str(card["name"])
-
-
-def entry(card: Json, **extra: object) -> Json:
-    return {
-        "name": display_name(card),
-        "scryfall_id": card["id"],
-        "set": card["set"],
-        "collector_number": card["collector_number"],
-        "layout": card["layout"],
-        "artist": card.get("artist", ""),
-        **extra,
-        "faces": faces(card),
-    }
 
 
 def makes(part: Json) -> bool:
@@ -455,25 +423,6 @@ def engine_name(name: str, type_line: str) -> str:
     if type_line.startswith("Token") and dash and subtypes == name:
         return f"{name} Token"
     return name
-
-
-def token_entry(token: Json, made_by: list[str]) -> Json:
-    out = entry(token, made_by=made_by)
-    for face in cast(list[Json], out["faces"]):
-        face["name"] = engine_name(str(face["name"]), str(face["type_line"]))
-    if len(cast(list[Json], out["faces"])) == 1:
-        out["name"] = cast(list[Json], out["faces"])[0]["name"]
-    return out
-
-
-def card_back(cards: Iterable[Json]) -> str:
-    """The image of the back most of these cards have: Magic's own, which a few cards replace
-    (a double-faced card's back is its other face)."""
-    backs = Counter(str(c["card_back_id"]) for c in cards if "card_back_id" in c)
-    if not backs:
-        raise LookupError("Scryfall gave no card back")
-    back = backs.most_common(1)[0][0]
-    return f"{BACKS}/{back[0]}/{back[1]}/{back}.jpg"
 
 
 def store_faces(card: Json, token: bool) -> list[Json]:
@@ -584,34 +533,8 @@ def build_store(pool: Pool) -> Built:
     return built
 
 
-def build_cards_json(names: list[str], built: Built, pool: Pool) -> Json:
-    """data/cards.json for `names`: each card's printing, as a deck names it (its own name
-    or its front face's), and the tokens and emblems they make."""
-    missing = [n for n in names if n not in built.by_name]
-    if missing:
-        raise LookupError(f"no card in the pool named {missing}")
-    cards = list({id(c): c for c in (built.by_name[n] for n in names)}.values())
-    makers = token_parts(cards)
-    return {
-        "card_back": card_back(cards),
-        "cards": sorted((entry(c) for c in cards), key=by_name),
-        "tokens": sorted(
-            (token_entry(pool.by_id[t], sorted(makers[t])) for t in makers),
-            key=by_name,
-        ),
-    }
-
-
-def by_name(card: Json) -> tuple[str, str]:
-    return (str(card["name"]), str(card["scryfall_id"]))
-
-
-def render(data: Json) -> str:
-    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-
-
 def sample(path: Path, bulk: Path, built: Built, pool: Pool, names: list[str]) -> None:
-    """Writes the tests' fixture: the printings data/cards.json reads, the pinned ones, and
+    """Writes the tests' fixture: the printings of the decks' cards, the pinned ones, and
     every printing of each of `names`, pruned, one per line."""
     pinned = [n for n in printings(PRINTINGS) if n in built.by_name]
     shown = [built.by_name[n] for n in dict.fromkeys(m1_names() + pinned)]
@@ -653,18 +576,15 @@ def cards(args: argparse.Namespace) -> int:
         print(f"cards: wrote {args.sample}", file=sys.stderr)
         return 0
     card_store.write(Path(args.store), built.lines)
-    output = Path(args.output)
-    output.write_text(render(build_cards_json(m1_names(), built, pool)), newline="\n")
-    print(f"cards: wrote {args.store} and {output}", file=sys.stderr)
+    print(f"cards: wrote {args.store}", file=sys.stderr)
     return 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "cards",
-        help="build the card store and data/cards.json from Scryfall's bulk data",
+        help="build the card store from Scryfall's bulk data",
     )
-    p.add_argument("--output", default=str(OUTPUT))
     p.add_argument("--store", default=str(card_store.STORE))
     source = p.add_mutually_exclusive_group()
     source.add_argument(
@@ -674,7 +594,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--sample",
         metavar="FILE",
-        help="write the tests' fixture instead: data/cards.json's printings and NAMES'",
+        help="write the tests' fixture instead: the decks' cards' printings and NAMES'",
     )
     p.add_argument("names", nargs="*", metavar="NAME")
     p.set_defaults(func=cards)
