@@ -583,6 +583,9 @@ def ui_lane() -> Lane:
         Lane("ui", warm=True)
         .step("prettier", [system.npm_bin("prettier"), "--check", "."], paths.UI)
         .step("tsc", [system.npm_bin("tsc"), "-b"], paths.UI)
+        # The UI's logic that runs with no browser (ui/package.json `test`): Node expands the
+        # pattern itself.
+        .step("test", ["node", "--test", "scripts/*.test.mjs"], paths.UI)
     )
 
 
