@@ -4,7 +4,8 @@ a verdict the tool infers, and a check that flakes twice in seven days is quaran
 - **flaky**: the check failed and then passed on the same tree, as on the rerun `run_lane` gives
   a failed step (checks.py).
 - **stale** or **catch**: a check that failed passed in a later run from the same place (the
-  branch, or slow CI), on another tree. The paths that changed between the two trees say which:
+  branch, or slow CI), on another tree. The paths that changed between the two trees say which
+  (for slow CI, those the Steward's commits changed, when a Steward fixed it):
   only the check's own side ([`CHECK_SIDE`]) is a stale test; only product code is a caught
   bug; both is **mixed**, which prints a line asking for `by verdict <check> stale|catch` and
   blocks nothing. The same command corrects any verdict.
@@ -230,8 +231,24 @@ def classify(lane: str, old: str, new: str) -> str | None:
     if old == new:
         return "flaky"
     touched = sides(lane, old, new)
-    if touched is None:
-        return None
+    return None if touched is None else judge(touched)
+
+
+def classify_commits(lane: str, commits: Iterable[str]) -> str | None:
+    """The verdict on a failure that `commits` fixed, judged by what they alone touched: on
+    staging, others' work lands between a failure and the pass, and would read as both sides.
+    """
+    touched: set[str] = set()
+    for c in commits:
+        found = sides(lane, f"{c}^", c)
+        if found is None:
+            return None
+        touched |= found
+    return judge(touched)
+
+
+def judge(touched: set[str]) -> str:
+    """The verdict on a fix that touched these sides of a check."""
     if touched == {"check"}:
         return "stale"
     if touched == {"product"}:
@@ -368,10 +385,11 @@ class Beads:
             warn(f"{check}: verdict {entry.get('verdict')} not recorded in {bead}")
         return code == 0
 
-    def steward(self, commits: set[str]) -> str:
-        """The Steward bead that delivered one of `commits`; empty when none did."""
+    def steward(self, commits: set[str]) -> tuple[str, list[str]]:
+        """The Steward bead that delivered one of `commits`, with those of its commits among
+        them; empty when none did."""
         if not commits:
-            return ""
+            return "", []
         _, out = self.bd(
             "list", "--label", "role:steward", "--all", "-n", "0", "--json"
         )
@@ -381,9 +399,10 @@ class Beads:
             delivered = (
                 str(meta.get("enact_commits", "")) if isinstance(meta, dict) else ""
             )
-            if commits & set(delivered.split()):
-                return str(b.get("id", ""))
-        return ""
+            mine = [c for c in delivered.split() if c in commits]
+            if mine:
+                return str(b.get("id", "")), mine
+        return "", []
 
 
 STORE: Beads = Beads()
@@ -498,9 +517,10 @@ def settle(
     for check, lane, e in found:
         if script == "ci" and e["verdict"] != "flaky" and e["commit"] != commit:
             fixes = git("rev-list", f"{e['commit']}..{commit}").stdout.split()
-            steward = STORE.steward(set(fixes))
+            steward, delivered = STORE.steward(set(fixes))
             if steward:
                 e["steward"] = steward
+                e["verdict"] = classify_commits(lane, delivered) or e["verdict"]
         STORE.record(check, lane, e)
         line = f"verdict: {lane} {check} {e['verdict']}"
         if e["verdict"] == "mixed":

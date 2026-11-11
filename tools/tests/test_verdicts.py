@@ -182,6 +182,25 @@ def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
     assert entry["fixed"] == git(repo, "rev-parse", "HEAD")
 
 
+def test_a_steward_fix_is_judged_by_its_own_commits_alone(
+    repo: Path, bd: FakeBd
+) -> None:
+    assert checks.run_lanes([one("shots:board", False)], "ci", 60, True) == 1
+    commit = ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm"]
+    write(repo, "ui/src/Board.tsx", "board, someone else's feature\n")
+    git(repo, "add", "-A")
+    git(repo, *commit, "feature")
+    write(repo, "ui/shots.json", "{}\n")
+    git(repo, "add", "-A")
+    git(repo, *commit, "fix")
+    fix = git(repo, "rev-parse", "HEAD")
+    bd.stewards = [{"id": "by-steward", "metadata": {"enact_commits": fix}}]
+    assert checks.run_lanes([one("shots:board", True)], "ci", 60, True) == 0
+    [entry] = bd.history(["shots:board"])["shots:board"]
+    # The range from the failure holds the feature too, which alone would read as mixed.
+    assert entry["verdict"] == "stale" and entry["steward"] == "by-steward"
+
+
 RUST = """\
 pub fn product() -> u32 {
     1
