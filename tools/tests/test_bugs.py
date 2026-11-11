@@ -73,6 +73,46 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(bugs.reports(tmp_path, done=True)) == 1
 
 
+def test_banked_reports_list_apart_and_stay_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    banked = report(tmp_path, "20261108-143012-arrow-jumps")
+    report(tmp_path, "20261109-101500-wrong-wording")
+    filed = bugs.load(banked)
+    assert filed is not None
+    bugs.update(filed, status="filed", bead="by-x1")
+    calls: list[list[str]] = []
+
+    def fake_bd(args: list[str]) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    assert cli.main(["bugs", "bank", "by-x1"]) == 0
+    assert calls == [["update", "by-x1", "--add-label", "banked"]]
+    r = bugs.load(banked)
+    assert r is not None and r.status == "banked" and r.bead == "by-x1"
+    # Banked is not done: the report stays where it was, and is never filed again.
+    assert len(bugs.reports(tmp_path)) == 2
+    capsys.readouterr()
+    assert cli.main(["bugs", "file", "--dry-run"]) == 0
+    assert "arrow-jumps" not in capsys.readouterr().out
+
+    assert cli.main(["bugs"]) == 0
+    out = capsys.readouterr().out
+    open_part, _, banked_part = out.partition("banked, waiting for the stage (1):")
+    assert "wrong-wording" in open_part and "arrow-jumps" not in open_part
+    assert "arrow-jumps" in banked_part and "wrong-wording" not in banked_part
+
+    # The stage's fix closes it as any other.
+    assert cli.main(["bugs", "done", "by-x1"]) == 0
+    assert [r.id for r in bugs.reports(tmp_path)] == ["20261109-101500-wrong-wording"]
+    assert cli.main(["bugs", "bank", "by-x1"]) == 1
+
+
 def test_an_ai_report_files_an_incident_bead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
