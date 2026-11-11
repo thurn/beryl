@@ -67,7 +67,7 @@ pub(crate) fn resolve<L: Layout>(
         x.events.revealed = Bitboard::EMPTY;
         let paused = paused?;
         debug_assert!(
-            paused.is_none() || s.outcome.is_some(),
+            paused.is_none() || s.outcome().is_some(),
             "a body paused outside a scratch copy"
         );
         return Ok(());
@@ -91,7 +91,7 @@ pub(crate) fn resolve<L: Layout>(
             keep_what_was_seen(s, spare, chance::replaying(sink));
             // While the question is open no one holds priority; the finished resolution gives
             // it to the active player (CR 117.3b).
-            s.turn.passes = 0;
+            s.reset_passes();
             s.pending = Pending::Resolving(Resolving {
                 record,
                 question,
@@ -132,7 +132,7 @@ fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, knowledge: [Bitboard<
 /// player there, so the cards seen are the cards it holds and the run replays to the same
 /// question.
 fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool) {
-    let random = run.rng != s.rng;
+    let random = run.rng() != s.rng();
     if settled && !random {
         chance::adopt_unknown(s, run);
     }
@@ -263,7 +263,7 @@ fn run<L: Layout>(
             let question = ctx.question.take();
             offer = ctx.offer;
             ctx.finish()?;
-            if s.outcome.is_some() {
+            if s.outcome().is_some() {
                 return Ok(None);
             }
             if flow.is_err() {
@@ -290,8 +290,7 @@ fn run<L: Layout>(
     }
     // CR 117.3b: "The active player receives priority after a spell or ability (other than a
     // mana ability) resolves."
-    s.turn.priority = s.turn.active;
-    s.turn.passes = 0;
+    s.give_priority(s.turn().active());
     Ok(None)
 }
 

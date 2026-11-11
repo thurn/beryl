@@ -8,11 +8,12 @@ use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Table};
 use crate::object::{Derived, Object};
 use crate::pending::Pending;
-use crate::player::{ManaPool, MulliganStatus, Player, Turn};
+use crate::player::{ManaPool, MulliganStatus, Player};
 use crate::profile::Profile;
 use crate::rng::Rng;
 use crate::state::{Budgets, DECK_SLOTS, Flags, State, Zones, deck_slot};
 use crate::table::GameTable;
+use crate::turn::Turn;
 
 /// A player before the game begins ([CR 103.4](https://yawgatog.com/resources/magic-rules/#R1034)):
 /// "Each player begins the game with a starting life total of 20."

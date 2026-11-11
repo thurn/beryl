@@ -77,9 +77,9 @@ fn activated<L: Layout>(
 /// priority may cast a sorcery card from their hand during a main phase of their turn when the
 /// stack is empty."
 pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
-    player == s.turn.active
+    player == s.turn().active()
         && matches!(
-            s.turn.step,
+            s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
         && s.stack.is_empty()
@@ -913,7 +913,7 @@ fn activation_options<L: Layout>(
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
-    let prunes = s.profile.hides_pointless[player.index()] && t.needy();
+    let prunes = s.profile().hides_pointless[player.index()] && t.needy();
     let mine = s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
         | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield));
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
@@ -1325,7 +1325,7 @@ fn waterbend_options<L: Layout>(
     }
     // With only generic symbols, activating a mana source keeps at least as much payment
     // available as it did untapped. Activate before tapping any permanent as a bender.
-    let manual_mana = s.profile.taps_mana == Some(c.player)
+    let manual_mana = s.profile().taps_mana == Some(c.player)
         && c.bent == 0
         && cost.symbols.iter().all(|&n| n == 0);
     if objects.is_empty() && !manual_mana {
@@ -1356,7 +1356,7 @@ fn pay_mana<L: Layout>(
 ) -> Result<(), Full> {
     let entry = top(s);
     let cost = total_cost(t, &entry, &c);
-    match s.profile.payment {
+    match s.profile().payment {
         Payment::Manual => {
             c.remaining = cost;
             if cost.is_zero() {
@@ -1429,8 +1429,8 @@ fn finish<L: Layout>(
     c: Casting,
 ) -> Result<(), Full> {
     s.pending = Pending::None;
-    s.turn.priority = if c.resolving { s.turn.active } else { c.player };
-    s.turn.passes = 0;
+    let active = s.turn().active();
+    s.give_priority(if c.resolving { active } else { c.player });
     let entry = top(s);
     if let Some(spell) = entry.spell() {
         let face = t.def(entry.card).face(entry.face);

@@ -133,7 +133,7 @@ const REFERENCES_EVERY: u32 = 32;
 pub(crate) fn assert_sound<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) {
     // A game that ran out of capacity stopped partway through an event, and is replayed
     // from before it in a larger layout, never played on.
-    if !x.checked || s.outcome == Some(Outcome::Stalled(StallReason::Capacity)) {
+    if !x.checked || s.outcome() == Some(Outcome::Stalled(StallReason::Capacity)) {
         return;
     }
     if let Err(v) = s.check_invariants(t) {

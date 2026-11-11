@@ -191,7 +191,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     fn stall(&mut self, reason: StallReason) {
-        self.state.outcome = Some(crate::decision::Outcome::Stalled(reason));
+        self.state
+            .end_game(crate::decision::Outcome::Stalled(reason));
     }
 
     /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):
@@ -232,10 +233,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             "a body asked a question without declaring may_pause"
         );
         debug_assert!(!d.is_empty(), "a question with no answer");
-        if self.state.outcome.is_some() {
+        if self.state.outcome().is_some() {
             return Err(Pause);
         }
-        if d.len() == 1 && self.state.profile.stops != Stops::Forced {
+        if d.len() == 1 && self.state.profile().stops != Stops::Forced {
             return Ok(Choice(0));
         }
         if let Some(&c) = self.record.get(self.used) {
@@ -247,11 +248,11 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         {
             // An inline answer is a decision like any other, so it counts toward the budget
             // as a paused question would when `next` returns it.
-            if self.state.budgets.decisions >= self.state.profile.limits.decisions_per_turn {
+            if self.state.budgets().decisions >= self.state.profile().limits.decisions_per_turn {
                 self.stall(StallReason::DecisionsPerTurn);
                 return Err(Pause);
             }
-            self.state.budgets.decisions += 1;
+            self.state.count_decision();
             let answer = answers.answer(Observation::new(self.state, d.player), d);
             debug_assert!(
                 answer.is_some(),
@@ -433,7 +434,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Pays a mana cost `player` can pay, under the profile's payment rules (§10).
     fn pay(&mut self, player: Seat, cost: ManaCost) -> Result<(), Pause> {
-        if self.state.profile.payment == Payment::Manual {
+        if self.state.profile().payment == Payment::Manual {
             let mut remaining = cost;
             while !remaining.is_zero() {
                 let r = mana::manual_options(
@@ -456,7 +457,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             }
             return Ok(());
         }
-        let greedy = self.state.profile.payment == Payment::Greedy;
+        let greedy = self.state.profile().payment == Payment::Greedy;
         let r = mana::plans(
             self.state,
             self.table,
@@ -547,7 +548,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// "Until your next turn, you may cast sorcery spells as though they had flash."
     pub fn allow_sorceries_as_flash(&mut self, player: Seat) {
-        self.state.player_mut(player).sorceries_as_flash = true;
+        self.state.legacy_mut().set_sorceries_as_flash(player, true);
     }
 
     /// Adds mana to a player's mana pool
@@ -806,9 +807,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                     self.full = true;
                 }
             }
-            let mut rng = self.state.rng.other;
-            self.state.rebind(moved.as_slice(), &mut rng);
-            self.state.rng.other = rng;
+            self.state.rebind_at_random(moved.as_slice());
         }
     }
 
@@ -1184,7 +1183,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     ) -> Result<Bitboard<L::Slot>, Pause> {
         let you = self.entry.controller;
         let attacking =
-            crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
+            crate::combat::in_combat(self.state.turn().step()) && self.state.turn().active() == you;
         let tokens = self.create_tokens(
             def,
             count,
@@ -1271,7 +1270,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// player."
     pub fn create_emblem(&mut self, player: Seat, def: &'static CardDef) {
         let card = self.game_index(def);
-        let r = self.state.player_mut(player).emblems.push(card);
+        let r = self.state.add_emblem(player, card);
         self.check(r);
     }
 
@@ -1299,7 +1298,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// "An effect may state that a player wins the game." The game ends at once; the body
     /// asks nothing more.
     pub fn win_game(&mut self, player: Seat) {
-        if self.state.outcome.is_none() {
+        if self.state.outcome().is_none() {
             let cause = crate::event::LossCause::Effect {
                 source: self.entry.object,
                 card: self.entry.card,

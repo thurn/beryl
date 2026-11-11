@@ -120,11 +120,10 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
     player: Seat,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    s.turn.priority = player;
-    s.turn.passes = 0;
+    s.give_priority(player);
     let cost = face_up_cost(s, t, slot).expect("a permanent offered to turn face up");
-    if s.profile.payment != Payment::Manual {
-        let greedy = s.profile.payment == Payment::Greedy;
+    if s.profile().payment != Payment::Manual {
+        let greedy = s.profile().payment == Payment::Greedy;
         let plans = mana::plans(s, t, sink, player, cost, Bitboard::EMPTY, greedy)?;
         debug_assert!(!plans.is_empty(), "a cost offered is payable");
         if plans.len() == 1 {
@@ -158,7 +157,7 @@ pub(crate) fn decision<L: Layout>(
     remaining: ManaCost,
 ) -> Result<Decision<L>, Full> {
     let player = s.controller(slot);
-    let (kind, list) = if s.profile.payment == Payment::Manual {
+    let (kind, list) = if s.profile().payment == Payment::Manual {
         (
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, player, remaining, Bitboard::EMPTY)?,

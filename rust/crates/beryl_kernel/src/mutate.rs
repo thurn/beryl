@@ -383,9 +383,11 @@ impl<L: Layout> State<L> {
     /// Removes every permanent from combat as it ends
     /// ([CR 511.3](https://yawgatog.com/resources/magic-rules/#R5113)): "As soon as the end
     /// of combat step ends, all creatures, battles, and planeswalkers are removed from
-    /// combat."
+    /// combat." The turn forgets that attackers were declared
+    /// ([`State::declare_attack`]).
     #[inline]
     pub fn end_combat(&mut self) {
+        self.turn.attacked = false;
         for i in 0..self.battlefield.len() {
             let slot = self.battlefield.as_slice()[i];
             let o = self.object_mut(slot);

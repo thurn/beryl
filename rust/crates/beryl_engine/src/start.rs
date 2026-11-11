@@ -26,8 +26,7 @@ pub(crate) fn set_starting_player<L: Layout>(
     sink: &mut Sink<L>,
     starting: Seat,
 ) -> Result<(), Full> {
-    s.turn.starting_player = starting;
-    s.turn.active = starting;
+    s.set_starting_player(starting);
     for player in [starting, starting.opponent()] {
         s.draw_n(sink, player, STARTING_HAND)?;
     }
@@ -37,7 +36,10 @@ pub(crate) fn set_starting_player<L: Layout>(
 
 /// The players in turn order from the starting player.
 pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> [Seat; 2] {
-    [s.turn.starting_player, s.turn.starting_player.opponent()]
+    [
+        s.turn().starting_player(),
+        s.turn().starting_player().opponent(),
+    ]
 }
 
 /// Records a keep or mulligan declaration. A player who keeps after taking mulligans then
@@ -50,7 +52,7 @@ pub(crate) fn declare<L: Layout>(
     mulligan: bool,
 ) -> Result<(), Full> {
     if mulligan {
-        s.player_mut(player).mulligan = MulliganStatus::WillMulligan;
+        s.declare_mulligan(player);
     } else {
         keep(s, player);
     }
@@ -69,9 +71,7 @@ pub(crate) fn declare<L: Layout>(
 /// bottomed cards are hidden either way.
 fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
     let hand = s.hand_size(player) as u8;
-    let p = s.player_mut(player);
-    p.mulligan = MulliganStatus::Kept;
-    p.to_bottom = p.mulligans.min(hand);
+    s.keep_hand(player, s.player(player).mulligans.min(hand));
 }
 
 /// Puts one card from a player's hand on the bottom of their library after a mulligan.
@@ -83,7 +83,7 @@ pub(crate) fn put_on_bottom<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     s.move_object(sink, slot, Zone::Library, Place::Bottom)?;
-    s.player_mut(player).to_bottom -= 1;
+    s.count_bottomed(player);
     advance_mulligans(s, t, sink)
 }
 
@@ -133,9 +133,7 @@ fn advance_mulligans<L: Layout>(
             }
             s.shuffle_library(p);
             s.draw_n(sink, p, STARTING_HAND)?;
-            let player = s.player_mut(p);
-            player.mulligans += 1;
-            player.mulligan = MulliganStatus::Undeclared;
+            s.count_mulligan(p);
         }
         if !any {
             s.pending = Pending::None;

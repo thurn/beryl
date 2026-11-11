@@ -13,7 +13,7 @@ use beryl_card::{Effect, Players};
 
 use crate::card::{Ability, Behavior, Flow, ManaColor};
 use crate::effect::EffectCtx;
-use crate::event::{Event, Sink};
+use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
@@ -108,14 +108,7 @@ pub(crate) fn add_mana<L: Layout>(
     color: ManaColor,
     amount: u8,
 ) {
-    let pool = &mut s.player_mut(player).mana[color];
-    *pool = pool.saturating_add(amount);
-    sink.note(Event::Mana {
-        player,
-        source,
-        color,
-        amount,
-    });
+    sink.note(s.add_mana(player, source, color, amount));
 }
 
 /// Whether a triggered ability's intervening "if" holds, or it has none

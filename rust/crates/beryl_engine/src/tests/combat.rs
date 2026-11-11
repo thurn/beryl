@@ -793,12 +793,12 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     let smart = Profile::SMART;
     for step in [TurnStep::DeclareAttackers, TurnStep::DeclareBlockers] {
-        g.s.turn.step = step;
+        g.s.board().set_step(step);
         for player in [a, a.opponent()] {
             assert!(stops_for(smart, &g.s, player), "{step:?}");
         }
     }
-    g.s.turn.step = TurnStep::BeginningOfCombat;
+    g.s.board().set_step(TurnStep::BeginningOfCombat);
     assert!(!stops_for(smart, &g.s, a));
 }
 

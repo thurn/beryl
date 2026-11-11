@@ -149,8 +149,8 @@ fn a_player_at_zero_life_loses_and_two_at_once_draw() {
     ] {
         let mut s = State::new(&t, 1, Profile::EXACT);
         begin(&t, &mut s);
-        s.player_mut(Seat::P0).life = lives[0];
-        s.player_mut(Seat::P1).life = lives[1];
+        s.board().set_life(Seat::P0, lives[0]);
+        s.board().set_life(Seat::P1, lives[1]);
         assert_eq!(
             next(&mut s, &t, &mut Scratch::new(), &mut Replay),
             Step::Over(outcome)

@@ -767,11 +767,10 @@ impl Game {
 
     /// Makes it `active`'s turn, at `step`, with priority for the active player.
     pub fn at(&mut self, active: Seat, step: TurnStep) {
-        let turn = &mut self.s.turn;
-        turn.active = active;
-        turn.step = step;
-        turn.priority = active;
-        turn.passes = 0;
+        let mut board = self.s.board();
+        board.set_active(active);
+        board.set_step(step);
+        board.set_priority(active);
     }
 
     pub fn decide(&mut self) -> Decision {

@@ -909,7 +909,7 @@ impl<L: Layout> Ahead<L> {
 ///   determines which permanents they control will untap. Then they untap them all
 ///   simultaneously."
 fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
-    s.turn.active == player && s.turn.step <= TurnStep::PostcombatMain
+    s.turn().active() == player && s.turn().step() <= TurnStep::PostcombatMain
 }
 
 /// Whether `player` may cast `face` at instant speed, as casting decides: an instant
@@ -1306,7 +1306,7 @@ pub(crate) fn plans<L: Layout>(
         let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
         (sources.sacrificed(p), floating, p.left)
     });
-    if s.profile.taps_mana == Some(player) {
+    if s.profile().taps_mana == Some(player) {
         looking_ahead(s, t, player, cost, &sources, kept.as_mut_slice())?;
     }
     Ok(kept)
@@ -1393,7 +1393,7 @@ pub(crate) fn pay<L: Layout>(
             units.push((1 << k, None, 1))?;
         }
     }
-    let human = s.profile.taps_mana == Some(player);
+    let human = s.profile().taps_mana == Some(player);
     for (i, c) in sources.classes().iter().enumerate() {
         let tapped: L::Queue<L::Slot, 64> = if human {
             human_taps(s, c, plan.taps[i])?
@@ -1421,9 +1421,7 @@ pub(crate) fn pay<L: Layout>(
         if let Some(slot) = source {
             activate(s, t, sink, slot, ManaColor::ALL[kind])?;
         }
-        let pool = &mut s.player_mut(player).mana[ManaColor::ALL[kind]];
-        debug_assert!(*pool >= n);
-        *pool -= n;
+        s.spend_mana(player, ManaColor::ALL[kind], n);
     }
     debug_assert_eq!(s.player(player).mana.amounts(), plan.left);
     Ok(())
@@ -1666,7 +1664,7 @@ pub(crate) fn manual_pay<L: Layout>(
         }
         _ => unreachable!("a manual payment option"),
     };
-    s.player_mut(player).mana[color] -= 1;
+    s.spend_mana(player, color, 1);
     pay_unit(&mut remaining, color.index());
     Ok(remaining)
 }

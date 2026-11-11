@@ -215,7 +215,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The players `players` names, in the order they act (CR 101.4).
     fn in_turn_order(&self, players: Players) -> impl Iterator<Item = Seat> + use<L> {
         let who = self.scene().players(players);
-        who.in_turn_order(self.ctx.state.turn.active)
+        who.in_turn_order(self.ctx.state.turn().active())
     }
 
     /// The one player who makes a choice the effect offers `players`.
@@ -526,7 +526,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             return Outcome::NOTHING;
         }
         let who = self.scene().players(players);
-        let active = self.ctx.state.turn.active;
+        let active = self.ctx.state.turn().active();
         let mut tokens = Bitboard::EMPTY;
         let mut copy = |ctx: &mut EffectCtx<'a, L>, card, how: TokenEntry| {
             let how = TokenEntry {

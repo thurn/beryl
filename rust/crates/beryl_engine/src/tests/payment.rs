@@ -112,7 +112,7 @@ fn flash_keeps_the_plains(human: bool) -> bool {
         g.give(g.me, "Test Island", Zone::Battlefield);
     }
     g.at(g.them, TurnStep::End);
-    g.s.turn.priority = g.me;
+    g.s.board().set_priority(g.me);
     g.pick(cast(flasher));
     assert_eq!(g.s.object(flasher).zone, Zone::Stack);
     !tapped(&g, plains)
@@ -162,7 +162,7 @@ fn main_phase_keeps_the_plains(lands_played: u8) -> bool {
     let plains = g.give(g.me, "Test Land", Zone::Battlefield);
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.give(g.me, "Test Island", Zone::Battlefield);
-    g.s.player_mut(g.me).lands_played = lands_played;
+    g.s.board().set_lands_played(g.me, lands_played);
     g.pick(cast(diver));
     assert_eq!(g.s.object(diver).zone, Zone::Stack);
     !tapped(&g, plains)
@@ -382,7 +382,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         for color in [ManaColor::White, ManaColor::Blue, ManaColor::Colorless] {
             pool[color] = rng.below(2) as u8;
         }
-        g.s.player_mut(g.me).mana = pool;
+        g.s.board().set_mana(g.me, pool);
         let pool = pool.amounts();
         crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default());
         let cost = ManaCost::new(
@@ -600,7 +600,9 @@ fn floating_mana_no_source_left_could_make_is_still_a_choice() {
     let bear = g.give(g.me, "Test Bear", Zone::Hand);
     g.give(g.me, "Test Land", Zone::Battlefield);
     g.give(g.me, "Test Land", Zone::Battlefield);
-    g.s.player_mut(g.me).mana[ManaColor::Blue] = 1;
+    let mut pool = ManaPool::default();
+    pool[ManaColor::Blue] = 1;
+    g.s.board().set_mana(g.me, pool);
     g.pick(cast(bear));
     // {U} and a Plains, or two Plains keeping the {U}: no Plains makes {U} again.
     let d = g.decide();

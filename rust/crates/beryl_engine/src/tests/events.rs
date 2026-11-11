@@ -1091,7 +1091,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     // A player who can't pay isn't asked.
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    s.player_mut(p).life = 2;
+    s.board().set_life(p, 2);
     let springs = find(&s, &t, p, "Test Springs");
     s.move_object(
         &mut crate::event::Sink::off(),

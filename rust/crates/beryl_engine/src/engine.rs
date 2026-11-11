@@ -39,7 +39,7 @@ pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>
 /// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
 pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
-    if s.outcome.is_none() {
+    if s.outcome().is_none() {
         sba::end_game(s, &mut x.events, player, crate::event::LossCause::Concede);
     }
 }
@@ -84,7 +84,7 @@ pub fn next<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Step<L> {
-    let step = advance::<false, L>(s, t, x, a, (s.turn.number, s.turn.step));
+    let step = advance::<false, L>(s, t, x, a, (s.turn().number(), s.turn().step()));
     x.settle_counts();
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
@@ -136,14 +136,14 @@ fn advance<const STEPS: bool, L: Layout>(
     let mut settled = false;
     loop {
         let unchanged = std::mem::take(&mut settled);
-        if let Some(outcome) = s.outcome {
+        if let Some(outcome) = s.outcome() {
             return Some(Step::Over(outcome));
         }
         layers::refresh(s, t, &mut x.events);
-        if combat::in_combat(s.turn.step) {
+        if combat::in_combat(s.turn().step()) {
             combat::prune(s);
         }
-        if STEPS && (s.turn.number, s.turn.step) != seen {
+        if STEPS && (s.turn().number(), s.turn().step()) != seen {
             return None;
         }
         if s.pending == Pending::None {
@@ -156,7 +156,7 @@ fn advance<const STEPS: bool, L: Layout>(
                 sba::check(s, t, &mut x.events)
             } {
                 Ok(true) => {
-                    s.turn.cleanup_check = false;
+                    s.set_cleanup_check(false);
                     continue;
                 }
                 Ok(false) => {}
@@ -165,8 +165,8 @@ fn advance<const STEPS: bool, L: Layout>(
                     continue;
                 }
             }
-            if s.turn.cleanup_check {
-                s.turn.cleanup_check = false;
+            if s.turn().cleanup_check() {
+                s.set_cleanup_check(false);
                 // CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
                 if s.triggers.is_empty() {
@@ -179,8 +179,8 @@ fn advance<const STEPS: bool, L: Layout>(
         }
         if passes_silently(s) {
             x.counts.silent += 1;
-            let passes = s.turn.passes;
-            if perform_priority(s, t, x, a, s.turn.priority, Opt::Pass).is_err() {
+            let passes = s.turn().passes();
+            if perform_priority(s, t, x, a, s.turn().priority(), Opt::Pass).is_err() {
                 stall(s, StallReason::Capacity);
             }
             settled = handed_over(s, passes);
@@ -193,23 +193,23 @@ fn advance<const STEPS: bool, L: Layout>(
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
         let forced = (d.len() == 1 || only_idle(s, t, &d))
-            && (priority || s.profile.stops != Stops::Forced)
-            && !profile::asks_lone(s.profile, s, &d);
-        let silent = (forced || (priority && !profile::stops_for(s.profile, s, d.player)))
-            && !(priority && s.profile.asks_pass(s.turn, d.player));
+            && (priority || s.profile().stops != Stops::Forced)
+            && !profile::asks_lone(s.profile(), s, &d);
+        let silent = (forced || (priority && !profile::stops_for(s.profile(), s, d.player)))
+            && !(priority && s.profile().asks_pass(*s.turn(), d.player));
         if silent {
             x.counts.silent += 1;
-            let passes = s.turn.passes;
+            let passes = s.turn().passes();
             perform_or_stall(s, t, x, a, &d, Choice(0));
             // A priority decision's first candidate is passing.
             settled = priority && handed_over(s, passes);
             continue;
         }
-        if s.budgets.decisions >= s.profile.limits.decisions_per_turn {
+        if s.budgets().decisions >= s.profile().limits.decisions_per_turn {
             stall(s, StallReason::DecisionsPerTurn);
             continue;
         }
-        s.budgets.decisions += 1;
+        s.count_decision();
         x.counts.decisions += 1;
         return Some(Step::Decide(d));
     }
@@ -221,7 +221,7 @@ fn advance<const STEPS: bool, L: Layout>(
 /// in turn order receives priority." The first of two passes in succession resolves nothing
 /// and ends no step.
 fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
-    passes == 0 && s.turn.passes == 1 && s.outcome.is_none() && s.pending == Pending::None
+    passes == 0 && s.turn().passes() == 1 && s.outcome().is_none() && s.pending == Pending::None
 }
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
@@ -229,8 +229,8 @@ fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
 fn passes_silently<L: Layout>(s: &State<L>) -> bool {
     s.pending == Pending::None
         && s.triggers.is_empty()
-        && !profile::stops_for(s.profile, s, s.turn.priority)
-        && !s.profile.breaks_at(s.turn)
+        && !profile::stops_for(s.profile(), s, s.turn().priority())
+        && !s.profile().breaks_at(*s.turn())
 }
 
 /// Applies an answer to the decision `next` returned for this state.
@@ -241,7 +241,7 @@ pub fn apply<L: Layout>(
     a: &mut dyn Answers<L>,
     c: Choice,
 ) {
-    debug_assert!(s.outcome.is_none(), "apply after the game ended");
+    debug_assert!(s.outcome().is_none(), "apply after the game ended");
     layers::refresh(s, t, &mut x.events);
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
@@ -266,7 +266,7 @@ pub fn apply_decided<L: Layout>(
     d: &Decision<L>,
     c: Choice,
 ) {
-    debug_assert!(s.outcome.is_none(), "apply after the game ended");
+    debug_assert!(s.outcome().is_none(), "apply after the game ended");
     layers::refresh(s, t, &mut x.events);
     #[cfg(debug_assertions)]
     {
@@ -283,7 +283,7 @@ pub fn apply_decided<L: Layout>(
 
 #[cold]
 fn stall<L: Layout>(s: &mut State<L>, reason: StallReason) {
-    s.outcome = Some(Outcome::Stalled(reason));
+    s.end_game(Outcome::Stalled(reason));
 }
 
 fn perform_or_stall<L: Layout>(
@@ -335,7 +335,7 @@ pub(crate) fn decision<L: Layout>(
             (p, false) => options(p, DecisionKind::KeepOrMulligan, &[Opt::Keep, Opt::Mulligan]),
         },
         Pending::Discard => {
-            let p = s.turn.active;
+            let p = s.turn().active();
             let count = s.hand_size(p).saturating_sub(turn::MAX_HAND_SIZE);
             Ok(Decision {
                 ask: Ask::Cleanup {
@@ -413,7 +413,7 @@ fn options<L: Layout>(
 /// [CR 117.1](https://yawgatog.com/resources/magic-rules/#R1171): "The player with priority
 /// may cast spells, activate abilities, and take special actions."
 fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<L>, Full> {
-    let player = s.turn.priority;
+    let player = s.turn().priority();
     // Built in place: the list is most of a decision's size.
     let mut d: Decision<L> = Decision {
         player,
@@ -438,7 +438,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
     face_down::face_up_options(s, t, player, list)?;
     // Last, as the options a full list leaves out: tapping ahead is never needed, the payment
     // taps for itself.
-    if s.profile.floats_for(player) {
+    if s.profile().floats_for(player) {
         mana::standalone_options(s, t, player, list);
     }
     Ok(d)
@@ -454,8 +454,8 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
 /// offered them quietly ([`crate::Profile::quiet_pointless`]): paying a cost for no effect is
 /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)), but no reason to stop.
 fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
-    let floats = s.profile.floats_for(d.player);
-    let quiet = s.profile.quiet_pointless == Some(d.player);
+    let floats = s.profile().floats_for(d.player);
+    let quiet = s.profile().quiet_pointless == Some(d.player);
     if d.kind != DecisionKind::Priority || !(floats || quiet) {
         return false;
     }
@@ -576,7 +576,7 @@ fn perform_priority<L: Layout>(
             mana::activate(s, t, &mut x.events, slot, color)?;
             // CR 117.3c: "If a player has priority when they ... activate an ability ...,
             // that player receives priority afterward."
-            s.turn.passes = 0;
+            s.reset_passes();
             Ok(())
         }
         _ => pass(s, t, x, a),
@@ -690,9 +690,7 @@ fn pass<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
-    s.turn.passes += 1;
-    if s.turn.passes < 2 {
-        s.turn.priority = s.turn.priority.opponent();
+    if !s.pass_priority() {
         return Ok(());
     }
     if s.stack.is_empty() {
@@ -700,7 +698,7 @@ fn pass<L: Layout>(
     } else {
         // The passes are spent: a resolution that pauses for a question waits over this
         // state, and priority starts afresh once it resolves.
-        s.turn.passes = 0;
+        s.reset_passes();
         resolve::resolve(s, t, x, a)
     }
 }
@@ -725,9 +723,8 @@ fn play_land<L: Layout>(
     player: Seat,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    s.player_mut(player).lands_played += 1;
-    s.turn.priority = player;
-    s.turn.passes = 0;
+    s.count_land_played(player);
+    s.give_priority(player);
     let face = land_face(s, t, slot).expect("a land face");
     match event::life_to_enter(t, s.object(slot).card, face) {
         Some(life) if s.player(player).life >= i16::from(life) => {

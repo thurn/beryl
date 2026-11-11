@@ -35,7 +35,10 @@ pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<
 /// declared, the opponent's end step, and whenever the stack is non-empty", with the steps
 /// the player's `steps` name in place of those.
 fn is_smart_stop<L: Layout>(s: &State<L>, player: Seat, steps: StepStops) -> bool {
-    !s.stack.is_empty() || steps.stops_in(s.turn.step, s.turn.active == player, || any_attacking(s))
+    !s.stack.is_empty()
+        || steps.stops_in(s.turn().step(), s.turn().active() == player, || {
+            any_attacking(s)
+        })
 }
 
 /// Where passing priority now takes the viewer, as the pass button says (decision D13).
@@ -65,7 +68,7 @@ pub fn next_stop<L: Layout>(
     if !s.stack.is_empty() {
         return NextStop::Resolve;
     }
-    let step = s.turn.step;
+    let step = s.turn().step();
     let attacking = any_attacking(s);
     if attacking
         && matches!(
@@ -91,9 +94,9 @@ pub fn next_step_stop<L: Layout>(
     after: TurnStep,
 ) -> NextStop {
     let s = obs.shown();
-    let active = s.turn.active == obs.viewer();
+    let active = s.turn().active() == obs.viewer();
     let declares =
-        active && s.turn.step < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
+        active && s.turn().step() < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
     let attacking = declares || any_attacking(s);
     for l in TurnStep::ALL.into_iter().filter(|&l| l > after) {
         if (l == TurnStep::BeginningOfCombat && declares) || steps.stops_in(l, active, || attacking)

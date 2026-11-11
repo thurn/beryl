@@ -403,8 +403,8 @@ pub(crate) fn lose_life<L: Layout>(
     player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
-    s.player_mut(player).life -= i16::from(amount);
-    settle(s, t, sink, Event::LifeLoss { player, amount })
+    let e = s.lose_life(player, amount);
+    settle(s, t, sink, e)
 }
 
 /// A player gains life (CR 119.3).
@@ -415,8 +415,8 @@ pub(crate) fn gain_life<L: Layout>(
     player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
-    s.player_mut(player).life += i16::from(amount);
-    settle(s, t, sink, Event::LifeGain { player, amount })
+    let e = s.gain_life(player, amount);
+    settle(s, t, sink, e)
 }
 
 /// A player draws cards, one at a time
@@ -521,15 +521,7 @@ pub(crate) fn deal_damage<L: Layout>(
         return Ok(());
     }
     let e = match to {
-        Recipient::Player(p) => {
-            s.player_mut(p).life -= i16::from(amount);
-            Event::Damage {
-                source,
-                to,
-                amount,
-                combat,
-            }
-        }
+        Recipient::Player(p) => s.damage_player(source, p, amount, combat),
         Recipient::Permanent(r) => {
             if !s.is_current(r) || s.object(r.slot).zone() != Zone::Battlefield {
                 return Ok(());

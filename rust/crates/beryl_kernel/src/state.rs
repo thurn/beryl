@@ -6,8 +6,9 @@ pub use beryl_card::{CounterKind, TurnStep, Zone};
 pub use crate::floating::{CastPermission, Continuous, Duration, FloatingEffect};
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
-pub use crate::player::{ManaPool, MulliganStatus, Player, Turn};
+pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{Lki, PendingTrigger, StackEntry, TARGETS, Target, TriggerInfo};
+pub use crate::turn::Turn;
 
 use beryl_card::FaceIx;
 
@@ -104,13 +105,13 @@ pub struct Flags {
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
 /// (architecture §4.1).
 ///
-/// Transitional: every field is `pub` for the one push that moved the state into this crate,
-/// so `beryl_engine` builds against it as it did against its own module. Four beads make them
-/// private, each field naming its own (the crate's contract: only the kernel writes a
-/// field): objects, zones, the battlefield, the derived cache, knowledge and listening
-/// already are (by-w8gv.5.3, by-w8gv.5.4); players, the turn and the game-level fields, by-w8gv.5.7; the
-/// stack and the queues, by-w8gv.5.8. The fields keep their order: a state's hash feeds them
-/// in it.
+/// Transitional: the fields that are still `pub` are so from the one push that moved the
+/// state into this crate, so `beryl_engine` builds against it as it did against its own
+/// module. Each names the bead that makes it private (the crate's contract: only the kernel
+/// writes a field): the stack and the queues, by-w8gv.5.8. The objects, zones, the
+/// battlefield, the derived cache, knowledge, listening, the players, the turn and the
+/// game-level fields already are (by-w8gv.5.3, by-w8gv.5.4, by-w8gv.5.7). The fields keep
+/// their order: a state's hash feeds them in it.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
     /// Written through [`State::object_mut`] alone, which stays in the crate.
@@ -124,10 +125,8 @@ pub struct State<L: Layout = Small> {
     /// current while they are.
     pub(crate) listening: u16,
     pub(crate) zones: Zones<L>,
-    /// Private with by-w8gv.5.7.
-    pub players: [Player<L>; 2],
-    /// Private with by-w8gv.5.7.
-    pub turn: Turn,
+    pub(crate) players: [Player<L>; 2],
+    pub(crate) turn: Turn,
     /// Private with by-w8gv.5.8.
     pub stack: L::Queue<StackEntry<L>, 64>,
     /// Private with by-w8gv.5.8.
@@ -149,16 +148,11 @@ pub struct State<L: Layout = Small> {
     pub pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
     pub(crate) knowledge: [Bitboard<L::Slot>; 2],
-    /// Private with by-w8gv.5.7.
-    pub rng: Rng,
-    /// Private with by-w8gv.5.7.
-    pub profile: Profile,
-    /// Private with by-w8gv.5.7.
-    pub budgets: Budgets,
-    /// Private with by-w8gv.5.7.
-    pub flags: Flags,
-    /// Private with by-w8gv.5.7.
-    pub outcome: Option<Outcome>,
+    pub(crate) rng: Rng,
+    pub(crate) profile: Profile,
+    pub(crate) budgets: Budgets,
+    pub(crate) flags: Flags,
+    pub(crate) outcome: Option<Outcome>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -198,18 +192,22 @@ impl<L: Layout> State<L> {
         self.object(r.slot).incarnation == r.incarnation
     }
 
+    #[inline]
     pub fn player(&self, player: Seat) -> &Player<L> {
         &self.players[player.index()]
     }
 
+    #[inline]
     pub fn turn(&self) -> &Turn {
         &self.turn
     }
 
+    #[inline]
     pub fn outcome(&self) -> Option<Outcome> {
         self.outcome
     }
 
+    #[inline]
     pub fn profile(&self) -> Profile {
         self.profile
     }
@@ -227,6 +225,7 @@ impl<L: Layout> State<L> {
 
     /// The game's random streams: a session compares them to tell whether anything random
     /// happened between two positions.
+    #[inline]
     pub fn rng(&self) -> Rng {
         self.rng
     }
@@ -431,10 +430,5 @@ impl<L: Layout> State<L> {
     #[inline]
     pub(crate) fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
         &mut self.objects[slot.index()]
-    }
-
-    /// Transitional: private with by-w8gv.5.7.
-    pub fn player_mut(&mut self, player: Seat) -> &mut Player<L> {
-        &mut self.players[player.index()]
     }
 }

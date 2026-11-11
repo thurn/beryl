@@ -191,12 +191,21 @@ impl<L: Layout> State<L> {
     }
 
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
+    /// at random, as cards put there in a random order are: `rebind` with the game's stream
+    /// for everything but shuffles.
+    pub fn rebind_at_random(&mut self, slots: &[L::Slot]) {
+        let mut rng = self.rng.other;
+        self.rebind(slots, &mut rng);
+        self.rng.other = rng;
+    }
+
+    /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
     /// with `rng`, and every player forgets them: the slots are public handles (architecture
     /// §13), so this is how cards come to be in an order no player knows. Each becomes a new
     /// object ([CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d)): "If cards in a
     /// player's library are shuffled or otherwise reordered, any revealed cards that are
     /// reordered stop being revealed and become new objects."
-    pub fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) {
+    pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) {
         let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
         for &slot in slots {
             // A library never holds more than its owner'self deck slots.

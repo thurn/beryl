@@ -39,12 +39,11 @@ pub(crate) fn check<L: Layout>(
     let (graveyard, tokens, legendary) = doomed(s);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && !legends {
-        s.budgets.state_based_iterations = 0;
+        s.reset_state_based_checks();
         return Ok(false);
     }
-    s.budgets.state_based_iterations += 1;
-    if s.budgets.state_based_iterations > s.profile.limits.state_based_iterations {
-        s.outcome = Some(Outcome::Stalled(StallReason::StateBasedIterations));
+    if s.count_state_based_check() > s.profile().limits.state_based_iterations {
+        s.end_game(Outcome::Stalled(StallReason::StateBasedIterations));
         return Ok(true);
     }
     if graveyard.is_empty() && tokens.is_empty() {
@@ -177,7 +176,7 @@ pub(crate) fn end_game<L: Layout>(
 
 /// Ends the game as each player with a cause loses it.
 fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: [Option<LossCause<L>>; 2]) {
-    s.outcome = Some(match causes {
+    s.end_game(match causes {
         [Some(_), None] => Outcome::Win(Seat::P1),
         [None, Some(_)] => Outcome::Win(Seat::P0),
         _ => Outcome::Draw,

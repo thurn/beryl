@@ -2,12 +2,12 @@
 
 use crate::combat;
 use crate::decision::{Outcome, StallReason};
-use crate::event::{self, Event, Reason, Sink};
+use crate::event::{self, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue};
-use crate::state::{Duration, ManaPool, Pending, State, TurnStep, Zone, ZoneKey};
+use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
@@ -17,7 +17,7 @@ pub(crate) const MAX_HAND_SIZE: u32 = 7;
 /// The players in APNAP order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)):
 /// "the active player ... makes any choices required, then the next player in turn order".
 pub(crate) fn apnap<L: Layout>(s: &State<L>) -> [Seat; 2] {
-    [s.turn.active, s.turn.active.opponent()]
+    [s.turn().active(), s.turn().active().opponent()]
 }
 
 /// Whether any creature is attacking.
@@ -35,21 +35,11 @@ pub(crate) fn begin_turn<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    if s.turn.number >= s.profile.limits.turns {
-        s.outcome = Some(Outcome::Stalled(StallReason::Turns));
+    if s.turn().number() >= s.profile().limits.turns {
+        s.end_game(Outcome::Stalled(StallReason::Turns));
         return Ok(());
     }
-    s.turn.active = if s.turn.number == 0 {
-        s.turn.starting_player
-    } else {
-        s.turn.active.opponent()
-    };
-    s.turn.number += 1;
-    s.budgets.decisions = 0;
-    for p in &mut s.players {
-        p.lands_played = 0;
-    }
-    let active = s.turn.active;
+    let active = s.begin_turn();
     // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
     s.legacy_mut()
@@ -60,7 +50,7 @@ pub(crate) fn begin_turn<L: Layout>(
     // activated (CR 606.3), this turn.
     s.reset_permanents_for_turn(active);
     // "Until your next turn" ends as that turn begins.
-    s.player_mut(active).sorceries_as_flash = false;
+    s.legacy_mut().set_sorceries_as_flash(active, false);
     begin_step(s, t, sink, TurnStep::Untap)
 }
 
@@ -79,11 +69,9 @@ pub(crate) fn begin_step<L: Layout>(
     sink: &mut Sink<L>,
     step: TurnStep,
 ) -> Result<(), Full> {
-    s.turn.step = step;
-    s.turn.priority = s.turn.active;
-    s.turn.passes = 0;
-    let active = s.turn.active;
-    event::settle(s, t, sink, Event::StepBegins { step, active })?;
+    let began = s.begin_step(step);
+    event::settle(s, t, sink, began)?;
+    let active = s.turn().active();
     match step {
         TurnStep::Untap => {
             untap(s, t, sink)?;
@@ -93,7 +81,7 @@ pub(crate) fn begin_step<L: Layout>(
         TurnStep::Draw => {
             // CR 103.8a: "In a two-player game, the player who plays first skips the draw
             // step (see rule 504, "Draw Step") of their first turn."
-            if s.turn.number > 1 {
+            if s.turn().number() > 1 {
                 // CR 504.1: "First, the active player draws a card."
                 event::draw(s, t, sink, active, 1)?;
             }
@@ -114,7 +102,7 @@ pub(crate) fn begin_step<L: Layout>(
 /// determines which permanents they control will untap. Then they untap them all
 /// simultaneously."
 fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
-    let active = s.turn.active;
+    let active = s.turn().active();
     let mut i = 0;
     while i < s.battlefield().len() {
         let slot = s.battlefield()[i];
@@ -138,10 +126,8 @@ pub(crate) fn end_step<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    for p in &mut s.players {
-        p.mana = ManaPool::default();
-    }
-    let next = match s.turn.step {
+    s.empty_mana_pools();
+    let next = match s.turn().step() {
         TurnStep::Untap => TurnStep::Upkeep,
         TurnStep::Upkeep => TurnStep::Draw,
         TurnStep::Draw => TurnStep::PrecombatMain,
@@ -149,7 +135,7 @@ pub(crate) fn end_step<L: Layout>(
         TurnStep::BeginningOfCombat => TurnStep::DeclareAttackers,
         // CR 508.8: "If no creatures are declared as attackers or put onto the battlefield
         // attacking, skip the declare blockers and combat damage steps."
-        TurnStep::DeclareAttackers if s.turn.attacked || any_attacking(s) => {
+        TurnStep::DeclareAttackers if s.turn().attacked() || any_attacking(s) => {
             TurnStep::DeclareBlockers
         }
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
@@ -180,7 +166,7 @@ pub(crate) fn end_step<L: Layout>(
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
 fn cleanup<L: Layout>(s: &mut State<L>) {
-    if s.hand_size(s.turn.active) > MAX_HAND_SIZE {
+    if s.hand_size(s.turn().active()) > MAX_HAND_SIZE {
         s.pending = Pending::Discard;
     } else {
         finish_cleanup(s);
@@ -198,7 +184,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
-    if s.hand_size(s.turn.active) <= MAX_HAND_SIZE {
+    if s.hand_size(s.turn().active()) <= MAX_HAND_SIZE {
         s.pending = Pending::None;
         finish_cleanup(s);
     }
@@ -229,7 +215,7 @@ fn finish_cleanup<L: Layout>(s: &mut State<L>) {
             i += 1;
         }
     }
-    s.turn.cleanup_check = true;
+    s.set_cleanup_check(true);
 }
 
 /// Whether a player may play a land now.
@@ -241,9 +227,9 @@ fn finish_cleanup<L: Layout>(s: &mut State<L>) {
 /// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
 pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
-    player == s.turn.active
+    player == s.turn().active()
         && matches!(
-            s.turn.step,
+            s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
         && s.stack.is_empty()

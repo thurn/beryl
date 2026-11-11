@@ -14,8 +14,8 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Queue, Small};
 use crate::state::{
-    CounterKind, Counters, DECK_SLOTS, Duration, MulliganStatus, ObjectFlags, Pending, State,
-    TurnStep, Zone, token_slots,
+    CounterKind, Counters, DECK_SLOTS, Duration, ManaPool, MulliganStatus, ObjectFlags, Pending,
+    State, TurnStep, Zone, token_slots,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
@@ -292,7 +292,7 @@ impl<L: Layout> Board<'_, L> {
     /// Gives `player` the emblem of the game-table card `card`
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)).
     pub fn add_emblem(&mut self, player: Seat, card: CardIx) -> Result<(), Full> {
-        self.0.player_mut(player).emblems.push(card)
+        self.0.add_emblem(player, card)
     }
 
     /// Whether `player` knows the identity of the object in `slot` (architecture §13), as a
@@ -391,6 +391,32 @@ impl<L: Layout> Board<'_, L> {
 
     pub fn set_life(&mut self, player: Seat, life: i16) {
         self.0.player_mut(player).life = life;
+    }
+
+    /// Puts `pool` in a player's mana pool as its unspent mana (CR 106.4).
+    pub fn set_mana(&mut self, player: Seat, pool: ManaPool) {
+        self.0.player_mut(player).mana = pool;
+    }
+
+    /// Says a player has played `lands` lands this turn (CR 305.2).
+    pub fn set_lands_played(&mut self, player: Seat, lands: u8) {
+        self.0.player_mut(player).lands_played = lands;
+    }
+
+    /// Makes the turn the game is in `active`'s, its number and step as they are.
+    pub fn set_active(&mut self, active: Seat) {
+        self.0.turn.active = active;
+    }
+
+    /// Puts the game in `step` of the turn it is in, performing none of the step's
+    /// turn-based actions and leaving priority where it is.
+    pub fn set_step(&mut self, step: TurnStep) {
+        self.0.turn.step = step;
+    }
+
+    /// Hands priority to a player, no player having passed since.
+    pub fn set_priority(&mut self, player: Seat) {
+        self.0.give_priority(player);
     }
 
     /// Puts a player's library in the given order, top first. `top_first` must hold exactly

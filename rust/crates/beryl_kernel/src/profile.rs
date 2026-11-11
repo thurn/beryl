@@ -4,7 +4,7 @@
 use beryl_card::TurnStep;
 
 use crate::ids::Seat;
-use crate::player::Turn;
+use crate::turn::Turn;
 
 /// Where players get priority as a decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

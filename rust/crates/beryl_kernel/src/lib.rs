@@ -38,15 +38,23 @@
 //! mutators take that answer (`layers::counters_matter`). A zone is named by a
 //! [`state::ZoneKey`], whose rustdoc says how a shared zone and a command zone would join it.
 //!
+//! The players, the turn, the random streams, the profile, the budgets and the outcome are
+//! private as well, with a mutator for each thing the rules do to them. The kernel moves the
+//! turn as it is told and holds none of its rules: which step follows which, and when a
+//! budget stalls the game, are the rules' to say. The random streams are drawn only inside
+//! the chance chokepoints ([`zone`], [`chance`]); [`State::reseed`] and
+//! [`State::set_profile`] are the two game-level writes a search or a session makes.
+//!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::restore_knowledge`] and [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
-//! | change a player or the turn (by-w8gv.5.7) | `change_life`, `add_mana`, `spend_mana`, `empty_mana`, `count_land_played`, `set_mulligan`, `begin_turn`, `begin_step`, `give_priority`, `pass_priority`, `end_game` | passes reset with priority; the per-turn counts reset with the turn; the outcome is set once |
+//! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
+//! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack and the queues (by-w8gv.5.8) | `put_on_stack`, `take_off_stack`, which returns the entries, `queue_trigger`, `take_triggers`, `delay_trigger`, `ask`, `settle_question` | the stack queue and the stack's bitboard hold the same spells; a question is open or priority is |
 //!
 //! ## Events
@@ -69,17 +77,22 @@
 //! sees as an event (passes, budgets, the open question, the derived cache) returns nothing,
 //! and neither does a change the rules announce as part of a larger one: what a permanent
 //! enters with is part of its zone change, and each pick of a combat declaration is part of
-//! the declaration, announced once it is whole (CR 508.1, 509.1). The zone move itself
-//! returns nothing: its event carries the reason the pipeline moved it for, and the deal and
-//! a mulligan move cards before the game's first turn with no event at all (CR 103.5).
+//! the declaration, announced once it is whole (CR 508.1, 509.1): [`State::declare_attack`]
+//! returns that event. Spending mana and the steps of a mulligan are no event today.
+//! [`State::end_game`] returns none either: the rules announce a win or a loss to each
+//! player with its cause, and a stall, which is no rules outcome, to no one. It may replace
+//! an outcome already there, because a state that ran out of a capacity is abandoned. The
+//! zone move itself returns nothing: its event carries the reason the pipeline moved it for,
+//! and the deal and a mulligan move cards before the game's first turn with no event at all
+//! (CR 103.5).
 //!
 //! ## Entities and records
 //!
 //! [`State`], [`state::Object`], [`state::Player`], [`state::Turn`] and [`state::Zones`] are
 //! entities: private fields, read through `#[inline]` getters (by-w8gv.5.9 for the readers in
 //! other crates), written by mutators. An object has its getters, one for each field and one
-//! for each status flag; its fields stay `pub` to read until by-w8gv.5.9, and nothing outside
-//! the crate can write one.
+//! for each status flag, and so do a player and the turn, one for each field; their fields
+//! stay `pub` to read until by-w8gv.5.9, and nothing outside the crate can write one.
 //!
 //! Records stay plain data with `pub` fields. The rules build one and hand it to a mutator;
 //! the kernel stores it and gives it back whole: [`state::StackEntry`],
@@ -111,9 +124,10 @@
 //! `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and
 //! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
 //! Reads use the getters. Milestone 4 deletes the accessor with the last of them. It writes
-//! the object flags and the long-tail counters today; the beads that close the players
-//! (by-w8gv.5.7) and the queues (by-w8gv.5.8) add the rest. The zone move and the turn's
-//! resets clear those flags inside the kernel, with everything else an object forgets.
+//! the object flags, the long-tail counters, `sorceries_as_flash` and the floating effects it
+//! starts and ends today; the bead that closes the queues (by-w8gv.5.8) adds the rest. The
+//! zone move and the turn's resets clear those flags inside the kernel, with everything else
+//! an object forgets.
 //!
 //! ## Sets and orders
 //!
@@ -200,6 +214,7 @@ pub mod rng;
 mod stack;
 pub mod state;
 pub mod table;
+mod turn;
 pub mod zone;
 
 pub use bitboard::Bitboard;

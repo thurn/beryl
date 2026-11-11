@@ -30,7 +30,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
             s.board().corrupt(slot, Break::Tapped);
         }),
         ("a player who has lost has priority", |s, p, _| {
-            s.player_mut(p).life = 0;
+            s.board().set_life(p, 0);
         }),
         ("derived characteristics are stale", |s, _, _| {
             s.board().forget_derived();

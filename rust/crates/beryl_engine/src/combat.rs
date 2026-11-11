@@ -9,7 +9,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Types};
 use crate::decision::{Ask, Candidates, Choice, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Event, Recipient, Sink};
+use crate::event::{self, Recipient, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
@@ -20,7 +20,7 @@ use crate::table::GameTable;
 /// "During the combat phase of a two-player game, the nonactive player is the defending
 /// player".
 fn defender<L: Layout>(s: &State<L>) -> Seat {
-    s.turn.active.opponent()
+    s.turn().active().opponent()
 }
 
 fn flags<L: Layout>(s: &State<L>, slot: L::Slot) -> ObjectFlags {
@@ -75,7 +75,7 @@ pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
 /// haste.
 fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
-    s.controller(slot) == s.turn.active
+    s.controller(slot) == s.turn().active()
         && is_creature(s, slot)
         && !o.flags.has(ObjectFlags::TAPPED)
         && !o.flags.has(ObjectFlags::SUMMONING_SICK)
@@ -120,10 +120,10 @@ pub(crate) fn attack_decision<L: Layout>(
         for slot in collapse(s, able).iter() {
             list.push(Opt::Attack(slot))?;
         }
-        (s.turn.active, DecisionKind::Attacker)
+        (s.turn().active(), DecisionKind::Attacker)
     } else {
         list = attack_targets(s, defender(s));
-        (s.turn.active, DecisionKind::AttackTarget)
+        (s.turn().active(), DecisionKind::AttackTarget)
     };
     Ok(Decision {
         player,
@@ -228,9 +228,8 @@ fn finish_attack<L: Layout>(
     if attackers.is_empty() {
         return Ok(());
     }
-    s.turn.attacked = true;
-    let player = s.turn.active;
-    event::settle(s, t, sink, Event::Attack { player, attackers })
+    let declared = s.declare_attack(attackers);
+    event::settle(s, t, sink, declared)
 }
 
 /// Whether `blocker` may block `attacker`: an attacker attacking the defending player or a
@@ -374,7 +373,7 @@ fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     if !flags(s, slot).has(ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) {
         return false;
     }
-    if s.turn.step == TurnStep::FirstStrikeDamage {
+    if s.turn().step() == TurnStep::FirstStrikeDamage {
         has(s, slot, Keywords::FIRST_STRIKE)
     } else {
         !flags(s, slot).has(ObjectFlags::STRUCK_FIRST)
@@ -422,7 +421,7 @@ pub(crate) fn begin_damage<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    if s.turn.step == TurnStep::FirstStrikeDamage {
+    if s.turn().step() == TurnStep::FirstStrikeDamage {
         for i in 0..s.battlefield().len() {
             let slot = s.battlefield()[i];
             if assigns_now(s, slot) {
@@ -476,7 +475,7 @@ pub(crate) fn division_decision<L: Layout>(
         list.push(Opt::Lethal(b))?;
     }
     Ok(Decision {
-        player: s.turn.active,
+        player: s.turn().active(),
         kind: DecisionKind::DamageDivision,
         candidates: Candidates::Options(list),
         ask: Ask::Plain,
@@ -670,7 +669,7 @@ fn division<L: Layout>(
 /// from combat stops being an attacking, blocking, blocked, and/or unblocked creature. A
 /// planeswalker or battle that's removed from combat stops being attacked."
 pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
-    let active = s.turn.active;
+    let active = s.turn().active();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
@@ -709,6 +708,5 @@ pub(crate) fn in_combat(step: TurnStep) -> bool {
 /// the end of combat step ends, all creatures, battles, and planeswalkers are removed from
 /// combat."
 pub(crate) fn end_combat<L: Layout>(s: &mut State<L>) {
-    s.turn.attacked = false;
     s.end_combat();
 }

@@ -50,7 +50,7 @@ const PROBES: &[ManaCost] = &[
 /// Checks the engine's fast paths against their reference implementations. It holds
 /// wherever [`State::check_invariants`] does, and checks nothing once the game is over.
 pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
-    if s.outcome.is_some() || s.is_derived_stale() {
+    if s.outcome().is_some() || s.is_derived_stale() {
         return Ok(());
     }
     check_layers(s, t)?;

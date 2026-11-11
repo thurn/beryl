@@ -7,7 +7,7 @@ use beryl_card::CounterKind;
 use crate::event::Event;
 use crate::fixed::Full;
 use crate::floating::{Continuous, Duration, FloatingEffect};
-use crate::ids::CardIx;
+use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Queue};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::state::State;
@@ -17,7 +17,8 @@ pub struct Legacy<'a, L: Layout>(&'a mut State<L>);
 
 impl<L: Layout> State<L> {
     /// Lends the raw writes of what milestone 4 (by-w8gv.7.1) moves to memos and stores: the
-    /// [`ObjectFlags::LEGACY`] flags and [`Counters`]' long-tail kind.
+    /// [`ObjectFlags::LEGACY`] flags, [`Counters`]' long-tail kind and
+    /// [`crate::state::Player::sorceries_as_flash`].
     #[inline]
     pub fn legacy_mut(&mut self) -> Legacy<'_, L> {
         Legacy(self)
@@ -113,5 +114,12 @@ impl<L: Layout> Legacy<'_, L> {
         if s.effects.len() != before {
             s.flags.derived_dirty = true;
         }
+    }
+
+    /// Whether a player may cast sorcery spells as though they had flash until their next
+    /// turn.
+    #[inline]
+    pub fn set_sorceries_as_flash(&mut self, player: Seat, on: bool) {
+        self.0.player_mut(player).sorceries_as_flash = on;
     }
 }
