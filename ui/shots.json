@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it.",
   "shots": [
     {
       "name": "phone-main",
@@ -151,17 +151,12 @@
       "click": ".opening-hand .opening-card"
     },
     {
-      "name": "game-castable",
-      "route": "/?fixture=greedy-turn-9&at=-1#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
       "name": "game-cast-step",
       "route": "/?fixture=greedy-turn-9&at=-1#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Fractured Identity']"
+      "click": "[data-zone=hand][data-card='Fractured Identity']",
+      "keep": "the only shot of a cast step opened from a hand card; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end"
     },
     {
       "name": "game-hand-pair",
@@ -194,7 +189,8 @@
       "name": "game-main",
       "route": "/?fixture=greedy-turn-9&at=-1#/game",
       "width": 1600,
-      "height": 900
+      "height": 900,
+      "keep": "the only shot of greedy-turn-9's last view, the table most checks start from; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end"
     },
     {
       "name": "game-undo-tip",
@@ -215,13 +211,8 @@
       "route": "/?fixture=greedy-turn-9&at=-1#/game",
       "width": 1600,
       "height": 900,
-      "hover": ".turn-controls .step-current"
-    },
-    {
-      "name": "game-main-1280",
-      "route": "/?fixture=greedy-turn-9&at=-1#/game",
-      "width": 1280,
-      "height": 800
+      "hover": ".turn-controls .step-current",
+      "keep": "the only shot of the step tracker's tip; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end"
     },
     {
       "name": "game-crowded",
@@ -240,12 +231,6 @@
       "route": "/?fixture=crowded&at=2#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "game-main-1920",
-      "route": "/?fixture=greedy-turn-9&at=-1#/game",
-      "width": 1920,
-      "height": 1080
     },
     {
       "name": "game-tapped-beneath",
@@ -406,7 +391,8 @@
         "[data-slot='10']",
         "[data-slot='121']",
         "[data-slot='12']"
-      ]
+      ],
+      "keep": "the only shot of attackers picked but not declared; its stale updates were combat-declare's re-recordings"
     },
     {
       "name": "game-declare-block-choosing",
@@ -434,21 +420,8 @@
         "[data-slot='62']",
         "[data-slot='15']",
         "[data-slot='69']"
-      ]
-    },
-    {
-      "name": "game-declare-block-1280",
-      "route": "/?fixture=combat-double-block&at=14#/game",
-      "width": 1280,
-      "height": 800,
-      "click": [
-        "[data-slot='8']",
-        "[data-slot='62']",
-        "[data-slot='9']",
-        "[data-slot='62']",
-        "[data-slot='15']",
-        "[data-slot='69']"
-      ]
+      ],
+      "keep": "the only shot of a double block declared; its stale updates were combat-double-block's re-recordings"
     },
     {
       "name": "game-trigger-1920",
@@ -558,6 +531,21 @@
       "route": "/?fixture=choice-pay#/game",
       "width": 1600,
       "height": 900
+    },
+    {
+      "name": "game-pay-other",
+      "route": "/?fixture=pay-other&at=-1#/game",
+      "width": 1600,
+      "height": 900,
+      "known": [
+        "text cut: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
+        "text cut: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box",
+        "text cut at 1180×820: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
+        "text cut at 1180×820: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box",
+        "text cut at 2560×1080: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
+        "text cut at 2560×1080: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box"
+      ],
+      "knownWhy": "by-w8gv.22: payment-plan buttons cut their land lists"
     },
     {
       "name": "game-choice-search",
