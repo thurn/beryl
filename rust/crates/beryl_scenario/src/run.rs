@@ -1,7 +1,5 @@
 //! The strict runner: plays a scenario through `next` and `apply` only (architecture §17.1).
 
-use std::fmt;
-
 use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
@@ -12,28 +10,9 @@ use beryl_engine::{
 
 use crate::setup::{Slots, setup};
 use crate::{
-    Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem, script,
+    Action, Assertion, CoinFlip, Ending, Failure, Forced, Pick, Position, Scenario, StackItem,
+    script,
 };
-
-/// Why a scenario failed: at which action, and what went wrong.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Failure {
-    pub scenario: &'static str,
-    /// The index of the failing action, or `None` for the setup.
-    pub action: Option<usize>,
-    pub message: String,
-}
-
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.action {
-            Some(i) => write!(f, "{}: action {i}: {}", self.scenario, self.message),
-            None => write!(f, "{}: setup: {}", self.scenario, self.message),
-        }
-    }
-}
-
-impl std::error::Error for Failure {}
 
 /// The exact profile, except that a question with one answer stops too: the runner answers it
 /// as the engine would have silently, and the trace records the answer.
@@ -62,7 +41,7 @@ pub fn trace_with(
     scenario: &Scenario,
     slots: Slots,
 ) -> Result<Vec<Position>, Failure> {
-    walk(cards, scenario, slots, &mut |_, _, _| {})
+    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut |_, _| {})
 }
 
 /// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
@@ -73,7 +52,18 @@ pub fn visit(
     scenario: &Scenario,
     mut visit: impl FnMut(&GameTable, &State, &Decision),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, Slots::Dealt, &mut visit).map(|_| ())
+    walk(cards, scenario, Slots::Dealt, &mut visit, &mut |_, _| {}).map(|_| ())
+}
+
+/// Runs a scenario like [`run`], showing `watch` the state each action begins from and the
+/// events since the action before, and once more what its last action left: for tests that
+/// two definitions of a card play the same game.
+pub fn watch(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    mut watch: impl FnMut(&State, &[Event]),
+) -> Result<(), Failure> {
+    walk(cards, scenario, Slots::Dealt, &mut |_, _, _| {}, &mut watch).map(|_| ())
 }
 
 fn walk(
@@ -81,6 +71,7 @@ fn walk(
     scenario: &Scenario,
     slots: Slots,
     visit: &mut dyn FnMut(&GameTable, &State, &Decision),
+    watch: &mut dyn FnMut(&State, &[Event]),
 ) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
         scenario: scenario.name,
@@ -97,9 +88,11 @@ fn walk(
         {
             visit(&runner.t, &runner.s, d);
         }
+        watch(&runner.s, runner.x.events.events());
         positions.push(runner.describe_position(&step));
         runner.act(action).map_err(|m| fail(Some(i), m))?;
     }
+    watch(&runner.s, runner.x.events.events());
     Ok(positions)
 }
 

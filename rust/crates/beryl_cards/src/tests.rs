@@ -13,6 +13,7 @@ use beryl_engine::{
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};
 
+mod effect_data;
 mod knowledge;
 
 /// This crate's directory, read at run time: a test binary from the shared target directory

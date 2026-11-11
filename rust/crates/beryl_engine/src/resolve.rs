@@ -45,7 +45,7 @@ pub(crate) fn resolve<L: Layout>(
         Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge)),
         _ => (Default::default(), None),
     };
-    if !ability.is_some_and(|b| b.may_pause) || a.inline() {
+    if !ability.is_some_and(Ability::asks) || a.inline() {
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.

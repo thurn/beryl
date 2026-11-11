@@ -22,9 +22,29 @@ use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
 pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
-pub use run::{Failure, Live, answer, describe, run, trace, trace_with, visit};
+pub use run::{Live, answer, describe, run, trace, trace_with, visit, watch};
 pub use script::{script, setup_source, source};
 pub use setup::{Slots, position};
+
+/// Why a scenario failed: at which action, and what went wrong.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Failure {
+    pub scenario: &'static str,
+    /// The index of the failing action, or `None` for the setup.
+    pub action: Option<usize>,
+    pub message: String,
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.action {
+            Some(i) => write!(f, "{}: action {i}: {}", self.scenario, self.message),
+            None => write!(f, "{}: setup: {}", self.scenario, self.message),
+        }
+    }
+}
+
+impl std::error::Error for Failure {}
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;

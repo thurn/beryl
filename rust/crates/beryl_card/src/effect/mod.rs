@@ -215,6 +215,110 @@ pub enum Effect {
 impl Effect {
     /// No instruction: what an ability that never resolves does, such as a static ability.
     pub const NOTHING: Effect = Effect::Sequence(&[]);
+
+    /// Whether carrying this out may ask a player to choose
+    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a
+    /// spell or ability offers any choices other than choices already made as part of
+    /// casting the spell, activating the ability, or otherwise putting the spell or ability
+    /// on the stack, the player announces these while applying the effect." The kind of mana
+    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing.
+    pub const fn asks(&self) -> bool {
+        match *self {
+            Effect::May { .. }
+            | Effect::Unless { .. }
+            | Effect::Discard { .. }
+            | Effect::Scry { .. } => true,
+            Effect::Sequence(effects) => {
+                let mut i = 0;
+                while i < effects.len() {
+                    if effects[i].asks() {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+            Effect::If {
+                then, otherwise, ..
+            } => {
+                then.asks()
+                    || match otherwise {
+                        Some(otherwise) => otherwise.asks(),
+                        None => false,
+                    }
+            }
+            Effect::ForEachPlayer { effect, .. } => effect.asks(),
+            Effect::Counter(_)
+            | Effect::Destroy(_)
+            | Effect::Exile(_)
+            | Effect::ExileUntilThisLeaves(_)
+            | Effect::Sacrifice(_)
+            | Effect::ReturnToHand(_)
+            | Effect::PutIntoLibrary { .. }
+            | Effect::Draw { .. }
+            | Effect::Mill { .. }
+            | Effect::GainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::CreateTokens { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::AddCounters { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::AddMana { .. }
+            | Effect::Modify { .. } => false,
+        }
+    }
+
+    /// Whether this moves what was chosen for the `target`th instance of the word "target"
+    /// out of the zone it is in: it destroys, exiles, sacrifices or returns it, or puts it
+    /// into a library. Of a permanent, that is removal, which a player is told as they
+    /// choose the target ([`crate::Ability::removes_target`]).
+    pub const fn removes(&self, target: u8) -> bool {
+        match *self {
+            Effect::Destroy(objects)
+            | Effect::Exile(objects)
+            | Effect::ExileUntilThisLeaves(objects)
+            | Effect::Sacrifice(objects)
+            | Effect::ReturnToHand(objects)
+            | Effect::PutIntoLibrary { objects, .. } => {
+                matches!(objects, Objects::Target(n) if n == target)
+            }
+            Effect::Sequence(effects) => {
+                let mut i = 0;
+                while i < effects.len() {
+                    if effects[i].removes(target) {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+            Effect::If {
+                then, otherwise, ..
+            } => {
+                then.removes(target)
+                    || match otherwise {
+                        Some(otherwise) => otherwise.removes(target),
+                        None => false,
+                    }
+            }
+            Effect::May { effect, .. }
+            | Effect::Unless { effect, .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.removes(target),
+            Effect::Counter(_)
+            | Effect::Draw { .. }
+            | Effect::Discard { .. }
+            | Effect::Mill { .. }
+            | Effect::Scry { .. }
+            | Effect::GainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::CreateTokens { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::AddCounters { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::AddMana { .. }
+            | Effect::Modify { .. } => false,
+        }
+    }
 }
 
 /// Where in a library a card is put.

@@ -13,7 +13,7 @@ use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Object
 use crate::filter::{Filter, Whose};
 use crate::ids::{CounterKind, TurnStep};
 use crate::mana::{ManaCost, ManaSet};
-use crate::target::TargetSpec;
+use crate::target::{TargetKind, TargetSpec};
 use crate::trigger::Trigger;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
@@ -137,7 +137,8 @@ pub struct Ability {
     pub targets: &'static [TargetSpec],
     /// Mana abilities: what they produce.
     pub produces: ManaSet,
-    /// Whether the body may ask its controller a question mid-resolution.
+    /// For a Rust body: whether it may ask a player a question mid-resolution. Effect data
+    /// says so itself; read [`Ability::asks`].
     pub may_pause: bool,
     pub body: Behavior,
     /// Triggered abilities: the event they trigger on.
@@ -339,6 +340,32 @@ impl Ability {
                 Behavior::Data(&Effect::Sacrifice(Objects::This)),
             )
         }
+    }
+
+    /// Whether resolving this may ask a player to choose: what its effect data says
+    /// ([`Effect::asks`]), or for a Rust body, which nothing can read, what its card declared
+    /// in [`Ability::may_pause`].
+    pub const fn asks(&self) -> bool {
+        match self.body {
+            Behavior::Data(effect) => effect.asks(),
+            Behavior::Custom(_) => self.may_pause,
+        }
+    }
+
+    /// Whether this removes the permanent chosen for its `target`th instance of the word
+    /// "target" from the battlefield: what its effect data does to a target that may be a
+    /// permanent ([`Effect::removes`]), or what its card declared with
+    /// [`TargetSpec::removal`].
+    pub fn removes_target(&self, target: u8) -> bool {
+        let Some(spec) = self.targets.get(target as usize) else {
+            return false;
+        };
+        let permanent = matches!(
+            spec.kind,
+            TargetKind::Permanent | TargetKind::SpellOrPermanent
+        );
+        spec.removes_permanent
+            || permanent && matches!(self.body, Behavior::Data(effect) if effect.removes(target))
     }
 
     /// Whether this is a loyalty ability

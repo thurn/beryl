@@ -325,7 +325,7 @@ fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
 }
 
 /// The spells on the stack, as objects.
-fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
+pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     s.stack
         .iter()
         .filter_map(StackEntry::spell)
@@ -333,7 +333,7 @@ fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
         .collect()
 }
 
-fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
+pub(crate) fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
     s.zone(Seat::P0, zone) | s.zone(Seat::P1, zone)
 }
 
@@ -1161,9 +1161,7 @@ pub fn target_removes_permanent<L: Layout>(s: &State<L>, t: &GameTable) -> bool 
         return false;
     };
     matches!(c.step, CastStep::TargetCount | CastStep::Target)
-        && specs(t, &top(s))
-            .get(usize::from(c.spec))
-            .is_some_and(|spec| spec.removes_permanent)
+        && entry_ability(t, &top(s)).is_some_and(|ability| ability.removes_target(c.spec))
 }
 
 /// The total mana cost of the spell or ability being cast, once X is announced.

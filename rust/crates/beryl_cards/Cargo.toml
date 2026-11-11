@@ -10,6 +10,8 @@ publish = false
 workspace = true
 
 [dependencies]
+# The vocabulary a card's effect data is written in (plan K1).
+beryl_card = { path = "../beryl_card" }
 beryl_engine = { path = "../beryl_engine" }
 beryl_scenario = { path = "../beryl_scenario" }
 

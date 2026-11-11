@@ -2142,7 +2142,7 @@ pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
         };
         let tr = &s.triggers()[Into::<usize>::into(i)];
         let ability = &t.def(tr.card).face(tr.face).abilities[usize::from(tr.ability)];
-        let group = if ability.may_pause {
+        let group = if ability.asks() {
             2
         } else {
             u8::from(!ability.targets.is_empty())

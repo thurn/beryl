@@ -107,7 +107,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         if self.full { Err(Full) } else { Ok(()) }
     }
 
-    fn check(&mut self, r: Result<(), Full>) {
+    pub(crate) fn check(&mut self, r: Result<(), Full>) {
         if r.is_err() {
             self.full = true;
         }
@@ -228,7 +228,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// the body asks nothing more.
     fn ask(&mut self, d: &Decision<L>) -> Result<Choice, Pause> {
         debug_assert!(
-            self.ability.may_pause,
+            self.ability.asks(),
             "a body asked a question without declaring may_pause"
         );
         debug_assert!(!d.is_empty(), "a question with no answer");
