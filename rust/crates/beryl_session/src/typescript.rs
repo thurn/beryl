@@ -5,6 +5,7 @@
 use ts_rs::{Config, TS};
 
 use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogRequest};
+use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
     SetStopsRequest, UndoRequest, WaterbendMana, WaterbendPreview, WaterbendRequest,
@@ -70,6 +71,11 @@ pub fn typescript() -> String {
         Region::decl(&cfg),
         PageInfo::decl(&cfg),
         BugSaved::decl(&cfg),
+        CardRecordsRequest::decl(&cfg),
+        CardRecords::decl(&cfg),
+        CardEntry::decl(&cfg),
+        CardFace::decl(&cfg),
+        CardImages::decl(&cfg),
         UiLogRequest::decl(&cfg),
         UiLogEntry::decl(&cfg),
         Level::decl(&cfg),

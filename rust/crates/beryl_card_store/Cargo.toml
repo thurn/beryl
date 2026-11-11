@@ -1,0 +1,15 @@
+[package]
+name = "beryl_card_store"
+version = "0.1.0"
+description = "The card store: a record for every card in the pool, looked up without a scan"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Reads a found record's JSON into types, in place of a hand-written JSON parser.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"

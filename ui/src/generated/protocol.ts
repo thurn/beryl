@@ -105,6 +105,32 @@ export type BugSaved = { id: string,
  */
 path: string, };
 
+export type CardRecordsRequest = { 
+/**
+ * Card, face, token and emblem names, as the engine gives them.
+ */
+names: Array<string>, };
+
+export type CardRecords = { 
+/**
+ * The image of Magic's card back.
+ */
+card_back: string, 
+/**
+ * The cards named so, or with a face so named.
+ */
+cards: { [key in string]: CardEntry }, 
+/**
+ * The tokens and emblems named so: the first printing the store has of each.
+ */
+tokens: { [key in string]: CardEntry }, };
+
+export type CardEntry = { name: string, scryfall_id: string, set: string, collector_number: string, layout: string, artist: string, faces: Array<CardFace>, };
+
+export type CardFace = { name: string, mana_cost?: string, type_line: string, oracle_text?: string, power?: string, toughness?: string, loyalty?: string, colors: Array<string>, images: CardImages, };
+
+export type CardImages = { art_crop: string, normal: string, large: string, };
+
 export type UiLogRequest = { entries: Array<UiLogEntry>, };
 
 export type UiLogEntry = { level: Level, message: string, data: unknown, };
@@ -738,6 +764,7 @@ export type Commands = {
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };
+  card_records: { args: { request: CardRecordsRequest }; result: CardRecords; error: never };
 };
 
 /** Each event's payload. */

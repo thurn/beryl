@@ -198,8 +198,7 @@ pub(crate) enum Condition {
     PlayablePair,
     /// A card lies in exile beneath the permanent that exiled it until it leaves (CR 610.3).
     ExiledBeneath,
-    /// A card lies in exile "exiled with" a permanent whose abilities may find it
-    /// (CR 607.2a).
+    /// A card lies in exile "exiled with" a permanent whose abilities may find it (CR 607.2a).
     ExiledWith,
     /// An Aura or Equipment one player controls is attached to a permanent the other
     /// controls.
@@ -879,7 +878,8 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
         if !only.is_empty() && !only.contains(&def.name) {
             continue;
         }
-        let messages = record(def).map_err(|e| format!("fixture {}: {e}", def.name))?;
+        let mut messages = record(def).map_err(|e| format!("fixture {}: {e}", def.name))?;
+        messages.insert(0, beryl_session::card_records::fixture_message(&messages));
         let path = out.join(format!("{}.json", def.name));
         let json = serde_json::to_string(&Fixture { messages }).expect("a fixture serializes");
         std::fs::write(&path, json).map_err(|e| format!("{}: {e}", path.display()))?;

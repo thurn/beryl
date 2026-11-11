@@ -12,6 +12,7 @@ mod snapshot;
 use std::time::{Duration, Instant};
 
 use beryl_session::bugs::{self, BugReport, BugSaved, Images, UiLogRequest};
+use beryl_session::card_records::{CardRecords, CardRecordsRequest};
 use beryl_session::ipc::{self, AppInfo};
 use beryl_session::{SessionError, Sessions, journal};
 use serde_json::json;
@@ -175,6 +176,12 @@ fn ui_log(request: UiLogRequest) {
     bugs::ui_log(request);
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn card_records(request: CardRecordsRequest) -> CardRecords {
+    beryl_session::card_records::card_records(&request)
+}
+
 /// The Tauri handler for the commands, each `function = name`: Tauri names a command for its
 /// function, so each must be named as `beryl_session::ipc` (and so `ui/src/ipc.ts`) calls it.
 macro_rules! handlers {
@@ -232,6 +239,7 @@ pub fn run() {
             report_bug = ipc::REPORT_BUG,
             bug_reports::export_bugs = ipc::EXPORT_BUGS,
             ui_log = ipc::UI_LOG,
+            card_records = ipc::CARD_RECORDS,
         ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {
             let app = ctx.app_handle().clone();

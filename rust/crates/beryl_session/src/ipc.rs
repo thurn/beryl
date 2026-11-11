@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::{Config, TS};
 
 use crate::bugs::{BugReport, BugSaved, UiLogRequest};
+use crate::card_records::{CardRecords, CardRecordsRequest};
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -83,6 +84,8 @@ pub const REPORT_BUG: &str = "report_bug";
 pub const EXPORT_BUGS: &str = "export_bugs";
 /// Journals the UI's warnings and errors ([`crate::bugs::UiLogRequest`]).
 pub const UI_LOG: &str = "ui_log";
+/// The card store's records for the names asked for ([`crate::card_records`]).
+pub const CARD_RECORDS: &str = "card_records";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
@@ -291,6 +294,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             UI_LOG,
             request(name::<UiLogRequest>(cfg)),
             name::<()>(cfg),
+            never.clone(),
+        ),
+        (
+            CARD_RECORDS,
+            request(name::<CardRecordsRequest>(cfg)),
+            name::<CardRecords>(cfg),
             never.clone(),
         ),
     ];

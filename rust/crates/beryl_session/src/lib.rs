@@ -7,6 +7,7 @@
 
 pub mod ai;
 pub mod bugs;
+pub mod card_records;
 pub mod checkpoint;
 pub mod corpus;
 mod game;

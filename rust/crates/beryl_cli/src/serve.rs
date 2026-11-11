@@ -18,6 +18,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
+use beryl_session::card_records::CardRecordsRequest;
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest,
     UndoRequest,
@@ -152,6 +153,14 @@ fn events(mut stream: TcpStream, streams: &Streams) -> Result<(), String> {
     Ok(())
 }
 
+/// The [`ipc::CARD_RECORDS`] command's answer, which needs no game: the spec server's too.
+pub(crate) fn card_records(args: Value) -> Value {
+    match serde_json::from_value::<Request<CardRecordsRequest>>(args) {
+        Ok(r) => json!({ "ok": beryl_session::card_records::card_records(&r.request) }),
+        Err(e) => json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
+    }
+}
+
 /// A command's request argument, as the UI sends it.
 #[derive(Deserialize)]
 struct Request<T> {
@@ -220,6 +229,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
             bugs::write(&bugs::dir(), &r, &Images::default(), sessions).map_err(|e| json!(e))
         })),
         ipc::UI_LOG => answer(request::<UiLogRequest>(args).map(bugs::ui_log)),
+        ipc::CARD_RECORDS => card_records(args),
         _ => json!({ "err": { "kind": "unknownCommand", "command": command } }),
     }
 }

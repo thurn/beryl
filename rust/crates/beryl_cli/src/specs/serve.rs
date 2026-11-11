@@ -22,13 +22,12 @@
 //!   browser allows a host only about six open connections, so a page of moments shares one
 //!   stream and hands each frame its views, rather than each frame holding its own.
 //!
-//! A moment's setup plays before the page sees anything: `current_game` answers with the first
-//! view after it, the one the page shows at once. The views after it, of the moment's own
-//! actions and of the game playing on to the viewer's first decision (as it does from the
-//! opponent's seat), are held until the viewer asks for them (`play`, or acting on the game in
-//! the frame), so the page animates them from that view on, when the viewer is watching; a new
-//! instance (the page's replay button) plays them again. Full-size and headless views hold
-//! their replay the same way.
+//! A moment's setup plays before the page sees anything: `current_game` answers with the first view
+//! after it, the one the page shows at once. The views after it, of the moment's own actions and of
+//! the game playing on to the viewer's first decision (as it does from the opponent's seat), are
+//! held until the viewer asks for them (`play`, or acting on the game in the frame), so the page
+//! animates them from that view on, when the viewer is watching; a new instance (the page's replay
+//! button) plays them again. Full-size and headless views hold their replay the same way.
 
 use std::collections::HashMap;
 use std::io::{self, Seek, Write};
@@ -45,7 +44,7 @@ use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
 use super::{Phase, View, find, listing, reviews, slug, specs};
-use crate::serve::{CORS, HttpRequest, invoke, read_request, respond};
+use crate::serve::{CORS, HttpRequest, card_records, invoke, read_request, respond};
 
 /// How many instances live at once; the least recently used goes first. A page keeps each
 /// moment it has shown.
@@ -275,6 +274,7 @@ fn handle_moment(
                 // The moment is the game: the page never starts another.
                 ipc::START_GAME | ipc::CONCEDE | ipc::RESUME_GAME => json!({ "ok": null }),
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
+                ipc::CARD_RECORDS => card_records(args),
                 _ => {
                     // The viewer acts on the game: it plays on from where it truly is.
                     if matches!(

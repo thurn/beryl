@@ -171,45 +171,6 @@ fn the_decks_are_forty_cards_matching_their_decklist_files() {
     }
 }
 
-/// The UI draws a card, token or emblem from `data/cards.json` by the name the engine gives
-/// it, a face's name (`ui/src/cards.ts`): each must be there.
-#[test]
-fn every_face_token_and_emblem_name_is_in_the_card_data() {
-    let path = crate_dir().join("../../../data/cards.json");
-    let data: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let mut known = std::collections::BTreeSet::new();
-    for entry in ["cards", "tokens"]
-        .iter()
-        .flat_map(|k| data[k].as_array().unwrap())
-    {
-        known.insert(entry["name"].as_str().unwrap());
-        for face in entry["faces"].as_array().unwrap() {
-            known.insert(face["name"].as_str().unwrap());
-        }
-    }
-    let mut defs: Vec<_> = CARDS.cards().to_vec();
-    let mut i = 0;
-    while i < defs.len() {
-        for &token in defs[i].tokens {
-            if !defs.iter().any(|d| std::ptr::eq(*d, token)) {
-                defs.push(token);
-            }
-        }
-        i += 1;
-    }
-    let mut missing: Vec<&str> = defs
-        .iter()
-        .flat_map(|d| d.face_ixs().map(|f| d.face_name(f)))
-        .filter(|name| !known.contains(name))
-        .collect();
-    missing.dedup();
-    assert!(
-        missing.is_empty(),
-        "not in data/cards.json (run `just cards`): {missing:?}"
-    );
-}
-
 #[test]
 fn every_card_file_is_in_the_table_under_its_own_name() {
     let mut names: Vec<_> = CARDS.cards().iter().map(|c| c.name).collect();
