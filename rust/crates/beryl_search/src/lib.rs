@@ -376,6 +376,7 @@ pub const DEEP_SEARCHER: Family = Family {
 /// The options of the deep searches offered: the anchor alone.
 const ANCHORED: Options = Options {
     anchor: true,
+    guard: false,
     mid: false,
     means: false,
 };

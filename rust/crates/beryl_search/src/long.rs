@@ -97,6 +97,8 @@ pub struct Family {
 
 /// What a family adds to the plain search, each switchable on its own (epic by-7wl). None by
 /// default: a family named without them plays as it always has.
+// Independent switches by design, one a part of the family's name, each set or not by a rung.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Options {
     /// Where [`guarded`], greedy's answer is the root's default. The search's own choice
@@ -105,6 +107,12 @@ pub struct Options {
     /// choices lead the runner-up by less than noise; there, a sensible default beats a coin
     /// flip.
     pub anchor: bool,
+    /// With [`Options::anchor`], [`guarded`] also holds greedy's answer at combat (an attacker
+    /// and its target) and at a library search's find, where a card to hand is never worse
+    /// than nothing: the Spirit token held back from Jace, Wielder and the Mana Crypt Trinket
+    /// Mage declined both fell outside the anchor. Not promoted (by-97g.6): it fixed the Crypt
+    /// but not the Spirit, whose attack greedy itself sends at the wrong Jace.
+    pub guard: bool,
     /// Below the root, greedy answers the questions asked while casting or resolving
     /// ([`answered_by_policy`]), so an option followed by a wide choice is not valued as if
     /// that choice were made at random.
@@ -235,8 +243,8 @@ impl FromStr for Family {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate or tuned; options anchor, mid and means \
-                 joined by + in that order)"
+                 rollout, cutN or eval; estimate or tuned; options anchor, guard, mid and means \
+                 joined by + in that order, guard only with anchor)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -251,6 +259,7 @@ impl FromStr for Family {
                 for name in named.split('+') {
                     let flag = match name {
                         "anchor" => &mut o.anchor,
+                        "guard" => &mut o.guard,
                         "mid" => &mut o.mid,
                         "means" => &mut o.means,
                         _ => return Err(bad()),
@@ -261,7 +270,7 @@ impl FromStr for Family {
                     *flag = true;
                 }
                 // One spelling per family, so that a name read back prints as it was given.
-                if o.to_name() != *named {
+                if o.to_name() != *named || (o.guard && !o.anchor) {
                     return Err(bad());
                 }
                 o
@@ -307,10 +316,11 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+mid+means`; empty for none.
+    /// `anchor+guard+mid+means`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
+            (self.guard, "guard"),
             (self.mid, "mid"),
             (self.means, "means"),
         ]
@@ -870,7 +880,8 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             .options
             .anchor
             .then(|| self.policy.choose(&self.table, obs, d));
-        let guards = |b: Choice| greedy.is_some_and(|g| guarded(&self.policy, obs, d, g, b));
+        let guard = self.settings.family.options.guard;
+        let guards = |b: Choice| greedy.is_some_and(|g| guarded(&self.policy, obs, d, g, b, guard));
         let (iterations, work, checked) = self.grow(&mut trees, greedy, guards);
         let (visits, rewards) = totals(&trees);
         let best = Choice(self.pick(&trees) as u16);
@@ -1349,20 +1360,39 @@ impl<L: Layout> Tree<L> {
 /// Not a card `policy` is told never to cast ([`crate::CardInfo::never_cast`], Mana Crypt):
 /// greedy passes on it by tuning for its own play, not judgment, and the search keeps its say.
 /// Those were half the switches of the fair `pimc72/hidden/rollout/tuned@30M` (by-bzy).
+///
+/// With `guard` ([`Options::guard`]), also any other answer to an attacker
+/// ([CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player
+/// chooses which creatures that they control, if any, will attack"), to an attacker's
+/// target ([CR 508.1b](https://yawgatog.com/resources/magic-rules/#R5081b): the active
+/// player "announces which player, planeswalker, or battle each of the chosen creatures is
+/// attacking"), and to a library search's find
+/// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a): "find a card that
+/// matches the given description"), where greedy takes the best card and a card to hand is
+/// never worse than nothing.
 pub fn guarded<L: Layout>(
     policy: &RolloutPolicy,
     obs: Observation<'_, L>,
     d: &Decision<L>,
     greedy: Choice,
     search: Choice,
+    guard: bool,
 ) -> bool {
     let held = |slot: L::Slot| {
         obs.card(slot)
             .is_none_or(|card| !policy.values().get(card).never_cast)
     };
-    d.kind == DecisionKind::Priority
-        && d.candidates.option(greedy) == Some(Opt::Pass)
-        && matches!(d.candidates.option(search), Some(Opt::Cast { slot, .. }) if held(slot))
+    match d.kind {
+        DecisionKind::Priority => {
+            d.candidates.option(greedy) == Some(Opt::Pass)
+                && matches!(d.candidates.option(search), Some(Opt::Cast { slot, .. }) if held(slot))
+        }
+        DecisionKind::Attacker | DecisionKind::AttackTarget => guard && search != greedy,
+        DecisionKind::ChooseUpTo => {
+            guard && search != greedy && d.prompt.purpose == Purpose::Search
+        }
+        _ => false,
+    }
 }
 
 /// Whether a family with [`Options::mid`] lets greedy answer decisions of `kind` below the
@@ -1658,6 +1688,8 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+means",
             "pimc72/hidden/rollout/tuned/means",
             "pimc72/hidden/rollout/tuned/anchor+mid+means",
+            "pimc72/hidden/rollout/tuned/anchor+guard",
+            "pimc72/hidden/rollout/tuned/anchor+guard+mid+means",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1675,6 +1707,9 @@ mod tests {
             "pimc18/hidden/rollout/tuned/anchor/mid",
             "pimc18/hidden/rollout/tuned/means+anchor",
             "pimc18/hidden/rollout/tuned/means+means",
+            "pimc18/hidden/rollout/tuned/guard",
+            "pimc18/hidden/rollout/tuned/guard+mid",
+            "pimc18/hidden/rollout/tuned/guard+anchor",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
@@ -1844,7 +1879,7 @@ mod tests {
         let holds = |s: &State, d: &Decision, x: &mut Scratch| {
             let obs = observe(s, &t, x, d.player);
             let g = policy.choose(&t, obs, d);
-            (0..d.len()).any(|i| guarded(&policy, obs, d, g, Choice(i as u16)))
+            (0..d.len()).any(|i| guarded(&policy, obs, d, g, Choice(i as u16), false))
         };
         let mut scratch = Scratch::new();
         let chosen: Vec<(State, Decision)> = (2..12)
@@ -1866,14 +1901,14 @@ mod tests {
             let greedy = policy.choose(&t, obs, &d);
             if let Some(a) = search.anchor {
                 assert_eq!(a.greedy, greedy);
-                assert!(guarded(&policy, obs, &d, greedy, a.search));
+                assert!(guarded(&policy, obs, &d, greedy, a.search, false));
                 assert_eq!(c, a.played());
                 if c != greedy {
                     assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
                 }
                 checked += 1;
             } else {
-                assert!(c == greedy || !guarded(&policy, obs, &d, greedy, c));
+                assert!(c == greedy || !guarded(&policy, obs, &d, greedy, c, false));
                 assert_eq!(c, free, "unguarded, it plays as the plain search");
             }
         }
@@ -1923,7 +1958,7 @@ mod tests {
                             let crypt = obs
                                 .card(slot)
                                 .is_some_and(|card| t.def(card).name == names::MANA_CRYPT);
-                            assert_eq!(guarded(&policy, obs, &d, g, c), !crypt);
+                            assert_eq!(guarded(&policy, obs, &d, g, c, false), !crypt);
                             if crypt {
                                 never += 1;
                             } else {
@@ -1939,5 +1974,117 @@ mod tests {
             }
         }
         assert!(never > 0 && other > 0, "Mana Crypt {never}, others {other}");
+    }
+    /// The decisions of a greedy mirror game from `seed`, each with the state it was asked in
+    /// and greedy's answer.
+    fn greedy_decisions(t: &GameTable, seed: u64) -> Vec<(State, Decision, Choice)> {
+        let policy = RolloutPolicy::new(t);
+        let mut s = State::new(t, seed, Profile::SMART).unwrap();
+        let mut x = Scratch::new();
+        let mut out = Vec::new();
+        loop {
+            let d = match next(&mut s, t, &mut x, &mut Replay) {
+                Step::Over(_) => break,
+                Step::Decide(d) => d,
+            };
+            let g = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
+            out.push((s, d, g));
+            apply(&mut s, t, &mut x, &mut Replay, g);
+        }
+        out
+    }
+
+    /// `guard` holds greedy's answer against any other at an attacker, an attack target and a
+    /// library search's find, and changes nothing anywhere else: a family without it guards
+    /// as the anchor always has.
+    #[test]
+    fn the_guard_holds_at_combat_and_finds_and_nowhere_else() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let mut met = [0u32; 3];
+        for seed in 0..60 {
+            for (s, d, g) in greedy_decisions(&t, seed) {
+                let obs = observe(&s, &t, &mut x, d.player);
+                let place = match d.kind {
+                    DecisionKind::Attacker => Some(0),
+                    DecisionKind::AttackTarget => Some(1),
+                    DecisionKind::ChooseUpTo if d.prompt.purpose == Purpose::Search => Some(2),
+                    _ => None,
+                };
+                for i in 0..d.len() {
+                    let c = Choice(i as u16);
+                    let (with, without) = (
+                        guarded(&policy, obs, &d, g, c, true),
+                        guarded(&policy, obs, &d, g, c, false),
+                    );
+                    match place {
+                        Some(p) => {
+                            assert!(!without, "{:?} guarded without guard", d.kind);
+                            assert_eq!(with, c != g, "{:?}", d.kind);
+                            met[p] += u32::from(with);
+                        }
+                        None => assert_eq!(with, without, "{:?}", d.kind),
+                    }
+                }
+            }
+            if met.iter().all(|&n| n > 0) {
+                break;
+            }
+        }
+        assert!(
+            met.iter().all(|&n| n > 0),
+            "attacker, target, find met {met:?}"
+        );
+    }
+
+    /// An `anchor+guard` search plays greedy's answer at combat and finds unless its own choice
+    /// leads clearly, as the anchor does at a priority decision.
+    #[test]
+    fn a_guarded_search_plays_greedy_at_combat_unless_clearly_beaten() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let settings = Settings {
+            family: Family {
+                method: Method::Pimc { worlds: 2 },
+                ..family(Options {
+                    anchor: true,
+                    guard: true,
+                    ..Options::default()
+                })
+            },
+            work: 8_000,
+            threads: 1,
+        };
+        let combat = |d: &Decision| {
+            matches!(d.kind, DecisionKind::Attacker | DecisionKind::AttackTarget) && d.len() > 1
+        };
+        let chosen: Vec<(State, Decision, Choice)> = (0..12)
+            .flat_map(|seed| greedy_decisions(&t, seed))
+            .filter(|(_, d, _)| combat(d))
+            .take(12)
+            .collect();
+        let mut checked = 0;
+        for (i, (s, d, greedy)) in chosen.into_iter().enumerate() {
+            let obs = observe(&s, &t, &mut x, d.player);
+            let mut guarded_search = LongSearch::<Small>::new(&t, settings, i as u64);
+            let c = guarded_search.choose(obs, &d);
+            let search = guarded_search.last_search().expect("searched");
+            match search.anchor {
+                Some(a) => {
+                    assert_eq!(a.greedy, greedy);
+                    assert_ne!(a.search, greedy);
+                    assert_eq!(c, a.played());
+                    if c != greedy {
+                        assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
+                    }
+                    checked += 1;
+                }
+                None => assert_eq!(c, greedy, "unchecked, the search agreed with greedy"),
+            }
+            assert!(c == greedy || guarded(&policy, obs, &d, greedy, c, true));
+        }
+        assert!(checked > 0, "no combat decision checked");
     }
 }

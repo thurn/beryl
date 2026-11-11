@@ -234,7 +234,15 @@ fn replay(
         let mut x = Scratch::new();
         let obs = observe(s, &t, &mut x, d.player);
         let greedy = policy.choose(&t, obs, d);
-        let counted = !only_guarded || guarded(&policy, obs, d, greedy, Choice(choice));
+        let counted = !only_guarded
+            || guarded(
+                &policy,
+                obs,
+                d,
+                greedy,
+                Choice(choice),
+                family.options.guard,
+            );
         if greedy.0 != choice && counted {
             let mean = |c: u16| {
                 let v = f64::from(search.visits[usize::from(c)]);
