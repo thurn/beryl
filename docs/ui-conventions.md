@@ -55,9 +55,8 @@ restore the old behavior.
 - **Permanents that leave.** A permanent that is not a token dissolves where it
   is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
   there. Nothing flies to the pile (by-1ug). A destroyed creature glows and
-  falls to ash over about 0.7 s; the spell then goes to its graveyard
-  (RwKoGGUmw2k 27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37, 5UHzpVvUkfI
-  58:17.0).
+  falls to ash over about 1 s; the spell then goes to its graveyard (RwKoGGUmw2k
+  27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37, 5UHzpVvUkfI 58:17.0).
 - **Choosing how to cast.** A card or permanent with more than one way to cast
   or use it opens a modal, "Choose One", showing the card once per option, with
   Cancel: an adventure, an alternative cost, a land's abilities (by-lzl,
@@ -93,7 +92,7 @@ restore the old behavior.
 - **Cards the opponent looks at.** They come off the top of their library face
   down at library size and lie beside it; a top-bound card slides back onto the
   library and a bottom-bound one slides away from it, to either side. A pill
-  above their avatar reads "Scry: 1 top, 1 bottom." for about 2.5 s (by-pv6p,
+  above their avatar reads "Scry: 1 top, 1 bottom." for about 3 s (by-pv6p,
   by-yfb2, by-nva). No card is enlarged (IHPV6yRaFlk 52:54.6, IHPV6yRaFlk
   53:31.2, qF4GF-vfc8Y 52:59.9, IEXcjBn3BXk 33:32.3).
 - **A line from an ability to its source.** It is always shown while the ability
@@ -232,53 +231,65 @@ Every change on the table is shown by one of these, applied to a card, an
 ability or a player by a step of the script the session sends
 (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena
 does not show is composed from these. A verb's duration, delay, stagger and
-curve are measured from Arena and kept in the data (K27); none is filled yet.
+curve are Arena's medians over the instances in `data/arena-motion.json`, which
+also holds each case's own (K27).
 
 - **fly.** A card travels from where it is to its new place, turning over on the
   way if its face changes, and flashes as it lands on the battlefield: a land
   played, a spell cast, a permanent spell resolving, a draw, a discard, an aura
-  onto its permanent. A played land glides from the hand to its slot in about
-  0.6 s. The opponent's spell leaves their hand as a card back and is face up
-  when it reaches the stack, about 0.4 s. A resolving permanent flies to its
-  slot in about 0.5 s and the slot flashes. A drawn card shows large beside the
-  library and glides into the hand in about 0.5 s; three are drawn a third of a
-  second apart. A discard drops to the graveyard at hand size in about 0.3 s
-  (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc
-  22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8,
-  WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3).
+  onto its permanent. A played land glides from where it is released to its slot
+  in about 0.4 s. The opponent's spell leaves their hand as a card back and is
+  face up when it reaches the stack, about 0.4 s; the player's own flies from
+  where it is released in about 0.35 s. A resolving permanent flies to its slot
+  in about 0.6 s and the slot flashes. A drawn card flies large beside the
+  library, holds about 0.2 s and drops into the hand, about 1.1 s in all; three
+  are drawn a quarter second apart. A discard drops to the graveyard at hand
+  size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w
+  16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3,
+  UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI
+  1:01:50.3). Measured: 450 ms, 326 ms apart, ease-out.
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. A token appears whole with a
   short glow, a batch as one group. The opening hand and a mulligan's new hand
   are there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w
-  15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9).
+  15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Measured: 66 ms, 135 ms
+  after its cause, 33 ms apart, in place.
 - **vanish.** A card or an ability goes from where it is with no flight, and a
   card is then at its new place: destroyed, exiled, sacrificed, countered,
   returned to a hand, or done resolving. A destroyed permanent falls to ash in
-  0.7 to 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a
+  about 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a
   returned one glows and is gone; none flies to a pile or a hand. A countered
-  spell crumbles on the stack. A resolved instant darkens and dissolves there;
-  once it was seen to shrink into its graveyard after. A finished ability is
-  gone between two frames (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI
-  26:06.7, UrGalw_f35w 19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0,
-  WQiYBv23buw 29:15.67, pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9).
+  spell crumbles on the stack. A resolved instant darkens and dissolves there,
+  or shrinks into its graveyard. A finished ability is gone between two frames
+  (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w
+  19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67,
+  pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Measured: 565 ms, 260 ms after its
+  cause, in place.
 - **emerge.** An ability lifts out of its source and goes on the stack. The
   source stays as it is. A small copy of the card appears on the source and
-  travels along a curve to the stack, growing, in 0.4 to 0.5 s; an activated
-  ability does the same. Two triggers of one event leave a third of a second
-  apart. A dies trigger leaves before its source breaks up (IEXcjBn3BXk 20:39.3,
-  5UHzpVvUkfI 19:48.5, 5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw
-  49:08.0, I3Te0m1bBFw 26:56.75).
-- **flip.** A card turns over where it lies. Not seen in Arena: built as "A card
-  turning face up" says.
-- **tap.** A permanent turns as it taps or untaps. Beryl's own, by exception 2.
-  Arena tilts a tapped permanent's art crop a few degrees; no motion between the
-  two was caught (IEXcjBn3BXk 19:35.6, 0VsYGs88NXA 31:13.3).
+  travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated
+  ability does the same. Two triggers of one event leave 0.3 s apart. A dies
+  trigger leaves before its source breaks up (IEXcjBn3BXk 20:39.3, 5UHzpVvUkfI
+  19:48.5, 5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw 49:08.0,
+  I3Te0m1bBFw 26:56.75). Measured: 300 ms, 190 ms after its cause, 300 ms apart,
+  ease-in.
+- **flip.** A card turns over where it lies: a double-faced card transforms, a
+  face-down permanent turns face up (not seen: built as "A card turning face up"
+  says). A transforming card is covered by an effect (a lava slab, a cocoon) for
+  about 1.1 s and shows its new face as the effect clears; it neither turns nor
+  grows (WCknTZNbraE 35:49.2, WCknTZNbraE 1:23:36.8, UrGalw_f35w 49:06.5).
+  Measured: 1130 ms, in place.
+- **tap.** A permanent turns as it taps or untaps. Arena tilts a tapped
+  permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
+  restores it in about 0.1 s (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1,
+  0VsYGs88NXA 31:13.15). Exempt: exception 2.
 - **strike.** A creature lunges at what it deals combat damage to and drifts
-  back. Each attacker lunges from its row to the player's avatar or to its
-  blocker, the screen flashes, and it drifts back in 0.5 to 0.9 s. A blocked
-  attacker strikes about 0.4 s before an unblocked one. First strike is a strike
-  of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6,
-  IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
+  back. Each attacker winds back, lunges from its row to the player's avatar or
+  to its blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all.
+  A blocked attacker strikes about 0.4 s before an unblocked one. First strike
+  is a strike of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk
+  25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
+  Measured: 850 ms, 285 ms apart.
 - **streak.** A streak leaves one thing and lands on another, which flashes:
   mana from its source into the spell or ability it pays for, and damage from a
   spell or ability to what it hits. Each tapped land sends one streak of its
@@ -286,32 +297,36 @@ curve are measured from Arena and kept in the data (K27); none is filled yet.
   and a streak of fire crosses to its target in about 0.25 s, with a burst where
   it lands; the spell leaves after (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85,
   pE4XSNi-nZc 22:00.6, IEXcjBn3BXk 20:40.88, IEXcjBn3BXk 38:36.7, I3Te0m1bBFw
-  31:37.8).
+  31:37.8). Measured: 250 ms, 100 ms after its cause.
 - **count.** A number changes and shows that it did: a life total, a kind of
   counter, a power and toughness, a mana pool. A life total jumps to its new
-  value; the change floats up from the avatar, red for a loss, and a gain bursts
-  green. A counter's badge settles onto its permanent after a flash. A
-  planeswalker's loyalty changes about a second after its ability reaches the
-  stack (IEXcjBn3BXk 22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5,
-  0VsYGs88NXA 31:13.25, 5UHzpVvUkfI 19:59.25).
+  value in a burst of about 0.4 s; a loss's red number drifts down from the
+  opponent's avatar, and a gain's green one rises for about 0.5 s. A counter's
+  badge settles onto its permanent after a flash. A planeswalker's loyalty
+  changes about a second after its ability reaches the stack (IEXcjBn3BXk
+  22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5, 0VsYGs88NXA 31:13.25,
+  5UHzpVvUkfI 19:59.25). Measured: 400 ms, 125 ms after its cause, in place.
 - **set.** The table changes and nothing moves: a step of the turn begins, a
   library is shuffled, a permanent's characteristics change. Nothing animates as
   a step begins, and nothing shows on a library when it is shuffled (IEXcjBn3BXk
-  19:36.5, IEXcjBn3BXk 28:10.5).
+  19:36.5, IEXcjBn3BXk 28:10.5). Measured: 25 ms, in place.
 - **showcase.** A card is held up for both players to read: it joins the
   "Revealed Cards" pile at the top left. Revealed cards gather under a "Revealed
   Cards" pill at the top left, which opens into a browser of them and stays
-  afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9).
+  afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9). Measured: 200 ms,
+  ease-out.
 - **dwell.** Nothing moves while a spell or ability is read: the opponent's,
-  before it resolves unanswered. The opponent's spell sits on the stack for
-  about a second before it resolves (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5).
+  before it resolves unanswered. The opponent's spell sits on the stack for 0.7
+  to 1.9 s before it resolves (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5).
+  Measured: 800 ms, in place.
 - **announce.** A notice passes over the table while play goes on under it: the
   turn banner, the pill that says what a scry did, a coin tossed. "Your Turn" or
   "Opponent's Turn" glows at the centre for about a second while cards move
-  under it. A pill above an avatar reads "Scry: 1 top, 1 bottom." for about 2.5
-  s. A coin a card flips is tossed mid-table and lands in about 1.3 s
-  (IEXcjBn3BXk 19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk
-  52:54.6, SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0).
+  under it. A pill above an avatar reads "Scry: 1 top, 1 bottom." for about 3 s.
+  A coin a card flips is tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk
+  19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6,
+  SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Measured: 1200 ms, 116 ms after its
+  cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
   attacker to what it attacks, from a blocker to its attacker. A cyan arc runs
@@ -320,13 +335,15 @@ curve are measured from Arena and kept in the data (K27); none is filled yet.
   blocker to its attacker until combat damage is done. An attacker has no line
   to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5,
   IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk
-  25:52.5).
+  25:52.5). Measured: 33 ms, 170 ms after its cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
-  the step that begins it to the step that ends it.
+  the step that begins it to the step that ends it. Measured: 50 ms, 125 ms
+  after its cause, 0 ms apart, in place.
 - **lift.** Cards the opponent is handling come away from their pile, face down,
   from the step that begins the look to the step that ends it. Cards the
   opponent scries come off their library face down at its size and lie beside it
-  (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9).
+  (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9). Measured: 433 ms, 500 ms apart,
+  ease-out.
 
 ## Marks
 

@@ -44,7 +44,7 @@
       "key": "verbs",
       "heading": "Verbs",
       "intro": [
-        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve are measured from Arena and kept in the data (K27); none is filled yet."
+        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve are Arena's medians over the instances in `data/arena-motion.json`, which also holds each case's own (K27)."
       ]
     },
     {
@@ -207,7 +207,7 @@
         "by-1ug"
       ],
       "arena": {
-        "does": "A destroyed creature glows and falls to ash over about 0.7 s; the spell then goes to its graveyard.",
+        "does": "A destroyed creature glows and falls to ash over about 1 s; the spell then goes to its graveyard.",
         "evidence": [
           {
             "recording": "RwKoGGUmw2k",
@@ -388,7 +388,7 @@
     {
       "kind": "settled",
       "name": "Cards the opponent looks at",
-      "rule": "They come off the top of their library face down at library size and lie beside it; a top-bound card slides back onto the library and a bottom-bound one slides away from it, to either side. A pill above their avatar reads \"Scry: 1 top, 1 bottom.\" for about 2.5 s.",
+      "rule": "They come off the top of their library face down at library size and lie beside it; a top-bound card slides back onto the library and a bottom-bound one slides away from it, to either side. A pill above their avatar reads \"Scry: 1 top, 1 bottom.\" for about 3 s.",
       "reports": [
         "by-pv6p",
         "by-yfb2",
@@ -868,7 +868,7 @@
       "name": "fly",
       "shows": "A card travels from where it is to its new place, turning over on the way if its face changes, and flashes as it lands on the battlefield: a land played, a spell cast, a permanent spell resolving, a draw, a discard, an aura onto its permanent.",
       "arena": {
-        "does": "A played land glides from the hand to its slot in about 0.6 s. The opponent's spell leaves their hand as a card back and is face up when it reaches the stack, about 0.4 s. A resolving permanent flies to its slot in about 0.5 s and the slot flashes. A drawn card shows large beside the library and glides into the hand in about 0.5 s; three are drawn a third of a second apart. A discard drops to the graveyard at hand size in about 0.3 s.",
+        "does": "A played land glides from where it is released to its slot in about 0.4 s. The opponent's spell leaves their hand as a card back and is face up when it reaches the stack, about 0.4 s; the player's own flies from where it is released in about 0.35 s. A resolving permanent flies to its slot in about 0.6 s and the slot flashes. A drawn card flies large beside the library, holds about 0.2 s and drops into the hand, about 1.1 s in all; three are drawn a quarter second apart. A discard drops to the graveyard at hand size in about 0.2 s.",
         "evidence": [
           {
             "recording": "UrGalw_f35w",
@@ -913,10 +913,10 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 450,
         "delay": null,
-        "stagger": null,
-        "curve": null
+        "stagger": 326,
+        "curve": "ease-out"
       }
     },
     {
@@ -948,17 +948,17 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
-        "stagger": null,
-        "curve": null
+        "duration": 66,
+        "delay": 135,
+        "stagger": 33,
+        "curve": "none"
       }
     },
     {
       "name": "vanish",
       "shows": "A card or an ability goes from where it is with no flight, and a card is then at its new place: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving.",
       "arena": {
-        "does": "A destroyed permanent falls to ash in 0.7 to 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a returned one glows and is gone; none flies to a pile or a hand. A countered spell crumbles on the stack. A resolved instant darkens and dissolves there; once it was seen to shrink into its graveyard after. A finished ability is gone between two frames.",
+        "does": "A destroyed permanent falls to ash in about 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a returned one glows and is gone; none flies to a pile or a hand. A countered spell crumbles on the stack. A resolved instant darkens and dissolves there, or shrinks into its graveyard. A finished ability is gone between two frames.",
         "evidence": [
           {
             "recording": "RwKoGGUmw2k",
@@ -999,17 +999,17 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
+        "duration": 565,
+        "delay": 260,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
       "name": "emerge",
       "shows": "An ability lifts out of its source and goes on the stack. The source stays as it is.",
       "arena": {
-        "does": "A small copy of the card appears on the source and travels along a curve to the stack, growing, in 0.4 to 0.5 s; an activated ability does the same. Two triggers of one event leave a third of a second apart. A dies trigger leaves before its source breaks up.",
+        "does": "A small copy of the card appears on the source and travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated ability does the same. Two triggers of one event leave 0.3 s apart. A dies trigger leaves before its source breaks up.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",
@@ -1038,35 +1038,56 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
-        "stagger": null,
-        "curve": null
+        "duration": 300,
+        "delay": 190,
+        "stagger": 300,
+        "curve": "ease-in"
       }
     },
     {
       "name": "flip",
-      "shows": "A card turns over where it lies. Not seen in Arena: built as \"A card turning face up\" says.",
+      "shows": "A card turns over where it lies: a double-faced card transforms, a face-down permanent turns face up (not seen: built as \"A card turning face up\" says).",
       "values": {
-        "duration": null,
+        "duration": 1130,
         "delay": null,
         "stagger": null,
-        "curve": null
+        "curve": "none"
+      },
+      "arena": {
+        "does": "A transforming card is covered by an effect (a lava slab, a cocoon) for about 1.1 s and shows its new face as the effect clears; it neither turns nor grows.",
+        "evidence": [
+          {
+            "recording": "WCknTZNbraE",
+            "time": "35:49.2"
+          },
+          {
+            "recording": "WCknTZNbraE",
+            "time": "1:23:36.8"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "49:06.5"
+          }
+        ]
       }
     },
     {
       "name": "tap",
-      "shows": "A permanent turns as it taps or untaps. Beryl's own, by exception 2.",
+      "shows": "A permanent turns as it taps or untaps.",
       "arena": {
-        "does": "Arena tilts a tapped permanent's art crop a few degrees; no motion between the two was caught.",
+        "does": "Arena tilts a tapped permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap restores it in about 0.1 s.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",
-            "time": "19:35.6"
+            "time": "19:35.3"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "19:49.1"
           },
           {
             "recording": "0VsYGs88NXA",
-            "time": "31:13.3"
+            "time": "31:13.15"
           }
         ]
       },
@@ -1075,13 +1096,14 @@
         "delay": null,
         "stagger": null,
         "curve": null
-      }
+      },
+      "exempt": 2
     },
     {
       "name": "strike",
       "shows": "A creature lunges at what it deals combat damage to and drifts back.",
       "arena": {
-        "does": "Each attacker lunges from its row to the player's avatar or to its blocker, the screen flashes, and it drifts back in 0.5 to 0.9 s. A blocked attacker strikes about 0.4 s before an unblocked one. First strike is a strike of its own, seconds earlier.",
+        "does": "Each attacker winds back, lunges from its row to the player's avatar or to its blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s before an unblocked one. First strike is a strike of its own, seconds earlier.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",
@@ -1106,9 +1128,9 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 850,
         "delay": null,
-        "stagger": null,
+        "stagger": 285,
         "curve": null
       }
     },
@@ -1145,8 +1167,8 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
+        "duration": 250,
+        "delay": 100,
         "stagger": null,
         "curve": null
       }
@@ -1155,7 +1177,7 @@
       "name": "count",
       "shows": "A number changes and shows that it did: a life total, a kind of counter, a power and toughness, a mana pool.",
       "arena": {
-        "does": "A life total jumps to its new value; the change floats up from the avatar, red for a loss, and a gain bursts green. A counter's badge settles onto its permanent after a flash. A planeswalker's loyalty changes about a second after its ability reaches the stack.",
+        "does": "A life total jumps to its new value in a burst of about 0.4 s; a loss's red number drifts down from the opponent's avatar, and a gain's green one rises for about 0.5 s. A counter's badge settles onto its permanent after a flash. A planeswalker's loyalty changes about a second after its ability reaches the stack.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",
@@ -1180,10 +1202,10 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
+        "duration": 400,
+        "delay": 125,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
@@ -1203,10 +1225,10 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 25,
         "delay": null,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
@@ -1226,17 +1248,17 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 200,
         "delay": null,
         "stagger": null,
-        "curve": null
+        "curve": "ease-out"
       }
     },
     {
       "name": "dwell",
       "shows": "Nothing moves while a spell or ability is read: the opponent's, before it resolves unanswered.",
       "arena": {
-        "does": "The opponent's spell sits on the stack for about a second before it resolves.",
+        "does": "The opponent's spell sits on the stack for 0.7 to 1.9 s before it resolves.",
         "evidence": [
           {
             "recording": "pE4XSNi-nZc",
@@ -1249,17 +1271,17 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 800,
         "delay": null,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
       "name": "announce",
       "shows": "A notice passes over the table while play goes on under it: the turn banner, the pill that says what a scry did, a coin tossed.",
       "arena": {
-        "does": "\"Your Turn\" or \"Opponent's Turn\" glows at the centre for about a second while cards move under it. A pill above an avatar reads \"Scry: 1 top, 1 bottom.\" for about 2.5 s. A coin a card flips is tossed mid-table and lands in about 1.3 s.",
+        "does": "\"Your Turn\" or \"Opponent's Turn\" glows at the centre for about a second while cards move under it. A pill above an avatar reads \"Scry: 1 top, 1 bottom.\" for about 3 s. A coin a card flips is tossed mid-table and lands in about 1.2 s.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",
@@ -1288,10 +1310,10 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
+        "duration": 1200,
+        "delay": 116,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
@@ -1327,20 +1349,20 @@
         ]
       },
       "values": {
-        "duration": null,
-        "delay": null,
+        "duration": 33,
+        "delay": 170,
         "stagger": null,
-        "curve": null
+        "curve": "none"
       }
     },
     {
       "name": "mark",
       "shows": "A mark from the list below on a card, an ability or a player, from the step that begins it to the step that ends it.",
       "values": {
-        "duration": null,
-        "delay": null,
-        "stagger": null,
-        "curve": null
+        "duration": 50,
+        "delay": 125,
+        "stagger": 0,
+        "curve": "none"
       }
     },
     {
@@ -1360,10 +1382,10 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 433,
         "delay": null,
-        "stagger": null,
-        "curve": null
+        "stagger": 500,
+        "curve": "ease-out"
       }
     }
   ],

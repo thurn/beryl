@@ -1,0 +1,3341 @@
+{
+  "about": [
+    "Arena's motion per verb, measured in the gameplay recordings in ~/Movies/arena (indexed in ~/arena) for docs/project-50k.md, K27. The verbs are data/ui-conventions.json's; `just conventions` derives each verb's summary here and its values there from these instances.",
+    "Each instance names its recording, the clip's start and span, its crop in the recording's pixels (1920x1080; SN9QFe2kM4Y is 2560x1440), and how it was taken: `tracker` is `just video measure`, which follows one moving card; `filmstrip` counts frames of `just video film` at the recording's frame rate (30 fps, 60 for UrGalw_f35w and SN9QFe2kM4Y), with `why` the tracker was not used. Its `command` retakes it.",
+    "duration_ms runs from the first frame of change to the first frame at rest; delay_ms from the instant `since` names; stagger_ms between like motions of one batch, start to start; peak is the largest size over the size at rest; curve is one of linear, ease-in, ease-out, ease-in-out, or none where nothing travels. A number not taken is null. Filmstrip numbers are good to a frame at the rate filmed, and the coarser strips' to about 100 ms.",
+    "A summary is the median and range of each number over all the verb's instances, the commonest curve, and the same per case when there are several. A verb's values in ui-conventions are the overall medians; where its cases differ (fly's draw, vanish's finished ability), the case's own summary is the reference.",
+    "To retake an instance, run its command, edit its numbers here and run `just conventions`. Instances were taken by agents with the arena-video skill; one of each verb was checked by eye (by-w8gv.21.18)."
+  ],
+  "verbs": [
+    {
+      "verb": "fly",
+      "path": "Rises out of the hand or library and glides on a shallow arc to its place, easing out. An opponent's card turns face up a little past halfway. A draw holds large beside the library for about 0.2 s, then drops into the hand.",
+      "gaps": [
+        "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows.",
+        "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
+        "Draw: SswBO8aOOgc 21:30.4 and 24:22.9 were tracked only inside a crop that misses the library leg (fly-in 330 to 360 ms, hold 200 ms, drop 200 to 330 ms), so they are left out.",
+        "Peak size of the spells was not taken."
+      ],
+      "instances": [
+        {
+          "case": "land played",
+          "recording": "UrGalw_f35w",
+          "time": "16:34.9",
+          "span": 1.2,
+          "crop": [
+            300,
+            450,
+            1200,
+            630
+          ],
+          "method": "filmstrip",
+          "why": "just video measure refused: 'cannot measure: 2 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards' (the glow, the hand and the dragged preview also move); same message on the sister land at 16:14.8 with two different crops.",
+          "command": "just video film UrGalw_f35w 16:35.4 --span 0.8 --fps 20 --cols 4 --width 480 --crop 300,450,1200,630",
+          "since": "",
+          "duration_ms": 350,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.9,
+          "path": "Island is dragged to the table enlarged, released at 16:35.40, shrinks to table size at once and glides up-and-left in a nearly straight line to its slot beside the other lands, rest by 16:35.80. Crop x centres 411,377,328,268,201,129,104,105 at 20 fps: steps grow then stop abruptly.",
+          "curve": "ease-in",
+          "note": "Duration counted from release (first frame at battlefield size, 16:35.45) to rest (16:35.80). Before it the card was held under the cursor at about 1.9x its rest width; true start inside the hand is not visible because the card is dragged out first. Peak is that held size. No flash on the land landing."
+        },
+        {
+          "case": "land played",
+          "recording": "UrGalw_f35w",
+          "time": "16:14.7",
+          "span": 1.0,
+          "crop": [
+            300,
+            450,
+            1100,
+            630
+          ],
+          "method": "filmstrip",
+          "why": "just video measure refused with '2 things moved where 1 card was asked for' at 16:14.8 (crop 700,0,1220,880), 16:14.5 (300,450,1100,500) and 16:14.8 (300,600,1100,400): the Your Turn banner and glow move too.",
+          "command": "just video film UrGalw_f35w 16:14.7 --span 0.8 --fps 20 --cols 4 --width 480 --crop 300,450,1100,630",
+          "since": "",
+          "duration_ms": 450,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.9,
+          "path": "Tundra held enlarged near the hand with a yellow outline until about 16:14.95, then shrinks and glides up-left to the first land slot, at rest about 16:15.40.",
+          "curve": null,
+          "note": "First land of the game. Duration 14.95 to 15.40 from 20 fps frames; curve not judged because positions were only read by eye. Same mechanism as the 16:34.9 land (drag, release, glide)."
+        },
+        {
+          "case": "permanent resolves",
+          "recording": "UrGalw_f35w",
+          "time": "17:00.95",
+          "span": 1.0,
+          "crop": [
+            700,
+            50,
+            1220,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "just video measure refused: 'cannot measure: 3 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards' (trail, smoke and flash move too).",
+          "command": "just video film UrGalw_f35w 17:01.1 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,50,1220,700",
+          "since": "",
+          "duration_ms": 600,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 2.0,
+          "path": "Monastery Mentor (own spell) sits large at the stack position top right, leaves at 17:01.10, shrinks and flies left and down to its slot, at rest 17:01.70. Crop x centres 405,341,287,243,218,196,177,158,140,126,107,103,100 at 20 fps: fast start, slow arrival.",
+          "curve": "ease-out",
+          "note": "Slot flash starts 17:01.75 and fades out by about 17:02.15, so the flash lasts about 400 ms and begins as the card stops. The stack card had been at rest from 17:00.95. Delay left null: nothing visible precedes it."
+        },
+        {
+          "case": "permanent resolves",
+          "recording": "pE4XSNi-nZc",
+          "time": "23:02.4",
+          "span": 0.8,
+          "crop": [
+            800,
+            100,
+            1100,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "just video measure was not run on this clip after refusing with '2 things moved where 1 card was asked for' / '3 things moved' on the other resolves (glow, trails and a shadow move with the card).",
+          "command": "just video film pE4XSNi-nZc 23:02.4 --span 0.8 --fps 20 --cols 4 --width 480 --crop 800,100,1100,600",
+          "since": "",
+          "duration_ms": 550,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.5,
+          "path": "Emeritus of Ideation (own creature) at rest on the stack at right at 23:02.50, leaves at 23:02.55, shrinks and sweeps left and down in an arc to its slot, at rest about 23:03.10, flash from 23:03.15.",
+          "curve": "ease-out",
+          "note": "Peak is approximate (card width about 140 px at the stack vs about 95 px at rest in the crop). Flash begins 23:03.15 and was still bright at the end of the 5 fps sheet around 23:03.4, so about 300 to 400 ms; not timed closely."
+        },
+        {
+          "case": "permanent resolves",
+          "recording": "pE4XSNi-nZc",
+          "time": "23:23.5",
+          "span": 0.8,
+          "crop": [
+            700,
+            100,
+            1220,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "the tracker refuses these clips (glow, trails and shadow count as movers), see the other resolves.",
+          "command": "just video film pE4XSNi-nZc 23:23.5 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,100,1220,500",
+          "since": "",
+          "duration_ms": 650,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "Opponent's Jace, Vryn's Prodigy (seen from the top seat) rests on the stack at right to 23:23.2 (5 fps sheet 23:22.8), leaves about 23:23.25, travels left and slightly down to its slot beside the opponent's other creature, at rest about 23:23.90, flash 23:23.95 to about 23:24.25.",
+          "curve": "ease-out",
+          "note": "Start is read from the 5 fps sheet (frames 0.2 s apart), so the start has up to 0.2 s of error; the 20 fps clip began mid flight. Flash about 300 ms. Peak not taken because the clip started mid flight."
+        },
+        {
+          "case": "permanent resolves",
+          "recording": "pE4XSNi-nZc",
+          "time": "21:19.7",
+          "span": 1.6,
+          "crop": [
+            700,
+            150,
+            1220,
+            650
+          ],
+          "method": "filmstrip",
+          "why": "the tracker refuses these clips (more than one mover), see the other resolves.",
+          "command": "just video film pE4XSNi-nZc 21:19.7 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,150,1220,650",
+          "since": "",
+          "duration_ms": 600,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.9,
+          "path": "Opponent's Mole Man, Moloid Master rests large at the stack position at right until 21:20.00, shrinks and flies left to its slot beside the other creature, at rest about 21:20.60.",
+          "curve": "ease-out",
+          "note": "No flash was visible at the slot in the 20 fps frames to 21:21.15, so the slot flash is absent here or too faint to see. Started a second film at 21:20.4 to catch the arrival."
+        },
+        {
+          "case": "discard",
+          "recording": "pE4XSNi-nZc",
+          "time": "20:47.4",
+          "span": 1.0,
+          "crop": [
+            0,
+            720,
+            640,
+            360
+          ],
+          "method": "filmstrip",
+          "why": "just video measure was not attempted: the hand fans out and the pile changes as the card leaves, so the first and last frames are not still.",
+          "command": "just video film pE4XSNi-nZc 20:47.55 --span 0.5 --fps 30 --cols 5 --width 450 --crop 0,720,640,360",
+          "since": "",
+          "duration_ms": 130,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.2,
+          "path": "Occult Epiphany resolves: the first discarded card (Forest) lifts out of the hand at bottom left, is first visible at card size over the graveyard pile at 20:47.78 and is at rest on it at 20:47.88.",
+          "curve": null,
+          "note": "The true start is inside the hand and not visible, so 130 ms is a lower bound of the visible hop. Peak is a rough eye estimate. The graveyard is the pile right beside the hand at bottom left. The 10 fps sheet (20:47.4) shows the second discarded card (a red creature) leaving the hand at 20:48.20 and resting on the pile at 20:48.40."
+        },
+        {
+          "case": "discard",
+          "recording": "pE4XSNi-nZc",
+          "time": "20:48.1",
+          "span": 0.6,
+          "crop": [
+            0,
+            650,
+            1100,
+            430
+          ],
+          "method": "filmstrip",
+          "why": "same as the first discard in this batch; the sheet used was 10 fps, so durations have a 100 ms error.",
+          "command": "just video film pE4XSNi-nZc 20:47.4 --span 1.6 --fps 10 --cols 4 --width 560 --crop 0,650,1100,430",
+          "since": "",
+          "duration_ms": 200,
+          "delay_ms": null,
+          "stagger_ms": 420,
+          "peak": null,
+          "path": "Second discarded card of the same two-card discard leaves the hand at 20:48.20 and rests on the graveyard pile at 20:48.40.",
+          "curve": null,
+          "note": "stagger_ms is start to start from the first discard (about 47.78) to this one (about 48.20), from a 10 fps sheet, so within about 100 ms."
+        },
+        {
+          "case": "own spell cast",
+          "recording": "SswBO8aOOgc",
+          "time": "20:11.0",
+          "span": 1.6,
+          "crop": [
+            700,
+            0,
+            1220,
+            880
+          ],
+          "method": "tracker",
+          "why": "",
+          "command": "just video measure SswBO8aOOgc 20:11.0 --span 1.6 --crop 700,0,1220,880",
+          "since": "",
+          "duration_ms": 370,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "dragged card is released near the table centre, then glides right to the stack slot at the right edge, size about constant",
+          "curve": "ease-out",
+          "note": "Tracker run covers 833 ms: 20:11.30-11.77 is the player's drag (card follows the cursor, glow on), the glow goes out at 20:11.70 (30 fps film 20:11.6) and the flight proper runs 20:11.77-12.13 = 370 ms. About 73% of the distance (x .43 to .89) is covered in the first half of the time. Peak not given: the tracker's size jumps (0.47 to 1.09) are the drag, the card is the same size on the stack as when released. Card is face up throughout (Currency Converter)."
+        },
+        {
+          "case": "own spell cast",
+          "recording": "UrGalw_f35w",
+          "time": "16:59.6",
+          "span": 0.8,
+          "crop": [
+            400,
+            150,
+            1520,
+            930
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: the card starts in the hand, which is inside the crop, and the hand fans while it is dragged (the same failure as SswBO8aOOgc 20:49.3: 'cannot measure: 2 things moved where 1 card was asked for')",
+          "command": "just video film UrGalw_f35w 16:59.6 --span 0.8 --fps 30 --cols 6 --width 300 --crop 400,150,1520,930",
+          "since": "",
+          "duration_ms": 340,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "released card (orange 'cast' glow off at 16:59.93) glides up and right to the stack slot at the right of the table, no rise first",
+          "curve": "ease-out",
+          "note": "Monastery Mentor. Drag 16:59.67-16:59.90 follows the cursor; glow goes at 16:59.93; card is at rest on the stack by 17:00.27 and darkens at 17:00.33. Flight after release = 340 ms (30 fps frames, +-33 ms). Stays face up. Size not measured."
+        },
+        {
+          "case": "own spell cast",
+          "recording": "SswBO8aOOgc",
+          "time": "20:49.3",
+          "span": 0.9,
+          "crop": [
+            700,
+            100,
+            1220,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: 'cannot measure: card 1 is moving in the first frame: start earlier' / '2 things moved where 1 card was asked for' (the card is mid-flight from the hand at the crop edge)",
+          "command": "just video film SswBO8aOOgc 20:49.3 --span 0.9 --fps 30 --cols 7 --width 270 --crop 700,100,1220,700",
+          "since": "",
+          "duration_ms": 640,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "card leaves the hand at the lower left, rises and glides right to the stack slot at the right",
+          "curve": "ease-out",
+          "note": "Pentad Prism: longer than the other two (640 ms: 20:49.33 leaves the crop's left edge, still sliding until about 20:49.97) because the player released it farther left, near the hand; the distance travelled is about twice that of Currency Converter. Orange glow gone by 20:49.33; the drag itself is not in this figure. Size not measured."
+        },
+        {
+          "case": "opponent spell cast",
+          "recording": "UrGalw_f35w",
+          "time": "16:47.15",
+          "span": 0.8,
+          "crop": [
+            600,
+            0,
+            1320,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: 'cannot measure: 2 things moved where 1 card was asked for' (opponent's hand fans and the mana flash share the crop)",
+          "command": "just video film UrGalw_f35w 16:47.15 --span 0.8 --fps 30 --cols 7 --width 270 --crop 600,0,1320,700",
+          "since": "",
+          "duration_ms": 400,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "card back drops out of the opponent's hand at the top centre, swings down and right, turns over in flight, lands at the stack slot on the right",
+          "curve": "ease-out",
+          "note": "Sentinel of the Nameless City. Back leaves the hand 16:47.25, edge-on at about 16:47.55, face up by 16:47.62, at rest 16:47.65 (+-33 ms). Turns over a little past halfway. Size not measured; the shadow stays beneath the card."
+        },
+        {
+          "case": "opponent spell cast",
+          "recording": "UrGalw_f35w",
+          "time": "17:16.1",
+          "span": 0.6,
+          "crop": [
+            800,
+            0,
+            1120,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: same crop failure as 16:47.15 on this recording ('2 things moved')",
+          "command": "just video film UrGalw_f35w 17:16.1 --span 0.6 --fps 30 --cols 6 --width 300 --crop 800,0,1120,600",
+          "since": "",
+          "duration_ms": 370,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "card back leaves the opponent's hand, arcs down and right to the stack slot, face up on arrival",
+          "curve": "ease-out",
+          "note": "Esika's Chariot. Back leaves 17:16.13, edge-on 17:16.33, face up 17:16.37, at rest 17:16.50 (+-33 ms). Mana-payment flashes appear at the top left only after it lands."
+        },
+        {
+          "case": "opponent spell cast",
+          "recording": "SswBO8aOOgc",
+          "time": "23:03.6",
+          "span": 0.6,
+          "crop": [
+            800,
+            0,
+            1120,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: not run on this recording because the opponent's hand shares the crop; the same two-movers failure occurred on UrGalw_f35w",
+          "command": "just video film SswBO8aOOgc 23:03.6 --span 0.6 --fps 30 --cols 6 --width 300 --crop 800,0,1120,600",
+          "since": "",
+          "duration_ms": 400,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "card back leaves the opponent's hand at the top centre, arcs right and down to the stack slot at the right edge, face up on arrival",
+          "curve": "ease-out",
+          "note": "Skullclamp. Back leaves 23:03.63, edge-on 23:03.87, face up 23:03.93, at rest 23:04.03 (+-33 ms). The back turns over at about 60% of the flight. Three instances: 370-400 ms, consistent with the 0.4 s claim. Size not measured."
+        },
+        {
+          "case": "draw",
+          "recording": "SswBO8aOOgc",
+          "time": "20:28.4",
+          "span": 1.8,
+          "crop": [
+            1250,
+            200,
+            670,
+            880
+          ],
+          "method": "filmstrip",
+          "why": "tracker covers only part of it ('crop 1250,200,670,880' starts after the library leg: tracker first sees the card at 20:28.83); start taken from 'just video film SswBO8aOOgc 20:28.5 --span 0.8 --fps 15 --cols 4 --width 480 --crop 300,300,1500,700', where the hand fan makes the tracker fail ('5 things moved where 1 card was asked for')",
+          "command": "just video measure SswBO8aOOgc 20:28.4 --span 1.8 --crop 1250,200,670,880  (+ the film above)",
+          "since": "",
+          "duration_ms": 1117,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.59,
+          "path": "leaves the library pile at the lower left, arcs up and right (turning face up) to a hold spot beside the stack, holds large, then drops straight down into the hand",
+          "curve": "ease-out",
+          "note": "fly-in (library to the hold spot beside the stack, card turning face up on the way): 20:28.55-29.13 = about 580 ms (15 fps film from 20:28.5 for the start, which the tracker's crop misses; tracker from 29.13 on: arrives 28.83-29.13 inside its crop in 300 ms); hold 29.13-29.37 = 240 ms; drop to hand 29.37-29.67 = 300 ms. The 'YOUR TURN' banner first shows at about 20:28.75, after the card has left the library (28.55): the draw is not delayed by the banner. Peak is the hold size over the card at the end of the drop (tracker 1.59; its 1.98 at the landing frame is a glitch)."
+        },
+        {
+          "case": "draw",
+          "recording": "UrGalw_f35w",
+          "time": "16:52.4",
+          "span": 1.6,
+          "crop": [
+            1400,
+            100,
+            520,
+            800
+          ],
+          "method": "filmstrip",
+          "why": "tracker covers only the hold and the drop (crop 1400,100,520,800 needed to avoid the banner; wider crops fail with '2 things moved'); start from 'just video film UrGalw_f35w 16:52.55 --span 0.45 --fps 30 --cols 5 --width 380 --crop 400,300,1520,700'",
+          "command": "just video measure UrGalw_f35w 16:52.4 --span 1.6 --crop 1400,100,520,800  (+ the film above)",
+          "since": "",
+          "duration_ms": 1050,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.55,
+          "path": "card back leaves the library pile at the lower left, arcs up and right turning face up, holds beside the stack on the right, then drops into the hand at the bottom right",
+          "curve": "ease-out",
+          "note": "Turn start (YOUR TURN 16:53.0). Card leaves the library at 16:52.52-52.55; the banner is faint at 16:52.75, so again no delay. Fly-in to hold 16:52.55-53.17 = about 620 ms, hold 53.17-53.37 = 200 ms, drop 53.37-53.60 = about 230 ms. Tracker end 53.77 includes the tracker losing the card in the fan at 53.60 (sizes 0.2), so 53.60 is used. Hold size 1.55x the card at the hand."
+        },
+        {
+          "case": "draw",
+          "recording": "WQiYBv23buw",
+          "time": "29:14.2",
+          "span": 1.0,
+          "crop": [
+            960,
+            100,
+            960,
+            900
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: 'cannot measure: 16 things moved where 3 cards were asked for' (Ancestral Recall on the stack, its glow, the hand fanning)",
+          "command": "just video film WQiYBv23buw 29:14.2 --span 1.0 --fps 15 --cols 5 --width 380 --crop 960,100,960,900  and  just video film WQiYBv23buw 29:14.8 --span 1.2 --fps 15 --cols 6 --width 320 --crop 300,300,1620,780",
+          "since": "",
+          "duration_ms": 700,
+          "delay_ms": null,
+          "stagger_ms": 233,
+          "peak": null,
+          "path": "each card comes out from behind the spell on the right, glides left across the table and down into the hand at the bottom; no pause",
+          "curve": "ease-out",
+          "note": "Three cards from Ancestral Recall (the draws begin about 2.3 s after the spell reaches the stack). Starts at 14.27 (Animate Dead), 14.53 (Island), 14.73-14.80 (Booster Tutor): stagger about 233 ms start to start, read at 15 fps so +-67 ms. Arrivals in the hand about 14.97, 15.20, 15.50 (700, 670, 770 ms each). Unlike the turn-start draw there is no large hold by the library here; the cards pass beside the stack at their natural size. Peak null."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 450,
+          "min": 130,
+          "max": 1117
+        },
+        "delay_ms": null,
+        "stagger_ms": {
+          "median": 326,
+          "min": 233,
+          "max": 420
+        },
+        "peak": {
+          "median": 1.75,
+          "min": 1.2,
+          "max": 2.0
+        },
+        "curve": "ease-out",
+        "cases": {
+          "land played": {
+            "duration_ms": {
+              "median": 400,
+              "min": 350,
+              "max": 450
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": {
+              "median": 1.9,
+              "min": 1.9,
+              "max": 1.9
+            },
+            "curve": "ease-in"
+          },
+          "permanent resolves": {
+            "duration_ms": {
+              "median": 600,
+              "min": 550,
+              "max": 650
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": {
+              "median": 1.9,
+              "min": 1.5,
+              "max": 2.0
+            },
+            "curve": "ease-out"
+          },
+          "discard": {
+            "duration_ms": {
+              "median": 165,
+              "min": 130,
+              "max": 200
+            },
+            "delay_ms": null,
+            "stagger_ms": {
+              "median": 420,
+              "min": 420,
+              "max": 420
+            },
+            "peak": {
+              "median": 1.2,
+              "min": 1.2,
+              "max": 1.2
+            },
+            "curve": null
+          },
+          "own spell cast": {
+            "duration_ms": {
+              "median": 370,
+              "min": 340,
+              "max": 640
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-out"
+          },
+          "opponent spell cast": {
+            "duration_ms": {
+              "median": 400,
+              "min": 370,
+              "max": 400
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-out"
+          },
+          "draw": {
+            "duration_ms": {
+              "median": 1050,
+              "min": 700,
+              "max": 1117
+            },
+            "delay_ms": null,
+            "stagger_ms": {
+              "median": 233,
+              "min": 233,
+              "max": 233
+            },
+            "peak": {
+              "median": 1.57,
+              "min": 1.55,
+              "max": 1.59
+            },
+            "curve": "ease-out"
+          }
+        }
+      }
+    },
+    {
+      "verb": "appear",
+      "path": "None: whole at its place within a frame, then a glow of a quarter second or more.",
+      "gaps": [
+        "A card a look puts in the graveyard (surveil, iRr-GeSF0lI 21:23.0) flies there: it is a fly, not an appear."
+      ],
+      "instances": [
+        {
+          "case": "token",
+          "recording": "SswBO8aOOgc",
+          "time": "22:29.5",
+          "span": 0.5,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "Earlier run: the tracker cannot isolate it (neighbouring creature slides aside while the token pops in); the card itself does not move.",
+          "command": "just video film SswBO8aOOgc 22:29.5 --span 0.5 --fps 30 --cols 4 --width 480",
+          "since": "Emissary's trigger is gone from the stack (last seen 22:29.57, Moss Opal alone at 22:29.60)",
+          "duration_ms": 100,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "appears whole in the row at its slot; the neighbouring creature slides aside 22:29.57 to 22:29.70",
+          "curve": "none",
+          "note": "Drone from Pinnacle Emissary. Frames: 22:29.67 nothing, 22:29.70 token first visible (dark), 22:29.77 clear, 22:29.80 full. Ripple rings keep expanding through the last frame (22:29.97) and until about 22:31.0 by an earlier run. Tracker earlier reported it cannot isolate one mover (a neighbour moves at the same time)."
+        },
+        {
+          "case": "token",
+          "recording": "UrGalw_f35w",
+          "time": "17:38.5",
+          "span": 0.4,
+          "crop": [
+            560,
+            380,
+            520,
+            360
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film UrGalw_f35w 17:38.5 --span 0.4 --fps 60 --cols 6 --width 360 --crop 560,380,520,360",
+          "since": "Gideon's ability leaves the stack (gone at 17:38.49)",
+          "duration_ms": 17,
+          "delay_ms": 140,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "appears whole at its slot, no flight",
+          "curve": "none",
+          "note": "2/2 Knight Ally token from Gideon, Ally of Zendikar (60 fps recording). Absent at 17:38.62, whole and full size at 17:38.63 (one frame); a dust/glow halo grows around it from about 17:38.75 and is still fading at the end of the clip (17:38.88), so the glow lasts 250 ms or more. Ability card gone between 17:38.46 and 17:38.49 (30 fps strip)."
+        },
+        {
+          "case": "token",
+          "recording": "WQiYBv23buw",
+          "time": "23:56.95",
+          "span": 0.5,
+          "crop": [
+            500,
+            300,
+            700,
+            400
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film WQiYBv23buw 23:56.95 --span 0.5 --fps 30 --cols 5 --width 384 --crop 500,300,700,400",
+          "since": "Grave Titan's trigger leaves the stack (gone at 23:56.98, last seen 23:56.95)",
+          "duration_ms": 33,
+          "delay_ms": 170,
+          "stagger_ms": 33,
+          "peak": null,
+          "path": "two tokens appear one after the other at the same slot as a stacked pair, no flight",
+          "curve": "none",
+          "note": "Two 2/2 Zombies from Grave Titan, batch of two. First token whole at 23:57.15 (absent at 23:57.12), second in the same frame sequence at 23:57.18, already overlapping the first: the batch reads as one group. Dust/glow lingers to the end of the clip (23:57.42). Stagger is one frame, so effectively simultaneous."
+        },
+        {
+          "case": "opening hand",
+          "recording": "UrGalw_f35w",
+          "time": "15:59.75",
+          "span": 0.8,
+          "crop": [
+            0,
+            200,
+            1500,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film UrGalw_f35w 15:59.75 --span 0.8 --fps 15 --cols 4 --width 480 --crop 0,200,1500,700",
+          "since": "the VS splash is fully black (15:59.82)",
+          "duration_ms": 450,
+          "delay_ms": 60,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "the seven cards are already fanned in their final places; the whole table fades in from black, nothing flies",
+          "curve": "none",
+          "note": "Game start after the VS splash. Black at 15:59.82; ghost of the hand at 15:59.88; bright by about 16:00.28 and full by 16:00.35. The hand is a fade-in of the scene, not a deal."
+        },
+        {
+          "case": "opening hand",
+          "recording": "I3Te0m1bBFw",
+          "time": "21:23.5",
+          "span": 0.9,
+          "crop": [
+            0,
+            150,
+            1500,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film I3Te0m1bBFw 21:23.5 --span 0.9 --fps 15 --cols 5 --width 400 --crop 0,150,1500,700",
+          "since": "the VS splash goes black (21:23.70)",
+          "duration_ms": 340,
+          "delay_ms": 130,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "cards already fanned in place; scene fades in from black",
+          "curve": "none",
+          "note": "Game 2 start after the VS splash. Black at 21:23.70 and 21:23.77; hand first visible 21:23.83 (dim), clear by 21:24.17. No motion of the cards."
+        },
+        {
+          "case": "opening hand",
+          "recording": "0VsYGs88NXA",
+          "time": "54:16.2",
+          "span": 0.6,
+          "crop": [
+            0,
+            150,
+            1500,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film 0VsYGs88NXA 54:16.2 --span 0.6 --fps 30 --cols 6 --width 360 --crop 0,150,1500,700",
+          "since": "the old hand is gone (54:16.37)",
+          "duration_ms": 33,
+          "delay_ms": 260,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "new seven-card hand is there whole in the one frame after a blank",
+          "curve": "none",
+          "note": "Mulligan to 6: old hand last whole at 54:16.30, battlefield shows through at 16.33, nothing at 16.37 to 16.60, then the new fanned hand is fully present at 54:16.63 with no fade (one frame). No deal motion."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 66,
+          "min": 17,
+          "max": 450
+        },
+        "delay_ms": {
+          "median": 135,
+          "min": 60,
+          "max": 260
+        },
+        "stagger_ms": {
+          "median": 33,
+          "min": 33,
+          "max": 33
+        },
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "token": {
+            "duration_ms": {
+              "median": 33,
+              "min": 17,
+              "max": 100
+            },
+            "delay_ms": {
+              "median": 140,
+              "min": 100,
+              "max": 170
+            },
+            "stagger_ms": {
+              "median": 33,
+              "min": 33,
+              "max": 33
+            },
+            "peak": null,
+            "curve": "none"
+          },
+          "opening hand": {
+            "duration_ms": {
+              "median": 340,
+              "min": 33,
+              "max": 450
+            },
+            "delay_ms": {
+              "median": 130,
+              "min": 60,
+              "max": 260
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "vanish",
+      "path": "None: breaks up in place (ash, a vortex, a crumble). A resolved instant or sorcery darkens and dissolves, or shrinks into its graveyard.",
+      "gaps": [
+        "Sacrificed and bounced: one instance each; exiled: both in 0VsYGs88NXA. A land or artifact sacrificed as a cost rises and becomes its ability on the stack (an emerge), so it is not counted."
+      ],
+      "instances": [
+        {
+          "case": "destroyed",
+          "recording": "RwKoGGUmw2k",
+          "time": "27:35.95",
+          "span": 1.4,
+          "crop": [
+            700,
+            380,
+            520,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film RwKoGGUmw2k 27:35.95 --span 1.4 --fps 15 --cols 7 --width 300 --crop 700,380,520,420",
+          "since": "the bolt first appears beside the creature, 27:36.08",
+          "duration_ms": 930,
+          "delay_ms": 140,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "stays in place: a white flash, then it crumbles into dark ash and fragments that fade; the empty shadow remains",
+          "curve": "none",
+          "note": "Cut Down on a 1/1. Bolt from the spell first beside the creature at 36.08, impact 36.22 (creature still whole), white flash 36.28, ash cloud 36.42 to 36.9, fragments 36.95 to 37.08, clean at 37.15. The spell itself stays on the stack until about 37.2 and then shrinks to the graveyard."
+        },
+        {
+          "case": "destroyed",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:25.25",
+          "span": 1.4,
+          "crop": [
+            560,
+            380,
+            560,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film IEXcjBn3BXk 22:25.25 --span 1.4 --fps 15 --cols 7 --width 300 --crop 560,380,560,420",
+          "since": "combat damage lands on it (22:25.38 is the effect start itself)",
+          "duration_ms": 1000,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "in place: flash at the strike, then ash and fragments, a faint outline last",
+          "curve": "none",
+          "note": "Green 2/2 token killed in combat damage (by a 4/3 attacker). Strike lands 22:25.38 (flash), ash from 25.65, fragments 26.18 to 26.25, ghost outline 26.32, gone at 26.38. Damage arrow numbers and the attacker's own shake overlap the first frames."
+        },
+        {
+          "case": "countered",
+          "recording": "IEXcjBn3BXk",
+          "time": "51:34.75",
+          "span": 1.4,
+          "crop": [
+            1380,
+            150,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film IEXcjBn3BXk 51:34.75 --span 1.4 --fps 15 --cols 7 --width 300 --crop 1380,150,540,420",
+          "since": "Counterspell's bolt hits the stack object, 51:34.82",
+          "duration_ms": 870,
+          "delay_ms": 260,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "stays on the stack behind the countering spell: goes dark, then crumbles into rubble that falls away",
+          "curve": "none",
+          "note": "Skullclamp countered by Counterspell. Counterspell's bolt hits at 51:34.82 (flash, no change to Skullclamp yet), Skullclamp darkens from 35.08, stays dark to 35.62, crumbles 35.68 to 35.95, gone at 36.02. Duration counted from the darkening; from the impact flash it is 1130 ms."
+        },
+        {
+          "case": "countered",
+          "recording": "WCknTZNbraE",
+          "time": "17:46.0",
+          "span": 1.2,
+          "crop": [
+            1380,
+            150,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film WCknTZNbraE 17:46.0 --span 1.2 --fps 15 --cols 6 --width 320 --crop 1380,150,540,420",
+          "since": "",
+          "duration_ms": 950,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "stays on the stack behind Force of Will: slowly darkens, then crumbles to fragments and fades",
+          "curve": "none",
+          "note": "Baleful Strix countered by Force of Will (cost: exile a blue card, alternative). FoW's bolt hit at 17:42.75; Strix then waited behind it while the player paid; dimming starts about 17:46.50, dark at 47.0 to 47.13, crumbles 47.20 to 47.33, glow remnants to 47.47. Clip 17:46.0 for 1.2 s plus the next clip 17:47.0 for 1.4 s were read together (command shown is the first)."
+        },
+        {
+          "case": "resolved instant or sorcery",
+          "recording": "WQiYBv23buw",
+          "time": "29:15.3",
+          "span": 1.2,
+          "crop": [
+            1420,
+            200,
+            500,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film WQiYBv23buw 29:15.3 --span 1.2 --fps 15 --cols 6 --width 320 --crop 1420,200,500,500",
+          "since": "",
+          "duration_ms": 820,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "stays in place on the stack: darkens, then dissolves in torn pieces and swirls away; no flight",
+          "curve": "none",
+          "note": "Ancestral Recall. Whole and glowing to 29:15.57, first dark at 15.63, torn dissolve 15.70 to 16.30, scraps at 16.43, none by 16.45 (5 fps strip: nothing at 16.40). No shrink to the graveyard is seen."
+        },
+        {
+          "case": "resolved instant or sorcery",
+          "recording": "IEXcjBn3BXk",
+          "time": "51:36.0",
+          "span": 1.4,
+          "crop": [
+            1380,
+            150,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film IEXcjBn3BXk 51:36.0 --span 1.4 --fps 15 --cols 7 --width 300 --crop 1380,150,540,420",
+          "since": "",
+          "duration_ms": 600,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "dims on the stack for about 0.4 s, then shrinks and flies up-left to the graveyard pile",
+          "curve": "ease-out",
+          "note": "Counterspell resolving (it countered Skullclamp). Dims at 51:36.13, holds dim to 36.53, then at 36.60 becomes a small card that flies to the pile, gone at 36.73. The 600 ms includes the 130 ms shrink flight: the one seen case where a resolved instant leaves by flying to the graveyard after darkening."
+        },
+        {
+          "case": "resolved instant or sorcery",
+          "recording": "pE4XSNi-nZc",
+          "time": "22:01.1",
+          "span": 0.5,
+          "crop": [
+            1380,
+            0,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film pE4XSNi-nZc 22:01.1 --span 0.5 --fps 30 --cols 5 --width 400 --crop 1380,0,540,420",
+          "since": "",
+          "duration_ms": 130,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.0,
+          "path": "stays full size with sparkles, then shrinks and flies up and left into the graveyard pile at the top left",
+          "curve": "ease-out",
+          "note": "Time Walk (sorcery, extra turn). No darkening or dissolve: at 22:01.27 it leaves the stack as a small card flying to the pile, settled by 22:01.40. First seen of three resolved cases; compare Ancestral Recall (dissolve) and Force of Will (dissolve): which one happens varies by card or effect."
+        },
+        {
+          "case": "resolved instant or sorcery",
+          "recording": "WCknTZNbraE",
+          "time": "17:47.0",
+          "span": 1.4,
+          "crop": [
+            1380,
+            150,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film WCknTZNbraE 17:47.0 --span 1.4 --fps 15 --cols 7 --width 300 --crop 1380,150,540,420",
+          "since": "",
+          "duration_ms": 400,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "darkens on the stack and is gone; the graveyard pile gains a card shortly after",
+          "curve": "none",
+          "note": "Force of Will resolving after countering Baleful Strix. Bright at 17:47.47, dim from 47.53 to 47.87, gone at 47.93 with dust left; no flight of the card is visible in this crop."
+        },
+        {
+          "case": "exiled",
+          "recording": "0VsYGs88NXA",
+          "time": "19:44.9",
+          "span": 1.4,
+          "crop": [
+            700,
+            380,
+            520,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film 0VsYGs88NXA 19:44.9 --span 1.4 --fps 15 --cols 7 --width 300 --crop 700,380,520,420",
+          "since": "Swords' bolt hits the creature (19:44.75, read from a 4 fps strip)",
+          "duration_ms": 670,
+          "delay_ms": 680,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "in place: the card goes dark, a dark vortex swirls over it, a white ring and flash close it, then nothing",
+          "curve": "none",
+          "note": "Swords to Plowshares on a 4/6. Card whole to 19:45.37, dark from 45.43, vortex 45.50 to 45.83, ring and flash 45.83 to 46.03, empty at 46.10. Delay is from a 4 fps strip (spell's bolt and flash at 19:44.75), so about plus or minus 125 ms."
+        },
+        {
+          "case": "exiled",
+          "recording": "0VsYGs88NXA",
+          "time": "22:30.0",
+          "span": 1.3,
+          "crop": [
+            800,
+            180,
+            520,
+            360
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film 0VsYGs88NXA 22:30.0 --span 1.3 --fps 15 --cols 7 --width 300 --crop 800,180,520,360",
+          "since": "",
+          "duration_ms": 530,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "in place: dark, vortex, white ring, gone",
+          "curve": "none",
+          "note": "Parallax Wave exiling a Phyrexian Germ token (Batterskull's germ). Dark at 22:30.27, vortex 30.33 to 30.60, ring 30.67 to 30.73, gone at 30.80 as the equipment card drops out beside it."
+        },
+        {
+          "case": "bounced",
+          "recording": "3sEoP_s4DQE",
+          "time": "24:49.4",
+          "span": 0.7,
+          "crop": [
+            560,
+            380,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film 3sEoP_s4DQE 24:49.4 --span 0.7 --fps 30 --cols 7 --width 300 --crop 560,380,540,420",
+          "since": "",
+          "duration_ms": 370,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "in place: cyan beam, glow builds, creature is gone in one frame; neighbours slide together to close the gap",
+          "curve": "none",
+          "note": "The Theorist, Jace Beleren's -2 returning a creature to its owner's hand. Beam already present at 24:49.40 (the true start is earlier, so 370 ms is a lower bound; at 24:49.2 there was no glow in a 5 fps strip). Creature present at 49.73, gone at 49.77; neighbouring creatures slide over from 49.77 and ripple rings fade by about 50.07. The returned card then appears in the hand; the creature does not fly there."
+        },
+        {
+          "case": "sacrificed",
+          "recording": "I3Te0m1bBFw",
+          "time": "29:18.4",
+          "span": 1.0,
+          "crop": [
+            900,
+            380,
+            520,
+            360
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film I3Te0m1bBFw 29:18.4 --span 1.0 --fps 15 --cols 5 --width 360 --crop 900,380,520,360",
+          "since": "",
+          "duration_ms": 530,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "in place: the creature is hidden by a white flash that bursts and fades, no flight",
+          "curve": "none",
+          "note": "Birds of Paradise sacrificed to Grist's -2. Whole at 29:18.53, burst at 18.60 (card already hidden), ring and bloom to 19.00, sparks until 19.13, clean by 19.20. Sacrificing an artifact or land as a cost looks different: the card rises from the battlefield and becomes the ability on the stack (seen with Flooded Strand, UrGalw_f35w 19:28.4, and Pyrite Spellbomb, 0VsYGs88NXA 51:24.6), so that is a flight, not a vanish."
+        },
+        {
+          "case": "ability finished",
+          "recording": "WQiYBv23buw",
+          "time": "23:56.85",
+          "span": 0.4,
+          "crop": [
+            1380,
+            120,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film WQiYBv23buw 23:56.85 --span 0.4 --fps 30 --cols 6 --width 320 --crop 1380,120,540,420",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "gone between two frames",
+          "curve": "none",
+          "note": "Grave Titan trigger card on the stack: present at 23:56.95, absent at 23:56.98 (30 fps strip). The tokens appear 170 ms later."
+        },
+        {
+          "case": "ability finished",
+          "recording": "UrGalw_f35w",
+          "time": "17:38.36",
+          "span": 0.3,
+          "crop": [
+            1380,
+            120,
+            540,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film UrGalw_f35w 17:38.36 --span 0.3 --fps 30 --cols 5 --width 360 --crop 1380,120,540,420",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "gone between two frames; a faint smoke wisp stays for 100 ms or more",
+          "curve": "none",
+          "note": "Gideon, Ally of Zendikar's ability card present at 17:38.46, absent at 17:38.49. The Knight token appears 140 ms later."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 565,
+          "min": 33,
+          "max": 1000
+        },
+        "delay_ms": {
+          "median": 260,
+          "min": 140,
+          "max": 680
+        },
+        "stagger_ms": null,
+        "peak": {
+          "median": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "curve": "none",
+        "cases": {
+          "destroyed": {
+            "duration_ms": {
+              "median": 965,
+              "min": 930,
+              "max": 1000
+            },
+            "delay_ms": {
+              "median": 140,
+              "min": 140,
+              "max": 140
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "countered": {
+            "duration_ms": {
+              "median": 910,
+              "min": 870,
+              "max": 950
+            },
+            "delay_ms": {
+              "median": 260,
+              "min": 260,
+              "max": 260
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "resolved instant or sorcery": {
+            "duration_ms": {
+              "median": 500,
+              "min": 130,
+              "max": 820
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": {
+              "median": 1.0,
+              "min": 1.0,
+              "max": 1.0
+            },
+            "curve": "ease-out"
+          },
+          "exiled": {
+            "duration_ms": {
+              "median": 600,
+              "min": 530,
+              "max": 670
+            },
+            "delay_ms": {
+              "median": 680,
+              "min": 680,
+              "max": 680
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "bounced": {
+            "duration_ms": {
+              "median": 370,
+              "min": 370,
+              "max": 370
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "sacrificed": {
+            "duration_ms": {
+              "median": 530,
+              "min": 530,
+              "max": 530
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "ability finished": {
+            "duration_ms": {
+              "median": 33,
+              "min": 33,
+              "max": 33
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "emerge",
+      "path": "A curve from the source to the stack, growing from about a quarter of its size there, easing in.",
+      "gaps": [
+        "Delay from the source settling is taken once (Thraben Inspector); other sources land under sparks."
+      ],
+      "instances": [
+        {
+          "case": "triggered ability",
+          "recording": "IEXcjBn3BXk",
+          "time": "20:39.15",
+          "span": 0.35,
+          "crop": [
+            850,
+            250,
+            700,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "cannot measure: 3 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards (clip 20:39.3, crop 800,200,1120,700; Inti's tooltip and the glow moved too)",
+          "command": "just video film IEXcjBn3BXk 20:39.15 --span 0.35 --fps 30 --cols 4 --width 560 --crop 850,250,700,500  then 20:39.45 span 0.6 crop 850,250,1070,500",
+          "since": "",
+          "duration_ms": 300,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a small card appears on Flametongue Kavu (just landed, 20:39.38), curves right and up to the stack slot at the right edge, growing, resting 20:39.68",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Copy first visible 20:39.38 (absent 20:39.35), at rest 20:39.68 (30 fps). Starts about 0.2x rest width. Delay not taken: the creature's own landing was only seen at 6 fps (about 20:38.9-39.1), too coarse. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/5.0 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "triggered ability",
+          "recording": "5UHzpVvUkfI",
+          "time": "19:48.45",
+          "span": 0.55,
+          "crop": [
+            880,
+            180,
+            1040,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "cannot measure: 5 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards (tried twice, crops 880,180,1040,700 and 900,200,1000,420)",
+          "command": "just video film 5UHzpVvUkfI 19:48.45 --span 0.55 --fps 30 --cols 5 --width 400 --crop 880,180,1040,700",
+          "since": "Thraben Inspector settles on the battlefield (about 19:48.30, from an 8 fps strip, so +-0.12 s)",
+          "duration_ms": 330,
+          "delay_ms": 250,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "small copy on the creature, then a rising arc to the right to the stack slot, growing",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. First visible 19:48.55, at rest 19:48.88. Starts about 0.22x rest width. The thin source line begins 19:48.72 (see point/source line). step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/4.5 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "triggered ability",
+          "recording": "WQiYBv23buw",
+          "time": "49:07.95",
+          "span": 0.55,
+          "crop": [
+            600,
+            100,
+            1320,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "tracker not tried on this clip: it failed on two other emerges (sparks, tooltips and the stack glow count as movers, '5 things moved where 1 card was asked for')",
+          "command": "just video film WQiYBv23buw 49:07.95 --span 0.55 --fps 30 --cols 5 --width 480 --crop 600,100,1320,500",
+          "since": "",
+          "duration_ms": 240,
+          "delay_ms": null,
+          "stagger_ms": 300,
+          "peak": null,
+          "path": "Mole Man's copy rises from Mole Man (a land had just entered) in a short rising arc to the right edge stack slot",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Trigger 1 (Mole Man, landfall): first visible 49:07.98, at rest 49:08.22. Trigger 2 (Icetill Explorer, same land) first visible 49:08.28, reaches its slot under the first card by 49:08.53 (250 ms), so the two leave 300 ms apart start to start. The second card sits offset behind the first. The land's own arrival not timed, so no delay. Starts at about 1/3.3 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "triggered ability",
+          "recording": "WQiYBv23buw",
+          "time": "49:08.2",
+          "span": 0.55,
+          "crop": [
+            800,
+            100,
+            1120,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "tracker not tried on this clip: it failed on two other emerges (sparks, tooltips and the stack glow count as movers, '5 things moved where 1 card was asked for')",
+          "command": "just video film WQiYBv23buw 49:08.4 --span 0.4 --fps 30 --cols 4 --width 560 --crop 800,100,1120,500",
+          "since": "",
+          "duration_ms": 250,
+          "delay_ms": null,
+          "stagger_ms": 300,
+          "peak": null,
+          "path": "Icetill Explorer's copy leaves the creature two to the left of Mole Man, arcs right and tucks behind the first stack card",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Second of two triggers of one landfall: start 49:08.28, rest 49:08.53. Stagger 300 ms from the first trigger's start (49:07.98), matching the claimed third of a second. Starts at about 1/3.5 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "activated ability",
+          "recording": "5UHzpVvUkfI",
+          "time": "19:58.0",
+          "span": 0.55,
+          "crop": [
+            1380,
+            250,
+            540,
+            640
+          ],
+          "method": "filmstrip",
+          "why": "cannot measure: 5 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards on the sister emerge at 19:48.3; not retried here: the line is a thin glow, not a card; the loyalty ability copy sits partly on its source",
+          "command": "just video film 5UHzpVvUkfI 19:58.0 --span 0.55 --fps 30 --cols 6 --width 330 --crop 1380,250,540,640  then 19:58.4 span 0.4",
+          "since": "the Choose One overlay lifts after the -3 is picked (19:58.10)",
+          "duration_ms": 300,
+          "delay_ms": 130,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "small copy appears on Teferi (right edge, mid height) and grows up and to the left of the source into the stack slot just above it",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Teferi, Time Raveler -3. First visible 19:58.23, at rest 19:58.53. Starts about 0.24x rest width. Short distance (the stack slot is about one card above the source). step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/4.2 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "activated ability",
+          "recording": "krskVfn2v5Q",
+          "time": "46:07.25",
+          "span": 0.5,
+          "crop": [
+            1000,
+            100,
+            920,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "tracker not tried on this clip: it failed on two other emerges (sparks, tooltips and the stack glow count as movers, '5 things moved where 1 card was asked for')",
+          "command": "just video film krskVfn2v5Q 46:07.25 --span 0.5 --fps 30 --cols 4 --width 560 --crop 1000,100,920,500",
+          "since": "",
+          "duration_ms": 300,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "copy appears on Lightning Greaves (centre, back row), moves slowly right then sweeps to the right edge stack slot, growing",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Equip. First visible 46:07.25 (absent at 46:07.22 in an 8 fps strip), at rest about 46:07.55. Starts about 0.27x rest width. Sparks trail the card at arrival. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/3.8 of its size at rest on the stack and grows to it."
+        },
+        {
+          "case": "activated ability",
+          "recording": "IEXcjBn3BXk",
+          "time": "23:12.5",
+          "span": 0.55,
+          "crop": [
+            1100,
+            200,
+            820,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker not tried on this clip: it failed on two other emerges (sparks, tooltips and the stack glow count as movers, '5 things moved where 1 card was asked for')",
+          "command": "just video film IEXcjBn3BXk 23:12.5 --span 0.55 --fps 30 --cols 5 --width 400 --crop 1100,200,820,700",
+          "since": "",
+          "duration_ms": 350,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "copy appears on Skullclamp (lower right), rises in a gentle curve up and right to the stack slot at the right edge, growing",
+          "curve": "ease-in",
+          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Equip. First visible 23:12.50 (absent in the 8 fps frame at 23:12.45), at rest 23:12.83. Starts about 0.19x rest width. The thin source line begins at 23:12.67 while the copy is mid-flight. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/5.0 of its size at rest on the stack and grows to it."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 300,
+          "min": 240,
+          "max": 350
+        },
+        "delay_ms": {
+          "median": 190,
+          "min": 130,
+          "max": 250
+        },
+        "stagger_ms": {
+          "median": 300,
+          "min": 300,
+          "max": 300
+        },
+        "peak": null,
+        "curve": "ease-in",
+        "cases": {
+          "triggered ability": {
+            "duration_ms": {
+              "median": 275,
+              "min": 240,
+              "max": 330
+            },
+            "delay_ms": {
+              "median": 250,
+              "min": 250,
+              "max": 250
+            },
+            "stagger_ms": {
+              "median": 300,
+              "min": 300,
+              "max": 300
+            },
+            "peak": null,
+            "curve": "ease-in"
+          },
+          "activated ability": {
+            "duration_ms": {
+              "median": 300,
+              "min": 300,
+              "max": 350
+            },
+            "delay_ms": {
+              "median": 130,
+              "min": 130,
+              "max": 130
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-in"
+          }
+        }
+      }
+    },
+    {
+      "verb": "flip",
+      "path": "None: an effect covers the card for about 1.1 s and the new face shows as it clears. The card neither turns nor scales.",
+      "gaps": [
+        "A face-down permanent turning face up is not seen: no morph or disguise is in play, and manifest dread's face-down cards (I3Te0m1bBFw 28:57 to 29:40, 44:04 to 44:19) never turn face up. That case stays as \"A card turning face up\" says."
+      ],
+      "instances": [
+        {
+          "case": "transform",
+          "recording": "WCknTZNbraE",
+          "time": "35:49.2",
+          "span": 1.8,
+          "crop": [
+            800,
+            470,
+            320,
+            260
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the card stays in place and is covered by an effect; timed from frames",
+          "command": "just video film WCknTZNbraE 35:49.2 --span 1.8 --fps 15 --cols 9 --width 210 --crop 800,470,320,260",
+          "since": "the transform ability resolves (the ability card leaves the stack about 49.0)",
+          "duration_ms": 1130,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.0,
+          "path": "stays in place",
+          "curve": "none",
+          "note": "transform in place (Concealing Curtains to Revealing Eye). Not a turn-over: the card never rotates or scales (peak 1.0). Within one frame (49.33 to 49.40) it is covered by a cracked-lava slab with red glow, which brightens to bright orange by 49.73-49.87 with embers; the new face (Revealing Eye 3/4) shows through from about 49.93, is clear by 50.20 with cracks fading to 50.53. Swap about 0.55 s after the start. 3 beats: cover (0.35 s), swap hidden in glare, burn-off (0.6 s). +-67 ms."
+        },
+        {
+          "case": "transform",
+          "recording": "WCknTZNbraE",
+          "time": "1:23:36.8",
+          "span": 1.8,
+          "crop": [
+            900,
+            460,
+            320,
+            260
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the card stays in place and is covered by an effect; timed from frames",
+          "command": "just video film WCknTZNbraE 1:23:36.8 --span 1.8 --fps 15 --cols 9 --width 210 --crop 900,460,320,260",
+          "since": "",
+          "duration_ms": 1130,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.0,
+          "path": "stays in place",
+          "curve": "none",
+          "note": "transform in place (Concealing Curtains to Revealing Eye). Second Curtains transform (another game): lava slab first 36.87, bright orange 37.20-37.33, new face appearing through it 37.40-37.53 and clear 37.60, cracks fading to about 37.93, clean 38.00. Identical to the first (1.13 s, no turn)."
+        },
+        {
+          "case": "transform",
+          "recording": "UrGalw_f35w",
+          "time": "49:06.5",
+          "span": 1.4,
+          "crop": [
+            1100,
+            650,
+            300,
+            280
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the card stays in place and is covered by an effect; timed from frames (60 fps source, read at 20 fps)",
+          "command": "just video film UrGalw_f35w 49:06.5 --span 1.4 --fps 20 --cols 10 --width 190 --crop 1100,650,300,280",
+          "since": "",
+          "duration_ms": 1150,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.0,
+          "path": "stays in place",
+          "curve": "none",
+          "note": "transform in place (Incubator token to Phyrexian). Incubator token transform ('2: Transform this token.'). Different effect from Curtains: the token's face swaps to the red Phyrexian face in one frame (06.65 to 06.70) and at once a black cocoon shape grows over it (06.75-07.10), then a green slime burst with a flash (07.10-07.50) that fades by 07.85. Card not rotated or scaled. About 1.15 s from swap to the last residue."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 1130,
+          "min": 1130,
+          "max": 1150
+        },
+        "delay_ms": null,
+        "stagger_ms": null,
+        "peak": {
+          "median": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "curve": "none"
+      }
+    },
+    {
+      "verb": "tap",
+      "path": "Turns 7 to 8 degrees in place, easing out.",
+      "gaps": [
+        "An attacker tapping as it is declared was seen only at 3 fps (UrGalw_f35w 20:57.3)."
+      ],
+      "instances": [
+        {
+          "case": "untap",
+          "recording": "IEXcjBn3BXk",
+          "time": "19:35.30",
+          "span": 0.3,
+          "crop": [
+            300,
+            640,
+            400,
+            240
+          ],
+          "method": "filmstrip",
+          "why": "nothing to track: the card's art colour returns in one frame and the rotation is a few degrees",
+          "command": "just video film IEXcjBn3BXk 19:35.30 --span 0.3 --fps 30 --cols 5 --width 400 --crop 300,640,400,240",
+          "since": "the untap step begins (card dim and tilted at 19:35.33)",
+          "duration_ms": 100,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "two lands rotate in place from about 8 degrees clockwise back to level",
+          "curve": "ease-out",
+          "note": "Frames: 19:35.33 tapped (dim art, grey arrow icon, about 8 degrees); 19:35.37 colour restored and about 6 degrees; 19:35.40 about 6; 19:35.43 level. So the tilt unwinds over about 100 ms and the colour returns at once. Both lands go at the same time (stagger 0). Tapped look is dimmed art with a grey arrow, not just tilt."
+        },
+        {
+          "case": "tap",
+          "recording": "UrGalw_f35w",
+          "time": "19:49.1",
+          "span": 0.5,
+          "crop": [
+            350,
+            650,
+            520,
+            200
+          ],
+          "method": "filmstrip",
+          "why": "a gold burst covers the land and the neighbours shuffle together, so there is no clean mover to track",
+          "command": "just video film UrGalw_f35w 19:49.1 --span 0.5 --fps 30 --cols 5 --width 400 --crop 350,650,520,200",
+          "since": "",
+          "duration_ms": 170,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "an untapped Plains flashes gold and turns to about 7 degrees clockwise with its art dimmed and an arrow shown",
+          "curve": "ease-out",
+          "note": "tap (land tapped for mana, paying a spell). Plains untapped at 19:49.17, flash at 19:49.20, dim tilted at 19:49.27-.30 and the stack of tapped lands settles by about 19:49.37. The burst of gold motes rises to the spell. The filmstrip is 30 fps although the source is 60. Duration is plus or minus 35 ms."
+        },
+        {
+          "case": "tap",
+          "recording": "0VsYGs88NXA",
+          "time": "31:13.15",
+          "span": 0.6,
+          "crop": [
+            760,
+            260,
+            300,
+            200
+          ],
+          "method": "filmstrip",
+          "why": "a white flash and a chain overlay cover the card, so a tracker has nothing to isolate",
+          "command": "just video film 0VsYGs88NXA 31:13.15 --span 0.6 --fps 30 --cols 5 --width 400 --crop 760,260,300,200",
+          "since": "",
+          "duration_ms": 270,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a white flash, then the card rotates about 7 degrees clockwise and dims while a chain overlay and a stun counter appear",
+          "curve": "ease-out",
+          "note": "tap (creature tapped by an effect: Kaito, stun counters). Flash from 31:13.28; tilt visible at 31:13.35 and settled by about 31:13.55. Estimate of the angle is 7 degrees, about the same as a land. Not a normal tap (an effect), so the flash is extra."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 170,
+          "min": 100,
+          "max": 270
+        },
+        "delay_ms": null,
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "ease-out",
+        "cases": {
+          "untap": {
+            "duration_ms": {
+              "median": 100,
+              "min": 100,
+              "max": 100
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-out"
+          },
+          "tap": {
+            "duration_ms": {
+              "median": 220,
+              "min": 170,
+              "max": 270
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-out"
+          }
+        }
+      }
+    },
+    {
+      "verb": "strike",
+      "path": "Winds back, lunges straight at the avatar or its blocker, then drifts back to its slot.",
+      "gaps": [
+        "First strike as a strike of its own was not measured; sMpAJ0HKDdg 54:55.7's target is a likely reading."
+      ],
+      "instances": [
+        {
+          "case": "blocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:25.2",
+          "span": 1.35,
+          "crop": [
+            560,
+            120,
+            800,
+            820
+          ],
+          "method": "filmstrip",
+          "why": "tracker not usable: camera shake, flashes and several movers in the clip; the measure run returned a peak of 1.717 and a 700 ms stagger that came from the impact flash, so timing was read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 22:25.2 --span 1.35 --fps 12 --cols 4 --width 480 --crop 560,120,800,820",
+          "since": "",
+          "duration_ms": 800,
+          "delay_ms": null,
+          "stagger_ms": 220,
+          "peak": null,
+          "path": "from its row down-left to the blocker's card, slight tilt, then a slower drift back to its slot",
+          "curve": null,
+          "note": "Opponent attacker (top-left) blocked by the streamer's green 2/2. Rest at 25.28, first moves 25.37, reaches the blocker 25.53 (dust and flash, blocker dies), eases back and is at rest by about 26.12. Outbound lunge about 250 ms, return about 600 ms. Frame step 83 ms. Impact of this blocked attacker (25.50) is about 370 ms before the other attacker's impact on the avatar (25.87). Peak size not measured: the card tilts and flashes, the tracker was unusable."
+        },
+        {
+          "case": "unblocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:25.2",
+          "span": 1.35,
+          "crop": [
+            560,
+            120,
+            800,
+            820
+          ],
+          "method": "filmstrip",
+          "why": "tracker not usable: camera shake, flashes and several movers in the clip; the measure run returned a peak of 1.717 and a 700 ms stagger that came from the impact flash, so timing was read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 22:25.2 --span 1.35 --fps 12 --cols 4 --width 480 --crop 560,120,800,820",
+          "since": "",
+          "duration_ms": 650,
+          "delay_ms": null,
+          "stagger_ms": 220,
+          "peak": null,
+          "path": "from its row straight down to the player's avatar, then back up to its slot",
+          "curve": null,
+          "note": "Second attacker (blue 2/2, same combat) lunges at the streamer's avatar. Small wind-up up and back about 25.45, moves down from 25.55, arrives at the avatar 25.87 with a burst and a red 2 (life 10 to 8 readable by 25.95), is back at rest 26.12-26.20. Outbound about 320 ms, return about 300 ms. Frame step 83 ms. Starts about 220 ms after the blocked attacker."
+        },
+        {
+          "case": "unblocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "35:34.8",
+          "span": 1.6,
+          "crop": [
+            360,
+            0,
+            1200,
+            1080
+          ],
+          "method": "filmstrip",
+          "why": "tracker not usable: camera shake, flashes and several movers in the clip; the measure run returned a peak of 1.717 and a 700 ms stagger that came from the impact flash, so timing was read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 35:34.8 --span 1.6 --fps 10 --cols 4 --width 480 --crop 360,0,1200,1080",
+          "since": "",
+          "duration_ms": 850,
+          "delay_ms": null,
+          "stagger_ms": 350,
+          "peak": null,
+          "path": "small pull back, then a straight dash up the table to the opponent's avatar, then a drift back",
+          "curve": null,
+          "note": "Two streamer attackers vs the opponent's avatar (19 to 10). First attacker (right one): drifts down-left from 35.05 (wind-up), dashes up from 35.25, at the avatar 35.50 (fire burst, red 4), back at rest about 35.90. Outbound about 450 ms including wind-up, return about 350 ms. Frame step 100 ms. The second attacker's own strike is the next row. Impacts are 450 ms apart (35.50, 35.95)."
+        },
+        {
+          "case": "unblocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "35:35.4",
+          "span": 1.6,
+          "crop": [
+            360,
+            0,
+            1200,
+            720
+          ],
+          "method": "filmstrip",
+          "why": "tracker not usable: camera shake, flashes and several movers in the clip; the measure run returned a peak of 1.717 and a 700 ms stagger that came from the impact flash, so timing was read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 35:36.0 --span 1.0 --fps 10 --cols 4 --width 400 --crop 360,0,1200,720",
+          "since": "",
+          "duration_ms": 1000,
+          "delay_ms": null,
+          "stagger_ms": 350,
+          "peak": null,
+          "path": "pull back down-left, dash up to the avatar, drift back to its slot",
+          "curve": null,
+          "note": "Second attacker of the same combat (left one). Pulls back down-left 35.40 to 35.75 (a long wind-up), dashes up 35.80, at the avatar 35.95 (flash, red 5, life 15 to 10 readable 36.10), returns and is at rest 36.40. Outbound about 550 ms including the wind-up, return about 450 ms. Frame step 100 ms (rest and return frames from the 35:36.0 film). Starts about 350 ms after the first attacker."
+        },
+        {
+          "case": "blocked attacker",
+          "recording": "sMpAJ0HKDdg",
+          "time": "54:55.7",
+          "span": 1.6,
+          "crop": [
+            0,
+            60,
+            1920,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "tracker not usable: camera shake, flashes and several movers in the clip; the measure run returned a peak of 1.717 and a 700 ms stagger that came from the impact flash, so timing was read from filmstrip frame times",
+          "command": "just video film sMpAJ0HKDdg 54:55.7 --span 1.6 --fps 10 --cols 4 --width 640 --crop 0,60,1920,600",
+          "since": "",
+          "duration_ms": 1300,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "wind-up up-left, dash to the right and down, slow glide back",
+          "curve": null,
+          "note": "Regular-damage strike after first-strike damage (the regular strike is the 54:57.5 evidence; first strike was about 3 s earlier). Attacker lifts and swings away 55.90-56.20 (wind-up), dashes right and down 56.20-56.50 with a motion streak, back toward its slot 56.60-57.20. Long and slow: 1.3 s total, outbound about 600 ms, return about 600 ms, longer than the 0.5 to 0.9 s claimed. Frame step 100 ms. Target (a blocker at lower right) is my reading and not certain at this crop; treat the case label as likely."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 850,
+          "min": 650,
+          "max": 1300
+        },
+        "delay_ms": null,
+        "stagger_ms": {
+          "median": 285,
+          "min": 220,
+          "max": 350
+        },
+        "peak": null,
+        "curve": null,
+        "cases": {
+          "blocked attacker": {
+            "duration_ms": {
+              "median": 1050,
+              "min": 800,
+              "max": 1300
+            },
+            "delay_ms": null,
+            "stagger_ms": {
+              "median": 220,
+              "min": 220,
+              "max": 220
+            },
+            "peak": null,
+            "curve": null
+          },
+          "unblocked attacker": {
+            "duration_ms": {
+              "median": 850,
+              "min": 650,
+              "max": 1000
+            },
+            "delay_ms": null,
+            "stagger_ms": {
+              "median": 350,
+              "min": 220,
+              "max": 350
+            },
+            "peak": null,
+            "curve": null
+          }
+        }
+      }
+    },
+    {
+      "verb": "streak",
+      "path": "Straight from the source to the target, then a burst there.",
+      "instances": [
+        {
+          "case": "mana",
+          "recording": "TbrYIs2juCw",
+          "time": "33:32.2",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film TbrYIs2juCw 33:32.2 --span 0.8 --fps 20 --cols 4 --width 480",
+          "since": "the lands begin to glow, 33:32.45",
+          "duration_ms": 300,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "out of the land in a curl, then a nearly straight line to the stacked spell",
+          "curve": null,
+          "note": "Two lands (white and blue) glow at 32.45, both streaks leave 32.55-32.60, arc then run straight to the Remand on the stack at right, flash at 32.80 and burst 32.85-32.95 or longer. Streaks leave together (within 50 ms), so no real stagger. Frame step 50 ms."
+        },
+        {
+          "case": "mana",
+          "recording": "3sEoP_s4DQE",
+          "time": "45:30.5",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 3sEoP_s4DQE 45:30.5 --span 0.8 --fps 20 --cols 4 --width 480",
+          "since": "the lands begin to glow, 45:30.85",
+          "duration_ms": 250,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "curl out of the land, then a straight line to the spell at right",
+          "curve": null,
+          "note": "Two lands (blue, red) glow at 30.85, streaks leave 30.95 with a curl and reach Remand on the stack at 31.15, burst 31.20 (still bright at 31.25). Both leave together. Frame step 50 ms."
+        },
+        {
+          "case": "mana",
+          "recording": "pE4XSNi-nZc",
+          "time": "22:00.2",
+          "span": 1.1,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film pE4XSNi-nZc 22:00.2 --span 0.8 --fps 20 --cols 4 --width 480 (and 22:00.9 --span 0.4)",
+          "since": "the lands begin to glow, 22:00.65",
+          "duration_ms": 300,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "curl out of the land, then a long straight line across the table to the stacked spell",
+          "curve": null,
+          "note": "Opponent's two lands (blue, purple) glow at 00.65, streaks leave 00.75, run the whole table to Time Walk at right, arrive 01.05 with a spark burst that fades by about 01.20 (150 ms). Streaks leave within 50 ms of each other. Frame step 50 ms."
+        },
+        {
+          "case": "mana",
+          "recording": "IEXcjBn3BXk",
+          "time": "38:35.95",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 38:35.95 --span 0.4 --fps 20 --cols 4 --width 480 (and 38:36.3 --span 0.8)",
+          "since": "the lands glow, 38:36.0",
+          "duration_ms": 250,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "curl out of the land, then straight to the spell",
+          "curve": null,
+          "note": "Bonecrusher Giant's Stomp: two lands (red, white) glow 35.95-36.00, streaks leave 36.10, arrive at the spell at right 36.35 with a flash. Frame step 50 ms."
+        },
+        {
+          "case": "damage",
+          "recording": "IEXcjBn3BXk",
+          "time": "20:40.6",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 20:40.6 --span 0.8 --fps 20 --cols 4 --width 480",
+          "since": "the source card glows, 20:40.75",
+          "duration_ms": 250,
+          "delay_ms": 50,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "straight line from the stack card to the target creature",
+          "curve": null,
+          "note": "Flametongue Kavu trigger: the stacked card glows red at 40.75, a fire streak leaves 40.80 and reaches the target creature at 41.05 with a white-pink burst that is still on screen at 41.35 (at least 300 ms). Frame step 50 ms."
+        },
+        {
+          "case": "damage",
+          "recording": "0VsYGs88NXA",
+          "time": "45:58.8",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 0VsYGs88NXA 45:58.8 --span 0.8 --fps 20 --cols 4 --width 480",
+          "since": "the source card glows, 45:59.15",
+          "duration_ms": 250,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "straight line from the stack card to the target",
+          "curve": null,
+          "note": "Flametongue Kavu trigger on the opponent's turn: card glows 59.15, fire streak leaves 59.25 (a 1/1 token is the target), burst at 59.50, still a ball at 59.55, smoke by 59.75. Frame step 50 ms."
+        },
+        {
+          "case": "damage",
+          "recording": "3sEoP_s4DQE",
+          "time": "37:22.4",
+          "span": 0.8,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 3sEoP_s4DQE 37:22.4 --span 0.8 --fps 20 --cols 4 --width 480",
+          "since": "the source card glows, 37:22.55",
+          "duration_ms": 250,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "straight line from the stack card to the target",
+          "curve": null,
+          "note": "Legion Extruder trigger (2 damage): glow 22.55, streak leaves 22.65, arrives 22.90 with a white flash and a red 2, bright ball until at least 23.15 (about 250 ms or more). Frame step 50 ms."
+        },
+        {
+          "case": "damage",
+          "recording": "5UHzpVvUkfI",
+          "time": "49:49.5",
+          "span": 0.8,
+          "crop": [
+            700,
+            60,
+            1200,
+            520
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 5UHzpVvUkfI 49:49.5 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,60,1200,520",
+          "since": "",
+          "duration_ms": 250,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "slightly curved line from the stack card to the opponent's avatar",
+          "curve": null,
+          "note": "Vivi Ornitier trigger (1 damage to each opponent): a red shard leaves the stacked card at 49.60 and hits the opponent's avatar at 49.85 with a red burst that lasts to at least 50.25 (400 ms). Frame step 50 ms."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 250,
+          "min": 250,
+          "max": 300
+        },
+        "delay_ms": {
+          "median": 100,
+          "min": 50,
+          "max": 100
+        },
+        "stagger_ms": null,
+        "peak": null,
+        "curve": null,
+        "cases": {
+          "mana": {
+            "duration_ms": {
+              "median": 275,
+              "min": 250,
+              "max": 300
+            },
+            "delay_ms": {
+              "median": 100,
+              "min": 100,
+              "max": 100
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": null
+          },
+          "damage": {
+            "duration_ms": {
+              "median": 250,
+              "min": 250,
+              "max": 250
+            },
+            "delay_ms": {
+              "median": 100,
+              "min": 50,
+              "max": 100
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": null
+          }
+        }
+      }
+    },
+    {
+      "verb": "count",
+      "path": "None: the number changes in a burst. A life loss's red number drifts down from the opponent's avatar; a gain's green one rises.",
+      "gaps": [
+        "Loyalty: one instance (5UHzpVvUkfI); counters: two. Their delays count from the ability reaching the stack and are left out."
+      ],
+      "instances": [
+        {
+          "case": "life loss",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:25.7",
+          "span": 1.6,
+          "crop": [
+            700,
+            640,
+            520,
+            440
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 22:25.7 --span 1.6 --fps 10 --cols 4 --width 480 --crop 700,640,520,440",
+          "since": "the strike lands, 22:25.80",
+          "duration_ms": 400,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "number appears in the flash over the avatar and is gone within 100 ms; burst stays on the avatar",
+          "curve": "none",
+          "note": "Streamer 10 to 8. The strike lands at 25.80 (flash, red 2 in the flash); the total reads 8 at 25.90 inside a red-orange burst that fades by 26.30; the avatar's glow lasts to about 27.0. The red number is short and does not clearly float up here, it sits in the flash for about 100 ms. Resolution 100 ms. Duration given is the burst."
+        },
+        {
+          "case": "life loss",
+          "recording": "IEXcjBn3BXk",
+          "time": "35:35.4",
+          "span": 1.6,
+          "crop": [
+            700,
+            0,
+            520,
+            300
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film IEXcjBn3BXk 35:35.4 --span 1.6 --fps 10 --cols 4 --width 480 --crop 700,0,520,300",
+          "since": "the strike lands, 35:35.40",
+          "duration_ms": 400,
+          "delay_ms": 200,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "red number appears beside the avatar and drifts down-right for about 400 ms",
+          "curve": "none",
+          "note": "Opponent 19 to 15 to 10, two hits. First: the red 4 appears at 35.40 with the impact and drifts down and right, visible until about 35.80; total reads 15 by 35.70 (hidden by the burst at 35.60). Second: red 5 from 36.10 to 36.30 (about 250 ms), total 10 by 36.10. Delays 200 ms and 150 ms. The change drifts DOWN (away from the opponent avatar), not up. Resolution 100 ms."
+        },
+        {
+          "case": "life loss",
+          "recording": "5UHzpVvUkfI",
+          "time": "49:49.5",
+          "span": 0.8,
+          "crop": [
+            700,
+            60,
+            1200,
+            520
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 5UHzpVvUkfI 49:49.5 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,60,1200,520",
+          "since": "the damage streak lands, 49:49.85",
+          "duration_ms": 400,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "red 1 beneath the total, sinking slowly",
+          "curve": "none",
+          "note": "Opponent 20 to 19 from Vivi's trigger. The streak lands at 49.85 (burst, red 1); the total reads 19 at 49.95 with the red 1 under it, which sinks slowly to at least 50.25. Frame step 50 ms."
+        },
+        {
+          "case": "life gain",
+          "recording": "sMpAJ0HKDdg",
+          "time": "27:16.0",
+          "span": 1.0,
+          "crop": [
+            700,
+            560,
+            520,
+            520
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film sMpAJ0HKDdg 27:16.0 --span 1.0 --fps 10 --cols 4 --width 480 --crop 700,560,520,520 (and 27:16.9 --span 1.6)",
+          "since": "",
+          "duration_ms": 600,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a green number rises from the avatar over about 500 ms; the avatar bursts green",
+          "curve": null,
+          "note": "Streamer 4 to 7 (Professor Dellian Fel). Green burst at the avatar from 16.60, a green 3 rises up and right until about 17.10, and the new total 7 is readable at 17.10-17.20 as the burst fades. Burst about 600 ms, number about 500 ms. Delay counted to the burst; the 7 is readable about 500 ms later. Resolution 100 ms. Delay from the ability reaching the stack was 600 ms, which includes its resolution, so it is not the count's own delay."
+        },
+        {
+          "case": "life gain",
+          "recording": "sMpAJ0HKDdg",
+          "time": "54:53.2",
+          "span": 1.6,
+          "crop": [
+            660,
+            0,
+            600,
+            340
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film sMpAJ0HKDdg 54:53.2 --span 1.6 --fps 10 --cols 4 --width 480 --crop 660,0,600,340",
+          "since": "the strike lands, 54:53.25",
+          "duration_ms": 500,
+          "delay_ms": 150,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a green number rises from the avatar; green burst for about 500 ms",
+          "curve": null,
+          "note": "Opponent 19 to 21, a lifelink strike. The attacker is at the avatar at 53.20-53.30, a green burst starts 53.40, a green 2 rises to the top of the crop by 53.60, the burst lasts to about 53.90 and the total 21 reads at 53.90. Delay is about 150 ms from the strike landing. Resolution 100 ms."
+        },
+        {
+          "case": "life gain",
+          "recording": "I3Te0m1bBFw",
+          "time": "18:20.4",
+          "span": 2.0,
+          "crop": [
+            660,
+            520,
+            600,
+            560
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film I3Te0m1bBFw 18:20.4 --span 2.0 --fps 8 --cols 4 --width 400 --crop 660,520,600,560",
+          "since": "",
+          "duration_ms": 500,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a green number rises from the avatar; green burst",
+          "curve": null,
+          "note": "Streamer 18 to 21 (Vaultborn Tyrant trigger). The trigger shows at 18:20.4; the green burst starts at 21.53, a green 3 rises until about 22.03, and 21 is readable at 22.03. Frame step 125 ms. Long delay because the trigger waits to resolve. Delay from the ability reaching the stack was 1100 ms, which includes its resolution, so it is not the count's own delay."
+        },
+        {
+          "case": "counter",
+          "recording": "0VsYGs88NXA",
+          "time": "31:13.1",
+          "span": 0.8,
+          "crop": [
+            760,
+            200,
+            400,
+            260
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 0VsYGs88NXA 31:13.1 --span 0.8 --fps 20 --cols 4 --width 480 --crop 760,200,400,260",
+          "since": "",
+          "duration_ms": 300,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "orb at the card's top-right corner becomes a numbered badge in place; the card tilts slightly",
+          "curve": "none",
+          "note": "Kaito's two stun counters on Urza (the card looks still before and after the clip). A white flash at 13.30, chains appear 13.35, a bright orb at the card's corner turns into a 2 badge at 13.55-13.60 and is settled by 13.65. Flash about 200 ms, badge settle about 300 ms. Frame step 50 ms. Delay is long because it counts from the ability reaching the stack (target choice and passing happen between). Delay from the ability reaching the stack was 3800 ms, which includes its resolution, so it is not the count's own delay."
+        },
+        {
+          "case": "counter",
+          "recording": "5UHzpVvUkfI",
+          "time": "49:49.4",
+          "span": 1.0,
+          "crop": [
+            780,
+            420,
+            400,
+            300
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 5UHzpVvUkfI 49:49.4 --span 1.0 --fps 16 --cols 4 --width 480 --crop 780,420,400,300",
+          "since": "",
+          "duration_ms": 310,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "orb at the card's top-right corner becomes a badge in place",
+          "curve": "none",
+          "note": "Vivi Ornitier gets a +1/+1 counter, 0/3 to 1/4. A beam drops on the card's top-right at 49.59 and the power/toughness box jumps to 1/4 with a white outline and ripples (still rippling at 50.34); a glowing orb at the corner turns into a 1 badge at 49.90. Badge settle about 310 ms. Frame step 63 ms. Delay is long because it counts from the trigger reaching the stack. Delay from the ability reaching the stack was 2100 ms, which includes its resolution, so it is not the count's own delay."
+        },
+        {
+          "case": "loyalty",
+          "recording": "5UHzpVvUkfI",
+          "time": "19:58.4",
+          "span": 1.6,
+          "crop": [
+            1380,
+            560,
+            540,
+            300
+          ],
+          "method": "filmstrip",
+          "why": "motion is a glow or number effect, not a card the tracker can follow; read from filmstrip frame times",
+          "command": "just video film 5UHzpVvUkfI 19:58.4 --span 1.6 --fps 10 --cols 4 --width 360 --crop 1380,560,540,300",
+          "since": "",
+          "duration_ms": 400,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "badge changes in place with a blue outline",
+          "curve": "none",
+          "note": "Teferi, Time Raveler -3: the ability shows as a card on the stack at 19:58.5 with the -3 cost badge; the loyalty badge under it reads 4 until 19:59.1 and reads 1 with a blue outline at 19:59.2, as the blue energy flash begins (19:59.3 to 19:59.7). Loyalty flash about 400 ms. Resolution 100 ms. Only one instance, in one recording. Delay from the ability reaching the stack was 700 ms, which includes its resolution, so it is not the count's own delay."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 400,
+          "min": 300,
+          "max": 600
+        },
+        "delay_ms": {
+          "median": 125,
+          "min": 100,
+          "max": 200
+        },
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "life loss": {
+            "duration_ms": {
+              "median": 400,
+              "min": 400,
+              "max": 400
+            },
+            "delay_ms": {
+              "median": 100,
+              "min": 100,
+              "max": 200
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "life gain": {
+            "duration_ms": {
+              "median": 500,
+              "min": 500,
+              "max": 600
+            },
+            "delay_ms": {
+              "median": 150,
+              "min": 150,
+              "max": 150
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": null
+          },
+          "counter": {
+            "duration_ms": {
+              "median": 305,
+              "min": 300,
+              "max": 310
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "loyalty": {
+            "duration_ms": {
+              "median": 400,
+              "min": 400,
+              "max": 400
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "set",
+      "path": "None: a phase pip changes within a frame and its glow ramps over about 0.3 s.",
+      "instances": [
+        {
+          "case": "step begins",
+          "recording": "IEXcjBn3BXk",
+          "time": "19:42.1",
+          "span": 0.8,
+          "crop": [
+            760,
+            810,
+            440,
+            110
+          ],
+          "method": "filmstrip",
+          "why": "nothing moves, so the tracker has nothing to follow; changes read from frames",
+          "command": "just video film IEXcjBn3BXk 19:42.1 --span 0.8 --fps 20 --cols 4 --width 480 --crop 760,810,440,110",
+          "since": "",
+          "duration_ms": 50,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "none",
+          "curve": "none",
+          "note": "Phase pips beside your avatar: the lit main-phase pip goes dark between 42.15 and 42.20 (one frame, 50 ms; no fade). The next pip does not visibly light in this crop. An orange horizontal flare streak appears around the avatar from 42.35, widest about 42.50, still there at 42.85 (so over 0.5 s); this belongs to the avatar glow/combat start, not to a card. No card, library or permanent moves. So 'nothing animates' holds for the table; the indicator changes in one frame."
+        },
+        {
+          "case": "step begins",
+          "recording": "IEXcjBn3BXk",
+          "time": "19:36.3",
+          "span": 1.2,
+          "crop": [
+            760,
+            810,
+            440,
+            110
+          ],
+          "method": "filmstrip",
+          "why": "nothing moves, so the tracker has nothing to follow; changes read from frames",
+          "command": "just video film IEXcjBn3BXk 19:36.3 --span 1.2 --fps 15 --cols 6 --width 360 --crop 760,810,440,110",
+          "since": "",
+          "duration_ms": 67,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "none",
+          "curve": "none",
+          "note": "step change: turn start (untap/upkeep/draw to main). Under the YOUR TURN banner. The small lit diamond pip (draw step) swaps to the white main-phase card pip in one frame (36.77 to 36.83, 67 ms), then that pip's glow ramps to full orange over about 0.3 s (36.83-37.10). A sweeping flare streak crosses the avatar for two frames (36.70-36.77) as the turn begins. Nothing else on the table moves."
+        },
+        {
+          "case": "library shuffled",
+          "recording": "IEXcjBn3BXk",
+          "time": "28:10.6",
+          "span": 1.2,
+          "crop": [
+            1330,
+            0,
+            280,
+            220
+          ],
+          "method": "filmstrip",
+          "why": "nothing moves, so the tracker has nothing to follow; changes read from frames",
+          "command": "just video film IEXcjBn3BXk 28:10.6 --span 1.2 --fps 15 --cols 9 --width 200 --crop 1330,0,280,220 ; also 28:11.3 --span 3.0 --fps 10 same crop",
+          "since": "",
+          "duration_ms": 0,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "none",
+          "curve": "none",
+          "note": "library shuffle after a search (opponent). Misty Rainforest search on the opponent's turn ('then shuffle'). The opponent's library pile is identical in all 18 frames from 28:10.6 to 28:11.73 and in the 30 frames 28:11.3-28:14.2: no riffle, no shake, no glow; only a few stray sparkle motes drift past. The fetched land appears elsewhere."
+        },
+        {
+          "case": "library shuffled",
+          "recording": "pE4XSNi-nZc",
+          "time": "22:58.8",
+          "span": 2.5,
+          "crop": [
+            0,
+            860,
+            420,
+            220
+          ],
+          "method": "filmstrip",
+          "why": "nothing moves, so the tracker has nothing to follow; changes read from frames",
+          "command": "just video film pE4XSNi-nZc 22:58.8 --span 2.5 --fps 10 --cols 9 --width 210 --crop 0,860,420,220",
+          "since": "",
+          "duration_ms": 0,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "none",
+          "curve": "none",
+          "note": "library shuffle after a search (own). Prismatic Vista search by the streamer (choose Island in the 'Choose Up To One' browser, closes about 22:59.0). Own library pile (bottom left) is first visible at 22:59.50 as the browser's dimming ends, within one frame, and is then identical through 23:01.20 (17 frames): no shuffle motion or effect."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 25,
+          "min": 0,
+          "max": 67
+        },
+        "delay_ms": null,
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "step begins": {
+            "duration_ms": {
+              "median": 58,
+              "min": 50,
+              "max": 67
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "library shuffled": {
+            "duration_ms": {
+              "median": 0,
+              "min": 0,
+              "max": 0
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "showcase",
+      "path": "None across the table: a tiny card at the pill grows to full size in place.",
+      "gaps": [
+        "The pill appearing could not be split from the card's growth; the delay from the revealing spell was not taken."
+      ],
+      "instances": [
+        {
+          "case": "card joins Revealed Cards pill",
+          "recording": "I3Te0m1bBFw",
+          "time": "22:08.2",
+          "span": 0.5,
+          "crop": [
+            0,
+            0,
+            800,
+            400
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film I3Te0m1bBFw 22:08.2 --span 0.5 --fps 30 --cols 5 --width 400 --crop 0,0,800,400",
+          "since": "",
+          "duration_ms": 200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a tiny card appears at the pill's spot at the top left and grows in place into the pile; the 'Revealed Cards' label fades in over it",
+          "curve": "ease-out",
+          "note": "Malevolent Rumble reveal (Forest). Tiny card at 22:08.40, pile large at 08.43 and full size by about 08.60; the pill label starts at 08.43 and is fully visible at about 08.60. The card does not fly from the library across the table in this crop."
+        },
+        {
+          "case": "card joins Revealed Cards pill",
+          "recording": "RwKoGGUmw2k",
+          "time": "37:43.0",
+          "span": 0.6,
+          "crop": [
+            0,
+            0,
+            1000,
+            420
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film RwKoGGUmw2k 37:43.0 --span 0.6 --fps 30 --cols 6 --width 360 --crop 0,0,1000,420",
+          "since": "",
+          "duration_ms": 200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "the revealed card leaves the top of the table (43.00 to 43.07), then a tiny card appears at the pill and grows to the pile",
+          "curve": "ease-out",
+          "note": "Environmental Scientist reveal (Forest). A card at the top centre exits at 37:43.00 to 43.07, nothing 43.10 to 43.17, a tiny card at the pill at 43.20, full size at about 43.40; label fades in 43.23 to about 43.50. A first look at 10 fps (37:42.8) shows the card first at the library, then at the pill."
+        },
+        {
+          "case": "card joins Revealed Cards pill",
+          "recording": "UrGalw_f35w",
+          "time": "41:36.5",
+          "span": 0.6,
+          "crop": [
+            0,
+            150,
+            700,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the card changes in place (pop, fade, crumble), and the tracker only follows a moving card.",
+          "command": "just video film UrGalw_f35w 41:36.5 --span 0.6 --fps 30 --cols 6 --width 360 --crop 0,150,700,500",
+          "since": "",
+          "duration_ms": 200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a small card appears at the pill's spot at the top left and grows to its place; the dark backing panel and label fade in",
+          "curve": "ease-out",
+          "note": "Ouroboroid reveal (60 fps recording). Small card at 41:36.57, near full size at 36.77; the panel behind it and the label fade up to about 37.00 to 37.07 (500 ms)."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 200,
+          "min": 200,
+          "max": 200
+        },
+        "delay_ms": null,
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "ease-out"
+      }
+    },
+    {
+      "verb": "dwell",
+      "path": "None: the card rests on the stack while its cast effects play over it.",
+      "instances": [
+        {
+          "case": "opponent spell resolves unanswered",
+          "recording": "pE4XSNi-nZc",
+          "time": "22:00.3",
+          "span": 1.5,
+          "crop": [
+            1400,
+            100,
+            520,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: nothing moves while the card sits; the timed thing is the rest between arrival and the start of resolution",
+          "command": "just video film pE4XSNi-nZc 22:00.3 --span 1.5 --fps 15 --cols 6 --width 240 --crop 1400,100,520,700",
+          "since": "the card comes to rest on the stack (22:00.50)",
+          "duration_ms": 800,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static",
+          "curve": "none",
+          "note": "Time Walk, opponent's turn, no response (button 'Opponent's Turn' only). Card at rest on the stack 22:00.50; resolution motion (card shrinks toward the graveyard in smoke) first seen 22:01.30, last still frame 01.23. Cast effects (cyan flash, purple sparks) play 00.63-01.17 on top of the card, so the card itself is still but the stack is not quiet."
+        },
+        {
+          "case": "opponent spell resolves unanswered",
+          "recording": "pE4XSNi-nZc",
+          "time": "23:22.0",
+          "span": 2.6,
+          "crop": [
+            1400,
+            100,
+            520,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: nothing moves while the card sits; the timed thing is the rest between arrival and the start of resolution",
+          "command": "just video film pE4XSNi-nZc 23:22.0 --span 2.6 --fps 10 --cols 9 --width 200 --crop 1400,100,520,700",
+          "since": "the card comes to rest on the stack (23:22.70)",
+          "duration_ms": 700,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static",
+          "curve": "none",
+          "note": "Jace, Vryn's Prodigy (creature), no response. Flies in 22.40-22.60, at rest 22.70, flash and sparks 22.90-23.20, last still frame 23.30, first resolution frame 23.40 (card moves left into smoke). 10 fps so +-100 ms."
+        },
+        {
+          "case": "opponent spell resolves unanswered",
+          "recording": "IEXcjBn3BXk",
+          "time": "23:25.8",
+          "span": 2.6,
+          "crop": [
+            1400,
+            100,
+            520,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: nothing moves while the card sits; the timed thing is the rest between arrival and the start of resolution",
+          "command": "just video film IEXcjBn3BXk 23:25.8 --span 2.6 --fps 10 --cols 9 --width 200 --crop 1400,100,520,700",
+          "since": "the card comes to rest on the stack (23:26.20)",
+          "duration_ms": 1900,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static",
+          "curve": "none",
+          "note": "Tersa Lightshatter (creature, a 1.5 s stack entry in the index), no response. At rest 26.20, one flash/sparks beat 26.80-27.00, otherwise dead still to 28.00, first resolution frame 28.10. Much longer than the other two: the holds vary 0.7-1.9 s, not a fixed 1 s. Not clear what made this one longer (a pause for the streamer's possible response is likely, but not visible). 10 fps so +-100 ms. A fourth look at IEXcjBn3BXk 22:48.2 (Overwhelming Surge, a modal spell) sat over 2.4 s with mode effects; not counted."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 800,
+          "min": 700,
+          "max": 1900
+        },
+        "delay_ms": null,
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "none"
+      }
+    },
+    {
+      "verb": "announce",
+      "path": "None: fades in at its place, holds and fades out. The turn banner sinks (yours) or rises (theirs) as it goes; a coin rises out of view and drops back.",
+      "gaps": [
+        "Every coin is Mana Crypt's."
+      ],
+      "instances": [
+        {
+          "case": "turn banner",
+          "recording": "IEXcjBn3BXk",
+          "time": "19:35.2",
+          "span": 1.6,
+          "crop": [
+            360,
+            400,
+            1200,
+            160
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: a glow banner over the table, not a card; tracked by frame counts",
+          "command": "just video film IEXcjBn3BXk 19:35.2 --span 1.6 --fps 15 --cols 6 --width 360 --crop 360,400,1200,160",
+          "since": "",
+          "duration_ms": 1050,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "glows at table centre (y about 480), drifts down about 40 px as it leaves",
+          "curve": "none",
+          "note": "YOUR TURN. First faint frame 35.60, fully bright by 36.00 (fade in about 400 ms, text also grows), last frame 36.60 as it sinks about 40 px and vanishes by 36.67 (fade out about 100 ms). Cards keep moving under it (a card previews on the right). 10 fps strip at 19:35.7 agrees (gone at 36.70)."
+        },
+        {
+          "case": "turn banner",
+          "recording": "IEXcjBn3BXk",
+          "time": "18:35.0",
+          "span": 1.8,
+          "crop": [
+            360,
+            380,
+            1200,
+            320
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: banner glow, not a card",
+          "command": "just video film IEXcjBn3BXk 18:35.0 --span 1.8 --fps 10 --cols 6 --width 360 --crop 360,380,1200,320",
+          "since": "",
+          "duration_ms": 1000,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "centre, drifts up as it leaves",
+          "curve": "none",
+          "note": "OPPONENT'S TURN (blue). First faint frame 35.20, full by 35.50 (fade in about 300 ms, text grows), last frame 36.10 as it rises about 40 px, gone at 36.20 (out at most 100 ms). Opposite drift from your own banner (yours sinks, the opponent's rises). 10 fps, so +-100 ms."
+        },
+        {
+          "case": "turn banner",
+          "recording": "WCknTZNbraE",
+          "time": "16:39.4",
+          "span": 1.8,
+          "crop": [
+            360,
+            380,
+            1200,
+            320
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: banner glow, not a card",
+          "command": "just video film WCknTZNbraE 16:39.4 --span 1.8 --fps 10 --cols 6 --width 360 --crop 360,380,1200,320",
+          "since": "",
+          "duration_ms": 1000,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "starts a little above centre, settles, sinks as it leaves",
+          "curve": "none",
+          "note": "YOUR TURN. First faint frame 39.70 (a flame sweep at the right edge too), full by 40.00 (fade in about 300 ms), last frame 40.60 sinking, gone at 40.70 (out at most 100 ms). 10 fps so +-100 ms. Three banners: 1.05, 1.0, 1.0 s."
+        },
+        {
+          "case": "scry pill",
+          "recording": "SN9QFe2kM4Y",
+          "time": "14:52.8",
+          "span": 0.5,
+          "crop": [
+            1080,
+            850,
+            400,
+            140
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: a text pill fading, not a card. NOTE this recording is 2560x1440 and --crop is in its native pixels, not 1920x1080",
+          "command": "just video film SN9QFe2kM4Y 14:52.8 --span 0.5 --fps 30 --cols 5 --width 400 --crop 1080,850,400,140 ; end: just video film SN9QFe2kM4Y 14:55.2 --span 0.9 --fps 15 --cols 5 --width 400 --crop 1080,850,400,140",
+          "since": "the Scry card browser closes (first frame showing the table, 14:52.83)",
+          "duration_ms": 3100,
+          "delay_ms": 100,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static; a speech bubble with a tail toward the avatar",
+          "curve": "none",
+          "note": "'Scry: 1 top, 1 bottom.' above the scrying player's avatar (own avatar here). First faint frame 14:52.93, full by about 53.27 (fade in about 330 ms), still full 55.87, half 55.93, ghost 56.00, gone 56.07 (fade out about 130 ms; it is cut off mid-fade as a card flies over). Shown about 3.1 s, longer than the text layer's 2.5 s."
+        },
+        {
+          "case": "scry pill",
+          "recording": "IHPV6yRaFlk",
+          "time": "52:54.2",
+          "span": 0.8,
+          "crop": [
+            780,
+            190,
+            360,
+            100
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: a text pill fading, not a card",
+          "command": "just video film IHPV6yRaFlk 52:54.2 --span 0.8 --fps 15 --cols 6 --width 360 --crop 780,190,360,100 ; end: just video film IHPV6yRaFlk 52:57.4 --span 1.2 --fps 10 --cols 6 --width 360 --crop 780,190,360,100",
+          "since": "",
+          "duration_ms": 3050,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static bubble above the avatar",
+          "curve": "none",
+          "note": "'Scry: 0 top, 1 bottom.' above the OPPONENT's avatar (top of table, y about 235) after Oracle of the Alpha's attack trigger. First faint frame 54.60, full by 54.93 (fade in about 330 ms); full at 57.50, faint 57.60, gone 57.70 (fade out about 100 ms). Same duration as when it is above your own avatar."
+        },
+        {
+          "case": "scry pill",
+          "recording": "UrGalw_f35w",
+          "time": "24:35.0",
+          "span": 0.9,
+          "crop": [
+            780,
+            640,
+            360,
+            110
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: a text pill fading, not a card",
+          "command": "just video film UrGalw_f35w 24:35.0 --span 0.9 --fps 15 --cols 7 --width 300 --crop 780,640,360,110 ; end: just video film UrGalw_f35w 24:38.0 --span 0.9 --fps 15 --cols 7 --width 300 --crop 780,640,360,110",
+          "since": "the last frame showing the Scry card browser (35.27), first frame of the table 35.33",
+          "duration_ms": 3080,
+          "delay_ms": 133,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static bubble above the avatar",
+          "curve": "none",
+          "note": "'Scry: 1 top, 1 bottom.' above your avatar. Scry cards gone by 35.33, first faint pill 35.47, full by about 35.80 (fade in about 330 ms); full at 38.40, half 38.47, ghost 38.53, gone 38.60 (fade out about 130 ms). 15 fps so +-67 ms. Three pills: 3.1, 3.05, 3.08 s."
+        },
+        {
+          "case": "coin",
+          "recording": "WCknTZNbraE",
+          "time": "16:41.7",
+          "span": 2.0,
+          "crop": [
+            500,
+            230,
+            720,
+            480
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the coin goes up out of the frame, passes behind the banner and leaves only a shadow; timed from frames",
+          "command": "just video film WCknTZNbraE 16:41.7 --span 2.0 --fps 15 --cols 6 --width 320 --crop 500,230,720,480",
+          "since": "",
+          "duration_ms": 1200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "rises straight up out of view then falls back to the same spot",
+          "curve": null,
+          "note": "Mana Crypt upkeep flip. Coin appears at table centre 41.97, is thrown up and out of the top of the crop by about 42.23, only its shadow (shrinking then growing, twice) is seen for about 0.7 s, it drops back 42.97-43.03, is flat on the table by 43.17. A white burst begins 43.30 and is still fading at 43.63 (about 0.5 s more). Duration = first frame to flat on table; burst extra. +-67 ms."
+        },
+        {
+          "case": "coin",
+          "recording": "WCknTZNbraE",
+          "time": "17:21.6",
+          "span": 1.8,
+          "crop": [
+            500,
+            230,
+            720,
+            480
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the coin goes up out of the frame, passes behind the banner and leaves only a shadow; timed from frames",
+          "command": "just video film WCknTZNbraE 17:21.6 --span 1.8 --fps 15 --cols 6 --width 300 --crop 500,230,720,480",
+          "since": "",
+          "duration_ms": 1200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "same arc",
+          "curve": null,
+          "note": "Same flip during the YOUR TURN banner (the turn banner and the coin overlap). Ring first seen 21.73 behind the banner, up and out by 22.00, shadow only 22.07-22.73, back down 22.80, flat 22.93, glow burst 23.00 fading by 23.33+. 1.2 s from first frame to flat on the table."
+        },
+        {
+          "case": "coin",
+          "recording": "MnhyzykajXw",
+          "time": "23:00.7",
+          "span": 1.8,
+          "crop": [
+            500,
+            230,
+            720,
+            480
+          ],
+          "method": "filmstrip",
+          "why": "tracker not applicable: the coin goes up out of the frame, passes behind the banner and leaves only a shadow; timed from frames (the coin here is small and the board busy)",
+          "command": "just video film MnhyzykajXw 23:00.7 --span 1.8 --fps 15 --cols 6 --width 300 --crop 500,230,720,480",
+          "since": "",
+          "duration_ms": 1200,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "same arc",
+          "curve": null,
+          "note": "Third flip, another recording and board. Faint ring at 00.70, hidden behind the turn banner, shadow only 01.10-01.70, falls 01.77-01.83, flat 01.90, golden burst 02.03 fading by 02.43. Same 1.2 s. The 4 fps scan agrees (burst at 23:02.0)."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 1200,
+          "min": 1000,
+          "max": 3100
+        },
+        "delay_ms": {
+          "median": 116,
+          "min": 100,
+          "max": 133
+        },
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "turn banner": {
+            "duration_ms": {
+              "median": 1000,
+              "min": 1000,
+              "max": 1050
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "scry pill": {
+            "duration_ms": {
+              "median": 3080,
+              "min": 3050,
+              "max": 3100
+            },
+            "delay_ms": {
+              "median": 116,
+              "min": 100,
+              "max": 133
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "coin": {
+            "duration_ms": {
+              "median": 1200,
+              "min": 1200,
+              "max": 1200
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": null
+          }
+        }
+      }
+    },
+    {
+      "verb": "point",
+      "path": "Appears whole within a frame (a target arrow, a block line) or draws in from the source's end (a source line). It is cut, not faded, when it ends.",
+      "gaps": [
+        "No line was seen fading: each was cut when its spell resolved or combat damage began. A source line's end was not filmed."
+      ],
+      "instances": [
+        {
+          "case": "source line",
+          "recording": "5UHzpVvUkfI",
+          "time": "19:48.45",
+          "span": 0.55,
+          "crop": [
+            880,
+            180,
+            1040,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film 5UHzpVvUkfI 19:48.45 --span 0.55 --fps 30 --cols 5 --width 400 --crop 880,180,1040,700",
+          "since": "the copy leaves its source (first visible 19:48.55)",
+          "duration_ms": 130,
+          "delay_ms": 170,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a thin pale-green arc from the stack card back to its source creature; draws in from the source end outward over about 4 frames",
+          "curve": "ease-out",
+          "note": "First frame 19:48.72 (short stub under the copy), full length by about 19:48.85. Stays up to at least 19:49.42 (8 fps strip); end not filmed. Draw-in is a few frames, not a cut."
+        },
+        {
+          "case": "source line",
+          "recording": "IEXcjBn3BXk",
+          "time": "23:12.5",
+          "span": 0.55,
+          "crop": [
+            1100,
+            200,
+            820,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film IEXcjBn3BXk 23:12.5 --span 0.55 --fps 30 --cols 5 --width 400 --crop 1100,200,820,700",
+          "since": "the copy leaves its source (first visible 23:12.50)",
+          "duration_ms": 130,
+          "delay_ms": 170,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "thin pale-green arc from the stack card down to the Skullclamp; starts as a stub at the source and grows toward the stack",
+          "curve": "ease-out",
+          "note": "First frame 23:12.67, full length about 23:12.80. Remains while the target arrow draws (23:13.15) and through at least 23:13.7 (8 fps strip). End not filmed."
+        },
+        {
+          "case": "target arrow",
+          "recording": "IEXcjBn3BXk",
+          "time": "23:13.05",
+          "span": 0.5,
+          "crop": [
+            380,
+            0,
+            1540,
+            720
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film IEXcjBn3BXk 23:13.05 --span 0.5 --fps 30 --cols 4 --width 560 --crop 380,0,1540,720",
+          "since": "the Skullclamp equip ability reaches rest on the stack (23:12.83)",
+          "duration_ms": 33,
+          "delay_ms": 320,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a thick cyan arc from the stack ability up over the top and down to the creature under the cursor",
+          "curve": "none",
+          "note": "Absent at 23:13.12, full length at 23:13.15: it appears in one frame (<=33 ms), no visible draw-in. It appears with the 'Target a creature.' prompt, so the delay is the player's step, not an animation. It is the hover arrow: it ends at the creature under the cursor. End not filmed."
+        },
+        {
+          "case": "target arrow",
+          "recording": "I3Te0m1bBFw",
+          "time": "31:34.95",
+          "span": 0.3,
+          "crop": [
+            600,
+            0,
+            1320,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film I3Te0m1bBFw 31:34.95 --span 0.3 --fps 30 --cols 3 --width 640 --crop 600,0,1320,600  then 31:36.2 span 0.75 --fps 20",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "thick cyan arc from the Unholy Heat card on the stack over the top to the target creature, which gets a cyan outline",
+          "curve": "none",
+          "note": "Absent 31:35.02, full length 31:35.05 (one frame). Stays until the spell resolves: last frame 31:36.60, gone 31:36.65 (20 fps strip), a cut with no fade (<=50 ms), as the spell's damage effect plays. Up for about 1.6 s. Delay not taken: the target click is not visible."
+        },
+        {
+          "case": "target arrow",
+          "recording": "krskVfn2v5Q",
+          "time": "46:36.35",
+          "span": 0.5,
+          "crop": [
+            400,
+            100,
+            1520,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film krskVfn2v5Q 46:36.35 --span 0.5 --fps 30 --cols 4 --width 560 --crop 400,100,1520,600",
+          "since": "the Lightning Greaves equip ability card lands as the top of the stack (46:36.58)",
+          "duration_ms": 67,
+          "delay_ms": 70,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "thick cyan arc from the stack ability over the top row to the target creature (far left in the back row)",
+          "curve": "none",
+          "note": "Absent 46:36.62, bright from the target to near the top at 46:36.65, longer by 46:36.72: at most about two frames of draw-in, if any; the far end fades out toward the stack. Stays at least to 46:36.82. End not filmed."
+        },
+        {
+          "case": "block line",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:20.95",
+          "span": 0.4,
+          "crop": [
+            600,
+            200,
+            700,
+            550
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film IEXcjBn3BXk 22:20.95 --span 0.4 --fps 30 --cols 4 --width 560 --crop 600,200,700,550",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "thin gold line from the blocking Cat token straight up to the attacking Pyrogoyf",
+          "curve": "none",
+          "note": "Absent 22:21.05, complete 22:21.08, in the same frames in which the blocker slides into its slot. Stays about 3.8 s until combat damage, last frame 22:24.87, gone 22:24.90 as the attacker lunges: a cut, no fade (<=33 ms). The gold arc glow under the blocker stays after the line is gone. The blocker click itself is not visible, so no delay."
+        },
+        {
+          "case": "block line",
+          "recording": "sMpAJ0HKDdg",
+          "time": "54:50.4",
+          "span": 0.25,
+          "crop": [
+            300,
+            250,
+            900,
+            500
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film sMpAJ0HKDdg 54:50.4 --span 0.25 --fps 30 --cols 4 --width 560 --crop 300,250,900,500",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "long thin gold line from the blocking Cat token across the board to an attacker in the far top right",
+          "curve": "none",
+          "note": "Absent 54:50.43, full length 54:50.47 (one frame) as the stack of cats slides apart and the hover preview closes (50.37). The line is longer than IEX's but appears in the same one frame, so draw time does not scale with length. End not filmed."
+        },
+        {
+          "case": "block line",
+          "recording": "IEXcjBn3BXk",
+          "time": "33:37.45",
+          "span": 0.4,
+          "crop": [
+            700,
+            200,
+            500,
+            350
+          ],
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; timed from a 30 fps filmstrip",
+          "command": "just video film IEXcjBn3BXk 33:37.45 --span 0.4 --fps 30 --cols 4 --width 500 --crop 700,200,500,350",
+          "since": "",
+          "duration_ms": 33,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "short thin gold line from Nadu up to the attacking Oracle of the Alpha",
+          "curve": "none",
+          "note": "Absent 33:37.62, present 33:37.65 and the same length at 33:37.72: one frame. Stays through at least 33:40.0 (5 fps strip). Part of the line sits under the 'Choose blockers.' text."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 33,
+          "min": 33,
+          "max": 130
+        },
+        "delay_ms": {
+          "median": 170,
+          "min": 70,
+          "max": 320
+        },
+        "stagger_ms": null,
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "source line": {
+            "duration_ms": {
+              "median": 130,
+              "min": 130,
+              "max": 130
+            },
+            "delay_ms": {
+              "median": 170,
+              "min": 170,
+              "max": 170
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "ease-out"
+          },
+          "target arrow": {
+            "duration_ms": {
+              "median": 33,
+              "min": 33,
+              "max": 67
+            },
+            "delay_ms": {
+              "median": 195,
+              "min": 70,
+              "max": 320
+            },
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "block line": {
+            "duration_ms": {
+              "median": 33,
+              "min": 33,
+              "max": 33
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "mark",
+      "path": "None: the outline pops in within a frame; an eligible outline's glow settles over about 0.15 s.",
+      "gaps": [
+        "Selected and target: one instance each."
+      ],
+      "instances": [
+        {
+          "case": "eligible",
+          "recording": "UrGalw_f35w",
+          "time": "20:54.95",
+          "span": 0.8,
+          "crop": [
+            640,
+            480,
+            620,
+            220
+          ],
+          "method": "filmstrip",
+          "why": "an outline is not a moving card",
+          "command": "just video film UrGalw_f35w 20:54.95 --span 0.8 --fps 20 --cols 4 --width 480 --crop 640,480,620,220",
+          "since": "the 'Choose attackers.' prompt, timeline 20:55.0 (index time to 0.5 s)",
+          "duration_ms": 50,
+          "delay_ms": 150,
+          "stagger_ms": 0,
+          "peak": null,
+          "path": "cyan outline and halo on both eligible creatures at once",
+          "curve": "none",
+          "note": "eligible (attackers when 'Choose attackers.' opens). No outline at 20:55.10; full cyan outline at 20:55.15 on both creatures at the same instant; the halo spreads outward and softens until about 20:55.30. So the outline pops in within one 50 ms frame, then its glow settles over about 150 ms. The 3 fps strip shows the prompt text appearing after the outline (20:55.33). The creature that cannot attack stays dim, with no outline. It ends by turning gold (selected) or at declare."
+        },
+        {
+          "case": "eligible",
+          "recording": "IEXcjBn3BXk",
+          "time": "19:36.3",
+          "span": 0.8,
+          "crop": [
+            300,
+            740,
+            1100,
+            340
+          ],
+          "method": "filmstrip",
+          "why": "an outline is not a moving card",
+          "command": "just video film IEXcjBn3BXk 19:36.3 --span 0.8 --fps 20 --cols 4 --width 480 --crop 300,740,1100,340",
+          "since": "the 'YOUR TURN' banner begins to appear, 19:36.60",
+          "duration_ms": 200,
+          "delay_ms": 100,
+          "stagger_ms": 0,
+          "peak": null,
+          "path": "cyan outline on each playable card in hand and on lands",
+          "curve": "ease-out",
+          "note": "eligible (playable cards in hand and lands after the turn begins). No outline at 19:36.65; partial at 19:36.70; full at 19:36.90 with a halo around the avatar. All cards at once. Here the fade is about 200 ms, longer than in the attackers case; the banner is still on screen, so the start may wait on it. It stays until the player acts."
+        },
+        {
+          "case": "selected",
+          "recording": "UrGalw_f35w",
+          "time": "20:55.6",
+          "span": 0.75,
+          "crop": [
+            640,
+            420,
+            620,
+            280
+          ],
+          "method": "filmstrip",
+          "why": "an outline is not a moving card",
+          "command": "just video film UrGalw_f35w 20:55.6 --span 0.75 --fps 20 --cols 4 --width 480 --crop 640,420,620,280",
+          "since": "",
+          "duration_ms": 50,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "cyan outline on the clicked creature changes to gold with an orange glow at the lower edge",
+          "curve": "none",
+          "note": "selected (clicked attacker turns gold). The cursor sits on the card at 20:55.60-.70; gold at 20:55.75 (one frame, 50 ms) and stays; at 20:56.25 the outline is cyan again in one frame (a second click, deselect), so it ends as fast as it begins. The other creature keeps its cyan. Only one selection was timed: the SswBO8aOOgc 33:30.5 example in the skill is a second instance I did not re-measure."
+        },
+        {
+          "case": "target",
+          "recording": "UrGalw_f35w",
+          "time": "20:47.7",
+          "span": 0.6,
+          "crop": [
+            800,
+            400,
+            520,
+            260
+          ],
+          "method": "filmstrip",
+          "why": "an outline is not a moving card",
+          "command": "just video film UrGalw_f35w 20:47.7 --span 0.6 --fps 20 --cols 4 --width 480 --crop 800,400,520,260",
+          "since": "",
+          "duration_ms": 50,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "cyan outline on each legal target (Mother of Runes, Gideon), no dimming of the others",
+          "curve": "none",
+          "note": "target (valid targets for an ability's target). Mother of Runes activation. No outline at 20:47.90, full cyan at 20:47.95, the cards sliding as they do. Pops in within one 50 ms frame. Only one clear instance of a target outline was found; a second try (0VsYGs88NXA 31:09.3, Kaito) showed only a targeting arc and no outline on the hovered creature in 0.6 s."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 50,
+          "min": 50,
+          "max": 200
+        },
+        "delay_ms": {
+          "median": 125,
+          "min": 100,
+          "max": 150
+        },
+        "stagger_ms": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peak": null,
+        "curve": "none",
+        "cases": {
+          "eligible": {
+            "duration_ms": {
+              "median": 125,
+              "min": 50,
+              "max": 200
+            },
+            "delay_ms": {
+              "median": 125,
+              "min": 100,
+              "max": 150
+            },
+            "stagger_ms": {
+              "median": 0,
+              "min": 0,
+              "max": 0
+            },
+            "peak": null,
+            "curve": "ease-out"
+          },
+          "selected": {
+            "duration_ms": {
+              "median": 50,
+              "min": 50,
+              "max": 50
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          },
+          "target": {
+            "duration_ms": {
+              "median": 50,
+              "min": 50,
+              "max": 50
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "curve": "none"
+          }
+        }
+      }
+    },
+    {
+      "verb": "lift",
+      "path": "Comes off the library at its size, turning, and lies beside it, easing out.",
+      "gaps": [
+        "The cards going back were timed only in IHPV6yRaFlk (about 200 ms to the bottom, from a 10 fps strip)."
+      ],
+      "instances": [
+        {
+          "case": "opponent's scry",
+          "recording": "IHPV6yRaFlk",
+          "time": "52:54.4",
+          "span": 0.7,
+          "crop": [
+            1290,
+            0,
+            220,
+            330
+          ],
+          "method": "tracker",
+          "why": "",
+          "command": "just video measure IHPV6yRaFlk 52:54.4 --span 0.7 --crop 1290,0,220,330 --since 52:54.5 --json",
+          "since": "",
+          "duration_ms": 433,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "drops from the library (x 0.737, y 0.087) straight down and slightly left, then right, to rest beside it at (0.748, 0.270); it spins during flight and ends upside down",
+          "curve": "ease-out",
+          "note": "opponent scry 1 (card to the bottom: 'Scry: 0 top, 1 bottom.'). y covers 76% of its distance in the first 200 of 433 ms. The tracker's size ratio (1.78) is unreliable: its 'rest' size was the pile, so peak is null; the filmstrip (10 fps, crop 1200,60,720,400) shows the card at the pile's size, tilted about 30 degrees in flight. It lies about 0.3 s (52:54.9 to 52:55.2), then tilts and leaves toward the bottom of the library by 52:55.4 (about 200 ms, from the 10 fps strip; not tracked). Opponent's seat is across the table, top right. Whole thing is quiet: no glow beyond the library's blue aura."
+        },
+        {
+          "case": "opponent's scry",
+          "recording": "qF4GF-vfc8Y",
+          "time": "53:00.35",
+          "span": 0.5,
+          "crop": [
+            1230,
+            60,
+            260,
+            330
+          ],
+          "method": "filmstrip",
+          "why": "tracker failed twice: \"cannot measure: 2 things moved where 1 card was asked for\" (crop 1230,60,260,300, span 0.8) and \"3 things moved where 2 cards were asked for\" (--cards 2, span 1.4): the library's blue glow counts as a mover",
+          "command": "just video film qF4GF-vfc8Y 53:00.35 --span 0.5 --fps 30 --cols 4 --width 480 --crop 1230,60,260,330",
+          "since": "",
+          "duration_ms": 440,
+          "delay_ms": null,
+          "stagger_ms": 500,
+          "peak": null,
+          "path": "first card leaves the library at 53:00.38 and arcs down-left onto the table at about 53:00.82; second starts about 53:00.90 (10 fps strip)",
+          "curve": "ease-out",
+          "note": "opponent scry 2 (two cards: 'Scry: 1 top, 1 bottom.'). Duration is first frame of motion (53:00.38) to the last slide at 53:00.82, still creeping at the end. The card spins about 180 degrees in flight and passes over the neighbouring card on its way, with a shadow on landing. Cards come off at the library's size. Second card lands just right of the first, overlapping. Stagger from the 10 fps strip (53:00.40 and 53:00.90), so plus or minus 100 ms. Return not filmed."
+        },
+        {
+          "case": "opponent's scry",
+          "recording": "IEXcjBn3BXk",
+          "time": "33:33.4",
+          "span": 0.5,
+          "crop": [
+            1250,
+            30,
+            260,
+            300
+          ],
+          "method": "filmstrip",
+          "why": "tracker failed twice: \"cannot measure: 3 things moved where 1 card was asked for\" (crop 1250,30,260,300, span 1.0)",
+          "command": "just video film IEXcjBn3BXk 33:33.4 --span 0.5 --fps 30 --cols 4 --width 400 --crop 1250,30,260,300",
+          "since": "",
+          "duration_ms": 350,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "leaves the library already moving at 33:33.40, arcs down and left over the neighbouring cards, rests below the library by about 33:33.73",
+          "curve": "ease-out",
+          "note": "opponent scry 1 (card stays on top: 'Scry: 1 top, 0 bottom.'). The first frame of the strip is already moving, so the true start is a frame or two before 33:33.40 and the duration is a lower bound. Tilts about 35 degrees in flight and ends upside down at the pile's size, as in the other two. The return to the library was not filmed."
+        }
+      ],
+      "summary": {
+        "duration_ms": {
+          "median": 433,
+          "min": 350,
+          "max": 440
+        },
+        "delay_ms": null,
+        "stagger_ms": {
+          "median": 500,
+          "min": 500,
+          "max": 500
+        },
+        "peak": null,
+        "curve": "ease-out"
+      }
+    }
+  ]
+}

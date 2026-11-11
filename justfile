@@ -142,7 +142,7 @@ count-gate:
 cards *args:
     {{ by }} cards "$@"
 
-# Write docs/ui-conventions.md from data/ui-conventions.json (--check)
+# Derive Arena's values and write docs/ui-conventions.md from data/ (--check)
 [group('data')]
 conventions *args:
     {{ by }} conventions "$@"
