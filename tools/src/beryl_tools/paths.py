@@ -56,6 +56,22 @@ def main_checkout() -> Path | None:
     return Path(run.stdout.strip()).parent if run.returncode == 0 else None
 
 
+def worktree_names() -> list[str]:
+    """The names of this repository's worktrees, the main checkout's included; none if git
+    could not list them."""
+    listing = subprocess.run(
+        ["git", "-C", str(REPO), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return [
+        Path(line.removeprefix("worktree ")).name
+        for line in listing.splitlines()
+        if line.startswith("worktree ")
+    ]
+
+
 # The Tauri CLI's builds get their own target directory: it sets environment variables that
 # Tauri's build scripts track, so sharing one with plain cargo would rebuild Tauri every time
 # the two alternate, and parallel lanes would wait on each other's build lock.

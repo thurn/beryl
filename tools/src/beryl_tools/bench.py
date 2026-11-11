@@ -313,16 +313,6 @@ fi
 {script}"""
 
 
-def worktree_names() -> list[str]:
-    """The names of this repository's worktrees, the main checkout's included."""
-    listing = output("git", "-C", str(paths.REPO), "worktree", "list", "--porcelain")
-    return [
-        Path(line.removeprefix("worktree ")).name
-        for line in listing.splitlines()
-        if line.startswith("worktree ")
-    ]
-
-
 def count_script(
     provision: str, cargo: list[str], name: str, checkout: str, live: list[str]
 ) -> str:
@@ -401,7 +391,7 @@ def bench_count(args: argparse.Namespace) -> int:
         cargo_bench(extra),
         paths.REPO.name,
         str(paths.REPO),
-        worktree_names(),
+        paths.worktree_names(),
     )
     return vm_shell(script)
 
@@ -493,7 +483,7 @@ def count_gate(args: argparse.Namespace) -> int:
         gate_cargo(gate),
         GATE_NAME,
         str(paths.REPO),
-        worktree_names(),
+        paths.worktree_names(),
     )
     run = subprocess.run(
         vm_command(script),

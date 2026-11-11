@@ -1,9 +1,9 @@
 """`by nightly`: the work that runs once a night on the development machine, from a launchd
-agent (`just nightly-install`): today, coverage of origin/staging (`by coverage`) and the checks'
-verdicts the fast check orders by (`by ci-history`). It costs no agent tokens and needs no
-session open. Its record is this machine's, in
-`$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and `last-output.txt`
-(the last run's output). More nightly work, such as the presentation track's motion captures and
+agent (`just nightly-install`): today, removing the cache folders of checkouts that are gone
+(`by prune-caches`), coverage of origin/staging (`by coverage`) and the checks' verdicts the fast
+check orders by (`by ci-history`). It costs no agent tokens and needs no session open. Its
+record is this machine's, in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped
+or not) and `last-output.txt` (the last run's output). More nightly work, such as the presentation track's motion captures and
 the nightly fuzz, joins as another [`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
 
-from . import paths, system
+from . import caches, paths, system
 
 LABEL = "ca.thurn.beryl.nightly"
 # The agent's first firing, and its last retry.
@@ -89,7 +89,11 @@ def history_step(commit: str, out: IO[str]) -> int:
     ).returncode
 
 
-STEPS: list[Step] = [Step("coverage", coverage_step), Step("history", history_step)]
+STEPS: list[Step] = [
+    Step("prune", caches.prune_step),
+    Step("coverage", coverage_step),
+    Step("history", history_step),
+]
 
 
 def read_log() -> list[dict[str, object]]:

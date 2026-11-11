@@ -290,6 +290,11 @@ coverage *args:
 nightly *args:
     {{ by }} nightly "$@"
 
+# Remove the cache folders of checkouts that are gone, unchanged for a day (--dry-run lists them); part of the nightly
+[group('checks')]
+prune-caches *args:
+    {{ by }} prune-caches "$@"
+
 # Load the launchd agent that runs `by nightly` at 03:00, hourly until 08:00 (macOS; idempotent)
 [group('checks')]
 nightly-install:
