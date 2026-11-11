@@ -13,14 +13,19 @@
 //
 // How a step moves things: at its start its act is applied to the table and the table is laid
 // out again, and everything whose resting place that moved glides there for as long as the
-// verb takes, which is all a `fly` is. A verb whose subject does not travel from where it was
-// gives it a track of its own (`#enter`): an `emerge` starts on the ability's source, an
-// `appear` is there at once and only fades in.
+// verb takes, which is all a `fly` is. The step's own card or ability travels over everything
+// at rest; what only makes room for it (a row closing up, a phone's rows as its stack comes
+// and goes) moves at the depth it rests at, under what flies. A verb whose subject does not
+// travel from where it was gives it a track of its own (`#enter`): an `emerge` starts on the
+// ability's source, an `appear` is there at once and only fades in.
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
 // script alone and a pose is the same whether its time is reached in frames or in one jump.
 // Promises are for those who watch (`idle`), never for sequencing.
+//
+// What follows a step besides motion (a sound) is told its beginning and its end the same way
+// (`follow`): inside the tick, in the order of their stage times, each with its own time.
 import type {
   Act,
   PlayerView,
@@ -92,6 +97,18 @@ export interface Playing {
   step: ScriptStep;
 }
 
+/** A step beginning or ending, for what follows steps besides motion (`ScriptStage.follow`). */
+export interface Edge {
+  edge: "start" | "end";
+  /** The stage time it happens at, whenever the tick that finds it runs. */
+  at: number;
+  step: ScriptStep;
+  /** The table as the step found it, before its act. */
+  table: Table;
+  /** The steps of its beat before it, in order. */
+  earlier: readonly ScriptStep[];
+}
+
 /** An entry's motion over a step: where it is `progress` of the way through, given where it
  * now rests, which a later step may have moved. */
 interface Track {
@@ -100,11 +117,19 @@ interface Track {
   pose(progress: number, rest: Pose): Pose;
 }
 
-/** The glide to its resting place of an entry that was at `start`. */
+/** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
+ * is about, and at its resting depth for what makes room. */
 const glide =
-  (start: Pose, ease: Timing["ease"]): Track["pose"] =>
+  (start: Pose, ease: Timing["ease"], aloft: boolean): Track["pose"] =>
   (progress, rest) =>
-    between(start, rest, ease(progress));
+    between(start, rest, ease(progress), aloft);
+
+/** What a step's act is about, if it is something on the table: its card, or the ability it
+ * puts on the stack. */
+function subjectOf(act: Act): Name | undefined {
+  if (act.verb === "emerge") return abilityName(act.id);
+  return "object" in act ? act.object?.slot : undefined;
+}
 
 /** An entry that is at its resting place from the first, and comes to be seen there. */
 const fade =
@@ -122,6 +147,9 @@ interface Entry {
 interface Run extends Playing {
   ease(progress: number): number;
   begun: boolean;
+  /** The table as the step found it, once it has begun. */
+  found?: Table;
+  ended: boolean;
 }
 
 interface Playback {
@@ -155,7 +183,7 @@ export class ScriptStage {
   readonly clock: StageClock;
   /** How each step is played. */
   timings: (act: Act) => Timing;
-  readonly #layout: StageLayout;
+  #layout: StageLayout;
   #surface: Surface | undefined;
   #table: Table | undefined;
   #view: PlayerView | undefined;
@@ -166,6 +194,9 @@ export class ScriptStage {
   #at = 0;
   #watching: (() => void)[] = [];
   readonly #listeners = new Set<() => void>();
+  readonly #following = new Set<(edge: Edge) => void>();
+  /** Stage time is passing over what plays (`skip`): no step's edge is told. */
+  #skipping = false;
   #shown: Shown = {
     table: undefined,
     resting: new Map(),
@@ -252,9 +283,15 @@ export class ScriptStage {
   }
 
   /** Plays out at once everything given to `play`, as a click skips what is playing: stage
-   * time passes over all of it, and the clock goes on as it was, held or following frames. */
+   * time passes over all of it, and the clock goes on as it was, held or following frames.
+   * Those who `follow` are told none of what is passed over. */
   skip() {
-    this.#finish(Infinity);
+    this.#skipping = true;
+    try {
+      this.#finish(Infinity);
+    } finally {
+      this.#skipping = false;
+    }
   }
 
   #finish(limit: number): number {
@@ -298,8 +335,20 @@ export class ScriptStage {
     };
   };
 
-  /** Lays the table out afresh, with no motion: the stage changed shape. */
-  relayout() {
+  /** Calls `follower` as each step begins and as it ends, inside the tick that finds it, in
+   * the order of their stage times; returns how to stop. A step that takes no time ends as it
+   * begins; one dropped while it plays (a reset, a skip) is told no end. */
+  readonly follow = (follower: (edge: Edge) => void) => {
+    this.#following.add(follower);
+    return () => {
+      this.#following.delete(follower);
+    };
+  };
+
+  /** Lays the table out afresh, with no motion: the stage changed shape, or is `layout`'s
+   * from now on. */
+  relayout(layout = this.#layout) {
+    this.#layout = layout;
     if (!this.#table) return;
     this.#lay(this.clock.now);
     this.#write(this.clock.now);
@@ -339,8 +388,20 @@ export class ScriptStage {
         };
       }
       const playback = this.#playback;
-      // Steps begin in the script's order: each changes the table the next one reads.
+      // Steps begin in the script's order: each changes the table the next one reads. One
+      // that began ends first if its time comes no later than the next one's beginning.
       const next = playback.steps.find((s) => !s.begun);
+      const over = playback.steps
+        .filter((s) => s.begun && !s.ended)
+        .reduce<Run | undefined>(
+          (a, b) => (a && a.to <= b.to ? a : b),
+          undefined,
+        );
+      if (over && over.to <= to && (!next || over.to <= next.from)) {
+        over.ended = true;
+        this.#tell(over, "end");
+        continue;
+      }
       if (next) {
         if (next.from > to) break;
         this.#begin(next);
@@ -384,6 +445,7 @@ export class ScriptStage {
         step,
         ease: timing.ease,
         begun: false,
+        ended: false,
       };
     });
   }
@@ -392,6 +454,8 @@ export class ScriptStage {
    * moves glides to where it now rests for as long as the verb takes. */
   #begin(run: Run) {
     run.begun = true;
+    run.found = this.#table!;
+    this.#tell(run, "start");
     this.#set(apply(this.#table!, run.step.act));
     this.#lay(run.from, run);
     if (run.to > run.from) this.#enter(run);
@@ -419,7 +483,7 @@ export class ScriptStage {
           poseAt(from, run.from),
           entry.resting.pose,
         );
-        entry.track = track(glide(start, run.ease));
+        entry.track = track(glide(start, run.ease, true));
         return;
       }
       case "appear": {
@@ -433,6 +497,20 @@ export class ScriptStage {
     }
   }
 
+  /** Tells those who follow that `run` begins or ends. */
+  #tell(run: Run, edge: Edge["edge"]) {
+    if (this.#skipping || this.#following.size === 0) return;
+    const steps = this.#playback!.steps;
+    const told: Edge = {
+      edge,
+      at: edge === "start" ? run.from : run.to,
+      step: run.step,
+      table: run.found!,
+      earlier: steps.slice(0, steps.indexOf(run)).map((s) => s.step),
+    };
+    for (const follower of [...this.#following]) follower(told);
+  }
+
   #set(table: Table) {
     this.#table = table;
     this.#stale = true;
@@ -440,8 +518,9 @@ export class ScriptStage {
 
   /** Lays the table out at stage time `at`: nodes for what it newly holds, none for what it
    * no longer does, and each entry's resting place. An entry whose place moved glides there
-   * over the `run` that moved it, from wherever it is; with no run, or one that takes no
-   * time, it is there at once, unless a glide still under way carries it. */
+   * over the `run` that moved it, from wherever it is, aloft if the run is about it; with no
+   * run, or one that takes no time, it is there at once, unless a glide still under way
+   * carries it. */
   #lay(at: number, run?: Run) {
     const rest = this.#layout.rest(this.#table!);
     for (const name of [...this.#entries.keys()]) {
@@ -467,7 +546,12 @@ export class ScriptStage {
       if (!still) {
         if (run && run.to > at) {
           const start = poseAt(entry, at);
-          entry.track = { from: at, to: run.to, pose: glide(start, run.ease) };
+          const aloft = subjectOf(run.step.act) === name;
+          entry.track = {
+            from: at,
+            to: run.to,
+            pose: glide(start, run.ease, aloft),
+          };
         }
         entry.moved = true;
       }

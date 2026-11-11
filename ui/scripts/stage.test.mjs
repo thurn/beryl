@@ -157,6 +157,19 @@ test("the steps of a beat run together, each its stagger after the one before", 
     );
 });
 
+test("what a step is about flies over what rests; what makes room for it does not", () => {
+    const { stage: made } = stage({ fly: { duration: 400 } });
+    made.play(view([1, 2, 3]));
+    // 1 goes last, and 2 and 3 close up behind it.
+    made.play(view([2, 3, 1]), { beats: [[move(1, 2)]] });
+    made.clock.advance(200);
+    assert.deepEqual([made.pose(1).x, made.pose(1).depth], [400, 900 + 1]);
+    assert.deepEqual([made.pose(2).x, made.pose(2).depth], [200, 2]);
+    assert.deepEqual([made.pose(3).x, made.pose(3).depth], [600, 3]);
+    made.clock.advance(200);
+    assert.equal(made.pose(1).depth, 1);
+});
+
 test("a script given while another plays begins where that one ends", async () => {
     const { stage: made } = stage({ fly: { duration: 600 } });
     made.play(view([1, 2]));
@@ -210,6 +223,80 @@ test("with no durations every step is over in the tick that begins it", () => {
     made.clock.advance(0);
     assert.equal(made.pose(1).x, 400);
     assert.equal(made.step, null);
+});
+
+test("a step's beginning and end are told at their own stage times, in order", () => {
+    const { stage: made } = stage({
+        fly: { duration: 400, stagger: 100 },
+        dwell: { duration: 250 },
+    });
+    made.play(view([1, 2, 3]));
+    const told = [];
+    const stop = made.follow(({ edge, at, step, table, earlier }) =>
+        told.push([
+            edge,
+            at,
+            step.act.verb,
+            table.view.battlefield.join(""),
+            earlier.length,
+        ]),
+    );
+    const dwell = {
+        act: { verb: "dwell", subject: { kind: "object", slot: 1 } },
+    };
+    const tap = { act: { verb: "tap", object: object(1, "battlefield") } };
+    made.play(view([3, 1, 2]), {
+        beats: [
+            [move(1, 2), move(2, 2)],
+            [tap, dwell],
+        ],
+    });
+    // One tick finds all of it, however late: each edge has its step's time, a step that
+    // overlaps the one before begins before that one ends, one that takes no time ends as it
+    // begins, and each is told the table as its step found it and its beat's earlier steps.
+    made.clock.advance(1000);
+    assert.deepEqual(told, [
+        ["start", 0, "fly", "123", 0],
+        ["start", 100, "fly", "231", 1],
+        ["end", 400, "fly", "123", 0],
+        ["end", 500, "fly", "231", 1],
+        ["start", 500, "tap", "312", 0],
+        ["end", 500, "tap", "312", 0],
+        ["start", 500, "dwell", "312", 1],
+        ["end", 750, "dwell", "312", 1],
+    ]);
+    // What a skip passes over is told to no one, nor is anything once told to stop.
+    told.length = 0;
+    made.play(view([1, 3, 2]), { beats: [[move(1, 0)]] });
+    made.clock.advance(100);
+    made.skip();
+    assert.deepEqual(told, [["start", 1000, "fly", "312", 0]]);
+    stop();
+    made.play(view([3, 1, 2]), { beats: [[move(1, 1)]] });
+    made.settle();
+    assert.equal(told.length, 1);
+});
+
+test("another layout places everything afresh, with no motion", () => {
+    const { stage: made, surface } = stage({ fly: { duration: 400 } });
+    made.play(view([1, 2]));
+    const lower = {
+        ...row,
+        rest: (table) =>
+            new Map(
+                [...row.rest(table)].map(([name, resting]) => [
+                    name,
+                    { ...resting, pose: { ...resting.pose, y: 300 } },
+                ]),
+            ),
+    };
+    made.relayout(lower);
+    assert.equal(made.pose(2).y, 300);
+    assert.equal(surface.nodes.get(2).y, 300);
+    // It is the layout of what plays from then on.
+    made.play(view([2, 1]), { beats: [[move(1, 1)]] });
+    made.clock.advance(200);
+    assert.deepEqual([made.pose(1).x, made.pose(1).y], [200, 300]);
 });
 
 test("a step makes and removes nodes; a reset drops what was playing", () => {

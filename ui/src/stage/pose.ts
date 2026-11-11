@@ -23,9 +23,15 @@ export interface Pose {
 /** How far over everything at rest a moving object is drawn (CardLayer's FLYING_Z). */
 const ALOFT = 900;
 
-/** The pose `progress` of the way from `from` to `to`, drawn over what lies at rest, showing
- * the side it will show there. */
-export function between(from: Pose, to: Pose, progress: number): Pose {
+/** The pose `progress` of the way from `from` to `to`, showing the side it will show there:
+ * `aloft`, drawn over what lies at rest; or at the depth it will rest at, as what only makes
+ * room for another moves. */
+export function between(
+  from: Pose,
+  to: Pose,
+  progress: number,
+  aloft: boolean,
+): Pose {
   const mix = (a: number, b: number) => a + (b - a) * progress;
   return {
     x: mix(from.x, to.x),
@@ -34,7 +40,7 @@ export function between(from: Pose, to: Pose, progress: number): Pose {
     rotation: mix(from.rotation, to.rotation),
     skew: mix(from.skew, to.skew),
     opacity: mix(from.opacity, to.opacity),
-    depth: ALOFT + to.depth,
+    depth: (aloft ? ALOFT : 0) + to.depth,
     face: to.face,
   };
 }
