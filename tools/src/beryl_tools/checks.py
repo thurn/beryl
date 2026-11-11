@@ -18,6 +18,8 @@ A step that fails is rerun once before its lane fails (plan K21), narrowed to th
 failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
 <check>` line for each. A step killed at the deadline, or one that failed to build or start
 (exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
+After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
+failing checks are quarantined or pending fails no lane.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cards, paths, runlog, system, warm
+from . import cards, paths, runlog, system, verdicts, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -107,6 +109,8 @@ class Outcome:
     timings: list[str]
     # The checks that failed and then passed on the rerun; a step's name where it reran whole.
     flaky: list[str] = field(default_factory=list)
+    # Failures that failed no step: why (quarantined or pending), and the check.
+    excused: list[tuple[str, str]] = field(default_factory=list)
 
 
 def stretch(load: float, cpus: int) -> float:
@@ -209,21 +213,27 @@ class Steps:
 
 def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> Outcome:
     """Runs the lane's steps until one fails, logging each attempt's checks (runlog.py): a
-    rerun's own, so a check that failed and then passed shows as both."""
+    rerun's own, so a check that failed and then passed shows as both, and the failure is
+    marked flaky for its verdict. A step fails no lane when each check it failed is quarantined
+    or pending (verdicts.excused), unless it never ran its checks."""
     script: str = run.script
     clock: Clock = steps.clock
     started = clock.now()
     log: list[str] = []
     timings: list[str] = []
     flaky: list[str] = []
+    excused: list[tuple[str, str]] = []
 
-    def attempt(step: Step, cmd: list[str]) -> int | None:
-        """Runs `cmd` for `step`, logging its output and how it ended; its exit code."""
+    def attempt(
+        step: Step, cmd: list[str]
+    ) -> tuple[int | None, list[dict[str, object]]]:
+        """Runs `cmd` for `step`, logging its output and how it ended; its exit code and the
+        records it logged."""
         t, wall = clock.now(), clock.wall()
         with run.step(env) as (step_env, results):
             code, output = steps.run(cmd, step.cwd, step_env)
             seconds, wall = clock.now() - t, clock.wall() - wall
-            run.log(lane.name, step.name, code == 0, wall, results)
+            records = run.log(lane.name, step.name, code == 0, wall, results)
         if output.strip():
             log.append(output.rstrip())
         ended = f"{script} {lane.name} {step.name}: "
@@ -238,25 +248,40 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
             checks = step.failed(output)
             ended += f"; rerunning {', '.join(checks) if checks else 'it'} once"
             log.append(ended)
-            again = attempt(Step(step.name, step.cmd, step.cwd), cmd + checks)
+            again, rerun = attempt(Step(step.name, step.cmd, step.cwd), cmd + checks)
             if again == 0:
                 flaky.extend(checks or [step.name])
-            return again
+                for r in records:
+                    r["flaky"] = r["outcome"] == "fail"
+            return again, rerun
         log.append(ended)
-        return code
+        return code, records
 
     for step in lane.steps:
         t, flakes = clock.now(), len(flaky)
-        code = attempt(step, step.cmd)
+        code, records = attempt(step, step.cmd)
+        why = verdicts.excused(records) if code not in (0, None, CANNOT_RUN) else []
+        if why:
+            excused.extend(why)
+            held = ", ".join(f"{check} {reason}" for reason, check in why)
+            log.append(f"{script} {lane.name} {step.name}: fails no lane: {held}")
+            timings.append(f"{step.name} {clock.now() - t:.0f} s, excused")
+            continue
         if code != 0:
             timings.append(f"{step.name} {'TIMED OUT' if code is None else 'FAILED'}")
             return Outcome(
-                lane.name, False, clock.now() - started, "\n".join(log), timings, flaky
+                lane.name,
+                False,
+                clock.now() - started,
+                "\n".join(log),
+                timings,
+                flaky,
+                excused,
             )
         rerun = " after a rerun" if len(flaky) > flakes else ""
         timings.append(f"{step.name} {clock.now() - t:.0f} s{rerun}")
     return Outcome(
-        lane.name, True, clock.now() - started, "\n".join(log), timings, flaky
+        lane.name, True, clock.now() - started, "\n".join(log), timings, flaky, excused
     )
 
 
@@ -336,6 +361,10 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
     for o in outcomes:
         for check in o.flaky:
             print(f"flaky: {o.lane} {check}")
+        for why, check in o.excused:
+            print(f"{why}: {o.lane} {check}")
+    for line in run.settle():
+        print(line)
     elapsed = steps.clock.now()
     failed = [o.lane for o in outcomes if not o.ok]
     over = elapsed > budget

@@ -23,6 +23,7 @@ from . import (
     shots,
     specs,
     system,
+    verdicts,
     video,
     warm,
 )
@@ -68,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         shots,
         specs,
         system,
+        verdicts,
         video,
         warm,
     ):

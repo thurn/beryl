@@ -1,12 +1,13 @@
 import argparse
 import json
 import subprocess
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles, paths, runlog
+from beryl_tools import checks, oracles, paths, runlog, verdicts
 
 
 def logged() -> list[dict[str, object]]:
@@ -143,12 +144,32 @@ def record(
 
 
 def test_the_report_totals_each_check_and_lane_costliest_first(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    now = datetime.now(timezone.utc)
+
+    class Verdicts(verdicts.Beads):
+        """The checks' beads hold one recent flake and one catch from before the window."""
+
+        def checks(self) -> list[str]:
+            return ["rust:beryl_engine::tests::a"]
+
+        def history(self, checks: Iterable[str]) -> dict[str, list[verdicts.Entry]]:
+            return {
+                "rust:beryl_engine::tests::a": [
+                    {
+                        "time": (now - timedelta(days=40)).isoformat(),
+                        "verdict": "catch",
+                    },
+                    {"time": now.isoformat(), "verdict": "flaky"},
+                ]
+            }
+
+    monkeypatch.setattr(verdicts, "STORE", Verdicts())
     runlog.append(
         [
             record("rust:beryl_engine::tests::a", "pass", 1.0),
-            record("rust:beryl_engine::tests::a", "fail", 2.0, verdict="flaky"),
+            record("rust:beryl_engine::tests::a", "fail", 2.0),
             record("ui-test:drag", "pass", 10.0),
             record("ui-test:drag", "skip", 0.0),
             record("shots:board", "fail", 100.0, days_ago=40),
@@ -156,7 +177,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     )
     with open(runlog.log_path(), "a") as f:
         f.write("not a record\n")
-    args = argparse.Namespace(days=30, json=True)
+    args = argparse.Namespace(days=30, json=True, quarantined=False, pending=False)
     assert runlog.report(args) == 0
     out = json.loads(capsys.readouterr().out)
     assert list(out["checks"]) == ["ui-test:drag", "rust:beryl_engine::tests::a"]
@@ -170,7 +191,12 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     assert out["checks"]["ui-test:drag"]["skips"] == 1
     assert out["lanes"]["ui-test"]["seconds"] == 10.0
     assert list(out["lanes"]) == ["ui-test", "rust"]
-    assert runlog.report(argparse.Namespace(days=60, json=False)) == 0
+    assert (
+        runlog.report(
+            argparse.Namespace(days=60, json=False, quarantined=False, pending=False)
+        )
+        == 0
+    )
     table = capsys.readouterr().out
     assert "6 runs" not in table and "4 runs of 3 checks" in table
     assert table.index("shots:board") < table.index("ui-test:drag")

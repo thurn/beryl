@@ -1,6 +1,7 @@
 """The run log (docs/project-50k.md, K18): every run of every check `by check` and `by ci` make
 appends one JSON line to `$BERYL_CACHE/ci/runs.jsonl`, under a file lock, since worktrees and
-slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it.
+slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it,
+with the verdicts on each check's failures that verdicts.py records in beads.
 
 A check is the finest thing a step can report: one Rust test (`rust:<binary>::<test path>`), one
 browser check (`ui-test:<title>`), one screenshot (`shots:<name>`), one oracle scenario
@@ -22,17 +23,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, system
+from . import paths, system, verdicts
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
 OUTCOMES = ("pass", "fail", "skip")
+# What a check on the pending list (verdicts.PENDING) logs instead of a pass or a fail.
+PENDING_OUTCOMES = {"pass": "pending-pass", "fail": "pending-fail"}
 
 
 def log_path() -> Path:
@@ -112,20 +116,33 @@ def read_results(path: Path) -> list[dict[str, object]]:
     return found
 
 
+def place(script: str) -> str:
+    """Where a run's checks ran, so a pass settles only failures from the same place
+    (verdicts.settle): the branch, or for slow CI on a detached staging tip, `staging`, else the
+    working tree's path."""
+    branch = git("symbolic-ref", "--short", "-q", "HEAD")
+    if branch:
+        return branch
+    return "staging" if script == "ci" else git("rev-parse", "--show-toplevel")
+
+
 @dataclass
 class Run:
-    """One `by check` or `by ci`: what every record of it shares."""
+    """One `by check` or `by ci`: what every record of it shares, and its records so far."""
 
     script: str
     commit: str = ""
     tree: str = ""
+    place: str = ""
     host: str = field(default_factory=platform.node)
     chosen: str = "all"
+    logged: list[dict[str, object]] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
     @staticmethod
     def start(script: str) -> Run:
         try:
-            return Run(script, git("rev-parse", "HEAD"), tree_hash())
+            return Run(script, git("rev-parse", "HEAD"), tree_hash(), place(script))
         except Exception as e:  # Logging never fails a check.
             warn(e)
             return Run(script)
@@ -157,6 +174,10 @@ class Run:
                     "seconds": round(seconds, 3),
                 }
             )
+        pending = verdicts.pending_checks()
+        for c in checks:
+            if c["check"] in pending:
+                c["outcome"] = PENDING_OUTCOMES.get(str(c["outcome"]), c["outcome"])
         return [
             {
                 "time": now,
@@ -176,11 +197,32 @@ class Run:
 
     def log(
         self, lane: str, step: str, passed: bool, seconds: float, results: Path
-    ) -> None:
+    ) -> list[dict[str, object]]:
+        """Logs a finished step's records and returns them."""
         try:
-            append(self.records(lane, step, passed, seconds, results))
+            records = self.records(lane, step, passed, seconds, results)
         except Exception as e:  # Logging never fails a check.
             warn(e)
+            return []
+        with self.lock:
+            self.logged += records
+        try:
+            append(records)
+        except Exception as e:
+            warn(e)
+        return records
+
+    def settle(self) -> list[str]:
+        """The verdicts this run reached (verdicts.settle), a line each."""
+        with self.lock:
+            records = list(self.logged)
+        try:
+            return verdicts.settle(
+                records, self.script, self.place, self.tree, self.commit, self.host
+            )
+        except Exception as e:  # Neither do verdicts.
+            warn(e)
+            return []
 
 
 def append(records: Iterable[dict[str, object]]) -> None:
@@ -227,9 +269,9 @@ class Tally:
         self.failures += outcome == "fail"
         seconds = r.get("seconds")
         self.seconds += seconds if isinstance(seconds, (int, float)) else 0.0
-        verdict = r.get("verdict")
-        if isinstance(verdict, str):
-            self.verdicts[verdict] = self.verdicts.get(verdict, 0) + 1
+
+    def judged(self, verdict: str) -> None:
+        self.verdicts[verdict] = self.verdicts.get(verdict, 0) + 1
 
     def json(self) -> dict[str, object]:
         return {
@@ -243,13 +285,26 @@ class Tally:
 
 def tally(
     records: Iterable[dict[str, object]],
+    history: dict[str, list[verdicts.Entry]],
+    since: datetime,
 ) -> tuple[dict[str, Tally], dict[str, Tally]]:
-    """Per check and per lane, costliest first."""
+    """Per check and per lane, costliest first: runs and seconds from the run log, verdicts
+    since `since` from the checks' beads (verdicts.py)."""
     checks: dict[str, Tally] = {}
     lanes: dict[str, Tally] = {}
     for r in records:
         checks.setdefault(str(r.get("check")), Tally()).add(r)
         lanes.setdefault(str(r.get("lane")), Tally()).add(r)
+    for check, found in history.items():
+        for e in found:
+            try:
+                recent = datetime.fromisoformat(str(e.get("time"))) >= since
+            except ValueError:
+                continue
+            if recent:
+                lane = str(e.get("lane") or check.split(":")[0])
+                checks.setdefault(check, Tally()).judged(str(e["verdict"]))
+                lanes.setdefault(lane, Tally()).judged(str(e["verdict"]))
 
     def costliest(t: dict[str, Tally]) -> dict[str, Tally]:
         return dict(sorted(t.items(), key=lambda kv: (-kv[1].seconds, kv[0])))
@@ -259,7 +314,14 @@ def tally(
 
 def report(args: argparse.Namespace) -> int:
     since = datetime.now(timezone.utc) - timedelta(days=args.days)
-    checks, lanes = tally(read_log(since))
+    records = read_log(since)
+    if args.pending:
+        return pending_report(records, args.json)
+    store = verdicts.STORE
+    history = store.history(store.checks())
+    if args.quarantined:
+        return quarantined_report(history, args.json)
+    checks, lanes = tally(records, history, since)
     if args.json:
         print(
             json.dumps(
@@ -281,9 +343,49 @@ def report(args: argparse.Namespace) -> int:
     for title, rows in (("check", checks), ("lane", lanes)):
         print(f"\n{'seconds':>9} {'runs':>6} {'fails':>6}  {title}  verdicts")
         for name, t in rows.items():
-            verdicts = ", ".join(f"{v} {n}" for v, n in sorted(t.verdicts.items()))
-            row = f"{t.seconds:9.1f} {t.runs:6} {t.failures:6}  {name}  {verdicts}"
+            judged = ", ".join(f"{v} {n}" for v, n in sorted(t.verdicts.items()))
+            row = f"{t.seconds:9.1f} {t.runs:6} {t.failures:6}  {name}  {judged}"
             print(row.rstrip())
+    return 0
+
+
+def quarantined_report(history: dict[str, list[verdicts.Entry]], as_json: bool) -> int:
+    held = verdicts.quarantine(history)
+    if as_json:
+        print(json.dumps({"quarantined": held}, indent=2))
+        return 0
+    print(
+        f"ci-report: {len(held)} quarantined checks ({verdicts.QUARANTINE_FLAKES} flakes in"
+        f" {verdicts.QUARANTINE_DAYS} days): they run and are logged, but fail no run"
+    )
+    for check, times in held.items():
+        print(f"{check}  flaky at {', '.join(times)}")
+    return 0
+
+
+def pending_report(records: list[dict[str, object]], as_json: bool) -> int:
+    """The pending list, each entry with its check's latest outcome in the log."""
+    last = {str(r.get("check")): str(r.get("outcome")) for r in records}
+    rows = [
+        {
+            "check": p.check,
+            "board": p.board,
+            "bead": p.bead,
+            "last": last.get(p.check, "not run"),
+        }
+        for p in verdicts.PENDING
+    ]
+    if as_json:
+        print(json.dumps({"pending": rows}, indent=2))
+        return 0
+    passing = sum(r["last"] == "pending-pass" for r in rows)
+    print(
+        f"ci-report: {len(rows)} pending checks, {passing} now passing: the bead that makes"
+        " one pass removes it from verdicts.PENDING"
+    )
+    for r in rows:
+        now = "  NOW PASSES" if r["last"] == "pending-pass" else ""
+        print(f"{r['check']}  board {r['board']}  bead {r['bead']}  {r['last']}{now}")
     return 0
 
 
@@ -293,4 +395,15 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument("--days", type=int, default=30, help="how far back (default 30)")
     p.add_argument("--json", action="store_true", help="JSON instead of a table")
+    which = p.add_mutually_exclusive_group()
+    which.add_argument(
+        "--quarantined",
+        action="store_true",
+        help="only the quarantined checks, with their flakes",
+    )
+    which.add_argument(
+        "--pending",
+        action="store_true",
+        help="only the pending list, with each check's latest outcome",
+    )
     p.set_defaults(func=report)

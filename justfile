@@ -259,10 +259,15 @@ check:
 ci *lanes:
     {{ by }} ci "$@"
 
-# Each check's runs, failures and seconds from the run log, costliest first, with lane totals (--days 30, --json)
+# Each check's runs, failures, verdicts and seconds, costliest first, with lane totals (--days 30, --json, --quarantined, --pending)
 [group('checks')]
 ci-report *args:
     {{ by }} ci-report "$@"
+
+# Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky
+[group('checks')]
+verdict check verdict:
+    {{ by }} verdict "$1" "$2"
 
 # Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
 [group('checks')]
