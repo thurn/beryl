@@ -57,14 +57,6 @@ impl ObjectFlags {
         | Self::BLOCKED
         | Self::ATTACKS_PLANESWALKER
         | Self::STRUCK_FIRST;
-    /// Entered the battlefield this turn.
-    pub const ENTERED_THIS_TURN: u32 = 1 << 16;
-    /// A loyalty ability of this permanent was activated this turn
-    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
-    pub const LOYALTY_ACTIVATED: u32 = 1 << 17;
-    /// The flag milestone 4 (by-w8gv.7.1) moves to a tracker. No mutator sets it: it is
-    /// written through [`State::legacy_mut`](crate::State::legacy_mut) alone.
-    pub const LEGACY: u32 = Self::LOYALTY_ACTIVATED;
 
     #[inline]
     pub fn has(self, flag: u32) -> bool {
@@ -261,11 +253,6 @@ impl<L: Layout> Object<L> {
     #[inline]
     pub fn is_one_one(&self) -> bool {
         self.flags.has(ObjectFlags::ONE_ONE)
-    }
-
-    #[inline]
-    pub fn entered_this_turn(&self) -> bool {
-        self.flags.has(ObjectFlags::ENTERED_THIS_TURN)
     }
 
     /// An attacking creature ([CR 506.3](https://yawgatog.com/resources/magic-rules/#R5063)).

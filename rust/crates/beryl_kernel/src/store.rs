@@ -111,7 +111,11 @@ impl<L: Layout> State<L> {
     /// ends as that turn begins). The layer results are stale if one of their inputs ended.
     #[inline]
     pub fn expire(&mut self, ended: Duration) {
-        let done = self.effects.expire(ended).and(self.memos.expire(ended));
+        let done = self
+            .effects
+            .expire(ended)
+            .and(self.memos.expire(ended))
+            .and(self.trackers.expire(ended));
         self.settle_ended(done);
     }
 
@@ -128,7 +132,8 @@ impl<L: Layout> State<L> {
     }
 
     /// The rare path of [`State::forget_stored`], out of line: the zone move is the hottest
-    /// mutator and almost never takes it.
+    /// mutator and almost never takes it. The Trackers store is no part of it: it keys no
+    /// slot, and the move ends a permanent's trackers as it leaves the battlefield.
     #[cold]
     #[inline(never)]
     fn forget_keyed(&mut self, slot: L::Slot) {
@@ -162,13 +167,14 @@ impl<L: Layout> State<L> {
 
     /// The slots a store has an entry about as an object: what `keyed` holds.
     fn store_keys(&self) -> Bitboard<L::Slot> {
-        self.effects.keys() | self.memos.keys()
+        self.effects.keys() | self.memos.keys() | self.trackers.keys()
     }
 
     /// Whether layout `M` has room for what the stores hold ([`State::fits`]).
     pub(crate) fn stores_fit<M: Layout>(&self) -> Result<(), Misfit> {
         self.effects.fits::<M>()?;
-        self.memos.fits::<M>()
+        self.memos.fits::<M>()?;
+        self.trackers.fits::<M>()
     }
 
     /// The stores' invariants ([`State::check_invariants`]): each store's own, and that the
@@ -176,6 +182,7 @@ impl<L: Layout> State<L> {
     pub(crate) fn check_stores(&self, t: &GameTable) -> Result<(), Violation> {
         self.effects.check(self, t)?;
         self.memos.check(self, t)?;
+        self.trackers.check(self, t)?;
         check(
             self.keyed == self.store_keys(),
             "the keyed slots disagree with the stores",
@@ -188,5 +195,6 @@ impl<L: Layout> State<L> {
         self.effects
             .lingering(self, t)
             .or_else(|| self.memos.lingering(self, t))
+            .or_else(|| self.trackers.lingering(self, t))
     }
 }

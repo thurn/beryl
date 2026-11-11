@@ -32,7 +32,7 @@ use crate::profile::Payment;
 use crate::rule_change;
 use crate::state::{
     Affects, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry, State,
-    Target, TurnStep, Zone, ZoneKey,
+    Target, Tracker, TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 
@@ -764,28 +764,28 @@ fn activatable<L: Layout>(
     if a.cost.remove.is_some_and(|kind| o.counters_of(kind) == 0) {
         return false;
     }
-    let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {
+    let timely = if let Some(loyalty) = a.cost.loyalty {
+        // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
+        // unless the permanent has at least that many loyalty counters on it."
+        let payable = i16::from(o.counters().loyalty) + i16::from(loyalty) >= 0;
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
         // time they have priority and the stack is empty during a main phase of their turn,
         // but only if no player has previously activated a loyalty ability of that permanent
-        // that turn."
-        if o.flags().has(ObjectFlags::LOYALTY_ACTIVATED) {
-            return false;
-        }
-        // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
-        // unless the permanent has at least that many loyalty counters on it."
-        if i16::from(o.counters().loyalty) + i16::from(loyalty) < 0 {
-            return false;
-        }
+        // that turn." The timing first, so that most decisions read one tracker.
+        let unused = || !s.tracked(Tracker::LoyaltyActivated, slot);
         let instant = Rule::InstantLoyaltyTheTurnItEntered;
-        !(o.flags().has(ObjectFlags::ENTERED_THIS_TURN)
-            && rule_change::applies(s, t, instant, Affects::object(s.object_ref(slot))))
+        payable
+            && (sorcery_timing(s, player)
+                || (s.tracked(Tracker::EnteredThisTurn, slot)
+                    && unused()
+                    && rule_change::applies(s, t, instant, Affects::object(s.object_ref(slot)))))
+            && unused()
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".
-        a.timing == Timing::Sorcery
+        a.timing != Timing::Sorcery || sorcery_timing(s, player)
     };
-    if sorcery_speed && !sorcery_timing(s, player) {
+    if !timely {
         return false;
     }
     // The mana before the targets, which read the battlefield: both checks are pure.
@@ -999,8 +999,7 @@ pub(crate) fn begin_activate<L: Layout>(
     let a = source.face(t).ability(index);
     let (card, face) = source.record(t);
     if a.is_loyalty() {
-        s.legacy_mut()
-            .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, true);
+        s.track(t, Tracker::LoyaltyActivated, slot);
     }
     s.put_on_stack(StackEntry {
         object: Some(s.object_ref(slot)),

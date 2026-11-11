@@ -111,8 +111,9 @@ impl<L: Layout> State<L> {
     /// Begins the next turn and returns its active player: the starting player's first, then
     /// alternating ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)): "The
     /// starting player takes their first turn." The per-turn counts begin again with it: the
-    /// decisions offered, and the lands each player has played
-    /// ([CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)).
+    /// decisions offered, the lands each player has played
+    /// ([CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)), and what the
+    /// Trackers store noted of the turn before ([`crate::trackers`]).
     #[inline]
     pub fn begin_turn(&mut self) -> Seat {
         self.turn.active = if self.turn.number == 0 {
@@ -125,6 +126,7 @@ impl<L: Layout> State<L> {
         for p in self.players.as_mut_slice() {
             p.lands_played = 0;
         }
+        self.trackers.begin_turn();
         self.turn.active
     }
 

@@ -14,8 +14,8 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, Counters, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, TurnStep,
-    Zone,
+    CounterKind, Counters, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, Tracker,
+    TurnStep, Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -292,22 +292,13 @@ impl<L: Layout> Board<'_, L> {
             .set(ObjectFlags::TAPPED, tapped);
     }
 
-    /// Whether the permanent in `slot` entered the battlefield this turn.
-    pub fn set_entered_this_turn(&mut self, slot: L::Slot, entered: bool) {
+    /// Whether `tracker` is noted of the permanent in `slot` this turn
+    /// ([`crate::trackers`]): that it entered the battlefield, or that a loyalty ability of
+    /// it was activated ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
+    /// Arrange it only in a game with a card that reads the tracker: no other keeps it.
+    pub fn set_tracked(&mut self, slot: L::Slot, tracker: Tracker, on: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        self.0
-            .object_mut(slot)
-            .flags
-            .set(ObjectFlags::ENTERED_THIS_TURN, entered);
-    }
-
-    /// Whether a loyalty ability of the permanent in `slot` was activated this turn
-    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
-    pub fn set_loyalty_activated(&mut self, slot: L::Slot, activated: bool) {
-        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        self.0
-            .legacy_mut()
-            .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, activated);
+        self.0.trackers.set(tracker, slot, on);
     }
 
     /// Trades the identities of two cards, as the deal could have dealt them: which card a

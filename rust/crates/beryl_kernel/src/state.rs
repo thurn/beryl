@@ -16,6 +16,7 @@ pub use crate::stack::{
     placed,
 };
 pub use crate::store::Duration;
+pub use crate::trackers::{Tracked, Tracker, Trackers};
 pub use crate::turn::Turn;
 
 use beryl_card::{FaceIx, Rules};
@@ -107,7 +108,10 @@ pub struct Flags {
 /// most loads of it, so a store that grows moves nothing before it. The whole order costs
 /// [`Small`] 8 bytes of padding; in the order the compiler chose, the same fields counted
 /// 0.9% more instructions (by-w8gv.7.2). A new field joins the group of its alignment, the
-/// stores at the end. A hash of the state does not follow that order ([`State`]'s `Hash`).
+/// stores at the end. The Trackers store is the one store among the small fields, beside the
+/// other sets of slots: every decision tests its bits for each loyalty ability it could
+/// offer, and at the far end those tests counted 0.09% more (by-w8gv.7.8). A hash of the
+/// state does not follow that order ([`State`]'s `Hash`).
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct State<L: Layout = Small> {
@@ -134,6 +138,10 @@ pub struct State<L: Layout = Small> {
     /// The slots a store has an entry about as an object, so that an object with nothing
     /// stored about it ends at the cost of one bit test ([`crate::store`]).
     pub(crate) keyed: Bitboard<L::Slot>,
+    /// The Trackers store ([`crate::trackers`]): [`State::track`] writes it, the turn's
+    /// beginning empties it and the zone move ends what it holds about a permanent. Here
+    /// and not with the other stores for the decision loop's reads of it.
+    pub(crate) trackers: Trackers<L>,
     pub(crate) zones: Zones<L>,
     /// The open question of a machine step: [`State::ask`] and its kin write it.
     pub(crate) pending: Pending<L>,
@@ -186,6 +194,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             delayed,
             effects,
             memos,
+            trackers,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -200,6 +209,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         delayed.hash(h);
         effects.hash(h);
         memos.hash(h);
+        trackers.hash(h);
         pending.hash(h);
         knowledge.hash(h);
         rng.hash(h);

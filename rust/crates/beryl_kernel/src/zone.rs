@@ -13,8 +13,13 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::memos::MemosOf;
 use crate::rng::SplitMix64;
-use crate::state::{Counters, Derived, Object, ObjectFlags, State, Zone, ZoneKey};
+use crate::state::{Counters, Derived, Object, ObjectFlags, State, Tracked, Zone, ZoneKey};
+use crate::store::Store;
 use beryl_card::FaceIx;
+
+/// What [`State::signature`] compares two objects by: the object, for a permanent its layer
+/// results and what is tracked of it, and its memos.
+pub type Signature<'a, L> = (Object<L>, Option<(Derived<L>, Tracked)>, MemosOf<'a, L>);
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,7 +99,6 @@ impl<L: Layout> State<L> {
                 let o = self.object_mut(slot);
                 o.timestamp = timestamp;
                 o.flags.set(ObjectFlags::SUMMONING_SICK, true);
-                o.flags.set(ObjectFlags::ENTERED_THIS_TURN, true);
                 self.zones.next_timestamp = timestamp.wrapping_add(1);
                 self.flags.derived_dirty = true;
             }
@@ -247,13 +251,15 @@ impl<L: Layout> State<L> {
 
     /// What makes two objects interchangeable (§7.2): every field but the incarnation, the
     /// timestamp and the battlefield index, for a permanent its characteristics after
-    /// continuous effects, and what it remembers of how it was cast, so two untapped basic
-    /// lands match but a stolen Mana Crypt does not match your own, nor a creature that got
-    /// -2/-0 one that didn't, nor a kicked creature one that was not. With nothing stored
-    /// about the object, its memos cost one bit test.
-    pub fn signature(&self, slot: L::Slot) -> (Object<L>, Option<Derived<L>>, MemosOf<'_, L>) {
+    /// continuous effects and what is tracked of it this turn, and what it remembers of how
+    /// it was cast, so two untapped basic lands match but a stolen Mana Crypt does not match
+    /// your own, nor a creature that got -2/-0 one that didn't, nor a kicked creature one
+    /// that was not, nor a planeswalker whose loyalty ability was activated one whose was
+    /// not. With nothing stored about the object, its memos cost one bit test.
+    pub fn signature(&self, slot: L::Slot) -> Signature<'_, L> {
         let o = self.object(slot);
-        let derived = (o.zone == Zone::Battlefield).then(|| *self.derived(slot));
+        let permanent =
+            (o.zone == Zone::Battlefield).then(|| (*self.derived(slot), self.trackers(slot)));
         (
             Object {
                 incarnation: 0,
@@ -261,7 +267,7 @@ impl<L: Layout> State<L> {
                 battlefield_index: 0,
                 ..*o
             },
-            derived,
+            permanent,
             self.memos(slot),
         )
     }
@@ -301,6 +307,9 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
         Zone::Battlefield => {
             s.leave_battlefield(slot);
             s.flags.derived_dirty = true;
+            // What was tracked of it this turn ends with it (CR 400.7): the object it
+            // returns as is new.
+            s.trackers.forget(slot);
             // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
             // removed from combat if it leaves the battlefield". The creatures attacking it or
             // blocked by it stay in combat, related to nothing; the slot may soon hold

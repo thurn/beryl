@@ -18,7 +18,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
 use crate::state::{
-    CounterKind, Counters, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Zone,
+    CounterKind, Counters, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Tracker, Zone,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -49,10 +49,17 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub attach: Option<L::Slot>,
 }
 
-/// Gives the permanent that just entered in `slot` what it enters with, and has it remember
-/// what its spell was cast with. The kinds of counter milestone 4 (by-w8gv.7.1) moves to a
-/// store go raw, through the legacy accessor.
-fn arrive<L: Layout>(s: &mut State<L>, slot: L::Slot, entry: Entry<L>) -> Result<(), Full> {
+/// Gives the permanent that just entered in `slot` what it enters with, has it remember
+/// what its spell was cast with, and notes that it entered this turn, in a game with a card
+/// that reads that. The kinds of counter milestone 4 (by-w8gv.7.1) moves to a store go raw,
+/// through the legacy accessor.
+fn arrive<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    entry: Entry<L>,
+) -> Result<(), Full> {
+    s.track(t, Tracker::EnteredThisTurn, slot);
     let long_tail = entry
         .counters
         .filter(|&(kind, _)| Counters::is_long_tail(kind));
@@ -206,7 +213,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         }
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
-            arrive(s, slot, entry)?;
+            arrive(s, t, slot, entry)?;
         }
         sink.push(changed(s.object_ref(slot), from, dest));
     }

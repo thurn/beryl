@@ -39,8 +39,7 @@ pub(crate) fn begin_turn<L: Layout>(
     s.expire(Duration::UntilYourNextTurn(active));
     layers::refresh(s, t, sink);
     // CR 302.6: the active player's permanents have now been under their control since their
-    // most recent turn began. Nothing has entered, and no loyalty ability has been
-    // activated (CR 606.3), this turn.
+    // most recent turn began.
     s.reset_permanents_for_turn(active);
     begin_step(s, t, sink, TurnStep::Untap)
 }

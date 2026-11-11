@@ -2,7 +2,7 @@
 //! library, in slots numbered as [`Slots`] says, and moves to its zone.
 
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Memo};
+use beryl_engine::state::{CounterKind, Memo, Tracker};
 use beryl_engine::{CardIx, CardTable, GameTable, Profile, Seat, Slot, State, Zone};
 
 use crate::{Failure, Scenario};
@@ -107,6 +107,10 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
             };
             s.board().set_tapped(slot, b.tapped);
             s.board().set_sick(slot, b.sick);
+            // A scenario's permanents entered the battlefield the turn it begins in, as its
+            // setup has always had them: a permanent whose abilities are faster that turn
+            // may use them so, and the scripts recorded from scenarios stop where it may.
+            s.track(t, Tracker::EnteredThisTurn, slot);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
             let printed = s.copiable(slot).turned(b.face).face(t).loyalty;

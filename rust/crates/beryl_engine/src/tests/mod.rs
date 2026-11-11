@@ -12,6 +12,7 @@ mod mulligan;
 mod payment;
 mod replay;
 mod rules;
+mod trackers;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 

@@ -68,25 +68,20 @@ impl<L: Layout> State<L> {
             .set(ObjectFlags::SUMMONING_SICK, sick);
     }
 
-    /// The per-turn resets of every permanent as `active`'s turn begins: theirs have now been
+    /// The per-turn reset of every permanent as `active`'s turn begins: theirs have now been
     /// under their control since their most recent turn began
-    /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)), and nothing has
-    /// entered, nor has a loyalty ability been activated
-    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)), this turn. Reads each
-    /// permanent's controller, so the layer results must be current.
+    /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)). Reads each
+    /// permanent's controller, so the layer results must be current. What the Trackers store
+    /// noted of the turn before went as the turn began ([`State::begin_turn`]).
     #[inline]
     pub fn reset_permanents_for_turn(&mut self, active: Seat) {
         for i in 0..self.battlefield.len() {
             let slot = self.battlefield.as_slice()[i];
-            let controlled = self.controller(slot) == active;
-            let o = self.object_mut(slot);
-            if controlled {
-                o.flags.set(ObjectFlags::SUMMONING_SICK, false);
+            if self.controller(slot) == active {
+                self.object_mut(slot)
+                    .flags
+                    .set(ObjectFlags::SUMMONING_SICK, false);
             }
-            o.flags.set(ObjectFlags::ENTERED_THIS_TURN, false);
-            // One of the flags milestone 4 (by-w8gv.7.1) moves out, reset here so the turn's
-            // beginning walks the battlefield once.
-            o.flags.set(ObjectFlags::LOYALTY_ACTIVATED, false);
         }
     }
 

@@ -5,7 +5,7 @@ use super::cast::{Game, cast, index_of};
 use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility};
 use crate::event::{self, Reason};
 use crate::ids::Slot;
-use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone, ZoneKey};
+use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, Tracker, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{Choice, DecisionKind, Opt, Profile};
 
@@ -411,10 +411,13 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     assert_eq!(g.s.object(emperor).counters().loyalty, 4);
     g.pass_both();
     // The turn it did not enter, it is sorcery speed again.
-    g.s.board().set_entered_this_turn(emperor, false);
-    g.s.board().set_loyalty_activated(emperor, false);
+    for tracker in Tracker::ALL {
+        g.s.board().set_tracked(emperor, tracker, false);
+    }
     g.at(g.them, TurnStep::End);
+    g.choose(Choice(0));
     let d = g.current();
+    assert_eq!(d.player, g.me);
     assert!(index_of(&d, plus).is_none());
 }
 

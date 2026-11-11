@@ -51,7 +51,7 @@ use beryl_engine::card::{
     ObjectAbility, Purpose, Types,
 };
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{ObjectFlags, StackEntry};
+use beryl_engine::state::{ObjectFlags, StackEntry, Tracker};
 use beryl_engine::{
     Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat, Step,
     TurnStep, Zone, apply, next,
@@ -1807,13 +1807,7 @@ impl<L: Layout> Expert<'_, L> {
     fn removals_now(&self) -> usize {
         let walkers = self
             .permanents(self.me())
-            .filter(|&s| {
-                !self
-                    .obs()
-                    .object(s)
-                    .flags()
-                    .has(ObjectFlags::LOYALTY_ACTIVATED)
-            })
+            .filter(|&s| !self.obs().tracked(Tracker::LoyaltyActivated, s))
             .filter(|&s| {
                 let loyalty = self.obs().object(s).counters().loyalty;
                 match self.name(s) {

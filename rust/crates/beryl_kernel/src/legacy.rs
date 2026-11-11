@@ -6,7 +6,7 @@ use beryl_card::CounterKind;
 
 use crate::event::Event;
 use crate::layout::Layout;
-use crate::object::{Counters, ObjectFlags, ObjectRef};
+use crate::object::{Counters, ObjectRef};
 use crate::state::State;
 
 /// Lent by [`State::legacy_mut`]. Deleted by milestone 4 with the last of what it writes,
@@ -14,7 +14,6 @@ use crate::state::State;
 ///
 /// | Behind the accessor | Written by | Replaced by |
 /// | --- | --- | --- |
-/// | the [`ObjectFlags::LEGACY`] flag, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | a tracker of the permanent |
 /// | [`Counters`]' long-tail kind (`other_kind`, `other`) | [`Legacy::add_counters`], [`Legacy::remove_counters`], [`Legacy::set_counters`] | counter kinds generated from a list, each with its own count |
 pub struct Legacy<'a, L: Layout>(&'a mut State<L>);
 
@@ -28,14 +27,6 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> Legacy<'_, L> {
-    /// Sets or clears flags among [`ObjectFlags::LEGACY`] on an object. The layers read
-    /// none of them.
-    #[inline]
-    pub fn set_object_flags(&mut self, slot: L::Slot, flags: u32, on: bool) {
-        debug_assert_eq!(flags & !ObjectFlags::LEGACY, 0, "a flag with a mutator");
-        self.0.object_mut(slot).flags.set(flags, on);
-    }
-
     /// Puts counters of a long-tail kind on an object: [`State::add_counters`] for them.
     #[inline]
     #[must_use]
