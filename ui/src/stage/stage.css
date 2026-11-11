@@ -1,0 +1,13 @@
+/* The stage's nodes (stage/dom.ts): placed about their top-left corner by the transform the
+   stage writes, each its own compositor layer so that a rewritten transform moves it without a
+   repaint (the findings on by-w8gv.21.3: 60 frames a second at 80 nodes only with this). Time
+   on the stage is the stage clock's alone, so no node may carry a transition or an animation
+   of its own, whatever another rule says. */
+.stage-node {
+  transform-origin: 0 0;
+  transition: none !important;
+  animation: none !important;
+}
+.card-el.stage-node:not(.card-el-hidden, .card-el-rim) {
+  will-change: transform, opacity;
+}

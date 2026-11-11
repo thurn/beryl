@@ -31,7 +31,7 @@ import {
   type StopsSetting,
   type TargetRef,
 } from "../ipc";
-import { Board } from "../game/Board";
+import { Board } from "../stage/switch";
 import { FloatPrompt, PromptRow } from "../game/FloatPrompt";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, choiceSlots, floats, type Choice } from "../game/choices";

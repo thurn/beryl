@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it.",
   "shots": [
     {
       "name": "phone-main",
@@ -374,6 +374,12 @@
       "route": "/?fixture=combat-blockers#/game",
       "width": 1280,
       "height": 800
+    },
+    {
+      "name": "stage-blockers",
+      "route": "/?stage&fixture=combat-blockers#/game",
+      "width": 1600,
+      "height": 900
     },
     {
       "name": "game-declare-attack",

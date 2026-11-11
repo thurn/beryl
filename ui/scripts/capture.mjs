@@ -553,6 +553,35 @@ export async function screenFaults(page) {
     });
 }
 
+/** What a node of the stage (src/stage/dom.ts) carries that only the stage's clock may give it:
+ * a CSS transition or animation, or a Web Animation, any of which would move it on the
+ * browser's time, where no test can step it and nothing sequences it (src/stage/stage.ts).
+ * Each is described for a failure message. Nothing on a page without the stage. */
+export async function stageFaults(page) {
+    return page.evaluate(() => {
+        const faults = [];
+        const timed = (durations) =>
+            durations.split(",").some((d) => parseFloat(d) > 0);
+        for (const node of document.querySelectorAll(".stage-node")) {
+            const what = `the stage's node for slot ${node.dataset.slot}`;
+            const style = getComputedStyle(node);
+            if (
+                style.transitionProperty !== "none" &&
+                timed(style.transitionDuration)
+            ) {
+                faults.push(`${what} has a CSS transition`);
+            }
+            if (style.animationName !== "none") {
+                faults.push(`${what} has a CSS animation`);
+            }
+            if (node.getAnimations().length > 0) {
+                faults.push(`${what} has an animation running`);
+            }
+        }
+        return faults;
+    });
+}
+
 /** The controls a player can't fully reach: a button or other control a click reaches (no
  * modal covers its middle) lying partly outside the window, or overlapping another such
  * control that is neither inside it nor around it, so that a click meant for one may land on

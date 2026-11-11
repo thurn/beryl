@@ -35,7 +35,9 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   (`fixtures.json`, `beryl_cli`'s `boards.rs`), which `just ui-shots` captures
   in the states `shots.json` names. `src/generated/protocol.ts` is generated
   from `beryl_session` by ts-rs: a test fails when it is stale, and its header
-  says how to regenerate it.
+  says how to regenerate it. `src/stage/` is the stage that plays the session's
+  scripts on a clock tests can step (plan K25); it draws the table only behind
+  `?stage` until it takes the old board's place.
 - `data/`: `cards.json`, the card data `just cards` writes from Scryfall
   (printing, artist, per-face text and image URLs); `card-printings.csv`, the
   printings it pins; `oracle-divergences.json`, the scenarios where an oracle is
@@ -130,14 +132,16 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    `just oracle <card names>` checks them against XMage and Forge, `just fuzz`
    plays random games at length, and `just exhaust` plays every decision
    sequence near the scenarios' end positions.
-2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
-   states headless and prints their paths; `just ui-test` plays the game screen
-   through a fixture. Every card has a spec (`/specs/<card>`), generated from
-   its definition and scenarios, showing each of its UI moments as a live game
-   from both seats. To reproduce, debug or verify a card's behavior in the UI,
-   use the `specs` skill: `just specs --describe`, `--film`, `--motion` and
-   `--drive` show what each moment does for both players, in text, in pictures,
-   as an animation audit and under Playwright.
+2. UI: `cd ui && npm run typecheck`. `npm test` runs what needs no browser
+   (`ui/scripts/*.test.mjs`: the stage's clock and sequencing).
+   `just ui-shots [names]` screenshots UI states headless and prints their
+   paths; `just ui-test` plays the game screen through a fixture. Every card has
+   a spec (`/specs/<card>`), generated from its definition and scenarios,
+   showing each of its UI moments as a live game from both seats. To reproduce,
+   debug or verify a card's behavior in the UI, use the `specs` skill:
+   `just specs --describe`, `--film`, `--motion` and `--drive` show what each
+   moment does for both players, in text, in pictures, as an animation audit and
+   under Playwright.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
@@ -172,9 +176,9 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the
   branch left `origin/staging`: `repo` (justfile and Markdown formatting),
   `python` (black, pyre, pytest; a card or vocabulary change alone runs just the
-  scale harness's tests), `rust` (rustfmt, clippy, tests), `ui` (prettier, tsc),
-  `names` (`card-names`: no card name in generic code, held to the burn-down
-  list `data/card-names-allowlist.json`, whose counts only fall;
+  scale harness's tests), `rust` (rustfmt, clippy, tests), `ui` (prettier, tsc,
+  `npm test`), `names` (`card-names`: no card name in generic code, held to the
+  burn-down list `data/card-names-allowlist.json`, whose counts only fall;
   `python -m beryl_tools.checks card-names --shrink` lowers them) and `oracle`
   (each changed card file's scenarios in XMage and Forge, skipped when another
   oracle run holds the oracles past 10 s). For a change to `ui/` or `rust/` it

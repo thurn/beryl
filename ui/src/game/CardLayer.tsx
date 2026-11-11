@@ -1050,8 +1050,8 @@ function cardSurface(object: ObjectView, back: boolean) {
   return object.name === null ? "back" : `face:${object.name}`;
 }
 
-/** The card itself, as its placement draws it. */
-function Look({
+/** The card itself, as its placement draws it: here, and on the stage (stage/Faces.tsx). */
+export function Look({
   object,
   place,
   state,
@@ -1059,7 +1059,7 @@ function Look({
   instantSize = false,
 }: {
   object: ObjectView;
-  place: Placement;
+  place: Pick<Placement, "look" | "width" | "count">;
   state: CardState;
   /** A copy drawn over the card's element: the element keeps the id arrows find it by. */
   ghost?: boolean;
