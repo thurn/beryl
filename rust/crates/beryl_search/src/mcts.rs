@@ -287,10 +287,8 @@ impl<L: Layout> Mcts<L> {
         // with no memory of or relation to its previous existence", so a new incarnation is
         // a zone change.
         for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
-            let o = obs.object(slot);
-            if obs.knows(slot) != knew
-                || (o.incarnation() != incarnation && kept.moves != Some(slot))
-            {
+            let now = obs.object(slot).incarnation();
+            if obs.knows(slot) != knew || (now != incarnation && kept.moves != Some(slot)) {
                 return None;
             }
         }

@@ -1759,10 +1759,9 @@ impl<L: Layout> Agent<L> for Scripted {
         let next = self.script.front().map(|&(_, a, _)| a);
         // An action waits for the other seat's actions before it: a response is cast once
         // what it answers is on the stack. It waits for its turn and step too.
-        let turn = s.turn();
+        let now = (s.turn().number(), s.turn().step());
         let due = self.script.front().is_some_and(|&(at, _, gate)| {
-            lock(&self.progress).taken >= at
-                && gate.is_none_or(|g| (turn.number(), turn.step()) >= g)
+            lock(&self.progress).taken >= at && gate.is_none_or(|g| now >= g)
         });
         // A "may" its script answers that the session folds into the question it leads to (a
         // search's choice, with Done to find nothing): a yes is the choice itself, a no is Done.

@@ -11,7 +11,7 @@
   "rust/crates/beryl_engine/src/engine.rs": 834,
   "rust/crates/beryl_engine/src/mana.rs": 1586,
   "rust/crates/beryl_scenario/src/run.rs": 972,
-  "rust/crates/beryl_search/src/mcts.rs": 903,
+  "rust/crates/beryl_search/src/mcts.rs": 902,
   "rust/crates/beryl_search/src/rollout.rs": 1175,
   "rust/crates/beryl_session/src/bugs.rs": 838,
   "rust/crates/beryl_session/src/game.rs": 2225,

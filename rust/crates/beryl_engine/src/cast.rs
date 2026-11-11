@@ -795,10 +795,7 @@ fn activatable<L: Layout>(
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if a.cost
-        .remove
-        .is_some_and(|kind| o.counters().get(kind) == 0)
-    {
+    if a.cost.remove.is_some_and(|kind| o.counters_of(kind) == 0) {
         return false;
     }
     let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {

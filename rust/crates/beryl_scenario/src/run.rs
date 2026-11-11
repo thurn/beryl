@@ -549,13 +549,10 @@ impl Runner {
                 (format!("{actual:?}"), format!("{top:?}"))
             }
             Assertion::Mana {
-                player,
+                player: p,
                 color,
                 amount,
-            } => (
-                s.player(player).mana()[color].to_string(),
-                amount.to_string(),
-            ),
+            } => (s.player(p).mana()[color].to_string(), amount.to_string()),
             Assertion::Decision {
                 player,
                 kind,
