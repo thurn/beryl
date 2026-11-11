@@ -2,11 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SoundPanel } from "../audio/SoundControls";
 import { cardEntry, useCardRecords } from "../cards";
 import { Button } from "../components/Controls";
-import type { CardRecords, DecisionId, GameUpdate, RelayedEvent } from "../ipc";
+import type { DecisionId, GameUpdate, RelayedEvent } from "../ipc";
+import { API, post, specCards } from "./specApi";
 import "./testing.css";
-
-/** Where Vite proxies the spec server (vite.config.ts). */
-const API = "/spec-api";
 
 interface MomentListing {
   name: string;
@@ -31,18 +29,6 @@ interface SpecListing {
   momentReports?: Record<string, number>;
 }
 
-/** A spec server answer: `{ok}` or `{err}`, as `serve`'s commands answer. */
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const answer = (await r.json()) as { ok?: T; err?: { message?: string } };
-  if ("err" in answer) throw new Error(answer.err?.message ?? "refused");
-  return answer.ok as T;
-}
-
 function useSpecs(): SpecListing[] | string | undefined {
   const [specs, setSpecs] = useState<SpecListing[] | string>();
   useEffect(() => {
@@ -55,10 +41,6 @@ function useSpecs(): SpecListing[] | string | undefined {
   }, []);
   return specs;
 }
-
-/** The card store's records for `names`, which the spec server answers as the app does. */
-const specCards = (names: string[]) =>
-  post<CardRecords>("/invoke/card_records", { request: { names } });
 
 /** A card's image, straight from Scryfall, once its record is cached (`useCardRecords`). */
 function CardImage({ name, className }: { name: string; className?: string }) {
