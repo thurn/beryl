@@ -21,7 +21,8 @@
 /* A card that is tapping or untapping (stage/tracks.ts `turned`): the node is dressed as its
    record now says, the frame a quarter round in its slot or upright (components/Card.tsx), and
    the stage says how far the frame has yet to turn, about its own middle as the skin turns it.
-   The slot's marks (an attacker's chevron) stay as they are. */
-.stage-node .card-slot > .card {
-  rotate: var(--turn, 0deg);
+   The slot's marks (an attacker's chevron) stay as they are. Only a node that is turning
+   carries the rule: a `rotate` of nothing would still make every card a stacking context. */
+.stage-node[data-turning] .card-slot > .card {
+  rotate: var(--turn);
 }

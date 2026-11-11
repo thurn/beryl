@@ -174,6 +174,14 @@ async function walk({ tick, gap, answers, middle, whole }) {
         if (turn !== (pose.turn ? `${pose.turn}deg` : "")) {
             return `has its card turned ${turn || "not at all"}`;
         }
+        // And the browser draws it so: the stage's rule reaches the card (stage.css).
+        const card = pose.turn && node.querySelector(".card-slot > .card");
+        if (card) {
+            const drawn = parseFloat(getComputedStyle(card).rotate);
+            if (!near(drawn, pose.turn, 0.01)) {
+                return `has its card drawn turned ${drawn} of ${pose.turn}`;
+            }
+        }
         // A node dressed with its card's name shows its face (src/stage/dom.ts), but for a
         // face-down permanent its controller knows, which is named and shows its back.
         if (pose.face === "back" && node.dataset.card && !down) {

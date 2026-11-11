@@ -154,12 +154,15 @@ export class DomSurface implements Surface {
   }
 
   draw(name: Name, pose: Pose, frame: number) {
-    const style = this.#nodes.get(name)?.style;
-    if (!style) return;
+    const node = this.#nodes.get(name);
+    const style = node?.style;
+    if (!node || !style) return;
     style.transform = transformOf(pose, frame);
     style.opacity = String(pose.opacity);
     style.zIndex = String(Math.round(pose.depth));
-    // The card inside is turned by the skin's rule for it (stage.css).
-    style.setProperty("--turn", turnOf(pose));
+    // The card inside is turned by the stage's rule for it (stage.css), only while it turns.
+    const turn = turnOf(pose);
+    style.setProperty("--turn", turn);
+    node.toggleAttribute("data-turning", turn !== "");
   }
 }
