@@ -14,6 +14,7 @@ use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
 use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
+use beryl_session::script::{Mark, Subject};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, Seat, SessionId, StartGame, Status, StopsSetting,
 };
@@ -659,15 +660,20 @@ fn smart_damage_takes_the_only_lethal_outcome_and_defaults_real_choices() {
                         .map_or(CandidateIndex(0), |i| CandidateIndex(i as u16)),
                     Kind::DamageDivision => {
                         asked = true;
-                        let preferred = decision.damage_default.expect("a recommended blocker");
-                        let Candidate::Lethal { slot } =
-                            decision.candidates[preferred.0 as usize].option
-                        else {
-                            panic!("the recommendation must deal lethal damage");
+                        // The prompt marks the blocker the session would take as suggested.
+                        let suggested = (decision.prompt.marks.iter())
+                            .find(|marked| marked.mark == Mark::Suggested)
+                            .expect("a recommended blocker");
+                        let Subject::Object { slot } = suggested.on else {
+                            panic!("the recommendation must be a blocker");
                         };
                         assert!(view.objects.iter().any(|object| {
                             object.slot == slot && object.name.as_deref() == small
                         }));
+                        let preferred = (decision.candidates.iter())
+                            .position(|c| c.option == Candidate::Lethal { slot })
+                            .map(|i| CandidateIndex(i as u16))
+                            .expect("the recommendation deals lethal damage");
                         if stops.full_control {
                             let done = &decision.candidates[0].option;
                             assert_eq!(*done, Candidate::Done);

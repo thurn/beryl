@@ -1,11 +1,9 @@
 //! Which lands an "untap up to N lands" opens with picked.
 
-use beryl_engine::card::{AbilityKind, Purpose, Types};
-use beryl_engine::{
-    Layout, Profile, Refusal, Replay, Scratch, Seat, SlotId as _, State, Step as Played, Stops,
-    Zone, ZoneKey, apply, next, observe, refusal,
-};
+use beryl_engine::card::{AbilityKind, Purpose};
+use beryl_engine::{Layout, Replay, Scratch, Seat, SlotId as _, Step as Played, apply, next};
 
+use crate::prompt::ahead::{self, forced};
 use crate::prompt::held::{Run, Step, Table, Want};
 use crate::protocol::Side;
 use crate::script::Subject;
@@ -97,9 +95,8 @@ fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, picks: &[u16]) -> usi
     let Some(mut d) = table.d.cloned() else {
         return 0;
     };
-    let (shown, t) = (table.shown, table.t);
-    let held = shown.zone(ZoneKey::Of(viewer, Zone::Hand));
-    let mut copy = stopping_everywhere(table.s);
+    let t = table.t;
+    let mut copy = forced(table.s);
     let mut scratch = Scratch::new();
     let mut run = Run::new(
         Purpose::Untap,
@@ -118,24 +115,5 @@ fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, picks: &[u16]) -> usi
             _ => break,
         }
     }
-    let after = copy.zone(ZoneKey::Of(viewer, Zone::Hand));
-    let obs = observe(&copy, t, &mut scratch, viewer);
-    (shown.in_candidate_order(held))
-        .filter(|&slot| {
-            after.contains(slot)
-                && !shown.copiable(slot).face(t).types.intersects(Types::LAND)
-                && matches!(refusal(obs, t, slot), None | Some(Refusal::Target))
-        })
-        .count()
-}
-
-/// A copy of `s` in which every priority comes back as a decision, so that play stops as
-/// soon as the untap is done.
-fn stopping_everywhere<L: Layout>(s: &State<L>) -> State<L> {
-    let mut copy = s.clone();
-    copy.set_profile(Profile {
-        stops: Stops::Forced,
-        ..s.profile()
-    });
-    copy
+    ahead::castable(table, viewer, &copy)
 }

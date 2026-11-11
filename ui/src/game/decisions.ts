@@ -315,6 +315,23 @@ export function warnedTarget(
     );
 }
 
+/** The pick the session suggests in a division of combat damage: the candidate that deals
+ * lethal damage to the blocker its prompt marks as suggested. None under full control, where
+ * the player makes each pick. */
+export function suggestedDamage(
+  decision: DecisionView,
+  fullControl: boolean,
+): CandidateIndex | undefined {
+  if (fullControl) return undefined;
+  const slot = decision.prompt.marks.flatMap((m) =>
+    m.mark === "suggested" && m.on.kind === "object" ? [m.on.slot] : [],
+  )[0];
+  const index = decision.candidates.findIndex(
+    (c) => c.option.kind === "lethal" && c.option.slot === slot,
+  );
+  return index < 0 ? undefined : index;
+}
+
 /** The combat declarations: made on the board, finished with the turn button. */
 export const isCombat = (kind: Kind) =>
   kind === "attacker" ||

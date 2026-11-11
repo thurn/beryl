@@ -345,10 +345,6 @@ export type DecisionView = {
  */
 waterbend?: WaterbendPreview, 
 /**
- * The recommended lethal pick in a combat damage division.
- */
-damageDefault?: CandidateIndex, 
-/**
  * What an answer names.
  */
 id: DecisionId, kind: Kind, candidates: Array<CandidateView>, 

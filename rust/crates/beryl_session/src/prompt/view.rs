@@ -189,7 +189,8 @@ pub enum ButtonId {
     /// Answers with what the player has put together.
     Confirm,
     /// Answers with nothing: pass priority, find nothing, no attackers. Where the prompt asks
-    /// about a pick before it answers ([`ShapeView::Pick`]'s `warned`), it takes the pick back.
+    /// about a pick before it answers ([`ShapeView::Pick`]'s `warned`), it takes the pick back;
+    /// on the choice among a card's ways, open over a priority, it goes back to the priority.
     Decline,
     /// Answers with what the marks suggest, as Auto Pay does.
     Auto,
@@ -389,8 +390,9 @@ pub struct ClickRequest {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ClickReply {
     /// The prompt goes on, in this state. A click that does nothing returns the state it was
-    /// made on. A click that opens another prompt over this one returns that prompt: a card
-    /// with several ways to use it, clicked at a priority, opens the choice among them.
+    /// made on. A click that opens another prompt over this one returns that prompt, as the
+    /// next state: a card with several ways to use it, clicked at a priority, opens the choice
+    /// among them, and the button that closes it returns the priority's prompt.
     Open { prompt: Box<PromptView> },
     /// The click answered the prompt: the session has sent the engine its picks, and the
     /// game's next views arrive as updates, as after any answer.

@@ -62,7 +62,6 @@ impl Game {
         let prompt = Box::new(held.view().clone());
         Ok(match clicked {
             Clicked::Same | Clicked::Changed => ClickReply::Open { prompt },
-            Clicked::Opens(prompt) => ClickReply::Open { prompt },
             Clicked::PassesOn => {
                 self.pass_on(open.pass_on(id)?);
                 ClickReply::Answered
@@ -81,7 +80,7 @@ impl Game {
                 self.choose(Answer {
                     id,
                     choice,
-                    continuation: false,
+                    continuation: run.continues(),
                 });
                 self.run = run.over(waiting).rest();
                 ClickReply::Answered

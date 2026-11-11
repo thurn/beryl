@@ -421,7 +421,8 @@ not a mark.
   clicked attacker and a chosen blocker turn gold (SswBO8aOOgc 33:30.5,
   UrGalw_f35w 42:50.0).
 - **suggested.** The offered default would use it: a permanent Auto Pay would
-  tap. An ember ring. Not seen in Arena.
+  tap, the blocker the session would deal lethal damage to next. An ember ring.
+  Not seen in Arena.
 - **paying.** Picked to pay a cost. The permanent turns and carries a tap mark,
   with no outline. Not seen in Arena.
 - **friendly-target.** A target its chooser controls. A green outline, by

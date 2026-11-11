@@ -11,14 +11,20 @@
 
 use beryl_cards::CARDS;
 use beryl_engine::layout::Queue as _;
-use beryl_engine::{Candidates, Choice, Decision, Layout, Observation, Opt, Seat};
+use beryl_engine::{
+    Candidates, Choice, Decision, GameTable, Layout, Observation, Opt, Replay, Scratch, Seat,
+    State, Step, next,
+};
 use beryl_scenario::Scenario;
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
-use beryl_session::protocol::{Candidate, DecisionView, ObjectView, Side, ZoneName};
+use beryl_session::protocol::{
+    Candidate, DecisionView, Moment, ObjectView, Side, ZoneName, player_view,
+};
 use beryl_session::script::Subject;
 use beryl_session::{
-    CandidateIndex, Game, PlayerView, Prepared, SessionId, StartGame, Status, StopsSetting,
+    CandidateIndex, DecisionId, Game, PlayerView, Prepared, SessionId, StartGame, Status,
+    StopsSetting,
 };
 
 pub const SESSION: SessionId = SessionId(1);
@@ -42,6 +48,33 @@ pub fn cards(slots: &[u16]) -> String {
     cards.join(" ")
 }
 
+/// `scenario`'s position played to its first decision, for a prompt held apart from a game
+/// ([`Held::opening`](beryl_session::prompt::Held::opening)): a shape no card asks yet is
+/// tested from a decision built by hand in such a position.
+pub fn position(scenario: &Scenario) -> (GameTable, State) {
+    let (table, mut state) = beryl_scenario::position(&CARDS, scenario).unwrap();
+    let mut scratch = Scratch::new();
+    let Step::Decide(_) = next(&mut state, &table, &mut scratch, &mut Replay) else {
+        panic!("the scenario ends before a decision");
+    };
+    (table, state)
+}
+
+/// The view of `state`, in which `d` is put to the first player, as their seat is sent it.
+pub fn asked(table: &GameTable, state: &State, d: &Decision) -> PlayerView {
+    let id = DecisionId {
+        session: SESSION,
+        seq: 1,
+    };
+    player_view(
+        table,
+        Observation::new(state, Seat::P0),
+        Moment::Deciding(id, d, None),
+        StopsSetting::SMART,
+        &[],
+    )
+}
+
 impl Play {
     /// `scenario`'s position with the first player the human, under the smart stops, played
     /// to their first decision. The other seat is the random agent, seeded the same each
@@ -52,6 +85,15 @@ impl Play {
 
     /// [`Play::scenario`] against `opponent`, or the random agent.
     pub fn against(scenario: &Scenario, opponent: Option<Box<dyn GameAgent + Send>>) -> Play {
+        Play::with(scenario, opponent, StopsSetting::SMART)
+    }
+
+    /// [`Play::against`] under `stops`.
+    pub fn with(
+        scenario: &Scenario,
+        opponent: Option<Box<dyn GameAgent + Send>>,
+        stops: StopsSetting,
+    ) -> Play {
         let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
         let random = beryl_search::agent("random").unwrap();
         let game = Game::prepared(
@@ -63,7 +105,7 @@ impl Play {
                 table,
                 state,
                 human: Seat::P0,
-                stops: StopsSetting::SMART,
+                stops,
             },
             SESSION,
         );
@@ -106,10 +148,7 @@ impl Play {
         match self.game.click(request).unwrap() {
             ClickReply::Open { prompt } => {
                 let text = prompt.to_string();
-                // A prompt opened over this one is not this one's state.
-                if let Status::Deciding { decision } = &mut self.view.status
-                    && decision.prompt.purpose == prompt.purpose
-                {
+                if let Status::Deciding { decision } = &mut self.view.status {
                     decision.prompt = prompt;
                 }
                 Some(text)
@@ -134,6 +173,16 @@ impl Play {
     /// Answers the open decision with the candidate `wanted` names, as a UI that holds the
     /// prompt's state itself does, and plays on to the human's next decision.
     pub fn choose(&mut self, wanted: impl Fn(&Candidate) -> bool) {
+        self.answer(wanted, false);
+    }
+
+    /// [`Play::choose`], as the continuation of the answer before: what such a UI sends for
+    /// the picks it plans after a cast's own.
+    pub fn follow(&mut self, wanted: impl Fn(&Candidate) -> bool) {
+        self.answer(wanted, true);
+    }
+
+    fn answer(&mut self, wanted: impl Fn(&Candidate) -> bool, continuation: bool) {
         let decision = self.decision();
         let index = (decision.candidates.iter())
             .position(|c| wanted(&c.option))
@@ -141,7 +190,11 @@ impl Play {
         let answer = (self.game)
             .answer(decision.id, CandidateIndex(index as u16))
             .unwrap();
-        self.game.choose(answer);
+        self.game.choose(if continuation {
+            answer.as_continuation()
+        } else {
+            answer
+        });
         self.view = to_human(&mut self.game);
     }
 

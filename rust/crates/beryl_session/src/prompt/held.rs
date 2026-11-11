@@ -15,16 +15,21 @@ use beryl_engine::{
     interchangeable,
 };
 
+use super::catalog::Catalog;
+use super::divide::Divide;
+use super::mode::Mode;
+use super::number::Number;
 use super::order::Order;
 use super::pick::Pick;
 use super::split::Split;
-use super::{Click, Lies, PromptView, ShapeName};
+use super::yes_no::YesNo;
+use super::{ButtonId, Click, Lies, PromptButton, PromptView, ShapeName};
 use crate::protocol::{Candidate, DecisionView, ObjectView, PlayerView, Side, Status, ZoneName};
 use crate::script::Subject;
 
 /// The open prompt's state.
 #[derive(Clone, Debug)]
-pub(crate) struct Held {
+pub struct Held {
     /// The prompt as its seat was last sent it: the record and its words, and the state the
     /// shape gives it.
     view: PromptView,
@@ -37,11 +42,16 @@ enum Shaped {
     Pick(Pick),
     Order(Order),
     Split(Split),
+    YesNo(YesNo),
+    Number(Number),
+    Mode(Mode),
+    Catalog(Catalog),
+    Divide(Divide),
 }
 
 /// What a click did to the prompt it was made on.
 #[derive(Debug)]
-pub(crate) enum Clicked {
+pub enum Clicked {
     /// Nothing: the prompt has no use for it.
     Same,
     /// The prompt's state changed.
@@ -50,8 +60,6 @@ pub(crate) enum Clicked {
     Answers(Run),
     /// It passes priority on to the viewer's next stop ([`crate::Game::pass_on`]).
     PassesOn,
-    /// It opens this prompt over the one clicked, whose state the session does not hold yet.
-    Opens(Box<PromptView>),
 }
 
 impl Held {
@@ -80,7 +88,13 @@ impl Held {
             ShapeName::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
             ShapeName::Order => Shaped::Order(Order::open(&table, decision)?),
             ShapeName::Split => Shaped::Split(Split::open(&table, decision)?),
-            _ => return None,
+            ShapeName::YesNo => Shaped::YesNo(YesNo::open(&table, purpose, decision)?),
+            ShapeName::Number => Shaped::Number(Number::open(purpose, decision)?),
+            ShapeName::Mode => Shaped::Mode(Mode::open(purpose, decision)),
+            ShapeName::Catalog => Shaped::Catalog(Catalog::open(purpose, decision)?),
+            ShapeName::Divide => Shaped::Divide(Divide::open(purpose, decision)?),
+            // Paying with permanents and combat's declarations are still a UI's to hold.
+            ShapeName::Pay | ShapeName::Declare => return None,
         };
         let mut held = Held {
             view: (*decision.prompt).clone(),
@@ -90,17 +104,37 @@ impl Held {
         Some(held)
     }
 
+    /// The state the prompt of `view`'s open decision opens in, if the session holds its
+    /// shape's: `view` is a view of the game `s` at its viewer's decision `d`, or none at a
+    /// halt. A game makes its own as it draws a decision's view; this one is for a decision
+    /// put together by hand, as a test of a shape no card asks yet builds one.
+    pub fn opening<L: Layout>(
+        view: &PlayerView,
+        s: &State<L>,
+        t: &GameTable,
+        d: Option<&Decision<L>>,
+    ) -> Option<Held> {
+        let mut scratch = Scratch::new();
+        let shown = beryl_engine::view(s, t, &mut scratch);
+        Held::open(s, shown, t, d, view)
+    }
+
     /// The prompt's whole state now.
-    pub(crate) fn view(&self) -> &PromptView {
+    pub fn view(&self) -> &PromptView {
         &self.view
     }
 
     /// Takes `click` and says what it did. A change counts a revision.
-    pub(crate) fn click(&mut self, click: Click) -> Clicked {
+    pub fn click(&mut self, click: Click) -> Clicked {
         let clicked = match &mut self.shape {
             Shaped::Pick(pick) => pick.click(click),
             Shaped::Order(order) => order.click(click),
             Shaped::Split(split) => split.click(click),
+            Shaped::YesNo(yes_no) => yes_no.click(click),
+            Shaped::Number(number) => number.click(click),
+            Shaped::Mode(mode) => mode.clicked(click),
+            Shaped::Catalog(catalog) => catalog.click(click),
+            Shaped::Divide(divide) => divide.click(click),
         };
         if matches!(clicked, Clicked::Changed) {
             self.view.revision += 1;
@@ -123,6 +157,11 @@ impl Held {
             Shaped::Pick(pick) => pick.show(&mut self.view),
             Shaped::Order(order) => order.show(&mut self.view),
             Shaped::Split(split) => split.show(&mut self.view),
+            Shaped::YesNo(yes_no) => yes_no.show(&mut self.view),
+            Shaped::Number(number) => number.show(&mut self.view),
+            Shaped::Mode(mode) => mode.show(&mut self.view),
+            Shaped::Catalog(catalog) => catalog.show(&mut self.view),
+            Shaped::Divide(divide) => divide.show(&mut self.view),
         }
     }
 }
@@ -137,9 +176,7 @@ pub fn add_opening_state<L: Layout>(
     t: &GameTable,
     d: Option<&Decision<L>>,
 ) {
-    let mut scratch = Scratch::new();
-    let shown = beryl_engine::view(s, t, &mut scratch);
-    if let Some(held) = Held::open(s, shown, t, d, view)
+    if let Some(held) = Held::opening(view, s, t, d)
         && let Status::Deciding { decision } = &mut view.status
     {
         *decision.prompt = held.view;
@@ -249,11 +286,13 @@ pub(crate) fn offered(decision: &DecisionView) -> Vec<u16> {
 /// The picks that answer a prompt, in the engine's order, still to be made: the first answers
 /// the open decision, and each one after it the decision of the same prompt that arrives next.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Run {
+pub struct Run {
     purpose: Purpose,
     steps: VecDeque<Step>,
     /// The run goes on after a choice of targets asked between its picks.
     waits: bool,
+    /// The run's first pick continues the answer before it.
+    continues: bool,
     /// The run that waits for this one to end: this one answers a prompt opened between that
     /// one's picks.
     under: Option<Box<Run>>,
@@ -297,6 +336,7 @@ impl Run {
             purpose,
             steps: steps.into_iter().collect(),
             waits: false,
+            continues: false,
             under: None,
         }
     }
@@ -312,6 +352,22 @@ impl Run {
         self
     }
 
+    /// The run's first pick continues the answer before it, where that answer began a cast:
+    /// what a spell is cast with is announced as part of casting it
+    /// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has a
+    /// variable cost that will be paid as it's being cast (such as an {X} in its mana cost; see
+    /// rule 107.3), the player announces the value of that variable"), so the choice log
+    /// records it as that answer's continuation and one undo takes back the cast with it.
+    pub(crate) fn continuing(mut self) -> Run {
+        self.continues = true;
+        self
+    }
+
+    /// Whether the run's first pick continues the answer before it ([`Run::continuing`]).
+    pub(crate) fn continues(&self) -> bool {
+        self.continues
+    }
+
     /// This run over `waiting`, a run waiting through the prompt this one answers.
     pub(crate) fn over(mut self, waiting: Option<Run>) -> Run {
         self.under = waiting.map(Box::new);
@@ -320,7 +376,7 @@ impl Run {
 
     /// The run with picks still to make: this one, or once it has made its own, the one
     /// that waited for it.
-    pub(crate) fn rest(self) -> Option<Run> {
+    pub fn rest(self) -> Option<Run> {
         if self.steps.is_empty() {
             self.under.and_then(|under| under.rest())
         } else {
@@ -337,7 +393,7 @@ impl Run {
     /// belongs to the run's prompt and a step answers it. A step the engine did not ask,
     /// having one answer left (architecture §7.2), is passed over. With no answer the run is
     /// over, unless it waits through `d`: the decision opens as a prompt of its own.
-    pub(crate) fn answer<L: Layout>(&mut self, s: &State<L>, d: &Decision<L>) -> Option<Choice> {
+    pub fn answer<L: Layout>(&mut self, s: &State<L>, d: &Decision<L>) -> Option<Choice> {
         if d.prompt.purpose != self.purpose {
             if self.waits_through(d) {
                 return None;
@@ -363,7 +419,7 @@ impl Run {
 }
 
 /// The candidates of `d` in the order a [`Choice`] counts them, each as an option.
-fn options<L: Layout>(d: &Decision<L>) -> Vec<Opt<L>> {
+pub(crate) fn options<L: Layout>(d: &Decision<L>) -> Vec<Opt<L>> {
     match &d.candidates {
         Candidates::Objects(_) => d.candidates.objects().map(Opt::Object).collect(),
         Candidates::Options(options) => options.iter().copied().collect(),
@@ -429,10 +485,13 @@ impl Step {
     }
 }
 
-/// The candidate among `options`, those of `d`, that names `on` itself.
+/// The candidate among `options`, those of `d`, that names `on` itself: an object offered, or
+/// a blocker offered to be dealt lethal damage.
 fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject) -> Option<usize> {
     options.iter().position(|&o| match (o, on) {
-        (Opt::Object(slot), Subject::Object { slot: wanted }) => slot.num() == wanted,
+        (Opt::Object(slot) | Opt::Lethal(slot), Subject::Object { slot: wanted }) => {
+            slot.num() == wanted
+        }
         // The player deciding is the viewer.
         (Opt::Player(player), Subject::Player { player: wanted }) => {
             (player == d.player) == (wanted == Side::You)
@@ -448,7 +507,18 @@ fn alike<L: Layout>(s: &State<L>, options: &[Opt<L>], on: Subject) -> Option<usi
         return None;
     };
     let wanted = L::Slot::from_num(slot)?;
-    options
-        .iter()
-        .position(|&o| matches!(o, Opt::Object(slot) if interchangeable(s, slot, wanted)))
+    options.iter().position(
+        |&o| matches!(o, Opt::Object(slot) | Opt::Lethal(slot) if interchangeable(s, slot, wanted)),
+    )
+}
+
+/// A button with no caption.
+pub(crate) fn button(id: ButtonId, label: &str, enabled: bool, primary: bool) -> PromptButton {
+    PromptButton {
+        id,
+        label: label.to_owned(),
+        caption: String::new(),
+        enabled,
+        primary,
+    }
 }

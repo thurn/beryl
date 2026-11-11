@@ -58,8 +58,8 @@ pub(crate) fn halt_prompt() -> PromptView {
 }
 
 /// The choice among the ways to use the card in `slot`, named `name` if the viewer knows it,
-/// which a click on it opens over a priority (`Purpose::Act`). The session does not hold its
-/// state yet: it arrives as any prompt whose state a UI holds, with no buttons.
+/// which a click on it opens over a priority (`Purpose::Act`), before its state: its buttons
+/// are the ways ([`Mode::act`](super::mode::Mode::act)).
 pub(crate) fn act_prompt(slot: u16, name: Option<&str>) -> PromptView {
     let holes = Holes {
         name,

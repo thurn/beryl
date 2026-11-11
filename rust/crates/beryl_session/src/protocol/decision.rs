@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{CandidateIndex, DecisionId, Kind, Mana, Side, StackItem, Step, TargetRef};
+use super::{DecisionId, Kind, Mana, Side, StackItem, Step, TargetRef};
 use crate::prompt::PromptView;
 
 /// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
@@ -14,10 +14,6 @@ pub struct DecisionView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub waterbend: Option<Box<crate::ipc::WaterbendPreview>>,
-    /// The recommended lethal pick in a combat damage division.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub damage_default: Option<CandidateIndex>,
     /// What an answer names.
     pub id: DecisionId,
     pub kind: Kind,

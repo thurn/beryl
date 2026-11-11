@@ -4,8 +4,9 @@
 //! a choice among permanents and a choice of cards from a hand, a library or a graveyard
 //! (`zone.rs`) are picks of objects ([`Objects`]): each click picks or unpicks one, and the
 //! prompt answers by a button, or by the click itself where one object on the table is all it
-//! takes.
+//! takes. A division of combat damage is a pick of the blockers that die ([`Damage`]).
 
+mod damage;
 mod priority;
 mod untap;
 mod zone;
@@ -13,8 +14,9 @@ mod zone;
 use beryl_engine::card::{Part, Purpose};
 use beryl_engine::{Layout, target_removes_permanent};
 
+use self::damage::Damage;
 use self::priority::Priority;
-use super::held::{Clicked, Run, Step, Table, Want, offered};
+use super::held::{Clicked, Run, Step, Table, Want, button, offered};
 use super::wording::{AIMED, Holes, OWN_TARGET, Wording};
 use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeName, ShapeView};
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
@@ -27,8 +29,9 @@ const ON_THE_TABLE: usize = 5;
 /// The state of a prompt of the pick shape.
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
-    Priority(Priority),
+    Priority(Box<Priority>),
     Objects(Box<Objects>),
+    Damage(Damage),
 }
 
 impl Pick {
@@ -44,7 +47,10 @@ impl Pick {
             return None;
         }
         match (purpose, prompt.part) {
-            (Purpose::Priority, _) => Some(Pick::Priority(Priority::open(table, decision))),
+            (Purpose::Priority, _) => {
+                Some(Pick::Priority(Box::new(Priority::open(table, decision))))
+            }
+            (Purpose::CombatDamage, _) => Damage::open(table, decision).map(Pick::Damage),
             (Purpose::Target, PartName::Count | PartName::Pick) => {
                 Some(Pick::Objects(Box::new(Objects::targets(table, decision))))
             }
@@ -71,6 +77,7 @@ impl Pick {
         match self {
             Pick::Priority(priority) => priority.click(click),
             Pick::Objects(objects) => objects.click(click),
+            Pick::Damage(damage) => damage.click(click),
         }
     }
 
@@ -85,6 +92,7 @@ impl Pick {
         match self {
             Pick::Priority(priority) => priority.show(view),
             Pick::Objects(objects) => objects.show(view),
+            Pick::Damage(damage) => damage.show(view),
         }
     }
 }
@@ -519,14 +527,4 @@ fn with_stand_ins<L: Layout>(table: &Table<'_, L>, eligible: &mut Vec<Subject>) 
         })
         .collect();
     eligible.extend((table.stand_ins(&offered).into_iter()).map(|(stand_in, _)| card(stand_in)));
-}
-
-fn button(id: ButtonId, label: &str, enabled: bool, primary: bool) -> PromptButton {
-    PromptButton {
-        id,
-        label: label.to_owned(),
-        caption: String::new(),
-        enabled,
-        primary,
-    }
 }

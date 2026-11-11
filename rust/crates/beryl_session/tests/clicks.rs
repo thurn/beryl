@@ -70,10 +70,19 @@ fn a_priority_is_answered_by_a_click_on_a_card_or_its_pass_button() {
     assert_eq!(play.prompt(), open);
     // A card with nothing to do changes nothing.
     assert_eq!(play.on(counterspell).as_deref(), Some(open.as_str()));
-    // The Tundra makes white or blue: two ways, so the choice among them opens, under its
-    // name. The session does not hold that prompt's state yet.
-    assert_eq!(play.on(tundra).as_deref(), Some("mode act: Choose One\n"));
-    assert_eq!(play.prompt(), open, "the priority is as it was");
+    // The Tundra makes white or blue: two ways, so the choice among them opens over the
+    // priority (tests/modes.rs), and its cancel button goes back.
+    let ways = play.on(tundra).expect("the choice opens");
+    assert!(ways.starts_with(&format!("mode act: Choose One\nabout #{tundra}\n")));
+    assert!(
+        ways.ends_with("[Tap Tundra for {U}] decline[Cancel]\n"),
+        "{ways}"
+    );
+    assert_eq!(
+        play.press(ButtonId::Decline).as_deref(),
+        Some(open.as_str()),
+        "the priority is as it was"
+    );
 
     // The second Island in hand stands for the first, which the engine offers for both
     // (architecture §7.2): the click plays a land, as picking the candidate does.
@@ -769,6 +778,12 @@ fn a_save_made_through_clicks_replays() {
         if prompt.state.is_none() {
             // A prompt whose state the session does not hold yet: its first candidate.
             play.choose(|_| true);
+            continue;
+        }
+        let first = ButtonId::Option { index: 0 };
+        if prompt.buttons.iter().any(|button| button.id == first) {
+            // An answer offered as buttons, as the opening's are: the first.
+            assert_eq!(play.press(first), None);
             continue;
         }
         // At a priority: cast a Time Spiral, or play an Island, or pass.

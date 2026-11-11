@@ -53,16 +53,23 @@
 //! left it. A click names the state it was made on and is refused on any other; one on a
 //! prompt whose state the session does not hold is refused too.
 //!
-//! One module holds each shape's state (`pick.rs`, `order.rs`, `split.rs`): what it opens
-//! as, what each click does to it, the marks and buttons it shows, and the picks it answers
-//! with.
+//! One module holds each shape's state (`pick.rs`, `order.rs`, `split.rs`, `yes_no.rs`,
+//! `number.rs`, `mode.rs`, `catalog.rs`, `divide.rs`): what it opens as, what each click does
+//! to it, the marks and buttons it shows, and the picks it answers with. What a prompt opens
+//! with that only the engine can say is found by playing answers ahead on a copy of the game
+//! (`ahead.rs`).
 //!
 //! # Text
 //!
 //! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
 //! expectations of tests (plan K24).
 
+mod ahead;
+mod catalog;
+mod divide;
 mod held;
+mod mode;
+mod number;
 mod open;
 mod order;
 mod pick;
@@ -70,9 +77,9 @@ mod split;
 mod text;
 mod view;
 mod wording;
+mod yes_no;
 
-pub use held::add_opening_state;
-pub(crate) use held::{Clicked, Held, Run};
+pub use held::{Clicked, Held, Run, add_opening_state};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use order::trigger_to_stack;
 pub use view::{

@@ -5,6 +5,7 @@ use beryl_engine::card::Purpose;
 
 use super::button;
 use crate::prompt::held::{Clicked, Run, Step, Table};
+use crate::prompt::mode::{Chosen, Mode};
 use crate::prompt::open::act_prompt;
 use crate::prompt::wording::{PassLeads, pass_words};
 use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeView};
@@ -24,6 +25,13 @@ pub(crate) struct Priority {
     /// The pass button's word where the view does not say where passing leads.
     word: String,
     buttons: Vec<PromptButton>,
+    /// The priority's prompt as it opened, which the choice among a card's ways lies over.
+    base: PromptView,
+    /// The candidates' labels, by index: what each way to use a card is called.
+    labels: Vec<String>,
+    /// The choice open among the ways to use a card with several: its prompt as it opened,
+    /// and its state.
+    acting: Option<(PromptView, Mode)>,
 }
 
 /// A card a click on uses.
@@ -100,6 +108,11 @@ impl Priority {
             yours: table.view.turn.active == Side::You,
             word: decision.prompt.words.decline.clone(),
             buttons: Vec::new(),
+            base: (*decision.prompt).clone(),
+            labels: (decision.candidates.iter())
+                .map(|candidate| candidate.label.clone())
+                .collect(),
+            acting: None,
         };
         priority.reword(decision);
         priority
@@ -137,13 +150,29 @@ impl Priority {
     pub(super) fn click(&mut self, click: Click) -> Clicked {
         let answers =
             |index: u16| Clicked::Answers(Run::new(Purpose::Priority, [Step::Index(index)]));
+        // The choice among a card's ways takes every click while it is open.
+        if let Some((_, mode)) = &self.acting {
+            return match mode.click(click) {
+                Chosen::Answers(run) => Clicked::Answers(run),
+                Chosen::Closes => {
+                    self.acting = None;
+                    Clicked::Changed
+                }
+                Chosen::Same => Clicked::Same,
+            };
+        }
         match click {
             Click::On {
                 on: Subject::Object { slot },
             } => match self.cards.iter().find(|card| card.slot == slot) {
                 Some(Used { ways, .. }) if ways.len() == 1 => answers(ways[0]),
-                // Several ways to use it: the choice among them opens.
-                Some(card) => Clicked::Opens(Box::new(act_prompt(slot, card.name.as_deref()))),
+                // Several ways to use it: the choice among them opens over the priority.
+                Some(card) => {
+                    let prompt = act_prompt(slot, card.name.as_deref());
+                    let mode = Mode::act(&self.labels, slot, &card.ways, &prompt.words.cancel);
+                    self.acting = Some((prompt, mode));
+                    Clicked::Changed
+                }
                 None => Clicked::Same,
             },
             Click::Button {
@@ -156,7 +185,23 @@ impl Priority {
         }
     }
 
+    /// Writes into `view` the state of the choice among a card's ways while it is open, and
+    /// the priority's own otherwise: one prompt lies over the other, and they count their
+    /// states as one.
     pub(super) fn show(&self, view: &mut PromptView) {
+        let prompt = match &self.acting {
+            Some((prompt, _)) => prompt,
+            None => &self.base,
+        };
+        if view.purpose != prompt.purpose {
+            *view = PromptView {
+                revision: view.revision,
+                ..prompt.clone()
+            };
+        }
+        if let Some((_, mode)) = &self.acting {
+            return mode.show(view);
+        }
         view.marks = (self.cards.iter())
             .filter(|card| card.plays)
             .map(|card| Marked {

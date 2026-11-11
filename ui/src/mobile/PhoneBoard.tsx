@@ -33,7 +33,13 @@ import {
 } from "../components/Controls";
 import { LifeOrb } from "../components/Player";
 import { attackPlan, blockPlan } from "../game/combat";
-import { follow, interactions, tapsOnly, type Intent } from "../game/decisions";
+import {
+  follow,
+  interactions,
+  suggestedDamage,
+  tapsOnly,
+  type Intent,
+} from "../game/decisions";
 import { faceDownFace, marksOf, SCAN, useFace } from "../game/faces";
 import { HALT_BUTTON, passButton } from "../game/stepLabels";
 import { PaymentButton } from "../game/PaymentButton";
@@ -515,9 +521,7 @@ function PhoneDock({
     );
   }
   if (!waiting && decision?.kind === "damageDivision") {
-    const preferred = view.stops.fullControl
-      ? undefined
-      : decision.damageDefault;
+    const preferred = suggestedDamage(decision, view.stops.fullControl);
     const done = can.done;
     const primary = preferred ?? done;
     return (

@@ -91,6 +91,7 @@ import {
   playActs,
   prompt,
   slotOf,
+  suggestedDamage,
   tapsOnly,
   triggerPlan,
   withResolving,
@@ -1746,9 +1747,7 @@ export function Board({
               <Finish
                 decision={declaring}
                 done={finish}
-                damageDefault={
-                  stops.fullControl ? undefined : declaring.damageDefault
-                }
+                damageDefault={suggestedDamage(declaring, stops.fullControl)}
                 onPick={pick}
                 objects={objects}
               />

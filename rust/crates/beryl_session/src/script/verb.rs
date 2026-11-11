@@ -126,8 +126,8 @@ names! {
         /// The player has picked it in the open prompt. Arena's gold outline
         /// (`SswBO8aOOgc 33:30.5`, `UrGalw_f35w 42:50.0`).
         Selected = "selected",
-        /// What the offered default would use: the permanents Auto Pay would tap. Not seen in
-        /// Arena.
+        /// What the offered default would use: the permanents Auto Pay would tap, the blocker
+        /// the session would deal lethal damage to next. Not seen in Arena.
         Suggested = "suggested",
         /// Picked to pay a cost: it turns and carries a tap mark. Not seen in Arena.
         Paying = "paying",
