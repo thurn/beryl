@@ -1,0 +1,43 @@
+/* Mana flowing from its sources into what it pays for (ManaFlow.tsx): over the cards, under
+   the arrows' labels and every screen, adding light to what lies beneath. */
+.mana-flow {
+  position: absolute;
+  inset: 0;
+  z-index: 440;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.mana-mote,
+.mana-tail,
+.mana-spark,
+.mana-flare {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+.mana-mote {
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+}
+/* Its right end at the head, turned about it. */
+.mana-tail {
+  width: 90px;
+  height: 7px;
+  margin: -3.5px 0 0 -90px;
+  border-radius: 4px;
+  transform-origin: 100% 50%;
+}
+.mana-spark {
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+}
+.mana-flare {
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  opacity: 0;
+}

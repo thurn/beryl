@@ -1,0 +1,17 @@
+/* While the page is frozen, a CSS animation that starts stays on its first frame. */
+.page-frozen *:not([data-unfrozen], [data-unfrozen] *) {
+  animation-play-state: paused !important;
+}
+
+/* The library moves back from an arrange tray as one packet. */
+[data-library-pile="you"] {
+  translate: var(--library-return-x, 0px) var(--library-return-y, 0px);
+}
+/* A browser or prompt owns this card's visual while it is off the table. */
+[data-card-borrowed],
+.card-el[data-card-borrowed] + .card-ghost,
+.stage:has([data-table-library="you"][data-card-borrowed])
+  [data-library-pile="you"] {
+  visibility: hidden;
+  pointer-events: none;
+}

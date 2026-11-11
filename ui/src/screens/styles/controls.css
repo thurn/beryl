@@ -1,0 +1,207 @@
+/* The turn controls at the bottom right, in stage pixels: the compact phase tracker over the
+   button that advances the turn, and under the button its caption or, while you wait, the
+   priority pill. Nothing moves between states. */
+.turn-controls > * {
+  position: absolute;
+}
+/* Each player's step stops about their life orb (Steps.tsx), as on Arena: two rows of three on
+   either side of it, centered on the orb's face (x 800; y 670 yours, 105 the opponent's), each
+   side's inner edge 70px from its middle. */
+.turn-controls .step-stops {
+  left: calc(646px + var(--shift-mid, 0px));
+  top: 645px;
+  z-index: 251;
+  width: 308px;
+}
+.turn-controls .step-stops-opponent {
+  top: 80px;
+}
+/* The rows span the orb, over it: only the steps take the pointer, so the whole orb is there to
+   click, as a target, and not just its rims. */
+.turn-controls .step-stops {
+  pointer-events: none;
+}
+.turn-controls .step {
+  pointer-events: auto;
+}
+/* Full control's stop sign, left of the turn button, while it is on. */
+.full-control {
+  right: 301px;
+  top: 775px;
+  display: flex;
+}
+.full-control svg {
+  width: 28px;
+  height: 28px;
+  fill: #2c2825;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
+}
+.full-control .full-control-bars {
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+/* The action dock (Controls.tsx' Dock): every action on the game screen, in the bottom-right
+   corner. A column of buttons of one size, as wide as the widest (the turn button's width at
+   the least), whose foot is where the turn button stands; the question it answers over them,
+   wrapped to the column; a caption or the priority pill under the foot. It rises in. */
+.dock {
+  position: absolute;
+  right: 39px;
+  bottom: 87px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--button-gap);
+  width: max-content;
+  min-width: var(--button-width);
+  max-width: 460px;
+  pointer-events: auto;
+  animation: dock-in 0.22s ease-out both;
+}
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock {
+    animation: none;
+  }
+}
+/* The question: a few words over the buttons, never widening them. */
+.dock .prompt-title {
+  contain: inline-size;
+  margin: 0 0 2px;
+  font: 600 26px/1.15 var(--font-serif);
+  color: #fff7e6;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow:
+    0 2px 4px rgb(0 0 0 / 90%),
+    0 0 14px rgb(0 0 0 / 85%),
+    0 0 28px rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+/* The buttons, the first at the foot and the rest stacked over it. */
+.dock-buttons {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: var(--button-gap);
+}
+.dock .button {
+  min-width: 0;
+  width: 100%;
+}
+.dock .button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Room for descenders inside the clip, at line-height 1, taking none from the button. */
+  padding-block: 0.2em;
+  margin-block: -0.2em;
+}
+/* Passing on to the next stop: a round icon button left of the turn button, which stays put,
+   in the turn button's orange (components.css .button-primary); full control's sign moves
+   over for it. The face is a child, so the button frames nothing and its tip stands free. */
+.dock .turn-action .pass-on-button {
+  position: absolute;
+  right: calc(100% + var(--button-gap));
+  top: 0;
+  width: var(--button-height);
+  height: var(--button-height);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.pass-on-face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border-width: 1.5px;
+  border-style: solid;
+  color: #fffaf2;
+  transition:
+    filter 0.15s,
+    transform 0.15s;
+}
+.pass-on-button:hover .pass-on-face {
+  filter: brightness(1.1);
+}
+.pass-on-button:active .pass-on-face {
+  transform: translateY(1px);
+}
+.pass-on-button:focus-visible {
+  outline: none;
+}
+.pass-on-button:focus-visible .pass-on-face {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: 3px;
+}
+/* The glyph's ink leans left of its box (each triangle's weight sits toward its base): nudged
+   right so it reads centered in the circle. */
+.pass-on-face > svg {
+  width: 22px;
+  transform: translateX(1.5px);
+  filter: drop-shadow(0 1px 1px rgb(70 25 4 / 75%));
+}
+.turn-controls:has(.pass-on-button) .full-control {
+  right: calc(301px + var(--button-height) + var(--button-gap));
+}
+/* A control's tip stands over the cards while it shows: its row or dock is raised for it. */
+.turn-controls > :has(.has-tip:hover, .has-tip:focus-visible) {
+  z-index: 1000;
+}
+/* The turn button: its icon and label centered together, a label too long for it shrinking
+   to fit (Controls.tsx' TurnButton); its caption or the priority pill under it, standing
+   centered out over both sides, so nothing moves between states. */
+.turn-action {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.turn-action .button > span:last-child {
+  text-overflow: clip;
+  font-size: calc(1em * var(--fit, 1));
+}
+.turn-action .button .button-icon {
+  width: 26px;
+  margin: 0;
+}
+.turn-action > :not(.button) {
+  position: absolute;
+  top: calc(100% + 8.5px);
+  max-width: 320px;
+}
+.turn-action .priority-pill {
+  height: 39px;
+  padding-left: 1.1em;
+  font-size: 20.5px;
+  border-color: rgb(111 101 96 / 35%);
+  border-top-color: #8a7f78;
+}
+.turn-action .priority-pill > span {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: calc(1em * var(--fit, 1));
+}
+.turn-caption {
+  text-align: center;
+  white-space: nowrap;
+  font-size: 17.8px;
+  line-height: 22px;
+  color: #b4b2ae;
+  -webkit-text-stroke: 0.3px currentColor;
+}
+/* The way back from a peek at the battlefield, over the hand. */
+.dock:has(> .overlay-return) {
+  z-index: 600;
+}

@@ -1,0 +1,255 @@
+/* A decision other than priority, the cast step and the questions asked in words: the
+   floating prompt (game/FloatPrompt.tsx). Its title and buttons stand in the action dock; what
+   it shows to choose among (cards off the table, triggers to order, a crew meter) mid-table,
+   with no panel. Only those take clicks. */
+.prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+/* The safety prompt focuses Cancel on open. Brighten its existing rim. */
+.prompt .removal-cancel:focus-visible {
+  outline-offset: -2px;
+}
+.prompt-body {
+  position: absolute;
+  left: 50%;
+  top: 300px;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: 460px;
+  pointer-events: auto;
+  animation: dock-in 0.22s ease-out both;
+}
+/* Whole cards to choose among, large enough to read, the row as wide as five. */
+.prompt-body:has(.prompt-cards) {
+  top: 215px;
+  max-width: 900px;
+}
+.prompt-body > :is(.prompt-triggers) {
+  align-self: stretch;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prompt-body {
+    animation: none;
+  }
+}
+/* Candidate cards off the table, as a graveyard's targets, by their faces: one row, which
+   scrolls sideways when they are many. */
+.prompt-cards {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+.prompt-card {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.prompt-card:hover > .card,
+.prompt-card:focus-visible > .card {
+  transform: translateY(-6px);
+}
+/* A card a question is about, risen above its place on the table (game/Risen.tsx). */
+.risen-card {
+  position: absolute;
+  z-index: 1050;
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 55%));
+}
+/* The card a question is about, shown but not picked. */
+.prompt-subject {
+  cursor: default;
+}
+/* Simultaneous triggers, each by its source and what it does, numbered in resolve order as
+   they are picked. */
+.prompt-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.prompt-trigger {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: rgb(33 31 28 / 92%);
+  color: var(--type);
+  font: 15px var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.prompt-trigger:enabled:hover,
+.prompt-trigger:focus-visible {
+  border-color: var(--gold);
+  background: rgb(233 173 74 / 18%);
+  outline: none;
+}
+.prompt-trigger:disabled {
+  border-color: var(--gold);
+  cursor: default;
+}
+.prompt-trigger-order {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 50%;
+  font: 600 14px/20px var(--font-sans);
+  text-align: center;
+}
+.prompt-trigger:disabled .prompt-trigger-order {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: rgb(33 31 28);
+}
+.prompt-trigger-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.prompt-trigger-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.prompt-trigger-text {
+  font: 13px/1.3 var(--font-sans);
+  color: var(--text-dim);
+}
+/* A Waterbend cost beside the prompt title. */
+.prompt-cost {
+  white-space: nowrap;
+}
+/* A crew cost as a row of pips: crewed gold, what the pointed-at creature would add soft. */
+.crew-meter {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.crew-pip {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 6%);
+}
+.crew-pip-on {
+  border-color: var(--gold);
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold-soft);
+}
+.crew-pip-next {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+/* A card's candidates, listed where it was clicked or dropped. */
+.menu-scrim {
+  position: absolute;
+  inset: var(--bleed);
+  z-index: 1150;
+}
+.action-menu {
+  position: absolute;
+  z-index: 1200;
+  min-width: 220px;
+  max-width: 330px;
+  padding: 6px;
+  border: 1px solid var(--metal);
+  border-top-color: var(--metal-bright);
+  border-radius: 9px;
+  background: rgb(33 31 28 / 97%);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 60%);
+  font-family: var(--font-sans);
+}
+.action-menu-title {
+  padding: 4px 10px 6px;
+  font: 600 15px var(--font-serif);
+  color: var(--gold);
+}
+/* Each line: its cost in symbols, then what it does. */
+.action-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--type);
+  font: 15px var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.action-menu-cost {
+  flex: none;
+  min-width: 2.2em;
+}
+.action-menu-effect {
+  font: 13px/1.3 var(--font-sans);
+  color: var(--text-dim);
+}
+/* A line naming what it does by the candidate's own label, as a cast does. */
+.action-menu-label {
+  font-size: 15px;
+  color: var(--type);
+}
+.action-menu-item:enabled:hover,
+.action-menu-item:focus-visible {
+  background: rgb(233 173 74 / 18%);
+  outline: none;
+}
+/* A loyalty ability the planeswalker cannot activate now. */
+.action-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* A permanent attached to the one the pointer is over, or that it is attached to: a pale ring,
+   apart from the gold, cyan and ember ones. */
+.card-linked {
+  box-shadow:
+    0 0 0 2px rgb(236 240 255 / 95%),
+    0 0 12px 3px rgb(200 214 255 / 55%),
+    var(--card-shadow, var(--shadow-card));
+}
+/* A permanent the payment being set up taps: an ember ring, apart from a source's gold and a
+   target's cyan. */
+.card-paying {
+  box-shadow:
+    0 0 0 2px rgb(255 168 92 / 95%),
+    0 0 10px 3px rgb(240 122 28 / 70%),
+    0 0 24px 6px rgb(240 122 28 / 30%),
+    var(--card-shadow, var(--shadow-card));
+}
+/* The cast step's X: a stepper over the buttons, its steps square. */
+.cast-x {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--button-gap);
+}
+.dock .cast-x .button {
+  width: var(--button-height);
+  padding: 0;
+}
+.cast-x-value {
+  font: 600 26px var(--font-serif);
+  text-align: center;
+  color: #fff7e6;
+  text-shadow: 0 2px 6px rgb(0 0 0 / 90%);
+}

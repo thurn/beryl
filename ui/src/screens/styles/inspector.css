@@ -1,0 +1,125 @@
+/* An opaque panel, so nothing beneath it shows through around the scan or its lines. */
+.inspect {
+  position: absolute;
+  top: 118px;
+  z-index: 1300;
+  width: 330px;
+  padding: 8px;
+  border-radius: 22px;
+  background: var(--surface-sunk);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+.inspect-scan {
+  display: block;
+  width: 100%;
+  border-radius: 15px;
+}
+.inspect-artist {
+  margin: 8px 0 0;
+  text-align: center;
+  font: italic 16px var(--font-serif);
+  color: var(--type);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+/* Its card types now, the printed ones struck out. */
+.inspect-types {
+  margin: 6px 0 0;
+  text-align: center;
+  font: 600 18px var(--font-serif);
+  color: var(--type);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+.inspect-types s {
+  opacity: 0.6;
+}
+/* What is attached to it. */
+.inspect-attached {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+/* Under the scan, why a refused hand card can't be played. */
+.inspect-refusal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font: 600 17px var(--font-sans);
+  color: var(--stat-down);
+  background: rgb(27 26 24 / 88%);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 50%);
+}
+.inspect-refusal .refusal-glyph {
+  font: normal 20px/1 Mana;
+}
+.inspect-refusal .refusal-reticle {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+/* A timing restriction reported at the permanent that imposes it. */
+.timing-refusal {
+  position: absolute;
+  z-index: 460;
+  pointer-events: none;
+  padding: 5px 10px;
+  border: 1px solid var(--stat-down);
+  border-radius: 8px;
+  white-space: nowrap;
+  font: 600 16px var(--font-sans);
+  color: var(--text);
+  background: rgb(27 26 24 / 95%);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 50%);
+}
+/* Under the scan, a permanent's marks spelled out: its P/T against the printed one, then a
+   badge per mark. */
+.inspect-marks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  list-style: none;
+  border-radius: 10px;
+  font: 600 15px var(--font-sans);
+  color: var(--type);
+  background: rgb(27 26 24 / 88%);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 50%);
+}
+.inspect-marks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inspect-marks .mark-badge {
+  font-size: 12px;
+}
+.inspect-pt {
+  font-size: 18px;
+}
+/* Its owner, beside the violet that edges a stolen permanent on the table. */
+.inspect-owner::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid var(--stolen);
+}
+.inspect-pt s {
+  color: var(--text-dim);
+}
+.inspect-pt .stat-up {
+  color: var(--stat-up);
+}
+.inspect-pt .stat-down {
+  color: var(--stat-down);
+}

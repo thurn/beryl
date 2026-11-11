@@ -1,0 +1,164 @@
+/* The hovered card's full scan, with the artist credit under it. */
+/* A graveyard or exile pile's button, over its top card: it rims in gold under the pointer,
+   where its tip names it, and glows as a card would when the decision offers something in it.
+   Under the hand. */
+.pile-at {
+  position: absolute;
+  z-index: 195;
+}
+.pile-button {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: none;
+  cursor: pointer;
+  transition: box-shadow 120ms ease-out;
+}
+.pile-button:hover,
+.pile-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1.5px var(--metal-bright),
+    0 0 12px 3px rgb(233 173 74 / 35%);
+}
+.pile-button-playable {
+  box-shadow:
+    0 0 0 2px var(--playable),
+    0 0 6px 2px rgb(var(--playable-rgb) / 45%);
+}
+.pile-button-target {
+  box-shadow: var(--glow-cyan);
+}
+/* The zone viewer: every card in a pile on a panel over the dimmed table, which a click beside
+   it closes; under the hovered card's scan. */
+.viewer-scrim {
+  position: absolute;
+  inset: var(--bleed);
+  z-index: 1240;
+  background: rgb(14 12 11 / 55%);
+}
+.zone-viewer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1250;
+  min-width: 380px;
+  translate: -50% -50%;
+  padding: 16px 24px 24px;
+  border: 1px solid var(--metal);
+  border-top-color: var(--metal-bright);
+  border-radius: 12px;
+  background: rgb(33 31 28 / 97%);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 65%);
+}
+/* The viewer panel fades around the cards, which stay visible as they travel. */
+.zone-viewer,
+.viewer-scrim,
+.zone-viewer-header {
+  transition:
+    background-color 200ms,
+    border-color 200ms,
+    box-shadow 200ms,
+    opacity 200ms;
+}
+.zone-viewer-rising,
+.zone-viewer-going {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+.zone-viewer-rising .zone-viewer-header,
+.zone-viewer-going .zone-viewer-header {
+  opacity: 0;
+}
+/* The visible rows can fly across the table without exposing the rows below them. */
+.zone-viewer-flying .zone-viewer-card:nth-child(n + 11) {
+  visibility: hidden;
+}
+.zone-viewer-flying .zone-viewer-cards {
+  overflow: visible;
+  mask-image: none;
+}
+.viewer-scrim:has(+ .zone-viewer-rising),
+.viewer-scrim:has(+ .zone-viewer-going) {
+  opacity: 0;
+}
+/* Returning cards fly in front of the closing panel. */
+.zone-viewer-going {
+  z-index: 890;
+  pointer-events: none;
+}
+.viewer-scrim:has(+ .zone-viewer-going) {
+  z-index: 880;
+  pointer-events: none;
+}
+.zone-viewer-going .zone-viewer-card {
+  visibility: hidden;
+}
+.zone-viewer-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.zone-viewer-title {
+  margin: 0;
+  font: 700 26px var(--font-serif);
+  color: var(--gold);
+}
+.zone-viewer-count {
+  flex: 1;
+  font: 14px var(--font-sans);
+  color: var(--text-dim);
+}
+.zone-viewer-close {
+  align-self: center;
+}
+.zone-viewer-close svg {
+  fill: currentColor;
+}
+.zone-viewer-cards {
+  display: grid;
+  gap: 14px;
+  /* Two rows of cards, then it scrolls. */
+  max-height: 456px;
+  padding: 12px;
+  margin: -12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--metal) transparent;
+  --fade: 56px;
+}
+/* A list longer than the panel fades out at each end with more beyond it, and keeps a thin
+   scroll bar in view: the system hides its own until scrolled. */
+.zone-viewer-cards[data-more="below"] {
+  mask-image: linear-gradient(to top, transparent, #000 var(--fade));
+}
+.zone-viewer-cards[data-more="above"] {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+}
+.zone-viewer-cards[data-more="both"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade) calc(100% - var(--fade)),
+    transparent
+  );
+}
+.zone-viewer-cards::-webkit-scrollbar {
+  width: 6px;
+}
+.zone-viewer-cards::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--metal);
+}
+.zone-viewer-card-offered {
+  cursor: pointer;
+}
+.zone-viewer-empty {
+  margin: 8px 0 0;
+  font: italic 16px var(--font-sans);
+  color: var(--text-dim);
+}

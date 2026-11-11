@@ -1,0 +1,148 @@
+/* The opening decisions, over the dimmed table. */
+.opening,
+.game-over {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 92px;
+}
+.opening > :not(.overlay-backdrop),
+.game-over > :not(.overlay-backdrop) {
+  position: relative;
+}
+.opening > .inspect,
+.opening > .dock,
+.game-over > .dock {
+  position: absolute;
+}
+.opening-title,
+.game-over-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: #fbf8f4;
+  text-shadow:
+    1px 3px 2px rgb(0 0 0 / 80%),
+    0 4px 10px rgb(0 0 0 / 60%);
+}
+.opening-title {
+  font-size: 56px;
+  line-height: 1.05;
+}
+.opening-instruction {
+  margin: 12px 0 34px;
+  font-family: var(--font-sans);
+  font-size: 21px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+.opening-hand {
+  display: flex;
+  gap: 8px;
+}
+.opening-fan {
+  transform-origin: 50% 100%;
+  transform: translateY(calc(var(--fan) * var(--fan) * 5px))
+    rotate(calc(var(--fan) * 2deg));
+}
+.opening-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.opening-card:disabled {
+  cursor: default;
+}
+.opening-buttons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 52px;
+  margin-top: 40px;
+}
+.opening-waiting {
+  font-size: 34px;
+  color: var(--gold);
+}
+/* Above the title: the flip's coin, and once it lands, whether the player is on the play. */
+.opening-coin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  margin-bottom: 14px;
+  perspective: 300px;
+  font: 600 22px var(--font-serif);
+  color: var(--gold);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+}
+.opening-title {
+  margin-bottom: 30px;
+}
+/* The cards for the bottom of the library: one slot per mulligan, filled as they are picked. */
+.opening-slots {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+}
+.opening-slot {
+  width: 120px;
+  height: calc(120px * 88 / 63);
+  border: 2px dashed var(--gold-soft);
+  border-radius: 8px;
+  background: rgb(14 11 10 / 45%);
+}
+.game-over {
+  padding-top: 260px;
+}
+.game-over-title {
+  font-size: 72px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow:
+    0 2px 4px rgb(0 0 0 / 70%),
+    0 0 24px rgb(240 150 60 / 45%);
+}
+/* Why the game ended: an icon and a word under the result. */
+.game-over-reason {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 14px 0 0;
+  font-family: var(--font-sans);
+  font-size: 24px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+/* The card that ended the game, under the reason. */
+.game-over-card {
+  margin-top: 22px;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 60%));
+}
+.game-over-icon {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.game-toast {
+  position: absolute;
+  left: 50%;
+  top: 330px;
+  z-index: 1500;
+  translate: -50% 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgb(33 31 28 / 95%);
+}
+.game-error {
+  color: var(--ember);
+}

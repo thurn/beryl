@@ -1,0 +1,207 @@
+/* The game screen (game/Board.tsx), in stage pixels. Cards live in one layer, one element per
+   slot (game/CardLayer.tsx), placed by transforms about their top-left corner. */
+.card-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.card-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Each card the table shows is its own compositor layer, painted once and then only moved:
+   otherwise WebKit repaints every card a moving one overlaps, shadows and all, on each frame
+   of a hover's rise or a drag, which drops frames on a full late-game table. */
+.card-el:not(.card-el-hidden, .card-el-rim) {
+  will-change: transform;
+}
+.card-el-hidden,
+.card-el-pile {
+  pointer-events: none;
+}
+/* A parked card under another only needs its paper edge. */
+.pile-card-rim {
+  border: 1px solid #161210;
+  border-bottom-color: #756458;
+  border-right-color: #66554a;
+  border-radius: 4.8% / 3.4%;
+  background: #211b18;
+}
+.card-el-draggable {
+  cursor: grab;
+}
+.card-el-dragging {
+  cursor: grabbing;
+}
+/* Held up, a hand card's resting shadow gives way to the one it casts on the felt. */
+.card-el-dragging .hand-card .card {
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+/* A card over the felt (game/physics.ts): what tilts and grows, the light on its face, and the
+   shadow it casts. Only their transforms, opacities and the shadow's penumbra change as it
+   moves; at rest none is drawn. */
+.card-body {
+  position: relative;
+}
+.card-shade,
+.card-cast {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: 4.8% / 3.4%;
+}
+.card-shade {
+  inset: 0;
+}
+/* The shadow of a card under a rectangular lamp: its edges blur over the penumbra in a straight
+   ramp each way, the card's outline swept across the lamp. */
+.card-cast {
+  --pen-x: 1%;
+  --pen-y: 1%;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  background: #000;
+  --ramp-x: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--pen-x),
+    #000 calc(100% - var(--pen-x)),
+    transparent
+  );
+  --ramp-y: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--pen-y),
+    #000 calc(100% - var(--pen-y)),
+    transparent
+  );
+  -webkit-mask-image: var(--ramp-x), var(--ramp-y);
+  mask-image: var(--ramp-x), var(--ramp-y);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+/* A hand card is hit where the fan shows it, never where its raised look covers its neighbors
+   (CardLayer.tsx): its look lets the pointer through to its hit box, and the copy drawn raised
+   over the hand is never hit. */
+.card-el-hand .card-look,
+.card-el.card-ghost,
+.card-ghost * {
+  pointer-events: none;
+}
+.hand-hit {
+  position: absolute;
+  left: 0;
+}
+/* The wrapper takes its card's size, so it is what the pointer and tests hit. */
+.card-el .on-table,
+.card-el .hand-card {
+  position: relative;
+}
+.card-el-pile .card,
+.card-el-stack .card {
+  --card-shadow: 0 3px 8px rgb(0 0 0 / 55%);
+}
+/* Something to play or activate: a crisp green outline, as Arena draws it, apart from a
+   target's cyan and a source's gold, with a faint halo so it reads on dark art. */
+.card-playable {
+  box-shadow:
+    0 0 0 2px var(--playable),
+    0 0 6px 2px rgb(var(--playable-rgb) / 45%),
+    var(--card-shadow, var(--shadow-card));
+}
+/* A card the hand fan holds because it can be played from a graveyard or exile: a purple edge,
+   drawn as the playable one is. */
+.card-elsewhere {
+  box-shadow:
+    0 0 0 2px rgb(186 120 255),
+    0 0 6px 2px rgb(186 120 255 / 45%),
+    var(--card-shadow, var(--shadow-card));
+}
+/* The over-height mask sweeps an irregular, perforated edge across an exiting frame. */
+[data-dissolving] {
+  mask-image: url("../../design/dissolve-mask.svg");
+  mask-size: 100% 240%;
+  mask-position: 50% 100%;
+  mask-repeat: no-repeat;
+  pointer-events: none;
+}
+.mode-departing {
+  pointer-events: none;
+}
+.stack-ability {
+  transform-origin: 0 0;
+}
+/* A stack item's marks (Stack.tsx' StackMarks): whose it is, unseen, and its X, a dark tab on
+   its top right corner. */
+.on-stack {
+  position: relative;
+}
+.stack-controller {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.stack-x {
+  position: absolute;
+  right: -10px;
+  top: -12px;
+  z-index: 1;
+  padding: 2px 9px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 12px;
+  background: rgb(24 21 19);
+  box-shadow: 0 2px 5px rgb(0 0 0 / 60%);
+  font: 700 17px/1.2 var(--font-sans);
+  color: var(--type);
+}
+/* The costs a spell was cast with: a tab on its bottom edge, gold as the stack's source is. */
+.stack-paid {
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  z-index: 1;
+  translate: -50% 0;
+  padding: 2px 11px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: rgb(24 21 19);
+  box-shadow:
+    0 2px 5px rgb(0 0 0 / 60%),
+    0 0 8px 1px rgb(240 190 90 / 45%);
+  font: 700 14px/1.2 var(--font-sans);
+  color: var(--gold);
+  white-space: nowrap;
+}
+/* Every arrow, combat and stack, over all the cards on the table and the stack's items, under
+   menus. */
+.board-arrows {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+}
+/* Combat marks face the other side: the opponent's attackers wear their chevron below, your
+   blockers their arc above. */
+.card-el-opponent .attack-chevron {
+  top: calc(100% + 0.15em);
+  bottom: auto;
+  scale: 1 -1;
+}
+.card-el-you .block-arc {
+  top: auto;
+  bottom: calc(100% - 1.6em);
+  scale: 1 -1;
+}
+.life-aimed {
+  border-radius: 50%;
+  filter: drop-shadow(0 0 3px #05c8f0)
+    drop-shadow(0 0 10px rgb(0 185 235 / 85%));
+}

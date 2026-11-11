@@ -1,0 +1,107 @@
+/* The start screen: one panel on the table. */
+.start-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 36px 32px;
+  border: 1.5px solid #8a735a;
+  border-top-color: #e9c88a;
+  border-radius: 12px;
+  background: #29231f;
+  box-shadow:
+    inset 0 0 0 1px rgb(14 11 10 / 55%),
+    0 6px 18px rgb(0 0 0 / 40%);
+  color: var(--type);
+}
+.start-title {
+  margin: 0;
+  font: 700 38px var(--font-serif);
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+.start-subtitle {
+  margin: -10px 0 0;
+  font: italic 19px var(--font-serif);
+  color: var(--text-dim);
+}
+.start-agents {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.start-agents legend {
+  margin-bottom: 6px;
+  font: 600 15px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.start-agent {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.start-agent:has(input:checked) {
+  background: rgb(233 173 74 / 14%);
+  box-shadow: inset 0 0 0 1px var(--gold-soft);
+}
+.start-agent input {
+  accent-color: var(--gold);
+}
+.start-agent-name {
+  font: 600 18px var(--font-serif);
+}
+.start-cheating {
+  margin-left: 10px;
+  font: italic 14px var(--font-serif);
+  color: var(--ember);
+}
+.start-agent-about {
+  grid-column: 2;
+  font: 14px var(--font-sans);
+  color: var(--text-dim);
+}
+.start-seed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 600 15px var(--font-sans);
+  color: var(--text-dim);
+}
+.start-seed input {
+  width: 160px;
+  padding: 6px 10px;
+  border: 1px solid var(--metal);
+  border-radius: 6px;
+  background: var(--surface-sunk);
+  color: var(--type);
+  font: 16px var(--font-sans);
+}
+.start-seed input[aria-invalid="true"] {
+  border-color: var(--ember);
+  outline-color: var(--ember);
+  color: var(--ember);
+}
+.start-buttons {
+  display: flex;
+  gap: 14px;
+}
+.start-buttons .button {
+  white-space: nowrap;
+}
+.start-working {
+  margin: 0;
+}

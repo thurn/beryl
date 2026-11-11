@@ -1,0 +1,500 @@
+/* Screens: the component gallery, the table and the scry overlay's content. */
+
+/* The gallery, laid out at ui_system.png's 1536×1024: the panels sit where the mockup puts them. */
+.gallery {
+  position: relative;
+  width: 1536px;
+  height: 1024px;
+  margin: 0 auto;
+  overflow: hidden;
+  background:
+    var(--grain),
+    radial-gradient(ellipse at 50% 0%, rgb(255 236 214 / 3%), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgb(0 0 0 / 14%), transparent 50%),
+    #413631;
+  font-family: var(--font-serif);
+}
+.gallery-header {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 100px;
+}
+.wordmark-crest {
+  position: absolute;
+  left: 556px;
+  top: 8px;
+  width: 46px;
+  height: 65px;
+  color: #f2cb93;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 55%));
+}
+.wordmark h1 {
+  position: absolute;
+  left: 627px;
+  top: 13px;
+  margin: 0;
+  font-weight: 400;
+  -webkit-text-stroke: 0.7px currentColor;
+  font-size: 37px;
+  line-height: 44px;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: #efc68c;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+.wordmark-rule {
+  position: absolute;
+  top: 42px;
+  width: 327px;
+  height: 2px;
+  background:
+    linear-gradient(180deg, rgb(150 115 70 / 85%) 50%, transparent 50%),
+    var(--metal-line);
+  background-blend-mode: normal;
+}
+.wordmark-rule:first-of-type {
+  left: 189px;
+}
+.wordmark-rule:last-of-type {
+  left: 1020px;
+}
+.gallery-subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60px;
+  margin: 0;
+  text-align: center;
+  font-style: italic;
+  font-size: 26px;
+  line-height: 34px;
+  color: var(--text);
+}
+/* A panel: a thin gold border lit from above, over the darker surface. */
+.panel {
+  position: absolute;
+  overflow: hidden;
+  padding: 0 28px;
+  border-radius: 12px;
+  border: 1.5px solid #8a735a;
+  border-top-color: #e9c88a;
+  border-bottom-color: #a9895f;
+  background: #29231f;
+  box-shadow:
+    inset 0 0 0 1px rgb(14 11 10 / 55%),
+    0 2px 6px rgb(0 0 0 / 30%);
+}
+.panel-01 {
+  left: 16px;
+  top: 116px;
+  width: 473px;
+  height: 390px;
+}
+.panel-02 {
+  left: 503px;
+  top: 116px;
+  width: 491px;
+  height: 390px;
+}
+.panel-03 {
+  left: 1010px;
+  top: 116px;
+  width: 509px;
+  height: 390px;
+}
+.panel-04 {
+  left: 16px;
+  top: 523px;
+  width: 464px;
+  height: 482px;
+}
+.panel-05 {
+  left: 493px;
+  top: 523px;
+  width: 491px;
+  height: 482px;
+}
+.panel-06 {
+  left: 1000px;
+  top: 523px;
+  width: 519px;
+  height: 482px;
+}
+/* The title, its number in gold, over an engraved rule that fades out at both ends. */
+.panel-title {
+  position: relative;
+  margin: 0 -16px 14px;
+  padding: 3px 16px 0;
+  height: 42px;
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 34px;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 50%);
+}
+.panel-title::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 3px;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(160 138 112 / 90%) 25%,
+    rgb(160 138 112 / 85%) 70%,
+    transparent
+  );
+  box-shadow:
+    0 -1px 0 rgb(20 16 14 / 45%),
+    0 1px 0 rgb(20 16 14 / 45%);
+}
+.panel-number {
+  margin-right: 9px;
+  color: var(--gold);
+}
+.panel-rule {
+  height: 1px;
+  margin: 13px 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(160 138 112 / 90%) 25%,
+    rgb(160 138 112 / 85%) 70%,
+    transparent
+  );
+  box-shadow:
+    0 -1px 0 rgb(20 16 14 / 45%),
+    0 1px 0 rgb(20 16 14 / 45%);
+}
+/* Italic serif captions, a touch heavier than Times' regular (the mockups' captions). */
+.caption {
+  display: block;
+  font-family: var(--font-serif);
+  font-style: italic;
+  -webkit-text-stroke: 0.35px currentColor;
+  font-size: 17px;
+  color: var(--type);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 75%);
+  text-align: center;
+}
+.centered {
+  display: flex;
+  justify-content: center;
+}
+.panel figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 01 Foundations. Panel contents are placed in the panel's padding box, as in the mockup. */
+.swatches {
+  position: absolute;
+  left: 30px;
+  top: 61px;
+  display: grid;
+  grid-template-columns: repeat(5, 68px);
+  column-gap: 19.5px;
+}
+.swatch {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* Each chip's rim is a light tint of its own color: cream on the dark ones. */
+.swatch-chip {
+  width: 68px;
+  height: 68px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--chip) 35%, #f6efe4);
+  background: var(--chip);
+  box-shadow:
+    0 1px 0 #191310,
+    0 0 0 1px rgb(10 8 7 / 50%),
+    0 3px 6px rgb(0 0 0 / 40%);
+}
+.swatch:nth-child(-n + 2) .swatch-chip {
+  border: 1.5px solid #e4dccf;
+  box-shadow:
+    0 0 0 1px rgb(10 8 7 / 60%),
+    0 3px 6px rgb(0 0 0 / 40%);
+}
+.swatch figcaption {
+  margin-top: -4px;
+  color: var(--type);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 75%);
+  -webkit-text-stroke: 0.4px currentColor;
+  text-align: center;
+  font-size: 17px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.swatch small {
+  display: block;
+  margin-top: -1px;
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+}
+.type-specimens {
+  position: absolute;
+  inset: 186px 0 auto;
+}
+.specimen-serif {
+  position: absolute;
+  left: 48px;
+  top: -2px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--type);
+  text-shadow:
+    0 3px 6px rgb(0 0 0 / 70%),
+    0 0 14px rgb(255 248 236 / 22%);
+}
+.specimen-sans {
+  position: absolute;
+  left: 244px;
+  top: 10px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: #fff;
+  font-size: 20px;
+  line-height: 30px;
+  white-space: nowrap;
+}
+.specimen .caption {
+  position: absolute;
+  font-size: 15.7px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.specimen:first-child .caption {
+  left: 46px;
+  top: 61px;
+}
+.specimen:last-child .caption {
+  left: 272px;
+  top: 57px;
+}
+.specimen-divider {
+  align-self: stretch;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    #8a745f 20%,
+    #947d66 50%,
+    #8a745f 80%,
+    transparent
+  );
+}
+.type-specimens .specimen-divider {
+  position: absolute;
+  left: 222px;
+  top: 11px;
+  height: 68px;
+}
+.material-specimens figure {
+  position: absolute;
+  top: 291px;
+  gap: 6px;
+}
+.material-specimens figure:first-child {
+  left: 28px;
+  width: 205px;
+}
+.material-specimens figure:last-child {
+  left: 263px;
+  width: 183px;
+}
+.material-specimens .caption {
+  margin-top: -3px;
+  font-size: 16px;
+  line-height: 22px;
+}
+/* The tabletop as a swatch: the material without the table's lighting. */
+.tabletop-chip {
+  width: 100%;
+  height: 60px;
+  margin-top: 1px;
+  height: 59px;
+  border-radius: 8px;
+  border: 1.5px solid #d6ac76;
+  border-top-color: #dfc39d;
+  border-bottom-color: #cd9c60;
+  background:
+    var(--grain),
+    radial-gradient(ellipse at 50% 75%, #67584f, #594c44 60%, #51453f);
+  box-shadow:
+    0 0 0 1px rgb(10 8 6 / 55%),
+    0 3px 6px rgb(0 0 0 / 40%);
+}
+.metal-chip {
+  width: 100%;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 29px;
+  padding-bottom: 2px;
+}
+.metal-chip i {
+  position: relative;
+  height: 2px;
+}
+/* Gold catches the light: amber at the ends, white-hot through the middle, in a faint warm haze. */
+.metal-gold {
+  background: linear-gradient(
+    90deg,
+    #c99d62,
+    #e2bb84 15%,
+    #ecca98 40%,
+    #fff2cf 47%,
+    #fffbe6 50%,
+    #fff2cf 53%,
+    #ecca98 60%,
+    #e2bb84 85%,
+    #c99d62
+  );
+  box-shadow: 0 0 3px 1px rgb(150 85 35 / 55%);
+}
+.metal-gold::after {
+  content: "";
+  position: absolute;
+  inset: -3px 24%;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 251 230),
+    rgb(240 150 60 / 70%) 25%,
+    rgb(200 100 30 / 25%) 60%,
+    transparent
+  );
+}
+.metal-silver {
+  background: linear-gradient(
+    90deg,
+    rgb(190 184 176 / 40%),
+    #c6c0b8 3%,
+    #e6e1da 50%,
+    #c6c0b8 97%,
+    rgb(190 184 176 / 40%)
+  );
+  box-shadow: 0 1px 0 rgb(0 0 0 / 50%);
+}
+.material-specimens figure:last-child .caption {
+  translate: 3px 0;
+  font-size: 15.5px;
+}
+
+/* 02 Actions & status. */
+.button-rows .button {
+  position: absolute;
+  left: 66px;
+  width: 243px;
+  min-width: 0;
+}
+.button-rows .button-primary {
+  top: 58px;
+  height: 45px;
+  font-size: 29.5px;
+}
+.button-rows .button-secondary {
+  top: 118px;
+  left: 70px;
+  width: 239px;
+  height: 41px;
+  font-size: 24.5px;
+}
+.button-rows .button:disabled {
+  top: 172px;
+  left: 69px;
+  width: 246px;
+  height: 45px;
+  font-size: 28.5px;
+}
+.button-rows .caption {
+  position: absolute;
+  left: 344px;
+  font-size: 17.5px;
+  line-height: 22px;
+  text-align: left;
+}
+.button-rows .caption:nth-of-type(1) {
+  top: 70px;
+}
+.button-rows .caption:nth-of-type(2) {
+  top: 124px;
+}
+.button-rows .caption:nth-of-type(3) {
+  top: 183px;
+}
+.panel-02 .panel-rule {
+  position: absolute;
+  left: 26px;
+  right: 29px;
+  margin: 0;
+}
+.panel-02 .panel-title {
+  padding-left: 12px;
+}
+.panel-02 .button-rows + .panel-rule {
+  top: 237px;
+}
+.panel-02 .centered + .panel-rule {
+  top: 304px;
+}
+.panel-02 .priority-pill {
+  position: absolute;
+  left: 109px;
+  top: 250px;
+  width: 278px;
+  height: 40px;
+  font-size: 20px;
+}
+.panel-02 .phase-tracker {
+  position: absolute;
+  left: 41px;
+  top: 315px;
+}
+
+/* 03 Player & zones: parts placed in the panel as on the mockup (At). */
+.panel-03 .life-orb {
+  --orb: 0.74px;
+}
+.panel-03 .player-badge {
+  font-size: 20.5px;
+  padding-right: 0.8em;
+}
+.panel-03 .panel-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 166px;
+  margin: 0;
+}
+
+/* 04 Cards & states and 05 Combat & stack: parts placed in the panel as on the mockup (At). */
+.at {
+  position: absolute;
+}
+.caption-at {
+  width: 240px;
+}
+.combat-stack {
+  position: absolute;
+  inset: 0;
+}
+.combat-stack .panel-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 226px;
+  margin: 0;
+}

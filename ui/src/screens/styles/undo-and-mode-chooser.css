@@ -1,0 +1,103 @@
+/* Under the gear, in its brushed metal, right of the opponent's piles: takes back the latest
+   answer. Over the cards, so its tip opens over the opponent's piles. */
+.undo-button.has-tip {
+  position: absolute;
+  right: 14px;
+  top: 126px;
+  z-index: 1000;
+}
+.undo-icon {
+  overflow: visible;
+}
+.undo-arrow {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.undo-button > .tip {
+  margin-right: -14px;
+}
+
+/* The mode chooser (game/ModeChooser.tsx): a card's uses side by side mid-table over a
+   dimmed table, each a full frame sprung out of the card, its caption under it; an X beside
+   the gear and Cancel in the action dock close it. */
+.chooser-scrim {
+  background: rgb(10 8 6 / 55%);
+}
+.ability-chooser {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+.ability-choice,
+.mode-departing {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ability-choice-lift {
+  position: relative;
+  display: block;
+  border-radius: 12px;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
+}
+.ability-choice:enabled:hover .ability-choice-lift,
+.ability-choice:enabled:focus-visible .ability-choice-lift {
+  transform: translateY(-8px);
+  box-shadow: var(--glow-gold);
+}
+.ability-choice:focus-visible {
+  outline: none;
+}
+.ability-choice:disabled {
+  cursor: default;
+}
+:is(.ability-choice, .mode-departing):disabled .ability-choice-lift {
+  filter: grayscale(0.85) brightness(0.55);
+}
+/* The use's cost or name, on a dark plaque across the frame's foot. */
+.ability-choice-caption {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 0.2em;
+  left: 50%;
+  bottom: -26px;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border: 1px solid var(--metal);
+  border-radius: 999px;
+  background: rgb(18 15 12 / 92%);
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 22px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 55%);
+}
+.ability-choice-caption .mana-cost {
+  padding-left: 0;
+}
+/* The X that closes the chooser, beside the gear, an icon button like it. */
+.chooser-close {
+  position: absolute;
+  right: 70px;
+  top: 14px;
+  z-index: 1210;
+}
+.chooser-close svg {
+  fill: currentColor;
+}
+/* Its Cancel, in the action dock, over the dimmed table. */
+.chooser-dock {
+  z-index: 1210;
+}

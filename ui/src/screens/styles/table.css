@@ -1,0 +1,303 @@
+/* The table: a fixed stage scaled to the window. */
+.stage-frame {
+  position: fixed;
+  inset: 0;
+  /* Clipped, never scrolled: a pointer or a script bringing a card into view must not slide the
+     whole table. */
+  overflow: clip;
+  background: var(--tabletop);
+}
+.stage {
+  /* An inset reaching from the stage's edges to the window's (Stage.tsx), for what covers the
+     whole table: its cloth, its shade and the scrims over it. */
+  --bleed: calc(-1 * var(--bleed-y, 0px)) calc(-1 * var(--bleed-x, 0px));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  transform-origin: 50% 50%;
+  /* A drag across the table selects nothing; only what is typed in is text. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.stage :is(input, textarea) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.table {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-serif);
+}
+/* The cloth reaches the window's edges, under everything on the stage, and is dimmed with the
+   table (its filter then holds the cloth). The table forms no layer of its own otherwise, so
+   what it raises, as a dragged card or a menu, still rises over the brand beside it. */
+.table::before {
+  content: "";
+  position: absolute;
+  inset: var(--bleed);
+  z-index: -1;
+  background: var(--tabletop);
+}
+.table-dimmed {
+  filter: blur(2.5px) brightness(0.68) saturate(0.85);
+}
+/* The opening hand overlay leaves the opponent's cards readable along the far edge. */
+.table-dimmed[data-opening] {
+  filter: none;
+}
+.table-dimmed[data-opening] :is([data-life], .turn-controls) {
+  opacity: 0.22;
+}
+.opening > .overlay-backdrop {
+  background: linear-gradient(transparent 12%, rgb(14 13 12 / 65%) 28%);
+}
+/* The far edge of the table lies in shadow under the opponent's hand and life orb, darkest at
+   the edge and gone a third of the way to the creatures (the screen mockups). */
+.far-shade {
+  position: absolute;
+  inset: var(--bleed);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 300px 85px at calc(800px + var(--bleed-x, 0px))
+      calc(48px + var(--bleed-y, 0px)),
+    rgb(10 7 5 / 80%),
+    rgb(10 7 5 / 64%) 50%,
+    rgb(10 7 5 / 32%) 80%,
+    rgb(10 7 5 / 0%)
+  );
+}
+/* Permanents lying on the table (layout.ts places them in depth): each card shows a dark slab
+   edge below it and casts a soft shadow down and away from the light. The cast shadow is a
+   gradient, not a blurred box-shadow, which WebKit draws with hard edges on a scaled layer. */
+.on-table {
+  position: absolute;
+  --card-shadow: 0 5px 0 -1px #0b0a09, 0 7px 4px rgb(0 0 0 / 38%);
+  /* A glowing card on the table wears a thicker neon line, a broad halo and a frame steeped in
+     its light (trigger_on_stack_with_target.png). */
+  --glow-gold:
+    0 0 0 1px #fde3a0, 0 0 2px 3px rgb(235 140 50 / 80%),
+    0 0 16px 5px rgb(235 125 10 / 60%);
+  --glow-gold-in:
+    inset 0 0 0 1px #fffef8, inset 0 0 0 2px #fbe7a8, inset 0 0 0 3px #f6c959,
+    inset 0 0 3px 4px rgb(220 125 30 / 95%),
+    inset 0 0 8px 4px rgb(160 90 25 / 60%), inset 0 0 0 30px rgb(80 50 15 / 45%);
+  --glow-cyan:
+    0 0 0 1px #05c8f0, 0 0 2px 3px rgb(0 185 235 / 90%),
+    0 0 8px 7px rgb(0 160 225 / 80%);
+  --glow-cyan-in:
+    inset 0 0 0 1px #00dcf8, inset 0 0 0 2px #01eeff, inset 0 0 0 3px #02c0e4,
+    inset 0 0 5px 4px rgb(3 110 155 / 90%), inset 0 0 0 30px rgb(0 60 85 / 80%);
+}
+.on-table .card::before {
+  content: "";
+  /* Fades as the card leaves the felt (game/physics.ts). */
+  opacity: var(--contact, 1);
+  position: absolute;
+  inset: 12% -7% -16% -3%;
+  z-index: -1;
+  /* A shadow, not the card: the pointer passes through it. */
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(0 0 0 / 46%),
+    rgb(0 0 0 / 24%) 60%,
+    transparent
+  );
+}
+.hud {
+  position: absolute;
+}
+/* The strip of a stack item that peeks out from under the next (Board's StackPeek): an anchor
+   for its arrows, which neither shows nor takes the pointer. */
+.stack-peek {
+  pointer-events: none;
+}
+/* Over the permanents and the hand at rest, under a hovered (CardLayer's RAISED_Z, 300) or
+   dragged hand card: the card in hand is what the player is reading. */
+.table .life {
+  z-index: 250;
+}
+/* Your orb takes the pointer only on its face, to be picked as a target: otherwise the top of a
+   raised hand card under it stays at hand. (A drag only ever aims at the opponent's orb.) */
+.table .life[data-life="you"] {
+  pointer-events: none;
+}
+/* The orb's face, picked as a target: the cushion and its ring, in the middle of the orb's art
+   (Player.tsx: 98 by 96 of its 272 by 116), clear of the stops beside it. */
+.life-hit {
+  position: absolute;
+  left: 50%;
+  top: 46.5%;
+  z-index: 1;
+  width: 36%;
+  height: 83%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* Mockup pixels on the 1600-wide stage. */
+.table .life-orb {
+  --orb: calc(1px / 1.045);
+}
+/* A choice of library end made by the opponent, just below their life. */
+.library-choice-hud {
+  left: calc(800px + var(--shift-mid, 0px));
+  top: 160px;
+  translate: -50% 0;
+  z-index: 250;
+}
+.library-choice-hud .button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 12px;
+  font-size: 14px;
+}
+/* The opponent thinking, under their orb, clear of its rays. */
+.thinking-hud {
+  left: calc(782px + var(--shift-mid, 0px));
+  top: 166px;
+  z-index: 250;
+  pointer-events: none;
+}
+/* In combat, the damage the unblocked attackers will deal, a badge on the rim of the life orb
+   toward the table: a number, solid red when lethal. */
+.life-incoming {
+  position: absolute;
+  left: calc(50% + 30px);
+  top: 6px;
+  min-width: 44px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(24 21 19 / 85%);
+  box-shadow: inset 0 0 0 1px rgb(255 120 90 / 55%);
+  font: 700 20px/1.1 var(--font-sans);
+  color: #ff9a7a;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+/* The opponent's on the lower rim of their orb, toward the table. */
+.life[data-life="opponent"] .life-incoming {
+  top: 82px;
+}
+.life-incoming-lethal {
+  background: #b3261e;
+  box-shadow:
+    inset 0 0 0 1px #ffb4a8,
+    0 0 14px rgb(230 40 30 / 75%);
+  color: #fff;
+}
+/* The settings gear at the top right: brushed grey metal. */
+.gear {
+  fill: currentColor;
+  fill-rule: evenodd;
+}
+/* The hole shows the button's face. */
+.gear .gear-hole {
+  fill: none;
+}
+.hand-card {
+  position: absolute;
+}
+/* The game log at the table's left, between the far lands and the near ones: a heading for each
+   turn in small gold capitals, then an entry per line marked with its player's color (yours
+   cyan, the opponent's ember), the newest brightest at the foot and the oldest fading out at
+   the top. */
+.game-log {
+  --log-top: 262px;
+  position: absolute;
+  left: 18px;
+  top: var(--log-top);
+  width: 300px;
+}
+.game-log-list {
+  max-height: 272px;
+  margin: 0;
+  padding: 10px 14px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  list-style: none;
+  border-radius: 10px;
+  background: rgb(24 21 19 / 62%);
+  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 16%);
+  mask-image: linear-gradient(to bottom, transparent, #000 40px);
+  font: 14px/1.35 var(--font-sans);
+  color: var(--text-dim);
+}
+.game-log-list:empty {
+  display: none;
+}
+/* Folded while permanents reach into the log's column: a button in the gutter left of the rows,
+   which opens the log in its column, the rows making room (layout.ts), over their arrows
+   (.board-arrows). */
+.game-log-folded {
+  z-index: 460;
+  /* Only the button and the open list take the pointer, not the column's empty box over the
+     cards. */
+  pointer-events: none;
+}
+.game-log-folded > * {
+  pointer-events: auto;
+}
+.game-log-folded .game-log-list {
+  max-height: 228px;
+  background: rgb(24 21 19);
+  box-shadow:
+    inset 0 0 0 1px rgb(214 192 150 / 24%),
+    0 12px 28px rgb(0 0 0 / 45%);
+}
+/* Folded, the log's button stands at the stage's top left, in the icon buttons' circle; the
+   list opens in the log's column. */
+.game-log-folded .game-log-toggle {
+  position: absolute;
+  left: 0;
+  top: calc(18px - var(--log-top));
+}
+.game-log-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.game-log-toggle[aria-expanded="true"] {
+  color: var(--gold);
+}
+.game-log-entry {
+  position: relative;
+  padding: 2px 0 2px 15px;
+}
+.game-log-entry::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  rotate: 45deg;
+  background: var(--cyan);
+}
+.game-log-opponent::before {
+  background: var(--ember);
+}
+.game-log-entry:last-child {
+  color: var(--text);
+}
+.game-log-turn {
+  margin-top: 8px;
+  padding-left: 0;
+  font: 600 12px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.game-log-turn:first-child {
+  margin-top: 0;
+}
+.game-log-turn::before {
+  display: none;
+}
+.game-log-counter {
+  color: #ffab7c;
+}

@@ -1,0 +1,136 @@
+/* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
+   title between ornamented rules over an italic detail, on a smoky shade, in the band between
+   the opponent's life orb and their permanents. Laid out from its center line; the shade's box
+   is the banner. */
+.step-banner {
+  position: absolute;
+  /* Over the permanents (CardLayer), which a card peeking out above its row would otherwise
+     lay over the detail; it takes no pointer, so they stay at hand. Under the life orbs. */
+  z-index: 240;
+  left: calc(802px + var(--shift-mid, 0px));
+  top: 158px;
+  width: 400px;
+  height: 80px;
+  translate: -50% 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 52% 54% at 50% 45%,
+    rgb(12 10 9 / 88%),
+    rgb(12 10 9 / 70%) 45%,
+    rgb(12 10 9 / 30%) 75%,
+    transparent
+  );
+}
+.step-banner > * {
+  position: absolute;
+  left: 50%;
+}
+.step-banner-coin.coin-landing {
+  top: 10px;
+  margin-left: -169px;
+  animation-duration: 300ms;
+}
+.step-banner-title {
+  top: 4px;
+  translate: -50% 0;
+  /* The mockup's title face is narrower than our serif's. */
+  scale: 0.92 1;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: transparent;
+  background: linear-gradient(180deg, #fbe2ab 15%, #e2a75a 60%, #a8692a);
+  background-clip: text;
+  -webkit-background-clip: text;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 85%))
+    drop-shadow(0 2px 5px rgb(0 0 0 / 50%));
+}
+.step-banner-detail {
+  top: 39px;
+  translate: -50% 0;
+  font-size: 20.2px;
+  font-style: italic;
+  line-height: 1;
+  white-space: nowrap;
+  color: #f3ece0;
+  -webkit-text-stroke: 0.4px currentColor;
+  text-shadow:
+    0 1px 1px rgb(0 0 0 / 85%),
+    0 2px 6px rgb(0 0 0 / 55%);
+}
+.step-banner-rule {
+  top: 24px;
+  width: 50px;
+  height: 2px;
+  border-radius: 1px;
+  box-shadow: 0 0 5px rgb(245 150 50 / 80%);
+}
+.step-banner-rule-left {
+  margin-left: -169px;
+  background: linear-gradient(90deg, transparent, #f7b95d 70%, #ffe0a0);
+}
+.step-banner-rule-right {
+  margin-left: 119px;
+  background: linear-gradient(270deg, transparent, #f7b95d 70%, #ffe0a0);
+}
+.step-banner-diamond {
+  top: 19.6px;
+  margin-left: -111px;
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  border: 2px solid #f6a64a;
+  background: #ffe4a8;
+  box-shadow: 0 0 6px rgb(245 150 50 / 90%);
+}
+.step-banner-dot {
+  top: 22.8px;
+  margin-left: 100px;
+  width: 4px;
+  height: 4px;
+  rotate: 45deg;
+  background: #ffe0a0;
+  box-shadow: 0 0 4px rgb(245 150 50 / 90%);
+}
+.step-banner-underline {
+  top: 33.4px;
+  margin-left: -100px;
+  width: 190px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(240 160 70 / 80%) 25%,
+    #ffcf7a 50%,
+    rgb(240 160 70 / 80%) 75%,
+    transparent
+  );
+  box-shadow: 0 0 4px rgb(245 150 50 / 60%);
+}
+/* A faint rule under the banner that dips into a V at its middle. */
+.step-banner-notch {
+  top: 64px;
+  margin-left: -70px;
+  width: 140px;
+  height: 12px;
+  overflow: visible;
+  fill: none;
+  stroke: rgb(235 195 130 / 55%);
+  stroke-width: 1.5;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 30%,
+    #000 70%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 30%,
+    #000 70%,
+    transparent
+  );
+}

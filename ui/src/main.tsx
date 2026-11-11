@@ -6,7 +6,7 @@ import { App } from "./App";
 import "./design/fonts";
 import "./design/tokens.css";
 import "./design/components";
-import "./screens/screens.css";
+import "./screens/styles";
 import { installDiagnostics } from "./diagnostics";
 import { installAudio } from "./audio/sound";
 
