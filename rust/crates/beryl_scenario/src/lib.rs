@@ -22,7 +22,7 @@ use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
 pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
-pub use run::{Live, answer, describe, run, trace, trace_with, visit, watch};
+pub use run::{Live, answer, describe, run, trace, trace_with, visit, watch, watch_with};
 pub use script::{script, setup_source, source};
 pub use setup::{Slots, position};
 

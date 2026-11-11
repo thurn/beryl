@@ -290,6 +290,62 @@ fn every_card_has_scenarios_and_they_pass() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// The lands one effect untaps untap together
+/// ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)): "To untap a permanent,
+/// rotate it back to the upright position from a tapped position." Their untap events, which
+/// the UI animates and a "becomes untapped" trigger would follow, come in the order the lands
+/// entered the battlefield, whatever slots their cards are in and whichever was chosen first.
+/// The lands differ so that the events tell them apart, which positions never do.
+#[test]
+fn lands_untapped_by_one_effect_untap_in_battlefield_order() {
+    use beryl_engine::event::Event;
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario, Slots};
+
+    const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
+    const LANDS: [&str; 2] = [names::PLAINS, names::ISLAND];
+    const UNTAP: Scenario = Scenario::new("one effect untaps a Plains and an Island")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI),
+                Permanent::new(LANDS[0]).tapped(),
+                Permanent::new(LANDS[1]).tapped(),
+            ],
+        )
+        .library(P0, &[names::ISLAND])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::activate(P0, TEFERI, 0),
+            Action::Resolve,
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::End,
+            },
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::ChooseUpTo, LANDS[1]),
+            Action::choose(P0, DecisionKind::ChooseUpTo, LANDS[0]),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: LANDS[0],
+                count: 0,
+            }),
+        ]);
+    // The table is built from the decks, whatever their slots.
+    let (t, _) = beryl_scenario::position(&CARDS, &UNTAP).unwrap_or_else(|e| panic!("{e}"));
+    for slots in Slots::ALL {
+        let mut untapped = Vec::new();
+        beryl_scenario::watch_with(&CARDS, &UNTAP, slots, |s, events| {
+            for event in events {
+                if let Event::Untap { object } = event {
+                    untapped.push(s.definition_name(&t, object.slot));
+                }
+            }
+        })
+        .unwrap_or_else(|e| panic!("{slots:?} slots: {e}"));
+        assert_eq!(untapped, LANDS, "{slots:?} slots");
+    }
+}
+
 /// The bar for a supported card (architecture §17.3): "every one of its abilities is exercised
 /// by at least one scenario", and so is every way to cast it. Any card's scenarios may
 /// exercise another's: the basic lands' mana abilities pay for everything.

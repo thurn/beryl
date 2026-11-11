@@ -67,9 +67,20 @@ pub fn visit(
 pub fn watch(
     cards: &'static CardTable,
     scenario: &Scenario,
+    watch: impl FnMut(&State, &[Event]),
+) -> Result<(), Failure> {
+    watch_with(cards, scenario, Slots::Dealt, watch)
+}
+
+/// Runs a scenario like [`watch`], with each deck's slots numbered as `slots` says: its events
+/// must name the same cards in the same order under every numbering.
+pub fn watch_with(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    slots: Slots,
     mut watch: impl FnMut(&State, &[Event]),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, Slots::Dealt, &mut |_, _, _| {}, &mut watch).map(|_| ())
+    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut watch).map(|_| ())
 }
 
 fn walk(

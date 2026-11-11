@@ -1136,10 +1136,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let s = &*self.state;
         let lands = tapped.select(s, self.table, s.in_zone(Zone::Battlefield), you);
         let chosen = self.choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?;
-        // A bug kept for parity (by-w8gv.23): the untap events come in candidate order.
-        for slot in self.state.in_candidate_order(chosen) {
-            let land = self.state.object_ref(slot);
-            self.untap(land);
+        // In battlefield order, never slot order: the untaps' events are seen in this order.
+        let lands = self.state.in_game_order(self.table, chosen);
+        for &slot in self.checked(lands).as_slice() {
+            self.untap(self.state.object_ref(slot));
         }
         Ok(())
     }

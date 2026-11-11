@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- The lands one effect untapped came untapped in slot order
+  (`EffectCtx::untap_up_to_lands`, Teferi, Hero of Dominaria's +1 and Time
+  Spiral, walked the chosen set in candidate order), so the order of the untap
+  events, which the UI animates and a "becomes untapped" trigger would follow,
+  depended on slot numbers. The effect untaps them together
+  ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap
+  a permanent, rotate it back to the upright position from a tapped position"),
+  so they now go in battlefield order (`State::in_game_order`). Found by the
+  audit of every walk of a set (by-w8gv.5.6); no scenario caught it, because the
+  three slot numberings compare positions, which are the same whichever land
+  untaps first, and the one scenario untapped two Plains. Prevention: a set
+  whose members an effect acts on one by one goes through `in_game_order`; and a
+  test of an order that only events show watches the events under every
+  numbering (`beryl_scenario::watch_with`), with cards that differ.
+
 - Three reads answered one rules question differently, depending on who asked: a
   filter's mana value left out a spell's X where the interpreter's counted it
   ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e): "X is
