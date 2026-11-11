@@ -11,9 +11,9 @@ mod play;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, SNAPCASTER_MAGE,
-    STAFF_OF_THE_STORYTELLER, STOCK_UP, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER,
-    THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
+    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, REPRIEVE,
+    SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, TEFERI_HERO_OF_DOMINARIA,
+    TEFERI_TIME_RAVELER, THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
 };
 use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue as _;
@@ -506,6 +506,41 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
     picked.choose(|c| *c == Candidate::Done);
     assert_eq!(none.press(ButtonId::Decline), None);
     assert_eq!(none.game.state(), picked.game.state());
+}
+
+/// As [`TEFERI_UNTAPS`], with a second Island tapped, a Plains untapped, and a Reprieve to
+/// hold up.
+const TEFERI_UNTAPS_FOR_REPRIEVE: Scenario = Scenario::new("untap for a white instant")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[REPRIEVE])
+    .battlefield(
+        P0,
+        &[
+            Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+            Permanent::new(PLAINS).tapped(),
+            Permanent::new(ISLAND).tapped(),
+            Permanent::new(ISLAND).tapped(),
+            Permanent::new(TUNDRA).tapped(),
+            Permanent::new(PLAINS),
+        ],
+    )
+    .battlefield(P1, &[Permanent::new(ISLAND).tapped()])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// Where any land pays for what the hand holds, the untap opens on those that make the most
+/// colors of mana: a dual land with the first of the rest.
+#[test]
+fn an_untap_prefers_the_lands_that_make_the_most_colors() {
+    let mut play = Play::scenario(&TEFERI_UNTAPS_FOR_REPRIEVE);
+    to_the_untap(&mut play);
+    let tundra = play.named(TUNDRA, ZoneName::Battlefield, Side::You)[0];
+    let Some(ShapeView::Pick { picked, .. }) = &play.decision().prompt.state else {
+        panic!("an untap is a pick the session holds");
+    };
+    // Reprieve costs {1}{W} and a Plains is untapped: any one land pays for it.
+    assert_eq!(picked.len(), 2);
+    assert!(picked.contains(&play::card(tundra)), "{picked:?}");
 }
 
 /// Two Teferis under one player's control, one of them tapped down a loyalty: the legend

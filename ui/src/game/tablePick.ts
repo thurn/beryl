@@ -1,7 +1,6 @@
 // Choices of cards made on the table rather than in an overlay, with the table in view: an
 // untap's lands, and a choice of cards from the hand (a discard, a card exiled to pay a cost),
 // for which the hand rises whole into view. Pure functions of the view.
-import { faceEntry } from "../cards";
 import type { ObjectView, PlayerView, Words } from "../generated/protocol";
 import {
   counted,
@@ -11,7 +10,6 @@ import {
   type Intent,
   type Interactions,
 } from "./decisions";
-import { untapChoice } from "./untapChoice";
 
 /** A choice of cards made on the table rather than in an overlay, with the table in view: the
  * cards that can be picked, glowing; how many may be; those picked to begin with; and, for
@@ -123,8 +121,8 @@ function handPick(
 
 /** "Untap up to N lands", whoever controls them: the engine offers only tapped ones
  * (CR 701.26b), so each of the player's own is worth untapping, and as many as may be are
- * picked to begin with, those whose mana their hand wants most ([`untapChoice`]); an
- * opponent's, whose mana would let them answer, only by a click. */
+ * picked to begin with, those the session's prompt opens with picked; an opponent's, whose
+ * mana would let them answer, only by a click. */
 function untapPick(
   view: PlayerView,
   can: Interactions,
@@ -133,7 +131,14 @@ function untapPick(
   words: Words,
 ): TablePick {
   const eligible = new Set(can.bySlot.keys());
-  const initial = untapChoice(view, eligible, max, faceEntry);
+  const state =
+    view.status.kind === "deciding"
+      ? view.status.decision.prompt.state
+      : undefined;
+  const initial =
+    state?.shape === "pick"
+      ? state.picked.flatMap((on) => (on.kind === "object" ? [on.slot] : []))
+      : [];
   return {
     eligible,
     max,
