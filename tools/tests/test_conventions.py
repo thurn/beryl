@@ -64,7 +64,7 @@ def test_bad_data_is_refused() -> None:
     assert conventions.problems(with_sections)
 
 
-VERB = {
+VERB: dict[str, Any] = {
     "name": "fly",
     "shows": "A card travels.",
     "arena": {
@@ -73,7 +73,11 @@ VERB = {
     },
     "values": {"duration": None, "delay": None, "stagger": None, "curve": None},
 }
-MARK = {"name": "hostile-target", "means": "Not its chooser's.", "look": "Red."}
+MARK: dict[str, Any] = {
+    "name": "hostile-target",
+    "means": "Not its chooser's.",
+    "look": "Red.",
+}
 
 
 def listed(verbs: list[dict[str, Any]], marks: list[dict[str, Any]]) -> dict[str, Any]:

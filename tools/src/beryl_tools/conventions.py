@@ -72,7 +72,9 @@ def list_problems(data: dict[str, Any]) -> list[str]:
                 if not member.get(field):
                     found.append(f"{where}: needs {field}")
             if key == "verbs" and tuple(member.get("values", {})) != VALUES:
-                found.append(f"{where}: values are {list(VALUES)}, each a number or null")
+                found.append(
+                    f"{where}: values are {list(VALUES)}, each a number or null"
+                )
             found += evidence_problems(where, member)
     return found
 
