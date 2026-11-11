@@ -273,7 +273,7 @@ pt: PowerToughness | null,
 /**
  * On the battlefield: the keyword abilities it has after continuous effects, printed and
  * gained alike ([CR 613.1f](https://yawgatog.com/resources/magic-rules/#R6131f): "Layer
- * 6: Ability-adding effects, ability-removing effects, and effects that say an object
+ * 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object
  * can't have an ability are applied"), so that one gained until end of turn shows.
  */
 keywords: Array<Keyword>, attachedTo: number | null, 
