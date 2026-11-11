@@ -1385,9 +1385,9 @@ fn answered_by_policy<L: Layout>(d: &Decision<L>) -> bool {
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
         | DecisionKind::ChooseUpTo
-        // The order of one's own triggers is as wide or as minor, as are discarding to hand
-        // size, the legend to keep and a land's life payment among the kinds above and
-        // below, and greedy answers them sensibly.
+        // Discarding to hand size, the legend to keep and a land's life payment, among the
+        // kinds here, and the order of one's own triggers are as wide or as minor, and greedy
+        // answers them sensibly.
         | DecisionKind::TriggerOrder => true,
         DecisionKind::ChooseObject => d.prompt.purpose != Purpose::PutOnBottom,
         DecisionKind::Priority

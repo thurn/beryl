@@ -141,7 +141,8 @@ pub enum DecisionKind {
     YesNo,
     /// One object: asked by a resolving spell or ability, by a cost paid with objects, or by
     /// a rule that has a player choose one (a mulligan's card for the bottom, the cleanup
-    /// step's discard, the legend rule's permanent to keep).
+    /// step's discard, the legend rule's permanent to keep). Each such purpose quotes its
+    /// rule ([`beryl_card::Purpose`]).
     ChooseObject,
     /// One more object, as an [`Opt::Object`], or [`Opt::Done`]: a resolving spell or
     /// ability's choice of up to a number of objects, one at a time.
