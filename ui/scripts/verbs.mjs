@@ -374,8 +374,7 @@ function soundsFollowSteps(run) {
 const CASES = Object.fromEntries(
     verbs.map((verb) => [
         verb,
-        (runs) =>
-            [ZONES, PLACE, PILES].forEach((cases) => cases[verb]?.(runs)),
+        (runs) => [ZONES, PLACE, PILES].forEach((cases) => cases[verb]?.(runs)),
     ]),
 );
 assert.deepEqual(
