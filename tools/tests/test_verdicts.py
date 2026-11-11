@@ -342,7 +342,13 @@ def logged() -> list[dict[str, object]]:
 
 
 def report_args(**more: object) -> argparse.Namespace:
-    args = {"days": 30, "json": True, "quarantined": False, "pending": False}
+    args = {
+        "days": 30,
+        "json": True,
+        "quarantined": False,
+        "pending": False,
+        "prune": False,
+    }
     return argparse.Namespace(**{**args, **more})
 
 

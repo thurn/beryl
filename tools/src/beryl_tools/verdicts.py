@@ -100,6 +100,22 @@ def pending_checks() -> set[str]:
     return {p.check for p in PENDING}
 
 
+@dataclass(frozen=True)
+class SlowOnly:
+    """A check the pruning rule moved to slow CI alone (prune.py: never failed, and in the
+    costliest tenth of the fast check by seconds per run), on `date`: checks.fast() leaves it out
+    and slow CI runs it as before. `seconds` (a run) and `runs` are its fast-check record when it
+    moved, which keeps it in the ranking of later prunes."""
+
+    check: str
+    date: str
+    seconds: float
+    runs: int
+
+
+SLOW_ONLY: tuple[SlowOnly, ...] = ()
+
+
 def matches(path: str, globs: Iterable[str]) -> bool:
     return any(fnmatch.fnmatchcase(path, g) for g in globs)
 

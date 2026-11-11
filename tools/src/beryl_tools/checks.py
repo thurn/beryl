@@ -63,7 +63,12 @@ from .reruns import (
     unproven,
     whole,
 )
-from .rust_tests import junit_results, nextest_filter, rust_tests_step
+from .rust_tests import (
+    fast_rust_tests_step,
+    junit_results,
+    nextest_filter,
+    rust_tests_step,
+)
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -504,7 +509,8 @@ def python_lane() -> Lane:
     )
 
 
-def rust_lane() -> Lane:
+def rust_lane(fast: bool = False) -> Lane:
+    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY."""
     return (
         Lane("rust", warm=True)
         .step(
@@ -518,7 +524,12 @@ def rust_lane() -> Lane:
         )
         .step(
             "tests",
-            [sys.executable, "-m", "beryl_tools.checks", "rust-tests"],
+            [
+                sys.executable,
+                "-m",
+                "beryl_tools.checks",
+                "fast-rust-tests" if fast else "rust-tests",
+            ],
             rerun=failed_tests,
         )
     )
@@ -609,7 +620,7 @@ def fast(args: argparse.Namespace) -> int:
     if touched(r"^tools/"):
         lanes.append(python_lane())
     if touched(r"^rust/"):
-        lanes.append(rust_lane())
+        lanes.append(rust_lane(fast=True))
     if touched(r"^ui/"):
         lanes.append(ui_lane())
     if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
@@ -741,6 +752,7 @@ if __name__ == "__main__":
     steps: dict[str, Callable[..., int]] = {
         "pytest": pytest_step,
         "rust-tests": rust_tests_step,
+        "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
         "file-length": file_length.step,
         "conventions": conventions.step,

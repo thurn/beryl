@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import nightly, paths, system, verdicts
+from . import nightly, paths, prune, system, verdicts
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
@@ -338,6 +338,8 @@ def report(args: argparse.Namespace) -> int:
     history = store.history(store.checks())
     if args.quarantined:
         return quarantined_report(history, args.json)
+    if args.prune:
+        return prune.report(records, history, since, args.days, args.json)
     checks, lanes = tally(records, history, since)
     if args.json:
         print(
@@ -426,5 +428,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--pending",
         action="store_true",
         help="only the pending list, with each check's latest outcome",
+    )
+    which.add_argument(
+        "--prune",
+        action="store_true",
+        help="each check the pruning rule acts on, with its action and numbers",
     )
     p.set_defaults(func=report)

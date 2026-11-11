@@ -5,6 +5,7 @@ result in the run log (runlog.py), or only the tests a failed run named (reruns.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -13,7 +14,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import paths, runlog
+from . import paths, runlog, verdicts
 from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN
 
 
@@ -25,8 +26,39 @@ def nextest_filter(tests: Iterable[str]) -> str:
     )
 
 
-def rust_tests_step(*only: str) -> int:
-    """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`).
+def slow_only_filter(checks: Iterable[str]) -> str:
+    """A filterset of the Rust tests among `checks` (`rust:<binary>::<test path>`, run-log ids).
+    The id does not say where the binary ends: `<crate>` (unit tests) or `<crate>::<target>`
+    (an integration test or a binary), so a test matches by its package and either test path it
+    can have. A binary_id() that matches no binary is an error to nextest, and a test() is not,
+    so the entry of a deleted test matches nothing; a deleted crate's must go."""
+    found: list[str] = []
+    for check in checks:
+        lane, _, rest = check.partition(":")
+        parts = rest.split("::")
+        if lane != "rust" or len(parts) < 2:
+            continue
+        target = regex(parts[1]) + "::"
+        name = regex("::".join(parts[2:])) if len(parts) > 2 else ""
+        path = f"({target})?{name}" if name else regex(parts[1])
+        found.append(f"(package({parts[0]}) & test(/^{path}$/))")
+    return " | ".join(found)
+
+
+def regex(text: str) -> str:
+    """`text` as a literal in a nextest regex, which `/` delimits."""
+    return re.escape(text).replace("/", "\\/")
+
+
+def fast_rust_tests_step(*only: str) -> int:
+    """The fast check's tests step: the workspace's tests but those the pruning rule moved to
+    slow CI alone (verdicts.SLOW_ONLY)."""
+    return rust_tests_step(*only, fast=True)
+
+
+def rust_tests_step(*only: str, fast: bool = False) -> int:
+    """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`); `fast`
+    leaves out verdicts.SLOW_ONLY's.
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
     it cannot list the harness-less `allocations` targets, so cargo test runs those beside it
     once everything is built. Plain cargo test where cargo-nextest is missing. Each test's result
@@ -40,6 +72,10 @@ def rust_tests_step(*only: str) -> int:
         return CANNOT_RUN
     # Every test runs past a failure, so that a rerun of those named failed covers the run:
     # nextest would otherwise cancel the rest unrun.
+    every = "not binary(allocations)"
+    slow_only = slow_only_filter(s.check for s in verdicts.SLOW_ONLY) if fast else ""
+    if slow_only:
+        every += f" & not ({slow_only})"
     nextest = [
         "cargo",
         "nextest",
@@ -52,7 +88,7 @@ def rust_tests_step(*only: str) -> int:
         "--status-level=fail",
         "--final-status-level=fail",
         "-E",
-        nextest_filter(only) if only else "not binary(allocations)",
+        nextest_filter(only) if only else every,
     ]
     allocations = [*cargo, "--test", "allocations"]
     jobs = [nextest] if only else [nextest, allocations]

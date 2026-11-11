@@ -353,8 +353,10 @@ scenario. All four are logged and judged the same way.
   record. Enact files that as the Steward bead. A run over budget on a loaded
   machine or a cold cache reruns and files nothing.
 
-- **Pruning.** `just ci-report` prints each check's record over 30 days. A
-  weekly agent applies this rule in one commit that lists what it removed:
+- **Pruning.** `just ci-report` prints each check's record over 30 days, and
+  `just ci-report --prune` each check this rule acts on, with its numbers. A
+  weekly agent applies the rule in one commit that lists what it removed; a test
+  run in slow CI only goes in `verdicts.SLOW_ONLY`:
 
   | Record                                        | Action              |
   | --------------------------------------------- | ------------------- |
