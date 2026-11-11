@@ -91,6 +91,9 @@ export function caseOf(act: Act): string | undefined {
         : "activated ability";
     case "vanish":
       if (act.subject.kind === "ability") return "ability finished";
+      // Where it goes says more than why: a spell an effect returns is bounced.
+      if (act.object?.zone === "hand") return "bounced";
+      if (act.object?.zone === "exile") return "exiled";
       switch (act.why) {
         case "destroy":
         case "stateBased":
@@ -99,10 +102,6 @@ export function caseOf(act: Act): string | undefined {
           return "countered";
         case "resolve":
           return "resolved instant or sorcery";
-        case "exile":
-          return "exiled";
-        case "return":
-          return "bounced";
         case "sacrifice":
           return "sacrificed";
         default:

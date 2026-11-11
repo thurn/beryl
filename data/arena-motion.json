@@ -3340,6 +3340,13 @@
       "gaps": [
         "The cards going back were timed only in IHPV6yRaFlk (about 200 ms to the bottom, from a 10 fps strip)."
       ],
+      "waivers": [
+        {
+          "measure": "capture",
+          "bead": "by-w8gv.21.38",
+          "reason": "The stepped capture plays only the verb suite's first moment, a cast and its trigger, where nothing lifts; the opponent's scry is played by the moment `scry` (ui/verbs.json), which verb:lift checks from both seats in stage time. No capture of it is measured yet (by-w8gv.21.20)."
+        }
+      ],
       "instances": [
         {
           "case": "opponent's scry",

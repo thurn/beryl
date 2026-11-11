@@ -164,7 +164,8 @@ def measured(summary: dict[str, Any]) -> dict[str, Any]:
 
 def cases(summary: dict[str, Any]) -> dict[str, Any]:
     """Each case's own values where Arena's instances are of several cases, which the stage
-    plays that case with: a draw is not a discard. A value a case has none of is the verb's."""
+    plays that case with: a draw is not a discard. A value a case has none of is the verb's.
+    """
     return {case: measured(own) for case, own in summary.get("cases", {}).items()}
 
 

@@ -117,6 +117,40 @@ def test_each_step_of_the_slice_is_held_to_a_case_arena_measured() -> None:
         assert case in cases[str(act["verb"])], (act, seat, case)
 
 
+def test_a_card_that_leaves_is_held_to_the_case_of_where_it_goes_or_why() -> None:
+    def leaves(zone: str, why: str) -> dict[str, Any]:
+        subject = {"kind": "object", "slot": 1}
+        return {
+            "verb": "vanish",
+            "subject": subject,
+            "why": why,
+            "object": {"zone": zone},
+        }
+
+    assert motion.case_of(leaves("graveyard", "destroy"), "yours") == "destroyed"
+    assert motion.case_of(leaves("graveyard", "counter"), "yours") == "countered"
+    assert motion.case_of(leaves("graveyard", "sacrifice"), "yours") == "sacrificed"
+    # A spell an effect returns to its hand is bounced, whatever the effect is called.
+    assert motion.case_of(leaves("hand", "effect"), "yours") == "bounced"
+    assert motion.case_of(leaves("exile", "effect"), "theirs") == "exiled"
+    # The opponent's spell is theirs from either seat's capture.
+    theirs = {"zone": "stack", "controller": "opponent"}
+    cast = {"verb": "fly", "from": "hand", "object": theirs}
+    assert motion.case_of(cast, "yours") == "opponent spell cast"
+    drawn = {"verb": "fly", "from": "library", "object": {"zone": "hand"}}
+    assert motion.case_of(drawn, "theirs") == "draw"
+
+
+def test_a_verb_the_capture_does_not_play_is_waived_only_by_name() -> None:
+    reference = motion.motion()
+    verbs = list(motion.entries(reference))
+    entry = motion.entries(reference)["lift"]
+    entry["waivers"] = [{"measure": "capture", "bead": "by-w8gv.21.20", "reason": "x"}]
+    assert not motion.data_problems(reference, verbs)
+    assert motion.waiver(entry, "capture", None) == "by-w8gv.21.20"
+    assert motion.waiver(entry, "peak", None) is None
+
+
 def test_a_step_out_of_arenas_case_fails_unless_waived() -> None:
     reference = motion.motion()
     resolves = "permanent resolves"

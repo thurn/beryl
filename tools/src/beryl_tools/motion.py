@@ -39,10 +39,11 @@ from . import conventions, paths, runlog, selection, shots, video_measure
 if TYPE_CHECKING:
     from .checks import Lane
 
-# The measures a value or a capture is held to, and a waiver may name.
+# The measures a value or a capture is held to, and a waiver may name; `capture` is the
+# capture itself, for a verb of the suite the stepped capture's moment does not play.
 TIMED: tuple[str, ...] = ("duration", "delay", "stagger")
 SIZED: tuple[str, ...] = ("peak", "start")
-MEASURES: tuple[str, ...] = (*TIMED, *SIZED, "curve", "travel", "tracked")
+MEASURES: tuple[str, ...] = (*TIMED, *SIZED, "curve", "travel", "tracked", "capture")
 # How far from half way a motion must be at half its time to ease out (past it) or in (short
 # of it). A tracked flight that does not ease reads within 0.02 of half way, and one easing as
 # CSS's ease-in or ease-out does reads 0.1 or more from it, growing or shrinking as it goes:
@@ -235,15 +236,17 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
     verb = act.get("verb")
     origin = act.get("from")
     zone = (act.get("object") or {}).get("zone")
+    # Whose it is: its controller's, as the step's record says, or the seat that plays the
+    # capture's moment.
+    controller = (act.get("object") or {}).get("controller")
+    own = controller == "you" if controller else seat == "yours"
     if verb == "fly":
         cases = {
-            ("hand", "stack"): (
-                "own spell cast" if seat == "yours" else "opponent spell cast"
-            ),
+            ("hand", "stack"): "own spell cast" if own else "opponent spell cast",
             ("stack", "battlefield"): "permanent resolves",
             ("hand", "battlefield"): "land played",
             ("hand", "graveyard"): "discard",
-            ("library", "hand"): "draw" if seat == "yours" else None,
+            ("library", "hand"): "draw",
         }
         return cases.get((origin, zone))
     if verb == "emerge":
@@ -253,6 +256,17 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
         return "token"
     if verb == "vanish" and (act.get("subject") or {}).get("kind") == "ability":
         return "ability finished"
+    if verb == "vanish":
+        # Where it goes says more than why: a spell an effect returns is bounced.
+        left = {"hand": "bounced", "exile": "exiled"}
+        why = {
+            "destroy": "destroyed",
+            "stateBased": "destroyed",
+            "counter": "countered",
+            "resolve": "resolved instant or sorcery",
+            "sacrifice": "sacrificed",
+        }
+        return left.get(str(zone)) or why.get(str(act.get("why")))
     return None
 
 
@@ -471,11 +485,15 @@ def command(args: argparse.Namespace) -> int:
                 for v, name, vs in measured
                 if v == verb and name.startswith(f"{layout}/")
             ]
-            bad = not mine or any(v.failed for _, vs in mine for v in vs)
+            waived = None if mine else waiver(entries(reference)[verb], "capture", None)
+            bad = (not mine and waived is None) or any(
+                v.failed for _, vs in mine for v in vs
+            )
             failed = failed or bad
             runlog.result(f"motion:{verb}/{layout}", "fail" if bad else "pass", took)
             if not mine:
-                print(f"{layout}: the stage played no {verb} to capture")
+                said = f"{layout}: the stage played no {verb} to capture"
+                print(f"{said} (waived: {waived})" if waived else said)
             for name, vs in mine:
                 print(f"{name}:")
                 for v in vs:
