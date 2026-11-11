@@ -38,6 +38,12 @@
       "height": 647
     },
     {
+      "name": "phone-stage-respond",
+      "route": "/?phone&stage&fixture=phone-respond#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
       "name": "phone-main-max",
       "route": "/?phone&fixture=phone-main#/game",
       "width": 430,

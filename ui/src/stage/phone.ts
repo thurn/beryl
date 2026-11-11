@@ -1,0 +1,193 @@
+// The phone's layout for the stage: mobile/layout.ts's bands, read as resting poses and anchors
+// on a board the size of `viewport`. The recordings are of the desktop alone, so everything a
+// phone plays is the desktop's verbs between the phone's own places (UI Conventions, "The
+// phone"). Besides the cards mobile/layout.ts places (the battlefield, your hand, the stack),
+// everything a step can move rests somewhere: the opponent's hand as backs at the top edge,
+// and the top card of each library and graveyard on its pile in its player's strip, the rest
+// of a pile unseen beneath it. The phone draws no exile pile and no emblem yet: an exiled card
+// rests unseen under its owner's graveyard, and an emblem's ability has no source to lift
+// out of.
+import type { ObjectView, PlayerView, Side } from "../generated/protocol";
+import { CARD_ASPECT } from "../components/Card";
+import {
+  BACKS,
+  backSpot,
+  phoneLayout,
+  PILE,
+  pileSpot,
+  RATIO,
+  SIDE,
+  STACK_CARD,
+  type Spot,
+  type Viewport,
+} from "../mobile/layout";
+import { emerging } from "./desktop.ts";
+import {
+  abilityName,
+  type Anchors,
+  type Dress,
+  type Name,
+  type Place,
+  type Resting,
+  type StageLayout,
+} from "./layout.ts";
+import type { Pose } from "./pose.ts";
+import type { Table } from "./table.ts";
+
+/** What each kind of thing at rest is drawn over, all under what flies (pose.ts ALOFT): the
+ * piles, the opponent's hand, the permanents in the order their rows overlap, your hand, and
+ * the stack. */
+const DEPTH = { pile: 1, backs: 2, field: 10, hand: 600, stack: 700 };
+
+/** The life orb's size (phone.css `.phone-orb`: Player.tsx's 272 by 116 art at 0.37px). */
+const ORB = { width: 272 * 0.37, height: 116 * 0.37 };
+
+const upright = (place: Place, depth: number, face: Pose["face"]): Pose => ({
+  x: place.x,
+  y: place.y,
+  width: place.width,
+  rotation: 0,
+  skew: 0,
+  opacity: 1,
+  depth,
+  face,
+});
+
+const dressed = (
+  zone: Dress["zone"],
+  look: Dress["look"],
+  frame: number,
+  back = false,
+): Dress => ({ zone, look, frame, back, rim: false });
+
+const faceOf = (object: ObjectView): Pose["face"] =>
+  object.name === null || object.facing === "down" ? "back" : "front";
+
+/** A hand card's pose in the fan. The fan turns a card about its bottom center; a pose turns
+ * about its top-left corner, which that turn carries here. */
+function fanned(spot: Spot, depth: number, face: Pose["face"]): Pose {
+  const turn = (spot.rotate * Math.PI) / 180;
+  const pivot = { x: spot.width / 2, y: spot.width / CARD_ASPECT };
+  return {
+    ...upright(spot, depth, face),
+    x: spot.x + pivot.x - pivot.x * Math.cos(turn) + pivot.y * Math.sin(turn),
+    y: spot.y + pivot.y - pivot.x * Math.sin(turn) - pivot.y * Math.cos(turn),
+    rotation: spot.rotate,
+  };
+}
+
+/** The pile a card outside the battlefield, the hands and the stack rests on. */
+const pileOf = (zone: ObjectView["zone"]) =>
+  zone === "library" ? "library" : "graveyard";
+
+function rest({ view, abilities }: Table, viewport: Viewport) {
+  const { bands, cards, stack } = phoneLayout(view, viewport);
+  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  const out = new Map<Name, Resting>();
+  // Permanents lie over one another in the order of their rows; nothing else overlaps them.
+  const rows = cards
+    .filter((spot) => spot.zone === "battlefield")
+    .sort((a, b) => a.z - b.z);
+  rows.forEach((spot, rank) => {
+    const object = objects.get(spot.slot)!;
+    out.set(spot.slot, {
+      object,
+      pose: upright(spot, DEPTH.field + rank, faceOf(object)),
+      dress: dressed("battlefield", "field", spot.width),
+    });
+  });
+  let held = 0;
+  for (const spot of cards) {
+    if (spot.zone !== "hand") continue;
+    const object = objects.get(spot.slot)!;
+    out.set(spot.slot, {
+      object,
+      pose: fanned(spot, DEPTH.hand + held++, faceOf(object)),
+      dress: dressed("hand", "hand", spot.width),
+    });
+  }
+  const theirs = view.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "opponent",
+  );
+  theirs.forEach((object, i) => {
+    const place = backSpot(bands, viewport.width, i, theirs.length);
+    out.set(object.slot, {
+      object,
+      pose: upright(place, DEPTH.backs + i, "back"),
+      dress: dressed("hand", "held", BACKS.width, true),
+    });
+  });
+  for (const object of view.objects) {
+    if (out.has(object.slot) || object.zone === "stack") continue;
+    const pile = pileOf(object.zone);
+    const order = view.players[object.owner][pile];
+    const top = object.zone === pile && order.at(-1) === object.slot;
+    const back = pile === "library";
+    out.set(object.slot, {
+      object,
+      pose: upright(
+        pileSpot(bands, object.owner, pile),
+        top ? DEPTH.pile : 0,
+        back ? "back" : faceOf(object),
+      ),
+      dress: dressed(object.zone, top ? "pile" : "hidden", PILE.width, back),
+    });
+  }
+  // As the desktop's: an ability the table has no number for cannot be named by a later
+  // step, so it is not drawn.
+  let numbered = 0;
+  for (const spot of stack) {
+    const pose = upright(spot, DEPTH.stack + spot.index, "front");
+    const dress = dressed("stack", "stack", spot.width);
+    if (spot.item.kind === "spell") {
+      const object = objects.get(spot.item.slot);
+      if (object) out.set(object.slot, { object, pose, dress });
+      continue;
+    }
+    const id = abilities[numbered++];
+    if (id === undefined) continue;
+    const source =
+      spot.item.source === null ? undefined : out.get(spot.item.source)?.object;
+    out.set(abilityName(id), { ability: spot.item, source, pose, dress });
+  }
+  return out;
+}
+
+function anchors(view: PlayerView, viewport: Viewport): Anchors {
+  const { bands } = phoneLayout(view, viewport);
+  const middle = bands.middle.top + bands.middle.height / 2;
+  const life = (side: Side) => {
+    const strip = side === "you" ? bands.yourStrip : bands.opponentStrip;
+    const middle = {
+      x: viewport.width / 2,
+      y: strip.top + strip.height / 2,
+    };
+    return {
+      corner: { x: middle.x - ORB.width / 2, y: middle.y - ORB.height / 2 },
+      middle,
+    };
+  };
+  return {
+    pile: (side, zone) => pileSpot(bands, side, pileOf(zone)),
+    // The stack's cards stand about the middle of its band, wherever the band's edges are.
+    stack: (index, count) => ({
+      x:
+        SIDE +
+        (viewport.width - 2 * SIDE - STACK_CARD.width) / 2 +
+        (index - (count - 1) / 2) * STACK_CARD.step,
+      y: middle - STACK_CARD.width / RATIO / 2,
+      width: STACK_CARD.width,
+    }),
+    life,
+    // A phone shows no unspent mana: it is its player's.
+    pool: (side) => life(side).middle,
+  };
+}
+
+/** The table as a phone lays it out, on a board the size of `viewport`. An ability lifts out
+ * of its source as the desktop's does. */
+export const phone = (viewport: Viewport): StageLayout => ({
+  rest: (table) => rest(table, viewport),
+  anchors: (view) => anchors(view, viewport),
+  emerging,
+});

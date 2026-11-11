@@ -3,16 +3,14 @@
 // ability where the page's stage has it (playback.ts). The stage plays whatever the session
 // sent; this only gives it somewhere to draw. The board's controls and the pointer are not
 // here yet, but the click that skips what is playing.
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useReducedMotion } from "motion/react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 import { LifeOrb } from "../components/Player";
 import { useStageWidth } from "../game/Stage";
 import { desktop } from "./desktop.ts";
-import { DomSurface } from "./dom.ts";
-import { Faces } from "./Faces.tsx";
+import { DESKTOP, Faces } from "./Faces.tsx";
+import { useSurface } from "./mount.ts";
 import { pageStage } from "./playback.ts";
 import type { ScriptStage } from "./stage.ts";
-import { snap, timingOf } from "./timing.ts";
 import "./stage.css";
 
 export function StageBoard({
@@ -22,28 +20,17 @@ export function StageBoard({
   onSkip?: () => void;
 }) {
   const { stage } = pageStage();
-  const layer = useRef<HTMLDivElement>(null);
-  const [surface, setSurface] = useState<DomSurface>();
-  const reduce = useReducedMotion() ?? false;
+  const { layer, surface } = useSurface(stage);
   const width = useStageWidth();
-  useLayoutEffect(() => {
-    const surface = new DomSurface(layer.current!);
-    stage.mount(surface);
-    setSurface(surface);
-    return () => stage.unmount(surface);
-  }, [stage]);
-  // Reduced motion is durations of zero: every step is over in the tick that begins it.
-  useLayoutEffect(() => {
-    stage.timings = reduce ? snap : timingOf;
-  }, [stage, reduce]);
-  // The layout reads the stage's width as it places (game/layout.ts STAGE).
-  useLayoutEffect(() => stage.relayout(), [stage, width]);
+  // The table is laid out for the desktop while this board shows it, and afresh at each
+  // width: the layout reads the stage's as it places (game/layout.ts STAGE).
+  useLayoutEffect(() => stage.relayout(desktop), [stage, width]);
   return (
     <div className="table" onPointerDown={onSkip}>
       <div className="far-shade" />
       <Life stage={stage} />
       <div className="card-layer" ref={layer} />
-      {surface && <Faces stage={stage} surface={surface} />}
+      {surface && <Faces stage={stage} surface={surface} skin={DESKTOP} />}
     </div>
   );
 }

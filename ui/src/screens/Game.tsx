@@ -2,7 +2,7 @@
 // mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
 // the open decision through `choose`. A reloaded page takes up the game in progress.
-import { Board } from "../stage/switch";
+import { Board, PhoneBoard } from "../stage/switch";
 import { Button, Dock } from "../components/Controls";
 import {
   type CandidateIndex,
@@ -27,7 +27,6 @@ import {
   isOpening,
   warnedTarget,
 } from "../game/decisions";
-import { PhoneBoard } from "../mobile/PhoneBoard";
 import { type Playback, eventsHold } from "../game/playback";
 import { RulesText } from "../components/Mana";
 import { SpecOpponentMove, SpecReplayPlay } from "./Testing";

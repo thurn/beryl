@@ -135,7 +135,7 @@ function rest({ view, abilities }: Table): Map<Name, Resting> {
 }
 
 /** A small copy in the middle of the source, upright and as wide as most of it. */
-function emerging(source: Pose, rest: Pose): Pose {
+export function emerging(source: Pose, rest: Pose): Pose {
   const width = source.width * EMERGING;
   return {
     ...rest,

@@ -1,8 +1,9 @@
 // The faces of the stage's nodes: React draws each object's card and each ability's stack
 // item, the skin as it is (components/Card.tsx, components/Stack.tsx), into the node the stage
 // made for it, and nothing else of the node. A face is drawn again only when what it is
-// drawn from or its dress changes; motion never reaches React.
-import { memo, useSyncExternalStore } from "react";
+// drawn from or its dress changes; motion never reaches React. A layout brings the faces it
+// is drawn with (`Skin`): the desktop's are here, the phone's in mobile/faces.tsx.
+import { memo, useSyncExternalStore, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { MotionConfig } from "motion/react";
 import type { ObjectView } from "../generated/protocol";
@@ -71,15 +72,32 @@ const AbilityFace = memo(function AbilityFace({
   );
 });
 
+/** How a layout's nodes are drawn: a card's face from its record and its dress, and an
+ * ability's from its stack item and its source's record. Each is memoised, so that motion
+ * draws none again. */
+export interface Skin {
+  Card: ComponentType<{ object: ObjectView; dress: Dress }>;
+  Ability: ComponentType<{
+    ability: StackAbility;
+    source: ObjectView | undefined;
+    dress: Dress;
+  }>;
+}
+
+/** The desktop's faces: the old board's cards and stack items. */
+export const DESKTOP: Skin = { Card: Face, Ability: AbilityFace };
+
 /** Every node's face. The skin turns a tapped frame with a spring of its own (Card.tsx's
  * TURN), on the browser's time; on the stage a record's change shows at once, and what moves
  * is a step's track, so the skin's motion is switched off here. */
 export function Faces({
   stage,
   surface,
+  skin,
 }: {
   stage: ScriptStage;
   surface: DomSurface;
+  skin: Skin;
 }) {
   const { resting } = useSyncExternalStore(stage.subscribe, () => stage.shown);
   return (
@@ -88,9 +106,9 @@ export function Faces({
         const node = surface.node(name);
         if (!node) return null;
         const face = object ? (
-          <Face object={object} dress={dress} />
+          <skin.Card object={object} dress={dress} />
         ) : (
-          <AbilityFace ability={ability} source={source} dress={dress} />
+          <skin.Ability ability={ability} source={source} dress={dress} />
         );
         return createPortal(face, node, `${name}`);
       })}

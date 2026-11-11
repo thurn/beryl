@@ -283,7 +283,16 @@ recordings do not show them.
   and games begin with the first player chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc
   34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
 - **The phone.** It plays what the desktop plays; its layout and gestures are
-  Beryl's own.
+  Beryl's own. Every motion is one of the desktop's verbs between the phone's
+  places. A card flies between your hand's fan, the stack in the middle band and
+  its row; the opponent's leaves and joins the card backs at the top edge. A
+  draw leaves the library's pile in its player's strip, and a card put into a
+  graveyard lands on that pile. An ability lifts out of its source to the stack,
+  and a token appears in its row. The rows make room as the middle band grows
+  for the stack, so a source glides aside while its ability lifts. An exiled
+  card rests unseen under its owner's graveyard, and an emblem's ability appears
+  on the stack with no lift: the phone draws no exile pile and no emblem yet.
+  Sounds follow the same steps.
 
 ## Verbs
 

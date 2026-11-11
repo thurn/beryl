@@ -34,6 +34,19 @@ const ROW_GAP = 8;
 /** The stack's cards: their width and the step between them. */
 export const STACK_CARD = { width: 68, step: 44 } as const;
 
+/** A pile in a player's strip, its library and then its graveyard: its card's size and each
+ * pile's left edge (phone.css `.phone-piles`). */
+export const PILE = {
+  width: 26,
+  height: 36,
+  library: 10,
+  graveyard: 46,
+} as const;
+/** The opponent's hand, a back per card peeking from the top edge of their strip: a back's
+ * width, the step between them, how far they rise over the edge, and the room kept at the
+ * right for the menu (phone.css `.phone-backs`). */
+export const BACKS = { width: 24, step: 14, rise: 10, right: 56 } as const;
+
 /** The space the layout fills: the viewport inside its top safe area, and the bottom safe area
  * (the home bar), which the hand runs under. */
 export interface Viewport {
@@ -88,6 +101,36 @@ export interface PhoneLayout {
   bands: Record<BandName, Band>;
   cards: Spot[];
   stack: StackSpot[];
+}
+
+/** Where the top card of `side`'s library or graveyard lies in their strip. */
+export function pileSpot(
+  bands: Record<BandName, Band>,
+  side: Side,
+  zone: "library" | "graveyard",
+) {
+  const strip = side === "you" ? bands.yourStrip : bands.opponentStrip;
+  return {
+    x: PILE[zone],
+    y: strip.top + (strip.height - PILE.height) / 2,
+    width: PILE.width,
+  };
+}
+
+/** Where the back of the opponent's hand card `index` of `count` lies, on a board `width`
+ * wide. */
+export function backSpot(
+  bands: Record<BandName, Band>,
+  width: number,
+  index: number,
+  count: number,
+) {
+  const left = width - BACKS.right - BACKS.step * (count - 1) - BACKS.width;
+  return {
+    x: left + BACKS.step * index,
+    y: bands.opponentStrip.top - BACKS.rise,
+    width: BACKS.width,
+  };
 }
 
 /** The phase a step belongs to, for the middle's icon. */
