@@ -16,9 +16,11 @@ use crate::filter::{Evaluate, Filter, Whose};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
+use crate::state::ZoneKey;
 use crate::state::{
     Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
 };
+use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
     Scratch, State, Step, apply, next,
@@ -512,11 +514,12 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     let mut s = State::new(&t, seed, Profile::EXACT);
     begin(&t, &mut s);
     for player in Seat::BOTH {
-        let land = (s.zone(player, Zone::Library))
+        let land = (s.zone(ZoneKey::Of(player, Zone::Library)))
             .iter()
             .find(|&slot| t.def(s.object(slot).card).name == "Test Land")
             .unwrap();
-        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
+        s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
+            .unwrap();
     }
     let p = s.turn().starting_player;
     (t, s, p)
@@ -524,7 +527,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 
 /// A slot holding `name` in the player's library or hand.
 fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
-    (s.zone(player, Zone::Library) | s.zone(player, Zone::Hand))
+    (s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand)))
         .iter()
         .find(|&slot| t.def(s.object(slot).card).name == name)
         .unwrap_or_else(|| panic!("no {name}"))
@@ -612,13 +615,14 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let lands: Vec<Slot> = s
-        .zone(p, Zone::Library)
+        .zone(ZoneKey::Of(p, Zone::Library))
         .iter()
         .filter(|&slot| t.def(s.object(slot).card).name == "Test Land")
         .take(2)
         .collect();
     for &land in &lands {
-        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
+        s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
+            .unwrap();
     }
     let plays = |s: &mut State, x: &mut Scratch| {
         let d = decide_with(&t, s, x);
@@ -632,7 +636,7 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
             .count()
     };
     assert_eq!(plays(&mut s, &mut x), 1, "copies alike are one candidate");
-    s.knowledge[p.opponent().index()].insert(lands[1]);
+    s.board().set_known(p.opponent(), lands[1], true);
     assert_eq!(plays(&mut s, &mut x), 2);
 }
 
@@ -641,7 +645,8 @@ fn an_enters_trigger_resolves_after_the_land_is_played() {
     let (t, mut s, p) = game();
     let mut x = Scratch::recording();
     let land = find(&s, &t, p, "Test Gain Land");
-    crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
+    s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
+        .unwrap();
     let d = decide_with(&t, &mut s, &mut x);
     let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(land)))
@@ -699,7 +704,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     assert!(s.triggers().is_empty());
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone, Zone::Nowhere);
-    assert!(!s.zone(p, Zone::Graveyard).contains(token));
+    assert!(!s.zone(ZoneKey::Of(p, Zone::Graveyard)).contains(token));
 }
 
 #[test]
@@ -832,9 +837,9 @@ fn combat_damage_to_a_player_triggers_and_noncombat_damage_does_not() {
     .unwrap();
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].info.player, q);
-    let hand = s.zone(p, Zone::Hand).count();
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).count();
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.zone(p, Zone::Hand).count(), hand + 1);
+    assert_eq!(s.zone(ZoneKey::Of(p, Zone::Hand)).count(), hand + 1);
     assert_eq!(s.player(q).life, 16);
 }
 
@@ -1059,7 +1064,13 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         let (t, mut s, p) = game();
         let mut x = Scratch::new();
         let springs = find(&s, &t, p, "Test Springs");
-        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), springs, Zone::Hand).unwrap();
+        s.move_object(
+            &mut crate::event::Sink::off(),
+            springs,
+            Zone::Hand,
+            Place::Top,
+        )
+        .unwrap();
         let d = decide_with(&t, &mut s, &mut x);
         let play = (0..d.len() as u16)
             .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
@@ -1082,7 +1093,13 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let mut x = Scratch::new();
     s.player_mut(p).life = 2;
     let springs = find(&s, &t, p, "Test Springs");
-    crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), springs, Zone::Hand).unwrap();
+    s.move_object(
+        &mut crate::event::Sink::off(),
+        springs,
+        Zone::Hand,
+        Place::Top,
+    )
+    .unwrap();
     let d = decide_with(&t, &mut s, &mut x);
     let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
@@ -1228,7 +1245,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     });
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].controller, p);
-    assert!(s.zone(q, Zone::Graveyard).contains(sphinx));
+    assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(sphinx));
     resolve_all(&t, &mut s, &mut x);
     let copy = *s
         .battlefield()
@@ -1283,7 +1300,7 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
     with_ctx(&t, &mut s, &mut x, mine, |ctx| ctx.destroy(r));
     assert_eq!(s.object(theirs).zone, Zone::Graveyard);
-    assert!(s.zone(q, Zone::Graveyard).contains(theirs));
+    assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(theirs));
     assert!(s.effects().is_empty(), "the effect ended with its object");
 }
 
@@ -1309,7 +1326,7 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
         Reason::Effect,
     )
     .unwrap();
-    let other = (s.zone(p, Zone::Library))
+    let other = (s.zone(ZoneKey::Of(p, Zone::Library)))
         .iter()
         .find(|&slot| s.object(slot).card != s.object(mine).card)
         .unwrap();
@@ -1419,11 +1436,11 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
 fn reading_derived_after_a_raw_change_without_a_refresh_panics() {
     let (t, mut s, p) = game();
     let bear = find(&s, &t, p, "Test Bear");
-    crate::zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         bear,
         Zone::Battlefield,
+        Place::Top,
     )
     .unwrap();
     let _ = s.derived(bear);

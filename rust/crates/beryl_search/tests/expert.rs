@@ -4,6 +4,7 @@
 mod common;
 
 use beryl_cards::{CARDS, names};
+use beryl_engine::ZoneKey;
 use beryl_engine::card::AbilityIx;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile,
@@ -318,13 +319,13 @@ fn jace_bounces_only_when_that_saves_him() {
     };
     let (t, mut s) = arrange(&THREATENED);
     let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
-        walker(d) && s.zone(P0, beryl_engine::Zone::Hand).count() == 2
+        walker(d) && s.zone(ZoneKey::Of(P0, beryl_engine::Zone::Hand)).count() == 2
     });
     assert_eq!(ability(&t, &s, chosen(&d, c)), Some(-1));
 
     let (t, mut s) = arrange(&SAFE);
     let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
-        walker(d) && s.zone(P0, beryl_engine::Zone::Hand).count() == 3
+        walker(d) && s.zone(ZoneKey::Of(P0, beryl_engine::Zone::Hand)).count() == 3
     });
     assert_eq!(ability(&t, &s, chosen(&d, c)), Some(2));
 }

@@ -1,6 +1,7 @@
 //! Effect data: what the interpreter makes of the vocabulary's instructions and expressions,
 //! resolved as abilities of test permanents.
 
+use crate::state::ZoneKey;
 use beryl_card::effect::build::{
     EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
     THOSE, YOU, add_counters, controller_of, create_copy, destroy, discard, draw, exile,
@@ -89,7 +90,7 @@ fn life(s: &State, player: Seat) -> i16 {
 }
 
 fn hand(s: &State, player: Seat) -> u32 {
-    s.zone(player, Zone::Hand).count()
+    s.zone(ZoneKey::Of(player, Zone::Hand)).count()
 }
 
 fn zone_of(s: &State, slot: Slot) -> Zone {
@@ -160,7 +161,7 @@ fn those_are_the_objects_the_instruction_before_moved_as_they_are_now() {
 
     let mut under = s;
     assert!(resolve(&t, &mut under, &mut x, source, &MILL_UNDER, &[], &[]).is_none());
-    assert!(under.zone(p, Zone::Graveyard).is_empty());
+    assert!(under.zone(ZoneKey::Of(p, Zone::Graveyard)).is_empty());
     assert_eq!(under.library(p).len(), s.library(p).len());
     assert!(under.library(p)[..2].iter().all(|card| top.contains(card)));
 }
@@ -251,7 +252,10 @@ fn a_choice_in_the_data_pauses_until_it_is_answered() {
     let mut discarded = s;
     assert!(resolve(&t, &mut discarded, &mut x, source, &DISCARD, &[], &[0]).is_none());
     assert_eq!(hand(&discarded, them), hand(&s, them) - 1);
-    assert_eq!(discarded.zone(them, Zone::Graveyard).count(), 1);
+    assert_eq!(
+        discarded.zone(ZoneKey::Of(them, Zone::Graveyard)).count(),
+        1
+    );
 
     let question = resolve(&t, &mut { s }, &mut x, source, &SCRY, &[], &[]).unwrap();
     assert_eq!(question.ask, Ask::Scry { count: 2 });

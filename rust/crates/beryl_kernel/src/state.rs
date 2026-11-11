@@ -15,7 +15,7 @@ use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, Slot, SlotId};
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
@@ -40,20 +40,46 @@ pub fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
     (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
 }
 
-/// Zone membership and the zones whose order the rules read (architecture §4.3).
+/// Names a zone, or a player's part of one, for [`State::zone`]
+/// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has their
+/// own library, hand, and graveyard. The other zones are shared by all players."
 ///
-/// Transitional: the fields are `pub`; by-w8gv.5.4 makes them private.
+/// Today the kernel keeps every zone but the stack by owner, so the battlefield and exile
+/// are named a player's part at a time. Two zones the key can name and the kernel does not
+/// yet keep:
+///
+/// - A zone shared by all players, as the rules see the battlefield and exile, is a variant
+///   with no player, as [`ZoneKey::Stack`] is: add the variant, keep its membership once in
+///   [`Zones`] and answer it in [`State::zone`].
+/// - A command zone ([CR 408.1](https://yawgatog.com/resources/magic-rules/#R4081): "The
+///   command zone is a game area reserved for certain specialized objects") is
+///   `Of(player, Zone::Command)` for the objects a player owns there, once `beryl_card`'s
+///   `Zone` has the variant and `Zone::OWNED` covers it, or a variant with no player if it
+///   is kept shared.
+///
+/// Either way no caller's signature changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ZoneKey {
+    /// The objects `Seat` owns in a zone other than the stack: their library, hand or
+    /// graveyard, or their cards on the battlefield or in exile.
+    Of(Seat, Zone),
+    /// The stack ([CR 405.1](https://yawgatog.com/resources/magic-rules/#R4051)).
+    Stack,
+}
+
+/// Zone membership and the zones whose order the rules read (architecture §4.3). Only the
+/// zone chokepoints write it ([`crate::zone`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone as usize` for the owned zones.
-    pub members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
-    pub stack: Bitboard<L::Slot>,
+    pub(crate) members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
+    pub(crate) stack: Bitboard<L::Slot>,
     /// Bottom first: the top card is the last.
-    pub library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    pub(crate) library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
     /// Bottom first: the top card is the last.
-    pub graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    pub(crate) graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
     /// The next battlefield timestamp.
-    pub next_timestamp: u16,
+    pub(crate) next_timestamp: u16,
 }
 
 impl Copy for Zones<Small> {}
@@ -70,8 +96,9 @@ pub struct Budgets {
 /// Engine bookkeeping that is not game state.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Flags {
-    /// A change since `derived` was last computed may have changed a layer result.
-    pub derived_dirty: bool,
+    /// A change since `derived` was last computed may have changed a layer result. Set by
+    /// the mutators that change a layer input and cleared by [`State::rederive`] alone.
+    pub(crate) derived_dirty: bool,
 }
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
@@ -80,24 +107,23 @@ pub struct Flags {
 /// Transitional: every field is `pub` for the one push that moved the state into this crate,
 /// so `beryl_engine` builds against it as it did against its own module. Four beads make them
 /// private, each field naming its own (the crate's contract: only the kernel writes a
-/// field): objects, which already are (by-w8gv.5.3); zones, the battlefield, the derived cache, knowledge and
-/// listening, by-w8gv.5.4; players, the turn and the game-level fields, by-w8gv.5.7; the
+/// field): objects, zones, the battlefield, the derived cache, knowledge and listening
+/// already are (by-w8gv.5.3, by-w8gv.5.4); players, the turn and the game-level fields, by-w8gv.5.7; the
 /// stack and the queues, by-w8gv.5.8. The fields keep their order: a state's hash feeds them
 /// in it.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
     /// Written through [`State::object_mut`] alone, which stays in the crate.
     pub(crate) objects: L::Table<Object<L>, SLOTS>,
-    /// Slots on the battlefield, in the order they entered. Private with by-w8gv.5.4.
-    pub battlefield: L::Queue<L::Slot, BATTLEFIELD>,
-    /// Layer results, by battlefield index. Private with by-w8gv.5.4.
-    pub derived: L::Table<Derived, BATTLEFIELD>,
+    /// Slots on the battlefield, in the order they entered.
+    pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
+    /// Layer results, by battlefield index.
+    pub(crate) derived: L::Table<Derived, BATTLEFIELD>,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
-    /// current while they are. Private with by-w8gv.5.4.
-    pub listening: u16,
-    /// Private with by-w8gv.5.4.
-    pub zones: Zones<L>,
+    /// current while they are.
+    pub(crate) listening: u16,
+    pub(crate) zones: Zones<L>,
     /// Private with by-w8gv.5.7.
     pub players: [Player<L>; 2],
     /// Private with by-w8gv.5.7.
@@ -122,8 +148,7 @@ pub struct State<L: Layout = Small> {
     /// Private with by-w8gv.5.8.
     pub pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
-    /// Private with by-w8gv.5.4.
-    pub knowledge: [Bitboard<L::Slot>; 2],
+    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
     /// Private with by-w8gv.5.7.
     pub rng: Rng,
     /// Private with by-w8gv.5.7.
@@ -212,9 +237,13 @@ impl<L: Layout> State<L> {
         self.rng = Rng::new(seed);
     }
 
-    /// The slots a player owns in a zone other than the stack.
-    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard<L::Slot> {
-        self.zones.members[owner.index()][zone as usize]
+    /// The objects in the zone, or the player's part of one, that `key` names.
+    #[inline]
+    pub fn zone(&self, key: ZoneKey) -> Bitboard<L::Slot> {
+        match key {
+            ZoneKey::Of(owner, zone) => self.zones.members[owner.index()][zone as usize],
+            ZoneKey::Stack => self.zones.stack,
+        }
     }
 
     /// The cards exiled with the object in `source` by an ability linked to another of its
@@ -223,13 +252,14 @@ impl<L: Layout> State<L> {
     /// instruction to exile them in the first ability." Kept while that object has left its
     /// zone, until a new object arrives in the slot (CR 400.7).
     pub fn exiled_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
-        (self.zone(Seat::P0, Zone::Exile) | self.zone(Seat::P1, Zone::Exile))
-            .iter()
-            .filter(|&x| {
-                let o = self.object(x);
-                o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
-            })
-            .collect()
+        (self.zone(ZoneKey::Of(Seat::P0, Zone::Exile))
+            | self.zone(ZoneKey::Of(Seat::P1, Zone::Exile)))
+        .iter()
+        .filter(|&x| {
+            let o = self.object(x);
+            o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
+        })
+        .collect()
     }
 
     /// A player's library as slots, bottom first.
@@ -262,6 +292,42 @@ impl<L: Layout> State<L> {
     /// Whether `player` knows the identity of the object in `slot`.
     pub fn knows(&self, player: Seat, slot: L::Slot) -> bool {
         self.knowledge[player.index()].contains(slot)
+    }
+
+    /// The slots whose identity each player knows, by seat (architecture §13): what a paused
+    /// resolution keeps to give back ([`State::restore_knowledge`]).
+    #[inline]
+    pub fn knowledge(&self) -> [Bitboard<L::Slot>; 2] {
+        self.knowledge
+    }
+
+    /// Whether a change since the layer results were last stored may have changed one, so
+    /// that [`State::derived`] must not be read before [`State::rederive`].
+    #[inline]
+    pub fn is_derived_stale(&self) -> bool {
+        self.flags.derived_dirty
+    }
+
+    /// Every permanent with its characteristics after continuous effects, in the order they
+    /// entered the battlefield.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if the layer results are stale.
+    #[inline]
+    pub fn permanents(&self) -> impl Iterator<Item = (L::Slot, &Derived)> + '_ {
+        debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+        self.battlefield
+            .iter()
+            .copied()
+            .zip(self.derived.as_slice().iter())
+    }
+
+    /// The kinds of event the permanents on the battlefield have triggered abilities for, as
+    /// the layers last stored them, or nothing while the layer results are stale.
+    #[inline]
+    pub fn listening(&self) -> Option<u16> {
+        (!self.flags.derived_dirty).then_some(self.listening)
     }
 
     /// A permanent's characteristics after continuous effects (architecture §9). Reads never

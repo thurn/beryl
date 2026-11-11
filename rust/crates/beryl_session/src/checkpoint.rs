@@ -13,6 +13,7 @@
 //! turn, a delayed trigger, a permission to cast) is not recorded: a checkpoint names the first
 //! such thing ([`State::off_board`]), and no game is rebuilt from it.
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
@@ -453,7 +454,7 @@ fn side<L: Layout>(
     p: Seat,
     place: &impl Fn(L::Slot) -> Option<u16>,
 ) -> Side {
-    let hand = s.zone(p, Zone::Hand);
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     let mut shown: Vec<String> = hand
         .iter()
         .filter(|&slot| s.knows(p.opponent(), slot))
@@ -463,7 +464,7 @@ fn side<L: Layout>(
     let mut hand: Vec<String> = hand.iter().map(|slot| name(t, s, slot)).collect();
     hand.sort();
     let mut exile: Vec<Exiled> = s
-        .zone(p, Zone::Exile)
+        .zone(ZoneKey::Of(p, Zone::Exile))
         .iter()
         .map(|slot| {
             let o = s.object(slot);

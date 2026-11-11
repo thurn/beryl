@@ -18,7 +18,7 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
-use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn, zone};
+use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 /// The position a player sees the open decision in. That is the state itself, except while
 /// a resolution is paused (§7.3): the committed state is then the one before the resolution
@@ -336,7 +336,7 @@ pub(crate) fn decision<L: Layout>(
         },
         Pending::Discard => {
             let p = s.turn.active;
-            let count = zone::hand_size(s, p).saturating_sub(turn::MAX_HAND_SIZE);
+            let count = s.hand_size(p).saturating_sub(turn::MAX_HAND_SIZE);
             Ok(Decision {
                 ask: Ask::Cleanup {
                     count: u8::try_from(count).unwrap_or(u8::MAX),
@@ -807,7 +807,7 @@ fn collapse_ordered<L: Layout>(
     s: &State<L>,
     slots: impl Iterator<Item = L::Slot>,
 ) -> Bitboard<L::Slot> {
-    let signature = |slot: L::Slot| zone::signature(s, slot);
+    let signature = |slot: L::Slot| s.signature(slot);
     let known = |slot: L::Slot| {
         matches!(s.object(slot).zone, Zone::Hand | Zone::Library)
             .then(|| Seat::BOTH.map(|p| s.knows(p, slot)))

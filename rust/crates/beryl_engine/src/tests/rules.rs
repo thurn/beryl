@@ -6,10 +6,11 @@ use crate::effect::EffectCtx;
 use crate::event::Sink;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::state::ZoneKey;
 use crate::state::{PendingTrigger, Zone};
+use crate::zone::Place;
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
-    zone,
 };
 
 const LEGENDS: &Decklist = &[(40, "Test Legend")];
@@ -19,8 +20,20 @@ fn two_legends(s: &mut State) -> (Seat, Slot, Slot) {
     let p = s.turn().starting_player;
     let lib = s.library(p);
     let (a, b) = (lib[0], lib[1]);
-    zone::move_to(s, &mut crate::event::Sink::off(), a, Zone::Battlefield).unwrap();
-    zone::move_to(s, &mut crate::event::Sink::off(), b, Zone::Battlefield).unwrap();
+    s.move_object(
+        &mut crate::event::Sink::off(),
+        a,
+        Zone::Battlefield,
+        Place::Top,
+    )
+    .unwrap();
+    s.move_object(
+        &mut crate::event::Sink::off(),
+        b,
+        Zone::Battlefield,
+        Place::Top,
+    )
+    .unwrap();
     (p, a, b)
 }
 
@@ -55,8 +68,8 @@ fn the_legend_rule_keeps_one_of_two_interchangeable_legends_silently() {
     begin(&t, &mut s);
     let (p, a, b) = two_legends(&mut s);
     assert_eq!(decide(&t, &mut s).kind, DecisionKind::Priority);
-    assert_eq!(s.zone(p, Zone::Battlefield).count(), 1);
-    assert_eq!(s.zone(p, Zone::Graveyard).count(), 1);
+    assert_eq!(s.zone(ZoneKey::Of(p, Zone::Battlefield)).count(), 1);
+    assert_eq!(s.zone(ZoneKey::Of(p, Zone::Graveyard)).count(), 1);
     assert!(s.battlefield().contains(&a.min(b)));
 }
 
@@ -68,18 +81,18 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
     let p = s.turn().starting_player;
     let mine = s.library(p)[0];
     let stolen = s.library(p.opponent())[0];
-    zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         mine,
         Zone::Battlefield,
+        Place::Top,
     )
     .unwrap();
-    zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         stolen,
         Zone::Battlefield,
+        Place::Top,
     )
     .unwrap();
     s.board().set_controller(stolen, p);
@@ -100,28 +113,28 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     let q = p.opponent();
     let from_library = s.library(p)[0];
     assert!(!s.knows(p, from_library));
-    zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         from_library,
         Zone::Hand,
+        Place::Top,
     )
     .unwrap();
     assert!(s.knows(p, from_library) && !s.knows(q, from_library));
     // A card returned from the battlefield was seen by everyone on its way.
     let from_battlefield = s.library(p)[0];
-    zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         from_battlefield,
         Zone::Battlefield,
+        Place::Top,
     )
     .unwrap();
-    zone::move_to(
-        &mut s,
+    s.move_object(
         &mut crate::event::Sink::off(),
         from_battlefield,
         Zone::Hand,
+        Place::Top,
     )
     .unwrap();
     assert!(s.knows(p, from_battlefield) && s.knows(q, from_battlefield));
@@ -152,17 +165,23 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let mut s = State::new(&t, 9, Profile::EXACT);
     begin(&t, &mut s);
     let p = s.turn().starting_player;
-    let hand: Vec<Slot> = s.zone(p, Zone::Hand).iter().collect();
+    let hand: Vec<Slot> = s.zone(ZoneKey::Of(p, Zone::Hand)).iter().collect();
     for &slot in &hand {
         assert!(s.knows(p, slot));
-        zone::move_to(&mut s, &mut crate::event::Sink::off(), slot, Zone::Library).unwrap();
+        s.move_object(
+            &mut crate::event::Sink::off(),
+            slot,
+            Zone::Library,
+            Place::Top,
+        )
+        .unwrap();
     }
     let before: Vec<(Slot, CardIx, u16)> = s
         .library(p)
         .iter()
         .map(|&slot| (slot, s.object(slot).card, s.object(slot).incarnation))
         .collect();
-    zone::shuffle_library(&mut s, p);
+    s.shuffle_library(p);
     let after = |slot: Slot| (s.object(slot).card, s.object(slot).incarnation);
     let mut cards_before: Vec<CardIx> = before.iter().map(|b| b.1).collect();
     let mut cards_after: Vec<CardIx> = before.iter().map(|b| after(b.0).0).collect();
@@ -187,7 +206,7 @@ fn filters_select_by_type_and_owner() {
     let mut s = State::new(&t, 9, Profile::EXACT);
     begin(&t, &mut s);
     let p = s.turn().starting_player;
-    let hand = s.zone(p, Zone::Hand);
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     let lands = Filter::Types(Types::LAND).select(&s, &t, hand, p);
     let others = Filter::Not(&Filter::Types(Types::LAND)).select(&s, &t, hand, p);
     assert_eq!((lands | others), hand);

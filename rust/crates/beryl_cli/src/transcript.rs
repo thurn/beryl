@@ -5,6 +5,7 @@
 //! (spells resolving or countered, creatures dying, damage, life gained), comes before the
 //! decision it led to, on lines that start with `*`.
 
+use beryl_engine::ZoneKey;
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -113,7 +114,7 @@ impl Transcript {
         for p in Seat::BOTH {
             let player = s.player(p);
             let hand: Vec<String> = s
-                .zone(p, Zone::Hand)
+                .zone(ZoneKey::Of(p, Zone::Hand))
                 .iter()
                 .map(|slot| name(t, s, slot))
                 .collect();

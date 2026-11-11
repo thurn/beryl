@@ -73,7 +73,7 @@ pub use profile::{
 };
 pub use reference::check_references;
 pub use relayout::Relayout;
-pub use state::{State, TurnStep, Zone};
+pub use state::{State, TurnStep, Zone, ZoneKey};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 
 #[cfg(test)]

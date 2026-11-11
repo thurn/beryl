@@ -15,7 +15,9 @@ use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{Seat, Slot};
+use crate::state::ZoneKey;
 use crate::state::{CounterKind, Pending, TurnStep, Zone};
+use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
@@ -69,7 +71,7 @@ fn counter_exile<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 fn ponder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 2);
-    let hand = ctx.state().zone(you, Zone::Hand);
+    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
     if !hand.is_empty() {
         let card = ctx.choose_object(you, hand, Ask::Plain)?;
         let card = ctx.state().object_ref(card);
@@ -114,7 +116,7 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     };
     let s = ctx.state();
     let nonland: Bitboard<L::Slot> = s
-        .zone(opponent, Zone::Hand)
+        .zone(ZoneKey::Of(opponent, Zone::Hand))
         .iter()
         .filter(|&slot| !LANDS.matches(s, ctx.table, slot, opponent))
         .collect();
@@ -131,7 +133,7 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "Discard a card. You may cast it without paying its mana cost."
 fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    let hand = ctx.state().zone(you, Zone::Hand);
+    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
     if hand.is_empty() {
         return Ok(());
     }
@@ -697,8 +699,14 @@ impl Game {
         begin(&t, &mut s);
         let me = s.turn().starting_player;
         for p in Seat::BOTH {
-            for slot in s.zone(p, Zone::Hand).iter() {
-                crate::zone::put_on_bottom(&mut s, &mut crate::event::Sink::off(), slot).unwrap();
+            for slot in s.zone(ZoneKey::Of(p, Zone::Hand)).iter() {
+                s.move_object(
+                    &mut crate::event::Sink::off(),
+                    slot,
+                    Zone::Library,
+                    Place::Bottom,
+                )
+                .unwrap();
             }
         }
         let mut g = Game {
@@ -720,7 +728,9 @@ impl Game {
             .iter()
             .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
-        crate::zone::move_to(&mut self.s, &mut crate::event::Sink::off(), slot, zone).unwrap();
+        self.s
+            .move_object(&mut crate::event::Sink::off(), slot, zone, Place::Top)
+            .unwrap();
         if zone == Zone::Battlefield {
             let loyalty = self.t.def(self.s.object(slot).card).front().loyalty;
             let mut board = self.s.board();
@@ -740,13 +750,14 @@ impl Game {
             .iter()
             .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
-        crate::zone::move_to(
-            &mut self.s,
-            &mut crate::event::Sink::off(),
-            slot,
-            Zone::Library,
-        )
-        .unwrap();
+        self.s
+            .move_object(
+                &mut crate::event::Sink::off(),
+                slot,
+                Zone::Library,
+                Place::Top,
+            )
+            .unwrap();
         slot
     }
 

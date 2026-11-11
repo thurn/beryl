@@ -9,7 +9,7 @@ use crate::layout::{Layout, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
     CastPermission, DECK_SLOTS, Derived, Object, Pending, PendingTrigger, Player, StackEntry,
-    State, Turn, Zone, deck_slot,
+    State, Turn, Zone, ZoneKey, deck_slot,
 };
 use crate::table::GameTable;
 use beryl_card::FaceIx;
@@ -108,9 +108,9 @@ impl<'a, L: Layout> Observation<'a, L> {
         }
     }
 
-    /// The slots a player owns in a zone: public, though the identities may not be.
-    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard<L::Slot> {
-        self.state.zone(owner, zone)
+    /// The objects in the zone `key` names: public, though the identities may not be.
+    pub fn zone(&self, key: ZoneKey) -> Bitboard<L::Slot> {
+        self.state.zone(key)
     }
 
     /// A player's library as slots, bottom first.

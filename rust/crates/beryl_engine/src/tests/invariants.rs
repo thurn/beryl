@@ -2,6 +2,7 @@
 
 use super::{MIXED, begin, table};
 use crate::state::Zone;
+use crate::state::ZoneKey;
 use crate::{Profile, Seat, Slot, State};
 use beryl_kernel::board::Corruption as Break;
 
@@ -15,16 +16,16 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
     begin(&t, &mut s);
     assert_eq!(s.check_invariants(&t), Ok(()));
     let p = s.turn().active;
-    let hand = s.zone(p, Zone::Hand).first().unwrap();
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).first().unwrap();
     let corruptions: [(&str, Corruption); 6] = [
         ("zone bitboards disagree", |s, _, slot| {
             s.board().corrupt(slot, Break::Zone(Zone::Library));
         }),
-        ("the library list disagrees", |s, p, _| {
-            s.zones.library[p.index()].pop();
+        ("the library list disagrees", |s, _, slot| {
+            s.board().corrupt(slot, Break::Unlisted);
         }),
         ("a hand card its owner doesn't know", |s, p, slot| {
-            s.knowledge[p.index()].remove(slot);
+            s.board().set_known(p, slot, false);
         }),
         ("permanent status off the battlefield", |s, _, slot| {
             s.board().corrupt(slot, Break::Tapped);
@@ -33,7 +34,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
             s.player_mut(p).life = 0;
         }),
         ("derived characteristics are stale", |s, _, _| {
-            s.flags.derived_dirty = true;
+            s.board().forget_derived();
         }),
     ];
     for (what, corrupt) in corruptions {
@@ -55,7 +56,7 @@ fn the_engine_panics_on_a_broken_invariant() {
     let mut s = State::new(&t, 2, Profile::EXACT);
     begin(&t, &mut s);
     let p = s.turn().active;
-    let hand = s.zone(p, Zone::Hand).first().unwrap();
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).first().unwrap();
     s.board().corrupt(hand, Break::Tapped);
     let message = |run: &mut dyn FnMut(&mut State)| {
         let mut bad = s;

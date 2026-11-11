@@ -3,6 +3,7 @@
 //! here has a generated TypeScript twin in `ui/src/generated/protocol.ts`
 //! ([`crate::typescript`]).
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, Face, FaceAbility,
     FaceIx, Keywords, ManaColor, ManaCost, Types,
@@ -1096,7 +1097,7 @@ pub fn player_view<L: Layout>(
             );
         }
         // Unordered zones: their objects say where they are.
-        for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(p, zone)) {
+        for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {
             objects.extend(slots.iter().map(|slot| object_view(t, obs, slot)));
         }
         state
@@ -1238,7 +1239,7 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
         })
     };
     let hand = |player| {
-        (!obs.zone(player, Zone::Hand).is_empty()).then(|| CardHandling::Hand {
+        (!obs.zone(ZoneKey::Of(player, Zone::Hand)).is_empty()).then(|| CardHandling::Hand {
             side: side(obs, player),
         })
     };
@@ -1548,7 +1549,7 @@ fn decision_view<L: Layout>(
 /// The cards in the viewer's hand they may neither cast nor play as a land at their priority
 /// ([`DecisionView::refused`]).
 fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
-    obs.zone(obs.viewer(), Zone::Hand)
+    obs.zone(ZoneKey::Of(obs.viewer(), Zone::Hand))
         .iter()
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {

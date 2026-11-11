@@ -43,6 +43,7 @@
 
 mod combat;
 
+use beryl_engine::ZoneKey;
 use std::cell::OnceCell;
 
 use beryl_cards::names;
@@ -464,9 +465,10 @@ impl Expert<'_> {
     /// so that milling them may hand them the game.
     fn their_jace_live(&self) -> bool {
         let opp = self.opp();
-        let gone = (self.obs().zone(opp, Zone::Graveyard) | self.obs().zone(opp, Zone::Exile))
-            .iter()
-            .any(|s| self.is(s, names::JACE_WIELDER_OF_MYSTERIES));
+        let gone = (self.obs().zone(ZoneKey::Of(opp, Zone::Graveyard))
+            | self.obs().zone(ZoneKey::Of(opp, Zone::Exile)))
+        .iter()
+        .any(|s| self.is(s, names::JACE_WIELDER_OF_MYSTERIES));
         self.p.wins_from_empty(opp) || (self.in_game(names::JACE_WIELDER_OF_MYSTERIES) && !gone)
     }
 
@@ -516,7 +518,7 @@ impl Expert<'_> {
     }
 
     fn hand(&self, who: Seat) -> Bitboard {
-        self.obs().zone(who, Zone::Hand)
+        self.obs().zone(ZoneKey::Of(who, Zone::Hand))
     }
 
     /// Our own Mana Crypt, when its next lost flip (3 damage, half the time) would kill us.
@@ -569,7 +571,10 @@ impl Expert<'_> {
             return 0;
         }
         self.obs()
-            .zone(self.obs().controller(slot).opponent(), Zone::Exile)
+            .zone(ZoneKey::Of(
+                self.obs().controller(slot).opponent(),
+                Zone::Exile,
+            ))
             .iter()
             .filter(|&s| self.obs().object(s).linked == Some(slot))
             .map(|s| self.value(s))
@@ -1370,9 +1375,11 @@ impl Expert<'_> {
     /// Whether we can see a card named `name` outside the opponent's hand and library.
     fn seen(&self, name: &str) -> bool {
         let obs = self.obs();
-        let mut zones = obs.zone(self.me(), Zone::Hand);
+        let mut zones = obs.zone(ZoneKey::Of(self.me(), Zone::Hand));
         for p in Seat::BOTH {
-            zones = zones | obs.zone(p, Zone::Graveyard) | obs.zone(p, Zone::Exile);
+            zones = zones
+                | obs.zone(ZoneKey::Of(p, Zone::Graveyard))
+                | obs.zone(ZoneKey::Of(p, Zone::Exile));
         }
         zones.iter().any(|s| self.is(s, name))
             || obs.battlefield().iter().any(|&s| self.is(s, name))

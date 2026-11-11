@@ -17,6 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
+use crate::state::ZoneKey;
 use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
@@ -50,7 +51,7 @@ const PROBES: &[ManaCost] = &[
 /// Checks the engine's fast paths against their reference implementations. It holds
 /// wherever [`State::check_invariants`] does, and checks nothing once the game is over.
 pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
-    if s.outcome.is_some() || s.flags.derived_dirty {
+    if s.outcome.is_some() || s.is_derived_stale() {
         return Ok(());
     }
     check_layers(s, t)?;
@@ -68,23 +69,22 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
 /// stale, which this sees and the dirty flag cannot.
 fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
     let mut fresh = s.clone();
-    fresh.flags.derived_dirty = true;
+    fresh.board().forget_derived();
     layers::refresh(&mut fresh, t, &mut Sink::default());
-    let n = s.battlefield.len();
-    for i in 0..n {
+    for ((slot, was), (_, now)) in s.permanents().zip(fresh.permanents()) {
         check(
-            fresh.derived[i] == s.derived[i],
+            now == was,
             "layer results differ from a fresh recompute",
-            Some(At::Slot(s.battlefield.as_slice()[i].index())),
+            Some(At::Slot(slot.index())),
         )?;
     }
     check(
-        fresh.listening == s.listening,
+        fresh.listening() == s.listening(),
         "the trigger listeners differ from a fresh recompute",
         None,
     )?;
     check(
-        fresh.knowledge == s.knowledge,
+        fresh.knowledge() == s.knowledge(),
         "knowledge differs from a fresh layer recompute",
         None,
     )
@@ -99,7 +99,7 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
     };
     let at = Some(At::Player(player));
     let hand = s
-        .zone(player, Zone::Hand)
+        .zone(ZoneKey::Of(player, Zone::Hand))
         .iter()
         .flat_map(|slot| t.def(s.card(slot)).faces.iter().map(|f| f.cost));
     let abilities = s

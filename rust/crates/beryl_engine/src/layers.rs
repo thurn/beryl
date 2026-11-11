@@ -4,10 +4,11 @@
 use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
 use crate::ids::CardIx;
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, Queue};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
+use beryl_kernel::derive::Rederive;
 
 /// One continuous effect to apply in this recompute.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -28,10 +29,9 @@ struct Apply {
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
 pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) {
-    if s.flags.derived_dirty {
+    if let Some(cache) = s.rederive() {
         sink.work.layer_recomputes += 1;
-        recompute(s, t);
-        s.flags.derived_dirty = false;
+        recompute(cache, t);
     }
 }
 
@@ -41,7 +41,7 @@ pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sin
 /// name, no subtypes, and no mana cost". So it counts for nothing, and masking or
 /// determinizing its hidden identity leaves this unchanged.
 pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> u16 {
-    s.battlefield
+    s.battlefield()
         .iter()
         .map(|&slot| s.object(slot))
         .filter(|o| o.face != FaceIx::DOWN)
@@ -87,18 +87,19 @@ pub(crate) fn counters_matter<L: Layout>(
 /// characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
 /// cards' effects in one layer depend on each other
 /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
-fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
-    // Effects on an object that left its zone end: that object no longer exists (CR 400.7).
-    s.drop_stale_effects();
-
-    s.listening = listening(s, t);
+///
+/// The kernel lends the cache with the effects on objects that left their zone already ended,
+/// and stores the results, with what each face-down permanent's controller now sees, as the
+/// recompute finishes ([`Rederive::finish`]).
+fn recompute<L: Layout>(mut s: Rederive<'_, L>, t: &GameTable) {
+    let listening = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<L::Queue<Apply, 192>> = None;
-    for i in 0..s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
+    for i in 0..s.battlefield().len() {
+        let slot = s.battlefield()[i];
         let o = *s.object(slot);
-        let f = face(s, t, slot);
+        let f = face(&s, t, slot);
         // Layer 1: the copiable values. A token copy points at the card it copies, so its
         // values are the card's, with the 1/1 exception of CR 707.9b.
         let (power, toughness) = if o.flags.has(ObjectFlags::ONE_ONE) {
@@ -106,7 +107,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         } else {
             (f.power.unwrap_or(0), f.toughness.unwrap_or(0))
         };
-        s.derived[i] = Derived {
+        s.results()[i] = Derived {
             power,
             toughness,
             types: f.types,
@@ -146,7 +147,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             }
         }
     }
-    for e in s.effects.iter() {
+    for e in s.effects() {
         let Continuous::Layer(m) = e.effect else {
             continue;
         };
@@ -164,14 +165,14 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             });
         }
     }
-    let len = s.battlefield.len();
+    let len = s.battlefield().len();
     if let Some(list) = &mut list {
         list.as_mut_slice()
             .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
         for a in list.iter() {
             let Some(m) = a.modification else { continue };
             let i = usize::from(a.target);
-            apply(&mut s.derived.as_mut_slice()[..len], i, a.source, m);
+            apply(s.results(), i, a.source, m);
         }
     }
     // Layer 7c: counters modify power and toughness
@@ -179,21 +180,13 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     // that modify power and/or toughness (but don't set power and/or toughness to a specific
     // number or value) are applied." Additions commute, so they follow the effects.
     for i in 0..len {
-        let c = s.object(s.battlefield.as_slice()[i]).counters;
-        let d = &mut s.derived[i];
+        let c = s.object(s.battlefield()[i]).counters;
+        let d = &mut s.results()[i];
         let delta = c.plus_one as i8 - c.minus_one as i8;
         d.power = d.power.saturating_add(delta);
         d.toughness = d.toughness.saturating_add(delta);
     }
-    // [CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085): "At any time, you may
-    // look at ... a face-down permanent you control". Control is settled here, so a player who
-    // gains control of one sees it from then on.
-    for i in 0..len {
-        let slot = s.battlefield.as_slice()[i];
-        if s.object(slot).face == FaceIx::DOWN {
-            s.knowledge[s.derived[i].controller.index()].insert(slot);
-        }
-    }
+    s.finish(listening);
 }
 
 /// Applies one modification to the permanent at battlefield index `i`.

@@ -18,7 +18,7 @@ use crate::state::{
     TurnStep, Zone, token_slots,
 };
 use crate::table::GameTable;
-use crate::zone;
+use crate::zone::Place;
 
 /// Lent by [`State::board`]: the handle that arranges a position with no event and no rules
 /// action.
@@ -32,6 +32,8 @@ pub enum Corruption {
     Zone(Zone),
     /// Taps it wherever it is.
     Tapped,
+    /// Takes the top card off its owner's library list, leaving that card a member.
+    Unlisted,
 }
 
 impl<L: Layout> State<L> {
@@ -178,7 +180,8 @@ impl<L: Layout> Board<'_, L> {
     /// this way has been there since its controller's turn began, so it is not summoning sick
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
-        zone::move_to(self.0, &mut Sink::off(), slot, zone)?;
+        self.0
+            .move_object(&mut Sink::off(), slot, zone, Place::Top)?;
         if zone == Zone::Battlefield {
             self.0
                 .object_mut(slot)
@@ -368,11 +371,23 @@ impl<L: Layout> Board<'_, L> {
     /// ([`State::check_invariants`]).
     #[doc(hidden)]
     pub fn corrupt(&mut self, slot: L::Slot, how: Corruption) {
-        let o = self.0.object_mut(slot);
+        let owner = self.0.object(slot).owner.index();
         match how {
-            Corruption::Zone(zone) => o.zone = zone,
-            Corruption::Tapped => o.flags.set(ObjectFlags::TAPPED, true),
+            Corruption::Zone(zone) => self.0.object_mut(slot).zone = zone,
+            Corruption::Tapped => {
+                self.0.object_mut(slot).flags.set(ObjectFlags::TAPPED, true);
+            }
+            Corruption::Unlisted => {
+                self.0.zones.library[owner].pop();
+            }
         }
+    }
+
+    /// Marks the layer results stale, so the next refresh computes them again from base:
+    /// for the reference check, which compares the two, and the tests of the invariants.
+    #[doc(hidden)]
+    pub fn forget_derived(&mut self) {
+        self.0.flags.derived_dirty = true;
     }
 
     pub fn set_life(&mut self, player: Seat, life: i16) {

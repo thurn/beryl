@@ -25,7 +25,7 @@ use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::ids::{CardIx, Seat};
 use crate::layout::Layout;
-use crate::state::{ObjectFlags, State, TurnStep, Zone};
+use crate::state::{ObjectFlags, State, TurnStep, Zone, ZoneKey};
 
 /// The outcome of one random event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -194,7 +194,7 @@ fn settle_but<L: Layout>(
 pub fn adopt_unknown<L: Layout>(s: &mut State<L>, run: &State<L>) {
     let known = s.knowledge[0] | s.knowledge[1];
     for p in Seat::BOTH {
-        for slot in (s.zone(p, Zone::Library) & !known).iter() {
+        for slot in (s.zone(ZoneKey::Of(p, Zone::Library)) & !known).iter() {
             s.object_mut(slot).card = run.object(slot).card;
         }
     }
@@ -213,7 +213,7 @@ fn partner<L: Layout>(
     if o.zone as usize >= Zone::OWNED {
         return None;
     }
-    (s.zone(o.owner, o.zone) & !settled)
+    (s.zone(ZoneKey::Of(o.owner, o.zone)) & !settled)
         .iter()
         .find(|&p| p != slot && unknown(s, p) && s.object(p).card == card)
 }

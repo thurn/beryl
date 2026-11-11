@@ -9,10 +9,12 @@ use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
+use crate::state::ZoneKey;
 use crate::state::{CounterKind, ObjectFlags, Zone};
+use crate::zone::Place;
 use crate::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
-    Replay, Scratch, State, Step, TurnStep, apply, next, zone,
+    Replay, Scratch, State, Step, TurnStep, apply, next,
 };
 use crate::{Layout, bodies};
 
@@ -200,20 +202,22 @@ impl Game {
 
     /// The slots of `player`'s cards named `name` not yet on the battlefield, lowest first.
     fn cards(&self, player: Seat, name: &str) -> Vec<Slot> {
-        (self.s.zone(player, Zone::Library) | self.s.zone(player, Zone::Hand))
-            .iter()
-            .filter(|&slot| self.t.def(self.s.object(slot).card).name == name)
-            .collect()
+        (self.s.zone(ZoneKey::Of(player, Zone::Library))
+            | self.s.zone(ZoneKey::Of(player, Zone::Hand)))
+        .iter()
+        .filter(|&slot| self.t.def(self.s.object(slot).card).name == name)
+        .collect()
     }
 
     fn put_slot(&mut self, slot: Slot) -> Slot {
-        zone::move_to(
-            &mut self.s,
-            &mut crate::event::Sink::off(),
-            slot,
-            Zone::Battlefield,
-        )
-        .unwrap();
+        self.s
+            .move_object(
+                &mut crate::event::Sink::off(),
+                slot,
+                Zone::Battlefield,
+                Place::Top,
+            )
+            .unwrap();
         self.s.board().set_sick(slot, false);
         if let Some(loyalty) = self.t.def(self.s.card(slot)).front().loyalty {
             self.s
@@ -644,11 +648,11 @@ fn an_attacker_stays_blocked_when_its_blocker_leaves() {
     g.pick(DecisionKind::Blocker, Opt::Block(bear));
     // Stop after blockers are declared and remove the blocker (CR 506.4, 509.1h).
     stop_at(&mut g, TurnStep::DeclareBlockers);
-    zone::move_to(
-        &mut g.s,
+    g.s.move_object(
         &mut crate::event::Sink::off(),
         bear,
         Zone::Graveyard,
+        Place::Top,
     )
     .unwrap();
     g.finish_combat();
@@ -666,11 +670,11 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
     g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
-    zone::move_to(
-        &mut g.s,
+    g.s.move_object(
         &mut crate::event::Sink::off(),
         walker,
         Zone::Graveyard,
+        Place::Top,
     )
     .unwrap();
     g.finish_combat();
@@ -686,11 +690,11 @@ fn combat_goes_on_when_every_declared_attacker_is_removed() {
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     stop_at(&mut g, TurnStep::DeclareAttackers);
-    zone::move_to(
-        &mut g.s,
+    g.s.move_object(
         &mut crate::event::Sink::off(),
         bear,
         Zone::Graveyard,
+        Place::Top,
     )
     .unwrap();
     g.finish_combat();

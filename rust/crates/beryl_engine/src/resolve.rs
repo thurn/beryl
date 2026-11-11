@@ -19,7 +19,6 @@ use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
-use crate::ids::Seat;
 use crate::interpret;
 use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
@@ -96,7 +95,7 @@ pub(crate) fn resolve<L: Layout>(
             s.pending = Pending::Resolving(Resolving {
                 record,
                 question,
-                knowledge: knowledge.unwrap_or(s.knowledge),
+                knowledge: knowledge.unwrap_or(s.knowledge()),
             });
         }
     }
@@ -109,8 +108,7 @@ pub(crate) fn resolve<L: Layout>(
 /// sink, so chance does not count them as revealed again ([`chance`]). The caller empties
 /// `sink.revealed` once the run returns.
 fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, knowledge: [Bitboard<L::Slot>; 2]) {
-    sink.revealed = (s.knowledge[0] | s.knowledge[1]) & !(knowledge[0] | knowledge[1]);
-    s.knowledge = knowledge;
+    sink.revealed = s.restore_knowledge(knowledge);
 }
 
 /// What a paused run showed a player stays known in the committed state (architecture
@@ -138,15 +136,7 @@ fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool
     if settled && !random {
         chance::adopt_unknown(s, run);
     }
-    for p in Seat::BOTH {
-        let gained = run.knowledge[p.index()] & !s.knowledge[p.index()];
-        for slot in gained.iter() {
-            let (now, then) = (s.object(slot), run.object(slot));
-            if now.card == then.card && (!random || now.incarnation == then.incarnation) {
-                s.knowledge[p.index()].insert(slot);
-            }
-        }
-    }
+    s.keep_seen(run, random);
 }
 
 /// Replays a paused resolution into the scratch state up to its question, so a viewer sees

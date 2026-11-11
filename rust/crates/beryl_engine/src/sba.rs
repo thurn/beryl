@@ -7,11 +7,11 @@ use crate::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, Table};
+use crate::state::ZoneKey;
 use crate::state::{ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn::apnap;
-use crate::zone;
 
 /// Checks state-based actions and performs them, returning whether any were performed. A
 /// player losing ends the game; a legend-rule choice opens [`Pending::LegendRule`], whose
@@ -55,7 +55,7 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     for slot in tokens.iter() {
-        zone::cease_to_exist(s, slot);
+        s.cease_to_exist(slot);
     }
     event::move_batch(
         s,
@@ -101,8 +101,7 @@ type Doomed<S> = (Bitboard<S>, Bitboard<S>, [Bitboard<S>; 2]);
 fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
     let mut graveyard = Bitboard::EMPTY;
     let mut legendary = [Bitboard::EMPTY; 2];
-    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
-    for (&slot, d) in s.battlefield.iter().zip(s.derived.iter()) {
+    for (slot, d) in s.permanents() {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             legendary[d.controller.index()].insert(slot);
         }
@@ -118,10 +117,10 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
     }
     // The zones' memberships hold everything off the battlefield and in a zone, so the
     // token slots need no scan.
-    let mut away = s.zones.stack;
+    let mut away = s.zone(ZoneKey::Stack);
     for player in Seat::BOTH {
         for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
-            away |= s.zone(player, zone);
+            away |= s.zone(ZoneKey::Of(player, zone));
         }
     }
     let tokens = (away & L::TOKEN_POOL)
@@ -203,8 +202,7 @@ fn legendary<L: Layout>(s: &State<L>) -> [Bitboard<L::Slot>; 2] {
     let mut by_controller = [Bitboard::EMPTY; 2];
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
-    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
-    for (&slot, d) in s.battlefield.iter().zip(s.derived.iter()) {
+    for (slot, d) in s.permanents() {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             by_controller[d.controller.index()].insert(slot);
         }
@@ -275,7 +273,7 @@ fn legend_group_in<L: Layout>(
     }
     for player in apnap(s) {
         let mut seen = Bitboard::EMPTY;
-        for &slot in s.battlefield.iter() {
+        for &slot in s.battlefield() {
             if !legendary[player.index()].contains(slot) || seen.contains(slot) {
                 continue;
             }

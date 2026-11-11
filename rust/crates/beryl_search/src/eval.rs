@@ -8,6 +8,7 @@
 //! where the state is a world it sampled, so reading hands there is no cheating.
 
 use beryl_engine::Layout;
+use beryl_engine::ZoneKey;
 use beryl_engine::card::Types;
 use beryl_engine::{Seat, State, Zone};
 
@@ -50,7 +51,7 @@ const LIBRARY_SHORT: usize = 5;
 pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Features {
     let mut f = [0.0; FEATURES];
     f[0] = f64::from(s.player(p).life.clamp(-10, 40));
-    let hand = s.zone(p, Zone::Hand);
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     f[1] = f64::from(hand.count());
     f[2] = hand
         .iter()

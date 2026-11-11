@@ -4,6 +4,7 @@
 
 mod common;
 
+use beryl_engine::ZoneKey;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Decision, GameTable, Observation, Profile, Scratch, Seat, Slot, State, Zone, observe,
@@ -100,7 +101,7 @@ fn the_hands_sight_keeps_the_hands_and_deals_the_libraries() {
     for seed in 0..4 {
         let det = obs.determinize_libraries(&t, &mut SplitMix64::new(seed));
         for p in Seat::BOTH {
-            for slot in s.zone(p, Zone::Hand).iter() {
+            for slot in s.zone(ZoneKey::Of(p, Zone::Hand)).iter() {
                 assert_eq!(det.card(slot), s.card(slot));
             }
             libraries_differ |= s

@@ -25,6 +25,7 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
 //!   the bottom only the cards not worth drawing.
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
     Keywords, Replacement, TargetKind, TargetSpec, Types,
@@ -309,7 +310,7 @@ impl Policy<'_> {
                 .obs
                 .card(slot)
                 .is_some_and(|c| !self.t.def(c).front().types.intersects(Types::LAND));
-        let mine = |zone| self.obs.zone(self.me, zone);
+        let mine = |zone| self.obs.zone(ZoneKey::Of(self.me, zone));
         let lands = (mine(Zone::Hand) | mine(Zone::Battlefield))
             .iter()
             .filter(|&s| self.is_land(s))
@@ -326,7 +327,7 @@ impl Policy<'_> {
     /// left once a card per mulligan taken goes to the bottom: the least worth keeping, as
     /// [`DecisionKind::PutOnBottom`] picks them.
     pub(crate) fn keep(&self) -> bool {
-        let mut kept = self.obs.zone(self.me, Zone::Hand);
+        let mut kept = self.obs.zone(ZoneKey::Of(self.me, Zone::Hand));
         for _ in 0..self.obs.player(self.me).mulligans {
             match kept.iter().min_by_key(|&slot| self.in_hand(slot)) {
                 Some(least) => kept.remove(least),
@@ -356,7 +357,7 @@ impl Policy<'_> {
         };
         let info = self.values.get(card);
         let f = self.t.def(card).face(face);
-        if info.wheel && self.obs.zone(self.me, Zone::Hand).count() > 3 {
+        if info.wheel && self.obs.zone(ZoneKey::Of(self.me, Zone::Hand)).count() > 3 {
             return 0;
         }
         if info.never_cast {
@@ -438,7 +439,7 @@ impl Policy<'_> {
         self.obs.library(self.me).len() > LIBRARY_LOW
             || self
                 .obs
-                .zone(self.me, Zone::Hand)
+                .zone(ZoneKey::Of(self.me, Zone::Hand))
                 .iter()
                 .any(|s| self.info(s).is_some_and(|info| info.wheel))
             || self.wins_from_empty(self.me)

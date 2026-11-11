@@ -1,5 +1,6 @@
 //! The generated names, the card table and the decklists.
 
+use beryl_engine::ZoneKey;
 use std::fmt::Write;
 use std::path::PathBuf;
 
@@ -421,7 +422,7 @@ fn a_question_after_a_look_keeps_the_look() {
         }
     };
     assert_eq!(question.player, Seat::P0);
-    for slot in s.zone(Seat::P1, Zone::Hand).iter() {
+    for slot in s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).iter() {
         assert!(
             s.knows(Seat::P0, slot),
             "player 0 forgot the card in slot {slot}"
@@ -466,7 +467,7 @@ fn a_search_that_finds_nothing_still_shuffles() {
         ]);
     let mut known = Vec::new();
     beryl_scenario::visit(&CARDS, &SEARCH, |_, s, d| {
-        let library = s.zone(Seat::P0, Zone::Library);
+        let library = s.zone(ZoneKey::Of(Seat::P0, Zone::Library));
         let count = library
             .iter()
             .filter(|&slot| s.knows(Seat::P0, slot))

@@ -1,5 +1,6 @@
 //! The strict runner: plays a scenario through `next` and `apply` only (architecture §17.1).
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
@@ -523,7 +524,7 @@ impl Runner {
                     return Err(format!("no owned {zone:?} to count"));
                 }
                 let n = s
-                    .zone(player, zone)
+                    .zone(ZoneKey::Of(player, zone))
                     .iter()
                     .filter(|&slot| card.is_none_or(|c| self.name(slot) == c))
                     .count();
@@ -626,7 +627,7 @@ impl Runner {
         }
         for player in Seat::BOTH {
             for zone in [Zone::Hand, Zone::Graveyard, Zone::Exile, Zone::Library] {
-                let slots: Vec<Slot> = s.zone(player, zone).iter().collect();
+                let slots: Vec<Slot> = s.zone(ZoneKey::Of(player, zone)).iter().collect();
                 let names: Vec<&'static str> = slots.iter().map(|&slot| self.name(slot)).collect();
                 out.push(Assertion::Count {
                     player,

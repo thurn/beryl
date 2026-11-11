@@ -6,6 +6,7 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::profile::Limits;
 use crate::state::Zone;
+use crate::state::ZoneKey;
 use crate::{Choice, DecisionKind, Decklist, Opt, Outcome, Profile, StallReason, State};
 
 /// Plays a land-and-pass game, returning the outcome, the final state and the state hash at
@@ -98,7 +99,7 @@ fn only_the_active_player_plays_one_land_in_a_main_phase() {
         };
         assert!(
             Filter::Types(Types::LAND).matches(s, &t, slot, d.player)
-                && s.zone(d.player, Zone::Hand).contains(slot)
+                && s.zone(ZoneKey::Of(d.player, Zone::Hand)).contains(slot)
         );
         land_offers += 1;
     });
@@ -114,10 +115,10 @@ fn cleanup_discards_down_to_seven() {
     let outcome = play(&t, &mut s, land_go, |s, d| {
         let active = s.turn().active;
         // The player who isn't active ended their own turn at seven cards or fewer.
-        assert!(s.zone(active.opponent(), Zone::Hand).count() <= 7);
+        assert!(s.zone(ZoneKey::Of(active.opponent(), Zone::Hand)).count() <= 7);
         if d.kind == DecisionKind::Discard {
             assert_eq!(d.player, active);
-            assert!(s.zone(active, Zone::Hand).count() > 7);
+            assert!(s.zone(ZoneKey::Of(active, Zone::Hand)).count() > 7);
             discards += 1;
         }
     });
@@ -125,7 +126,7 @@ fn cleanup_discards_down_to_seven() {
     assert!(discards > 5);
     for p in Seat::BOTH {
         assert_eq!(
-            s.graveyard(p).len() + s.zone(p, Zone::Hand).count() as usize,
+            s.graveyard(p).len() + s.zone(ZoneKey::Of(p, Zone::Hand)).count() as usize,
             40
         );
     }

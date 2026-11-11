@@ -1,14 +1,15 @@
 //! Turn structure: turns, steps and their turn-based actions (architecture §12.1).
 
+use crate::combat;
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue};
-use crate::state::{Duration, ManaPool, ObjectFlags, Pending, State, TurnStep, Zone};
+use crate::state::ZoneKey;
+use crate::state::{Duration, ManaPool, Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
-use crate::{combat, zone};
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
 /// "normally seven".
@@ -22,9 +23,9 @@ pub(crate) fn apnap<L: Layout>(s: &State<L>) -> [Seat; 2] {
 
 /// Whether any creature is attacking.
 pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
-    s.battlefield
+    s.battlefield()
         .iter()
-        .any(|&slot| s.object(slot).flags.has(ObjectFlags::ATTACKING))
+        .any(|&slot| s.object(slot).is_attacking())
 }
 
 /// Begins the next turn: the starting player's first, then alternating
@@ -52,12 +53,8 @@ pub(crate) fn begin_turn<L: Layout>(
     let active = s.turn.active;
     // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
-    let before = s.effects.len();
-    s.effects
-        .retain(|e| e.duration != Duration::UntilYourNextTurn(active));
-    if s.effects.len() != before {
-        s.flags.derived_dirty = true;
-    }
+    s.legacy_mut()
+        .end_effects(Duration::UntilYourNextTurn(active));
     layers::refresh(s, t, sink);
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began. Nothing has entered, and no loyalty ability has been
@@ -120,8 +117,8 @@ pub(crate) fn begin_step<L: Layout>(
 fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
     let active = s.turn.active;
     let mut i = 0;
-    while i < s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
+    while i < s.battlefield().len() {
+        let slot = s.battlefield()[i];
         if s.controller(slot) == active {
             event::set_tapped(s, t, sink, s.object_ref(slot), false)?;
         }
@@ -184,7 +181,7 @@ pub(crate) fn end_step<L: Layout>(
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
 fn cleanup<L: Layout>(s: &mut State<L>) {
-    if zone::hand_size(s, s.turn.active) > MAX_HAND_SIZE {
+    if s.hand_size(s.turn.active) > MAX_HAND_SIZE {
         s.pending = Pending::Discard;
     } else {
         finish_cleanup(s);
@@ -202,7 +199,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
-    if zone::hand_size(s, s.turn.active) <= MAX_HAND_SIZE {
+    if s.hand_size(s.turn.active) <= MAX_HAND_SIZE {
         s.pending = Pending::None;
         finish_cleanup(s);
     }
@@ -222,11 +219,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
 /// instead when nothing happens.
 fn finish_cleanup<L: Layout>(s: &mut State<L>) {
     s.clear_damage();
-    let before = s.effects.len();
-    s.effects.retain(|e| e.duration != Duration::EndOfTurn);
-    if s.effects.len() != before {
-        s.flags.derived_dirty = true;
-    }
+    s.legacy_mut().end_effects(Duration::EndOfTurn);
     // Permissions that last this turn end, and those whose card has left its zone are gone.
     let mut i = 0;
     while i < s.permissions.len() {
@@ -260,5 +253,5 @@ pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
 
 /// The cards in a player's hand.
 pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> crate::bitboard::Bitboard<L::Slot> {
-    s.zone(player, Zone::Hand)
+    s.zone(ZoneKey::Of(player, Zone::Hand))
 }

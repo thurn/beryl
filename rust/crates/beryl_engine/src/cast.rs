@@ -10,6 +10,7 @@
 //! Spells that cannot be paid for or targeted are never offered, and every step offers only
 //! answers that leave the rest completable, so the machine never has to rewind.
 
+use crate::state::ZoneKey;
 use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
@@ -110,14 +111,12 @@ fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, rule: Rule) -
 fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<L::Slot> {
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
-    s.battlefield
-        .iter()
-        .zip(s.derived.iter())
-        .find(|&(&slot, d)| {
+    s.permanents()
+        .find(|&(slot, d)| {
             filter::is_an_opponent(player, d.controller)
                 && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
         })
-        .map(|(&slot, _)| slot)
+        .map(|(slot, _)| slot)
 }
 
 /// Whether `player` may cast this face at instant speed: an instant
@@ -203,7 +202,7 @@ impl ExileCost {
         match self {
             ExileCost::Hand(colors) => !hand_cards(s, t, player, colors, itself).is_empty(),
             ExileCost::Graveyard(n) => {
-                let mut graveyard = s.zone(player, Zone::Graveyard);
+                let mut graveyard = s.zone(ZoneKey::Of(player, Zone::Graveyard));
                 graveyard.remove(itself);
                 graveyard
                     .iter()
@@ -223,7 +222,7 @@ fn hand_cards<L: Layout>(
     colors: Colors,
     itself: L::Slot,
 ) -> Bitboard<L::Slot> {
-    let mut hand = s.zone(player, Zone::Hand);
+    let mut hand = s.zone(ZoneKey::Of(player, Zone::Hand));
     hand.remove(itself);
     hand.iter()
         .filter(|&slot| t.def(s.object(slot).card).front().colors.intersects(colors))
@@ -333,7 +332,7 @@ pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
 }
 
 pub(crate) fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
-    s.zone(Seat::P0, zone) | s.zone(Seat::P1, zone)
+    s.zone(ZoneKey::Of(Seat::P0, zone)) | s.zone(ZoneKey::Of(Seat::P1, zone))
 }
 
 /// The objects or players a target spec can choose now, for a spell or ability controlled by
@@ -664,7 +663,7 @@ pub(crate) fn refusal<L: Layout>(
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
 fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
-    let mut cards = s.zone(player, Zone::Hand);
+    let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
     for p in s.permissions.iter() {
         if p.player == player && s.is_current(p.object) {
             cards.insert(p.object.slot);
@@ -916,10 +915,11 @@ fn activation_options<L: Layout>(
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
     let prunes = s.profile.hides_pointless[player.index()] && t.needy();
-    let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
+    let mine = s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
+        | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield));
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard<L::Slot> =
-        objects.collect::<Bitboard<L::Slot>>() | s.zone(player, Zone::Hand);
+        objects.collect::<Bitboard<L::Slot>>() | s.zone(ZoneKey::Of(player, Zone::Hand));
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.

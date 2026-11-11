@@ -14,6 +14,7 @@
 //! - Not a terminal, or `TERM=dumb`: no escapes at all, just the log lines and a board table
 //!   every 10 games. `NO_COLOR` turns colors off and keeps the panel.
 
+use beryl_engine::ZoneKey;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal, Stdout, Write};
@@ -433,7 +434,7 @@ impl Display {
             decision,
             turn: s.turn().number,
             life: seats.map(|q| s.player(q).life),
-            hand: seats.map(|q| s.zone(q, Zone::Hand).count()),
+            hand: seats.map(|q| s.zone(ZoneKey::Of(q, Zone::Hand)).count()),
             budget: p.budgets[d.player.index()],
             at: Instant::now(),
             rollouts,

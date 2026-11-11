@@ -6,7 +6,8 @@ use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{MulliganStatus, Pending, State, Zone};
 use crate::table::GameTable;
-use crate::{turn, zone};
+use crate::turn;
+use crate::zone::Place;
 
 /// The starting hand size ([CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035)),
 /// "normally seven".
@@ -28,7 +29,7 @@ pub(crate) fn set_starting_player<L: Layout>(
     s.turn.starting_player = starting;
     s.turn.active = starting;
     for player in [starting, starting.opponent()] {
-        zone::draw_n(s, sink, player, STARTING_HAND)?;
+        s.draw_n(sink, player, STARTING_HAND)?;
     }
     s.pending = Pending::Mulligans;
     advance_mulligans(s, t, sink)
@@ -67,7 +68,7 @@ pub(crate) fn declare<L: Layout>(
 /// differs: a hand mulliganed again is shuffled away whole, bottomed cards included, and the
 /// bottomed cards are hidden either way.
 fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
-    let hand = zone::hand_size(s, player) as u8;
+    let hand = s.hand_size(player) as u8;
     let p = s.player_mut(player);
     p.mulligan = MulliganStatus::Kept;
     p.to_bottom = p.mulligans.min(hand);
@@ -81,7 +82,7 @@ pub(crate) fn put_on_bottom<L: Layout>(
     player: Seat,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    zone::put_on_bottom(s, sink, slot)?;
+    s.move_object(sink, slot, Zone::Library, Place::Bottom)?;
     s.player_mut(player).to_bottom -= 1;
     advance_mulligans(s, t, sink)
 }
@@ -128,10 +129,10 @@ fn advance_mulligans<L: Layout>(
             }
             any = true;
             for slot in turn::hand(s, p).iter() {
-                zone::move_to(s, sink, slot, Zone::Library)?;
+                s.move_object(sink, slot, Zone::Library, Place::Top)?;
             }
-            zone::shuffle_library(s, p);
-            zone::draw_n(s, sink, p, STARTING_HAND)?;
+            s.shuffle_library(p);
+            s.draw_n(sink, p, STARTING_HAND)?;
             let player = s.player_mut(p);
             player.mulligans += 1;
             player.mulligan = MulliganStatus::Undeclared;

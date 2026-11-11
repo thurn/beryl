@@ -22,6 +22,7 @@ use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::state::ZoneKey;
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone};
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
@@ -247,12 +248,7 @@ fn controlled<L: Layout>(
     s: &State<L>,
     player: Seat,
 ) -> impl Iterator<Item = (L::Slot, &Derived)> + '_ {
-    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
-    s.battlefield
-        .iter()
-        .zip(s.derived.iter())
-        .filter(move |(_, d)| d.controller == player)
-        .map(|(&slot, d)| (slot, d))
+    s.permanents().filter(move |(_, d)| d.controller == player)
 }
 
 /// What an untapped source `player` controls makes, if the permanent in `slot`, whose derived
@@ -807,7 +803,7 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
             let _ = later.push(l);
         }
     };
-    for slot in s.zone(player, Zone::Hand).iter() {
+    for slot in s.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
         let def = t.def(s.object(slot).card);
         for face in def.faces {
             if !face.types.intersects(Types::LAND) {
@@ -979,7 +975,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     // it meets the costs in can decide, and the slots are where the game's randomness dealt
     // the cards.
     let mut hand: L::Queue<L::Slot, 64> = Default::default();
-    for slot in s.zone(player, Zone::Hand).iter() {
+    for slot in s.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
         let _ = hand.push(slot);
     }
     hand.as_mut_slice().sort_by_key(|&slot| s.object(slot).card);

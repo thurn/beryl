@@ -60,7 +60,7 @@ pub(crate) fn manifest<L: Layout>(
     )?;
     for p in Seat::BOTH {
         if !knew[p.index()] && p != player {
-            s.knowledge[p.index()].remove(slot);
+            s.forget(p, slot);
         }
     }
     Ok(())

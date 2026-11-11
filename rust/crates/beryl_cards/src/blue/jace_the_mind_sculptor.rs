@@ -10,6 +10,7 @@
 use beryl_card::Effect;
 use beryl_card::effect::build::{TARGET, return_to_hand};
 use beryl_engine::Bitboard;
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
     Supertypes, TargetKind, TargetSpec, Types,
@@ -103,7 +104,7 @@ fn brainstorm<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 3);
     for count in (1..=2).rev() {
-        let hand = ctx.state().zone(you, Zone::Hand);
+        let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
         if hand.is_empty() {
             break;
         }
@@ -129,9 +130,9 @@ fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(player) = ctx.target_player(0) else {
         return Ok(());
     };
-    let library = ctx.state().zone(player, Zone::Library);
+    let library = ctx.state().zone(ZoneKey::Of(player, Zone::Library));
     ctx.move_all(library, Zone::Exile, Reason::Exile);
-    let hand = ctx.state().zone(player, Zone::Hand);
+    let hand = ctx.state().zone(ZoneKey::Of(player, Zone::Hand));
     ctx.move_all(hand, Zone::Library, Reason::Effect);
     ctx.shuffle(player);
     Ok(())

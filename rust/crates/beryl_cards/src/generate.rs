@@ -9,6 +9,7 @@
 //! action, so each script replays as written, and the dump adds the final snapshot (§17.2)
 //! for the oracles to compare. A seed whose script the runner refuses is skipped.
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{AbilityIx, AbilityKind, Face, Subtype, Supertypes, Trigger, Types};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{DecisionKind, Step, TurnStep, Zone};
@@ -151,7 +152,7 @@ fn alone(live: &Live, player: beryl_engine::Seat, card: &str) -> bool {
     let elsewhere: usize = [Zone::Hand, Zone::Graveyard, Zone::Exile]
         .into_iter()
         .map(|zone| {
-            s.zone(player, zone)
+            s.zone(ZoneKey::Of(player, zone))
                 .iter()
                 .filter(|&slot| named(slot))
                 .count()

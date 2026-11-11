@@ -7,6 +7,7 @@
 //! [`settle`]d the same way. The cube's other replacement and prevention effects (damage,
 //! most draws) arrive with the cards that create them.
 
+use crate::state::ZoneKey;
 pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, kind};
 use beryl_kernel::mutate::Arrival;
 
@@ -21,7 +22,7 @@ use crate::state::{
 };
 use crate::table::GameTable;
 use crate::trigger;
-use crate::zone::{self, Place};
+use crate::zone::Place;
 
 /// How a permanent enters, as decided by whatever puts it onto the battlefield, before the
 /// replacement effects of §8.2 apply.
@@ -131,7 +132,7 @@ fn in_order<L: Layout>(
         return Ok(ordered);
     }
     let mut rest = objects;
-    let zone = |z: Zone| s.zone(Seat::P0, z) | s.zone(Seat::P1, z);
+    let zone = |z: Zone| s.zone(ZoneKey::Of(Seat::P0, z)) | s.zone(ZoneKey::Of(Seat::P1, z));
     if !(rest & zone(Zone::Battlefield)).is_empty() {
         for &slot in s.battlefield() {
             if rest.contains(slot) {
@@ -141,7 +142,7 @@ fn in_order<L: Layout>(
         }
     }
     for player in Seat::BOTH {
-        if (rest & s.zone(player, Zone::Library)).is_empty() {
+        if (rest & s.zone(ZoneKey::Of(player, Zone::Library))).is_empty() {
             continue;
         }
         for &slot in s.library(player).iter().rev() {
@@ -245,7 +246,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
         }
-        zone::move_to_place(s, sink, slot, dest, place)?;
+        s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             arrive(s, slot, entry);
             if entry.x > 0 {
@@ -298,7 +299,7 @@ fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.
 fn exiled_until<L: Layout>(s: &State<L>, slot: L::Slot) -> Bitboard<L::Slot> {
-    (s.zone(Seat::P0, Zone::Exile) | s.zone(Seat::P1, Zone::Exile))
+    (s.zone(ZoneKey::Of(Seat::P0, Zone::Exile)) | s.zone(ZoneKey::Of(Seat::P1, Zone::Exile)))
         .iter()
         .filter(|&x| {
             let o = s.object(x);
@@ -449,7 +450,7 @@ pub(crate) fn draw<L: Layout>(
                 break;
             }
         }
-        zone::draw(s, sink, player)?;
+        s.draw(sink, player)?;
     }
     if drawn > 0 {
         settle(
@@ -553,14 +554,12 @@ pub(crate) fn add_counters<L: Layout>(
     if !s.is_current(object) || amount == 0 {
         return Ok(());
     }
+    let layered = layers::counters_matter(s, t, object.slot, kind);
     let e = if Counters::is_long_tail(kind) {
-        s.legacy_mut().add_counters(object, kind, amount)
+        s.legacy_mut().add_counters(object, kind, amount, layered)
     } else {
-        s.add_counters(object, kind, amount)
+        s.add_counters(object, kind, amount, layered)
     };
-    if layers::counters_matter(s, t, object.slot, kind) {
-        s.flags.derived_dirty = true;
-    }
     settle(s, t, sink, e)
 }
 
@@ -582,14 +581,13 @@ pub(crate) fn remove_counters<L: Layout>(
     if amount == 0 {
         return Ok(());
     }
+    let layered = layers::counters_matter(s, t, object.slot, kind);
     let e = if Counters::is_long_tail(kind) {
-        s.legacy_mut().remove_counters(object, kind, amount)
+        s.legacy_mut()
+            .remove_counters(object, kind, amount, layered)
     } else {
-        s.remove_counters(object, kind, amount)
+        s.remove_counters(object, kind, amount, layered)
     };
-    if layers::counters_matter(s, t, object.slot, kind) {
-        s.flags.derived_dirty = true;
-    }
     settle(s, t, sink, e)
 }
 

@@ -3,6 +3,7 @@
 //! as that card remains exiled, its owner may play it. A spell cast this way costs {2} more
 //! to cast."
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Subtype, Subtypes,
     TargetKind, TargetSpec, Trigger, Types,
@@ -27,7 +28,7 @@ fn spellbind<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         return Ok(());
     };
     let you = ctx.controller();
-    let hand = ctx.state().zone(them, Zone::Hand);
+    let hand = ctx.state().zone(ZoneKey::Of(them, Zone::Hand));
     ctx.look_at(you, hand);
     let nonland =
         Filter::Not(&Filter::Types(Types::LAND)).select(ctx.state(), ctx.table(), hand, you);

@@ -1,6 +1,7 @@
 //! Timetwister. {2}{U} Sorcery. "Each player shuffles their hand and graveyard into their
 //! library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)"
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -47,7 +48,7 @@ pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
     let active = s.turn().active;
     let players = [active, active.opponent()];
     let cards = players.iter().fold(Bitboard::EMPTY, |b, &p| {
-        b | s.zone(p, Zone::Hand) | s.zone(p, Zone::Graveyard)
+        b | s.zone(ZoneKey::Of(p, Zone::Hand)) | s.zone(ZoneKey::Of(p, Zone::Graveyard))
     });
     ctx.move_all(cards, Zone::Library, Reason::Effect);
     for p in players {

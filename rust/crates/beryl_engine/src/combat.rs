@@ -423,8 +423,8 @@ pub(crate) fn begin_damage<L: Layout>(
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     if s.turn.step == TurnStep::FirstStrikeDamage {
-        for i in 0..s.battlefield.len() {
-            let slot = s.battlefield.as_slice()[i];
+        for i in 0..s.battlefield().len() {
+            let slot = s.battlefield()[i];
             if assigns_now(s, slot) {
                 s.mark_struck_first(slot);
             }
@@ -671,8 +671,8 @@ fn division<L: Layout>(
 /// planeswalker or battle that's removed from combat stops being attacked."
 pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     let active = s.turn.active;
-    for i in 0..s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
+    for i in 0..s.battlefield().len() {
+        let slot = s.battlefield()[i];
         let o = *s.object(slot);
         let side = if o.flags.has(ObjectFlags::ATTACKING) {
             active

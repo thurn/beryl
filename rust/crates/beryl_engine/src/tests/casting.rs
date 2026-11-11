@@ -4,7 +4,9 @@
 use super::cast::{Game, cast, index_of};
 use crate::card::{AbilityIx, Castings, FaceIx, ManaColor};
 use crate::ids::Slot;
+use crate::state::ZoneKey;
 use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone};
+use crate::zone::Place;
 use crate::{Choice, DecisionKind, Opt, Profile};
 
 #[test]
@@ -89,12 +91,13 @@ fn a_spell_whose_targets_all_became_illegal_does_not_resolve() {
         bear
     );
     // The bear leaves and comes back: a new object (CR 400.7), so an illegal target.
-    crate::zone::move_to(&mut g.s, &mut crate::event::Sink::off(), bear, Zone::Hand).unwrap();
-    crate::zone::move_to(
-        &mut g.s,
+    g.s.move_object(&mut crate::event::Sink::off(), bear, Zone::Hand, Place::Top)
+        .unwrap();
+    g.s.move_object(
         &mut crate::event::Sink::off(),
         bear,
         Zone::Battlefield,
+        Place::Top,
     )
     .unwrap();
     g.pass_both();
@@ -466,9 +469,9 @@ fn cycling_discards_from_hand_as_a_cost_and_draws_on_resolution() {
         ability: AbilityIx::Own(1),
     });
     assert_eq!(g.s.object(hq).zone, Zone::Graveyard);
-    assert_eq!(g.s.zone(g.me, Zone::Hand).count(), 0);
+    assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 0);
     g.pass_both();
-    assert_eq!(g.s.zone(g.me, Zone::Hand).count(), 1);
+    assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 1);
 }
 
 #[test]
@@ -592,10 +595,14 @@ fn a_paused_resolution_leaves_the_committed_state_unchanged_and_view_replays_it(
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::ChooseObject);
     assert!(g.is_paused());
-    assert_eq!(g.s.zone(g.me, Zone::Hand).count(), 0, "nothing drawn yet");
+    assert_eq!(
+        g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(),
+        0,
+        "nothing drawn yet"
+    );
     let view = crate::view(&g.s, &g.t, &mut g.x);
     assert_eq!(
-        view.zone(g.me, Zone::Hand).count(),
+        view.zone(ZoneKey::Of(g.me, Zone::Hand)).count(),
         2,
         "the two cards drawn"
     );
@@ -603,7 +610,7 @@ fn a_paused_resolution_leaves_the_committed_state_unchanged_and_view_replays_it(
     assert_eq!(view.object(candidate).zone, Zone::Hand);
     g.choose(Choice(0));
     assert!(matches!(g.s.pending, Pending::None));
-    assert_eq!(g.s.zone(g.me, Zone::Hand).count(), 1);
+    assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 1);
     assert_eq!(g.s.library(g.me).last(), Some(&candidate));
 }
 
@@ -675,16 +682,17 @@ fn a_paused_body_answers_each_question_with_the_card_first_chosen() {
     lands.sort_unstable();
     let [seen, mine, drawn] = [lands[0], lands[1], lands[2]];
     for slot in [seen, mine] {
-        crate::zone::move_to(&mut g.s, &mut crate::event::Sink::off(), slot, Zone::Hand).unwrap();
+        g.s.move_object(&mut crate::event::Sink::off(), slot, Zone::Hand, Place::Top)
+            .unwrap();
     }
-    crate::zone::move_to(
-        &mut g.s,
+    g.s.move_object(
         &mut crate::event::Sink::off(),
         drawn,
         Zone::Library,
+        Place::Top,
     )
     .unwrap();
-    g.s.knowledge[g.them.index()].insert(seen);
+    g.s.board().set_known(g.them, seen, true);
     let bear = g.give(g.me, "Test Bear", Zone::Hand);
     let rummage = g.give(g.me, "Test Rummage", Zone::Hand);
     assert!(!g.s.knows(g.them, mine) && !g.s.knows(g.them, drawn));
@@ -696,8 +704,8 @@ fn a_paused_body_answers_each_question_with_the_card_first_chosen() {
     assert!(g.is_paused());
     g.pick_object(bear);
     assert!(!g.is_paused());
-    let graveyard = g.s.zone(g.me, Zone::Graveyard);
+    let graveyard = g.s.zone(ZoneKey::Of(g.me, Zone::Graveyard));
     assert!(graveyard.contains(mine) && graveyard.contains(bear));
-    let hand = g.s.zone(g.me, Zone::Hand);
+    let hand = g.s.zone(ZoneKey::Of(g.me, Zone::Hand));
     assert!(hand.contains(seen) && hand.contains(drawn));
 }

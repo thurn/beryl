@@ -12,6 +12,7 @@
 
 mod common;
 
+use beryl_engine::ZoneKey;
 use std::fmt::Write;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -167,7 +168,7 @@ impl Game {
 /// hand and library, top first. Nothing else is anywhere yet.
 fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     let names = |p, zone| -> &'static [&'static str] {
-        s.zone(p, zone)
+        s.zone(ZoneKey::Of(p, zone))
             .iter()
             .map(|slot| s.name(t, slot))
             .collect::<Vec<_>>()
@@ -176,7 +177,8 @@ fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     assert!(
         s.battlefield().is_empty()
             && Seat::BOTH.iter().all(|&p| {
-                s.zone(p, Zone::Graveyard).is_empty() && s.zone(p, Zone::Exile).is_empty()
+                s.zone(ZoneKey::Of(p, Zone::Graveyard)).is_empty()
+                    && s.zone(ZoneKey::Of(p, Zone::Exile)).is_empty()
             }),
         "the first priority comes before anything is played"
     );
@@ -245,7 +247,7 @@ fn a_broken_invariant_shrinks_to_a_scenario() {
     fn graveyards_stay_empty(_: &GameTable, s: &State) -> Result<(), String> {
         for p in Seat::BOTH {
             assert!(
-                s.zone(p, Zone::Graveyard).is_empty(),
+                s.zone(ZoneKey::Of(p, Zone::Graveyard)).is_empty(),
                 "a card is in P{}'s graveyard",
                 p.get()
             );
@@ -292,7 +294,7 @@ fn seen(t: &GameTable, s: &State, d: &Decision) -> String {
     );
     let hands = Seat::BOTH.map(|p| {
         names(
-            s.zone(p, Zone::Hand)
+            s.zone(ZoneKey::Of(p, Zone::Hand))
                 .iter()
                 .map(|slot| s.name(t, slot).to_owned())
                 .collect(),

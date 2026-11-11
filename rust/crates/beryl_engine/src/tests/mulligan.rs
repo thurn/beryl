@@ -3,6 +3,7 @@
 use super::{LANDS, MIXED, decide, land_go, play, table};
 use crate::ids::Seat;
 use crate::state::Zone;
+use crate::state::ZoneKey;
 use crate::{Choice, Decision, DecisionKind, Observation, Profile, Replay, Scratch, State, apply};
 
 /// Answers mulligan decisions with `mulligan(player, mulligans so far)` and plays first.
@@ -59,7 +60,7 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
         }
     }
     // The starting player skipped their draw, so their hand is the kept six.
-    assert_eq!(s.zone(p, Zone::Hand).count(), 6);
+    assert_eq!(s.zone(ZoneKey::Of(p, Zone::Hand)).count(), 6);
 }
 
 #[test]
@@ -102,10 +103,10 @@ fn a_player_can_mulligan_down_to_nothing() {
         .count();
     assert_eq!(asked, 7);
     assert_eq!(
-        s.library(Seat::P0).len() + s.zone(Seat::P0, Zone::Hand).count() as usize,
+        s.library(Seat::P0).len() + s.zone(ZoneKey::Of(Seat::P0, Zone::Hand)).count() as usize,
         40
     );
-    assert!(s.zone(Seat::P0, Zone::Hand).count() <= 1);
+    assert!(s.zone(ZoneKey::Of(Seat::P0, Zone::Hand)).count() <= 1);
 }
 
 #[test]
@@ -122,13 +123,13 @@ fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_libra
         for viewer in Seat::BOTH {
             let obs = Observation::new(s, viewer);
             let other = viewer.opponent();
-            for slot in obs.zone(other, Zone::Hand).iter() {
+            for slot in obs.zone(ZoneKey::Of(other, Zone::Hand)).iter() {
                 assert_eq!(obs.card(slot), None);
             }
             for &slot in obs.library(other) {
                 assert_eq!(obs.card(slot), None);
             }
-            for slot in obs.zone(viewer, Zone::Hand).iter() {
+            for slot in obs.zone(ZoneKey::Of(viewer, Zone::Hand)).iter() {
                 assert_eq!(obs.card(slot), Some(s.card(slot)));
             }
             for &slot in obs.battlefield() {

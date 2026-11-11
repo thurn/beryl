@@ -4,6 +4,7 @@
 //! opponent controls more creatures than you. Draw a card if an opponent has more cards in
 //! hand than you."
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, CardDef, Colors, Face, Flow, ManaColor, ManaCost, Subtype, Subtypes, Supertypes,
     Trigger, Types,
@@ -62,7 +63,7 @@ fn compare<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if creatures(ctx.state(), them) > creatures(ctx.state(), you) {
         ctx.create_tokens(&FISH, 2, TokenEntry::default());
     }
-    let hand = |s: &State<L>, p| s.zone(p, Zone::Hand).count();
+    let hand = |s: &State<L>, p| s.zone(ZoneKey::Of(p, Zone::Hand)).count();
     if hand(ctx.state(), them) > hand(ctx.state(), you) {
         ctx.draw(you, 1);
     }

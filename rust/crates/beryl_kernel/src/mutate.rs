@@ -134,8 +134,9 @@ impl<L: Layout> State<L> {
     }
 
     /// Puts counters of a common kind on an object
-    /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)). Whether the layers
-    /// read them is the rules' to say, with the card in hand.
+    /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)). `layered` says
+    /// whether the layers read them, which is the rules' to say, with the card in hand: the
+    /// layer results are stale if so.
     #[inline]
     #[must_use]
     pub fn add_counters(
@@ -143,12 +144,14 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
+        layered: bool,
     ) -> Event<L> {
         debug_assert!(!Counters::is_long_tail(kind));
-        self.put_counters(object, kind, amount)
+        self.put_counters(object, kind, amount, layered)
     }
 
     /// Removes `amount` counters of a common kind from an object that has that many.
+    /// `layered` as for [`State::add_counters`].
     #[inline]
     #[must_use]
     pub fn remove_counters(
@@ -156,9 +159,10 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
+        layered: bool,
     ) -> Event<L> {
         debug_assert!(!Counters::is_long_tail(kind));
-        self.take_counters(object, kind, amount)
+        self.take_counters(object, kind, amount, layered)
     }
 
     #[inline]
@@ -167,10 +171,14 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
+        layered: bool,
     ) -> Event<L> {
         debug_assert!(self.is_current(object));
         let n = self.object_mut(object.slot).counters.get_mut(kind);
         *n = n.saturating_add(amount);
+        if layered {
+            self.flags.derived_dirty = true;
+        }
         Event::CountersAdded {
             object,
             kind,
@@ -184,9 +192,13 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
+        layered: bool,
     ) -> Event<L> {
         debug_assert!(self.is_current(object));
         *self.object_mut(object.slot).counters.get_mut(kind) -= amount;
+        if layered {
+            self.flags.derived_dirty = true;
+        }
         Event::CountersRemoved {
             object,
             kind,
@@ -384,10 +396,10 @@ impl<L: Layout> State<L> {
 
     /// Ends the floating effects on objects that have left their zone: such an object no
     /// longer exists ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The
-    /// queue is milestone 4's to replace (by-w8gv.7.1); this is the one write of it that
-    /// reads the objects.
+    /// queue is milestone 4's to replace (by-w8gv.7.1); [`State::rederive`] does this before
+    /// it lends the cache.
     #[inline]
-    pub fn drop_stale_effects(&mut self) {
+    pub(crate) fn drop_stale_effects(&mut self) {
         let objects = &self.objects;
         self.effects
             .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);

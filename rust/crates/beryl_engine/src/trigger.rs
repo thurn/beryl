@@ -44,19 +44,17 @@ pub(crate) fn match_event<L: Layout>(
     }
     if t.listens_any() & k != 0 {
         // Only permanents can have changed what listens while the layer results are stale.
-        let listening = if s.flags.derived_dirty {
-            t.listens_any()
-        } else {
+        let listening = s.listening().map_or(t.listens_any(), |listening| {
             debug_assert_eq!(
-                s.listening,
+                listening,
                 layers::listening(s, t),
                 "the battlefield's listeners, as the layer results found them"
             );
-            s.listening
-        };
+            listening
+        });
         if listening & k != 0 {
-            for i in 0..s.battlefield.len() {
-                let slot = s.battlefield.as_slice()[i];
+            for i in 0..s.battlefield().len() {
+                let slot = s.battlefield()[i];
                 let card = s.object(slot).card;
                 if t.listens(card) & k == 0 {
                     continue;
@@ -334,9 +332,7 @@ pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L
 /// interchangeable objects, lead to the same game whatever their order (§7.2).
 fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger<L>, b: &PendingTrigger<L>) -> bool {
     let interchangeable = |x: Option<ObjectRef<L>>, y: Option<ObjectRef<L>>| match (x, y) {
-        (Some(x), Some(y)) => {
-            x == y || crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot)
-        }
+        (Some(x), Some(y)) => x == y || s.signature(x.slot) == s.signature(y.slot),
         _ => x == y,
     };
     interchangeable(a.source, b.source)

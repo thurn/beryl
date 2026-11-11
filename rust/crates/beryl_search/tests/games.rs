@@ -5,6 +5,7 @@
 
 mod common;
 
+use beryl_engine::ZoneKey;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -185,7 +186,7 @@ impl Agent for Observer {
                 Zone::Graveyard,
                 Zone::Exile,
             ] {
-                obs.zone(p, zone).hash(&mut h);
+                obs.zone(ZoneKey::Of(p, zone)).hash(&mut h);
             }
         }
         (obs.viewer(), obs.turn(), obs.battlefield()).hash(&mut h);

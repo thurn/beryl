@@ -1,6 +1,7 @@
 //! Thirst for Discovery. {2}{U} Instant. "Draw three cards. Then discard two cards unless you
 //! discard a basic land card."
 
+use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Supertypes, Types,
 };
@@ -48,7 +49,7 @@ const BASIC_LAND: Filter = Filter::All(&[
 fn draw_three_discard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 3);
-    let hand = ctx.state().zone(you, Zone::Hand);
+    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
     let basics = BASIC_LAND.select(ctx.state(), ctx.table(), hand, you);
     if !basics.is_empty()
         && hand.count() >= 2

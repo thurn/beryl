@@ -7,6 +7,7 @@
 //! ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Library and hand are
 //! hidden zones, even if all the cards in one such zone happen to be revealed."
 
+use beryl_engine::ZoneKey;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardIx, DecisionKind, GameTable, Observation, Seat, Slot, State, TurnStep, Zone,
@@ -40,7 +41,7 @@ fn slots(s: &State, owner: Seat, zone: Zone) -> Vec<Slot> {
     if zone == Zone::Library {
         s.library(owner).iter().rev().copied().collect()
     } else {
-        s.zone(owner, zone).iter().collect()
+        s.zone(ZoneKey::Of(owner, zone)).iter().collect()
     }
 }
 

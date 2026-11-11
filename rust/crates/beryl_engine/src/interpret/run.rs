@@ -5,6 +5,7 @@
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random).
 
+use crate::state::ZoneKey;
 use beryl_card::{CopyException, Duration, Effect, LibraryPosition, Objects, Players};
 
 use crate::bitboard::Bitboard;
@@ -416,9 +417,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     fn draw(&mut self, players: Players, count: u8) -> Outcome<L> {
         let mut drawn = Bitboard::EMPTY;
         for player in self.in_turn_order(players) {
-            let hand = self.ctx.state.zone(player, Zone::Hand);
+            let hand = self.ctx.state.zone(ZoneKey::Of(player, Zone::Hand));
             self.ctx.draw(player, count);
-            drawn |= self.ctx.state.zone(player, Zone::Hand) & !hand;
+            drawn |= self.ctx.state.zone(ZoneKey::Of(player, Zone::Hand)) & !hand;
         }
         Outcome::acted_on(drawn)
     }
@@ -444,7 +445,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         for player in self.in_turn_order(players) {
             let top = self.ctx.top_of_library(player, count);
             self.ctx.mill(player, count);
-            milled |= top & !self.ctx.state.zone(player, Zone::Library);
+            milled |= top & !self.ctx.state.zone(ZoneKey::Of(player, Zone::Library));
         }
         Outcome::acted_on(milled)
     }

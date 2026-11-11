@@ -17,12 +17,13 @@ use crate::layout::{Layout, Queue, Small, index};
 use crate::mana;
 use crate::observation::Observation;
 use crate::profile::{Payment, Stops};
+use crate::state::ZoneKey;
 use crate::state::{
-    CastPermission, Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef,
-    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
+    CastPermission, Continuous, CounterKind, Duration, ObjectFlags, ObjectRef, PendingTrigger,
+    StackEntry, State, Target, TriggerInfo, Zone,
 };
 use crate::table::GameTable;
-use crate::zone::{self, Place};
+use crate::zone::Place;
 use crate::{cast, face_down};
 use crate::{layers, trigger};
 
@@ -371,7 +372,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// that cause a player to discard a card allow the affected player to choose which card
     /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
     pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef<L>>, Pause> {
-        self.discard_one_of(player, self.state.zone(player, Zone::Hand))
+        self.discard_one_of(player, self.state.zone(ZoneKey::Of(player, Zone::Hand)))
     }
 
     /// `player` discards one of `cards`, cards in their hand, of their choice, as Thirst for
@@ -382,7 +383,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         player: Seat,
         cards: Bitboard<L::Slot>,
     ) -> Result<Option<ObjectRef<L>>, Pause> {
-        debug_assert!((cards & !self.state.zone(player, Zone::Hand)).is_empty());
+        debug_assert!((cards & !self.state.zone(ZoneKey::Of(player, Zone::Hand))).is_empty());
         if cards.is_empty() {
             return Ok(None);
         }
@@ -705,7 +706,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// library or a face-down pile of cards, randomize the cards within it so that no player
     /// knows their order."
     pub fn shuffle(&mut self, player: Seat) {
-        zone::shuffle_library(self.state, player);
+        self.state.shuffle_library(player);
         self.sink.note(event::Event::LibraryShuffled { player });
     }
 
@@ -714,10 +715,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// show that card to all players for a brief time." Each player knows it from then on,
     /// until it is shuffled or otherwise hidden anew.
     pub fn reveal(&mut self, slot: L::Slot) {
-        chance::settle(self.state, self.sink, slot);
-        for k in &mut self.state.knowledge {
-            k.insert(slot);
-        }
+        self.state.reveal(self.sink, slot);
     }
 
     /// A permanent explores ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)):
@@ -773,8 +771,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
     pub fn look_at(&mut self, player: Seat, cards: Bitboard<L::Slot>) {
-        chance::settle_all(self.state, self.sink, cards);
-        self.state.knowledge[player.index()] |= cards;
+        self.state.look(self.sink, player, cards);
     }
 
     /// Discards a card from its owner's hand
@@ -811,7 +808,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 }
             }
             let mut rng = self.state.rng.other;
-            zone::rebind(self.state, moved.as_slice(), &mut rng);
+            self.state.rebind(moved.as_slice(), &mut rng);
             self.state.rng.other = rng;
         }
     }
@@ -821,7 +818,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// library, so it is still the same object.
     pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
         if self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Library {
-            let r = zone::reorder_library(self.state, object.slot, Place::Bottom);
+            let r = self.state.reorder_library(object.slot, Place::Bottom);
             self.check(r);
         }
     }
@@ -844,7 +841,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             let Some(slot) = self.choose_or_done(player, left, ask)? else {
                 break;
             };
-            let r = zone::reorder_library(self.state, slot, Place::Bottom);
+            let r = self.state.reorder_library(slot, Place::Bottom);
             self.check(r);
             left.remove(slot);
             bottom += 1;
@@ -859,7 +856,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             let _ = order.push(slot);
         }
         for &slot in order.iter().rev() {
-            let r = zone::reorder_library(self.state, slot, Place::Top);
+            let r = self.state.reorder_library(slot, Place::Top);
             self.check(r);
         }
         if n > 0 {
@@ -958,7 +955,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         filter: Filter,
         n: u8,
     ) -> Result<Bitboard<L::Slot>, Pause> {
-        let library = self.state.zone(player, Zone::Library);
+        let library = self.state.zone(ZoneKey::Of(player, Zone::Library));
         self.look_at(player, library);
         let found = filter.select(self.state, self.table, library, player);
         self.choose_up_to(player, found, n, Ask::Search { max: n })
@@ -1233,17 +1230,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             return;
         }
         let source = self.entry.card;
-        let s = &mut *self.state;
-        let timestamp = s.zones.next_timestamp;
-        s.zones.next_timestamp = timestamp.wrapping_add(1);
-        let pushed = s.effects.push(FloatingEffect {
-            source,
-            timestamp,
-            duration,
-            affected,
-            effect,
-        });
-        s.flags.derived_dirty = true;
+        let pushed = self
+            .state
+            .legacy_mut()
+            .start_effect(source, affected, effect, duration);
         self.check(pushed);
         layers::refresh(self.state, self.table, self.sink);
     }
@@ -1332,7 +1322,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let lands = tapped.select(
             s,
             self.table,
-            s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield),
+            s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
+                | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield)),
             you,
         );
         for slot in self
