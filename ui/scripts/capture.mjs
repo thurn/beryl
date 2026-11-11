@@ -183,6 +183,22 @@ export function cutText(page) {
             t[hi] > b[lo] + slack &&
             t[lo] < b[hi] - slack &&
             (t[lo] < b[lo] - slack || t[hi] > b[hi] + slack);
+        /** Whether `el` shows turned an odd number of quarters, by its and its ancestors'
+         * transforms and rotations. */
+        const sideways = (el) => {
+            let degrees = 0;
+            for (let a = el; a; a = a.parentElement) {
+                const s = getComputedStyle(a);
+                if (s.transform !== "none") {
+                    const m = new DOMMatrix(s.transform);
+                    degrees += (Math.atan2(m.b, m.a) * 180) / Math.PI;
+                }
+                if (s.rotate && s.rotate !== "none") {
+                    degrees += parseFloat(s.rotate.split(" ").pop());
+                }
+            }
+            return Math.abs(Math.round(degrees / 90)) % 2 === 1;
+        };
         const found = [];
         for (const el of document.querySelectorAll("#root *")) {
             const nodes = [...el.childNodes].filter(
@@ -212,7 +228,10 @@ export function cutText(page) {
             range.setEndAfter(nodes[nodes.length - 1]);
             const t = range.getBoundingClientRect();
             if (t.width === 0 || t.height === 0) continue;
+            // A line's glyph box stands proud across the line, which on a card turned a
+            // quarter (tapped) runs across the screen's x axis, not its y.
             const line = 0.3 * parseFloat(style.fontSize);
+            const [slackX, slackY] = sideways(el) ? [line, 1] : [1, line];
             let framed = false;
             for (
                 let a = el.parentElement;
@@ -227,9 +246,9 @@ export function cutText(page) {
                     const b = a.getBoundingClientRect();
                     const cut =
                         (!scrolls(x) &&
-                            straddles(t, b, ["left", "right"], 1)) ||
+                            straddles(t, b, ["left", "right"], slackX)) ||
                         (!scrolls(y) &&
-                            straddles(t, b, ["top", "bottom"], line));
+                            straddles(t, b, ["top", "bottom"], slackY));
                     if (cut) {
                         const what = `${a.tagName.toLowerCase()}.${[...a.classList].join(".")}`;
                         found.push(`"${text}" is cut by ${what}`);
