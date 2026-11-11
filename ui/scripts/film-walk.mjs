@@ -25,8 +25,10 @@ export const EDGE = 3;
  * (`shows`). Before each tick whose number is in `shoot` it waits on
  * `window.berylShoot(number, time)`. Returns every step the stage told of, with its subject,
  * its stage times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
- * with the box on the page of everything drawn then and its pose as the stage has it; and
- * where each player's life total is drawn.
+ * with what changed since the tick before: the box on the page and the pose as the stage has
+ * it of each node drawn otherwise than it was, and the names of those no longer drawn (`reel`
+ * reads them whole); and where each player's life total is drawn. Where everything lies at
+ * every tick is too much to hand back for a moment that deals two whole libraries.
  *
  * With `paced`, on a page `openStage` opened so, the page's own time is the stage's while the
  * moment plays. The screen waits on the page's clock before it shows a choice (screens/
@@ -93,6 +95,9 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
     const layer = document.querySelector(".card-layer");
     const wanted = new Set(shoot);
     const ticks = [];
+    /** Each node drawn at the last tick, by name: its box and pose then. */
+    const drawn = new Map();
+    const same = (a, b) => Object.keys(a).every((key) => a[key] === b[key]);
     let abilities = false;
     // The page's timers on the stage's clock: each runs in the first turn at or after its
     // time, the earliest first.
@@ -141,6 +146,7 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
         const by = table.width / layer.offsetWidth;
         const boxes = {};
         const poses = {};
+        const seen = new Set();
         abilities = false;
         for (const name of stage.shown.resting.keys()) {
             abilities ||= typeof name === "string";
@@ -164,17 +170,25 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
             ].map(([x, y]) => [x + y * lean, y]);
             const xs = corners.map(([x, y]) => pose.x + x * cos - y * sin);
             const ys = corners.map(([x, y]) => pose.y + x * sin + y * cos);
-            boxes[name] = [
+            const box = [
                 table.left + Math.min(...xs) * by,
                 table.top + Math.min(...ys) * by,
                 table.left + Math.max(...xs) * by,
                 table.top + Math.max(...ys) * by,
             ];
-            poses[name] = pose;
+            const key = String(name);
+            seen.add(key);
+            const was = drawn.get(key);
+            if (was && same(was.box, box) && same(was.pose, pose)) continue;
+            drawn.set(key, { box, pose: { ...pose } });
+            boxes[key] = box;
+            poses[key] = pose;
         }
+        const gone = [...drawn.keys()].filter((key) => !seen.has(key));
+        for (const key of gone) drawn.delete(key);
         const at = clock.now - origin;
         if (wanted.has(ticks.length)) await window.berylShoot(ticks.length, at);
-        ticks.push({ at, boxes, poses });
+        ticks.push({ at, boxes, poses, gone });
     };
     // Still ticks before the first answer, which begins a step at once.
     for (let still = 0; still <= edge; still++) {
@@ -298,9 +312,52 @@ export function differing(first, second) {
     if (t < 0 || !second.ticks[t]) {
         return `${first.ticks.length} ticks, then ${second.ticks.length}`;
     }
-    const [a, b] = [first.ticks[t].poses, second.ticks[t].poses];
-    const names = Object.keys({ ...a, ...b }).filter(
-        (name) => !isDeepStrictEqual(a[name], b[name]),
+    const [a, b] = [reel(first.ticks), reel(second.ticks)];
+    const named = [first.ticks[t], second.ticks[t]].flatMap((tick) => [
+        ...Object.keys(tick.poses),
+        ...tick.gone,
+    ]);
+    const names = [...new Set(named)].filter(
+        (name) => !isDeepStrictEqual(a.pose(name, t), b.pose(name, t)),
     );
-    return `at tick ${t}, ${first.ticks[t].at} ms, ${names.join(", ")} was ${JSON.stringify(a[names[0]])}, then ${JSON.stringify(b[names[0]])}`;
+    return `at tick ${t}, ${first.ticks[t].at} ms, ${names.join(", ")} was ${JSON.stringify(a.pose(names[0], t))}, then ${JSON.stringify(b.pose(names[0], t))}`;
+}
+
+/** A walk's `ticks`, each of which tells only what changed since the one before, read whole:
+ * `box(name, t)` and `pose(name, t)` are the box and pose of the node `name` at tick `t`, or
+ * null while it is not drawn; `changes(name)`, the ticks at which either changes, in order;
+ * `names`, every node drawn at some tick. */
+export function reel(ticks) {
+    const tracks = new Map();
+    const tell = (name, t, box, pose) => {
+        if (!tracks.has(name)) tracks.set(name, { at: [], box: [], pose: [] });
+        const track = tracks.get(name);
+        track.at.push(t);
+        track.box.push(box);
+        track.pose.push(pose);
+    };
+    ticks.forEach((tick, t) => {
+        for (const [name, box] of Object.entries(tick.boxes)) {
+            tell(name, t, box, tick.poses[name]);
+        }
+        for (const name of tick.gone) tell(name, t, null, null);
+    });
+    /** What `track` told of `kind` at its last change at or before tick `t`, or null. */
+    const read = (kind) => (name, t) => {
+        const track = tracks.get(name);
+        if (!track) return null;
+        let [low, high] = [0, track.at.length];
+        while (low < high) {
+            const middle = (low + high) >> 1;
+            if (track.at[middle] <= t) low = middle + 1;
+            else high = middle;
+        }
+        return low ? track[kind][low - 1] : null;
+    };
+    return {
+        names: [...tracks.keys()],
+        box: read("box"),
+        pose: read("pose"),
+        changes: (name) => tracks.get(name)?.at ?? [],
+    };
 }

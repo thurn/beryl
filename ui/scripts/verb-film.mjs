@@ -35,6 +35,7 @@ import {
     EDGE,
     GAP,
     openStage,
+    reel,
     TICK,
     walk,
 } from "./film-walk.mjs";
@@ -116,12 +117,12 @@ const tickAt = (ticks, at) => {
     return found < 0 ? ticks.length - 1 : found;
 };
 
-/** The box a subject of `step` has at `tick`: its card's or ability's, or a player's life
- * total, for a count of life. */
-function boxOf(step, tick, orbs) {
+/** The box a subject of `step` has at tick `t` of `film` (a `reel`): its card's or ability's,
+ * or a player's life total, for a count of life. */
+function boxOf(step, film, t, orbs) {
     const player = step.act.tally?.kind === "life" && step.act.tally.player;
     if (player) return orbs[player] ?? null;
-    return (step.subject !== null && tick.boxes[step.subject]) || null;
+    return step.subject === null ? null : film.box(step.subject, t);
 }
 
 /** The window around `boxes` with `pad` about them, on whole pixels within `size`. */
@@ -169,14 +170,14 @@ function takesOf(steps) {
     return found;
 }
 
-/** How much a take's subjects change from one tick to the next: how far each moves, grows and
- * turns in pixels and degrees, and how much of it comes or goes. */
-function changeOf(take, before, after) {
+/** How much a take's subjects change from tick `t` of `film` to the next: how far each moves,
+ * grows and turns in pixels and degrees, and how much of it comes or goes. */
+function changeOf(take, film, t) {
     let change = 0;
     for (const step of take.steps) {
         const name = step.subject;
-        const a = name === null ? null : before.poses[name];
-        const b = name === null ? null : after.poses[name];
+        const a = name === null ? null : film.pose(name, t);
+        const b = name === null ? null : film.pose(name, t + 1);
         if (!a !== !b) change += 100;
         if (!a || !b) continue;
         change +=
@@ -189,27 +190,37 @@ function changeOf(take, before, after) {
     return change;
 }
 
-/** What is shot of `take` in a play of `ticks`: its windows on the page, the ticks of each of
- * its sheets, and where each step's subject comes to rest in its `track` frames. Null when
- * nothing of it is drawn. */
-function plan(take, { ticks, orbs }, size) {
+/** What is shot of `take` in a play of `ticks`, read as `film`: its windows on the page, the
+ * ticks of each of its sheets, and where each step's subject comes to rest in its `track`
+ * frames. Null when nothing of it is drawn. */
+function plan(take, { ticks, orbs }, film, size) {
     const first = tickAt(ticks, take.from);
     const last = tickAt(ticks, take.to);
     const from = Math.max(0, first - LEAD);
     const to = Math.min(ticks.length - 1, last + TAIL);
-    const near = ticks.slice(Math.max(0, first - 1), last + 2);
+    const near = [];
+    for (
+        let t = Math.max(0, first - 1);
+        t <= last + 1 && t < ticks.length;
+        t++
+    ) {
+        near.push(t);
+    }
     const subjects = take.steps.flatMap((step) =>
-        near.map((tick) => boxOf(step, tick, orbs)).filter(Boolean),
+        near.map((t) => boxOf(step, film, t, orbs)).filter(Boolean),
     );
     if (!subjects.length) return null;
     const pad = 0.3 * Math.max(...subjects.map((b) => b[2] - b[0]));
     const close = around(subjects, pad, size);
-    // Everything that moves, comes or goes while the take is filmed.
-    const window = ticks.slice(from, to + 1);
-    const moved = Object.keys(
-        Object.assign({}, ...window.map((t) => t.boxes)),
-    ).flatMap((name) => {
-        const boxes = window.map((t) => t.boxes[name]);
+    // Everything that moves, comes or goes while the take is filmed: each box it has then.
+    const moved = film.names.flatMap((name) => {
+        const boxes = [
+            film.box(name, from),
+            ...film
+                .changes(name)
+                .filter((t) => from < t && t <= to)
+                .map((t) => film.box(name, t)),
+        ];
         const still = boxes.every((b) => isDeepStrictEqual(b, boxes[0]));
         return still ? [] : boxes.filter(Boolean);
     });
@@ -224,7 +235,7 @@ function plan(take, { ticks, orbs }, size) {
     for (let start = first; start + span <= last; start++) {
         let change = 0;
         for (let t = start; t < start + span; t++) {
-            change += changeOf(take, ticks[t], ticks[t + 1]);
+            change += changeOf(take, film, t);
         }
         if (change > most) [key, most] = [start, change];
     }
@@ -243,7 +254,7 @@ function plan(take, { ticks, orbs }, size) {
         ],
         rests: take.steps.map((step) => {
             const box =
-                boxOf(step, ticks[tickAt(ticks, step.to)], orbs) ??
+                boxOf(step, film, tickAt(ticks, step.to), orbs) ??
                 subjects.at(-1);
             return [
                 ((box[0] + box[2]) / 2 - close.x) / close.width,
@@ -257,10 +268,15 @@ const browser = await launch();
 const board = await browser.newPage();
 let failed = false;
 
-const dataUrl = async (path) =>
-    `data:image/${path.endsWith(".png") ? "png" : "jpeg"};base64,${(
-        await readFile(path)
-    ).toString("base64")}`;
+/** Where a sheet finds the frame saved at `path`: the board's page fetches each from disk, so
+ * that a sheet of whole tables shot at twice their size is not sent to it as one string. */
+const FRAMES = "http://frames.invalid/";
+await board.route(`${FRAMES}**`, (route) =>
+    route.fulfill({
+        path: decodeURIComponent(new URL(route.request().url()).pathname),
+    }),
+);
+const served = (path) => new URL(path, FRAMES).href;
 
 /** How many frames of `width` by `height` go across a sheet and how wide each is drawn: the
  * fewest across, no frame wider than its device pixels or than `widest`, that keep `count` of
@@ -286,13 +302,11 @@ function arrange(count, width, height, widest = WIDE) {
 async function sheet(path, title, sections) {
     const html = [];
     for (const { label, frames, tile, across } of sections) {
-        const figures = [];
-        for (const frame of frames) {
-            figures.push(
+        const figures = frames.map(
+            (frame) =>
                 `<figure><figcaption class="${frame.live ? "live" : ""}">${frame.caption}</figcaption>` +
-                    `<img src="${await dataUrl(frame.path)}" style="width:${tile}px"></figure>`,
-            );
-        }
+                `<img src="${served(frame.path)}" style="width:${tile}px"></figure>`,
+        );
         html.push(
             `<h2>${label}</h2><div class="grid" style="grid-template-columns:repeat(${across},${tile}px)">${figures.join("")}</div>`,
         );
@@ -436,7 +450,7 @@ async function shoot(folder, chosen, learned, open, play, seat, title) {
 
 /** A take as `takes.json` tells it: where its frames and sheets are, what it is of, and each
  * step's subject tick by tick as the stage had it, times from the take's start. */
-function told(take, { layout, seat, moment, fixture, learned, folder }) {
+function told(take, { layout, seat, moment, fixture, learned, film, folder }) {
     const [first, last] = take.shots.track;
     return {
         layout,
@@ -461,8 +475,9 @@ function told(take, { layout, seat, moment, fixture, learned, folder }) {
                 to: step.to - take.from,
                 act: step.act,
                 rest: take.shots.rests[k],
-                poses: learned.ticks.slice(first, last + 1).map((tick) => {
-                    const pose = name === null ? null : tick.poses[name];
+                poses: learned.ticks.slice(first, last + 1).map((tick, at) => {
+                    const pose =
+                        name === null ? null : film.pose(name, first + at);
                     return { at: tick.at - take.from, ...(pose ?? {}) };
                 }),
             };
@@ -542,9 +557,10 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                 ) {
                     throw new Error("the moment did not play out");
                 }
+                const film = reel(learned.ticks);
                 const chosen = takesOf(learned.steps).filter((take) => {
                     if (!every && seen.has(take.case)) return false;
-                    take.shots = plan(take, learned, size);
+                    take.shots = plan(take, learned, film, size);
                     take.name = `${moment.name}-${take.steps[0].n}-${slug(take.case)}`;
                     return take.shots && seen.add(take.case);
                 });
@@ -561,13 +577,13 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                 for (const take of chosen) {
                     filmed.push({
                         take,
-                        learned,
                         ...told(take, {
                             layout,
                             seat,
                             moment: moment.name,
                             fixture,
                             learned,
+                            film,
                             folder,
                         }),
                     });
@@ -678,7 +694,7 @@ await writeFile(
         {
             verb,
             tick: TICK,
-            takes: filmed.map(({ take, learned, ...rest }) => rest),
+            takes: filmed.map(({ take, ...rest }) => rest),
             contacts,
         },
         null,
