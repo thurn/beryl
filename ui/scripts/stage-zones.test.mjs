@@ -38,7 +38,7 @@ for (const tick of [16, 100, 1000]) {
         if (made.clock.now === 200) {
             assert.equal(made.pose(2).x, 400);
             assert.equal(made.pose(2).y, 0);
-            assert.equal(made.pose(2).opacity, 1 - 0.5 / GONE);
+            assert.equal(made.pose(2).opacity, 1 - (0.5 / GONE) ** 2);
             assert.equal(made.pose(3).x, 800);
         }
         reach(made.clock, 340, tick);

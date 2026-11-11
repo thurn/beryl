@@ -36,13 +36,14 @@ export const fade =
  * that left it is gone (3sEoP_s4DQE 24:49.6 to 24:49.8, a creature returned to its hand). */
 export const GONE = 0.7;
 
-/** An entry that goes from sight where it was at `start`, and never travels: gone at `GONE`
- * of its step. */
+/** An entry that goes from sight where it was at `start`, and never travels: slowly at first,
+ * while the effect that says how it leaves is seen on it (effects.ts), all at once at the
+ * last, and gone at `GONE` of its step. */
 export const dissolve =
   (start: Pose, ease: Timing["ease"]): Path =>
   (progress) => ({
     ...start,
-    opacity: start.opacity * (1 - ease(Math.min(1, progress / GONE))),
+    opacity: start.opacity * (1 - ease(Math.min(1, progress / GONE)) ** 2),
   });
 
 /** The glide of an entry that was at `start` and stays there until `from` of its step, then

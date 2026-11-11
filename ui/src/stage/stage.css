@@ -66,7 +66,7 @@
   background: rgb(var(--light));
   box-shadow: 0 0 calc(var(--frame) * 0.2) calc(var(--frame) * 0.06)
     rgb(255 226 170 / 85%);
-  opacity: calc((1 - var(--settle)) * 0.75);
+  opacity: calc((1 - var(--settle)) * 0.6);
 }
 /* The card breaks up from the top down along the mask's stippled edge (the old board's, which
    the cut-over leaves to this rule), darkening as it goes. */
