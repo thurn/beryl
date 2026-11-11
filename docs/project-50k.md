@@ -4,7 +4,7 @@
 known Magic card. Decided 2026-11-10 in a design interview, on an audit of the
 code and on measurements taken that day, and revised the same day after an audit
 of the plan itself a second interview on the checks (K18 to K21) and a third on
-how the UI presents a game (K22 to K30). The work is tracked as an Enact epic in
+how the UI presents a game (K22 to K31). The work is tracked as an Enact epic in
 beads; this document is the plan the epic's beads are written against.*
 
 Beryl supports 47 cards. Its structure was built for that pool: one cards crate,
@@ -132,6 +132,7 @@ same cards build in about 90 seconds.
 | K28 | The design language is data: each verb's values, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                                                   | Nothing forced the code and the prose to agree. An exception that is data can exempt its verb from the Arena comparison.                                                                                                         |
 | K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout, listed the same way. A judgement call files a `human` bead and never blocks.                                                                                | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                                                                   |
 | K30 | From the track's start until the cut-over, reports about motion, arrows and combat lines are banked as cases the stage must pass, not fixed in the code it replaces.                                                                                                                                    | In three days the UI took 14,351 added lines of fixes, most in files the stage deletes.                                                                                                                                          |
+| K31 | No step of this plan waits for the user's approval. Where his judgement is wanted, the agent proceeds on a default and files a non-blocking bead labelled `human`. K1's count gate is the one exception: it stops the run.                                                                              | An unattended run that waits on a person stalls, and an approval nobody is there to give blocks every bead behind it. This is how Enact is meant to run.                                                                         |
 
 ## Target architecture
 
@@ -286,9 +287,9 @@ decided once in Rust and played by the UI.
   layouts, beside `shots` and its layout audits. The duplicate and motion audits
   read the script's verbs: Arena's cast chooser shows a card twice, and its
   tokens appear without a flight.
-- **No approval steps.** Where the user's eye is wanted (how a line looks, a new
-  verb, a rule Arena contradicts), the agent proceeds on Arena or on the nearest
-  existing verb and files a `human` bead. Nothing waits on it.
+- **No approval steps (K31).** Where the user's eye is wanted (how a line looks,
+  a new verb, a rule Arena contradicts), the agent proceeds on Arena or on the
+  nearest existing verb and files a `human` bead. Nothing waits on it.
 
 ### Card pool pipeline
 
