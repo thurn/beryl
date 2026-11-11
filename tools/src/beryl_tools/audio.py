@@ -118,7 +118,7 @@ def problems(manifest: Manifest, out: Path = OUTPUT, loops: Path = LOOPS) -> lis
     )
     if {cue: len(v) for cue, v in lengths.items()} != looping(manifest):
         found.append(f"{loops.name} does not match the looping music; run `just audio`")
-    found += [f"stray {p.relative_to(out)}" for p in stray(out, set(files))]
+    found += [f"stray {p.relative_to(out).as_posix()}" for p in stray(out, set(files))]
     total = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
     if total > LIMIT_BYTES:
         found.append(f"{total} bytes, over the {LIMIT_BYTES}-byte budget")
