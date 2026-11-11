@@ -109,6 +109,13 @@ def test_two_cards_moving_where_one_was_asked_for_cannot_be_measured() -> None:
         measure(clip)
 
 
+def test_a_card_followed_to_where_it_lands_leaves_out_what_moves_around_it() -> None:
+    clip = render(DEAL[:2], 1.4)
+    [card] = measure(clip, landing=DEAL[1].target)
+    assert abs(card.start - DEAL[1].start) <= FRAME
+    assert math.dist(card.blobs[-1].center, DEAL[1].target) < 10
+
+
 def test_a_card_still_moving_at_the_end_cannot_be_measured() -> None:
     clip = render([CAST], 0.9)
     with pytest.raises(Unmeasurable, match="last frame"):

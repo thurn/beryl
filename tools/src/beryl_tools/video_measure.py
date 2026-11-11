@@ -10,7 +10,8 @@ last frames: a pixel is the mover's when it differs from both. That drops the ta
 the card left (it matches the last frame) and the place it lands (it matches the first), so the
 first two frames and the last two must show the card at rest. The mover's pixels are grouped
 into blobs, and blobs are followed from frame to frame into tracks, one per card, trimmed of
-the light frames at either end (a card entering at the crop's edge, a glow where it landed). A
+the light frames at either end (a card entering at the crop's edge, a glow where it landed), but
+not those of a card small and whole there, as one growing or shrinking on its way. A
 card's motion runs from the last frame before its track to the first frame after it; its size
 at rest is where the last frame differs from the first, around the place it landed; its peak
 is the largest of its boxes in flight, as a multiple of that.
@@ -48,6 +49,8 @@ GAP = 3
 SPECK = 0.0005
 # A track whose largest blob is under this share of the largest track's is the table moving.
 MINOR = 0.15
+# A blob changed over this share of its box is solid: a card, not a glow.
+SOLID = 0.6
 # The default width the crop is scaled to: enough for a card's size to 2%, cheap in Python.
 WORK_WIDTH = 480
 # Path samples the table prints for each card; JSON has every frame.
@@ -243,8 +246,16 @@ def _diagonal(blob: Blob) -> float:
     return math.hypot(blob.x1 - blob.x0, blob.y1 - blob.y0)
 
 
-def measure(clip: Clip, cards: int = 1, threshold: int = THRESHOLD) -> list[Card]:
-    """Each of the `cards` movers in the clip, in the order they start moving."""
+def measure(
+    clip: Clip,
+    cards: int = 1,
+    threshold: int = THRESHOLD,
+    landing: tuple[float, float] | None = None,
+) -> list[Card]:
+    """Each of the `cards` movers in the clip, in the order they start moving. With `landing`,
+    a point in working pixels, only movers last seen over it count: a capture that knows where
+    its card comes to rest leaves out what moves around it, such as a row making room.
+    """
     if len(clip.frames) < 3:
         raise Unmeasurable(f"{len(clip.frames)} frames: a clip needs at least 3")
     first, last = clip.frames[0], clip.frames[-1]
@@ -255,6 +266,13 @@ def measure(clip: Clip, cards: int = 1, threshold: int = THRESHOLD) -> list[Card
 
     seen = [found(differ_both(f, first, last, threshold)) for f in clip.frames]
     tracks = [t for t in track(seen) if len(t) >= 2]
+    if landing is not None:
+        x, y = landing
+        tracks = [
+            t
+            for t in tracks
+            if t[-1][1].x0 <= x <= t[-1][1].x1 and t[-1][1].y0 <= y <= t[-1][1].y1
+        ]
     if not tracks:
         raise Unmeasurable("nothing moved: check the span and the crop")
     largest = max(b.pixels for t in tracks for _, b in t)
@@ -272,9 +290,14 @@ def measure(clip: Clip, cards: int = 1, threshold: int = THRESHOLD) -> list[Card
     measured: list[Card] = []
     for n, t in enumerate(tracks, 1):
         # A card entering at the crop's edge, or a glow lingering where it landed, leaves
-        # a track with little of the card in it at either end.
+        # a track with little of the card in it at either end. A card that is small there,
+        # growing as it leaves or shrinking as it lands, is whole: solid and inside the crop.
         heaviest = max(b.pixels for _, b in t)
-        heavy = [k for k, (_, b) in enumerate(t) if b.pixels >= MINOR * heaviest]
+        heavy = [
+            k
+            for k, (_, b) in enumerate(t)
+            if b.pixels >= MINOR * heaviest or _whole(clip, b)
+        ]
         t = t[heavy[0] : heavy[-1] + 1]
         begin, end = t[0][0], t[-1][0]
         # The first and last frames are the references, so a card moving between them and
@@ -308,6 +331,16 @@ def measure(clip: Clip, cards: int = 1, threshold: int = THRESHOLD) -> list[Card
             )
         )
     return measured
+
+
+def _whole(clip: Clip, blob: Blob) -> bool:
+    """Whether a blob is a whole card rather than a piece of one or a glow: clear of the
+    crop's edges, and changed over most of its box."""
+    inside = (
+        blob.x0 > 0 and blob.y0 > 0 and blob.x1 < clip.width and blob.y1 < clip.height
+    )
+    area = (blob.x1 - blob.x0) * (blob.y1 - blob.y0)
+    return inside and blob.pixels >= SOLID * area
 
 
 def _rest(clip: Clip, change: bytes, landed: Blob) -> Blob | None:
