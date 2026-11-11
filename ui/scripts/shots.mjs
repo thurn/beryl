@@ -96,6 +96,9 @@ async function capture(browser, shot) {
                 errors.push(`phone: ${fault}`);
         }
         const resized = shot.route.includes("fixture=") && !phone;
+        // At another size the pointer would rest on whatever has moved under it, as a hand
+        // card that rises over the life total: the resized checks are of the layout alone.
+        if (resized && shot.hover) await page.mouse.move(0, 0);
         for (const size of resized ? RESIZED : []) {
             await page.setViewportSize(size);
             await settle(page);
