@@ -384,13 +384,15 @@ held to by `just motion`.
   permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
   restores it in about 0.1 s (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1,
   0VsYGs88NXA 31:13.15). Exempt: exception 2.
-- **strike.** A creature lunges at what it deals combat damage to and drifts
-  back. Each attacker winds back, lunges from its row to the player's avatar or
-  to its blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all.
-  A blocked attacker strikes about 0.4 s before an unblocked one. First strike
-  is a strike of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk
-  25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
-  Beryl: 850 ms, 285 ms apart.
+- **strike.** A creature pulls back, lunges at what it deals combat damage to,
+  which flashes as the blow lands, and draws back. Two creatures that strike
+  each other meet half way, at one time. Each attacker winds back, lunges from
+  its row to the player's avatar or to its blocker, the screen flashes, and it
+  drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s
+  before an unblocked one. First strike is a strike of its own, seconds earlier
+  (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg
+  54:54.0, sMpAJ0HKDdg 54:57.5). Beryl: 850 ms, 285 ms apart. Effects: impact as
+  its blow lands (on what it strikes).
 - **streak.** A streak leaves one thing and lands on another, which flashes:
   mana from its source into the spell or ability it pays for, and damage from a
   spell or ability to what it hits. Each tapped land sends one streak of its
@@ -407,6 +409,8 @@ held to by `just motion`.
   changes about a second after its ability reaches the stack (IEXcjBn3BXk
   22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5, 0VsYGs88NXA 31:13.25,
   5UHzpVvUkfI 19:59.25). Beryl: 400 ms, 125 ms after its cause, in place.
+  Effects: pulse as it begins, loss as it begins (life loss), gain as it begins
+  (life gain).
 - **set.** The table changes and nothing moves: a step of the turn begins, a
   library is shuffled, a permanent's characteristics change. Nothing animates as
   a step begins, and nothing shows on a library when it is shuffled (IEXcjBn3BXk
@@ -447,12 +451,13 @@ held to by `just motion`.
 
 ## Effects
 
-An effect is light or a change of surface on one card, begun by a step of a verb
-as it starts or as it ends and played on the stage's clock
-(`ui/src/stage/effects.ts`): it never moves a card and never holds up the
-script. The list is closed, each effect has one look in Beryl's skin
-(`ui/src/stage/stage.css`), and a verb names the effects its steps begin. A mark
-says what a player may do; an effect says what just happened, and is gone.
+An effect is light or a change of surface on one card or one player's life
+total, begun by a step of a verb as it starts, as it ends or as its blow lands
+and played on the stage's clock (`ui/src/stage/effects.ts`): it never moves a
+card and never holds up the script. The list is closed, each effect has one look
+in Beryl's skin (`ui/src/stage/stage.css`), and a verb names the effects its
+steps begin. A mark says what a player may do; an effect says what just
+happened, and is gone.
 
 - **glow.** A halo of warm light around a card, bright at once, that spreads and
   fades: the card is new here, or is leaving whole. Drawn under its card. Beryl:
@@ -468,6 +473,17 @@ says what a player may do; an effect says what just happened, and is gone.
   going to exile. Drawn over its card. Beryl: linear.
 - **cover.** A veil of light closes over a card, hides it while it changes, and
   clears from what it now is, for as long as its step. Drawn over its card.
+  Beryl: linear.
+- **impact.** A burst of hot light on what a creature strikes, whole as the blow
+  lands and spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
+- **pulse.** A ring of light round a card's frame while its numbers swell and
+  settle: a counter put on it or taken off, its loyalty, its power and
+  toughness. Drawn over its card. Beryl: 320 ms, ease-out.
+- **loss.** A life total flares red, and the number that says how much it lost
+  sinks away from it and fades, for as long as its step. Drawn over its card.
+  Beryl: linear.
+- **gain.** A life total flares green, and the number that says how much it
+  gained rises from it and fades, for as long as its step. Drawn over its card.
   Beryl: linear.
 
 ## Marks

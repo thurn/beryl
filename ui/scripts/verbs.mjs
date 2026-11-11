@@ -131,6 +131,29 @@ async function walk({ tick, gap, answers, middle, whole }) {
             }
         }
     };
+    // Effects are drawn as the model has them (src/stage/dom.ts): an element of each inside
+    // what it is on, a node or a player's life total, in its layer, and how far through each
+    // is written there.
+    const lightless = (node, lit) => {
+        const drawn = [...node.querySelectorAll(":scope > .stage-effect")];
+        if (drawn.length !== lit.length) {
+            return `has ${drawn.length} effects drawn of ${lit.length}`;
+        }
+        for (const effect of lit) {
+            const made = drawn.find((e) =>
+                e.matches(
+                    `.stage-effect-${effect.name}.stage-effect-${effect.layer}`,
+                ),
+            );
+            const through = Number(
+                node.style.getPropertyValue(`--${effect.name}`) || NaN,
+            );
+            if (!made || !near(through, effect.progress, 0.0001)) {
+                return `has its ${effect.name} drawn ${through} through`;
+            }
+        }
+        return null;
+    };
     const layer = document.querySelector(".card-layer");
     const faults = [];
     const heard = window.berylSounds.length;
@@ -186,26 +209,8 @@ async function walk({ tick, gap, answers, middle, whole }) {
                 return `has its card drawn turned ${drawn} of ${pose.turn}`;
             }
         }
-        // Its effects are drawn as the model has them (src/stage/dom.ts): an element of each
-        // inside it, in its layer, and how far through each is written on the node.
-        const lit = stage.effect(name);
-        const drawn = [...node.querySelectorAll(":scope > .stage-effect")];
-        if (drawn.length !== lit.length) {
-            return `has ${drawn.length} effects drawn of ${lit.length}`;
-        }
-        for (const effect of lit) {
-            const made = drawn.find((e) =>
-                e.matches(
-                    `.stage-effect-${effect.name}.stage-effect-${effect.layer}`,
-                ),
-            );
-            const through = Number(
-                node.style.getPropertyValue(`--${effect.name}`) || NaN,
-            );
-            if (!made || !near(through, effect.progress, 0.0001)) {
-                return `has its ${effect.name} drawn ${through} through`;
-            }
-        }
+        const unlit = lightless(node, stage.effect(name));
+        if (unlit) return unlit;
         // A node dressed with its card's name shows its face (src/stage/dom.ts), but for a
         // face-down permanent its controller knows, which is named and shows its back.
         if (pose.face === "back" && node.dataset.card && !down) {
@@ -227,6 +232,7 @@ async function walk({ tick, gap, answers, middle, whole }) {
     };
     let lifted = false;
     let done = false;
+    const SIDES = ["you", "opponent"];
     sample = () => {
         const poses = {};
         const zones = {};
@@ -253,6 +259,13 @@ async function walk({ tick, gap, answers, middle, whole }) {
             const down = object?.facing === "down";
             const why = differs(name, pose, dress.frame, down);
             if (why) faults.push(`at ${clock.now - origin} ms ${name} ${why}`);
+        }
+        for (const side of SIDES) {
+            const lit = stage.effect(side);
+            if (lit.length) effects[side] = lit;
+            const orb = document.querySelector(`[data-life="${side}"]`);
+            const why = orb ? lightless(orb, lit) : "has no life total";
+            if (why) faults.push(`at ${clock.now - origin} ms ${side} ${why}`);
         }
         const nodes = layer.querySelectorAll(".stage-node").length;
         if (nodes !== resting.size) {
@@ -287,13 +300,17 @@ async function walk({ tick, gap, answers, middle, whole }) {
         };
     };
     /** What the page shows beside each life total of how it is changing, once React has drawn
-     * what the stage told it. */
+     * what the stage told it: whose, by how much, and how far down the page the number has
+     * drifted from where it stood (stage.css). */
     changes = async () => {
         await new Promise((resolve) => setTimeout(resolve));
         return [...document.querySelectorAll("[data-life-change]")].map(
             (shown) => [
                 shown.closest("[data-life]")?.dataset.life,
                 Number(shown.dataset.lifeChange),
+                parseFloat(
+                    getComputedStyle(shown).translate.split(" ")[1] ?? 0,
+                ),
             ],
         );
     };

@@ -4,10 +4,11 @@
 // (Faces.tsx) and never touches those. An effect on a node (effects.ts) is an element of the
 // stage's own inside it, under or over the face, and how far through it is a number the stage
 // writes on the node each tick: its look is a rule of stage.css read from that number, never a
-// CSS animation. The elements keep the names the old board gave its
+// CSS animation. An effect on a player is drawn the same way in the element of their life
+// total, which the chrome around the table draws. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
-import type { Drawn } from "./effects.ts";
+import type { Drawn, On } from "./effects.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import type { Pointer, Under } from "./pointer.ts";
 import { transformOf, turnOf, type Pose } from "./pose.ts";
@@ -159,12 +160,14 @@ export class DomSurface implements Surface {
     this.#repoint?.();
   }
 
-  effect(
-    on: Name,
-    { name, layer }: Omit<Drawn, "progress">,
-    progress?: number,
-  ) {
-    const node = this.#nodes.get(on);
+  effect(on: On, { name, layer }: Omit<Drawn, "progress">, progress?: number) {
+    // A player's life total is the chrome's (`data-life`), beside the card layer.
+    const node =
+      on === "you" || on === "opponent"
+        ? this.#layer.ownerDocument.querySelector<HTMLElement>(
+            `[data-life="${on}"]`,
+          )
+        : this.#nodes.get(on);
     if (!node) return;
     const drawn = node.querySelector(`:scope > .stage-effect-${name}`);
     if (progress === undefined) {

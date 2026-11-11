@@ -24,7 +24,7 @@ import {
   type Spot,
   type Viewport,
 } from "../mobile/layout";
-import { drawn, emerging, middle } from "./desktop.ts";
+import { drawn, emerging, half, middle } from "./desktop.ts";
 import {
   abilityName,
   type Anchors,
@@ -243,4 +243,5 @@ export const phone = (viewport: Viewport): StageLayout => ({
   emerging,
   drawn,
   middle,
+  half,
 });

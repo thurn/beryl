@@ -137,10 +137,13 @@ def affected(
 def test_the_page_lists_effects_and_the_verbs_that_begin_them() -> None:
     lands = {"effect": "settle", "when": "end", "into": "battlefield"}
     played = {"effect": "settle", "when": "start", "case": "land played"}
-    page = " ".join(conventions.render(affected([lands, played])).split())
+    blow = {"effect": "settle", "when": "blow", "on": "struck"}
+    assert not conventions.problems(affected([lands, played, blow]))
+    page = " ".join(conventions.render(affected([lands, played, blow])).split())
     assert (
         "- **fly.** A card travels. A land glides (UrGalw_f35w 16:14.8). Effects: "
-        "settle as it ends (into the battlefield), settle as it begins (land played). "
+        "settle as it ends (into the battlefield), settle as it begins (land played), "
+        "settle as its blow lands (on what it strikes). "
     ) in page
     assert (
         "## Effects "
@@ -152,7 +155,7 @@ def test_bad_effects_are_refused() -> None:
     lands = {"effect": "settle", "when": "end", "into": "battlefield"}
     assert not conventions.problems(affected([lands]))
     # An effect that is none, a time that is no end of a step, a case the verb has not, and
-    # a word the stage does not read.
+    # something no step is about or strikes.
     for use in (
         {**lands, "effect": "sparkle"},
         {**lands, "when": "midway"},

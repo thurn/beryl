@@ -98,4 +98,7 @@ export interface StageLayout {
   /** The middle of the card `resting` is dressed as, were it drawn at `pose`: what a card
    * turns about as it taps, grows about as it turns over, and strikes at. */
   middle(resting: Resting, pose: Pose): Point;
+  /** Half the width and half the height of the card `resting` is dressed as, as it lies at
+   * `pose`: how far it reaches from its middle, which a strike at it stops by. */
+  half(resting: Resting, pose: Pose): Point;
 }

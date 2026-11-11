@@ -1,12 +1,12 @@
 // Changes on a card where it lies and to a player, on the stage, with no browser (`npm test`):
 // a permanent turns as it taps, about its card's own middle; a creature lunges at what it
-// strikes and drifts back; a permanent turns over where it lies; and a number that changes
+// strikes and draws back; a permanent turns over where it lies; and a number that changes
 // says so for as long as its step plays. The same in a browser, from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { lifeChange } from "../src/stage/notices.ts";
 import { ALOFT } from "../src/stage/pose.ts";
-import { FLIP, STRIKE } from "../src/stage/tracks.ts";
+import { FLIP, meets, STRIKE } from "../src/stage/tracks.ts";
 import { object, reach, stage, view } from "./stage-table.mjs";
 
 const LINEAR = { duration: 200 };
@@ -117,26 +117,36 @@ const strike = (source, to) => ({
     act: { verb: "strike", source, to, amount: 2 },
 });
 
-test("a creature lunges at the player it strikes and drifts back", () => {
+test("a creature lunges at the player it strikes and draws back", () => {
     const { stage: made } = stage({ strike: { duration: 1000 } });
     made.play(view([1, 2]));
     made.play(view([1, 2]), {
         beats: [[strike(1, { kind: "player", player: "opponent" })]],
     });
-    // From its middle (50, 70) to the opponent's life total (1000, -400).
-    const toward = { x: 950, y: -470 };
+    // From its middle (50, 70) at the opponent's life total (1000, -400): it stops where its
+    // card, which reaches 50 across and 70 down, meets the face of the orb, 40 about that
+    // middle.
+    const way = { x: 950, y: -470 };
+    const far = Math.hypot(way.x, way.y);
+    const unit = { x: way.x / far, y: way.y / far };
+    const reaches = unit.x * 50 - unit.y * 70 + 40;
+    const left = () =>
+        Math.hypot(1000 - (made.pose(1).x + 50), -400 - (made.pose(1).y + 70));
     made.clock.advance(STRIKE.wind * 1000);
-    assert.ok(Math.abs(made.pose(1).x + toward.x * STRIKE.back) < 1e-9);
+    assert.ok(Math.abs(left() - far - STRIKE.back * 100) < 1e-9);
     assert.ok(made.pose(1).y > 0, "it pulls back first");
     made.clock.advance((STRIKE.hit - STRIKE.wind) * 1000);
-    assert.ok(Math.abs(made.pose(1).x - toward.x * STRIKE.reach) < 1e-9);
-    assert.ok(Math.abs(made.pose(1).y - toward.y * STRIKE.reach) < 1e-9);
+    assert.ok(Math.abs(left() - reaches) < 1e-9);
+    assert.ok(
+        Math.abs(made.pose(1).x * unit.y - made.pose(1).y * unit.x) < 1e-9,
+    );
     assert.ok(made.pose(1).depth >= ALOFT);
     assert.equal(made.pose(1).width, 100);
     assert.deepEqual(at(made.pose(2)), at({ ...made.pose(2), x: 400, y: 0 }));
+    const blow = made.pose(1).x;
     made.clock.advance(250);
     const back = made.pose(1);
-    assert.ok(back.x > 0 && back.x < toward.x * STRIKE.reach);
+    assert.ok(back.x > 0 && back.x < blow);
     made.settle();
     assert.deepEqual(at(made.pose(1)), {
         x: 0,
@@ -147,20 +157,80 @@ test("a creature lunges at the player it strikes and drifts back", () => {
     });
 });
 
-test("creatures that strike one another lunge at each other's middles", () => {
+test("a creature stops where it first overlaps the card it strikes", () => {
     const { stage: made } = stage({ strike: { duration: 1000 } });
     made.play(view([1, 2]));
     made.play(view([1, 2]), {
-        beats: [
-            [
-                strike(1, { kind: "object", slot: 2 }),
-                strike(2, { kind: "object", slot: 1 }),
-            ],
-        ],
+        beats: [[strike(1, { kind: "object", slot: 2 })]],
     });
-    made.clock.advance(STRIKE.hit * 1000);
-    assert.ok(Math.abs(made.pose(1).x - 400 * STRIKE.reach) < 1e-9);
-    assert.ok(Math.abs(made.pose(2).x - (400 - 400 * STRIKE.reach)) < 1e-9);
+    made.clock.advance(STRIKE.wind * 1000);
+    assert.ok(Math.abs(made.pose(1).x + STRIKE.back * 100) < 1e-9);
+    // Cards 100 wide, 400 apart: its edge is `bite` of its width past the other's.
+    made.clock.advance((STRIKE.hit - STRIKE.wind) * 1000);
+    assert.ok(Math.abs(made.pose(1).x - (300 + STRIKE.bite * 100)) < 1e-9);
+    assert.equal(made.pose(1).y, 0);
+    assert.equal(made.pose(2).x, 400, "what is struck stays where it lies");
+});
+
+test("what a blow does to a card shows as it lands, in a fight on both", () => {
+    const timed = (act, _, before) => ({
+        duration: 1000,
+        with: meets(act, before),
+    });
+    const { stage: made } = stage(timed);
+    made.play(view([1, 2, 3]));
+    const hurt = (slot, damage) => object(slot, "battlefield", { damage });
+    const blow = (source, to, damage) => ({
+        act: {
+            verb: "strike",
+            source,
+            to: { kind: "object", slot: to },
+            amount: damage,
+            object: hurt(to, damage),
+        },
+    });
+    made.play(view([1, 2, 3]), {
+        beats: [[blow(1, 2, 3), blow(2, 1, 1)], [blow(1, 3, 2)]],
+    });
+    const damage = (slot) => made.shown.resting.get(slot).object.damage;
+    made.clock.advance(STRIKE.hit * 1000 - 1);
+    assert.deepEqual([damage(1), damage(2)], [undefined, undefined]);
+    // Neither card left its lunge to wait.
+    assert.ok(made.pose(1).x > 0 && made.pose(2).x < 400);
+    made.clock.advance(1);
+    assert.deepEqual([damage(1), damage(2)], [1, 3]);
+    // A card that only stands and is struck, in the beat after: the same.
+    made.clock.advance(999);
+    assert.equal(damage(3), undefined);
+    assert.equal(made.pose(3).x, 800);
+    made.clock.advance(1);
+    assert.equal(damage(3), 2);
+});
+
+test("creatures that strike one another meet half way, at one time", () => {
+    // The blow dealt back is played with the strike it answers, as timing.ts has it.
+    const timed = (act, _, before) => ({
+        duration: 1000,
+        stagger: 300,
+        with: meets(act, before),
+    });
+    const { stage: made } = stage(timed);
+    made.play(view([1, 2, 3]));
+    const fight = [
+        strike(1, { kind: "object", slot: 2 }),
+        strike(2, { kind: "object", slot: 1 }),
+        strike(3, { kind: "player", player: "opponent" }),
+    ];
+    made.play(view([1, 2, 3]), { beats: [fight] });
+    // The strike after the fight waits one stagger, not two.
+    made.clock.advance(299);
+    assert.deepEqual(made.pose(3), made.shown.resting.get(3).pose);
+    made.clock.advance(2);
+    assert.ok(made.pose(3).depth >= ALOFT);
+    made.clock.advance(STRIKE.hit * 1000 - 301);
+    const met = (300 + STRIKE.bite * 100) / 2;
+    assert.ok(Math.abs(made.pose(1).x - met) < 1e-9);
+    assert.ok(Math.abs(made.pose(2).x - (400 - met)) < 1e-9);
     assert.equal(made.pose(1).y, 0);
     made.settle();
     assert.equal(made.pose(1).x, 0);

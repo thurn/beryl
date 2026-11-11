@@ -37,7 +37,8 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * shows its back. An ability lifts out of its source 10 in from its corner, at half its width,
  * and a drawn card is held up 300 above its place in the hand at twice its width. A card is
  * 1.4 times as tall as it is wide, and a tapped permanent lies on its side; the players' life
- * totals are at x 1000, yours at y 900 and the opponent's at y -400. */
+ * totals are at x 1000, yours at y 900 and the opponent's at y -400, each orb's corner 50
+ * up and to the left of it. */
 export const row = {
     rest({ view: table, abilities }) {
         const out = new Map();
@@ -90,16 +91,18 @@ export const row = {
     },
     anchors: () => ({
         life: (side) => ({
+            corner: { x: 950, y: side === "you" ? 850 : -450 },
             middle: { x: 1000, y: side === "you" ? 900 : -400 },
         }),
     }),
-    middle({ object, dress }, pose) {
+    half({ object, dress }, pose) {
         const lies = dress.zone === "battlefield" && object?.tapped;
         const [wide, tall] = lies ? [1.4, 1] : [1, 1.4];
-        return {
-            x: pose.x + (pose.width * wide) / 2,
-            y: pose.y + (pose.width * tall) / 2,
-        };
+        return { x: (pose.width * wide) / 2, y: (pose.width * tall) / 2 };
+    },
+    middle(resting, pose) {
+        const { x, y } = row.half(resting, pose);
+        return { x: pose.x + x, y: pose.y + y };
     },
     emerging: (source, rest) => ({
         ...rest,
@@ -145,7 +148,8 @@ export function recorder() {
 }
 
 /** A stage on a held clock. `durations` gives the verbs that take time, or says of each act
- * how long it takes; `effects`, the effects each act begins. */
+ * how long it takes, given the table it finds and the act of the step before it in its beat;
+ * `effects`, the effects each act begins. */
 export function stage(durations = {}, effects = undefined) {
     const surface = recorder();
     const timed =
@@ -155,7 +159,10 @@ export function stage(durations = {}, effects = undefined) {
     const made = new ScriptStage({
         layout: row,
         surface,
-        timings: (act) => ({ ...SNAP, ...timed(act) }),
+        timings: (act, found, before) => ({
+            ...SNAP,
+            ...timed(act, found, before),
+        }),
         effects,
     });
     return { stage: made, surface };

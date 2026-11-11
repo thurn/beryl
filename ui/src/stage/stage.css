@@ -110,3 +110,76 @@
     1
   );
 }
+/* A burst of hot light on what a blow lands on: whole as it lands, spreading as it fades. */
+.stage-effect-impact {
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgb(var(--light)),
+    rgb(255 196 120 / 85%) 55%,
+    rgb(255 120 64 / 0%)
+  );
+  box-shadow: 0 0 calc(var(--frame) * 0.24) calc(var(--frame) * 0.08)
+    rgb(255 132 72 / 85%);
+  opacity: calc((1 - var(--impact)) * 0.7);
+  transform: scale(calc(1 + 0.12 * var(--impact)));
+}
+/* A ring of light round the frame of a card as one of its numbers changes, and those numbers
+   swell and settle with it: its counters' badges, its loyalty, its power and toughness. The
+   skin's own pop of a badge (design/components/card-frame.css) is the browser's, which the
+   stage's nodes do not play. */
+.stage-effect-pulse {
+  box-shadow:
+    inset 0 0 calc(var(--frame) * 0.07) calc(var(--frame) * 0.025)
+      rgb(var(--light)),
+    0 0 calc(var(--frame) * 0.16) calc(var(--frame) * 0.03)
+      rgb(255 226 170 / 80%);
+  opacity: calc(1 - var(--pulse));
+}
+.stage-node :is(.badge-pop-0, .badge-pop-1) {
+  animation: none;
+}
+.stage-node:has(> .stage-effect-pulse)
+  :is(.card-pt, .card-pt-counter, .card-loyalty, .mark-badge) {
+  scale: calc(1 + 0.45 * sin(var(--pulse) * 180deg));
+}
+/* An effect on a player (stage/dom.ts) is drawn in the element of their life total, about the
+   face of the orb in the middle of its art (screens/styles/table.css `.life-hit`), on the
+   desktop and the phone alike. A total that falls flares red and one that rises green, a ring
+   that leaves the face and fades, and the number beside it that says by how much (game/Life.tsx
+   `LifeChange`) stands large for a moment and drifts away with it, down for a loss and up for a
+   gain, a little way so as to stay clear of what is announced under the orb, and fades at the
+   last. */
+[data-life] > .stage-effect {
+  --flare: 255 106 85;
+  --through: var(--loss);
+  inset: auto;
+  left: 50%;
+  top: 46.5%;
+  z-index: 0;
+  width: 36%;
+  height: 83%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0.5em 0.22em rgb(var(--flare) / 90%),
+    inset 0 0 0.6em 0.2em rgb(var(--flare) / 75%);
+  opacity: calc(1 - var(--through));
+  transform: scale(calc(1 + 0.45 * var(--through)));
+}
+[data-life] > .stage-effect-gain {
+  --flare: 127 224 138;
+  --through: var(--gain);
+}
+[data-life] > .life-change {
+  --drift: var(--loss, var(--gain, 0));
+  translate: 0 calc(var(--drift) * (2 - var(--drift)) * 0.4em);
+  scale: calc(1 + 0.3 * max(0, 1 - var(--drift) * 6));
+  opacity: min(1, (1 - var(--drift)) / 0.3);
+}
+[data-life] > .life-change-gain {
+  translate: 0 calc(var(--drift) * (2 - var(--drift)) * -0.4em);
+}
+/* The phone's orb is the same art, smaller (mobile/phone.css `.phone-orb`). */
+.phone-orb > .stage-effect {
+  font-size: 6px;
+}

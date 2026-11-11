@@ -148,12 +148,14 @@ export const CASES = {
         }
     },
 
-    // A creature lunges at what it deals combat damage to and drifts back to where it lay:
+    // A creature lunges at what it deals combat damage to and draws back to where it lay:
     // from its own place, over everything, toward the player's half of the table or its
-    // blocker's card, and never turned or sized. The strikes of one combat begin one after
-    // another, and creatures that strike one another are both on their way at once. A player
-    // struck has their old life total as the strike begins and the new one by its end. Nothing
-    // moves but what strikes.
+    // blocker's card, and never turned or sized. It stops where its card first overlaps the
+    // card it strikes, which a burst of light is on as the blow lands; a player's life total
+    // flares with its own change instead. The strikes of one combat begin one after another,
+    // but that creatures that strike one another do so as one, at one time, and meet half
+    // way. A player struck has their old life total as the strike begins and the new one by
+    // its end. Nothing moves but what strikes.
     strike({ combat }) {
         const strikes = combat.steps.filter((s) => s.verb === "strike");
         assert.equal(strikes.length, 4, "the combat's four strikes");
@@ -161,9 +163,10 @@ export const CASES = {
         const starts = strikes.map((s) => s.from);
         assert.deepEqual(
             starts,
-            [...new Set(starts)].sort((a, b) => a - b),
+            starts.toSorted((a, b) => a - b),
             "they begin one after another",
         );
+        assert.equal(new Set(starts).size, 3, "but for the two of the fight");
         const seen = { player: 0, object: 0 };
         for (const strike of strikes) {
             const { source, to, amount } = strike.act;
@@ -201,20 +204,61 @@ export const CASES = {
                     side.life[to.player] - amount,
                     `${what}: the life it takes`,
                 );
+                assert.ok(
+                    !effectsOn(strike.at.middle, to.player).includes(
+                        "impact over",
+                    ),
+                    `${what}: no burst on a player`,
+                );
             } else {
                 // Along the line from its card's middle to the middle of what it strikes.
-                const target = was.poses[to.slot];
+                const lies = was.marks[to.slot].tapped;
                 const from = cardMiddle(lay, tapped);
-                const at = cardMiddle(target, was.marks[to.slot].tapped);
+                const at = cardMiddle(was.poses[to.slot], lies);
                 const way = { x: at.x - from.x, y: at.y - from.y };
                 const whole = Math.hypot(way.x, way.y);
                 const along = (moved.x * way.x + moved.y * way.y) / whole;
                 assert.ok(
-                    Math.abs(far - along) < 0.01 &&
-                        along > 0.3 * whole &&
-                        along < whole,
+                    Math.abs(far - along) < 0.01 && along > 0,
                     `${what}: half way it has gone ${along} of ${whole}`,
                 );
+                // Half way is just past the blow: the two cards overlap by a little less
+                // than `bite` of its width, however far it came, unless they lay closer.
+                const reach = (pose, lying) => {
+                    const long = pose.width / CARD_ASPECT;
+                    const [wide, tall] = lying
+                        ? [long, pose.width]
+                        : [pose.width, long];
+                    return (
+                        (Math.abs(way.x) * wide + Math.abs(way.y) * tall) /
+                        (2 * whole)
+                    );
+                };
+                const struck = strike.at.middle.poses[to.slot];
+                const now = [
+                    cardMiddle(half, tapped),
+                    cardMiddle(struck, lies),
+                ];
+                const apart = Math.hypot(
+                    now[1].x - now[0].x,
+                    now[1].y - now[0].y,
+                );
+                const over = reach(lay, tapped) + reach(struck, lies) - apart;
+                const bite = STRIKE.bite * lay.width;
+                assert.ok(
+                    over > 0.4 * bite &&
+                        (over < bite + 0.5 ||
+                            along < STRIKE.least * lay.width + 0.5),
+                    `${what}: at the blow they overlap ${over} of a width ${lay.width}`,
+                );
+                assert.deepEqual(
+                    effectsOn(strike.at.middle, to.slot),
+                    ["impact over"],
+                    `${what}: the blow shows on what it strikes`,
+                );
+                if (strike.at.from) {
+                    assert.deepEqual(effectsOn(strike.at.from, to.slot), []);
+                }
             }
             assert.deepEqual(
                 where(strike.at.to.poses[source]),
@@ -237,28 +281,30 @@ export const CASES = {
             }
         }
         assert.deepEqual(seen, { player: 1, object: 3 });
-        // The blocked attacker and its blocker strike each other, each on its way at once.
+        // The blocked attacker and its blocker strike each other as one.
         const pairs = strikes.filter((a) =>
             strikes.some(
                 (b) =>
                     b.act.to.slot === a.act.source &&
                     a.act.to.slot === b.act.source &&
-                    a.from < b.to &&
-                    b.from < a.to,
+                    a.from === b.from &&
+                    a.to === b.to,
             ),
         );
         assert.equal(
             pairs.length,
             2,
-            "an attacker and its blocker strike at once",
+            "an attacker and its blocker strike at one time",
         );
     },
 
     // A number changes at once, as its step begins, and says that it did for as long as the
-    // step plays. A life total is the new one from the first, and the change stands beside it
-    // (on the page, too) until the step is over: a loss to a strike and a gain. A counter's
-    // badge, a planeswalker's loyalty and a power and toughness are their card's record, which
-    // is the new one from the first; a counter leaves its card where it is.
+    // step plays. A life total is the new one from the first, it flares for the whole step,
+    // red for a loss and green for a gain, and the change stands beside it (on the page, too)
+    // and drifts away, down for a loss and up for a gain, until the step is over: a loss to a
+    // strike and a gain. A counter's badge, a planeswalker's loyalty and a power and
+    // toughness are their card's record, which is the new one from the first, and a ring of
+    // light pulses round the card; a counter leaves its card where it is.
     count({ combat, place }) {
         const seen = { loss: 0, gain: 0, loyalty: 0, counter: 0, stats: 0 };
         let shown = 0;
@@ -283,17 +329,40 @@ export const CASES = {
                         assert.ok(all.length > 0, `${what}: no change says so`);
                         assert.equal(all.at(-1).life, life, what);
                     }
+                    const flare = by > 0 ? "gain" : "loss";
+                    for (const sample of during) {
+                        const lit = (sample.effects[player] ?? []).find(
+                            (e) => e.name === flare,
+                        );
+                        const through =
+                            (sample.at - step.from) / (step.to - step.from);
+                        assert.ok(
+                            lit && Math.abs(lit.progress - through) < 1e-6,
+                            `${what}: its ${flare} at ${sample.at} ms is ${JSON.stringify(lit)}`,
+                        );
+                    }
                     if (step.at.middle?.changes) {
                         shown += 1;
                         const { counting, changes } = step.at.middle;
                         const mine = counting.filter(
                             (c) => c.player === player,
                         );
+                        const said = changes.filter(
+                            ([side]) => side === player,
+                        );
                         assert.deepEqual(
-                            changes.filter(([side]) => side === player),
+                            said.map(([side, change]) => [side, change]),
                             [[player, mine.at(-1).life - mine[0].was]],
                             `${what}: the page shows the change beside the total`,
                         );
+                        // Alone, it has drifted half way: down for a loss, up for a gain.
+                        if (mine.length === 1) {
+                            const [, , drift] = said[0];
+                            assert.ok(
+                                drift !== 0 && drift < 0 === by > 0,
+                                `${what}: the change has drifted ${drift}`,
+                            );
+                        }
                     }
                     assert.deepEqual(
                         step.at.to.counting.filter(
@@ -318,6 +387,10 @@ export const CASES = {
                     [was.marks[slot].counters, was.marks[slot].pt],
                     [counters, pt ?? null],
                     `${what}: it changed nothing`,
+                );
+                assert.ok(
+                    effectsOn(first, slot).includes("pulse over"),
+                    `${what}: its card pulses`,
                 );
                 for (const sample of Object.values(step.at)) {
                     assert.deepEqual(

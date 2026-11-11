@@ -3,6 +3,7 @@
 // the poses it is made from and of progress alone, so a pose is the same however its stage
 // time is reached.
 import type { Act } from "../generated/protocol";
+import type { On } from "./effects.ts";
 import { abilityName, type Name, type Point } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import type { Table } from "./table.ts";
@@ -17,6 +18,9 @@ export interface Timing {
   ease(progress: number): number;
   /** For a step that moves several cards one after another (a lift), how long each moves. */
   each?: number;
+  /** It is played with the step before it, its turn in the beat being that step's: the blow
+   * a creature deals back to the one that strikes it. */
+  with?: boolean;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -141,48 +145,71 @@ export const turned =
 
 const into = (progress: number) => progress * progress;
 const out = (progress: number) => 1 - (1 - progress) * (1 - progress);
+const inOut = (progress: number) =>
+  progress < 0.5 ? 2 * into(progress) : 1 - 2 * into(1 - progress);
 
 /** How a strike is shared out and how far it goes. Arena's attacker pulls back a little,
  * dashes at the avatar or its blocker and drifts back more slowly (data/arena-motion.json,
  * strike: "small pull back, then a straight dash ..., then a drift back"); a strike that
  * begins at 22:25.4 lands at 25.80 of 650 to 800 ms. `wind` and `hit` are the shares of the
- * step by which it has pulled back and has landed; `back` and `reach` how far it then is
- * along the way from its place to what it strikes. The shake and flashes over Arena's
- * strikes left its tracker nothing to measure the distances by. */
-export const STRIKE = { wind: 0.15, hit: 0.45, back: 0.08, reach: 0.75 };
+ * step by which it has pulled back and has landed, and `back` how far it pulls back, in its
+ * own widths. Beryl's cards are whole and lie close, so the blow is where the two first
+ * overlap by `bite` of the striker's width and no further: what is struck stays in sight
+ * under the blow, and two creatures that strike each other meet half way (enter.ts). Before
+ * a blow that is hardly any way off it still goes `least` of its width. */
+export const STRIKE = {
+  wind: 0.15,
+  hit: 0.45,
+  back: 0.18,
+  bite: 0.3,
+  least: 0.25,
+};
 
-/** How far along its way to what it strikes a creature is, `progress` through its strike. */
-export function struck(progress: number): number {
-  const { wind, hit, back, reach } = STRIKE;
-  if (progress < wind) return -back * out(progress / wind);
+/** How far along its way to the blow a creature is `progress` through its strike, and how
+ * far back of where it rests, as a share of how far it pulls back: it pulls back, slowing,
+ * dashes from there, quickening all the way to the blow, stays on it a moment and draws back,
+ * slowing onto its place. */
+export function struck(progress: number): [toward: number, back: number] {
+  const { wind, hit } = STRIKE;
+  if (progress < wind) return [0, out(progress / wind)];
   if (progress < hit) {
-    return -back + (reach + back) * into((progress - wind) / (hit - wind));
+    const dash = into((progress - wind) / (hit - wind));
+    return [dash, 1 - dash];
   }
-  return reach * (1 - out(Math.min(1, (progress - hit) / (1 - hit))));
+  return [1 - inOut(Math.min(1, (progress - hit) / (1 - hit))), 0];
 }
 
-/** A creature's lunge at what it deals combat damage to, `toward` away from it as the step
- * begins, and its drift back to where it rests: over everything, and never turned or sized. */
+/** A creature's lunge at what it deals combat damage to and its return to where it rests:
+ * the blow is `toward` away from it as the step begins, and it first pulls `back` the other
+ * way. Over everything, and never turned or sized. */
 export const lunge =
-  (toward: Point): Path =>
+  (toward: Point, back: Point): Path =>
   (progress, rest) => {
-    const along = struck(progress);
+    const [to, away] = struck(progress);
     return {
       ...rest,
-      x: rest.x + toward.x * along,
-      y: rest.y + toward.y * along,
+      x: rest.x + toward.x * to - back.x * away,
+      y: rest.y + toward.y * to - back.y * away,
       depth: ALOFT + rest.depth,
     };
   };
+
+/** Whether the strikes `a` and `b` are the two blows of one fight: each creature strikes the
+ * other. They are played as one, at one time (the script puts them together:
+ * beryl_session's script/infer.rs `order`). */
+export const meets = (a: Act, b: Act | undefined) =>
+  a.verb === "strike" &&
+  b?.verb === "strike" &&
+  a.to.kind === "object" &&
+  b.to.kind === "object" &&
+  a.to.slot === b.source &&
+  b.to.slot === a.source;
 
 /** How a card that turns over where it lies is shared out and how large it grows (UI
  * Conventions, "A card turning face up": it "enlarges in place and flips"): it has grown by
  * `grown` of the step, shows its new face from the middle, and begins to settle at `settle`.
  * The veil that hides the change is the `cover` effect's (stage.css). */
 export const FLIP = { size: 1.2, grown: 0.3, turn: 0.5, settle: 0.7 };
-
-const inOut = (progress: number) =>
-  progress < 0.5 ? 2 * into(progress) : 1 - 2 * into(1 - progress);
 
 /** A card turning over in place: it grows about `middle` of itself, quickly and then slowing
  * into its largest, shows the side it showed as the step began until `FLIP.turn`, and settles
@@ -210,6 +237,15 @@ export const turnedOver =
  * or else what the act is about. */
 export const moverOf = (act: Act): Name | undefined =>
   act.verb === "strike" ? act.source : subjectOf(act);
+
+/** What the effects of a step's act are on (effects.ts): what the act is about, or what its
+ * number is on, a permanent or a player's life total. */
+export function litBy(act: Act): On | undefined {
+  if (act.verb !== "count") return subjectOf(act);
+  const { tally } = act;
+  if (tally.kind === "life") return tally.player;
+  return tally.kind === "pool" ? undefined : tally.object.slot;
+}
 
 /** What a step's act is about, if it is something on the table: its card, or the ability it
  * puts on the stack or takes from it. */

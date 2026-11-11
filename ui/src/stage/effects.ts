@@ -1,13 +1,21 @@
-// The stage's effects (UI Conventions, Effects): light and changes of surface on one node, a
-// glow as a token appears, a flash as a card lands, a card breaking up as it leaves, a veil
-// over one that turns over. A step of a verb begins the effects the design language gives it
-// (data/ui-conventions.json, timing.ts `effectsOf`) as it starts or as it ends, and each then
-// plays on the stage's clock for its own time, whatever the script goes on to do: an effect
-// moves nothing, holds up no step and outlives the one that began it. Like a pose, how far
-// through an effect is at a stage time is a function of that time alone, and the surface only
-// draws what the model says, once a tick. An effect goes with its node: when the stage no
-// longer holds what it is on, it is over.
+// The stage's effects (UI Conventions, Effects): light and changes of surface on one node or
+// on a player's life total, a glow as a token appears, a flash as a card lands, a card
+// breaking up as it leaves, a veil over one that turns over, a burst where a blow lands, a
+// life total flaring as it changes. A step of a verb begins the effects the design language
+// gives it (data/ui-conventions.json, timing.ts `effectsOf`) as it starts, as it ends or part
+// of the way through, and each then plays on the stage's clock for its own time, whatever the
+// script goes on to do: an effect moves nothing, holds up no step and outlives the one that
+// began it. Like a pose, how far through an effect is at a stage time is a function of that
+// time alone, and the surface only draws what the model says, once a tick. An effect goes
+// with its node: when the stage no longer holds what it is on, it is over.
+import type { Side } from "../generated/protocol";
 import type { Name } from "./layout.ts";
+
+/** What an effect is on: a node, by its name, or a player, whose life total it is drawn
+ * about. */
+export type On = Name | Side;
+
+const player = (on: On): on is Side => on === "you" || on === "opponent";
 
 /** Where an effect is drawn against the card it is on: under it, over what lies beneath, or
  * over its face. */
@@ -19,6 +27,11 @@ export interface Effect {
   name: string;
   layer: Layer;
   when: "start" | "end";
+  /** What it is on, where that is not what its step is about: what a strike lands on. */
+  on?: On;
+  /** How far into its step after that end it begins, as a share of the step: a blow lands
+   * part of the way through its strike. */
+  into?: number;
   duration?: number;
   delay: number;
   ease(progress: number): number;
@@ -31,14 +44,14 @@ export interface Drawn {
   progress: number;
 }
 
-/** Where effects are drawn: on the node of what the stage names `on`. With no progress the
- * effect is over and nothing of it stays. */
+/** Where effects are drawn: on the node of what the stage names `on`, or about that player's
+ * life total. With no progress the effect is over and nothing of it stays. */
 export interface EffectSurface {
-  effect(on: Name, effect: Omit<Drawn, "progress">, progress?: number): void;
+  effect(on: On, effect: Omit<Drawn, "progress">, progress?: number): void;
 }
 
 interface Running {
-  on: Name;
+  on: On;
   effect: Effect;
   from: number;
   to: number;
@@ -48,18 +61,22 @@ interface Running {
 export class Effects {
   #running: Running[] = [];
 
-  /** Begins on the node `on` those of `effects` that a step begins at this `edge` of it, which
-   * is at stage time `at`, the step showing its card for `span`. One that would take no time
-   * is not begun; one of its name already on the node gives way to it. */
+  /** Begins those of `effects` that a step begins at this `edge` of it, which is at stage
+   * time `at`, the step showing its card for `span`: each on what it says it is on, or else on
+   * `about`, what the step is about, and only on a node the stage holds (`held`). One that
+   * would take no time is not begun; one of its name already there gives way to it. */
   begin(
-    on: Name,
+    about: On | undefined,
     effects: readonly Effect[],
     edge: Effect["when"],
     at: number,
     span: number,
+    held: (name: Name) => boolean,
   ) {
     for (const effect of effects) {
-      const from = at + effect.delay;
+      const on = effect.on ?? about;
+      if (on === undefined || !(player(on) || held(on))) continue;
+      const from = at + effect.delay + (effect.into ?? 0) * span;
       const to = from + (effect.duration ?? span);
       if (effect.when !== edge || to <= from) continue;
       this.#running = this.#running.filter(
@@ -69,8 +86,8 @@ export class Effects {
     }
   }
 
-  /** The effects on the node `on` at stage time `now`, in the order they began. */
-  on(on: Name, now: number): Drawn[] {
+  /** The effects on `on` at stage time `now`, in the order they began. */
+  on(on: On, now: number): Drawn[] {
     return this.#running
       .filter((run) => run.on === on && now >= run.from && now < run.to)
       .map(({ effect: { name, layer, ease }, from, to }) => ({
@@ -81,7 +98,7 @@ export class Effects {
   }
 
   /** The stage no longer holds `on`: its effects went with its node. */
-  gone(on: Name) {
+  gone(on: On) {
     this.#running = this.#running.filter((run) => run.on !== on);
   }
 

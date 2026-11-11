@@ -22,8 +22,10 @@ disagree. A verb another numbered exception covers is `exempt`.
 The `effects` are the third closed list: the light and changes of surface the stage plays on a
 card, each with what it shows, the `layer` it is drawn in (under its card or over it) and its
 own values, a duration of null lasting as long as the step that begins it. A verb's `effects`
-are those its steps begin, each `when` its step starts or ends: every step's, or only those of
-a `case`, or `into` a zone. A case with effects of its own begins none of its verb's.
+are those its steps begin, each `when` its step starts or ends, or as a strike's `blow` lands:
+every step's, or only those of a `case`, or `into` a zone. One is `on` what the step is about,
+unless it says it is on what the step struck. A case with effects of its own begins none of
+its verb's.
 """
 
 from __future__ import annotations
@@ -61,9 +63,12 @@ NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
 VALUES = ("duration", "delay", "stagger", "curve")
 # What the stage plays an effect with: a duration of null is its step's.
 EFFECT_VALUES = ("duration", "delay", "curve")
-# Where an effect is drawn against the card it is on, and which end of its step begins it.
+# Where an effect is drawn against the card it is on, which end of its step begins it (or the
+# blow of a strike, part of the way through), and what it is on when that is not what its step
+# is about.
 LAYERS = ("under", "over")
-WHENS = ("start", "end")
+WHENS = ("start", "end", "blow")
+ONS = ("struck",)
 
 MOTION: Path = paths.REPO / "data" / "arena-motion.json"
 # How an instance was taken: by `by video measure`, or counted on a filmstrip.
@@ -167,8 +172,10 @@ def use_problems(where: str, verb: dict[str, Any], data: dict[str, Any]) -> list
             found.append(f"{where}: an effect begins at one of {WHENS}")
         if "case" in use and use["case"] not in verb.get("cases", {}):
             found.append(f"{where}: {use['case']!r} is not one of its cases")
-        if set(use) - {"effect", "when", "case", "into"}:
-            found.append(f"{where}: an effect's use is effect, when, case and into")
+        if "on" in use and use["on"] not in ONS:
+            found.append(f"{where}: an effect is on one of {ONS}, or on its step's own")
+        if set(use) - {"effect", "when", "case", "into", "on"}:
+            found.append(f"{where}: an effect's use is effect, when, case, into and on")
     return found
 
 
@@ -344,15 +351,23 @@ def member(key: str, entry: dict[str, Any]) -> str:
     return f"**{entry['name']}.** {said}{arena(entry)}{timing(entry)}{uses(entry)}"
 
 
+WHEN_WORDS = {
+    "start": "as it begins",
+    "end": "as it ends",
+    "blow": "as its blow lands",
+}
+
+
 def uses(verb: dict[str, Any]) -> str:
     """The effects a verb's steps begin, in words, to follow its values; empty with none."""
     said = [
         " ".join(
             [
                 use["effect"],
-                "as it begins" if use["when"] == "start" else "as it ends",
+                WHEN_WORDS[use["when"]],
                 *([f"({use['case']})"] if "case" in use else []),
                 *([f"(into the {use['into']})"] if "into" in use else []),
+                *(["(on what it strikes)"] if use.get("on") == "struck" else []),
             ]
         )
         for use in verb.get("effects", [])

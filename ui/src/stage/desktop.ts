@@ -180,15 +180,22 @@ export function drawn(rest: Pose): Pose {
 
 const radians = (degrees: number) => (degrees * Math.PI) / 180;
 
-/** The middle of its card: of the frame, which a tapped permanent's lies turned a quarter in
- * (components/Card.tsx's slot), leaned and then turned about the pose's corner as the node is
- * (pose.ts `transformOf`). */
-export function middle({ object, dress }: Resting, pose: Pose): Point {
+/** Half the width and half the height of its card: of the frame, which a tapped permanent's
+ * lies turned a quarter in (components/Card.tsx's slot). */
+export function half({ object, dress }: Resting, pose: Pose): Point {
   const lies = dress.zone === "battlefield" && object?.tapped === true;
   const long = pose.width / CARD_ASPECT;
-  const down = (lies ? pose.width : long) / 2;
-  const across =
-    (lies ? long : pose.width) / 2 + Math.tan(radians(pose.skew)) * down;
+  return {
+    x: (lies ? long : pose.width) / 2,
+    y: (lies ? pose.width : long) / 2,
+  };
+}
+
+/** The middle of its card, leaned and then turned about the pose's corner as the node is
+ * (pose.ts `transformOf`). */
+export function middle(resting: Resting, pose: Pose): Point {
+  const { x, y: down } = half(resting, pose);
+  const across = x + Math.tan(radians(pose.skew)) * down;
   const turn = radians(pose.rotation);
   return {
     x: pose.x + across * Math.cos(turn) - down * Math.sin(turn),
@@ -225,6 +232,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   emerging,
   drawn,
   middle,
+  half,
 });
 
 /** The desktop's table with nothing over it. */

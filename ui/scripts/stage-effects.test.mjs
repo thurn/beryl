@@ -1,5 +1,6 @@
 // The stage's effects, with no browser (`npm test`): a step begins the effects it is given on
-// what it is about, as it starts or as it ends, and each plays on the stage's clock for its
+// what it is about, a card or a player's life total, or on what each says it is on, as it
+// starts, as it ends or part of the way through, and each plays on the stage's clock for its
 // own time or its step's, whatever the script goes on to do. The same in a browser, with the
 // design language's effects and looks from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
@@ -170,4 +171,73 @@ test("a surface mounted while an effect plays draws it where it is", () => {
     surface.effects.clear();
     made.mount(surface);
     assert.deepEqual([...surface.effects], [["2 glow under", 0.5]]);
+});
+
+test("a number's effect is on its permanent, or on the player whose life it is", () => {
+    const count = (tally) => ({ act: { verb: "count", tally } });
+    const lit = (act) =>
+        act.verb === "count"
+            ? [effect("pulse", "start", { duration: 200 })]
+            : [];
+    const { stage: made, surface } = stage({ count: { duration: 400 } }, lit);
+    made.play(view([1]));
+    made.play(view([1]), {
+        beats: [
+            [
+                count({ kind: "life", player: "opponent", life: 18 }),
+                count({
+                    kind: "counters",
+                    counter: "plusOne",
+                    object: object(1),
+                }),
+                count({ kind: "pool", player: "you", mana: {} }),
+            ],
+        ],
+    });
+    made.clock.advance(100);
+    const half = [{ name: "pulse", layer: "over", progress: 0.5 }];
+    assert.deepEqual(made.effect("opponent"), half);
+    assert.deepEqual(made.effect(1), half);
+    assert.deepEqual(made.effect("you"), [], "mana in a pool is on nothing");
+    assert.deepEqual([...surface.effects.keys()].sort(), [
+        "1 pulse over",
+        "opponent pulse over",
+    ]);
+    made.clock.advance(100);
+    assert.equal(surface.effects.size, 0);
+});
+
+test("an effect on what a step strikes begins as the blow lands", () => {
+    const strike = (source, to) => ({
+        act: { verb: "strike", source, to, amount: 1 },
+    });
+    // The blow lands 0.4 of the way through; the burst is on what is struck, if the stage
+    // holds it.
+    const lit = (act) => [
+        effect("impact", "start", {
+            on: act.to.kind === "object" ? act.to.slot : undefined,
+            into: 0.4,
+            duration: 100,
+        }),
+    ];
+    const { stage: made } = stage({ strike: { duration: 1000 } }, lit);
+    made.play(view([1, 2]));
+    made.play(view([1, 2]), {
+        beats: [
+            [strike(1, { kind: "object", slot: 2 })],
+            [strike(1, { kind: "object", slot: 9 })],
+        ],
+    });
+    made.clock.advance(399);
+    assert.deepEqual(made.effect(2), []);
+    made.clock.advance(51);
+    assert.deepEqual(made.effect(2), [
+        { name: "impact", layer: "over", progress: 0.5 },
+    ]);
+    assert.deepEqual(made.effect(1), [], "not on what strikes");
+    made.clock.advance(50);
+    assert.deepEqual(made.effect(2), []);
+    // Nothing is drawn for what the stage does not hold.
+    made.clock.advance(950);
+    assert.deepEqual(made.effect(9), []);
 });

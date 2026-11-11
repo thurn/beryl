@@ -194,9 +194,9 @@
    gain. */
 .life-change {
   position: absolute;
-  right: calc(50% + 34px);
-  bottom: 4px;
-  font: 700 26px/1 var(--font-sans);
+  right: calc(50% + 36px);
+  bottom: 14px;
+  font: 700 30px/1 var(--font-sans);
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 3px rgb(0 0 0 / 90%);
   pointer-events: none;

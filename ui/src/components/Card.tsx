@@ -14,7 +14,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion, type MotionStyle } from "motion/react";
+import { motion, useReducedMotionConfig, type MotionStyle } from "motion/react";
 import { useCardBack } from "../cards";
 import { useTextFit } from "./fit";
 import { AbilityBadge, type AbilityMark, ManaCost, RulesText } from "./Mana";
@@ -90,6 +90,43 @@ export interface CardProps {
 
 /** How a card turns as it taps or untaps, and its slot with it. */
 const TURN = { type: "spring", stiffness: 260, damping: 26 } as const;
+
+/** A card's frame in its slot, a quarter round when tapped. Where motion is switched off (the
+ * stage's faces, stage/Faces.tsx: `still`) the turn is written as the face is drawn: Motion
+ * applies even a change that takes no time a frame late, and for that frame the stage's own
+ * turn of the card (stage.css) would add to the turn it had. */
+function Frame({
+  still,
+  tapped,
+  className,
+  style,
+  children,
+}: {
+  still: boolean;
+  tapped: boolean;
+  className: string;
+  style: { width: number; height: number };
+  children: ReactNode;
+}) {
+  return still ? (
+    <div
+      className={className}
+      style={{ ...style, transform: tapped ? "rotate(90deg)" : undefined }}
+    >
+      {children}
+    </div>
+  ) : (
+    <motion.div
+      className={className}
+      style={style}
+      initial={false}
+      animate={{ rotate: tapped ? 90 : 0 }}
+      transition={TURN}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 /** A card's width over its height, 63 by 88 millimeters. */
 export const CARD_ASPECT = 63 / 88;
@@ -401,24 +438,20 @@ export function Card({
   // layout.ts also draws a tapped frame smaller, to stand as tall as its row.)
   const frame = { width, height };
   const slot = tapped ? { width: height, height: width } : frame;
+  // With motion switched off the slot's size is the face's own, for the reason `Frame` gives.
+  const still = useReducedMotionConfig() ?? false;
   return (
     <motion.div
       className="card-slot"
-      style={{ fontSize: em, ...style }}
+      style={{ fontSize: em, ...style, ...(still ? slot : undefined) }}
       id={id}
       initial={false}
-      animate={slot}
+      animate={still ? undefined : slot}
       transition={instantSize ? { duration: 0 } : TURN}
     >
       {combat === "attacker" && <AttackChevron id={id} />}
       {combat === "blocker" && <BlockArc id={id} />}
-      <motion.div
-        className={classes}
-        style={frame}
-        initial={false}
-        animate={{ rotate: tapped ? 90 : 0 }}
-        transition={TURN}
-      >
+      <Frame still={still} tapped={tapped} className={classes} style={frame}>
         {back ? (
           <BackImage />
         ) : scan ? (
@@ -510,7 +543,7 @@ export function Card({
           <span className="card-count">×{count}</span>
         )}
         {children}
-      </motion.div>
+      </Frame>
     </motion.div>
   );
 }

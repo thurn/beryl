@@ -58,10 +58,10 @@ import { apply, tableOf, type Table } from "./table.ts";
 import {
   closing,
   dissolve,
-  drawsToRead,
   glide,
   GONE,
   later,
+  litBy,
   shareOf,
   moverOf,
   subjectOf,
@@ -178,7 +178,7 @@ interface Playback {
 export class ScriptStage {
   readonly clock: StageClock;
   /** How each step is played, given the table it finds. */
-  timings: (act: Act, found?: PlayerView) => Timing;
+  timings: (act: Act, found?: PlayerView, before?: Act) => Timing;
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
   readonly #effects = new Effects();
@@ -217,7 +217,7 @@ export class ScriptStage {
   constructor(options: {
     layout: StageLayout;
     surface?: Surface;
-    timings: (act: Act, found?: PlayerView) => Timing;
+    timings: ScriptStage["timings"];
     effects?: ScriptStage["effects"];
     frames?: Frames;
   }) {
@@ -362,8 +362,8 @@ export class ScriptStage {
     return entry ? this.#poseOf(name, entry, this.clock.now) : null;
   }
 
-  /** The effects under way at `clock.now` on the node `name`, each as far through as it is. */
-  effect(name: Name): ReturnType<Effects["on"]> {
+  /** The effects under way at `clock.now` on `name`, each as far through as it is. */
+  effect(name: NonNullable<Effect["on"]>): ReturnType<Effects["on"]> {
     return this.#effects.on(name, this.clock.now);
   }
 
@@ -485,17 +485,17 @@ export class ScriptStage {
   #beat(playback: Playback) {
     playback.played += playback.steps.length;
     playback.beat += 1;
-    let from = this.#at;
-    let turn = this.#at;
+    let [from, turn, last] = [this.#at, this.#at, this.#at];
     playback.end = this.#at;
-    // Each step is timed by the table it will find: the beat's earlier steps played.
+    // Each step is timed by the table it will find; one played `with` the last has its turn.
     let table = this.#table!;
-    playback.steps = playback.beats[playback.beat]!.map((step, i) => {
-      const timing = this.timings(step.act, table.view);
+    playback.steps = playback.beats[playback.beat]!.map((step, i, beat) => {
+      const timing = this.timings(step.act, table.view, beat[i - 1]?.act);
       table = apply(table, step.act);
-      const own = turn;
+      const own = timing.with ? last : turn;
       from = Math.max(from, own + timing.delay);
-      turn += timing.stagger;
+      turn = own + timing.stagger;
+      last = own;
       const to = from + timing.duration;
       playback.end = Math.max(playback.end, to);
       return {
@@ -548,16 +548,16 @@ export class ScriptStage {
     this.#affect(run, "start");
   }
 
-  /** Begins the effects the step `run` has at this `edge` of it on what it is about, if the
+  /** Begins the effects the step `run` has at this `edge` of it, on what they are on if the
    * stage holds that: one that lasts its step, for as long as its subject is seen in it. Time
    * passed over (`skip`) begins none. */
   #affect(run: Run, edge: Edge["edge"]) {
-    const on = subjectOf(run.step.act);
-    if (this.#skipping || on === undefined || !this.#entries.has(on)) return;
+    if (this.#skipping) return;
     const seen = (run.verb === "vanish" ? GONE : 1) * (run.to - run.from);
     const at = edge === "start" ? run.from : run.to;
     const begun = this.effects(run.step.act, run.found!.view);
-    this.#effects.begin(on, begun, edge, at, seen);
+    const held = (name: Name) => this.#entries.has(name);
+    this.#effects.begin(litBy(run.step.act), begun, edge, at, seen, held);
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
@@ -579,6 +579,7 @@ export class ScriptStage {
     const found = entering(act, run.ease, {
       layout: this.#layout,
       table: this.#table!.view,
+      found: run.found!.view,
       placed: (name) => {
         const entry = this.#entries.get(name);
         return (
@@ -591,14 +592,14 @@ export class ScriptStage {
       was,
       moving:
         mover !== undefined && this.#entries.get(mover)?.track !== undefined,
-      several: this.#playback!.steps.some(
-        (other) => other !== run && drawsToRead(other.step.act),
-      ),
+      beat: this.#playback!.steps.map((other) => other.step.act),
     });
-    const entry = found && this.#entries.get(found.name);
-    if (!entry) return;
-    const track = { ...found.track, from: run.from, to: run.to };
-    this.#fly(found.name, entry, track, found.cover);
+    for (const { name, track, cover, rides } of found) {
+      const entry = this.#entries.get(name);
+      const ridden = rides && entry?.track?.own ? entry.track : undefined;
+      const on = ridden ?? { ...track, from: run.from, to: run.to };
+      if (entry) this.#fly(name, entry, { ...on, turn: track.turn }, cover);
+    }
   }
 
   /** Tells those who follow that `run` begins or ends. */
