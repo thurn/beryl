@@ -1,25 +1,41 @@
-// How each verb is played, from the design language's data (data/ui-conventions.json, `verbs`):
-// a verb's duration, delay and stagger in stage milliseconds. One not yet measured from Arena
-// (K27) has none, and snaps. No verb has a curve yet: every glide is linear until the first
-// measured verb settles what a curve's number means.
+// How each step is played, from the design language's data (data/ui-conventions.json, `verbs`):
+// a verb's duration, delay and stagger in stage milliseconds and its curve, the medians of
+// Arena's own (data/arena-motion.json, plan K27). A verb with a number not taken has none, and
+// one with no duration snaps.
+import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json";
-import type { Verb } from "../generated/protocol";
+import type { Act } from "../generated/protocol";
 import { SNAP, type Timing } from "./stage.ts";
+
+/** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
+ * verb in which nothing travels, which changes evenly. */
+const CURVES: Record<string, Timing["ease"]> = {
+  linear: SNAP.ease,
+  none: SNAP.ease,
+  "ease-in": easeIn,
+  "ease-out": easeOut,
+  "ease-in-out": easeInOut,
+};
 
 const verbs = new Map(
   conventions.verbs.map(({ name, values }): [string, Timing] => [
     name,
     {
-      ...SNAP,
       duration: values.duration ?? 0,
       delay: values.delay ?? 0,
       stagger: values.stagger ?? 0,
+      ease: CURVES[values.curve ?? "none"] ?? SNAP.ease,
     },
   ]),
 );
 
-/** The data's timing of `verb`. */
-export const timingOf = (verb: Verb): Timing => verbs.get(verb) ?? SNAP;
+/** The data's timing of the step `act`. An ability that has finished is no verb's median: it
+ * is removed at once (UI Conventions, "A finished ability"; Arena's is gone between two
+ * frames). */
+export function timingOf(act: Act): Timing {
+  if (act.verb === "vanish" && act.subject.kind === "ability") return SNAP;
+  return verbs.get(act.verb) ?? SNAP;
+}
 
-/** Every verb at once: reduced motion. */
+/** Every step at once: reduced motion. */
 export const snap = (): Timing => SNAP;

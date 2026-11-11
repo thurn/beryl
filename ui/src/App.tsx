@@ -12,7 +12,7 @@ import { BugReporter } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen, StartScreen } from "./screens/Game";
-import { usePlayback } from "./game/playback";
+import { usePlayback } from "./stage/switch";
 import { useMusic } from "./audio/SoundControls";
 import { setMobile, usePhone } from "./mobile/phone";
 

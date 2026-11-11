@@ -5,10 +5,22 @@ import type {
   ObjectView,
   PlayerView,
   Side,
+  StackItem,
   ZoneName,
 } from "../generated/protocol";
 import type { Look } from "../game/layout";
 import type { Pose } from "./pose.ts";
+import type { Table } from "./table.ts";
+
+/** What names a node, as scripts name what a step is about: a card or token by its slot, an
+ * ability on the stack by the number its `emerge` gave it (script/mod.rs, Names). */
+export type Name = number | `a${number}`;
+
+/** The name of the ability a script numbered `id`. */
+export const abilityName = (id: number): Name => `a${id}`;
+
+/** An ability on the stack. */
+export type StackAbility = Extract<StackItem, { kind: "ability" }>;
 
 /** How an object's node is dressed where it rests: what its face is drawn from, besides its
  * record. A step that changes none of it leaves the face alone. */
@@ -25,13 +37,13 @@ export interface Dress {
   count?: number;
 }
 
-/** One object at rest: its record, as drawn (an emblem is drawn as a card of its own), where
- * it lies and how it is dressed. */
-export interface Resting {
-  object: ObjectView;
-  pose: Pose;
-  dress: Dress;
-}
+/** One thing at rest: where it lies, how it is dressed, and what its face is drawn from. A
+ * card's is its record, as drawn (an emblem is drawn as a card of its own); an ability's is
+ * its stack item and the record of its source, while the table has one. */
+export type Resting = { pose: Pose; dress: Dress } & (
+  | { object: ObjectView; ability?: undefined; source?: undefined }
+  | { ability: StackAbility; source?: ObjectView; object?: undefined }
+);
 
 /** A point on the stage. */
 export interface Point {
@@ -57,7 +69,10 @@ export interface Anchors {
 }
 
 export interface StageLayout {
-  /** Every object the table draws, by slot. */
-  rest(table: PlayerView): Map<number, Resting>;
+  /** Everything the table draws, by name: its objects, and the abilities on its stack. */
+  rest(table: Table): Map<Name, Resting>;
   anchors(table: PlayerView): Anchors;
+  /** Where an ability starts as it lifts out of its source, which is drawn at `source`: a
+   * small copy on it, which then travels to `rest`, its place on the stack. */
+  emerging(source: Pose, rest: Pose): Pose;
 }

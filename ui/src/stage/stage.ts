@@ -1,26 +1,41 @@
 // The stage (plan K25): it holds the table, plays the scripts the session sends over it on its
 // own clock, and says where every object is at any stage time. One entry per game object, named
-// as scripts name it, by slot: a card keeps its slot through every zone, and a token's slot is
-// used again only after the step that ended it, which removes its node (script/mod.rs, Names).
+// as scripts name it: a card by its slot, which it keeps through every zone, a token's being
+// used again only after the step that ended it, which removes its node; and an ability on the
+// stack by the number its `emerge` gave it (script/mod.rs, Names).
 //
 // An entry's pose is a function of stage time: its resting pose from the layout, or the track
 // of a step under way. Poses are data. `pose` reads the model, never the page, and the surface
 // only writes what the model computed, once a tick. No browser-timed animation runs here: no
-// CSS transition, no Web Animation left to play, no timer (the findings on by-w8gv.21.3).
+// CSS transition, no Web Animation left to play, no timer (the findings on by-w8gv.21.3). The
+// model outlives what it is drawn on: a surface is mounted and taken away as the page shows
+// and hides the table, and finds every node where the model has it.
+//
+// How a step moves things: at its start its act is applied to the table and the table is laid
+// out again, and everything whose resting place that moved glides there for as long as the
+// verb takes, which is all a `fly` is. A verb whose subject does not travel from where it was
+// gives it a track of its own (`#enter`): an `emerge` starts on the ability's source, an
+// `appear` is there at once and only fades in.
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
 // script alone and a pose is the same whether its time is reached in frames or in one jump.
 // Promises are for those who watch (`idle`), never for sequencing.
 import type {
-  ObjectView,
+  Act,
   PlayerView,
   Script,
   ScriptStep,
   Verb,
 } from "../generated/protocol";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
-import type { Dress, Resting, StageLayout } from "./layout.ts";
+import {
+  abilityName,
+  type Dress,
+  type Name,
+  type Resting,
+  type StageLayout,
+} from "./layout.ts";
 import { between, samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
 
@@ -42,40 +57,59 @@ export const SNAP: Timing = {
   ease: (progress) => progress,
 };
 
-/** Where the stage draws: one node an object, made and removed only as the stage says, and
+/** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
 export interface Surface {
-  make(slot: number): void;
-  remove(slot: number): void;
-  /** Dresses the node for where its object now rests. */
-  dress(slot: number, resting: Resting): void;
+  make(name: Name): void;
+  remove(name: Name): void;
+  /** Dresses the node for where its object or ability now rests. */
+  dress(name: Name, resting: Resting): void;
   /** Writes the node's pose, its frame `frame` wide. */
-  draw(slot: number, pose: Pose, frame: number): void;
+  draw(name: Name, pose: Pose, frame: number): void;
 }
 
 /** What the stage shows now, for what is drawn from it besides poses (faces, the chrome): a
- * new one whenever a record, a dress or the table changes, and never for motion alone. */
+ * new one whenever a record, a dress or the table changes, a script has played out, or the
+ * stage starts or stops playing, and never for motion alone. */
 export interface Shown {
+  /** The table as the steps so far have left it. */
   table: PlayerView | undefined;
-  resting: ReadonlyMap<number, Resting>;
+  resting: ReadonlyMap<Name, Resting>;
+  /** The view last shown whole, its script played out: the one the prompt and the chrome
+   * around the table are drawn from. */
+  view: PlayerView | undefined;
+  /** Something given to `play` has not played out. */
+  busy: boolean;
 }
 
-/** The step playing now: its place in its script counting every step, its verb, and its start
- * and end in stage milliseconds. */
+/** The step playing now: its place in its script counting every step, its verb, its start
+ * and end in stage milliseconds, and the step itself. */
 export interface Playing {
   index: number;
   verb: Verb;
   from: number;
   to: number;
+  step: ScriptStep;
 }
 
-/** The glide of an entry from the pose it had when a step moved its resting place. */
+/** An entry's motion over a step: where it is `progress` of the way through, given where it
+ * now rests, which a later step may have moved. */
 interface Track {
   from: number;
   to: number;
-  start: Pose;
-  ease(progress: number): number;
+  pose(progress: number, rest: Pose): Pose;
 }
+
+/** The glide to its resting place of an entry that was at `start`. */
+const glide =
+  (start: Pose, ease: Timing["ease"]): Track["pose"] =>
+  (progress, rest) =>
+    between(start, rest, ease(progress));
+
+/** An entry that is at its resting place from the first, and comes to be seen there. */
+const fade =
+  (ease: Timing["ease"]): Track["pose"] =>
+  (progress, rest) => ({ ...rest, opacity: rest.opacity * ease(progress) });
 
 interface Entry {
   resting: Resting;
@@ -86,7 +120,6 @@ interface Entry {
 
 /** One step of the beat under way. */
 interface Run extends Playing {
-  step: ScriptStep;
   ease(progress: number): number;
   begun: boolean;
 }
@@ -103,8 +136,12 @@ interface Playback {
   end: number;
 }
 
-const sameRecord = (a: ObjectView, b: ObjectView) =>
-  a === b || JSON.stringify(a) === JSON.stringify(b);
+/** What a resting thing's face is drawn from. */
+const faceOf = ({ object, ability, source }: Resting) =>
+  object ? { object } : { ability, source };
+
+const sameFace = (a: Resting, b: Resting) =>
+  JSON.stringify(faceOf(a)) === JSON.stringify(faceOf(b));
 
 const sameDress = (a: Dress, b: Dress) =>
   a.zone === b.zone &&
@@ -116,27 +153,33 @@ const sameDress = (a: Dress, b: Dress) =>
 
 export class ScriptStage {
   readonly clock: StageClock;
-  /** How each verb is played. */
-  timings: (verb: Verb) => Timing;
+  /** How each step is played. */
+  timings: (act: Act) => Timing;
   readonly #layout: StageLayout;
-  readonly #surface: Surface;
+  #surface: Surface | undefined;
   #table: Table | undefined;
-  readonly #entries = new Map<number, Entry>();
+  #view: PlayerView | undefined;
+  readonly #entries = new Map<Name, Entry>();
   #queue: { view: PlayerView; script: Script }[] = [];
   #playback: Playback | undefined;
   /** When the next beat begins: the end of the last one. */
   #at = 0;
   #watching: (() => void)[] = [];
   readonly #listeners = new Set<() => void>();
-  #shown: Shown = { table: undefined, resting: new Map() };
+  #shown: Shown = {
+    table: undefined,
+    resting: new Map(),
+    view: undefined,
+    busy: false,
+  };
   #stale = false;
 
-  /** A stage drawing on `surface`. With `frames` it follows them from the start; with none
-   * its clock is held, and only `clock.advance` moves it. */
+  /** A stage, drawing on `surface` if given one. With `frames` it follows them from the
+   * start; with none its clock is held, and only `clock.advance` moves it. */
   constructor(options: {
     layout: StageLayout;
-    surface: Surface;
-    timings: (verb: Verb) => Timing;
+    surface?: Surface;
+    timings: (act: Act) => Timing;
     frames?: Frames;
   }) {
     this.#layout = options.layout;
@@ -144,6 +187,26 @@ export class ScriptStage {
     this.timings = options.timings;
     this.clock = new Clock((_, to) => this.#tick(to), options.frames);
     this.clock.release();
+  }
+
+  /** Draws on `surface` from now on: a node for everything the model holds, where it is. */
+  mount(surface: Surface) {
+    this.unmount();
+    this.#surface = surface;
+    for (const [name, entry] of this.#entries) {
+      surface.make(name);
+      surface.dress(name, entry.resting);
+      entry.moved = true;
+    }
+    this.#write(this.clock.now);
+  }
+
+  /** Takes every node off the surface it draws on, `surface` if given, and draws on none: the
+   * model plays on. */
+  unmount(surface = this.#surface) {
+    if (!surface || surface !== this.#surface) return;
+    for (const name of this.#entries.keys()) surface.remove(name);
+    this.#surface = undefined;
   }
 
   /** Shows `view`, by playing the `script` that came with it over the table as it stands.
@@ -154,6 +217,7 @@ export class ScriptStage {
     if (script && !script.reset && this.#table) {
       if (!this.#busy) this.#at = this.clock.now;
       this.#queue.push({ view, script });
+      this.#write(this.clock.now);
       return;
     }
     this.#queue = [];
@@ -168,6 +232,7 @@ export class ScriptStage {
     for (const step of script?.beats.flat() ?? [])
       table = apply(table, step.act);
     this.#set(table);
+    this.#view = view;
     this.#lay(this.clock.now);
     this.#write(this.clock.now);
     this.#release();
@@ -183,6 +248,16 @@ export class ScriptStage {
    * stage milliseconds that took. Throws rather than pass `limit`. */
   settle(limit = 60_000): number {
     this.clock.hold();
+    return this.#finish(limit);
+  }
+
+  /** Plays out at once everything given to `play`, as a click skips what is playing: stage
+   * time passes over all of it, and the clock goes on as it was, held or following frames. */
+  skip() {
+    this.#finish(Infinity);
+  }
+
+  #finish(limit: number): number {
     const start = this.clock.now;
     while (this.#busy) {
       const due = Math.max(this.#due(), this.clock.now);
@@ -198,14 +273,15 @@ export class ScriptStage {
   get step(): Playing | null {
     const now = this.clock.now;
     const run = this.#playback?.steps.find((s) => !s.begun || now < s.to);
-    return run
-      ? { index: run.index, verb: run.verb, from: run.from, to: run.to }
-      : null;
+    if (!run) return null;
+    const { index, verb, from, to, step } = run;
+    return { index, verb, from, to, step };
   }
 
-  /** The pose of the object in `slot` at `clock.now`, from the model: no layout is read. */
-  pose(slot: number): Pose | null {
-    const entry = this.#entries.get(slot);
+  /** The pose at `clock.now` of the object in the slot `name`, or of the ability on the stack
+   * it names (`abilityName`), from the model: no layout is read. */
+  pose(name: Name): Pose | null {
+    const entry = this.#entries.get(name);
     return entry ? poseAt(entry, this.clock.now) : null;
   }
 
@@ -232,7 +308,7 @@ export class ScriptStage {
   /** Stops the clock and takes every node off the surface. */
   close() {
     this.clock.hold();
-    for (const slot of this.#entries.keys()) this.#surface.remove(slot);
+    this.unmount();
     this.#entries.clear();
   }
 
@@ -279,6 +355,7 @@ export class ScriptStage {
         // The script has played: the view's prompt and chrome replace the last one's whole.
         this.#playback = undefined;
         this.#set({ ...this.#table!, view: playback.view });
+        this.#view = playback.view;
         this.#lay(this.#at);
       }
     }
@@ -294,7 +371,7 @@ export class ScriptStage {
     let turn = this.#at;
     playback.end = this.#at;
     playback.steps = playback.beats[playback.beat]!.map((step, i) => {
-      const timing = this.timings(step.act.verb);
+      const timing = this.timings(step.act);
       from = Math.max(from, turn + timing.delay);
       turn += timing.stagger;
       const to = from + timing.duration;
@@ -317,6 +394,43 @@ export class ScriptStage {
     run.begun = true;
     this.#set(apply(this.#table!, run.step.act));
     this.#lay(run.from, run);
+    if (run.to > run.from) this.#enter(run);
+  }
+
+  /** The motion of a step's own subject where that is no glide from where it was. Each starts
+   * from the model as the step begins, whatever the scripts before it were and however they
+   * were cut: nothing here reads a view. */
+  #enter(run: Run) {
+    const { act } = run.step;
+    const track = (pose: Track["pose"]): Track => ({
+      from: run.from,
+      to: run.to,
+      pose,
+    });
+    switch (act.verb) {
+      case "emerge": {
+        // Out of its source, wherever that is now; with none on the table, it is on the
+        // stack at once.
+        const entry = this.#entries.get(abilityName(act.id));
+        const source = entry?.resting.source;
+        const from = source && this.#entries.get(source.slot);
+        if (!entry || !from) return;
+        const start = this.#layout.emerging(
+          poseAt(from, run.from),
+          entry.resting.pose,
+        );
+        entry.track = track(glide(start, run.ease));
+        return;
+      }
+      case "appear": {
+        // No flight, wherever it was before.
+        const entry = this.#entries.get(act.object.slot);
+        if (entry) entry.track = track(fade(run.ease));
+        return;
+      }
+      default:
+        return;
+    }
   }
 
   #set(table: Table) {
@@ -329,41 +443,42 @@ export class ScriptStage {
    * over the `run` that moved it, from wherever it is; with no run, or one that takes no
    * time, it is there at once, unless a glide still under way carries it. */
   #lay(at: number, run?: Run) {
-    const rest = this.#layout.rest(this.#table!.view);
-    for (const slot of [...this.#entries.keys()]) {
-      if (rest.has(slot)) continue;
-      this.#surface.remove(slot);
-      this.#entries.delete(slot);
+    const rest = this.#layout.rest(this.#table!);
+    for (const name of [...this.#entries.keys()]) {
+      if (rest.has(name)) continue;
+      this.#surface?.remove(name);
+      this.#entries.delete(name);
       this.#stale = true;
     }
-    for (const [slot, resting] of rest) {
-      const entry = this.#entries.get(slot);
+    for (const [name, resting] of rest) {
+      const entry = this.#entries.get(name);
       if (!entry) {
-        this.#surface.make(slot);
-        this.#surface.dress(slot, resting);
-        this.#entries.set(slot, { resting, moved: true });
+        this.#surface?.make(name);
+        this.#surface?.dress(name, resting);
+        this.#entries.set(name, { resting, moved: true });
         this.#stale = true;
         continue;
       }
       const before = entry.resting;
-      const object = sameRecord(before.object, resting.object)
-        ? before.object
-        : resting.object;
-      const dress = sameDress(before.dress, resting.dress)
-        ? before.dress
-        : resting.dress;
+      const face = sameFace(before, resting);
+      const dress = sameDress(before.dress, resting.dress);
       const still = samePose(before.pose, resting.pose);
-      if (still && object === before.object && dress === before.dress) continue;
+      if (still && face && dress) continue;
       if (!still) {
         if (run && run.to > at) {
           const start = poseAt(entry, at);
-          entry.track = { from: at, to: run.to, start, ease: run.ease };
+          entry.track = { from: at, to: run.to, pose: glide(start, run.ease) };
         }
         entry.moved = true;
       }
-      entry.resting = { object, pose: resting.pose, dress };
-      if (object !== before.object || dress !== before.dress) {
-        this.#surface.dress(slot, entry.resting);
+      // What did not change stays the very same, so that nothing drawn from it is drawn again.
+      entry.resting = {
+        ...(face ? before : resting),
+        pose: resting.pose,
+        dress: dress ? before.dress : resting.dress,
+      };
+      if (!face || !dress) {
+        this.#surface?.dress(name, entry.resting);
         // A frame of another width scales otherwise for the same pose.
         entry.moved = true;
         this.#stale = true;
@@ -374,19 +489,22 @@ export class ScriptStage {
   /** Writes the pose at stage time `now` of every entry that moved or is moving, and tells
    * those who draw from `shown` if it changed. */
   #write(now: number) {
-    for (const [slot, entry] of this.#entries) {
+    for (const [name, entry] of this.#entries) {
       if (!entry.moved && !entry.track) continue;
-      this.#surface.draw(slot, poseAt(entry, now), entry.resting.dress.frame);
+      this.#surface?.draw(name, poseAt(entry, now), entry.resting.dress.frame);
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
-    if (!this.#stale) return;
+    const busy = this.#busy;
+    if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;
     this.#shown = {
       table: this.#table?.view,
       resting: new Map(
-        [...this.#entries].map(([slot, entry]) => [slot, entry.resting]),
+        [...this.#entries].map(([name, entry]) => [name, entry.resting]),
       ),
+      view: this.#view,
+      busy,
     };
     for (const listener of [...this.#listeners]) listener();
   }
@@ -403,5 +521,5 @@ function poseAt(entry: Entry, at: number): Pose {
   const track = entry.track;
   if (!track || at >= track.to) return entry.resting.pose;
   const progress = Math.max(0, (at - track.from) / (track.to - track.from));
-  return between(track.start, entry.resting.pose, track.ease(progress));
+  return track.pose(progress, entry.resting.pose);
 }

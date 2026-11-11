@@ -1,70 +1,49 @@
 // The game's table drawn on the stage (plan K25), in place of game/Board.tsx behind `?stage`
-// (switch.tsx) until it takes over: the cloth, both life totals, and one node an object where
-// the layout rests it. It draws any view, and plays a script when one comes with it. The
-// board's controls and the pointer are not here yet.
+// (switch.tsx) until it takes over: the cloth, both life totals, and one node an object or
+// ability where the page's stage has it (playback.ts). The stage plays whatever the session
+// sent; this only gives it somewhere to draw. The board's controls and the pointer are not
+// here yet, but the click that skips what is playing.
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useReducedMotion } from "motion/react";
-import type { PlayerView, Script } from "../generated/protocol";
 import { LifeOrb } from "../components/Player";
 import { useStageWidth } from "../game/Stage";
-import { animationFrames } from "./clock.ts";
 import { desktop } from "./desktop.ts";
 import { DomSurface } from "./dom.ts";
 import { Faces } from "./Faces.tsx";
-import { ScriptStage } from "./stage.ts";
+import { pageStage } from "./playback.ts";
+import type { ScriptStage } from "./stage.ts";
 import { snap, timingOf } from "./timing.ts";
 import "./stage.css";
 
-/** The stage, for a test to step and read (`window.berylStage`, under a driven browser only,
- * as playback.ts's `berylShown`): `clock` (`now`, `advance`, `hold`, `release`), `idle`,
- * `settle`, `step` and `pose`. */
-type Hooked = Window & { berylStage?: ScriptStage };
-
 export function StageBoard({
-  view,
-  script,
+  onSkip,
 }: {
-  view: PlayerView;
-  /** What the screen does between the view before and this one; none starts over from it. */
-  script?: Script;
+  /** Plays out at once what the stage is playing, while it is. */
+  onSkip?: () => void;
 }) {
+  const { stage } = pageStage();
   const layer = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState<{
-    stage: ScriptStage;
-    surface: DomSurface;
-  }>();
-  const stage = mounted?.stage;
+  const [surface, setSurface] = useState<DomSurface>();
   const reduce = useReducedMotion() ?? false;
   const width = useStageWidth();
   useLayoutEffect(() => {
     const surface = new DomSurface(layer.current!);
-    const stage = new ScriptStage({
-      layout: desktop,
-      surface,
-      timings: timingOf,
-      frames: animationFrames,
-    });
-    setMounted({ stage, surface });
-    const hooked: Hooked = window;
-    if (navigator.webdriver) hooked.berylStage = stage;
-    return () => {
-      stage.close();
-      if (hooked.berylStage === stage) delete hooked.berylStage;
-    };
-  }, []);
+    stage.mount(surface);
+    setSurface(surface);
+    return () => stage.unmount(surface);
+  }, [stage]);
   // Reduced motion is durations of zero: every step is over in the tick that begins it.
   useLayoutEffect(() => {
-    if (stage) stage.timings = reduce ? snap : timingOf;
+    stage.timings = reduce ? snap : timingOf;
   }, [stage, reduce]);
-  useLayoutEffect(() => stage?.play(view, script), [stage, view, script]);
   // The layout reads the stage's width as it places (game/layout.ts STAGE).
-  useLayoutEffect(() => stage?.relayout(), [stage, width]);
+  useLayoutEffect(() => stage.relayout(), [stage, width]);
   return (
-    <div className="table">
+    <div className="table" onPointerDown={onSkip}>
       <div className="far-shade" />
-      {stage && <Life stage={stage} />}
+      <Life stage={stage} />
       <div className="card-layer" ref={layer} />
-      {mounted && <Faces {...mounted} />}
+      {surface && <Faces stage={stage} surface={surface} />}
     </div>
   );
 }

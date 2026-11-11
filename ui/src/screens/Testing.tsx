@@ -273,8 +273,10 @@ function SeatPage({
       search.get("instance") ??
       `seat-${Math.random().toString(36).slice(2, 10)}`;
     const live = `${window.location.origin}${API}/m/${slug}/${moment.name}/${seat}/${id}`;
+    // `?stage` goes on to the game: the moment plays on the stage (stage/switch.tsx).
+    const stage = search.has("stage") ? "&stage" : "";
     window.location.replace(
-      `/?live=${encodeURIComponent(live)}&spec${search.has("hold") ? "" : "&specReplay"}#/game`,
+      `/?live=${encodeURIComponent(live)}&spec${search.has("hold") ? "" : "&specReplay"}${stage}#/game`,
     );
   }, [slug, moment, seat]);
   return <div className="specs specs-empty">Opening game…</div>;

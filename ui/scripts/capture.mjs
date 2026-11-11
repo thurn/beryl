@@ -563,7 +563,7 @@ export async function stageFaults(page) {
         const timed = (durations) =>
             durations.split(",").some((d) => parseFloat(d) > 0);
         for (const node of document.querySelectorAll(".stage-node")) {
-            const what = `the stage's node for slot ${node.dataset.slot}`;
+            const what = `the stage's node ${node.dataset.stage}`;
             const style = getComputedStyle(node);
             if (
                 style.transitionProperty !== "none" &&

@@ -8,6 +8,13 @@
   transition: none !important;
   animation: none !important;
 }
-.card-el.stage-node:not(.card-el-hidden, .card-el-rim) {
+.card-el.stage-node:not(.card-el-hidden, .card-el-rim),
+.stack-ability.stage-node {
   will-change: transform, opacity;
+}
+/* An ability on the stack lies in the card layer as a card does. */
+.stack-ability.stage-node {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
