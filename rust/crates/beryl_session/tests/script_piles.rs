@@ -1,5 +1,5 @@
 //! The scripts of cards leaving and entering piles beyond a hand and the battlefield (plan
-//! K24): a hand-written expectation for each, from both seats, beside script_build.rs's.
+//! K24): a hand-written expectation for each, from both seats, beside `script_build.rs`'s.
 
 mod common;
 
