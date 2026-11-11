@@ -108,7 +108,8 @@ pub fn exhaust(
     let mut search = Search {
         t,
         check,
-        x: Scratch::new(),
+        // The search checks `check` itself at every position, and reports a panic.
+        x: Scratch::unchecked(),
         bounds,
         seen: HashMap::new(),
         path: Vec::new(),
@@ -228,7 +229,8 @@ fn found(
     path: &[Choice],
     why: String,
 ) -> Found {
-    let mut x = Scratch::new();
+    // Replays to the failure, which debug checks would panic at before it is described.
+    let mut x = Scratch::unchecked();
     let mut actions: Option<Vec<Action>> = Some(
         scenario
             .actions

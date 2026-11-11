@@ -6,10 +6,11 @@ use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
-    Breakpoint, CardIx, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
+    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
     Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
 };
 
+use crate::setup::{Slots, setup};
 use crate::{
     Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem, script,
 };
@@ -51,7 +52,17 @@ pub fn run(cards: &'static CardTable, scenario: &Scenario) -> Result<(), Failure
 /// Runs a scenario like [`run`], and returns the position each action began from: what the
 /// oracle exporters need to place an action at its turn, step and stack (§17.2).
 pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Position>, Failure> {
-    walk(cards, scenario, &mut |_, _, _| {})
+    trace_with(cards, scenario, Slots::Dealt)
+}
+
+/// Runs a scenario like [`trace`], with each deck's slots numbered as `slots` says: its
+/// assertions must pass and its positions match under every numbering.
+pub fn trace_with(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    slots: Slots,
+) -> Result<Vec<Position>, Failure> {
+    walk(cards, scenario, slots, &mut |_, _, _| {})
 }
 
 /// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
@@ -62,12 +73,13 @@ pub fn visit(
     scenario: &Scenario,
     mut visit: impl FnMut(&GameTable, &State, &Decision),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, &mut visit).map(|_| ())
+    walk(cards, scenario, Slots::Dealt, &mut visit).map(|_| ())
 }
 
 fn walk(
     cards: &'static CardTable,
     scenario: &Scenario,
+    slots: Slots,
     visit: &mut dyn FnMut(&GameTable, &State, &Decision),
 ) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
@@ -75,7 +87,7 @@ fn walk(
         action,
         message,
     };
-    let mut runner = Runner::new(cards, scenario)?;
+    let mut runner = Runner::new(cards, scenario, slots)?;
     let mut positions = Vec::with_capacity(scenario.actions.len());
     for (i, &action) in scenario.actions.iter().enumerate() {
         runner.upcoming = upcoming(&scenario.actions[i..]);
@@ -100,122 +112,6 @@ fn upcoming(actions: &[Action]) -> Option<Action> {
         .find(|a| !matches!(a, Action::Assert { .. }))
 }
 
-/// A scenario's starting position and the table it is played on, for tests that drive the
-/// engine themselves from a hand-built position, such as the agents'. Its actions are not
-/// run.
-pub fn position(
-    cards: &'static CardTable,
-    scenario: &Scenario,
-) -> Result<(GameTable, State), Failure> {
-    let fail = |message: String| Failure {
-        scenario: scenario.name,
-        action: None,
-        message,
-    };
-    let decks = decks(scenario);
-    let t = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
-        .map_err(|e| fail(format!("{e:?}")))?;
-    let s = arrange(&t, scenario).map_err(fail)?;
-    Ok((t, s))
-}
-
-/// Every card the setup names, by owner: the decks the game is built from.
-fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
-    scenario.setup.players.map(|p| {
-        p.hand
-            .iter()
-            .chain(p.battlefield.iter().filter(|b| !b.token).map(|b| &b.card))
-            .chain(p.battlefield.iter().flat_map(|b| b.exiled_with))
-            .chain(p.graveyard)
-            .chain(p.exile)
-            .chain(p.library)
-            .map(|&name| (1, name))
-            .collect()
-    })
-}
-
-/// The setup's position: every card starts in its owner's library and moves to its zone.
-fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
-    let setup = &scenario.setup;
-    let mut s = State::new(t, setup.seed, Profile::EXACT);
-    s.begin_at(setup.turn, setup.active, setup.step);
-    for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
-        s.set_life(p, player.life);
-        let full = |_| "a zone is full".to_string();
-        for &name in player.hand {
-            s.place(library_slot(&s, t, p, name), Zone::Hand)
-                .map_err(full)?;
-        }
-        for b in player.battlefield {
-            let slot = if b.token {
-                s.place_token(p, token_index(t, b.card)?, b.face, false)
-                    .map_err(full)?
-            } else {
-                let slot = library_slot(&s, t, p, b.card);
-                s.place(slot, Zone::Battlefield).map_err(full)?;
-                s.set_face(slot, b.face);
-                slot
-            };
-            s.set_tapped(slot, b.tapped);
-            s.set_sick(slot, b.sick);
-            // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
-            // to its printed loyalty number."
-            let printed = t.def(s.card(slot)).face(b.face).loyalty;
-            let counters = b
-                .counters
-                .map(|c| (c.kind, c.count))
-                .or(printed.map(|n| (CounterKind::Loyalty, n)));
-            if let Some((kind, n)) = counters {
-                s.set_counters(slot, kind, n);
-            }
-            for &name in b.exiled_with {
-                let card = library_slot(&s, t, p, name);
-                s.place(card, Zone::Exile).map_err(full)?;
-                s.set_exiled_with(card, slot);
-            }
-        }
-        // Top first: the last placed is on top.
-        for &name in player.graveyard.iter().rev() {
-            s.place(library_slot(&s, t, p, name), Zone::Graveyard)
-                .map_err(full)?;
-        }
-        for &name in player.exile {
-            s.place(library_slot(&s, t, p, name), Zone::Exile)
-                .map_err(full)?;
-        }
-        let mut order = Vec::new();
-        for &name in player.library {
-            let slot = s
-                .library(p)
-                .iter()
-                .copied()
-                .find(|&slot| s.name(t, slot) == name && !order.contains(&slot))
-                .expect("the library holds the cards it lists");
-            order.push(slot);
-        }
-        s.order_library(p, &order);
-    }
-    Ok(s)
-}
-
-/// The game index of the token named `name`: one a card of the decks creates.
-fn token_index(t: &GameTable, name: &str) -> Result<CardIx, String> {
-    (0..t.len())
-        .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
-        .find(|&card| t.def(card).name == name)
-        .ok_or_else(|| format!("no card of the setup creates a {name}"))
-}
-
-/// A slot in `player`'s library holding the card `name`. The decks are built from the setup,
-/// so there is always one.
-fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
-    s.library(player)
-        .iter()
-        .copied()
-        .find(|&slot| s.name(t, slot) == name)
-        .expect("the deck holds every card the setup names")
-}
-
 struct Runner {
     t: GameTable,
     s: State,
@@ -233,8 +129,12 @@ struct Runner {
 }
 
 impl Runner {
-    fn new(cards: &'static CardTable, scenario: &Scenario) -> Result<Runner, Failure> {
-        let (t, s) = position(cards, scenario)?;
+    fn new(
+        cards: &'static CardTable,
+        scenario: &Scenario,
+        slots: Slots,
+    ) -> Result<Runner, Failure> {
+        let (t, s) = setup(cards, scenario, slots)?;
         Ok(Runner {
             t,
             s,
@@ -251,8 +151,9 @@ impl Runner {
     /// that answers decisions is an advance, its target is a breakpoint, so the game stops
     /// there even where the engine would pass silently; when it is a resolution, the current
     /// step is, so the game stops as soon as the active player has priority again. Every new
-    /// position must keep the state's invariants (§17.4), so a setup or a rules path that
-    /// breaks one fails here.
+    /// position must keep the state's invariants (§17.4), which debug builds of `next` and
+    /// `apply` check, so a setup or a rules path that breaks one panics here, and agree with
+    /// the reference implementations, which fails here.
     fn position(&mut self) -> Result<Step, String> {
         if let Some(step) = self.position {
             return Ok(step);
@@ -275,9 +176,6 @@ impl Runner {
         });
         loop {
             let step = next(&mut self.s, &self.t, &mut self.x, &mut Replay);
-            self.s
-                .check_invariants(&self.t)
-                .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
             self.s
                 .check_references(&self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
@@ -902,7 +800,7 @@ impl Live {
     /// The setup of `scenario`, before any action; its own actions are not run.
     pub fn new(cards: &'static CardTable, scenario: &Scenario) -> Result<Live, Failure> {
         Ok(Live {
-            runner: Runner::new(cards, scenario)?,
+            runner: Runner::new(cards, scenario, Slots::Dealt)?,
             actions: Vec::new(),
         })
     }

@@ -34,6 +34,7 @@ pub mod relayout;
 mod resolve;
 pub mod rng;
 mod sba;
+mod scratch;
 mod setup;
 mod start;
 pub mod state;

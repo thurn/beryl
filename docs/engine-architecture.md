@@ -1084,10 +1084,13 @@ exercises, and `just fuzz` reports those random play never reaches.
 
 ### 17.4 Other checks
 
-- **Fuzzing:** random-agent games in debug builds with invariants after every
-  decision: zone bitboards agree with object zones, every stack reference names
-  a live incarnation, no object is in two zones, `derived` is clean when read,
-  counters and life are in range.
+- **Invariants:** debug builds of `next` and `apply` check every state they
+  return or are handed, so every test that plays the engine fuzzes it: zone
+  bitboards agree with object zones, every stack reference names a live
+  incarnation, no object is in two zones, `derived` is clean when read, counters
+  and life are in range. Search plays its simulated games on a
+  `Scratch::unchecked`, which skips them.
+- **Fuzzing:** random-agent games in debug builds, checked as above.
 - **Shrinking:** a fuzz game is also a seed and a vector of choice indices that
   proptest generates (`beryl_search/tests/shrink.rs`). A failing game shrinks to
   the fewest choices that still fail and prints as a scenario, its setup at the
@@ -1101,10 +1104,12 @@ exercises, and `just fuzz` reports those random play never reaches.
   fast check searches to depth 3; `just exhaust [card] --depth N` goes deeper. A
   failure prints as the scenario with the failing sequence after its actions.
 - **References:** slow reference implementations of the fast paths, checked at
-  every fuzz decision and scenario position: the layer results, listeners and
-  knowledge against a recompute from scratch, and the prefilter, funds and
-  solver against payability matched symbol by symbol from mana abilities read
-  off the cards.
+  every fuzz decision and scenario position, and at every 32nd checked step of
+  any debug game: the layer results, listeners and knowledge against a recompute
+  from scratch, and the prefilter, funds and solver against payability matched
+  symbol by symbol from mana abilities read off the cards.
+- **Slot numberings:** every card's scenarios run under three numberings of the
+  decks' slots and must trace the same, as slot numbers say nothing (§13).
 - **Determinism:** the same decks, seed and choices reproduce the same state
   hash at every decision.
 - **Inline and replayed answers agree:** a rollout's inline answers, replayed

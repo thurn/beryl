@@ -118,7 +118,7 @@ impl ExpertAgent {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
             rng: SplitMix64::new(seed),
-            x: Scratch::new(),
+            x: Scratch::unchecked(),
             plan: combat::Plan::default(),
         }
     }

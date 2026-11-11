@@ -275,8 +275,15 @@ fn a_game_of_the_three_lands_runs_to_decking() {
     assert_eq!(s.battlefield().len(), 67);
 }
 
+/// Every card's scenarios pass, under each numbering of the decks' slots, and play out the
+/// same under each: slot numbers are random handles the rules must never read (docs/bugs.md
+/// has several bugs of that class). Debug builds check the engine's invariants at every
+/// position, so a scenario that breaks one fails here too.
 #[test]
 fn every_card_has_scenarios_and_they_pass() {
+    use beryl_scenario::Slots;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
     let mut cards: Vec<_> = SCENARIOS.iter().map(|&(name, _)| name).collect();
     cards.sort_unstable();
     let mut table: Vec<_> = CARDS.cards().iter().map(|c| c.name).collect();
@@ -288,8 +295,33 @@ fn every_card_has_scenarios_and_they_pass() {
             failures.push(format!("{card} has no scenario"));
         }
         for scenario in scenarios {
-            if let Err(e) = beryl_scenario::run(&CARDS, scenario) {
-                failures.push(format!("{card}: {e}"));
+            let mut dealt = None;
+            for slots in Slots::ALL {
+                // An invariant violation panics; report it with the rest.
+                let run = catch_unwind(AssertUnwindSafe(|| {
+                    beryl_scenario::trace_with(&CARDS, scenario, slots)
+                }));
+                let positions = match run {
+                    Ok(Ok(positions)) => format!("{positions:?}"),
+                    Ok(Err(e)) => {
+                        failures.push(format!("{card} ({slots:?} slots): {e}"));
+                        break;
+                    }
+                    Err(_) => {
+                        let name = scenario.name;
+                        failures.push(format!("{card} ({slots:?} slots): {name} panicked"));
+                        break;
+                    }
+                };
+                match &dealt {
+                    None => dealt = Some(positions),
+                    Some(d) if *d != positions => failures.push(format!(
+                        "{card} ({slots:?} slots): {} plays out otherwise than with the \
+                         dealt slots",
+                        scenario.name
+                    )),
+                    Some(_) => {}
+                }
             }
         }
     }

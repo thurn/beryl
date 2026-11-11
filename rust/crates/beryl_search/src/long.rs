@@ -1007,7 +1007,7 @@ impl<L: Layout> Tree<L> {
             resample,
             known,
             rng: SplitMix64::new(0),
-            x: Scratch::new(),
+            x: Scratch::unchecked(),
             work: 0,
             iterations: 0,
             extra: 0,

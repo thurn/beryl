@@ -621,7 +621,7 @@ impl<L: Layout> Tree<L> {
             root: 0,
             state,
             rng,
-            x: Scratch::new(),
+            x: Scratch::unchecked(),
         };
         tree.expand(0, d);
         tree

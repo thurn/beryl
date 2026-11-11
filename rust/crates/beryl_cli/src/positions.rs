@@ -464,7 +464,6 @@ mod tests {
                     }
                 }
             }
-            s.check_invariants(&t).unwrap();
         }
         assert!(sample(&dir, 2).unwrap().contains("=="));
         let _ = fs::remove_dir_all(&dir);

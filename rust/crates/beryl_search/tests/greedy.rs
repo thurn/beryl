@@ -29,9 +29,7 @@ fn greedy_beats_random() {
             agents.swap(0, 1);
         }
         let mut s = State::new(&t, seed, Profile::SMART);
-        let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |s, _| {
-            s.check_invariants(&t).unwrap();
-        });
+        let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |_, _| {});
         if outcome == Outcome::Win(greedy) {
             wins += 1;
         }

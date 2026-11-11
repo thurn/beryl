@@ -133,7 +133,7 @@ impl Workload {
     /// The working memory a subject runs with: a scratch and a state to play on, allocated
     /// once so a measurement allocates nothing.
     pub fn memory(&self) -> (Scratch, Box<State>) {
-        (Scratch::new(), Box::new(self.starts[0]))
+        (Scratch::unchecked(), Box::new(self.starts[0]))
     }
 }
 
@@ -217,7 +217,7 @@ pub fn record(
     starts: &[State],
     policy: &RolloutPolicy,
 ) -> (Vec<Script>, Vec<(State, Decision)>, Summary) {
-    let mut x = Scratch::new();
+    let mut x = Scratch::unchecked();
     let (mut scripts, mut samples) = (Vec::new(), Vec::new());
     let mut summary = Summary::default();
     for start in starts {
@@ -390,7 +390,7 @@ mod tests {
         let starts = c.starts();
         let policy = RolloutPolicy::new(&c.table);
         let (scripts, _, summary) = record(&c.table, &starts, &policy);
-        let mut x = Scratch::new();
+        let mut x = Scratch::unchecked();
         let mut s = starts[0];
         let ends: Vec<u64> = starts
             .iter()
@@ -420,7 +420,7 @@ mod tests {
         let starts = &c.starts()[..8];
         let policy = RolloutPolicy::new(&c.table);
         let (scripts, _, summary) = record(&c.table, starts, &policy);
-        let mut x = Scratch::new();
+        let mut x = Scratch::unchecked();
         let mut s = starts[0];
         for (start, script) in starts.iter().zip(&scripts) {
             roll(

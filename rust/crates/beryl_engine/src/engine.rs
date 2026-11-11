@@ -10,54 +10,15 @@ use crate::decision::{
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue, Small, index};
+use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
-use crate::profile::{Profile, Stops};
+use crate::profile::Stops;
+#[cfg(debug_assertions)]
+use crate::scratch::assert_sound;
+pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
 use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn, zone};
-
-/// Per-thread working memory, never copied with the state: the event sink, the counts, and
-/// the spare state transactional replay runs bodies on (§7.3), allocated once so the hot
-/// path never allocates.
-#[derive(Debug)]
-pub struct Scratch<L: Layout = Small> {
-    pub counts: Counts,
-    pub events: Sink<L>,
-    spare: Box<State<L>>,
-}
-
-impl<L: Layout> Default for Scratch<L> {
-    fn default() -> Self {
-        Self {
-            counts: Counts::default(),
-            events: Sink::default(),
-            spare: Box::new(State::empty(Profile::EXACT)),
-        }
-    }
-}
-
-impl<L: Layout> Scratch<L> {
-    /// Working memory whose sink drops events, as search wants.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Working memory whose sink records every executed event, for the UI and replays.
-    pub fn recording() -> Self {
-        Self {
-            events: Sink::recording(),
-            ..Self::default()
-        }
-    }
-
-    /// The spare state, a copy of `s`, and the sink, for a run of a body on a copy.
-    pub(crate) fn copy_to_spare(&mut self, s: &State<L>) -> (&mut State<L>, &mut Sink<L>) {
-        (*self.spare).clone_from(s);
-        self.counts.copied();
-        (&mut self.spare, &mut self.events)
-    }
-}
 
 /// The position a player sees the open decision in. That is the state itself, except while
 /// a resolution is paused (§7.3): the committed state is then the one before the resolution
@@ -106,45 +67,6 @@ pub fn observe<'a, L: Layout>(
     Observation::paused(view(s, t, x), s, viewer)
 }
 
-/// Deterministic counts of the engine's logical operations, the stable performance signal CI
-/// gates on with tolerance bands (architecture §17.4), summed over every game the scratch
-/// serves.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Counts {
-    /// Decisions `next` returned.
-    pub decisions: u64,
-    /// Decisions `next` settled itself: one candidate, or a priority pass away from a stop.
-    pub silent: u64,
-    /// State-based action checks.
-    pub state_based_checks: u64,
-    /// Whole-state copies: the engine's, for transactional replay (§7.3), and a searcher's,
-    /// which it counts itself with [`Counts::copied`].
-    pub state_copies: u64,
-    /// Recomputes of the derived characteristics (§9).
-    pub layer_recomputes: u64,
-    /// Runs of the mana payment solver (§10).
-    pub solver_runs: u64,
-    /// Events executed (§8), whether or not the sink keeps them.
-    pub events: u64,
-}
-
-impl Counts {
-    /// Counts a copy of a whole state that a caller of the engine made.
-    pub fn copied(&mut self) {
-        self.state_copies += 1;
-    }
-}
-
-impl<L: Layout> Scratch<L> {
-    /// Moves the work the sink counted into the counts.
-    fn settle_counts(&mut self) {
-        let work = std::mem::take(&mut self.events.work);
-        self.counts.events += work.events;
-        self.counts.layer_recomputes += work.layer_recomputes;
-        self.counts.solver_runs += work.solver_runs;
-    }
-}
-
 /// Advances the game until a player must decide or the game is over.
 ///
 /// What the exact profile settles itself (§7.2): a decision with one candidate is applied
@@ -164,6 +86,8 @@ pub fn next<L: Layout>(
 ) -> Step<L> {
     let step = advance::<false, L>(s, t, x, a, (s.turn.number, s.turn.step));
     x.settle_counts();
+    #[cfg(debug_assertions)]
+    assert_sound(s, t, x);
     step.expect("`next` stops only at a decision or the end of the game")
 }
 
@@ -189,6 +113,12 @@ pub fn next_in_step<L: Layout>(
 ) -> Option<Step<L>> {
     let step = advance::<true, L>(s, t, x, a, seen);
     x.settle_counts();
+    // Stopped at a new step, the game has yet to check state-based actions: a player who drew
+    // from an empty library has not lost yet, so the invariants need not hold.
+    #[cfg(debug_assertions)]
+    if step.is_some() {
+        assert_sound(s, t, x);
+    }
     step
 }
 
@@ -313,6 +243,8 @@ pub fn apply<L: Layout>(
 ) {
     debug_assert!(s.outcome.is_none(), "apply after the game ended");
     layers::refresh(s, t, &mut x.events);
+    #[cfg(debug_assertions)]
+    assert_sound(s, t, x);
     match decision(s, t, &mut x.events) {
         Ok(d) => {
             debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
@@ -338,6 +270,7 @@ pub fn apply_decided<L: Layout>(
     layers::refresh(s, t, &mut x.events);
     #[cfg(debug_assertions)]
     {
+        assert_sound(s, t, x);
         let work = x.events.work;
         let built = decision(s, t, &mut x.events);
         x.events.work = work;

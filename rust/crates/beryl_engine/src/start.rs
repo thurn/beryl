@@ -3,7 +3,7 @@
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Table};
 use crate::profile::Profile;
 use crate::rng::Rng;
@@ -73,32 +73,44 @@ impl State {
         s
     }
 
-    /// Renumbers each library's slots last first, before the game begins: each card stays
-    /// where [`State::new`] put it in its library, and the random streams are untouched, so the
-    /// game plays out the same under other slot numbers. Slot numbers are public handles that
-    /// say nothing about a card (architecture §13), so a save must replay the same either way
-    /// (§14). For tests.
+    /// Renumbers each library's slots last first ([`State::renumber_deck_slots`]). For tests.
     ///
     /// # Panics
     ///
     /// If the game has begun: the choice to play or draw is not open.
     #[doc(hidden)]
     pub fn reverse_deck_slots(&mut self) {
+        self.renumber_deck_slots(<[Slot]>::reverse);
+    }
+
+    /// Renumbers each library's slots before the game begins: `order` rearranges the slots of
+    /// a library, and the card at each place in it moves to the slot now there. Each card
+    /// stays where [`State::new`] put it in its library, and the random streams are untouched,
+    /// so the game plays out the same under other slot numbers. Slot numbers are public
+    /// handles that say nothing about a card (architecture §13), so a save must replay the
+    /// same either way (§14), and so must a scenario. For tests.
+    ///
+    /// # Panics
+    ///
+    /// If the game has begun: the choice to play or draw is not open.
+    #[doc(hidden)]
+    pub fn renumber_deck_slots(&mut self, mut order: impl FnMut(&mut [Slot])) {
         assert!(
             matches!(self.pending, Pending::PlayOrDraw { .. }) && self.turn.number == 0,
             "the game has not begun"
         );
         for player in Seat::BOTH {
             let p = player.index();
-            let slots = self.zones.library[p];
+            let mut slots = self.zones.library[p];
             let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
             for &slot in &slots {
                 let _ = cards.push(self.object(slot).card);
             }
-            for (&slot, &card) in slots.iter().rev().zip(cards.iter()) {
+            order(slots.as_mut_slice());
+            for (&slot, &card) in slots.iter().zip(cards.iter()) {
                 self.object_mut(slot).card = card;
             }
-            self.zones.library[p].as_mut_slice().reverse();
+            self.zones.library[p] = slots;
         }
     }
 }

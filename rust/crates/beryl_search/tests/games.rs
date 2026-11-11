@@ -46,30 +46,32 @@ fn random_games_keep_the_invariants() {
     }
 }
 
-/// Plays game `seed` from `s` with random agents, checking the invariants at every decision
-/// and counting the decisions by kind.
+/// Plays game `seed` from `s` with random agents, checking the reference implementations at
+/// every decision and counting the decisions by kind. Debug assertions, which `just fuzz`
+/// keeps on, check the invariants at every step.
 fn fuzz<L: Layout>(
     t: &GameTable,
     mut s: State<L>,
     seed: u64,
     kinds: &mut HashMap<String, u64>,
 ) -> Outcome {
-    let mut decisions = 0;
-    let outcome = play(t, &mut s, &mut Scratch::new(), &mut agents(seed), |s, d| {
-        decisions += 1;
+    /// Names the game when the engine panics during it.
+    struct Game(u64);
+    impl Drop for Game {
+        fn drop(&mut self) {
+            if std::thread::panicking() {
+                eprintln!("the panic was in game {}", self.0);
+            }
+        }
+    }
+    let _game = Game(seed);
+    play(t, &mut s, &mut Scratch::new(), &mut agents(seed), |s, d| {
         *kinds.entry(format!("{:?}", d.kind)).or_default() += 1;
         assert!(!d.is_empty(), "seed {seed}: {d:?}");
-        if let Err(v) = s.check_invariants(t) {
-            panic!("seed {seed}, decision {decisions}: {v:?}");
-        }
         if let Err(v) = s.check_references(t) {
-            panic!("seed {seed}, decision {decisions}, a reference: {v:?}");
+            panic!("a reference: {v:?}");
         }
-    });
-    if let Err(v) = s.check_invariants(t) {
-        panic!("seed {seed}, at the end: {v:?}");
-    }
-    outcome
+    })
 }
 
 /// Widening is lossless: a game widened into [`Large`] at its start offers every decision

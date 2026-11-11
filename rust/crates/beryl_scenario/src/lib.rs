@@ -12,6 +12,7 @@
 mod exhaust;
 mod run;
 mod script;
+mod setup;
 #[cfg(test)]
 mod tests;
 
@@ -21,8 +22,9 @@ use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
 pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
-pub use run::{Failure, Live, answer, describe, position, run, trace, visit};
+pub use run::{Failure, Live, answer, describe, run, trace, trace_with, visit};
 pub use script::{script, setup_source, source};
+pub use setup::{Slots, position};
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;

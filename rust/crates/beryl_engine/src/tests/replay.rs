@@ -57,9 +57,6 @@ fn inline_game(seed: u64, profile: Profile) -> (Vec<Logged>, Outcome) {
         match step {
             Step::Over(outcome) => break outcome,
             Step::Decide(d) => {
-                if let Err(v) = s.check_invariants(&t) {
-                    panic!("seed {seed}: {v:?}");
-                }
                 let choice = agent.below(d.len() as u64) as u16;
                 logged.push(Logged::Decision {
                     hash: fingerprint(&s),

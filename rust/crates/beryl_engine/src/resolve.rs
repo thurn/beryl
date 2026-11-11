@@ -16,11 +16,11 @@ use crate::cast::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
-use crate::engine::Scratch;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
+use crate::scratch::Scratch;
 use crate::state::{
     CounterKind, ObjectFlags, Pending, PendingTrigger, Resolving, StackEntry, State, Zone,
 };

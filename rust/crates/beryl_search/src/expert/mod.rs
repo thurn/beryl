@@ -117,7 +117,7 @@ impl<L: Layout> ExpertAgent<L> {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
             rng: SplitMix64::new(seed),
-            x: Scratch::new(),
+            x: Scratch::unchecked(),
             plan: combat::Plan::default(),
         }
     }
@@ -143,7 +143,7 @@ impl Widen for ExpertAgent<Small> {
             table: self.table.clone(),
             policy: self.policy.clone(),
             rng: self.rng,
-            x: Scratch::new(),
+            x: Scratch::unchecked(),
             plan: self.plan.widen(),
         }
     }

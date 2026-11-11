@@ -10,6 +10,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Cost, ManaCost, Types};
 use crate::event::Sink;
+use crate::fixed::Fixed;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation};
 use crate::layers;
@@ -97,28 +98,28 @@ impl<L: Layout> State<L> {
             return Ok(());
         };
         let at = Some(At::Player(player));
-        let mut costs: Vec<ManaCost> = PROBES.to_vec();
-        for slot in self.zone(player, Zone::Hand).iter() {
-            costs.extend(t.def(self.card(slot)).faces.iter().map(|f| f.cost));
-        }
-        for &slot in self.battlefield() {
-            if self.controller(slot) == player {
-                costs.extend(
-                    face(self, t, slot)
-                        .abilities
-                        .iter()
-                        .filter(|a| a.kind == AbilityKind::Activated)
-                        .map(|a| a.cost.mana),
-                );
-            }
-        }
+        let hand = self
+            .zone(player, Zone::Hand)
+            .iter()
+            .flat_map(|slot| t.def(self.card(slot)).faces.iter().map(|f| f.cost));
+        let abilities = self
+            .battlefield()
+            .iter()
+            .filter(|&&slot| self.controller(slot) == player)
+            .flat_map(|&slot| {
+                face(self, t, slot)
+                    .abilities
+                    .iter()
+                    .filter(|a| a.kind == AbilityKind::Activated)
+                    .map(|a| a.cost.mana)
+            });
         let Ok(funds) = Funds::of(self, t, player) else {
             return Ok(());
         };
-        for cost in costs {
+        for cost in PROBES.iter().copied().chain(hand).chain(abilities) {
             // X is announced before payment, as 0 here.
             let cost = ManaCost { x: 0, ..cost };
-            let expected = reference_pays(&units, cost);
+            let expected = reference_pays(units.as_slice(), cost);
             let none = Bitboard::EMPTY;
             let Ok(prefilter) = mana::payable(self, t, player, cost, none) else {
                 continue;
@@ -148,10 +149,18 @@ impl<L: Layout> State<L> {
     }
 }
 
+/// The most units of mana the reference matches: the debug builds of `next` and `apply` check
+/// it (§17.4), so it allocates nothing, as the hot path does not.
+const UNITS: usize = 64;
+
+/// Units of mana, each as the set of kinds it may be.
+type Units = Fixed<u8, UNITS>;
+
 /// The units of mana `player` could make now, each as the set of kinds it may be: their
 /// floating mana, and one tap of each untapped permanent they control with a mana ability
 /// whose only costs are {T} and perhaps sacrificing it, read from its face up. `None` where a
-/// permanent's mana abilities make different amounts, which units cannot say.
+/// permanent's mana abilities make different amounts, which units cannot say, or where there
+/// are more than [`UNITS`].
 ///
 /// [CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a): "An activated ability is
 /// a mana ability if it meets all of the following criteria: it doesn't require a target, it
@@ -160,10 +169,12 @@ impl<L: Layout> State<L> {
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most
 /// recent turn began."
-fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Vec<u8>> {
-    let mut units = Vec::new();
+fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Units> {
+    let mut units = Units::new();
     for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
-        units.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
+        for _ in 0..n {
+            units.push(1u8 << k).ok()?;
+        }
     }
     for &slot in s.battlefield() {
         let d = s.derived(slot);
@@ -192,7 +203,9 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
             kinds |= a.produces.colors;
         }
         if let Some(n) = amount.filter(|_| kinds != 0) {
-            units.extend(std::iter::repeat_n(kinds, usize::from(n)));
+            for _ in 0..n {
+                units.push(kinds).ok()?;
+            }
         }
     }
     Some(units)
@@ -219,16 +232,27 @@ fn controls<L: Layout>(
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the total
 /// cost. ... Partial payments are not allowed."
 fn reference_pays(units: &[u8], cost: ManaCost) -> bool {
-    let symbols: Vec<u8> = (0..6)
-        .flat_map(|k| std::iter::repeat_n(1u8 << k, usize::from(cost.symbols[k])))
-        .collect();
-    if units.len() < symbols.len() + usize::from(cost.generic) {
+    let count: usize = cost.symbols.iter().map(|&n| usize::from(n)).sum();
+    if units.len() < count + usize::from(cost.generic) {
         return false;
     }
-    let mut paying: Vec<Option<usize>> = vec![None; units.len()];
+    // At most `units.len()` symbols, so they fit.
+    let mut symbols = Units::new();
+    for (k, &n) in cost.symbols.iter().enumerate() {
+        for _ in 0..n {
+            let _ = symbols.push(1u8 << k);
+        }
+    }
+    let mut paying = [None; UNITS];
     for symbol in 0..symbols.len() {
-        let mut seen = vec![false; units.len()];
-        if !augment(symbol, &symbols, units, &mut paying, &mut seen) {
+        let mut seen = [false; UNITS];
+        if !augment(
+            symbol,
+            symbols.as_slice(),
+            units,
+            &mut paying[..units.len()],
+            &mut seen[..units.len()],
+        ) {
             return false;
         }
     }

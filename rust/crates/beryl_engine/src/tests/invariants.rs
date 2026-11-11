@@ -41,3 +41,31 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
         assert_eq!(bad.check_invariants(&t).map_err(|v| v.what), Err(what));
     }
 }
+
+/// Debug builds check the invariants inside the engine (§17.4): `next` handed a corrupted
+/// state panics, and so does `apply`, so every test that plays the engine checks them.
+#[cfg(debug_assertions)]
+#[test]
+fn the_engine_panics_on_a_broken_invariant() {
+    use crate::{Choice, Replay, Scratch, apply, next};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let t = table([MIXED, MIXED]);
+    let mut s = State::new(&t, 2, Profile::EXACT);
+    begin(&t, &mut s);
+    let p = s.turn().active;
+    let hand = s.zone(p, Zone::Hand).first().unwrap();
+    s.object_mut(hand).flags.set(ObjectFlags::TAPPED, true);
+    let message = |run: &mut dyn FnMut(&mut State)| {
+        let mut bad = s;
+        let err = catch_unwind(AssertUnwindSafe(|| run(&mut bad))).unwrap_err();
+        err.downcast::<String>().map(|m| *m).unwrap_or_default()
+    };
+    let broke = "an engine invariant broke";
+    let by_next = message(&mut |s| {
+        next(s, &t, &mut Scratch::new(), &mut Replay);
+    });
+    assert!(by_next.starts_with(broke), "{by_next}");
+    let by_apply = message(&mut |s| apply(s, &t, &mut Scratch::new(), &mut Replay, Choice(0)));
+    assert!(by_apply.starts_with(broke), "{by_apply}");
+}
