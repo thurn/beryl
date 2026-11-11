@@ -120,7 +120,7 @@
   );
   box-shadow: 0 0 calc(var(--frame) * 0.24) calc(var(--frame) * 0.08)
     rgb(255 132 72 / 85%);
-  opacity: calc((1 - var(--impact)) * 0.7);
+  opacity: calc((1 - var(--impact)) * 0.55);
   transform: scale(calc(1 + 0.12 * var(--impact)));
 }
 /* A ring of light round the frame of a card as one of its numbers changes, and those numbers
@@ -172,12 +172,12 @@
 }
 [data-life] > .life-change {
   --drift: var(--loss, var(--gain, 0));
-  translate: 0 calc(var(--drift) * (2 - var(--drift)) * 0.4em);
+  translate: 0 calc(var(--drift) * (2 - var(--drift)) * 0.6em);
   scale: calc(1 + 0.3 * max(0, 1 - var(--drift) * 6));
   opacity: min(1, (1 - var(--drift)) / 0.3);
 }
 [data-life] > .life-change-gain {
-  translate: 0 calc(var(--drift) * (2 - var(--drift)) * -0.4em);
+  translate: 0 calc(var(--drift) * (2 - var(--drift)) * -0.6em);
 }
 /* The phone's orb is the same art, smaller (mobile/phone.css `.phone-orb`). */
 .phone-orb > .stage-effect {

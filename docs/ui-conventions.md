@@ -380,13 +380,15 @@ held to by `just motion`.
   grows (WCknTZNbraE 35:49.2, WCknTZNbraE 1:23:36.8, UrGalw_f35w 49:06.5).
   Beryl: 1130 ms, in place. Effects: cover as it begins.
 - **tap.** A permanent turns a quarter as it taps or untaps, its whole card
-  about its own middle, in the time Arena's tilt takes. Arena tilts a tapped
-  permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
-  restores it in about 0.1 s (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1,
-  0VsYGs88NXA 31:13.15). Exempt: exception 2.
+  about its own middle where it lies. Its row then closes up or makes room, the
+  tapped apart from the untapped. Arena tilts a tapped permanent's art crop 7 to
+  8 degrees in about 0.2 s and dims it; an untap restores it in about 0.1 s
+  (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1, 0VsYGs88NXA 31:13.15). Exempt:
+  exception 2.
 - **strike.** A creature pulls back, lunges at what it deals combat damage to,
   which flashes as the blow lands, and draws back. Two creatures that strike
-  each other meet half way, at one time. Each attacker winds back, lunges from
+  each other meet half way, at one time. On something much smaller than itself
+  it lands whole, shrinking as it goes. Each attacker winds back, lunges from
   its row to the player's avatar or to its blocker, the screen flashes, and it
   drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s
   before an unblocked one. First strike is a strike of its own, seconds earlier
@@ -408,7 +410,7 @@ held to by `just motion`.
   badge settles onto its permanent after a flash. A planeswalker's loyalty
   changes about a second after its ability reaches the stack (IEXcjBn3BXk
   22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5, 0VsYGs88NXA 31:13.25,
-  5UHzpVvUkfI 19:59.25). Beryl: 400 ms, 125 ms after its cause, in place.
+  5UHzpVvUkfI 19:59.25). Beryl: 400 ms, 125 ms after its cause, ease-out.
   Effects: pulse as it begins, loss as it begins (life loss), gain as it begins
   (life gain).
 - **set.** The table changes and nothing moves: a step of the turn begins, a

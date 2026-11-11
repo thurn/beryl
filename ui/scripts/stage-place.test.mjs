@@ -4,16 +4,24 @@
 // says so for as long as its step plays. The same in a browser, from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { entering } from "../src/stage/enter.ts";
 import { lifeChange } from "../src/stage/notices.ts";
 import { ALOFT } from "../src/stage/pose.ts";
-import { FLIP, meets, STRIKE } from "../src/stage/tracks.ts";
+import { FLIP, meets, STRIKE, TURNED } from "../src/stage/tracks.ts";
 import { object, reach, stage, view } from "./stage-table.mjs";
 
 const LINEAR = { duration: 200 };
 const tap = (slot, tapped) => ({
     act: { verb: "tap", object: object(slot, "battlefield", { tapped }) },
 });
-const at = ({ x, y, width, turn, depth }) => ({ x, y, width, turn, depth });
+const whole = (n) => Math.round(n * 1e6) / 1e6;
+const at = ({ x, y, width, turn, depth }) => ({
+    x: whole(x),
+    y: whole(y),
+    width,
+    turn: whole(turn),
+    depth,
+});
 
 for (const tick of [16, 100, 1000]) {
     test(`a permanent turns a quarter about its card's middle as it taps: ticks of ${tick} ms`, () => {
@@ -32,16 +40,32 @@ for (const tick of [16, 100, 1000]) {
             depth: 2,
         });
         assert.deepEqual(surface.nodes.get(2), made.pose(2));
-        reach(made.clock, 100, tick);
-        if (made.clock.now === 100) {
-            assert.deepEqual(at(made.pose(2)), {
-                x: 390,
-                y: 10,
-                width: 100,
-                turn: -45,
-                depth: 2,
-            });
-        }
+        // It turns where it lies for `TURNED` of the step, and only then goes to its place.
+        const turnedAt = 200 * TURNED;
+        reach(made.clock, turnedAt / 2, tick);
+        assert.deepEqual(at(made.pose(2)), {
+            x: 380,
+            y: 20,
+            width: 100,
+            turn: -45,
+            depth: 2,
+        });
+        reach(made.clock, turnedAt, tick);
+        assert.deepEqual(at(made.pose(2)), {
+            x: 380,
+            y: 20,
+            width: 100,
+            turn: 0,
+            depth: 2,
+        });
+        reach(made.clock, (turnedAt + 200) / 2, tick);
+        assert.deepEqual(at(made.pose(2)), {
+            x: 390,
+            y: 10,
+            width: 100,
+            turn: 0,
+            depth: 2,
+        });
         reach(made.clock, 200, tick);
         assert.deepEqual(at(made.pose(2)), {
             x: 400,
@@ -124,12 +148,12 @@ test("a creature lunges at the player it strikes and draws back", () => {
         beats: [[strike(1, { kind: "player", player: "opponent" })]],
     });
     // From its middle (50, 70) at the opponent's life total (1000, -400): it stops where its
-    // card, which reaches 50 across and 70 down, meets the face of the orb, 40 about that
-    // middle.
+    // card, which reaches 50 across and 70 down, meets the face of the orb, 64 about that
+    // middle, on the side it comes from: from below, so 70 and 64 apart up the table.
     const way = { x: 950, y: -470 };
     const far = Math.hypot(way.x, way.y);
     const unit = { x: way.x / far, y: way.y / far };
-    const reaches = unit.x * 50 - unit.y * 70 + 40;
+    const reaches = Math.min((50 + 64) / unit.x, (70 + 64) / -unit.y);
     const left = () =>
         Math.hypot(1000 - (made.pose(1).x + 50), -400 - (made.pose(1).y + 70));
     made.clock.advance(STRIKE.wind * 1000);
@@ -155,6 +179,59 @@ test("a creature lunges at the player it strikes and draws back", () => {
         turn: 0,
         depth: 1,
     });
+});
+
+test("a creature dives onto what is much smaller than itself, shrinking", () => {
+    // A card 100 wide lying at (0, 0), its middle (50, 70), strikes one 50 wide at (25, -400),
+    // whose middle is (50, -365): straight up the table.
+    const card = (slot, x, y, width) => ({
+        resting: { object: object(slot), dress: {} },
+        pose: { x, y, width, depth: slot, turn: 0, rotation: 0, skew: 0 },
+    });
+    const placed = new Map([
+        [1, card(1, 0, 0, 100)],
+        [2, card(2, 25, -400, 50)],
+    ]);
+    const half = (_, pose) => ({ x: pose.width / 2, y: pose.width * 0.7 });
+    const layout = {
+        half,
+        middle: (resting, pose) => ({
+            x: pose.x + half(resting, pose).x,
+            y: pose.y + half(resting, pose).y,
+        }),
+    };
+    const act = strike(1, { kind: "object", slot: 2 }).act;
+    const [lunging] = entering(act, (progress) => progress, {
+        layout,
+        table: view([1, 2]),
+        found: view([1, 2]),
+        placed: (name) => placed.get(name),
+        was: placed.get(1),
+        moving: false,
+        beat: [act],
+    });
+    const rest = placed.get(1).pose;
+    const blow = lunging.track.pose(STRIKE.hit, rest);
+    assert.ok(Math.abs(blow.width - 100 * STRIKE.small.least) < 1e-9);
+    assert.ok(Math.abs(blow.x + blow.width / 2 - 50) < 1e-9);
+    assert.ok(Math.abs(blow.y + blow.width * 0.7 + 365) < 1e-9, "it is on it");
+    assert.deepEqual(
+        at(lunging.track.pose(1, rest)),
+        at({ ...rest, depth: rest.depth + ALOFT }),
+    );
+    // One 65 wide, between the two rules, is struck part of the way in, a little shrunk.
+    placed.set(2, card(2, 15, -400, 65));
+    const [partly] = entering(act, (progress) => progress, {
+        layout,
+        table: view([1, 2]),
+        found: view([1, 2]),
+        placed: (name) => placed.get(name),
+        was: placed.get(1),
+        moving: false,
+        beat: [act],
+    });
+    const part = partly.track.pose(STRIKE.hit, rest);
+    assert.ok(part.width < 100 && part.width > 100 * STRIKE.small.least);
 });
 
 test("a creature stops where it first overlaps the card it strikes", () => {

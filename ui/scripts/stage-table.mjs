@@ -37,7 +37,7 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * shows its back. An ability lifts out of its source 10 in from its corner, at half its width,
  * and a drawn card is held up 300 above its place in the hand at twice its width. A card is
  * 1.4 times as tall as it is wide, and a tapped permanent lies on its side; the players' life
- * totals are at x 1000, yours at y 900 and the opponent's at y -400, each orb's corner 50
+ * totals are at x 1000, yours at y 900 and the opponent's at y -400, each orb's corner 80
  * up and to the left of it. */
 export const row = {
     rest({ view: table, abilities }) {
@@ -91,7 +91,7 @@ export const row = {
     },
     anchors: () => ({
         life: (side) => ({
-            corner: { x: 950, y: side === "you" ? 850 : -450 },
+            corner: { x: 920, y: side === "you" ? 820 : -480 },
             middle: { x: 1000, y: side === "you" ? 900 : -400 },
         }),
     }),

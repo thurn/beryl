@@ -56,7 +56,6 @@ import { heldPose, Pointer } from "./pointer.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
 import {
-  closing,
   dissolve,
   glide,
   GONE,
@@ -69,6 +68,7 @@ import {
   TURN,
   SNAP,
   turning,
+  WAITS,
   type Timing,
   type Track,
 } from "./tracks.ts";
@@ -677,19 +677,19 @@ export class ScriptStage {
         // Only the card a `fly` is about travels over what rests; what another verb's
         // change moves (a record that lays its card elsewhere) goes there as what makes room
         // does. It turns over on the way if it leaves face down and lands face up.
-        // What a card that leaves makes room for waits until it has gone.
+        // What makes room for a card that leaves, or one that taps, waits (tracks.ts WAITS).
+        const wait = WAITS[run!.verb];
         const flies = run!.verb === "fly" && subjectOf(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
         this.#fly(name, entry, {
           from: at,
           to: run!.to,
-          pose:
-            run!.verb === "vanish"
-              ? closing(start, run!.ease)
-              : run!.each
-                ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
-                : glide(start, run!.ease, flies, turns),
+          pose: run!.each
+            ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
+            : wait === undefined
+              ? glide(start, run!.ease, flies, turns)
+              : later(start, run!.ease, wait),
           turn: turns ? TURN : undefined,
           own: flies,
         });

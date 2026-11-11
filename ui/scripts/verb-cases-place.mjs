@@ -57,13 +57,13 @@ const rested = (run, step) =>
 export const CASES = {
     // A permanent turns a quarter as it taps or untaps: dressed from the first as its record
     // now says, its card is a quarter back about its own middle, which is where it was, and
-    // turns for as long as the step takes at the depth it rests at. Attackers tap together,
-    // lands as they pay, and all untap together.
+    // turns there, at the depth it rests at; only once it has turned do it and its row go to
+    // where they now rest. Attackers tap together, lands as they pay, and all untap together.
     // A permanent that taps and then leaves (a Treasure, tapped and sacrificed for mana) has
     // done turning as it begins to go: the script orders the two, and the departure begins at
     // the stage time the turn ends, with no wait between (the old board held 450 ms there).
     tap({ combat, place }) {
-        const seen = { tap: 0, untap: 0, placed: 0 };
+        const seen = { tap: 0, untap: 0, placed: 0, waited: 0 };
         for (const run of [combat, place]) {
             for (const step of run.steps.filter((s) => s.verb === "tap")) {
                 const { slot, tapped } = step.act.object;
@@ -93,6 +93,26 @@ export const CASES = {
                         `${what}: half way it is turned ${turn}`,
                     );
                     assert.ok(depth < ALOFT, `${what}: it never flies`);
+                    // Half way it is still turning where it lay, and its row has yet to
+                    // close up or make room: nothing on the battlefield has left its place.
+                    if (rested(run, step)) {
+                        near(
+                            cardMiddle(step.at.middle.poses[slot], tapped),
+                            cardMiddle(was.poses[slot], !tapped),
+                            `${what}: it turns where it lay`,
+                        );
+                        for (const [name, pose] of Object.entries(was.poses)) {
+                            const now = step.at.middle.poses[name];
+                            if (was.zones[name] !== "battlefield") continue;
+                            if (now === undefined || now.turn !== 0) continue;
+                            near(
+                                now,
+                                pose,
+                                `${what}: ${name} waits for the turn`,
+                            );
+                            seen.waited += 1;
+                        }
+                    }
                 }
                 const end = step.at.to.poses[slot];
                 assert.equal(end.turn, 0, what);
@@ -108,6 +128,7 @@ export const CASES = {
             seen.placed >= 2,
             `${seen.placed} were seen to begin in place`,
         );
+        assert.ok(seen.waited >= 4, `${seen.waited} were seen to wait`);
 
         const left = combat.steps.filter(
             (s) => s.verb === "vanish" && s.act.why === "sacrifice",
@@ -152,7 +173,8 @@ export const CASES = {
     // from its own place, over everything, toward the player's half of the table or its
     // blocker's card, and never turned or sized. It stops where its card first overlaps the
     // card it strikes, which a burst of light is on as the blow lands; a player's life total
-    // flares with its own change instead. The strikes of one combat begin one after another,
+    // flares with its own change instead. What is much smaller than it, it shrinks to the size
+    // of and lands on. The strikes of one combat begin one after another,
     // but that creatures that strike one another do so as one, at one time, and meet half
     // way. A player struck has their old life total as the strike begins and the new one by
     // its end. Nothing moves but what strikes.
@@ -182,14 +204,28 @@ export const CASES = {
                     `${what}: it begins where it lay`,
                 );
             }
+            // How far its card's middle has gone: it may be smaller there (below).
             const half = strike.at.middle.poses[source];
-            const moved = { x: half.x - lay.x, y: half.y - lay.y };
+            const [here, there] = [lay, half].map((p) => cardMiddle(p, tapped));
+            const moved = { x: there.x - here.x, y: there.y - here.y };
             const far = Math.hypot(moved.x, moved.y);
             assert.ok(half.depth >= ALOFT, `${what}: it flies over what rests`);
             assert.deepEqual(
-                [half.width, half.turn, half.rotation, half.opacity],
-                [lay.width, lay.turn, lay.rotation, lay.opacity],
-                `${what}: it is not turned or sized`,
+                [half.turn, half.rotation, half.opacity],
+                [lay.turn, lay.rotation, lay.opacity],
+                `${what}: it is not turned`,
+            );
+            // Its own size, unless it dives onto something much smaller than itself (a
+            // phone's small permanents and life totals), which it shrinks to the size of.
+            const small =
+                to.kind === "object"
+                    ? was.poses[to.slot].width / lay.width
+                    : undefined;
+            assert.ok(
+                small === undefined || small < STRIKE.small.from
+                    ? half.width <= lay.width && half.width > 0.4 * lay.width
+                    : half.width === lay.width,
+                `${what}: half way it is ${half.width} wide of ${lay.width}`,
             );
             if (to.kind === "player") {
                 // Toward the half of the player it strikes: the opponent's is the far one.
@@ -223,34 +259,41 @@ export const CASES = {
                     `${what}: half way it has gone ${along} of ${whole}`,
                 );
                 // Half way is just past the blow: the two cards overlap by a little less
-                // than `bite` of its width, however far it came, unless they lay closer.
+                // than `bite` of its width on the side they meet, however far it came,
+                // unless they lay closer.
                 const reach = (pose, lying) => {
                     const long = pose.width / CARD_ASPECT;
-                    const [wide, tall] = lying
-                        ? [long, pose.width]
-                        : [pose.width, long];
-                    return (
-                        (Math.abs(way.x) * wide + Math.abs(way.y) * tall) /
-                        (2 * whole)
-                    );
+                    return lying
+                        ? { x: long / 2, y: pose.width / 2 }
+                        : { x: pose.width / 2, y: long / 2 };
                 };
                 const struck = strike.at.middle.poses[to.slot];
-                const now = [
-                    cardMiddle(half, tapped),
-                    cardMiddle(struck, lies),
+                const now = [there, cardMiddle(struck, lies)];
+                const [mine, theirs] = [
+                    reach(half, tapped),
+                    reach(struck, lies),
                 ];
-                const apart = Math.hypot(
-                    now[1].x - now[0].x,
-                    now[1].y - now[0].y,
+                const over = Math.min(
+                    mine.x + theirs.x - Math.abs(now[1].x - now[0].x),
+                    mine.y + theirs.y - Math.abs(now[1].y - now[0].y),
                 );
-                const over = reach(lay, tapped) + reach(struck, lies) - apart;
                 const bite = STRIKE.bite * lay.width;
-                assert.ok(
-                    over > 0.4 * bite &&
-                        (over < bite + 0.5 ||
-                            along < STRIKE.least * lay.width + 0.5),
-                    `${what}: at the blow they overlap ${over} of a width ${lay.width}`,
-                );
+                if (small >= STRIKE.small.from) {
+                    assert.ok(
+                        over > 0.4 * bite &&
+                            (over < bite + 0.5 ||
+                                along < STRIKE.least * lay.width + 0.5),
+                        `${what}: at the blow they overlap ${over} of a width ${lay.width}`,
+                    );
+                } else if (small <= STRIKE.small.to) {
+                    // It has landed on it: its middle is over the card it strikes.
+                    const long = struck.width / CARD_ASPECT;
+                    assert.ok(
+                        Math.abs(now[1].x - now[0].x) < long / 2 &&
+                            Math.abs(now[1].y - now[0].y) < long / 2,
+                        `${what}: it has landed ${JSON.stringify(now)}`,
+                    );
+                }
                 assert.deepEqual(
                     effectsOn(strike.at.middle, to.slot),
                     ["impact over"],

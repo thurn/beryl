@@ -423,12 +423,18 @@ fn loose(events: &[GameEvent], i: usize, before: &Table, after: &Table) -> Origi
     }
 }
 
-/// The order a view's events are scripted in: the order they came in, but that the combat
-/// damage a creature deals back to the creature that strikes it follows that strike at once.
-/// Combat damage is dealt at one time whatever order its events come in
+/// The order a view's events are scripted in: the order they came in, but that two kinds of
+/// event join the like event they belong with, so that the stage plays them as one.
+///
+/// The combat damage a creature deals back to the creature that strikes it follows that
+/// strike at once: combat damage is dealt at one time whatever order its events come in
 /// ([CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "all combat damage that's
 /// been assigned is dealt simultaneously"), and the two blows of one fight are shown as one
 /// (`ui/src/stage/tracks.ts`, `meets`).
+///
+/// A permanent tapped for mana follows the one tapped before it, ahead of the mana that one
+/// made: the sources of one payment turn together, and no streak of mana, which leaves a
+/// moment after its source turns, holds the next source back.
 pub(super) fn order(events: &[GameEvent]) -> Vec<usize> {
     let blow = |i: usize| match events[i] {
         GameEvent::Damage {
@@ -440,6 +446,8 @@ pub(super) fn order(events: &[GameEvent]) -> Vec<usize> {
         _ => None,
     };
     let fighting = |i: usize| matches!(events[i], GameEvent::Damage { combat: true, .. });
+    let mana = |i: usize| matches!(events[i], GameEvent::Mana { .. });
+    let tap = |i: usize| matches!(events[i], GameEvent::Tap { .. });
     let mut order: Vec<usize> = Vec::with_capacity(events.len());
     for i in 0..events.len() {
         // The strike it answers: the last before it in this combat damage, unanswered yet.
@@ -455,7 +463,12 @@ pub(super) fn order(events: &[GameEvent]) -> Vec<usize> {
                         .is_none_or(|&next| blow(next) != Some((source, to)))
             })
         });
-        match answered {
+        // The tap before it, with only mana since.
+        let tapped = tap(i)
+            .then(|| order.iter().rposition(|&j| !mana(j)))
+            .flatten()
+            .filter(|&at| tap(order[at]) && at + 1 < order.len());
+        match answered.or(tapped) {
             Some(at) => order.insert(at + 1, i),
             None => order.push(i),
         }
@@ -649,6 +662,23 @@ mod tests {
         // One attacker, two blockers: each blocker answers the strike at itself.
         let events = [blow(1, 8), blow(1, 9), blow(8, 1), blow(9, 1)];
         assert_eq!(order(&events), [0, 2, 1, 3]);
+    }
+
+    /// The lands of one payment tap before any of their mana leaves; a permanent tapped
+    /// after anything else has happened keeps its place.
+    #[test]
+    fn a_payments_sources_tap_together() {
+        let tap = |slot| GameEvent::Tap { slot };
+        let mana = |slot| GameEvent::Mana {
+            player: Side::You,
+            source: Some(slot),
+            color: crate::protocol::Mana::White,
+            amount: 1,
+        };
+        let events = [tap(1), mana(1), tap(2), mana(2), tap(3), mana(3)];
+        assert_eq!(order(&events), [0, 2, 4, 1, 3, 5]);
+        let events = [tap(1), mana(1), blow(7, 8), tap(2), mana(2)];
+        assert_eq!(order(&events), [0, 1, 2, 3, 4]);
     }
 
     /// Damage that is not combat's is no fight, and a later combat's blows answer none of an

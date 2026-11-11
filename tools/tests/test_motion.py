@@ -1,3 +1,4 @@
+import copy
 import json
 import random
 from collections.abc import Callable
@@ -343,7 +344,10 @@ def test_an_exempt_verb_is_listed() -> None:
 def test_a_step_is_timed_by_the_case_the_page_told(tmp_path: Path) -> None:
     """A life total's case is the page's, which reads it from the table the step found; a tap,
     exempt and never screenshotted, is still held to its own duration."""
-    data: dict[str, Any] = conventions.load()
+    data: dict[str, Any] = copy.deepcopy(conventions.load())
+    count = next(verb for verb in data["verbs"] if verb["name"] == "count")
+    count["cases"]["life gain"]["duration"] = 500
+    count["cases"]["life loss"]["duration"] = 300
     reference: dict[str, Any] = motion.motion()
     play = tmp_path / "desktop" / "yours.combat"
     play.mkdir(parents=True)
@@ -392,3 +396,32 @@ def test_a_stagger_after_a_step_held_back_is_what_the_stage_waits() -> None:
     assert stagger(held_back, after) == [("120 ms (±18)", False)]
     on_turn = {**held_back, "turn": 3388}
     assert stagger(on_turn, after) == [("220 ms (±33)", True)]
+
+
+def test_a_fights_two_blows_are_held_to_one_time() -> None:
+    """Two creatures that strike each other do so as one: the blow dealt back begins with the
+    strike it answers, and one stagger later would fail."""
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+
+    def blow(source: int, slot: int) -> dict[str, Any]:
+        return {
+            "verb": "strike",
+            "source": source,
+            "to": {"kind": "object", "slot": slot},
+        }
+
+    def stagger(later: int) -> list[bool]:
+        steps = [
+            {"n": 20, "turn": 0, "from": 0, "to": 1050, "act": blow(1, 9)},
+            {"n": 21, "turn": 0, "from": later, "to": later + 1050, "act": blow(9, 1)},
+        ]
+        played = [
+            {**step, "verb": "strike", "case": "blocked attacker"} for step in steps
+        ]
+        captured = {"seat": "yours", "tick": 1000 / 60, "steps": played}
+        verdicts = motion.timing_verdicts(data, reference, captured)[0]
+        return [v.failed for v in verdicts if v.measure == "stagger"]
+
+    assert stagger(0) == [False]
+    assert stagger(220) == [True]

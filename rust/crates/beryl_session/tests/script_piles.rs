@@ -36,8 +36,8 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
             format!("fly #4 (Counterspell) graveyard>stack cast flashback at #261 <- {who}"),
             "& +point hostile-target #4 > #261".to_owned(),
             format!("tap #3 (Island) <- {who}"),
-            format!("& streak #3 > #4 blue 1 <- {who}"),
             format!("& tap #5 (Island) <- {who}"),
+            format!("& streak #3 > #4 blue 1 <- {who}"),
             format!("& streak #5 > #4 blue 1 <- {who}"),
         ];
         if who == "opponent" {
@@ -63,9 +63,13 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
         let mut lines = vec![format!(
             "fly #260 (Thieving Skydiver) exile>stack cast <- {who}"
         )];
-        for (i, land) in [257, 258, 259, 261].into_iter().enumerate() {
+        // The four lands tap together, and then each sends its mana.
+        let lands = [257, 258, 259, 261];
+        for (i, land) in lands.into_iter().enumerate() {
             let and = if i == 0 { "" } else { "& " };
             lines.push(format!("{and}tap #{land} (Island) <- {who}"));
+        }
+        for land in lands {
             lines.push(format!("& streak #{land} > #260 blue 1 <- {who}"));
         }
         text(&lines)

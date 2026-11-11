@@ -239,8 +239,9 @@ def timing_verdicts(
 ) -> list[list[Verdict]]:
     """For each step a capture recorded (stepped.mjs's steps.json), how long it played held to
     its verb's duration and, where the next step is the same verb and case right after it in
-    the script, how long after it that one began held to its stagger (`apart`). A value the data leaves
-    null is played as 0 (timing.ts), and held so."""
+    the script, how long after it that one began held to its stagger (`apart`), or to no time
+    at all where the two are one fight's blows (`meets`). A value the data leaves null is
+    played as 0 (timing.ts), and held so."""
     verbs = {v["name"]: v for v in data.get("verbs", [])}
     tick = float(captured.get("tick") or TICK)
     seat = captured["seat"]
@@ -276,13 +277,28 @@ def timing_verdicts(
                     step["verb"],
                     "stagger",
                     after["from"] - step["from"],
-                    apart(step, values),
+                    0.0 if meets(step["act"], after["act"]) else apart(step, values),
                     case,
                     tick,
                 )
             )
         out.append(found)
     return out
+
+
+def meets(act: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Whether the strikes `act` and `after` are the two blows of one fight, each creature
+    striking the other: the stage plays them as one, at one time (ui/src/stage/tracks.ts
+    `meets`)."""
+    if act.get("verb") != "strike" or after.get("verb") != "strike":
+        return False
+    at, back = act.get("to", {}), after.get("to", {})
+    return (
+        at.get("kind") == "object"
+        and back.get("kind") == "object"
+        and at.get("slot") == after.get("source")
+        and back.get("slot") == act.get("source")
+    )
 
 
 def apart(step: dict[str, Any], values: dict[str, Any]) -> float:

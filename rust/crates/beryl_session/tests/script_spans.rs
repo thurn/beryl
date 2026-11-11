@@ -309,8 +309,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
             format!("fly #1 (Counterspell) hand>stack cast at #256 <- {who}"),
             "& +point hostile-target #1 > #256".to_owned(),
             format!("tap #0 (Island) <- {who}"),
-            format!("& streak #0 > #1 blue 1 <- {who}"),
             format!("& tap #2 (Island) <- {who}"),
+            format!("& streak #0 > #1 blue 1 <- {who}"),
             format!("& streak #2 > #1 blue 1 <- {who}"),
             // The cast is announced after its lands are tapped: what the pool paid follows.
             format!("streak {who} > #1 blue 1 <- {who}"),

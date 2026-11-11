@@ -133,15 +133,29 @@ export const heldUp =
       : pose;
   };
 
+/** How much of its step a permanent that taps or untaps turns in. It turns where it lies, and
+ * only then do it and its row go to where they now rest, the tapped apart from the untapped
+ * (game/battlefield.ts), so that nothing crosses a card while it turns. */
+export const TURNED = 0.6;
+
 /** A permanent turning as it taps or untaps (UI Conventions, exception 2). It is dressed as
  * its record now says, lying or upright, and `unturned` is where that dress is drawn with its
  * card a quarter back, so that the card lies exactly as it did as the step began: from there
- * the card turns about its own middle while that middle goes to where it rests, at the depth
- * it rests at. */
+ * the card turns about its own middle to `home`, as it now rests but with that middle where
+ * it was, and then goes to where it rests, at the depth it rests at. */
 export const turned =
-  (unturned: Pose, ease: Timing["ease"]): Path =>
+  (unturned: Pose, home: Pose, ease: Timing["ease"]): Path =>
   (progress, rest) =>
-    between(unturned, rest, ease(progress), false);
+    progress < TURNED
+      ? between(unturned, home, ease(progress / TURNED), false)
+      : between(home, rest, ease((progress - TURNED) / (1 - TURNED)), false);
+
+/** How far through a step of these verbs what only makes room begins to move: once a card
+ * that leaves has gone, and once one that taps has turned. */
+export const WAITS: Partial<Record<Act["verb"], number>> = {
+  vanish: GONE,
+  tap: TURNED,
+};
 
 const into = (progress: number) => progress * progress;
 const out = (progress: number) => 1 - (1 - progress) * (1 - progress);
@@ -156,13 +170,18 @@ const inOut = (progress: number) =>
  * own widths. Beryl's cards are whole and lie close, so the blow is where the two first
  * overlap by `bite` of the striker's width and no further: what is struck stays in sight
  * under the blow, and two creatures that strike each other meet half way (enter.ts). Before
- * a blow that is hardly any way off it still goes `least` of its width. */
+ * a blow that is hardly any way off it still goes `least` of its width. What is much smaller
+ * than the striker (a phone's small permanents and its life totals) it dives onto instead,
+ * shrinking as it goes, or it would lie over the neighbours more than over what it strikes:
+ * not at all for something `small.from` of its length, wholly for something `small.to`, when
+ * it lands `small.least` of its own size. */
 export const STRIKE = {
   wind: 0.15,
   hit: 0.45,
   back: 0.18,
   bite: 0.3,
   least: 0.25,
+  small: { from: 0.7, to: 0.55, least: 0.6 },
 };
 
 /** How far along its way to the blow a creature is `progress` through its strike, and how
@@ -181,15 +200,22 @@ export function struck(progress: number): [toward: number, back: number] {
 
 /** A creature's lunge at what it deals combat damage to and its return to where it rests:
  * the blow is `toward` away from it as the step begins, and it first pulls `back` the other
- * way. Over everything, and never turned or sized. */
+ * way. It is `size` times as large at the blow, by `about`, which gives a pose that large
+ * about its card's middle. Over everything, and never turned. */
 export const lunge =
-  (toward: Point, back: Point): Path =>
+  (
+    toward: Point,
+    back: Point,
+    size: number,
+    about: (pose: Pose, size: number) => Pose,
+  ): Path =>
   (progress, rest) => {
     const [to, away] = struck(progress);
+    const pose = about(rest, 1 + (size - 1) * to);
     return {
-      ...rest,
-      x: rest.x + toward.x * to - back.x * away,
-      y: rest.y + toward.y * to - back.y * away,
+      ...pose,
+      x: pose.x + toward.x * to - back.x * away,
+      y: pose.y + toward.y * to - back.y * away,
       depth: ALOFT + rest.depth,
     };
   };

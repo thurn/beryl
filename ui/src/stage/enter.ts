@@ -76,6 +76,19 @@ const middleOf = (layout: StageLayout, { resting, pose }: Placed) =>
 /** How much of half its art's height the face of a life orb is (table.css `.life-hit`). */
 const FACE = 0.8;
 
+/** A pose `size` times as large about the middle of the card `resting` is dressed as. */
+const sized =
+  (layout: StageLayout, resting: Resting) =>
+  (pose: Pose, size: number): Pose => {
+    const middle = layout.middle(resting, pose);
+    return {
+      ...pose,
+      x: middle.x + (pose.x - middle.x) * size,
+      y: middle.y + (pose.y - middle.y) * size,
+      width: pose.width * size,
+    };
+  };
+
 /** The own motions of the step `act`, played with `ease`: none for most verbs. */
 export function entering(
   act: Act,
@@ -131,16 +144,26 @@ function enters(
       const lay = was?.resting.object;
       if (!card || !was || lay?.zone !== "battlefield") return undefined;
       if (lay.tapped === act.object.tapped) return undefined;
-      // Dressed as it now lies and turned a quarter back, its middle where it was.
+      // Dressed as it now lies and turned a quarter back, its middle where it was; and as it
+      // now rests, with that middle still there, which it turns to.
       const before = layout.middle(was.resting, was.pose);
-      const now = layout.middle(card.resting, was.pose);
-      const unturned: Pose = {
-        ...was.pose,
-        x: was.pose.x + before.x - now.x,
-        y: was.pose.y + before.y - now.y,
+      const held = (pose: Pose): Pose => {
+        const now = layout.middle(card.resting, pose);
+        return {
+          ...pose,
+          x: pose.x + before.x - now.x,
+          y: pose.y + before.y - now.y,
+        };
+      };
+      const unturned = {
+        ...held(was.pose),
         turn: act.object.tapped ? -90 : 90,
       };
-      return { name: act.object.slot, track: own(turned(unturned, ease)) };
+      const home = held(card.resting.pose);
+      return {
+        name: act.object.slot,
+        track: own(turned(unturned, home, ease)),
+      };
     }
     case "strike": {
       const striker = placed(act.source);
@@ -152,29 +175,45 @@ function enters(
           : undefined;
       const at = life?.middle ?? (target && middleOf(layout, target));
       if (!at) return undefined;
-      // The blow is where the two meet along the line between their middles: a little into
-      // the card it strikes. Two that strike each other meet half way.
+      // The blow is along the line between their middles, where the two cards overlap by a
+      // little on whichever side they meet. Two that strike each other meet half way.
       const way = away(middleOf(layout, striker), at);
       const far = Math.hypot(way.x, way.y) || 1;
       const unit = { x: way.x / far, y: way.y / far };
-      const across = (half: Point) =>
-        Math.abs(unit.x) * half.x + Math.abs(unit.y) * half.y;
-      const reach = life
-        ? (life.middle.y - life.corner.y) * FACE
-        : across(layout.half(target!.resting, target!.pose));
       const { width } = striker.pose;
-      const apart = across(layout.half(striker.resting, striker.pose)) + reach;
+      const mine = layout.half(striker.resting, striker.pose);
+      const art = life ? life.middle.y - life.corner.y : 0;
+      const theirs = life
+        ? { x: art * FACE, y: art * FACE }
+        : layout.half(target!.resting, target!.pose);
+      // What is much smaller than it, it shrinks toward the size of and lands on.
+      const long = (half: Point) => Math.max(half.x, half.y);
+      const ratio = (life ? art : long(theirs)) / long(mine);
+      const { from, to, least } = STRIKE.small;
+      const dive = Math.min(1, Math.max(0, (from - ratio) / (from - to)));
+      const size = 1 - dive * (1 - least);
+      // How far apart their middles are with each side's edges `into` the other's.
+      const apart = (into: number) =>
+        Math.min(
+          ...(["x", "y"] as const).map((side) =>
+            unit[side] === 0
+              ? Infinity
+              : (mine[side] * size + theirs[side] - into) /
+                Math.abs(unit[side]),
+          ),
+        );
+      // On a player it stops at the rim of the orb's face, which the total is read on, or
+      // with its edge on the orb's middle where it dives.
+      const bitten = apart(life ? 0 : STRIKE.bite * width * size);
+      const landed = life ? apart(Math.min(theirs.x, theirs.y)) : 0;
+      const near = bitten + (landed - bitten) * dive;
       const met = scene.beat.some((other) => meets(other, act));
-      // It stops at the rim of the orb's face, which the total on it is read through.
-      const bite = life ? 0 : STRIKE.bite * width;
-      const go = Math.max(
-        STRIKE.least * width,
-        (far - apart + bite) / (met ? 2 : 1),
-      );
+      const go = Math.max(STRIKE.least * width, (far - near) / (met ? 2 : 1));
       const by = (length: number) => ({
         x: unit.x * length,
         y: unit.y * length,
       });
+      const about = sized(layout, striker.resting);
       // What a blow does to a card shows as it lands: until then the card it strikes is
       // drawn from the record the step found, and so is one that strikes back, which the
       // other's step has covered already.
@@ -182,7 +221,7 @@ function enters(
       const lunging: Entering = {
         name: act.source,
         track: {
-          ...own(lunge(by(go), by(STRIKE.back * width))),
+          ...own(lunge(by(go), by(STRIKE.back * width), size, about)),
           turn: veiled ? STRIKE.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,
@@ -206,15 +245,7 @@ function enters(
       const lay = was?.resting.object;
       if (!card || !was || lay?.zone !== "battlefield") return undefined;
       if (act.object.zone !== "battlefield") return undefined;
-      const about = (pose: Pose, size: number): Pose => {
-        const middle = layout.middle(card.resting, pose);
-        return {
-          ...pose,
-          x: middle.x + (pose.x - middle.x) * size,
-          y: middle.y + (pose.y - middle.y) * size,
-          width: pose.width * size,
-        };
-      };
+      const about = sized(layout, card.resting);
       return {
         name: act.object.slot,
         track: { ...own(turnedOver(was.pose, about)), turn: FLIP.turn },
