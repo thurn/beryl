@@ -114,6 +114,26 @@
       "after": 1
     },
     {
+      "name": "verbs-combat",
+      "board": "verbs-combat",
+      "until": "first priority decision for seat 0 from turn 5"
+    },
+    {
+      "name": "verbs-combat-theirs",
+      "board": "verbs-combat",
+      "until": "first priority decision for seat 1 from turn 6"
+    },
+    {
+      "name": "verbs-place",
+      "board": "verbs-place",
+      "until": "first priority decision for seat 0 from turn 5"
+    },
+    {
+      "name": "verbs-place-theirs",
+      "board": "verbs-place",
+      "until": "first priority decision for seat 1 from turn 6"
+    },
+    {
       "name": "combat-double-block",
       "board": "combat-double-block",
       "until": "first blocker decision for seat 0",

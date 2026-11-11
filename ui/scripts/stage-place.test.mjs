@@ -221,7 +221,10 @@ test("a life total that changes says by how much while its count plays", () => {
     });
     made.play(view([1]));
     made.play(view([1]), {
-        beats: [[life("opponent", 17), life("opponent", 16)], [life("you", 24)]],
+        beats: [
+            [life("opponent", 17), life("opponent", 16)],
+            [life("you", 24)],
+        ],
     });
     let told = 0;
     made.subscribe(() => (told += 1));

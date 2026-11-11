@@ -314,6 +314,24 @@ fn a_stolen_permanent_flies_to_its_new_side() {
     );
 }
 
+/// `fly` onto a permanent: an Aura resolves onto the creature it is attached to, the arrow at
+/// that creature ended first, and what it changes of the creature shows after it lands.
+#[test]
+fn an_aura_flies_onto_its_permanent() {
+    let [first, second] = script(
+        names::SWIFT_RECONFIGURATION,
+        "a creature becomes a noncreature Vehicle that can't crew alone",
+        3,
+    );
+    let lines = [
+        "-point hostile-target #0 > #256",
+        "fly #0 (Swift Reconfiguration) stack>battlefield on #256 resolve",
+        "count #256 (Jace, Vryn's Prodigy) pt",
+    ];
+    assert_eq!(first, text(&lines));
+    assert_eq!(second, text(&lines));
+}
+
 /// `vanish` in a batch: a sweeper's creatures leave in one beat, the token with no record
 /// and the face-down one under its name.
 #[test]

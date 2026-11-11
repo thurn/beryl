@@ -80,7 +80,10 @@ export function PhoneStageBoard({
   const { stage, feed } = pageStage();
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
-  const { table, counts } = useSyncExternalStore(stage.subscribe, () => stage.shown);
+  const { table, counts } = useSyncExternalStore(
+    stage.subscribe,
+    () => stage.shown,
+  );
   // The table is laid out for a phone this size while this board shows it.
   useLayoutEffect(() => {
     if (viewport) stage.relayout(phone(viewport));

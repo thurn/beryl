@@ -10,8 +10,9 @@
 // time, so none depends on the machine's speed. It plays the moment in ticks of 16 ms and of
 // 100 ms, which must read the same. Every run also holds the page's sounds to its steps: each
 // asked for at the stage time its step begins or ends, and none otherwise. What each verb's
-// check then asks of its runs is its case in verb-cases.mjs. Exits non-zero if a check fails or
-// a page logs an error.
+// check then asks of its runs is its cases: verb-cases.mjs for cards changing zone, and
+// verb-cases-place.mjs for changes on a card where it lies and to a player. Exits non-zero if
+// a check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -23,7 +24,8 @@ import {
     workers,
 } from "./capture.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
-import { CASES, complete } from "./verb-cases.mjs";
+import { CASES as ZONES, complete } from "./verb-cases.mjs";
+import { CASES as PLACE } from "./verb-cases-place.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -105,27 +107,49 @@ async function walk({ tick, gap, answers, middle, whole }) {
         clock.advance(Math.ceil(clock.now) - clock.now);
     }
     const origin = clock.now;
-    const reach = (time) => {
+    // The times to sample besides: the middle and the end of every step the stage tells of as
+    // it begins, so that a step that plays while an earlier one of its beat does is seen too.
+    const wanted = new Set();
+    const extra = [];
+    let sample;
+    let changes;
+    const reach = async (time) => {
         while (clock.now < time) {
-            clock.advance(Math.min(tick, time - clock.now));
+            const next = Math.min(
+                time,
+                clock.now + tick,
+                ...[...wanted].filter((at) => at > clock.now),
+            );
+            clock.advance(next - clock.now);
+            if (wanted.delete(clock.now) && clock.now < time) {
+                const taken = sample();
+                if (taken.counting.length) taken.changes = await changes();
+                extra.push(taken);
+            }
         }
     };
     const layer = document.querySelector(".card-layer");
     const faults = [];
     const heard = window.berylSounds.length;
     const edges = [];
-    const unfollow = stage.follow((edge) =>
+    const unfollow = stage.follow((edge) => {
         edges.push({
             edge: edge.edge,
             at: edge.at - origin,
             verb: edge.step.act.verb,
             act: edge.step.act,
             cues: window.berylStepSounds(edge),
-        }),
-    );
+        });
+        if (edge.edge !== "start") return;
+        const { act } = edge.step;
+        const { duration } = stage.timings(act, edge.table.view);
+        if (duration > 0) {
+            wanted.add(edge.at + duration / 2).add(edge.at + duration);
+        }
+    });
     const near = (a, b, by) => Math.abs(a - b) <= by;
     /** Why the page's node for `name` is not where the model has it, if it is not. */
-    const differs = (name, pose, frame) => {
+    const differs = (name, pose, frame, down) => {
         const node = layer.querySelector(`[data-stage="${name}"]`);
         if (!node) return "has no node";
         const written = node.style.transform.match(/-?\d+(\.\d+)?(e-?\d+)?/g);
@@ -145,8 +169,14 @@ async function walk({ tick, gap, answers, middle, whole }) {
         if (Number(node.style.zIndex) !== Math.round(pose.depth)) {
             return `is drawn at depth ${node.style.zIndex}`;
         }
-        // A node dressed with its card's name shows its face (src/stage/dom.ts).
-        if (pose.face === "back" && node.dataset.card) {
+        // Its card's own turn inside it (src/stage/pose.ts turnOf).
+        const turn = node.style.getPropertyValue("--turn");
+        if (turn !== (pose.turn ? `${pose.turn}deg` : "")) {
+            return `has its card turned ${turn || "not at all"}`;
+        }
+        // A node dressed with its card's name shows its face (src/stage/dom.ts), but for a
+        // face-down permanent its controller knows, which is named and shows its back.
+        if (pose.face === "back" && node.dataset.card && !down) {
             return `shows the face of ${node.dataset.card}`;
         }
         // Where the browser put it: an upright node's corner is the pose's.
@@ -165,15 +195,28 @@ async function walk({ tick, gap, answers, middle, whole }) {
     };
     let lifted = false;
     let done = false;
-    const sample = () => {
+    sample = () => {
         const poses = {};
         const zones = {};
-        const { resting } = stage.shown;
-        for (const [name, { dress }] of resting) {
+        const marks = {};
+        const { resting, table, counts } = stage.shown;
+        for (const [name, { dress, object }] of resting) {
             const pose = stage.pose(name);
             poses[name] = pose;
             zones[name] = dress.zone;
-            const why = differs(name, pose, dress.frame);
+            // What a permanent's face is drawn from, where a step changes it in place.
+            if (object && dress.zone === "battlefield") {
+                marks[name] = {
+                    tapped: object.tapped,
+                    named: object.name !== null && object.facing !== "down",
+                    controller: object.controller,
+                    attachedTo: object.attachedTo ?? null,
+                    counters: object.counters,
+                    pt: object.pt ?? null,
+                };
+            }
+            const down = object?.facing === "down";
+            const why = differs(name, pose, dress.frame, down);
             if (why) faults.push(`at ${clock.now - origin} ms ${name} ${why}`);
         }
         const nodes = layer.querySelectorAll(".stage-node").length;
@@ -187,7 +230,29 @@ async function walk({ tick, gap, answers, middle, whole }) {
         );
         done ||= !whole && lifted && !abilities;
         lifted ||= abilities;
-        return { at: clock.now - origin, poses, zones };
+        // The life totals the table has, and the life counts under way with what each found.
+        const life = {
+            you: table.players.you.life,
+            opponent: table.players.opponent.life,
+        };
+        const counting = counts.flatMap(({ step, found }) => {
+            const { tally } = step.act;
+            if (tally.kind !== "life") return [];
+            const was = found.view.players[tally.player].life;
+            return [{ player: tally.player, life: tally.life, was }];
+        });
+        return { at: clock.now - origin, poses, zones, marks, life, counting };
+    };
+    /** What the page shows beside each life total of how it is changing, once React has drawn
+     * what the stage told it. */
+    changes = async () => {
+        await new Promise((resolve) => setTimeout(resolve));
+        return [...document.querySelectorAll("[data-life-change]")].map(
+            (shown) => [
+                shown.closest("[data-life]")?.dataset.life,
+                Number(shown.dataset.lifeChange),
+            ],
+        );
     };
     const steps = [];
     for (let answer = 0; answer < answers && !done; answer++) {
@@ -201,14 +266,17 @@ async function walk({ tick, gap, answers, middle, whole }) {
             if (!step) break;
             const { index, verb, from, to } = step;
             const at = {};
-            if (clock.now < from) reach(from);
+            if (clock.now < from) await reach(from);
             if (clock.now === from) at.from = sample();
             const middle = (from + to) / 2;
             if (clock.now < middle) {
-                reach(middle);
+                await reach(middle);
                 at.middle = sample();
+                if (at.middle.counting.length) {
+                    at.middle.changes = await changes();
+                }
             }
-            reach(to);
+            await reach(to);
             at.to = sample();
             steps.push({
                 answer,
@@ -221,7 +289,7 @@ async function walk({ tick, gap, answers, middle, whole }) {
                 at,
             });
         }
-        if (!done) reach(clock.now + gap);
+        if (!done) await reach(clock.now + gap);
     }
     unfollow();
     const shown = stage.shown.view;
@@ -230,6 +298,7 @@ async function walk({ tick, gap, answers, middle, whole }) {
         ?.getBoundingClientRect();
     return {
         steps,
+        extra,
         faults,
         done: done || (whole && !stage.shown.busy),
         shows: shown && [shown.turn.number, shown.turn.step, shown.status],
@@ -295,7 +364,18 @@ function soundsFollowSteps(run) {
     assert.deepEqual(run.sounds, asked, "the sounds against the steps");
 }
 
-assert.deepEqual(Object.keys(CASES), verbs, "ui/verbs.json and the cases");
+/** What each verb's check asks of its runs: each of its cases there is. */
+const CASES = Object.fromEntries(
+    verbs.map((verb) => [
+        verb,
+        (runs) => [ZONES, PLACE].forEach((cases) => cases[verb]?.(runs)),
+    ]),
+);
+assert.deepEqual(
+    [...new Set([...Object.keys(ZONES), ...Object.keys(PLACE)])].sort(),
+    [...verbs].sort(),
+    "ui/verbs.json and the cases",
+);
 assert.deepEqual(
     layouts.filter((layout) => !LAYOUTS[layout]?.windows.length),
     [],

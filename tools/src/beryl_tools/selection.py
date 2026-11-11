@@ -73,7 +73,7 @@ INTERACTIONS = "ui/scripts/interactions.mjs"
 # The verb suite, which `ui-test` runs beside interactions.mjs: its script, its cases, the list
 # of its checks, and the prefix of their ids in the run log (the lane's others are `ui-test:<title>`).
 VERB_SCRIPT = "ui/scripts/verbs.mjs"
-VERB_CASES = "ui/scripts/verb-cases.mjs"
+VERB_CASES = ("ui/scripts/verb-cases.mjs", "ui/scripts/verb-cases-place.mjs")
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"
 SHOTS = "ui/shots.json"
@@ -568,7 +568,7 @@ def choose(
         if harness:
             choice.add(universe, "harness")
     if lane == "ui-test" and any(
-        rewritten(p, changed, hunks_now) for p in (VERB_SCRIPT, VERB_CASES, VERBS)
+        rewritten(p, changed, hunks_now) for p in (VERB_SCRIPT, *VERB_CASES, VERBS)
     ):
         choice.add((c for c in universe if c.startswith(VERB_PREFIX)), "body")
     if lane == "shots" and SHOTS in changed:

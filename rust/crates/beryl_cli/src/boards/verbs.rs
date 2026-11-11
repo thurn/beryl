@@ -2,13 +2,17 @@
 //! changes a verb's check asks for, recorded from both seats.
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, COUNTERSPELL, DAMN, ISLAND, MANA_CRYPT, OVERLORD_OF_THE_MISTMOORS, PLAINS,
-    PORTABLE_HOLE, REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
+    AANGS_ICEBERG, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER, DAMN,
+    ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE,
+    REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, THE_WANDERING_EMPEROR,
+    THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
-use super::shorthand::{INSECT_TOKEN, ISLAND_, LANDS, PLAINS_, cast_with_option, choose};
+use super::shorthand::{
+    INSECT_TOKEN, ISLAND_, LANDS, PLAINS_, TREASURE_TOKEN, cast_with_option, choose, play_land,
+};
 
 /// Boards for the verb suite.
 pub(super) const VERBS: &[Scenario] = &[
@@ -82,5 +86,92 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::activate(P0, AANGS_ICEBERG, 1),
             choose(P0, DecisionKind::ChooseUpTo, ISLAND),
             Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+        ]),
+    // Combat damage every way, and what follows it: the first seat attacks with Trinket Mage,
+    // which Beza blocks and kills, taking its damage; with Snapcaster Mage, which strikes the
+    // player; and with Elite Spellbinder, which strikes The Wandering Emperor. In their turn
+    // the opponent taps and sacrifices a Treasure for the Oust that puts Snapcaster Mage into
+    // its library, so its controller gains life. In the turn after, the attacker that is left
+    // untaps and Mana Crypt flips its coin.
+    Scenario::new("verbs-combat")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(MANA_CRYPT),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(BEZA_THE_BOUNDING_SPRING),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::token(TREASURE_TOKEN),
+                ISLAND_,
+            ],
+        )
+        .hand(P1, &[OUST])
+        .library(P1, LANDS)
+        .actions(&[
+            choose(P0, DecisionKind::Attacker, TRINKET_MAGE),
+            Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+            choose(P0, DecisionKind::Attacker, SNAPCASTER_MAGE),
+            Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+            choose(P0, DecisionKind::Attacker, ELITE_SPELLBINDER),
+            choose(P0, DecisionKind::AttackTarget, THE_WANDERING_EMPEROR),
+            choose(P1, DecisionKind::Blocker, BEZA_THE_BOUNDING_SPRING),
+            choose(P1, DecisionKind::BlockTarget, TRINKET_MAGE),
+            Action::cast(P1, OUST),
+            choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
+        ]),
+    // Changes on a card where it lies: a seventh land piles the first seat's lands; its
+    // face-down Snapcaster Mage turns face up, and The Wandering Emperor puts a counter on it;
+    // Thieving Skydiver, kicked, takes the opponent's Currency Converter across the table;
+    // and Swift Reconfiguration is attached to Snapcaster Mage, which makes it a Vehicle. The
+    // opponent then Ousts the Skydiver, the one creature left, and its controller gains life.
+    // Each target is the only one when a seat that acts with its own spell on the stack
+    // chooses it, so both seats' recordings play the same game.
+    Scenario::new("verbs-place")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(SNAPCASTER_MAGE).face_down(),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[ISLAND, THIEVING_SKYDIVER, SWIFT_RECONFIGURATION])
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(CURRENCY_CONVERTER), ISLAND_, PLAINS_])
+        .hand(P1, &[OUST])
+        .library(P1, LANDS)
+        .actions(&[
+            play_land(P0, ISLAND),
+            Action::TurnFaceUp {
+                player: P0,
+                card: SNAPCASTER_MAGE,
+            },
+            Action::activate(P0, THE_WANDERING_EMPEROR, 1),
+            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+            choose(P0, DecisionKind::Target, SNAPCASTER_MAGE),
+            cast_with_option(P0, THIEVING_SKYDIVER),
+            Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+            choose(P0, DecisionKind::Target, CURRENCY_CONVERTER),
+            Action::cast(P0, SWIFT_RECONFIGURATION),
+            choose(P0, DecisionKind::Target, SNAPCASTER_MAGE),
+            Action::cast(P1, OUST),
+            choose(P1, DecisionKind::Target, THIEVING_SKYDIVER),
         ]),
 ];

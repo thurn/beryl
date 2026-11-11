@@ -130,8 +130,11 @@ export function entering(
       return { name: act.source, track: own(lunge(away(from, at))) };
     }
     case "flip": {
+      // Only a permanent turns over where it lies (UI Conventions, "A card turning face up").
       const card = placed(act.object.slot);
-      if (!card || !was) return undefined;
+      const lay = was?.resting.object;
+      if (!card || !was || lay?.zone !== "battlefield") return undefined;
+      if (act.object.zone !== "battlefield") return undefined;
       const about = (pose: Pose, size: number): Pose => {
         const middle = layout.middle(card.resting, pose);
         return {

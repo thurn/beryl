@@ -256,3 +256,22 @@ def test_a_card_that_comes_to_be_in_place_does_not_travel() -> None:
     frames = [absent] * 3 + [landed.frames[-1]] * 3
     clip = Clip(WIDTH, HEIGHT, landed.times[:6], frames, (WIDTH, HEIGHT))
     assert motion.seen(clip) == motion.Seen(travels=False)
+
+
+def test_a_change_in_place_is_held_to_its_case() -> None:
+    """A turn by which way it goes, a strike by what it lands on and a counter by its kind, as
+    the stage times them (ui/src/stage/timing.ts caseOf); a life total alone has no case."""
+    tapped = {"verb": "tap", "object": {"tapped": True}}
+    assert motion.case_of(tapped, "yours") == "tap"
+    assert motion.case_of({"verb": "tap", "object": {"tapped": False}}, "yours") == "untap"
+    at_player = {"verb": "strike", "to": {"kind": "player", "player": "opponent"}}
+    assert motion.case_of(at_player, "yours") == "unblocked attacker"
+    at_blocker = {"verb": "strike", "to": {"kind": "object", "slot": 3}}
+    assert motion.case_of(at_blocker, "theirs") == "blocked attacker"
+
+    def counted(tally: dict[str, object]) -> str | None:
+        return motion.case_of({"verb": "count", "tally": tally}, "yours")
+
+    assert counted({"kind": "counters", "counter": "loyalty"}) == "loyalty"
+    assert counted({"kind": "counters", "counter": "plusOne"}) == "counter"
+    assert counted({"kind": "life", "player": "you", "life": 17}) is None

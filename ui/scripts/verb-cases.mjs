@@ -7,16 +7,17 @@ import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 
 /** How far over what rests a moving node is drawn (src/stage/pose.ts ALOFT). */
-const ALOFT = 900;
+export const ALOFT = 900;
 /** A card's width over its height (src/components/Card.tsx CARD_ASPECT). */
-const CARD_ASPECT = 63 / 88;
+export const CARD_ASPECT = 63 / 88;
 
-const where = ({ x, y, width, rotation, skew, opacity }) => ({
+export const where = ({ x, y, width, rotation, skew, turn, opacity }) => ({
     x,
     y,
     width,
     rotation,
     skew,
+    turn,
     opacity,
 });
 const middleOf = (pose) => ({
@@ -26,16 +27,17 @@ const middleOf = (pose) => ({
 
 const placeOf = ({ x, y, width }) => ({ x, y, width });
 /** Whether two poses lie within a card's width of one another. */
-const beside = (a, b) =>
+export const beside = (a, b) =>
     Math.abs(a.x - b.x) < a.width && Math.abs(a.y - b.y) < a.width;
 
 /** `run` with the steps its walk did not see: `stage.step` shows one step at a time, the
  * first not over, so a step that plays wholly while an earlier one of its beat does is never
- * the one shown. Each is put together from what the stage told of it (`edges`) and the
- * samples the walk took at its times, where it took any; one with no sample at its end is
- * left out. */
+ * the one shown, and one still playing when the step shown before it ends is shown late.
+ * Each is put together from what the stage told of it (`edges`) and the samples the walk
+ * took at its times (`extra`: the middle and end of every step told), where it took any; one
+ * with no sample at its end is left out. With them, every sample the walk took, in order (`samples`). */
 export function complete(run) {
-    const samples = new Map();
+    const samples = new Map(run.extra.map((sample) => [sample.at, sample]));
     for (const step of run.steps) {
         for (const sample of [step.before, ...Object.values(step.at)]) {
             samples.set(sample.at, sample);
@@ -58,21 +60,27 @@ export function complete(run) {
         const sampled = samples.get(at);
         if (at === from || seen.has(`${from} ${told}`) || !sampled) continue;
         const step = { verb, act, from, to: at, at: { to: sampled } };
-        for (const [name, time] of [
-            ["from", from],
-            ["middle", (from + at) / 2],
-        ]) {
-            if (samples.has(time)) step.at[name] = samples.get(time);
-        }
         step.before = before(run, step);
         steps.push(step);
     }
+    // A step the walk came to late, or never showed, has what was sampled at its times.
+    for (const step of steps) {
+        for (const [name, time] of [
+            ["from", step.from],
+            ["middle", (step.from + step.to) / 2],
+        ]) {
+            if (!step.at[name] && samples.has(time)) {
+                step.at = { ...step.at, [name]: samples.get(time) };
+            }
+        }
+    }
     steps.sort((a, b) => a.from - b.from);
-    return { ...run, steps };
+    const all = [...samples.values()].sort((a, b) => a.at - b.at);
+    return { ...run, steps, samples: all };
 }
 
 /** The first step of `run` playing `verb`. */
-function stepOf(run, verb) {
+export function stepOf(run, verb) {
     const step = run.steps.find((s) => s.verb === verb);
     assert.ok(step, `the stage played no ${verb}`);
     return step;
@@ -81,7 +89,7 @@ function stepOf(run, verb) {
 /** What `run` held before `step` began: its last sample from an earlier stage time. A step
  * begins in the tick that ends the one before it, so the sample at that time already has it
  * begun; a run's first step has only the sample taken before any tick. */
-function before(run, step) {
+export function before(run, step) {
     const earlier = run.steps
         .flatMap((s) => [s.before, ...Object.values(s.at)])
         .filter((sample) => sample.at < step.from);
@@ -108,13 +116,13 @@ function onlyMoved(run, step, zones, names = []) {
 }
 
 /** Which half of `run`'s table `pose` lies in is the half of the seat that plays the moment. */
-function onSide(run, pose, seat, what) {
+export function onSide(run, pose, seat, what) {
     const far = middleOf(pose).y < run.middle;
     assert.equal(far, seat === "theirs", `${what} lies at y ${pose.y}`);
 }
 
 /** `run`'s page was asked for `sound` at the stage time `at`, with no delay. */
-function sounded(run, sound, at, what) {
+export function sounded(run, sound, at, what) {
     assert.ok(
         run.sounds.some((s) => s.sound === sound && s.at === at && !s.delay),
         `${what}: no ${sound} at ${at} ms among ${JSON.stringify(run.sounds)}`,
@@ -217,8 +225,10 @@ export const CASES = {
                 );
             }
             if (half) assert.ok(half.depth >= ALOFT, `${what}: it flies`);
+            // Whether it is larger than where it left and where it lands: told only of a
+            // flight sampled as it began.
             const larger = (pose) =>
-                pose.width > Math.max(start.width, end.width) + 0.01;
+                start && pose.width > Math.max(start.width, end.width) + 0.01;
             // A step a tick found already under way was sampled only as it ended.
             const turns = start?.face === "back" && end.face === "front";
             if (turns) seen.turned += 1;
@@ -533,9 +543,10 @@ export const CASES = {
         const lifts = scry.steps.filter((s) => s.verb === "lift");
         if (seat === "yours") {
             assert.deepEqual(lifts, [], "your own look lifts nothing");
-            const looked = scry.steps
-                .filter((s) => s.verb === "flip")
-                .map((s) => s.act.object.slot);
+            // Learning their names takes no time, so the stage only tells of it.
+            const looked = scry.edges
+                .filter((e) => e.verb === "flip" && e.edge === "start")
+                .map((e) => e.act.object.slot);
             assert.equal(looked.length, 2, "the scry looks at two cards");
             const told = stepOf(scry, "announce");
             const until = scry.steps.indexOf(told);

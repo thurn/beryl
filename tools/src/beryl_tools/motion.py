@@ -268,6 +268,17 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
             "sacrifice": "sacrificed",
         }
         return left.get(str(zone)) or why.get(str(act.get("why")))
+    if verb == "tap":
+        return "tap" if (act.get("object") or {}).get("tapped") else "untap"
+    if verb == "strike":
+        struck = (act.get("to") or {}).get("kind")
+        return "unblocked attacker" if struck == "player" else "blocked attacker"
+    if verb == "count":
+        # A life total's case is whether it rose, which the table it finds says (the stage's
+        # timing.ts caseOf reads it there): a step alone is held to the verb's whole summary.
+        tally = act.get("tally") or {}
+        if tally.get("kind") == "counters":
+            return "loyalty" if tally.get("counter") == "loyalty" else "counter"
     return None
 
 
