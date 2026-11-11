@@ -323,6 +323,45 @@ test("what a blow does to a card shows as it lands, in a fight on both", () => {
     assert.equal(damage(3), 2);
 });
 
+test("a step played with the one before it begins its delay after that one begins", () => {
+    // A strike held back 100 ms by the delay of the count before it, and the life it takes,
+    // which goes as its blow lands, 450 ms into it.
+    const timed = (act, _, before) =>
+        act.verb === "strike"
+            ? { duration: 1000, stagger: 300 }
+            : before?.verb === "strike"
+              ? { duration: 200, delay: 450, with: true }
+              : { duration: 200, delay: 100 };
+    const { stage: made } = stage(timed);
+    made.play(view([1, 2]));
+    const life = (player, total) => ({
+        act: { verb: "count", tally: { kind: "life", player, life: total } },
+    });
+    const told = [];
+    made.follow(({ edge, at, step }) => {
+        if (edge === "start") told.push([step.act.verb, at]);
+    });
+    made.play(view([1, 2]), {
+        beats: [
+            [
+                life("you", 21),
+                strike(1, { kind: "player", player: "opponent" }),
+                life("opponent", 18),
+                strike(2, { kind: "player", player: "opponent" }),
+            ],
+        ],
+    });
+    made.settle();
+    assert.deepEqual(told, [
+        ["count", 100],
+        ["strike", 100],
+        ["count", 550],
+        // One stagger after the first strike's turn, which came at 0, but no sooner than
+        // the step before it.
+        ["strike", 550],
+    ]);
+});
+
 test("creatures that strike one another meet half way, at one time", () => {
     // The blow dealt back is played with the strike it answers, as timing.ts has it.
     const timed = (act, _, before) => ({

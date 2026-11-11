@@ -18,9 +18,10 @@ export interface Timing {
   ease(progress: number): number;
   /** For a step that moves several cards one after another (a lift), how long each moves. */
   each?: number;
-  /** It is played with the step before it, its turn in the beat being that step's, and the
-   * step after it waits for neither longer than it would have: the blow a creature deals back
-   * to the one that strikes it, and the life a strike takes. */
+  /** It is played with the step before it: its turn in the beat is that step's, it begins
+   * its delay after that step begins, and the step after it waits no longer for the two than
+   * for the first. The blow a creature deals back to the one that strikes it, and the life a
+   * strike takes. */
   with?: boolean;
 }
 

@@ -487,13 +487,13 @@ export class ScriptStage {
     playback.beat += 1;
     let [from, turn, last] = [this.#at, this.#at, this.#at];
     playback.end = this.#at;
-    // Each step is timed by the table it will find; one played `with` the last has its turn.
+    // Each step is timed by the table it will find; one played `with` the last begins by it.
     let table = this.#table!;
     playback.steps = playback.beats[playback.beat]!.map((step, i, beat) => {
       const timing = this.timings(step.act, table.view, beat[i - 1]?.act);
       table = apply(table, step.act);
       const own = timing.with ? last : turn;
-      from = Math.max(from, own + timing.delay);
+      from = Math.max(from, (timing.with ? from : own) + timing.delay);
       if (!timing.with) turn = own + timing.stagger;
       last = own;
       const to = from + timing.duration;
