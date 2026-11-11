@@ -10,6 +10,7 @@ import {
     before,
     beside,
     CARD_ASPECT,
+    effectsOn,
     onSide,
     sounded,
     where,
@@ -346,8 +347,9 @@ export const CASES = {
     // A face-down permanent turns face up where it lies (UI Conventions, "A card turning face
     // up"): it grows about its card's middle, over what rests, shows its back as it was until
     // half way and its face from there, and settles back where it lay; nothing else moves. A
-    // card whose name you learn where it lies in a library (your scry) shows nothing and takes
-    // no time: the look's prompt shows it.
+    // A veil of light is over it for the whole step, drawn over its face, so that the face is
+    // not seen to change. A card whose name you learn where it lies in a library (your scry)
+    // shows nothing and takes no time: the look's prompt shows it.
     flip({ place, scry, seat }) {
         const flips = place.steps.filter((s) => s.verb === "flip");
         assert.equal(flips.length, 1, "one permanent turns face up");
@@ -375,6 +377,10 @@ export const CASES = {
             "its face shows from there",
         );
         assert.deepEqual(where(to.poses[slot]), where(lay), "it settles back");
+        assert.deepEqual(effectsOn(from, slot), ["cover over"]);
+        assert.deepEqual(effectsOn(middle, slot), ["cover over"]);
+        assert.equal(middle.effects[slot][0].progress, 0.5);
+        assert.deepEqual(effectsOn(to, slot), [], "the veil has cleared");
         assert.ok(to.poses[slot].depth < ALOFT);
         assert.equal(to.marks[slot].named, true);
         for (const [name, pose] of Object.entries(from.poses)) {
@@ -449,6 +455,11 @@ export const CASES = {
             (s) => s.act.from === "hand" && s.act.object.zone === "battlefield",
         );
         assert.ok(land, "a land is played");
+        assert.deepEqual(
+            effectsOn(land.at.to, land.act.object.slot),
+            ["settle over"],
+            "it settles as it lands",
+        );
         const was = before(place, land);
         const { middle, to } = land.at;
         let room = 0;

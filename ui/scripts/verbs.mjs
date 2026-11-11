@@ -94,8 +94,9 @@ const MIDDLE = 450;
  * src/ipc.ts) and walks the clock from step to step in ticks of `tick`, until an ability has
  * come onto the stack and gone, or with `whole`, for all of its `answers`: to the recording's
  * end, which the view the stage then shows tells (`shows`). Returns each step `stage.step` showed, in order, with every
- * node's pose by `stage.pose` before it, as it began, half way and as it ended, where a tick
- * landed there; and how the page's nodes differed from the model at any of those. A step that
+ * node's pose by `stage.pose` and the effects on it by `stage.effect` before it, as it began,
+ * half way and as it ended, where a tick landed there; and how the page's nodes differed from
+ * the model at any of those. A step that
  * takes no time shows only in what the samples around it hold. Also every edge of a step the
  * stage told (`stage.follow`) with the sounds that step asks for (src/audio/steps.ts), and
  * the sounds the page was asked for meanwhile (`window.berylSounds`), all in stage time; and
@@ -185,6 +186,26 @@ async function walk({ tick, gap, answers, middle, whole }) {
                 return `has its card drawn turned ${drawn} of ${pose.turn}`;
             }
         }
+        // Its effects are drawn as the model has them (src/stage/dom.ts): an element of each
+        // inside it, in its layer, and how far through each is written on the node.
+        const lit = stage.effect(name);
+        const drawn = [...node.querySelectorAll(":scope > .stage-effect")];
+        if (drawn.length !== lit.length) {
+            return `has ${drawn.length} effects drawn of ${lit.length}`;
+        }
+        for (const effect of lit) {
+            const made = drawn.find((e) =>
+                e.matches(
+                    `.stage-effect-${effect.name}.stage-effect-${effect.layer}`,
+                ),
+            );
+            const through = Number(
+                node.style.getPropertyValue(`--${effect.name}`) || NaN,
+            );
+            if (!made || !near(through, effect.progress, 0.0001)) {
+                return `has its ${effect.name} drawn ${through} through`;
+            }
+        }
         // A node dressed with its card's name shows its face (src/stage/dom.ts), but for a
         // face-down permanent its controller knows, which is named and shows its back.
         if (pose.face === "back" && node.dataset.card && !down) {
@@ -210,11 +231,14 @@ async function walk({ tick, gap, answers, middle, whole }) {
         const poses = {};
         const zones = {};
         const marks = {};
+        const effects = {};
         const { resting, table, counts } = stage.shown;
         for (const [name, { dress, object }] of resting) {
             const pose = stage.pose(name);
             poses[name] = pose;
             zones[name] = dress.zone;
+            const lit = stage.effect(name);
+            if (lit.length) effects[name] = lit;
             // What a permanent's face is drawn from, where a step changes it in place.
             if (object && dress.zone === "battlefield") {
                 marks[name] = {
@@ -252,7 +276,15 @@ async function walk({ tick, gap, answers, middle, whole }) {
             const was = found.view.players[tally.player].life;
             return [{ player: tally.player, life: tally.life, was }];
         });
-        return { at: clock.now - origin, poses, zones, marks, life, counting };
+        return {
+            at: clock.now - origin,
+            poses,
+            zones,
+            marks,
+            effects,
+            life,
+            counting,
+        };
     };
     /** What the page shows beside each life total of how it is changing, once React has drawn
      * what the stage told it. */

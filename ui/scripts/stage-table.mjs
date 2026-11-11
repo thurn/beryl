@@ -112,17 +112,32 @@ export const row = {
 };
 
 /** A surface that records what the stage did to it: the nodes it made and removed (`log`),
- * how it dressed each, as its zone or as a card back (`dressed`), and each node's pose. */
+ * how it dressed each, as its zone or as a card back (`dressed`), each node's pose, and how
+ * far through each effect drawn on a node is, by `<node> <effect> <layer>` (`effects`). */
 export function recorder() {
     const log = [];
     const dressed = [];
     const nodes = new Map();
+    const effects = new Map();
     return {
         log,
         dressed,
         nodes,
+        effects,
+        effect(on, { name, layer }, progress) {
+            const drawn = `${on} ${name} ${layer}`;
+            if (progress === undefined) effects.delete(drawn);
+            else effects.set(drawn, progress);
+        },
         make: (slot) => (nodes.set(slot, null), log.push(`make ${slot}`)),
-        remove: (slot) => (nodes.delete(slot), log.push(`remove ${slot}`)),
+        remove(slot) {
+            nodes.delete(slot);
+            // What was drawn on a node goes with it.
+            for (const drawn of [...effects.keys()]) {
+                if (drawn.startsWith(`${slot} `)) effects.delete(drawn);
+            }
+            log.push(`remove ${slot}`);
+        },
         dress: (slot, { dress }) =>
             dressed.push(`${slot} ${dress.back ? "back" : dress.zone}`),
         draw: (slot, pose) => nodes.set(slot, pose),
@@ -130,8 +145,8 @@ export function recorder() {
 }
 
 /** A stage on a held clock. `durations` gives the verbs that take time, or says of each act
- * how long it takes. */
-export function stage(durations = {}) {
+ * how long it takes; `effects`, the effects each act begins. */
+export function stage(durations = {}, effects = undefined) {
     const surface = recorder();
     const timed =
         typeof durations === "function"
@@ -141,6 +156,7 @@ export function stage(durations = {}) {
         layout: row,
         surface,
         timings: (act) => ({ ...SNAP, ...timed(act) }),
+        effects,
     });
     return { stage: made, surface };
 }

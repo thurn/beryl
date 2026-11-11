@@ -121,6 +121,11 @@ export function onSide(run, pose, seat, what) {
     assert.equal(far, seat === "theirs", `${what} lies at y ${pose.y}`);
 }
 
+/** The effects `sample` holds on the node `name` (src/stage/effects.ts), each as its name and
+ * the layer it is drawn in. */
+export const effectsOn = (sample, name) =>
+    (sample.effects[name] ?? []).map((e) => `${e.name} ${e.layer}`);
+
 /** `run`'s page was asked for `sound` at the stage time `at`, to sound `delay` ms after. */
 export function sounded(run, sound, at, what, delay = 0) {
     assert.ok(
@@ -136,6 +141,9 @@ export function sounded(run, sound, at, what, delay = 0) {
 
 /** What each verb's check asks of the moment as `seat` saw it: `whole`, a run of the fixture
  * that holds it in one view, and `cut`, one of the fixture that cuts it at each priority. */
+/** How a card that does not go to a graveyard leaves, by where it goes (`vanish`). */
+const LEAVES = { exile: "blanch over", returned: "glow under" };
+
 export const CASES = {
     // A card flies from where it lay to where it then lies, over everything at rest, and
     // nothing moves but the zones it left and entered: the spell from its hand to the stack,
@@ -193,6 +201,12 @@ export const CASES = {
         onSide(whole, resolve.at.to.poses[card], seat, "the permanent");
         sounded(whole, "cast", cast.from, "the spell as it is cast");
         sounded(whole, "place", resolve.to, "the permanent as it lands");
+        // A card that lands on the battlefield settles in a wash of light, from the tick it
+        // lands; one that lands on the stack does not.
+        assert.deepEqual(effectsOn(resolve.at.middle, card), []);
+        assert.deepEqual(effectsOn(resolve.at.to, card), ["settle over"]);
+        assert.equal(resolve.at.to.effects[card][0].progress, 0);
+        assert.deepEqual(effectsOn(cast.at.to, card), []);
         // It stays where it landed: the trigger lifts out of it there.
         const lift = stepOf(whole, "emerge");
         assert.deepEqual(
@@ -378,7 +392,8 @@ export const CASES = {
     // nothing moves but the battlefield making room. The tokens of a batch begin one after
     // another, and an earlier one makes room for the next as the row does: sideways, and
     // where identical permanents stack and a row shrinks to fit, by less than a card any way.
-    // Each is placed, by its sound, as it appears.
+    // Each is placed, by its sound, as it appears, in a halo under it that is fading by the
+    // time it is whole.
     appear({ whole, seat, reflows }) {
         const tokens = whole.steps.filter(
             (s) => s.verb === "appear" && s.act.from === "nowhere",
@@ -388,6 +403,9 @@ export const CASES = {
         for (const token of tokens) {
             const name = token.act.object.slot;
             assert.equal(before(whole, token).poses[name], undefined);
+            assert.deepEqual(effectsOn(token.at.to, name), ["glow under"]);
+            const { progress } = token.at.to.effects[name][0];
+            assert.ok(progress > 0 && progress < 1, `its glow at ${progress}`);
             if (token.at.from) {
                 assert.equal(token.at.from.poses[name].opacity, 0);
             }
@@ -430,7 +448,10 @@ export const CASES = {
     // no sound of its own.
     // A card that leaves (`zones`, and the permanent sacrificed in `scry`) goes from sight
     // where it lay, dressed as it was and never aloft, and only as its step ends is it in its
-    // new zone, with no flight; a token is then no more. Every way of leaving is seen: a
+    // new zone, with no flight; a token is then no more. How it goes says where: what goes to
+    // a graveyard darkens and breaks up for as long as it takes to leave, what goes to exile
+    // is lost in light, and what goes back to a hand leaves in a halo; nothing of any stays
+    // on a card at its new place. Every way of leaving is seen: a
     // spell countered and spells resolved, a creature and a token destroyed, a permanent
     // exiled and one sacrificed, and the opponent's spell returned to their hand.
     vanish({ whole, script, zones, scry, seat }) {
@@ -496,6 +517,16 @@ export const CASES = {
                     );
                     assert.equal(sample.zones[name], from, what);
                     assert.ok(pose.depth < ALOFT, `${what}: it never flies`);
+                    assert.deepEqual(
+                        effectsOn(sample, name),
+                        [LEAVES[kind] ?? "dissolve over"],
+                        `${what}: how it goes`,
+                    );
+                }
+                // What lasts as long as the step is half way through when the step is.
+                if (gone.at.middle && !(kind in LEAVES)) {
+                    const [{ progress }] = gone.at.middle.effects[name];
+                    assert.equal(progress, 0.5, what);
                 }
                 if (gone.at.from) {
                     assert.equal(gone.at.from.poses[name].opacity, lay.opacity);
@@ -515,6 +546,7 @@ export const CASES = {
                         placeOf(lay),
                         `${what}: it is at its new place`,
                     );
+                    assert.deepEqual(effectsOn(after, name), [], what);
                 } else {
                     assert.equal(after.poses[name], undefined, what);
                 }

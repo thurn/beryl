@@ -1,9 +1,13 @@
 // The stage's nodes on the page: one element an object or an ability on the stack, in the
 // card layer, for as long as the stage holds it. Only the stage writes an element's
 // transform, opacity and depth, with what its model computed; React draws the face inside
-// (Faces.tsx) and never touches those. The elements keep the names the old board gave its
+// (Faces.tsx) and never touches those. An effect on a node (effects.ts) is an element of the
+// stage's own inside it, under or over the face, and how far through it is a number the stage
+// writes on the node each tick: its look is a rule of stage.css read from that number, never a
+// CSS animation. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
+import type { Drawn } from "./effects.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import type { Pointer, Under } from "./pointer.ts";
 import { transformOf, turnOf, type Pose } from "./pose.ts";
@@ -47,6 +51,8 @@ export class DomSurface implements Surface {
     const node = this.#nodes.get(name);
     if (!node) return;
     node.dataset.zone = dress.zone;
+    // What an effect on it is sized by (stage.css).
+    node.style.setProperty("--frame", `${dress.frame}px`);
     if (!object) {
       node.className = "hud stack-ability stage-node";
       return;
@@ -151,6 +157,29 @@ export class DomSurface implements Surface {
    * came under it, sends no event of its own. */
   repoint() {
     this.#repoint?.();
+  }
+
+  effect(
+    on: Name,
+    { name, layer }: Omit<Drawn, "progress">,
+    progress?: number,
+  ) {
+    const node = this.#nodes.get(on);
+    if (!node) return;
+    const drawn = node.querySelector(`:scope > .stage-effect-${name}`);
+    if (progress === undefined) {
+      drawn?.remove();
+      node.style.removeProperty(`--${name}`);
+      return;
+    }
+    if (!drawn) {
+      const made = document.createElement("div");
+      made.className = `stage-effect stage-effect-${name} stage-effect-${layer}`;
+      made.setAttribute("aria-hidden", "true");
+      node.append(made);
+    }
+    // How far through it is, which its look is drawn from.
+    node.style.setProperty(`--${name}`, String(progress));
   }
 
   draw(name: Name, pose: Pose, frame: number) {

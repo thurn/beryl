@@ -2,11 +2,13 @@
 // a verb's duration, delay and stagger in stage milliseconds and its curve, Beryl's own (UI
 // Conventions, "Motion is Beryl's own"), first set from Arena's medians (data/arena-motion.json,
 // plan K27). Where a verb has several cases (a draw, a discard), a step of a case is played with
-// that case's own (`cases`), and with the verb's where the case has none. A verb with a number not taken has none, and one with no
-// duration snaps.
+// that case's own (`cases`), and with the verb's where the case has none. A verb with a number
+// not taken has none, and one with no duration snaps. The effects a step begins are the data's
+// too (`effects`, and each verb's list of those its steps begin): `effectsOf`.
 import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json";
 import type { Act, PlayerView } from "../generated/protocol";
+import type { Effect, Layer } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
@@ -158,6 +160,57 @@ export function timingOf(act: Act, table?: PlayerView): Timing {
     return { ...own, duration, each: own.duration };
   }
   return found === "exiled" ? { ...own, stagger: BATCH_EXILE } : own;
+}
+
+/** One of the effects a verb's steps begin, as the data says it: at which end of the step,
+ * and of which steps, those of a case or those that leave their card in a zone. */
+interface Use {
+  effect: string;
+  when: string;
+  case?: string;
+  into?: string;
+}
+
+const looks = new Map(
+  conventions.effects.map((effect) => [
+    effect.name,
+    { layer: effect.layer as Layer, ...effect.values },
+  ]),
+);
+
+const uses = new Map(
+  conventions.verbs.map((verb): [string, Use[]] => [
+    verb.name,
+    ("effects" in verb && verb.effects) || [],
+  ]),
+);
+
+/** The effects the step `act` begins, which finds the table `table`: its verb's that fit it,
+ * and only its case's own where the case has any (a card that leaves for exile is lost in
+ * light, and does not break up besides). */
+export function effectsOf(act: Act, table?: PlayerView): Effect[] {
+  const found = caseOf(act, table);
+  const into = "object" in act ? act.object?.zone : undefined;
+  const fit = (uses.get(act.verb) ?? []).filter(
+    (use) =>
+      (use.case === undefined || use.case === found) &&
+      (use.into === undefined || use.into === into),
+  );
+  const own = fit.filter((use) => use.case !== undefined);
+  return (own.length > 0 ? own : fit).flatMap((use): Effect[] => {
+    const look = looks.get(use.effect);
+    if (!look) return [];
+    return [
+      {
+        name: use.effect,
+        layer: look.layer,
+        when: use.when === "end" ? "end" : "start",
+        duration: look.duration ?? undefined,
+        delay: look.delay ?? 0,
+        ease: CURVES[look.curve] ?? SNAP.ease,
+      },
+    ];
+  });
 }
 
 /** Every step at once: reduced motion. */

@@ -33,7 +33,9 @@
 // Promises are for those who watch (`idle`), never for sequencing.
 //
 // What follows a step besides motion (a sound) is told its beginning and its end the same way
-// (`follow`): inside the tick, in the order of their stage times, each with its own time.
+// (`follow`): inside the tick, in the order of their stage times, each with its own time. A
+// step also begins the effects its verb has on what it is about (effects.ts): a glow, a flash,
+// a card breaking up, each played on this clock for its own time, whatever plays meanwhile.
 //
 // One pose is not the clock's: a card the pointer holds (pointer.ts). What the pointer does
 // enters the model as data, and the held card's pose is computed from it here like any other,
@@ -48,7 +50,10 @@ import type {
 } from "../generated/protocol";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { entering } from "./enter.ts";
-import type { Dress, Name, Resting, StageLayout } from "./layout.ts";
+import { Effects } from "./effects.ts";
+import type { Drawn, Effect, EffectSurface } from "./effects.ts";
+import { sameDress, sameFace } from "./layout.ts";
+import type { Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
@@ -89,7 +94,7 @@ export const SNAP: Timing = {
 
 /** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
-export interface Surface {
+export interface Surface extends EffectSurface {
   make(name: Name): void;
   remove(name: Name): void;
   /** Dresses the node for where its object or ability now rests. */
@@ -187,25 +192,13 @@ interface Playback {
   end: number;
 }
 
-/** What a resting thing's face is drawn from. */
-const faceOf = ({ object, ability, source }: Resting) =>
-  object ? { object } : { ability, source };
-
-const sameFace = (a: Resting, b: Resting) =>
-  JSON.stringify(faceOf(a)) === JSON.stringify(faceOf(b));
-
-const sameDress = (a: Dress, b: Dress) =>
-  a.zone === b.zone &&
-  a.look === b.look &&
-  a.frame === b.frame &&
-  a.back === b.back &&
-  a.rim === b.rim &&
-  a.count === b.count;
-
 export class ScriptStage {
   readonly clock: StageClock;
   /** How each step is played, given the table it finds. */
   timings: (act: Act, found?: PlayerView) => Timing;
+  /** The effects each step begins on what it is about, given the table it finds. */
+  effects: (act: Act, found?: PlayerView) => readonly Effect[];
+  readonly #effects = new Effects();
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
@@ -242,11 +235,13 @@ export class ScriptStage {
     layout: StageLayout;
     surface?: Surface;
     timings: (act: Act, found?: PlayerView) => Timing;
+    effects?: ScriptStage["effects"];
     frames?: Frames;
   }) {
     this.#layout = options.layout;
     this.#surface = options.surface;
     this.timings = options.timings;
+    this.effects = options.effects ?? (() => []);
     this.clock = new Clock((_, to) => this.#tick(to), options.frames);
     this.clock.release();
     this.pointer = new Pointer({
@@ -313,6 +308,7 @@ export class ScriptStage {
     }
     this.#queue = [];
     this.#playback = undefined;
+    this.#effects.clear(this.#surface);
     // What was in flight is where it rests, whether or not the view moves that.
     for (const entry of this.#entries.values()) {
       entry.moved ||= entry.track !== undefined;
@@ -381,6 +377,11 @@ export class ScriptStage {
   pose(name: Name): Pose | null {
     const entry = this.#entries.get(name);
     return entry ? this.#poseOf(name, entry, this.clock.now) : null;
+  }
+
+  /** The effects under way at `clock.now` on the node `name`, each as far through as it is. */
+  effect(name: Name): Drawn[] {
+    return this.#effects.on(name, this.clock.now);
   }
 
   /** What the stage shows now (`Shown`). */
@@ -463,6 +464,7 @@ export class ScriptStage {
         this.#stale ||= over.verb === "announce" || over.verb === "count";
         if (over.verb === "vanish") this.#left(over);
         this.#tell(over, "end");
+        this.#affect(over, "end");
         continue;
       }
       if (next) {
@@ -560,6 +562,20 @@ export class ScriptStage {
     }
     this.#lay(run.from, run);
     if (run.to > run.from) this.#enter(run, was);
+    this.#affect(run, "start");
+  }
+
+  /** Begins the effects the step `run` has at this `edge` of it on what it is about, if the
+   * stage holds that. Time passed over (`skip`) begins none. */
+  #affect(run: Run, edge: Edge["edge"]) {
+    const on = subjectOf(run.step.act);
+    if (this.#skipping || on === undefined || !this.#entries.has(on)) return;
+    const at = edge === "start" ? run.from : run.to;
+    for (const effect of this.effects(run.step.act, run.found!.view)) {
+      if (effect.when === edge) {
+        this.#effects.begin(on, effect, at, run.to - run.from);
+      }
+    }
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
@@ -634,6 +650,7 @@ export class ScriptStage {
       if (rest.has(name) || entry.leaving) continue;
       this.#surface?.remove(name);
       this.#entries.delete(name);
+      this.#effects.gone(name);
       this.pointer.gone(name);
       this.#stale = true;
     }
@@ -732,6 +749,7 @@ export class ScriptStage {
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
+    this.#effects.write(this.#surface, now);
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;

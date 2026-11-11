@@ -45,6 +45,23 @@ export type Resting = { pose: Pose; dress: Dress } & (
   | { ability: StackAbility; source?: ObjectView; object?: undefined }
 );
 
+/** What a resting thing's face is drawn from. */
+const faceOf = ({ object, ability, source }: Resting) =>
+  object ? { object } : { ability, source };
+
+/** Whether two resting things have one face. */
+export const sameFace = (a: Resting, b: Resting) =>
+  JSON.stringify(faceOf(a)) === JSON.stringify(faceOf(b));
+
+/** Whether two nodes are dressed alike. */
+export const sameDress = (a: Dress, b: Dress) =>
+  a.zone === b.zone &&
+  a.look === b.look &&
+  a.frame === b.frame &&
+  a.back === b.back &&
+  a.rim === b.rim &&
+  a.count === b.count;
+
 /** A point on the stage. */
 export interface Point {
   x: number;
