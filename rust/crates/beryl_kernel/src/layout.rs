@@ -102,7 +102,7 @@ pub fn index<L: Layout>(i: usize) -> L::Index {
 
 /// One value for each seat there is ([`Seat`] names two), indexed by [`Seat::index`]: the
 /// per-player table of both layouts ([`Layout::PerPlayer`]), and of what is the same in every
-/// layout, as a [`crate::Profile`]'s stops and a [`crate::GameTable`]'s decks are.
+/// layout, as a [`crate::profile::Profile`]'s stops and a [`crate::GameTable`]'s decks are.
 pub type PerSeat<T> = [T; Seat::BOTH.len()];
 
 /// One value for each player of a game in layout `L`, indexed by [`Seat::index`]
