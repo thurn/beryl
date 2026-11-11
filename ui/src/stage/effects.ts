@@ -48,17 +48,25 @@ interface Running {
 export class Effects {
   #running: Running[] = [];
 
-  /** Begins `effect` on the node `on` for a step that begins or ends at stage time `at` and
-   * takes `span`. One that would take no time is not begun; one of its name already on the
-   * node gives way to it. */
-  begin(on: Name, effect: Effect, at: number, span: number) {
-    const from = at + effect.delay;
-    const to = from + (effect.duration ?? span);
-    if (to <= from) return;
-    this.#running = this.#running.filter(
-      (other) => other.on !== on || other.effect.name !== effect.name,
-    );
-    this.#running.push({ on, effect, from, to });
+  /** Begins on the node `on` those of `effects` that a step begins at this `edge` of it, which
+   * is at stage time `at`, the step showing its card for `span`. One that would take no time
+   * is not begun; one of its name already on the node gives way to it. */
+  begin(
+    on: Name,
+    effects: readonly Effect[],
+    edge: Effect["when"],
+    at: number,
+    span: number,
+  ) {
+    for (const effect of effects) {
+      const from = at + effect.delay;
+      const to = from + (effect.duration ?? span);
+      if (effect.when !== edge || to <= from) continue;
+      this.#running = this.#running.filter(
+        (other) => other.on !== on || other.effect.name !== effect.name,
+      );
+      this.#running.push({ on, effect, from, to });
+    }
   }
 
   /** The effects on the node `on` at stage time `now`, in the order they began. */

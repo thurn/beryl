@@ -34,8 +34,7 @@
 //
 // What follows a step besides motion (a sound) is told its beginning and its end the same way
 // (`follow`): inside the tick, in the order of their stage times, each with its own time. A
-// step also begins the effects its verb has on what it is about (effects.ts): a glow, a flash,
-// a card breaking up, each played on this clock for its own time, whatever plays meanwhile.
+// step also begins its verb's effects on what it is about, played on this clock (effects.ts).
 //
 // One pose is not the clock's: a card the pointer holds (pointer.ts). What the pointer does
 // enters the model as data, and the held card's pose is computed from it here like any other,
@@ -50,8 +49,7 @@ import type {
 } from "../generated/protocol";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { entering } from "./enter.ts";
-import { Effects } from "./effects.ts";
-import type { Drawn, Effect, EffectSurface } from "./effects.ts";
+import { Effects, type Effect, type EffectSurface } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
@@ -365,7 +363,7 @@ export class ScriptStage {
   }
 
   /** The effects under way at `clock.now` on the node `name`, each as far through as it is. */
-  effect(name: Name): Drawn[] {
+  effect(name: Name): ReturnType<Effects["on"]> {
     return this.#effects.on(name, this.clock.now);
   }
 
@@ -559,9 +557,7 @@ export class ScriptStage {
     const seen = (run.verb === "vanish" ? GONE : 1) * (run.to - run.from);
     const at = edge === "start" ? run.from : run.to;
     const begun = this.effects(run.step.act, run.found!.view);
-    for (const effect of begun.filter((effect) => effect.when === edge)) {
-      this.#effects.begin(on, effect, at, seen);
-    }
+    this.#effects.begin(on, begun, edge, at, seen);
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
