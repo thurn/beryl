@@ -82,6 +82,8 @@ impl<L: Layout> State<L> {
                 o.flags.set(ObjectFlags::SUMMONING_SICK, false);
             }
             o.flags.set(ObjectFlags::ENTERED_THIS_TURN, false);
+            // One of the flags milestone 4 (by-w8gv.7.1) moves out, reset here so the turn's
+            // beginning walks the battlefield once.
             o.flags.set(ObjectFlags::LOYALTY_ACTIVATED, false);
         }
     }

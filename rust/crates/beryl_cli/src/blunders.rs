@@ -290,9 +290,7 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
         } else {
             let slot = from_library(&s, owner, &m.card)?;
             s.board().place(slot, Zone::Battlefield).map_err(full)?;
-            if face != FaceIx::FRONT {
-                s.board().set_face(slot, face);
-            }
+            s.board().set_face(slot, face);
             slot
         };
         s.board().set_controller(slot, seat(m.controller)?);

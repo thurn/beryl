@@ -27,11 +27,17 @@
 //! turn into a stall: the state is then abandoned for its wider copy, so a mutator never
 //! undoes.
 //!
+//! The object mutators are built ([`mutate`]): [`State`]'s way to an object to write is
+//! private to the crate. An attachment or a base controller changes only as a permanent
+//! enters or a spell is cast, so each is part of that mutator, and whether counters change
+//! a layer result is the rules' to say, with the card in hand (`layers::counters_matter`).
+//!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), create a token, end one (by-w8gv.5.3, .5.4; today [`zone`]) | `move_object`, `create_token`, `cease_to_exist` | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
-//! | change a permanent's status, damage or counters (by-w8gv.5.3) | `set_tapped`, `set_face`, `set_summoning_sick`, `mark_damage`, `clear_damage`, `add_counters`, `remove_counters` | `derived_dirty` where the layers read the field |
-//! | attach, change control, declare and end combat (by-w8gv.5.3) | `attach`, `unattach`, `set_base_controller`, `declare_attacker`, `declare_blocker`, `remove_from_combat`, `end_combat` | a reference names a current permanent; the combat flags and the combat reference change together; `derived_dirty` |
+//! | move an object between zones (CR 400.7), create a token, end one (by-w8gv.5.4; today [`zone`]) | `move_object`, `create_token`, `cease_to_exist` | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
+//! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
+//! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card (by-w8gv.5.4) | `reveal`, `look`, `forget` | each player's knowledge; the identity is settled first |
 //! | store the layers' results (by-w8gv.5.4) | `rederive`, which lends the cache to the one function that fills it | the derived table by battlefield index, the listening mask, `derived_dirty` cleared |
 //! | change a player or the turn (by-w8gv.5.7) | `change_life`, `add_mana`, `spend_mana`, `empty_mana`, `count_land_played`, `set_mulligan`, `begin_turn`, `begin_step`, `give_priority`, `pass_priority`, `end_game` | passes reset with priority; the per-turn counts reset with the turn; the outcome is set once |
@@ -53,14 +59,19 @@
 //!
 //! Builds deny warnings, so dropping an event does not compile: no visible change happens
 //! without one. A mutator takes as an argument what the event needs and the state cannot say,
-//! such as a zone change's [`event::Reason`]. Bookkeeping no player sees as an event (passes,
-//! budgets, the open question, the derived cache) returns nothing.
+//! such as a zone change's [`event::Reason`] or the source of damage. Bookkeeping no player
+//! sees as an event (passes, budgets, the open question, the derived cache) returns nothing,
+//! and neither does a change the rules announce as part of a larger one: what a permanent
+//! enters with is part of its zone change, and each pick of a combat declaration is part of
+//! the declaration, announced once it is whole (CR 508.1, 509.1).
 //!
 //! ## Entities and records
 //!
 //! [`State`], [`state::Object`], [`state::Player`], [`state::Turn`] and [`state::Zones`] are
 //! entities: private fields, read through `#[inline]` getters (by-w8gv.5.9 for the readers in
-//! other crates), written by mutators.
+//! other crates), written by mutators. An object has its getters, one for each field and one
+//! for each status flag; its fields stay `pub` to read until by-w8gv.5.9, and nothing outside
+//! the crate can write one.
 //!
 //! Records stay plain data with `pub` fields. The rules build one and hand it to a mutator;
 //! the kernel stores it and gives it back whole: [`state::StackEntry`],
@@ -74,23 +85,27 @@
 //!
 //! ## The board door
 //!
-//! `State::board` lends a `Board`, the one handle that arranges a position with no event and
-//! no rules action: `place`, `place_token`, the `set_*` methods, `attach`, `add_emblem`,
-//! `order_library`, `begin_at`, `begin_before_turn`, `set_flip_winner`, `renumber_deck_slots`
-//! and `reverse_deck_slots`. Scenarios, checkpoints, tools and tests go through it. A card
-//! body is lent the state shared, so it cannot open the door; rules code never names it, and
-//! a search for `.board()` finds whoever does. Today these are methods of [`State`] itself
-//! (`setup.rs`); by-w8gv.5.3 moves them and their callers behind the door.
+//! [`State::board`] lends a [`board::Board`], the one handle that arranges a position with no
+//! event and no rules action: `place`, `place_token`, the `set_*` methods, `attach`,
+//! `swap_cards`, `add_emblem`, `order_library`, `begin_at`, `begin_before_turn`,
+//! `set_flip_winner`, `renumber_deck_slots` and `reverse_deck_slots`, and `corrupt`, which
+//! breaks a state for the tests of the invariant check. Scenarios, checkpoints, tools and
+//! tests go through it. A card body is lent the state shared, so it cannot open the door;
+//! rules code never names it, and a search for `.board()` finds whoever does.
 //!
 //! ## The legacy accessor
 //!
-//! `State::legacy_mut` lends, raw, what milestone 4 (by-w8gv.7.1) deletes, which therefore
+//! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
+//! (by-w8gv.7.1) deletes, which therefore
 //! gets no typed mutator: the `effects` and `permissions` queues, which become stores whose
 //! payload is a resolved form of `Modification`; `entered_x`; `Player::sorceries_as_flash`;
 //! [`state::CastPermission`]'s `extra`, `exile` and `flashback`; the [`state::ObjectFlags`]
 //! `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and
 //! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
-//! Reads use the getters. Milestone 4 deletes the accessor with the last of them.
+//! Reads use the getters. Milestone 4 deletes the accessor with the last of them. It writes
+//! the object flags and the long-tail counters today; the beads that close the players
+//! (by-w8gv.5.7) and the queues (by-w8gv.5.8) add the rest. The zone move and the turn's
+//! resets clear those flags inside the kernel, with everything else an object forgets.
 //!
 //! ## Sets and orders
 //!

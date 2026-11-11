@@ -3,7 +3,7 @@
 //! §5, §13).
 //!
 //! Transitional: these are free functions, `pub` for `beryl_engine`'s event pipeline. They
-//! become the zone mutators of the crate's contract with by-w8gv.5.3 and by-w8gv.5.4.
+//! become the zone mutators of the crate's contract with by-w8gv.5.4.
 
 use crate::bitboard::Bitboard;
 use crate::chance;

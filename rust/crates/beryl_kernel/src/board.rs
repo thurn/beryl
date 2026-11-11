@@ -14,8 +14,8 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Queue, Small};
 use crate::state::{
-    CounterKind, DECK_SLOTS, Duration, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone,
-    token_slots,
+    CounterKind, Counters, DECK_SLOTS, Duration, MulliganStatus, ObjectFlags, Pending, State,
+    TurnStep, Zone, token_slots,
 };
 use crate::table::GameTable;
 use crate::zone;
@@ -197,9 +197,10 @@ impl<L: Layout> Board<'_, L> {
     pub fn set_exiled_with(&mut self, slot: L::Slot, source: L::Slot) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
         debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
-        let o = self.0.object_mut(slot);
-        o.flags.set(ObjectFlags::EXILED_WITH, true);
-        o.linked = Some(source);
+        self.0.link(slot, source);
+        self.0
+            .legacy_mut()
+            .set_object_flags(slot, ObjectFlags::EXILED_WITH, true);
     }
 
     /// Links the exiled card in `slot` to the permanent in `source`, which returns it when it
@@ -209,9 +210,10 @@ impl<L: Layout> Board<'_, L> {
     pub fn set_exiled_until(&mut self, slot: L::Slot, source: L::Slot) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
         debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
-        let o = self.0.object_mut(slot);
-        o.flags.set(ObjectFlags::EXILED_UNTIL, true);
-        o.linked = Some(source);
+        self.0.link(slot, source);
+        self.0
+            .legacy_mut()
+            .set_object_flags(slot, ObjectFlags::EXILED_UNTIL, true);
     }
 
     /// Creates a token of the game-table card `card` on the battlefield, owned and controlled
@@ -280,9 +282,8 @@ impl<L: Layout> Board<'_, L> {
     pub fn set_impending(&mut self, slot: L::Slot, impending: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0
-            .object_mut(slot)
-            .flags
-            .set(ObjectFlags::IMPENDING, impending);
+            .legacy_mut()
+            .set_object_flags(slot, ObjectFlags::IMPENDING, impending);
         self.0.flags.derived_dirty = true;
     }
 
@@ -306,7 +307,11 @@ impl<L: Layout> Board<'_, L> {
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
     pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        *self.0.object_mut(slot).counters.get_mut(kind) = n;
+        if Counters::is_long_tail(kind) {
+            self.0.legacy_mut().set_counters(slot, kind, n);
+        } else {
+            *self.0.object_mut(slot).counters.get_mut(kind) = n;
+        }
     }
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
@@ -347,9 +352,8 @@ impl<L: Layout> Board<'_, L> {
     pub fn set_loyalty_activated(&mut self, slot: L::Slot, activated: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0
-            .object_mut(slot)
-            .flags
-            .set(ObjectFlags::LOYALTY_ACTIVATED, activated);
+            .legacy_mut()
+            .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, activated);
     }
 
     /// Trades the identities of two cards, as the deal could have dealt them: which card a
