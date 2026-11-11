@@ -7,6 +7,9 @@
 //! vocabulary cannot say yet. Everything here is `'static` data built in `const` context, so
 //! a definition is a `static` with no startup cost.
 //!
+//! A question a card or the rules ask a player is a [`Prompt`]: a [`Purpose`] from a closed
+//! list, answered in that purpose's [`Shape`] ([`prompt`]).
+//!
 //! This crate knows nothing of the game state. It depends on no other crate (plan K12), and
 //! holds the identifiers definitions share with the state ([`ids`]); the kernel crate depends
 //! on this one.
@@ -23,6 +26,7 @@ pub mod effect;
 pub mod filter;
 pub mod ids;
 pub mod mana;
+pub mod prompt;
 pub mod target;
 pub mod trigger;
 
@@ -39,5 +43,6 @@ pub use effect::{
 pub use filter::{Filter, Whose};
 pub use ids::{CounterKind, Seat, TurnStep, Zone};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};
+pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{TargetKind, TargetSpec};
 pub use trigger::{Delayed, Trigger};

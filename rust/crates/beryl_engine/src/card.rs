@@ -8,8 +8,8 @@ pub use beryl_card::{
     Ability, AbilityIx, AbilityKind, Affected, Behavior, CardDef, CastingKind, CastingOption,
     Castings, Colors, Condition, Cost, Custom, Delayed, FACE_DOWN, FACE_DOWN_COPY, Face,
     FaceAbility, FaceIx, Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet, Modification,
-    Needs, Replacement, Rule, StaticCondition, Subtype, Subtypes, Supertypes, TargetKind,
-    TargetSpec, Timing, Trigger, Types, mana,
+    Needs, Part, Place, Prompt, Purpose, Replacement, Rule, Shape, StaticCondition, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Timing, Trigger, Types, mana,
 };
 
 /// The result of a body. `Err(Pause)` means the body asked a question its answer source could
