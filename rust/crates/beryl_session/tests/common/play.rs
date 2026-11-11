@@ -6,6 +6,9 @@
 //!
 //! A test file takes it in with `#[path = "common/play.rs"] mod play;`.
 
+// Each test file uses the part of this it needs.
+#![allow(dead_code)]
+
 use beryl_cards::CARDS;
 use beryl_engine::Seat;
 use beryl_scenario::Scenario;
