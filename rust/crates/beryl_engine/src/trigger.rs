@@ -8,6 +8,7 @@ use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, index};
+use crate::query::Copiable;
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
@@ -79,7 +80,7 @@ pub(crate) fn match_event<L: Layout>(
         for player in s.players_in_seat_order(s.players()) {
             for index in 0..s.player(player).emblems().len() {
                 let card = s.player(player).emblems()[index];
-                if t.listens(card) & k == 0 {
+                if Copiable::<L>::of_card(card).may_listen(t) & k == 0 {
                     continue;
                 }
                 for (a, ability) in face_abilities(t, card, FaceIx::FRONT) {

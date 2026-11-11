@@ -191,9 +191,11 @@ impl GameTable {
             .map(C::from_index)
     }
 
-    /// The event kinds the triggered abilities of the card at `card` listen to.
+    /// The event kinds the triggered abilities of the card at `card` listen to. The crate's
+    /// own: others ask [`crate::Copiable::may_listen`], which is nothing for a face-down
+    /// permanent whatever its hidden card listens to.
     #[inline]
-    pub fn listens(&self, card: impl CardId) -> u16 {
+    pub(crate) fn listens(&self, card: impl CardId) -> u16 {
         self.listens[card.index()]
     }
 
@@ -208,9 +210,9 @@ impl GameTable {
     }
 
     /// Whether some face of the card at `card` has a static ability with `rule`: so whether it
-    /// can, whichever face is up.
+    /// can, whichever face is up. The crate's own: others ask [`crate::Copiable::has_rule`].
     #[inline]
-    pub fn may_have_rule(&self, card: impl CardId, rule: Rule) -> bool {
+    pub(crate) fn may_have_rule(&self, card: impl CardId, rule: Rule) -> bool {
         self.rules[card.index()] & rule_bit(rule) != 0
     }
 

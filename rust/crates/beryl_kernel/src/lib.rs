@@ -50,13 +50,13 @@
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
-//! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::restore_knowledge`] and [`State::keep_seen`] | each player's knowledge; the identity is settled first |
+//! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
-//! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began |
+//! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
 //!
 //! ## Events
 //!
@@ -104,8 +104,9 @@
 //! [`decision::Decision`] with its parts. [`state::Derived`] is one going the other way: the
 //! layers compute it, `rederive` stores it, everyone reads it. No invariant ties a record's
 //! fields to the rest of the state except the references it holds, which
-//! [`State::is_current`] checks; where a record is filed is the mutator's to keep. The kernel
-//! fills [`state::Resolving`]'s knowledge itself as a resolution pauses.
+//! [`State::is_current`] checks; where a record is filed is the mutator's to keep. One field
+//! is not the rules' to build: what each player knew as a resolution began is the crate's
+//! own in [`state::Resolving`], kept as it pauses and given back as it resumes.
 //!
 //! Where a record names an entry of one of a definition's lists, the field has that list's
 //! index type ([`beryl_card::index`]): a target's [`beryl_card::SpecIx`], a trigger's
@@ -120,7 +121,9 @@
 //! `set_flip_winner`, `renumber_deck_slots` and `reverse_deck_slots`, and `corrupt`, which
 //! breaks a state for the tests of the invariant check. Scenarios, checkpoints, tools and
 //! tests go through it. A card body is lent the state shared, so it cannot open the door;
-//! rules code never names it, and a search for `.board()` finds whoever does.
+//! rules code never names it, and a search for `.board()` finds whoever does. In
+//! `beryl_engine` that is its tests and one line of the reference check (`reference.rs`),
+//! which marks the layer results of a copy stale to compare them with a fresh recompute.
 //!
 //! ## The legacy accessor
 //!
@@ -168,15 +171,16 @@
 //!
 //! ## Queries
 //!
-//! Other crates read derived answers, not fields ([`query`]). A slot's definition index and
-//! its base controller have no getter outside the crate: each is asked for by the rule that
-//! wants it.
+//! Other crates read derived answers, not fields ([`query`]). A slot's definition index has
+//! no getter outside the crate, and an object none for its base controller: each is asked
+//! for by the rule that wants it. [`State::base_controller`] is the one named for what it
+//! is, for the layers, which start from it, and a saved position, which keeps it.
 //!
 //! | The rules ask | Query |
 //! | --- | --- |
 //! | the card that represents an object: nothing for a token (CR 111.1, 111.6) | [`State::card_behind`] |
 //! | what it is before any other effect, and what a copy of it would be (CR 707.2) | [`State::copiable`], a [`Copiable`] |
-//! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.8e) | [`State::mana_value`] |
+//! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
 //! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
 //!

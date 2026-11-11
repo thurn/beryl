@@ -80,7 +80,10 @@ pub struct Resolving<L: Layout = Small> {
     /// What each player knew as the resolution began. Every run of the body starts from it,
     /// not from what earlier runs showed, so a run asks its questions with the candidates the
     /// first run asked them with and each recorded index names the answer it named then.
-    pub knowledge: L::PerPlayer<Bitboard<L::Slot>>,
+    /// The kernel's own: [`State::pause_resolution`] keeps it and
+    /// [`State::resume_resolution`] gives it back, so nothing else decides what a player
+    /// knows.
+    pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
 }
 
 impl Copy for Resolving<Small> {}
@@ -170,6 +173,25 @@ impl<L: Layout> State<L> {
         });
     }
 
+    /// Settles the open question so that a resolution's body runs from its start. If the
+    /// resolution was paused, each player knows again what they knew as it began, which
+    /// [`State::pause_resolution`] kept: a run asks its questions with the candidates the
+    /// first run asked them with (architecture §7.3). Returns the cards some player knew
+    /// beyond that, which the earlier runs revealed and chance must not count as revealed
+    /// again ([`crate::chance`]); none for a resolution that was not paused.
+    #[inline]
+    pub fn resume_resolution(&mut self) -> Bitboard<L::Slot> {
+        let revealed = match &self.pending {
+            Pending::Resolving(r) => {
+                let knowledge = r.knowledge.clone();
+                self.restore_knowledge(knowledge)
+            }
+            _ => Bitboard::EMPTY,
+        };
+        self.pending = Pending::None;
+        revealed
+    }
+
     /// Records the answer to a paused resolution's question, for its body to run again with.
     ///
     /// # Panics
@@ -181,5 +203,55 @@ impl<L: Layout> State<L> {
             unreachable!("a paused resolution");
         };
         r.record.push(answer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_card::Prompt;
+    use beryl_card::prompt::Purpose;
+
+    use super::*;
+    use crate::decision::{Candidates, DecisionKind};
+    use crate::event::Sink;
+    use crate::fixed::Fixed;
+    use crate::ids::{Slot, SlotId};
+    use crate::profile::Profile;
+
+    /// A paused resolution keeps what each player knew at its first pause through every
+    /// later one, and resuming it gives exactly that back: a run of the body never starts
+    /// knowing what an earlier run showed after a question.
+    #[test]
+    fn resuming_gives_back_what_was_known_at_the_first_pause() {
+        let [known, first, second] = [0, 1, 2].map(Slot::from_index);
+        let question = Decision {
+            player: Seat::P0,
+            kind: DecisionKind::Priority,
+            candidates: Candidates::Objects(Bitboard::EMPTY),
+            prompt: Prompt::new(Purpose::ALL[0]),
+            about: Bitboard::EMPTY,
+        };
+        let mut s = State::<Small>::empty(Profile::EXACT);
+        s.board().set_known(Seat::P0, known, true);
+        let began = s.knowledge();
+
+        // Two runs pause, each after a card was shown that the one before had not shown.
+        s.pause_resolution(Fixed::default(), question);
+        s.look(&mut Sink::default(), Seat::P0, Bitboard::single(first));
+        s.pause_resolution(Fixed::default(), question);
+        s.look(&mut Sink::default(), Seat::P1, Bitboard::single(second));
+        assert!(s.knows(Seat::P0, first) && s.knows(Seat::P1, second));
+
+        let revealed = s.resume_resolution();
+        assert_eq!(revealed, [first, second].into_iter().collect());
+        assert!(s.knowledge() == began && s.knows(Seat::P0, known));
+        assert_eq!(*s.pending(), Pending::None);
+
+        // With no resolution paused there is nothing to give back.
+        s.look(&mut Sink::default(), Seat::P0, Bitboard::single(first));
+        s.ask(Pending::Mulligans);
+        assert!(s.resume_resolution().is_empty());
+        assert!(s.knows(Seat::P0, first));
+        assert_eq!(*s.pending(), Pending::None);
     }
 }

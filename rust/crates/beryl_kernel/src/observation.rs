@@ -193,9 +193,9 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// any other card the viewer does not know outside a hand, are dealt at random. This is
     /// half-cheating, for measuring what seeing the opponent's hand is worth: a hand is a
     /// hidden zone ([CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player
-    /// may arrange their hand in any convenient fashion and look at it as much as they
-    /// want. A player can't look at the cards in another player's hand but can see how many
-    /// cards are in that hand at any time."), and so is a library, whose order no player
+    /// may arrange their hand in any convenient fashion and look at it at any time. A
+    /// player can't look at the cards in another player's hand but may count those cards
+    /// at any time."), and so is a library, whose order no player
     /// knows ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Each library
     /// must be kept in a single face-down pile. Players can't look at or change the order of
     /// cards in a library.").

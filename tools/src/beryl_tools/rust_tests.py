@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import paths, runlog, verdicts
-from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN
+from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED
 
 
 def nextest_filter(tests: Iterable[str]) -> str:
@@ -60,10 +60,12 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
     """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`); `fast`
     leaves out verdicts.SLOW_ONLY's.
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
-    it cannot list the harness-less `allocations` targets, so cargo test runs those beside it
-    once everything is built. Plain cargo test where cargo-nextest is missing. Each test's result
-    goes to the run log: nextest's from its JUnit report (rust/.config/nextest.toml), the
-    `allocations` targets' as one check."""
+    it cannot list the harness-less `allocations` targets and runs no doctest, so cargo test
+    runs those beside it once everything is built: the doctests are where a `compile_fail`
+    block holds that one index type cannot pass for another. Plain cargo test where
+    cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
+    report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
+    check each."""
     cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
@@ -90,8 +92,12 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
         "-E",
         nextest_filter(only) if only else every,
     ]
-    allocations = [*cargo, "--test", "allocations"]
-    jobs = [nextest] if only else [nextest, allocations]
+    # Beside nextest: what it does not run, with the check and the line a failure is named by.
+    beside = {
+        "rust:allocations": ([*cargo, "--test", "allocations"], ALLOCATIONS_FAILED),
+        "rust:doctests": ([*cargo, "--doc"], DOCTESTS_FAILED),
+    }
+    jobs = [nextest] if only else [nextest, *(cmd for cmd, _ in beside.values())]
     junit = nextest_junit()
     junit.unlink(missing_ok=True)
 
@@ -112,12 +118,11 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
         runs = list(pool.map(run, jobs))
     for cmd, (r, seconds) in zip(jobs, runs):
         print(r.stdout.rstrip(), flush=True)
-        if cmd is allocations:
-            if r.returncode != 0:
-                print(ALLOCATIONS_FAILED, flush=True)
-            runlog.result(
-                "rust:allocations", "pass" if r.returncode == 0 else "fail", seconds
-            )
+        for check, (command, failed) in beside.items():
+            if cmd is command:
+                if r.returncode != 0:
+                    print(failed, flush=True)
+                runlog.result(check, "pass" if r.returncode == 0 else "fail", seconds)
     try:
         for check, outcome, took in junit_results(junit.read_text()):
             runlog.result(check, outcome, took)

@@ -187,7 +187,7 @@ fn copiable_values_are_the_face_up_or_the_blank_face_down_ones() {
     assert_eq!(values.record(&t), (bear_index, FaceIx::FRONT));
     assert_eq!(values, Copiable::of_card(bear_index));
 
-    // CR 712.8e: with its back face up, a double-faced permanent has only that face's.
+    // CR 712.6d: with its back face up, a double-faced permanent has only that face's.
     s.board().set_face(prodigy, FaceIx::BACK);
     let back = s.copiable(prodigy);
     assert_eq!(back.name(&t), "Test Telepath");
@@ -260,7 +260,7 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
     assert_eq!(s.mana_value(&t, bear), 2);
     assert_eq!(s.mana_value(&t, prodigy), 2);
 
-    // CR 712.8e: a transformed permanent's is its front face's, and a copy of its back
+    // CR 712.6d: a transformed permanent's is its front face's, and a copy of its back
     // face's is 0.
     s.board().set_face(prodigy, FaceIx::BACK);
     assert_eq!(s.mana_value(&t, prodigy), 2);

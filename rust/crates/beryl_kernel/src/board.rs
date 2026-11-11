@@ -147,9 +147,8 @@ impl<L: Layout> Board<'_, L> {
     /// its active player and both opening hands kept: the previous turn's cleanup step is
     /// over, so the engine's next call begins the turn, untapping, emptying what lasted
     /// "until your next turn" and triggering what the turn's beginning triggers, as play would
-    /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "If no state-based
-    /// actions are performed and no triggered abilities trigger during the cleanup step, no
-    /// player receives priority and the turn ends." Call it on a new state, before any
+    /// ([CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143)): "Normally, no player
+    /// receives priority during the cleanup step". Call it on a new state, before any
     /// decision is answered. Turns alternate from the starting player
     /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)).
     pub fn begin_before_turn(&mut self, turn: u16, active: Seat) {
@@ -319,7 +318,7 @@ impl<L: Layout> Board<'_, L> {
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
     /// transformed has its back face up
-    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)), or turns a
+    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)), or turns a
     /// permanent face down ([`FaceIx::DOWN`]), as a manifested one is. Then only its
     /// controller knows it (CR 708.5).
     pub fn set_face(&mut self, slot: L::Slot, face: FaceIx) {

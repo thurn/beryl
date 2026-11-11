@@ -366,7 +366,7 @@ impl<L: Layout> Object<L> {
         self.timestamp
     }
 
-    /// Which face is up ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)), or
+    /// Which face is up ([CR 712.6](https://yawgatog.com/resources/magic-rules/#R7126)), or
     /// [`FaceIx::DOWN`] ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
     #[inline]
     pub fn face(&self) -> FaceIx {

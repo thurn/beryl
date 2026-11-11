@@ -25,7 +25,7 @@ pub enum MulliganStatus {
 
 /// Unspent mana, an amount of each [`ManaColor`]
 /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect instructs
-/// a player to add mana, that mana goes into a mana pool."
+/// a player to add mana, that mana goes into a player's mana pool."
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ManaPool([u8; 6]);
 

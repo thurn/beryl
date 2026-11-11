@@ -46,12 +46,13 @@ NEXTEST_FAILED: re.Pattern[str] = re.compile(
     re.MULTILINE,
 )
 ALLOCATIONS_FAILED = "rust-tests: allocations FAILED"
+DOCTESTS_FAILED = "rust-tests: doctests FAILED"
 
 
 def failed_tests(output: str) -> list[str]:
     """The tests nextest failed, each as `<binary> <test>` (`rust_tests_step` takes them); none
-    when the allocations harness failed, which nextest does not run."""
-    if ALLOCATIONS_FAILED in output:
+    when the allocations harness or a doctest failed, which nextest does not run."""
+    if ALLOCATIONS_FAILED in output or DOCTESTS_FAILED in output:
         return []
     return list(dict.fromkeys(" ".join(m) for m in NEXTEST_FAILED.findall(output)))
 

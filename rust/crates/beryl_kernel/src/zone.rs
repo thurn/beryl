@@ -88,7 +88,7 @@ impl<L: Layout> State<L> {
             Zone::Graveyard => self.zones.graveyard[owner].push(slot)?,
             Zone::Battlefield => {
                 self.enter_battlefield(slot)?;
-                // CR 302.6: a permanent that just arrived hasn't been under its controller'self
+                // CR 302.6: a permanent that just arrived hasn't been under its controller's
                 // control since their most recent turn began.
                 let o = self.object_mut(slot);
                 o.timestamp = timestamp;
@@ -112,8 +112,9 @@ impl<L: Layout> State<L> {
                 k.insert(slot);
             }
         }
-        // [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange their hand in any convenient fashion and look at it
-        // as much as they want." Whatever put the card there: a draw, or a return from a library.
+        // [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange
+        // their hand in any convenient fashion and look at it at any time." Whatever put the
+        // card there: a draw, or a return from a library.
         if to == Zone::Hand {
             self.knowledge[owner].insert(slot);
         }
@@ -156,7 +157,7 @@ impl<L: Layout> State<L> {
         let library = &mut self.zones.library[self.objects[slot.index()].owner.index()];
         let i = library
             .position(slot)
-            .expect("a card in its owner'self library");
+            .expect("a card in its owner's library");
         library.remove(i);
         match place {
             Place::Top => library.push(slot),

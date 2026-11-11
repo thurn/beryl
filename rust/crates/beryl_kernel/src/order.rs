@@ -26,8 +26,8 @@ impl<L: Layout> State<L> {
     }
 
     /// A player's library, top card first
-    /// ([CR 401.1](https://yawgatog.com/resources/magic-rules/#R4011)): "Each player's
-    /// library is kept in a single face-down pile."
+    /// ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012)): "Each library must
+    /// be kept in a single face-down pile."
     #[inline]
     pub fn library_from_top(
         &self,

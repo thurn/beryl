@@ -216,8 +216,10 @@ def test_failed_rust_tests_are_named_as_nextest_filters() -> None:
         "(binary_id(beryl_cli::exe) & test(=also_bad))"
         " | (binary_id(beryl_engine) & test(=tests::crashes))"
     )
-    # The allocations harness runs beside nextest, so its failure reruns the lot.
+    # The allocations harness and the doctests run beside nextest, so a failure of either
+    # reruns the lot.
     assert checks.failed_tests(output + reruns.ALLOCATIONS_FAILED) == []
+    assert checks.failed_tests(output + reruns.DOCTESTS_FAILED) == []
 
 
 def test_failed_shots_and_oracle_cards_are_named() -> None:

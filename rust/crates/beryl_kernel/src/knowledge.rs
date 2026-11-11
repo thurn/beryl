@@ -44,11 +44,10 @@ impl<L: Layout> State<L> {
         self.knowledge[player.index()].remove(slot);
     }
 
-    /// Gives each player back what they knew at an earlier moment ([`State::knowledge`]),
-    /// as a paused resolution run again from its start needs. Returns the cards some player
-    /// knew beyond that: what the earlier runs revealed, which chance must not count as
-    /// revealed again ([`chance`]).
-    pub fn restore_knowledge(
+    /// Gives each player back what they knew at an earlier moment, for
+    /// [`State::resume_resolution`]. Returns the cards some player knew beyond that: what the
+    /// earlier runs revealed, which chance must not count as revealed again ([`chance`]).
+    pub(crate) fn restore_knowledge(
         &mut self,
         knowledge: L::PerPlayer<Bitboard<L::Slot>>,
     ) -> Bitboard<L::Slot> {

@@ -278,8 +278,9 @@ impl<L: Layout> State<L> {
         self.knowledge[player.index()].contains(slot)
     }
 
-    /// The slots whose identity each player knows, by seat (architecture §13): what a paused
-    /// resolution keeps to give back ([`State::restore_knowledge`]).
+    /// The slots whose identity each player knows, by seat (architecture §13), to compare
+    /// two positions by. A paused resolution keeps its own copy
+    /// ([`State::pause_resolution`]).
     #[inline]
     pub fn knowledge(&self) -> L::PerPlayer<Bitboard<L::Slot>> {
         self.knowledge.clone()
@@ -369,7 +370,7 @@ impl<L: Layout> State<L> {
 
     /// The name of the object in `slot`: its face up's, which is the card's own name
     /// everywhere but on the stack and the battlefield
-    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)): "While a
+    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)): "While a
     /// double-faced card is outside the game or in a zone other than the battlefield or
     /// stack, it has only the characteristics of its front face." A face-down permanent,
     /// which has no name ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)),

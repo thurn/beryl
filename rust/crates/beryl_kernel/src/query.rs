@@ -21,9 +21,9 @@ use crate::table::{FaceFacts, GameTable};
 /// An object's copiable values: what a copy of it would have, and what it has itself before
 /// any other effect applies
 /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "The copiable values are
-/// the values derived from the text printed on the object (that text being the name, mana
-/// cost, color indicator, card type, subtype, supertype, rules text, power, toughness, and/or
-/// loyalty), as modified by other copy effects, by its face-down status, and by 'as . . .
+/// the values derived from the text printed on the object (that text being name, mana cost,
+/// color indicator, card type, subtype, supertype, rules text, power, toughness, loyalty,
+/// and/or defense), as modified by other copy effects, by its face-down status, and by 'as . . .
 /// enters' and 'as . . . is turned face up' abilities that set power and toughness (and may
 /// also set additional characteristics). Other effects (including type-changing and
 /// text-changing effects), status, counters, and stickers are not copied."
@@ -62,7 +62,7 @@ impl<C: CardId> DefinitionKey<C> {
 impl<L: Layout> Copiable<L> {
     /// The copiable values of the card or token at a game index, its front face up: what a
     /// card has wherever it is not a permanent or a spell with another face up
-    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), and what a record
+    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), and what a record
     /// names that kept only the index, such as last-known information.
     #[inline]
     pub const fn of_card(card: L::Card) -> Copiable<L> {
@@ -96,9 +96,9 @@ impl<L: Layout> Copiable<L> {
     }
 
     /// These values with the face at `face` up instead: the spell a card becomes cast with
-    /// that face ([CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b)), or the
+    /// that face ([CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b)), or the
     /// permanent it becomes entering with it up or down
-    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a), CR 708.2).
+    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a), CR 708.2).
     #[inline]
     #[must_use]
     pub const fn turned(self, face: FaceIx) -> Copiable<L> {
@@ -145,8 +145,8 @@ impl<L: Layout> Copiable<L> {
     }
 
     /// The name of the face that is up
-    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a),
-    /// [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e)); none, the empty
+    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a),
+    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d)); none, the empty
     /// string, for a face-down permanent (CR 708.2a).
     #[inline]
     pub fn name(self, t: &GameTable) -> &'static str {
@@ -217,7 +217,7 @@ impl<L: Layout> State<L> {
 
     /// The definition of the card that represents the object in `slot`, with every face it
     /// may be cast or played with
-    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)); nothing for a
+    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)); nothing for a
     /// token ([`State::card_behind`]).
     #[inline]
     pub fn card_def(&self, t: &GameTable, slot: L::Slot) -> Option<&'static CardDef> {
@@ -248,7 +248,7 @@ impl<L: Layout> State<L> {
     /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as
     /// the number chosen for it while the object is on the stack."
     ///
-    /// [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): a transforming
+    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): a transforming
     /// double-faced permanent with its back face up "has only the characteristics of its back
     /// face. However, its mana value is calculated using the mana cost of its front face. If a
     /// permanent is copying the back face of a nonmodal double-faced permanent (even if the

@@ -20,7 +20,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::interpret;
-use crate::layout::{Layout, PerPlayer, Queue};
+use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
 use crate::state::{
     CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone,
@@ -37,9 +37,9 @@ pub(crate) fn resolve<L: Layout>(
 ) -> Result<(), Full> {
     let entry = s.stack().last().expect("a stack entry to resolve").clone();
     let ability = entry_ability(t, &entry);
-    let (record, knowledge) = match *s.pending() {
-        Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge.clone())),
-        _ => (Default::default(), None),
+    let record = match s.pending() {
+        Pending::Resolving(r) => r.record.clone(),
+        _ => Default::default(),
     };
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
@@ -47,10 +47,7 @@ pub(crate) fn resolve<L: Layout>(
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.
-        s.settle_question();
-        if let Some(knowledge) = knowledge {
-            rewind(s, &mut x.events, knowledge);
-        }
+        rewind(s, &mut x.events);
         let paused = run(
             s,
             t,
@@ -69,10 +66,7 @@ pub(crate) fn resolve<L: Layout>(
         return Ok(());
     }
     let (spare, sink) = x.copy_to_spare(s);
-    spare.settle_question();
-    if let Some(knowledge) = knowledge {
-        rewind(spare, sink, knowledge);
-    }
+    rewind(spare, sink);
     // Events of a run that ends paused are discarded with the copy (§7.3).
     let mark = sink.len();
     let paused = run(spare, t, sink, Some(a), record.as_slice(), &entry, ability);
@@ -94,17 +88,13 @@ pub(crate) fn resolve<L: Layout>(
     Ok(())
 }
 
-/// Readies `s`, the committed state or a copy of it, to run a body from its start: with what
-/// players knew as the resolution began, which a paused resolution keeps
-/// ([`Resolving::knowledge`]), and with the cards its earlier runs revealed beyond that in the
-/// sink, so chance does not count them as revealed again ([`chance`]). The caller empties
-/// `sink.revealed` once the run returns.
-fn rewind<L: Layout>(
-    s: &mut State<L>,
-    sink: &mut Sink<L>,
-    knowledge: PerPlayer<L, Bitboard<L::Slot>>,
-) {
-    sink.revealed = s.restore_knowledge(knowledge);
+/// Readies `s`, the committed state or a copy of it, to run a body from its start: with no
+/// question open, with what players knew as the resolution began, which a paused resolution
+/// keeps ([`State::resume_resolution`]), and with the cards its earlier runs revealed beyond
+/// that in the sink, so chance does not count them as revealed again ([`chance`]). The
+/// caller empties `sink.revealed` once the run returns.
+fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
+    sink.revealed = s.resume_resolution();
 }
 
 /// What a paused run showed a player stays known in the committed state (architecture
@@ -113,7 +103,7 @@ fn rewind<L: Layout>(
 /// determinized from what they know replays the body to the same question.
 ///
 /// The runs themselves start from what was known as the resolution began
-/// ([`Resolving::knowledge`]). A card a run showed after one of its questions, as a discarded
+/// ([`State::resume_resolution`]). A card a run showed after one of its questions, as a discarded
 /// card shown to the opponent, would otherwise be known before that question in the next run,
 /// so the question would be asked with other candidates and its recorded index would name
 /// another answer.
@@ -150,8 +140,7 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     let entry = s.stack().last().expect("a stack entry to resolve").clone();
     let ability = entry_ability(t, &entry);
     let (spare, sink) = x.copy_to_spare(s);
-    spare.settle_question();
-    rewind(spare, sink, r.knowledge);
+    rewind(spare, sink);
     let mark = sink.len();
     let paused = run(spare, t, sink, None, r.record.as_slice(), &entry, ability);
     sink.revealed = Bitboard::EMPTY;
