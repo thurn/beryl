@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles, reruns
+from beryl_tools import build_paths, checks, oracles, reruns
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -71,7 +71,7 @@ def test_baked_in_build_paths_are_refused_with_the_run_time_way(
         'let dir = std::env!( "CARGO_MANIFEST_DIR");\n'
         'let ok = std::env::var_os("CARGO_MANIFEST_DIR");\n'
     )
-    found = checks.baked_build_paths(tmp_path)
+    found = build_paths.baked_build_paths(tmp_path)
     assert len(found) == 2
     assert found[0].startswith(f"{tmp_path / 'a.rs'}:2: ")
     assert "std::env::current_exe" in found[0]
@@ -80,7 +80,7 @@ def test_baked_in_build_paths_are_refused_with_the_run_time_way(
 
 
 def test_the_crates_bake_in_no_build_paths() -> None:
-    assert checks.baked_build_paths(checks.paths.RUST / "crates") == []
+    assert build_paths.baked_build_paths(build_paths.paths.RUST / "crates") == []
 
 
 def test_an_over_budget_run_reports_the_machine_load(
