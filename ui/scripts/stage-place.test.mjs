@@ -7,7 +7,15 @@ import { test } from "node:test";
 import { entering } from "../src/stage/enter.ts";
 import { lifeChange } from "../src/stage/notices.ts";
 import { ALOFT } from "../src/stage/pose.ts";
-import { FLIP, meets, STRIKE, TURNED } from "../src/stage/tracks.ts";
+import {
+    FLIP,
+    GONE,
+    makingRoom,
+    meets,
+    STRIKE,
+    turned,
+    TURNED,
+} from "../src/stage/tracks.ts";
 import { object, reach, stage, view } from "./stage-table.mjs";
 
 const LINEAR = { duration: 200 };
@@ -40,43 +48,75 @@ for (const tick of [16, 100, 1000]) {
             depth: 2,
         });
         assert.deepEqual(surface.nodes.get(2), made.pose(2));
-        // It turns where it lies for `TURNED` of the step, and only then goes to its place.
+        // Its place is hardly any way off, so it turns straight onto it in `TURNED` of the
+        // step, and is there for the rest.
         const turnedAt = 200 * TURNED;
         reach(made.clock, turnedAt / 2, tick);
-        assert.deepEqual(at(made.pose(2)), {
-            x: 380,
-            y: 20,
-            width: 100,
-            turn: -45,
-            depth: 2,
-        });
-        reach(made.clock, turnedAt, tick);
-        assert.deepEqual(at(made.pose(2)), {
-            x: 380,
-            y: 20,
-            width: 100,
-            turn: 0,
-            depth: 2,
-        });
-        reach(made.clock, (turnedAt + 200) / 2, tick);
         assert.deepEqual(at(made.pose(2)), {
             x: 390,
             y: 10,
             width: 100,
-            turn: 0,
+            turn: -45,
             depth: 2,
         });
-        reach(made.clock, 200, tick);
-        assert.deepEqual(at(made.pose(2)), {
-            x: 400,
-            y: 0,
-            width: 100,
-            turn: 0,
-            depth: 2,
-        });
+        for (const time of [turnedAt, 200]) {
+            reach(made.clock, time, tick);
+            assert.deepEqual(at(made.pose(2)), {
+                x: 400,
+                y: 0,
+                width: 100,
+                turn: 0,
+                depth: 2,
+            });
+        }
         assert.equal(made.pose(1).x, 0);
     });
 }
+
+const lying = (x, y, turn = 0) => ({
+    x,
+    y,
+    width: 100,
+    rotation: 0,
+    skew: 0,
+    turn,
+    opacity: 1,
+    depth: 1,
+    face: "front",
+});
+const even = (progress) => progress;
+
+test("a permanent whose place is far off turns where it lies, and then goes there", () => {
+    // Its card a quarter back at (380, 20), which it turns about until it is as it will
+    // rest, and a place 600 to the right.
+    const path = turned(lying(380, 20, -90), lying(380, 20), even);
+    const rest = lying(980, 20);
+    assert.deepEqual(at(path(TURNED / 2, rest)), at(lying(380, 20, -45)));
+    assert.deepEqual(at(path(TURNED, rest)), at(lying(380, 20)));
+    assert.deepEqual(at(path((1 + TURNED) / 2, rest)), at(lying(680, 20)));
+    assert.deepEqual(at(path(1, rest)), at(rest));
+});
+
+test("what makes room for a tapped card waits for its turn, then steps past", () => {
+    // Two card widths to the left, on its controller's side of the row: it swings a third
+    // of its way toward them, or 0.45 of its width, whichever is less.
+    const past = makingRoom("tap", lying(600, 0), even, 1);
+    const rest = lying(400, 0);
+    assert.deepEqual(at(past(TURNED, rest)), at(lying(600, 0)));
+    assert.deepEqual(at(past((1 + TURNED) / 2, rest)), at(lying(500, 45)));
+    assert.deepEqual(at(past(1, rest)), at(rest));
+    // The opponent's swings the other way; a card that only closes up a gap hardly swings.
+    const theirs = makingRoom("tap", lying(600, 0), even, -1);
+    assert.equal(whole(theirs((1 + TURNED) / 2, rest).y), -45);
+    const closing = makingRoom("tap", lying(430, 0), even, 1);
+    assert.equal(whole(closing((1 + TURNED) / 2, rest).y), 10);
+    // After a card that leaves, the row waits and closes up straight; other verbs wait
+    // for nothing.
+    const after = makingRoom("vanish", lying(600, 0), even, 1);
+    assert.deepEqual(at(after(GONE, rest)), at(lying(600, 0)));
+    assert.equal(after((1 + GONE) / 2, rest).y, 0);
+    assert.equal(makingRoom("fly", lying(600, 0), even, 1), undefined);
+});
 
 test("an untap turns it back the other way, and a card that lay so already does not turn", () => {
     const { stage: made } = stage({ tap: LINEAR });
@@ -215,10 +255,9 @@ test("a creature dives onto what is much smaller than itself, shrinking", () => 
     assert.ok(Math.abs(blow.width - 100 * STRIKE.small.least) < 1e-9);
     assert.ok(Math.abs(blow.x + blow.width / 2 - 50) < 1e-9);
     assert.ok(Math.abs(blow.y + blow.width * 0.7 + 365) < 1e-9, "it is on it");
-    assert.deepEqual(
-        at(lunging.track.pose(1, rest)),
-        at({ ...rest, depth: rest.depth + ALOFT }),
-    );
+    const back = lunging.track.pose(1, rest);
+    assert.deepEqual(at(back), at({ ...rest, depth: back.depth }));
+    assert.ok(back.depth >= ALOFT);
     // One 65 wide, between the two rules, is struck part of the way in, a little shrunk.
     placed.set(2, card(2, 15, -400, 65));
     const [partly] = entering(act, (progress) => progress, {
@@ -309,6 +348,9 @@ test("creatures that strike one another meet half way, at one time", () => {
     assert.ok(Math.abs(made.pose(1).x - met) < 1e-9);
     assert.ok(Math.abs(made.pose(2).x - (400 - met)) < 1e-9);
     assert.equal(made.pose(1).y, 0);
+    // The earlier strike of the beat is drawn over the later.
+    assert.ok(made.pose(1).depth > made.pose(2).depth);
+    assert.ok(made.pose(2).depth > made.pose(3).depth);
     made.settle();
     assert.equal(made.pose(1).x, 0);
     assert.equal(made.pose(2).x, 400);

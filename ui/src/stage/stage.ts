@@ -61,6 +61,7 @@ import {
   GONE,
   later,
   litBy,
+  makingRoom,
   shareOf,
   moverOf,
   subjectOf,
@@ -68,7 +69,6 @@ import {
   TURN,
   SNAP,
   turning,
-  WAITS,
   type Timing,
   type Track,
 } from "./tracks.ts";
@@ -494,7 +494,7 @@ export class ScriptStage {
       table = apply(table, step.act);
       const own = timing.with ? last : turn;
       from = Math.max(from, own + timing.delay);
-      turn = own + timing.stagger;
+      if (!timing.with) turn = own + timing.stagger;
       last = own;
       const to = from + timing.duration;
       playback.end = Math.max(playback.end, to);
@@ -677,8 +677,8 @@ export class ScriptStage {
         // Only the card a `fly` is about travels over what rests; what another verb's
         // change moves (a record that lays its card elsewhere) goes there as what makes room
         // does. It turns over on the way if it leaves face down and lands face up.
-        // What makes room for a card that leaves, or one that taps, waits (tracks.ts WAITS).
-        const wait = WAITS[run!.verb];
+        // What makes room for a card that leaves, or one that taps, waits (tracks.ts).
+        const toward = resting.object?.controller === "opponent" ? -1 : 1;
         const flies = run!.verb === "fly" && subjectOf(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
@@ -687,9 +687,8 @@ export class ScriptStage {
           to: run!.to,
           pose: run!.each
             ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
-            : wait === undefined
-              ? glide(start, run!.ease, flies, turns)
-              : later(start, run!.ease, wait),
+            : (makingRoom(run!.verb, start, run!.ease, toward) ??
+              glide(start, run!.ease, flies, turns)),
           turn: turns ? TURN : undefined,
           own: flies,
         });

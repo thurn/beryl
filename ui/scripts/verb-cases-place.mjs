@@ -15,7 +15,7 @@ import {
     sounded,
     where,
 } from "./verb-cases.mjs";
-import { STRIKE } from "../src/stage/tracks.ts";
+import { NEAR, STRIKE } from "../src/stage/tracks.ts";
 
 /** The middle of a permanent's card at `pose`: of its frame, which lies turned a quarter in
  * its slot when it is tapped, leaned as the table leans it (src/stage/desktop.ts middle). */
@@ -93,13 +93,18 @@ export const CASES = {
                         `${what}: half way it is turned ${turn}`,
                     );
                     assert.ok(depth < ALOFT, `${what}: it never flies`);
-                    // Half way it is still turning where it lay, and its row has yet to
-                    // close up or make room: nothing on the battlefield has left its place.
+                    // Half way it is still turning where it lay, or onto a place hardly any
+                    // way off (an attacker's, a step forward), and its row has yet to close up
+                    // or make room: nothing else on the battlefield has left its place.
                     if (rested(run, step)) {
-                        near(
+                        const [now, lay] = [
                             cardMiddle(step.at.middle.poses[slot], tapped),
                             cardMiddle(was.poses[slot], !tapped),
-                            `${what}: it turns where it lay`,
+                        ];
+                        const off = Math.hypot(now.x - lay.x, now.y - lay.y);
+                        assert.ok(
+                            off <= NEAR * step.at.to.poses[slot].width,
+                            `${what}: it turns ${off} from where it lay`,
                         );
                         for (const [name, pose] of Object.entries(was.poses)) {
                             const now = step.at.middle.poses[name];
@@ -172,9 +177,9 @@ export const CASES = {
     // A creature lunges at what it deals combat damage to and draws back to where it lay:
     // from its own place, over everything, toward the player's half of the table or its
     // blocker's card, and never turned or sized. It stops where its card first overlaps the
-    // card it strikes, which a burst of light is on as the blow lands; a player's life total
-    // flares with its own change instead. What is much smaller than it, it shrinks to the size
-    // of and lands on. The strikes of one combat begin one after another,
+    // card it strikes, or at the rim of a player's life total, and a burst of light is on what
+    // it strikes as the blow lands, when a player's total changes too. What is much smaller
+    // than it, it shrinks toward the size of and lands on. The strikes of one combat begin one after another,
     // but that creatures that strike one another do so as one, at one time, and meet half
     // way. A player struck has their old life total as the strike begins and the new one by
     // its end. Nothing moves but what strikes.
@@ -240,11 +245,25 @@ export const CASES = {
                     side.life[to.player] - amount,
                     `${what}: the life it takes`,
                 );
+                // The blow bursts on their life total, which changes as it lands: the count
+                // of the life it takes begins there, on the stage time of the blow.
                 assert.ok(
-                    !effectsOn(strike.at.middle, to.player).includes(
+                    effectsOn(strike.at.middle, to.player).includes(
                         "impact over",
                     ),
-                    `${what}: no burst on a player`,
+                    `${what}: the blow shows on the player's total`,
+                );
+                const lands =
+                    strike.from + STRIKE.hit * (strike.to - strike.from);
+                const taken = combat.steps.find(
+                    (s) =>
+                        s.verb === "count" &&
+                        s.act.tally.player === to.player &&
+                        s.from >= strike.from,
+                );
+                assert.ok(
+                    taken && Math.abs(taken.from - lands) < 1e-6,
+                    `${what}: its life goes at ${taken?.from}, the blow lands at ${lands}`,
                 );
             } else {
                 // Along the line from its card's middle to the middle of what it strikes.

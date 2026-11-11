@@ -18,8 +18,9 @@ export interface Timing {
   ease(progress: number): number;
   /** For a step that moves several cards one after another (a lift), how long each moves. */
   each?: number;
-  /** It is played with the step before it, its turn in the beat being that step's: the blow
-   * a creature deals back to the one that strikes it. */
+  /** It is played with the step before it, its turn in the beat being that step's, and the
+   * step after it waits for neither longer than it would have: the blow a creature deals back
+   * to the one that strikes it, and the life a strike takes. */
   with?: boolean;
 }
 
@@ -99,11 +100,6 @@ export function shareOf(
   return [from / length, (from + each) / length];
 }
 
-/** An entry that was at `start` and makes room as a card leaves: it stays there until the card
- * has gone (`GONE`), then glides to where it rests. */
-export const closing = (start: Pose, ease: Timing["ease"]): Path =>
-  later(start, ease, GONE);
-
 /** How a card held up on its way is shared out over its step: the share of the time it
  * flies in, and the share it is held. Arena's draw at a turn's start flies in for about 600
  * ms, holds 200 to 240 and drops for 230 to 300 (data/arena-motion.json, fly, "draw":
@@ -142,20 +138,55 @@ export const TURNED = 0.6;
  * its record now says, lying or upright, and `unturned` is where that dress is drawn with its
  * card a quarter back, so that the card lies exactly as it did as the step began: from there
  * the card turns about its own middle to `home`, as it now rests but with that middle where
- * it was, and then goes to where it rests, at the depth it rests at. */
+ * it was, and then goes to where it rests, at the depth it rests at. Where it rests within
+ * `NEAR` of its width of `home` it turns straight onto its place, in one motion. */
 export const turned =
   (unturned: Pose, home: Pose, ease: Timing["ease"]): Path =>
-  (progress, rest) =>
-    progress < TURNED
-      ? between(unturned, home, ease(progress / TURNED), false)
-      : between(home, rest, ease((progress - TURNED) / (1 - TURNED)), false);
+  (progress, rest) => {
+    const far = Math.hypot(rest.x - home.x, rest.y - home.y);
+    const onto = far < NEAR * rest.width ? rest : home;
+    return progress < TURNED
+      ? between(unturned, onto, ease(progress / TURNED), false)
+      : between(onto, rest, ease((progress - TURNED) / (1 - TURNED)), false);
+  };
+/** How near where it lay, in its own widths, a place is that a card turns straight onto. */
+export const NEAR = 0.5;
 
 /** How far through a step of these verbs what only makes room begins to move: once a card
  * that leaves has gone, and once one that taps has turned. */
-export const WAITS: Partial<Record<Act["verb"], number>> = {
+const WAITS: Partial<Record<Act["verb"], number>> = {
   vanish: GONE,
   tap: TURNED,
 };
+
+/** How far out of its row a card swings as it steps past the cards that tapped, in its own
+ * widths, and never more than a third of how far it goes: a card that only closes up a gap
+ * hardly leaves the row. */
+const SWING = 0.45;
+
+/** The way of an entry that was at `start` and only makes room in a step of `verb`, if such
+ * a step keeps it waiting (`WAITS`): it stays there and then glides to where it rests. After
+ * a tap the untapped and the tapped of a row change places, and it swings out of the row on
+ * its way, `toward` its controller's edge of the table (1 down the stage, -1 up it), so that
+ * it is seen to step past and does not pass under them. */
+export function makingRoom(
+  verb: Act["verb"],
+  start: Pose,
+  ease: Timing["ease"],
+  toward: number,
+): Path | undefined {
+  const from = WAITS[verb];
+  if (from === undefined) return undefined;
+  const waited = later(start, ease, from);
+  if (verb !== "tap") return waited;
+  return (progress, rest) => {
+    const pose = waited(progress, rest);
+    const far = Math.hypot(rest.x - start.x, rest.y - start.y);
+    const out = Math.min(far / 3, SWING * rest.width);
+    const along = Math.max(0, (progress - from) / (1 - from));
+    return { ...pose, y: pose.y + toward * out * Math.sin(Math.PI * along) };
+  };
+}
 
 const into = (progress: number) => progress * progress;
 const out = (progress: number) => 1 - (1 - progress) * (1 - progress);
@@ -179,8 +210,8 @@ export const STRIKE = {
   wind: 0.15,
   hit: 0.45,
   back: 0.18,
-  bite: 0.3,
-  least: 0.25,
+  bite: 0.38,
+  least: 0.3,
   small: { from: 0.7, to: 0.55, least: 0.6 },
 };
 
@@ -201,13 +232,15 @@ export function struck(progress: number): [toward: number, back: number] {
 /** A creature's lunge at what it deals combat damage to and its return to where it rests:
  * the blow is `toward` away from it as the step begins, and it first pulls `back` the other
  * way. It is `size` times as large at the blow, by `about`, which gives a pose that large
- * about its card's middle. Over everything, and never turned. */
+ * about its card's middle. Never turned, and at the depth `over`, which is over everything
+ * at rest and over the strikes of its beat that come after it. */
 export const lunge =
   (
     toward: Point,
     back: Point,
     size: number,
     about: (pose: Pose, size: number) => Pose,
+    over: number,
   ): Path =>
   (progress, rest) => {
     const [to, away] = struck(progress);
@@ -216,7 +249,7 @@ export const lunge =
       ...pose,
       x: pose.x + toward.x * to - back.x * away,
       y: pose.y + toward.y * to - back.y * away,
-      depth: ALOFT + rest.depth,
+      depth: over,
     };
   };
 

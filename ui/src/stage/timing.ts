@@ -155,6 +155,18 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     SNAP;
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };
+  // The life a strike takes from a player goes as its blow lands on them, not its own delay
+  // after the strike's turn: the total flares on the frame the creature reaches it.
+  if (
+    act.verb === "count" &&
+    act.tally.kind === "life" &&
+    before?.verb === "strike" &&
+    before.to.kind === "player" &&
+    before.to.player === act.tally.player
+  ) {
+    const lands = STRIKE.hit * timingOf(before, table).duration;
+    return { ...own, delay: lands, with: true };
+  }
   // A look at several cards of a library takes them off it one after another, each as long
   // as one alone (Arena's leave about 0.5 s apart: the data's stagger).
   const look = act.verb === "lift" && act.span === "begin" && act.handling;
@@ -207,10 +219,15 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
       (use.into === undefined || use.into === into),
   );
   const own = fit.filter((use) => use.case !== undefined);
-  // What a strike lands on is lit only where that is a card: a player's life total flares
-  // as it changes, a moment after the blow.
+  // What a strike lands on: a card, or a player's life total.
   const struck =
-    act.verb === "strike" && act.to.kind === "object" ? act.to.slot : undefined;
+    act.verb !== "strike"
+      ? undefined
+      : act.to.kind === "object"
+        ? act.to.slot
+        : act.to.kind === "player"
+          ? act.to.player
+          : undefined;
   return (own.length > 0 ? own : fit).flatMap((use): Effect[] => {
     const look = looks.get(use.effect);
     if (!look || (use.on === "struck" && struck === undefined)) return [];

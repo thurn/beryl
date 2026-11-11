@@ -170,6 +170,18 @@
   --flare: 127 224 138;
   --through: var(--gain);
 }
+/* A blow that lands on a player bursts on their total: hot light over the face, and a ring
+   that leaves it faster and further than the flare of the loss that comes with it. */
+[data-life] > .stage-effect-impact {
+  --flare: 255 206 140;
+  --through: var(--impact);
+  background: radial-gradient(
+    circle,
+    rgb(var(--light) / 85%),
+    rgb(255 150 80 / 0%) 72%
+  );
+  transform: scale(calc(1 + 0.9 * var(--impact)));
+}
 [data-life] > .life-change {
   --drift: var(--loss, var(--gain, 0));
   translate: 0 calc(var(--drift) * (2 - var(--drift)) * 0.6em);

@@ -386,15 +386,16 @@ held to by `just motion`.
   (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1, 0VsYGs88NXA 31:13.15). Exempt:
   exception 2.
 - **strike.** A creature pulls back, lunges at what it deals combat damage to,
-  which flashes as the blow lands, and draws back. Two creatures that strike
-  each other meet half way, at one time. On something much smaller than itself
-  it lands whole, shrinking as it goes. Each attacker winds back, lunges from
-  its row to the player's avatar or to its blocker, the screen flashes, and it
-  drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s
-  before an unblocked one. First strike is a strike of its own, seconds earlier
-  (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg
-  54:54.0, sMpAJ0HKDdg 54:57.5). Beryl: 850 ms, 285 ms apart. Effects: impact as
-  its blow lands (on what it strikes).
+  which flashes as the blow lands, and draws back; a player's life total changes
+  on that blow. Two creatures that strike each other meet half way, at one time.
+  On something much smaller than itself it lands whole, shrinking as it goes.
+  Each attacker winds back, lunges from its row to the player's avatar or to its
+  blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all. A
+  blocked attacker strikes about 0.4 s before an unblocked one. First strike is
+  a strike of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk
+  25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
+  Beryl: 850 ms, 285 ms apart. Effects: impact as its blow lands (on what it
+  strikes).
 - **streak.** A streak leaves one thing and lands on another, which flashes:
   mana from its source into the spell or ability it pays for, and damage from a
   spell or ability to what it hits. Each tapped land sends one streak of its
@@ -476,8 +477,9 @@ happened, and is gone.
 - **cover.** A veil of light closes over a card, hides it while it changes, and
   clears from what it now is, for as long as its step. Drawn over its card.
   Beryl: linear.
-- **impact.** A burst of hot light on what a creature strikes, whole as the blow
-  lands and spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
+- **impact.** A burst of hot light on what a creature strikes, a card or a
+  player's life total, whole as the blow lands and spreading as it fades. Drawn
+  over its card. Beryl: 300 ms, ease-out.
 - **pulse.** A ring of light round a card's frame while its numbers swell and
   settle: a counter put on it or taken off, its loyalty, its power and
   toughness. Drawn over its card. Beryl: 320 ms, ease-out.

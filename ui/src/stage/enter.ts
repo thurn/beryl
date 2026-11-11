@@ -12,7 +12,7 @@ import {
   type Resting,
   type StageLayout,
 } from "./layout.ts";
-import type { Pose } from "./pose.ts";
+import { ALOFT, type Pose } from "./pose.ts";
 import {
   drawsToRead,
   fade,
@@ -214,6 +214,8 @@ function enters(
         y: unit.y * length,
       });
       const about = sized(layout, striker.resting);
+      // The earlier strike of a beat is over the later: its blow lands first.
+      const over = 2 * ALOFT - scene.beat.indexOf(act);
       // What a blow does to a card shows as it lands: until then the card it strikes is
       // drawn from the record the step found, and so is one that strikes back, which the
       // other's step has covered already.
@@ -221,7 +223,7 @@ function enters(
       const lunging: Entering = {
         name: act.source,
         track: {
-          ...own(lunge(by(go), by(STRIKE.back * width), size, about)),
+          ...own(lunge(by(go), by(STRIKE.back * width), size, about, over)),
           turn: veiled ? STRIKE.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,
