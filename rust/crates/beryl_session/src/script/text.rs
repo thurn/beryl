@@ -26,7 +26,7 @@ use crate::protocol::{
 };
 
 /// A fieldless enum's name on the wire.
-fn wire<T: Serialize>(value: T) -> String {
+pub(crate) fn wire<T: Serialize>(value: T) -> String {
     match serde_json::to_value(value) {
         Ok(serde_json::Value::String(name)) => name,
         _ => unreachable!("only fieldless enums are named this way"),

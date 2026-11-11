@@ -105,6 +105,7 @@ pub use act::{Act, Fact, Notice, Stream, Tally};
 pub use build::Screen;
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
+pub(crate) use text::wire;
 pub use verb::{Arrow, Mark, Span, Verb};
 
 use crate::protocol::Side;

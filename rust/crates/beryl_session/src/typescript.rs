@@ -10,6 +10,10 @@ use crate::ipc::{
     SetStopsRequest, UndoRequest, WaterbendMana, WaterbendPreview, WaterbendRequest,
 };
 use crate::journal::Level;
+use crate::prompt::{
+    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, Pile, PlaceName, PromptButton,
+    PromptView, ShapeView, Share,
+};
 use crate::protocol::{
     AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardHandling,
     CardType, Combat, Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing,
@@ -23,6 +27,24 @@ use crate::script::{
     Tally, Verb,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
+
+/// The prompt's types ([`crate::prompt`]).
+fn prompt_decls(cfg: &Config) -> [String; 12] {
+    [
+        PromptView::decl(cfg),
+        Marked::decl(cfg),
+        PromptButton::decl(cfg),
+        ButtonId::decl(cfg),
+        ShapeView::decl(cfg),
+        Pile::decl(cfg),
+        Share::decl(cfg),
+        Pair::decl(cfg),
+        PlaceName::decl(cfg),
+        Click::decl(cfg),
+        ClickRequest::decl(cfg),
+        ClickReply::decl(cfg),
+    ]
+}
 
 /// Where the generated file lives, from the repository root.
 pub const PATH: &str = "ui/src/generated/protocol.ts";
@@ -116,7 +138,7 @@ pub fn typescript() -> String {
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\
          // `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test typescript`.\n",
     );
-    for decl in decls {
+    for decl in decls.into_iter().chain(prompt_decls(&cfg)) {
         out.push('\n');
         out.push_str("export ");
         out.push_str(&decl);

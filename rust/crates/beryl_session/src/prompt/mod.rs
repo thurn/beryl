@@ -1,0 +1,47 @@
+//! Prompts as the session holds and sends them (plan K10 and K26, `docs/project-50k.md`,
+//! Target architecture, Prompts and Presentation).
+//!
+//! The engine asks one pick at a time, and each pick's decision says which prompt it belongs
+//! to: a [`Purpose`](beryl_engine::card::Purpose), its [`Shape`](beryl_engine::card::Shape)
+//! and the shape's parameters. The session folds a run of picks into one prompt and holds
+//! that prompt's state. The UI draws what it is sent and sends back clicks; it decides
+//! nothing, so the desktop and the phone behave alike and a prompt's behavior is a Rust test.
+//!
+//! # State
+//!
+//! A [`PromptView`] is a prompt's whole state as its seat sees it:
+//!
+//! - its title and its buttons, each with its label and whether it can be clicked, worded by
+//!   one table keyed by purpose;
+//! - the [`Mark`](crate::script::Mark) on each card, ability and player, from the closed list
+//!   scripts draw on, at most one each;
+//! - the shape's own state ([`ShapeView`]): the cards picked, the piles and their order, an
+//!   amount, the payment so far.
+//!
+//! The view that opens a decision carries the prompt's first state. It rides the view, so a
+//! reloaded page takes up a prompt as it stood.
+//!
+//! # Clicks
+//!
+//! A click is a command ([`ClickRequest`]) naming what was clicked: a card, an ability or a
+//! player; a button; a card dropped into a pile at a place; a number. Its reply
+//! ([`ClickReply`]) is the prompt's whole new state, or says the click answered the prompt.
+//! A click changes nothing but the prompt, so nothing else is sent until it answers.
+//!
+//! A click that answers sends the engine the run's picks, one as each decision of the run
+//! arrives, through the same path as any answer: the choice log records the picks and never
+//! the clicks. The first pick is the player's answer and the rest are its continuations, so
+//! an undo takes back the whole prompt and a replay needs no prompt state.
+//!
+//! # Text
+//!
+//! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
+//! expectations of tests (plan K24).
+
+mod text;
+mod view;
+
+pub use view::{
+    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, Pile, PlaceName, PromptButton,
+    PromptView, ShapeView, Share,
+};

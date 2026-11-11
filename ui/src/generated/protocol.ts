@@ -593,6 +593,131 @@ export type Mark = "eligible" | "selected" | "suggested" | "paying" | "friendly-
 
 export type Arrow = "friendly-target" | "hostile-target" | "source" | "attack" | "block";
 
+export type PromptView = { 
+/**
+ * Counts this prompt's states from 0. A click names the state it was made on.
+ */
+revision: number, 
+/**
+ * What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name. The UI
+ * reads no meaning from it; it keys sound and motion.
+ */
+purpose: string, 
+/**
+ * What the prompt asks, in words, from the wording table.
+ */
+title: string, 
+/**
+ * The mark on each card, ability and player that has one, at most one each, in no
+ * order. What has none is not part of the prompt as it stands.
+ */
+marks: Array<Marked>, 
+/**
+ * The buttons, in the order they are laid out.
+ */
+buttons: Array<PromptButton>, 
+/**
+ * How the prompt is answered, with what the player has put together so far.
+ */
+shape: ShapeView, };
+
+export type Marked = { on: Subject, mark: Mark, };
+
+export type PromptButton = { id: ButtonId, label: string, 
+/**
+ * Whether a click does anything now.
+ */
+enabled: boolean, 
+/**
+ * The one the prompt puts forward: at most one button of a prompt.
+ */
+primary: boolean, };
+
+export type ButtonId = { "kind": "confirm" } | { "kind": "decline" } | { "kind": "auto" } | { "kind": "passOn" } | { "kind": "option", index: number, };
+
+export type ShapeView = { "shape": "pick", 
+/**
+ * The cards laid out to pick from when they are not on the table as it lies: the
+ * top of a library, a hand, a graveyard. Empty when they are picked where they lie.
+ */
+tray: Array<number>, 
+/**
+ * How few and how many may be picked.
+ */
+least: number, most: number, 
+/**
+ * Those picked, in the order they were.
+ */
+picked: Array<Subject>, } | { "shape": "order", items: Array<Subject>, } | { "shape": "split", piles: Array<Pile>, } | { "shape": "yesNo", 
+/**
+ * The cards the question is about.
+ */
+about: Array<number>, } | { "shape": "number", values: Array<number>, value: number, 
+/**
+ * What the value means, where it means more than itself: the total cost an X makes.
+ */
+detail: string | null, } | { "shape": "mode", 
+/**
+ * The cards the choice is about.
+ */
+about: Array<number>, } | { "shape": "catalog", entries: Array<string>, 
+/**
+ * The entry chosen, by index.
+ */
+chosen: number | null, } | { "shape": "divide", total: number, 
+/**
+ * How much of it is not yet given out.
+ */
+left: number, shares: Array<Share>, } | { "shape": "pay", 
+/**
+ * The whole cost, and what of it is still to pay, each as the screen writes it: a
+ * mana cost as Oracle text does, a crew cost as its power.
+ */
+cost: string, left: string, } | { "shape": "declare", 
+/**
+ * The line drawn from each object to what it is aimed at.
+ */
+arrow: Arrow, pairs: Array<Pair>, 
+/**
+ * The objects picked whose aim the next click gives.
+ */
+aiming: Array<number>, };
+
+export type Pile = { place: PlaceName, label: string, 
+/**
+ * The cards in it: where the place keeps an order, as they will lie, the top first.
+ */
+cards: Array<number>, 
+/**
+ * How many it must hold for the prompt to confirm, if a number.
+ */
+exactly: number | null, 
+/**
+ * It is settled: no card can be dropped into it or taken out.
+ */
+closed: boolean, };
+
+export type Share = { on: Subject, amount: number, };
+
+export type Pair = { from: number, to: Subject, };
+
+export type PlaceName = "none" | "top" | "onTop" | "bottom" | "hand" | "graveyard" | "exile" | "battlefield";
+
+export type Click = { "kind": "on", on: Subject, } | { "kind": "button", button: ButtonId, } | { "kind": "drop", on: Subject, pile: number, at: number, } | { "kind": "number", n: number, on: Subject | null, } | { "kind": "entry", index: number, };
+
+export type ClickRequest = { 
+/**
+ * The open decision the UI received.
+ */
+decision: DecisionId, 
+/**
+ * The state of its prompt the click was made on ([`PromptView::revision`]): a click on
+ * an older state is refused, as an answer to an older decision is.
+ */
+revision: number, click: Click, };
+
+export type ClickReply = { "kind": "open", prompt: PromptView, } | { "kind": "answered" };
+
 /** Each command: its arguments, its result, and the error it rejects with. */
 export type Commands = {
   app_info: { args: Record<string, never>; result: AppInfo; error: never };

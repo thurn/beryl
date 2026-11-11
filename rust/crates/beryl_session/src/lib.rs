@@ -15,6 +15,7 @@ pub mod journal;
 pub mod migrate;
 pub mod perturb;
 pub mod preview;
+pub mod prompt;
 pub mod protocol;
 pub mod replay;
 pub mod save;
