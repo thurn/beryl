@@ -32,12 +32,14 @@ export const view = (battlefield, hand = [], more = {}) => ({
 });
 
 /** Permanents in a row 400 apart at y 0; a hand's cards in a row at y 500; the stack's items
- * in a column 100 apart at x 2000, bottom first. Cards in no zone drawn here (a graveyard's)
- * rest nowhere. An ability lifts out of its source 10 in from its corner, at half its width. */
+ * in a column 100 apart at x 2000, bottom first; a library's cards in one place, at x 3000
+ * and y 500. Cards in no zone drawn here (a graveyard's) rest nowhere. A card with no name
+ * shows its back. An ability lifts out of its source 10 in from its corner, at half its width,
+ * and a drawn card is held up 300 above its place in the hand at twice its width. */
 export const row = {
     rest({ view: table, abilities }) {
         const out = new Map();
-        const pose = (x, y, depth) => ({
+        const pose = (x, y, depth, face = "front") => ({
             x,
             y,
             width: 100,
@@ -45,7 +47,7 @@ export const row = {
             skew: 0,
             opacity: 1,
             depth,
-            face: "front",
+            face,
         });
         const dress = (zone) => ({
             zone,
@@ -58,7 +60,7 @@ export const row = {
             const object = table.objects.find((o) => o.slot === slot);
             out.set(slot, {
                 object,
-                pose: pose(x, y, slot),
+                pose: pose(x, y, slot, object.name === null ? "back" : "front"),
                 dress: dress(object.zone),
             });
         };
@@ -66,6 +68,11 @@ export const row = {
         table.objects
             .filter((o) => o.zone === "hand")
             .forEach((o, i) => place(o.slot, i * 400, 500));
+        for (const side of ["you", "opponent"]) {
+            for (const slot of table.players[side].library) {
+                place(slot, 3000, 500);
+            }
+        }
         let numbered = 0;
         table.stack.forEach((item, i) => {
             if (item.kind === "spell") return place(item.slot, 2000, i * 100);
@@ -87,18 +94,24 @@ export const row = {
         y: source.y + 10,
         width: source.width / 2,
     }),
+    // A drawn card is held up 300 above where it will lie, at twice its width.
+    drawn: (rest) => ({ ...rest, y: rest.y - 300, width: rest.width * 2 }),
 };
 
-/** A surface that records what the stage did to it. */
+/** A surface that records what the stage did to it: the nodes it made and removed (`log`),
+ * how it dressed each, as its zone or as a card back (`dressed`), and each node's pose. */
 export function recorder() {
     const log = [];
+    const dressed = [];
     const nodes = new Map();
     return {
         log,
+        dressed,
         nodes,
         make: (slot) => (nodes.set(slot, null), log.push(`make ${slot}`)),
         remove: (slot) => (nodes.delete(slot), log.push(`remove ${slot}`)),
-        dress: () => {},
+        dress: (slot, { dress }) =>
+            dressed.push(`${slot} ${dress.back ? "back" : dress.zone}`),
         draw: (slot, pose) => nodes.set(slot, pose),
     };
 }

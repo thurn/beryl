@@ -254,12 +254,21 @@ export function apply(table: Table, act: Act): Table {
         }
       }
     }
-    // Waits, words and spans change nothing on the table.
+    // The cards the opponent is handling, from the step that begins the look to the one that
+    // ends it: the view's own word for it (`PlayerView.handling`), which a layout lifts them
+    // by.
+    case "lift": {
+      const { handling: _, ...rest } = view;
+      return {
+        ...table,
+        view: act.span === "begin" ? { ...rest, handling: act.handling } : rest,
+      };
+    }
+    // Waits, words and the other spans change nothing on the table.
     case "dwell":
     case "announce":
     case "point":
     case "mark":
-    case "lift":
       return table;
   }
 }

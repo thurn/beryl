@@ -3,7 +3,7 @@
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import type { HandHold } from "../game/handLayout";
-import { layout, STACK_Z } from "../game/layout";
+import { handlingSlots, layout, STACK_Z } from "../game/layout";
 import { fromMiddle } from "../game/perspective";
 import { FULL_WIDTH, type Placement } from "../game/placement";
 import { stackPlace } from "../game/stackLayout";
@@ -125,7 +125,7 @@ function rest(
     NO_ORDER,
     NONE,
     zonePiles(view, NO_ORDER),
-    [],
+    handlingSlots(view, NO_ORDER),
   );
   const out = new Map<Name, Resting>();
   for (const object of [...view.objects, ...emblemObjects(view)]) {
@@ -157,6 +157,24 @@ export function emerging(source: Pose, rest: Pose): Pose {
   };
 }
 
+/** How large a card you draw is held up, against its size in your hand: Arena's 1.55 and
+ * 1.59 (data/arena-motion.json, fly, "draw"). */
+const DRAWN = 1.57;
+
+/** Upright over where it will lie, its foot a quarter of the way down the card it becomes:
+ * Arena's drops straight down into the hand (`UrGalw_f35w 16:52.4`). */
+export function drawn(rest: Pose): Pose {
+  const width = rest.width * DRAWN;
+  return {
+    ...rest,
+    x: rest.x - (width - rest.width) / 2,
+    y: rest.y + (rest.width / 4 - width) / CARD_ASPECT,
+    width,
+    rotation: 0,
+    skew: 0,
+  };
+}
+
 function anchors(table: PlayerView): Anchors {
   const piles = [...zonePiles(table, NO_ORDER), ...knownLibraries(table)];
   return {
@@ -184,6 +202,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   rest: (table) => rest(table, around),
   anchors,
   emerging,
+  drawn,
 });
 
 /** The desktop's table with nothing over it. */

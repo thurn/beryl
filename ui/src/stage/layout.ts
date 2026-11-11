@@ -75,4 +75,7 @@ export interface StageLayout {
   /** Where an ability starts as it lifts out of its source, which is drawn at `source`: a
    * small copy on it, which then travels to `rest`, its place on the stack. */
   emerging(source: Pose, rest: Pose): Pose;
+  /** Where a card you draw is held up to be read before it drops into your hand, where it
+   * will lie at `rest`. */
+  drawn(rest: Pose): Pose;
 }

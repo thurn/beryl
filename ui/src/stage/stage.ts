@@ -17,7 +17,12 @@
 // at rest; what only makes room for it (a row closing up, a phone's rows as its stack comes
 // and goes) moves at the depth it rests at, under what flies. A verb whose subject does not
 // travel from where it was gives it a track of its own (`#enter`): an `emerge` starts on the
-// ability's source, an `appear` is there at once and only fades in.
+// ability's source, an `appear` is there at once and only fades in, and a card you draw is
+// held up on its way. A card that leaves face down and lands face up turns over on the way.
+//
+// One verb's subject does not go where the table has it as the step begins: what a `vanish`
+// takes goes from sight where it was, dressed as it was, for as long as the verb takes, and
+// only as the step ends is it at its new place, or no more (`#lay`, `#left`).
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
@@ -47,8 +52,19 @@ import {
   type StageLayout,
 } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
-import { between, samePose, type Pose } from "./pose.ts";
+import { samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
+import {
+  dissolve,
+  drawsToRead,
+  fade,
+  glide,
+  HELD_TURN,
+  heldUp,
+  subjectOf,
+  TURN,
+  type Path,
+} from "./tracks.ts";
 
 /** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
  * turn comes it begins, how long the next step of its beat waits for it, and its curve from 0
@@ -124,37 +140,26 @@ export interface Edge {
 interface Track {
   from: number;
   to: number;
-  pose(progress: number, rest: Pose): Pose;
+  pose: Path;
+  /** How far along it turns face up, if it leaves face down for a place where its face
+   * shows: until then it is dressed as a card back. */
+  turn?: number;
   /** A card let go where its drop was taken, kept there with no end of its own until what the
    * drop did has played: a step that moves it starts from there, and otherwise it glides home
    * when the script is over. */
   stays?: boolean;
 }
 
-/** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
- * is about, and at its resting depth for what makes room. */
-const glide =
-  (start: Pose, ease: Timing["ease"], aloft: boolean): Track["pose"] =>
-  (progress, rest) =>
-    between(start, rest, ease(progress), aloft);
-
-/** What a step's act is about, if it is something on the table: its card, or the ability it
- * puts on the stack. */
-function subjectOf(act: Act): Name | undefined {
-  if (act.verb === "emerge") return abilityName(act.id);
-  return "object" in act ? act.object?.slot : undefined;
-}
-
-/** An entry that is at its resting place from the first, and comes to be seen there. */
-const fade =
-  (ease: Timing["ease"]): Track["pose"] =>
-  (progress, rest) => ({ ...rest, opacity: rest.opacity * ease(progress) });
-
 interface Entry {
   resting: Resting;
   track?: Track;
   /** Its pose is to be written at the tick's end. */
   moved: boolean;
+  /** The `vanish` taking it from where `resting` still has it, until that step ends. */
+  leaving?: Run;
+  /** What it is drawn as while it has yet to turn over on its way (`Track.turn`): as it
+   * rests, but for its back. */
+  covered?: Resting;
 }
 
 /** One step of the beat under way. */
@@ -276,7 +281,7 @@ export class ScriptStage {
     this.#surface = surface;
     for (const [name, entry] of this.#entries) {
       surface.make(name);
-      surface.dress(name, entry.resting);
+      surface.dress(name, entry.covered ?? entry.resting);
       entry.moved = true;
     }
     this.#write(this.clock.now);
@@ -307,6 +312,7 @@ export class ScriptStage {
     for (const entry of this.#entries.values()) {
       entry.moved ||= entry.track !== undefined;
       entry.track = undefined;
+      entry.leaving = undefined;
     }
     let table = tableOf(view, script?.reset);
     // A reset's steps are only the spans to show, begun at once.
@@ -450,6 +456,7 @@ export class ScriptStage {
       if (over && over.to <= to && (!next || over.to <= next.from)) {
         over.ended = true;
         this.#stale ||= over.verb === "announce";
+        if (over.verb === "vanish") this.#left(over);
         this.#tell(over, "end");
         continue;
       }
@@ -517,8 +524,36 @@ export class ScriptStage {
     run.found = this.#table!;
     this.#tell(run, "start");
     this.#set(apply(this.#table!, run.step.act));
+    // A step about what an earlier one is still taking from sight finds it gone already.
+    const subject = subjectOf(run.step.act);
+    const entry =
+      subject === undefined ? undefined : this.#entries.get(subject);
+    if (entry?.leaving) {
+      entry.leaving = undefined;
+      entry.track = undefined;
+    }
+    if (entry && run.verb === "vanish" && run.to > run.from) {
+      const start = this.#poseOf(subject!, entry, run.from);
+      entry.leaving = run;
+      entry.track = {
+        from: run.from,
+        to: run.to,
+        pose: dissolve(start, run.ease),
+      };
+    }
     this.#lay(run.from, run);
     if (run.to > run.from) this.#enter(run);
+  }
+
+  /** The `vanish` `run` is over: what it took is where the table has had it since the step
+   * began, with no flight, or is no more. */
+  #left(run: Run) {
+    const entry = [...this.#entries.values()].find((e) => e.leaving === run);
+    if (!entry) return;
+    entry.leaving = undefined;
+    entry.track = undefined;
+    entry.moved = true;
+    this.#lay(run.to);
   }
 
   /** The motion of a step's own subject where that is no glide from where it was. Each starts
@@ -552,6 +587,21 @@ export class ScriptStage {
         if (entry) entry.track = track(fade(run.ease));
         return;
       }
+      case "fly": {
+        // Your draw is held up to be read on its way, unless it is one of several: Arena's
+        // three cards of one spell pass at their own size (`WQiYBv23buw 29:14.2`).
+        const entry = this.#entries.get(act.object.slot);
+        const several = this.#playback!.steps.some(
+          (other) => other !== run && drawsToRead(other.step.act),
+        );
+        if (!entry?.track || several || !drawsToRead(act)) return;
+        const start = this.#poseOf(act.object.slot, entry, run.from);
+        this.#fly(act.object.slot, entry, {
+          ...track(heldUp(start, run.ease, this.#layout.drawn)),
+          turn: start.face === "back" ? HELD_TURN : undefined,
+        });
+        return;
+      }
       default:
         return;
     }
@@ -583,8 +633,8 @@ export class ScriptStage {
    * carries it. */
   #lay(at: number, run?: Run) {
     const rest = this.#layout.rest(this.#table!);
-    for (const name of [...this.#entries.keys()]) {
-      if (rest.has(name)) continue;
+    for (const [name, entry] of [...this.#entries]) {
+      if (rest.has(name) || entry.leaving) continue;
       this.#surface?.remove(name);
       this.#entries.delete(name);
       this.pointer.gone(name);
@@ -599,23 +649,15 @@ export class ScriptStage {
         this.#stale = true;
         continue;
       }
+      // What a `vanish` is taking stays as it was until that step is over (`#left`).
+      if (entry.leaving) continue;
       const before = entry.resting;
       const face = sameFace(before, resting);
       const dress = sameDress(before.dress, resting.dress);
       const still = samePose(before.pose, resting.pose);
       if (still && face && dress) continue;
-      if (!still) {
-        if (run && run.to > at) {
-          const start = this.#poseOf(name, entry, at);
-          const aloft = subjectOf(run.step.act) === name;
-          entry.track = {
-            from: at,
-            to: run.to,
-            pose: glide(start, run.ease, aloft),
-          };
-        }
-        entry.moved = true;
-      }
+      const moves = !still && run !== undefined && run.to > at;
+      const start = moves ? this.#poseOf(name, entry, at) : undefined;
       // What did not change stays the very same, so that nothing drawn from it is drawn again.
       entry.resting = {
         ...(face ? before : resting),
@@ -623,18 +665,55 @@ export class ScriptStage {
         dress: dress ? before.dress : resting.dress,
       };
       if (!face || !dress) {
+        entry.covered = undefined;
         this.#surface?.dress(name, entry.resting);
         // A frame of another width scales otherwise for the same pose.
         entry.moved = true;
         this.#stale = true;
       }
+      if (start) {
+        const flies = subjectOf(run!.step.act) === name;
+        // The card a `fly` is about turns over on the way if it lands face up.
+        const turns =
+          flies &&
+          run!.verb === "fly" &&
+          start.face === "back" &&
+          resting.pose.face === "front";
+        this.#fly(name, entry, {
+          from: at,
+          to: run!.to,
+          pose: glide(start, run!.ease, flies, turns),
+          turn: turns ? TURN : undefined,
+        });
+      }
+      entry.moved ||= !still;
     }
+  }
+
+  /** Puts `entry` on `track`: until the track turns it over, it is dressed as a card back. */
+  #fly(name: Name, entry: Entry, track: Track) {
+    entry.track = track;
+    const covered = track.turn !== undefined && !entry.resting.dress.back;
+    if (!covered && !entry.covered) return;
+    entry.covered = covered
+      ? { ...entry.resting, dress: { ...entry.resting.dress, back: true } }
+      : undefined;
+    this.#surface?.dress(name, entry.covered ?? entry.resting);
+    entry.moved = true;
+    this.#stale = true;
   }
 
   /** Writes the pose at stage time `now` of every entry that moved or is moving, and tells
    * those who draw from `shown` if it changed. */
   #write(now: number) {
     for (const [name, entry] of this.#entries) {
+      // It has turned over, or what was turning it is no longer its track.
+      if (entry.covered && !turning(entry.track, now)) {
+        entry.covered = undefined;
+        this.#surface?.dress(name, entry.resting);
+        entry.moved = true;
+        this.#stale = true;
+      }
       if (!entry.moved && !entry.track) continue;
       this.#draw(name, entry, now);
       entry.moved = false;
@@ -646,7 +725,10 @@ export class ScriptStage {
     this.#shown = {
       table: this.#table?.view,
       resting: new Map(
-        [...this.#entries].map(([name, entry]) => [name, entry.resting]),
+        [...this.#entries].map(([name, entry]) => [
+          name,
+          entry.covered ?? entry.resting,
+        ]),
       ),
       view: this.#view,
       busy,
@@ -696,10 +778,17 @@ export class ScriptStage {
   }
 }
 
+/** How far along `track` stage time `at` is. */
+const along = (track: Track, at: number) =>
+  Math.max(0, (at - track.from) / (track.to - track.from));
+
+/** Whether `track` has yet to turn its card face up at stage time `at`. */
+const turning = (track: Track | undefined, at: number) =>
+  track?.turn !== undefined && at < track.to && along(track, at) < track.turn;
+
 /** Where an entry is at stage time `at`: on its track while one runs, else at rest. */
 function poseAt(entry: Entry, at: number): Pose {
   const track = entry.track;
   if (!track || at >= track.to) return entry.resting.pose;
-  const progress = Math.max(0, (at - track.from) / (track.to - track.from));
-  return track.pose(progress, entry.resting.pose);
+  return track.pose(along(track, at), entry.resting.pose);
 }

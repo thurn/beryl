@@ -21,7 +21,7 @@ import {
   type Spot,
   type Viewport,
 } from "../mobile/layout";
-import { emerging } from "./desktop.ts";
+import { drawn, emerging } from "./desktop.ts";
 import {
   abilityName,
   type Anchors,
@@ -190,4 +190,5 @@ export const phone = (viewport: Viewport): StageLayout => ({
   rest: (table) => rest(table, viewport),
   anchors: (view) => anchors(view, viewport),
   emerging,
+  drawn,
 });
