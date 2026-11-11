@@ -3,9 +3,9 @@
 *A plan to rebuild Beryl's engine, card and UI structure so it could hold every
 known Magic card. Decided 2026-11-10 in a design interview, on an audit of the
 code and on measurements taken that day, and revised the same day after an audit
-of the plan itself and a second interview on the checks (K18 to K21). The work
-is tracked as an Enact epic in beads; this document is the plan the epic's beads
-are written against.*
+of the plan itself a second interview on the checks (K18 to K21) and a third on
+how the UI presents a game (K22 to K30). The work is tracked as an Enact epic in
+beads; this document is the plan the epic's beads are written against.*
 
 Beryl supports 47 cards. Its structure was built for that pool: one cards crate,
 hand-kept registries, one Rust function per ability, and an enum variant or
@@ -14,9 +14,9 @@ structure with one that would still work with the full Comprehensive Rules and
 50,000 card definitions.
 
 - **In scope:** architecture. Crates, state ownership, the card format, the
-  shared rules library, the prompt protocol, the card data pipeline,
-  verification, the checks every push runs, and the tools a fleet of cheap
-  models needs to write cards.
+  shared rules library, the prompt protocol, how the UI presents a game, the
+  card data pipeline, verification, the checks every push runs, and the tools a
+  fleet of cheap models needs to write cards.
 - **Not in scope:** new rules features. Expanding what the engine can do is the
   next project, [rules-coverage.md](rules-coverage.md). The only new cards are
   the ten of the closing authoring pilot.
@@ -80,35 +80,58 @@ and 57 of those were the two browser lanes, which the fast check never runs.
 - Nothing records what a check has caught or cost, so nothing can be removed on
   evidence.
 
+**UI reports.** See [Measurements](#measurements). In three days the UI drew 180
+bug reports: about 150 on the UI, about 22 on the AI's plays and 4 on the rules.
+
+- About 40 re-filed five themes. One motion, a trigger lifting out of its card,
+  took twelve reports and seven commits. It is how Arena presents a trigger.
+- The session sends a snapshot and a flat list of events. `beats.ts` rebuilds a
+  timeline from them, and cards, trigger flights, arrows, combat lines and mana
+  each animate in code of their own, sequenced by fixed waits. One motion ran
+  through a different path for each way the views happened to batch.
+- A fixing agent had prose to interpret and its own pixel measurements to verify
+  against. The fixer closed 178 of the 180, at a median of 47 minutes.
+- `docs/ui-conventions.md` covered three topics. The reports state about 60
+  rules.
+
 **Compile time.** See [Measurements](#measurements). One crate of 50,000 real
 card files would need about 53 GiB of compiler memory. Split into crates, the
 same cards build in about 90 seconds.
 
 ## Decisions
 
-| ID  | Decision                                                                                                                                                                                                                | Why                                                                                                                                                                                                                              |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump; if it cannot hold, the run stops for a human decision.                         | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data, so there is no substitute to fall back to.                    |
-| K2  | Printed characteristics are generated from Scryfall for the whole pool into the card store. A card gets a Rust file, under a generated header, when it gets written abilities.                                          | Nobody types a cost or type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh.                                       |
-| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                                                                                       | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                                                                 |
-| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers.                                                                    | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                                                                                                              |
-| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                                                                                        | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                                                    |
-| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                                                                                        | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                                                                                                                   |
-| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.                                                                           | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                                                                                                                |
-| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                                                                                                  | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                                                                                                                      |
-| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                                                                                      | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.                                                                                                        |
-| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                                                                                        | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                                                                                                                   |
-| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                                                                                       | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                                                                                                                          |
-| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                                                                                     | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.                                                                                                       |
-| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                                                                                      | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find.                                                                                               |
-| K14 | The project ends at parity, a scale rehearsal and a ten-card authoring pilot.                                                                                                                                           | Foundations first. The pilot is the only test that a cheap model can write a card from the brief; its cards are Legacy cards the project needs anyway.                                                                           |
-| K15 | Five parallel tracks. One Warden per milestone. A Mason audit gates each step of the engine chain (after milestones 2, 3, 4 and 5) and one closes the run. No Sage, one Archivist.                                      | Parity is machine-checked. Architecture drift is what the checks cannot see, and it is expensive in the vocabulary, kernel, stores and library.                                                                                  |
-| K16 | Beryl stays Apache-2.0 and takes no card data from Forge. Forge is a test oracle and a census of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                                   | A translator from Forge's scripts would be a second vocabulary: about 1,600 hand-mapped script entries for 83% of its cards ([Measurements](#measurements)), built from the idioms Beryl avoids, at the cost of a permanent GPL. |
-| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink. Tests, test drivers, generated files, the expert system and the retired long-think code are exempt.        | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                                                                                                                  |
-| K18 | Every check's every run is logged, and each failure gets a verdict the tool infers: flaky, stale test or caught a bug. A weekly agent applies a fixed pruning rule to the records, with no approval step.               | Nobody can say which checks earn their time. A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                              |
-| K19 | The fast check runs the browser checks a change affects, chosen by measured coverage and capped by time. Slow CI stays the full sweep on every staging tip until the miss rate is measured.                             | The author knows whether the test or the code is wrong; a Steward has to find out. `Board.tsx` changes in a quarter of all commits, so choosing by file would choose everything.                                                 |
-| K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                | Audits found about six of eight real UI bugs; scripted checks caused about 21 stale or racy failures. Only audits scale to generated specs for 50,000 cards.                                                                     |
-| K21 | A failed check reruns once. One that flakes twice in seven days is quarantined: it runs and is logged but cannot fail a run. A failure that survives the rerun on staging is bisected before its Steward bead is filed. | A racy test should not charge an unrelated change. A Steward told the check, the commit and the check's record starts from the answer.                                                                                           |
+| ID  | Decision                                                                                                                                                                                                                                                                                                | Why                                                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump; if it cannot hold, the run stops for a human decision.                                                                                                         | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data, so there is no substitute to fall back to.                    |
+| K2  | Printed characteristics are generated from Scryfall for the whole pool into the card store. A card gets a Rust file, under a generated header, when it gets written abilities.                                                                                                                          | Nobody types a cost or type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh.                                       |
+| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                                                                                                                                                                       | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                                                                 |
+| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers.                                                                                                                                                    | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                                                                                                              |
+| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                                                                                                                                                                        | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                                                    |
+| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                                                                                                                                                                        | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                                                                                                                   |
+| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.                                                                                                                                                           | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                                                                                                                |
+| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                                                                                                                                                                                  | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                                                                                                                      |
+| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                                                                                                                                                                      | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.                                                                                                        |
+| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                                                                                                                                                                        | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                                                                                                                   |
+| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                                                                                                                                                                       | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                                                                                                                          |
+| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                                                                                                                                                                     | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.                                                                                                       |
+| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                                                                                                                                                                      | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find.                                                                                               |
+| K14 | The project ends at parity, a scale rehearsal and a ten-card authoring pilot.                                                                                                                                                                                                                           | Foundations first. The pilot is the only test that a cheap model can write a card from the brief; its cards are Legacy cards the project needs anyway.                                                                           |
+| K15 | Six parallel tracks. One Warden per milestone. A Mason audit gates each step of the engine chain (after milestones 2, 3, 4 and 5) and one closes the run. No Sage, one Archivist.                                                                                                                       | Parity is machine-checked. Architecture drift is what the checks cannot see, and it is expensive in the vocabulary, kernel, stores and library.                                                                                  |
+| K16 | Beryl stays Apache-2.0 and takes no card data from Forge. Forge is a test oracle and a census of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                                                                                                                   | A translator from Forge's scripts would be a second vocabulary: about 1,600 hand-mapped script entries for 83% of its cards ([Measurements](#measurements)), built from the idioms Beryl avoids, at the cost of a permanent GPL. |
+| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink. Tests, test drivers, generated files, the expert system and the retired long-think code are exempt.                                                                                        | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                                                                                                                  |
+| K18 | Every check's every run is logged, and each failure gets a verdict the tool infers: flaky, stale test or caught a bug. A weekly agent applies a fixed pruning rule to the records, with no approval step.                                                                                               | Nobody can say which checks earn their time. A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                              |
+| K19 | The fast check runs the browser checks a change affects, chosen by measured coverage and capped by time. Slow CI stays the full sweep on every staging tip until the miss rate is measured.                                                                                                             | The author knows whether the test or the code is wrong; a Steward has to find out. `Board.tsx` changes in a quarter of all commits, so choosing by file would choose everything.                                                 |
+| K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                                                                                                | Audits found about six of eight real UI bugs; scripted checks caused about 21 stale or racy failures. Only audits scale to generated specs for 50,000 cards.                                                                     |
+| K21 | A failed check reruns once. One that flakes twice in seven days is quarantined: it runs and is logged but cannot fail a run. A failure that survives the rerun on staging is bisected before its Steward bead is filed.                                                                                 | A racy test should not charge an unrelated change. A Steward told the check, the commit and the check's record starts from the answer.                                                                                           |
+| K22 | Arena is the reference for flow, motion, timing, table layout and wording. Beryl keeps its own skin: colors, type, icon drawings, frames, full cards that tap. Beryl differs from Arena only by a numbered exception, and the user's bug report makes or removes one, the latest winning.               | Agents had prose to interpret, and read it differently each time. A recording can be measured. The lift reported twelve times is Arena's own.                                                                                    |
+| K23 | For each update the session builds, per seat, a script: ordered steps of about 15 motion verbs covering every visible change, arrows, combat lines and marks included. Engine events carry their cause and what they are simultaneous with. The UI plays scripts and infers nothing.                    | The UI rebuilt a timeline from snapshots and guessed causes the engine knew. Each fix covered the batching patterns it had seen.                                                                                                 |
+| K24 | A card's scripts are held to invariants: replaying a script on the previous view gives the next view, and no arrow points at an object that is moving or gone. Text snapshots exist only where a person wrote the expectation: per verb, per prompt shape and for the library's hand-written scenarios. | K20: invariants scale to the pool. A snapshot per card is a change detector that one verb change rewrites everywhere, and K18's rule would delete it.                                                                            |
+| K25 | An imperative stage plays scripts over one persistent DOM node per game object, on a clock it owns and a test can step. A step ends when its animation ends. It is built behind a switch and cut over once; the old animation code is deleted in the same change.                                       | Ten layout effects and a table of fixed waits coordinate today's motion. Two animation systems sharing a screen is the seam that flickered. K21's paused clock does not drive CSS or Web Animations.                             |
+| K26 | A prompt's state lives in the session. Each click is a command; the answer is marks from a closed list and the state of each button.                                                                                                                                                                    | The UI decided what an outline meant, and one prompt ended up with three colors. A prompt interaction becomes a Rust test, and the phone behaves identically.                                                                    |
+| K27 | One tool measures a motion the same way in an Arena recording and in a Beryl capture. Arena's numbers are committed as reference data, and each verb is held to them within a tolerance.                                                                                                                | The motion audit asks only whether something moved. It passed fixes the user reported again.                                                                                                                                     |
+| K28 | The design language is data: each verb's values, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                                                   | Nothing forced the code and the prose to agree. An exception that is data can exempt its verb from the Arena comparison.                                                                                                         |
+| K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout, listed the same way. A judgement call files a `human` bead and never blocks.                                                                                | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                                                                   |
+| K30 | From the track's start until the cut-over, reports about motion, arrows and combat lines are banked as cases the stage must pass, not fixed in the code it replaces.                                                                                                                                    | In three days the UI took 14,351 added lines of fixes, most in files the stage deletes.                                                                                                                                          |
 
 ## Target architecture
 
@@ -212,9 +235,60 @@ take `Resolution` (source, controller, targets, X, the answer record).
 A **shape** says how the player answers: pick up to N objects, order, split into
 destinations, yes or no, a number, a mode, a catalog choice (a color, a type, a
 card name), divide an amount, pay with permanents. A **purpose** tag says what
-it is for (scry, discard, search) and tunes wording, sound and motion. The UI
-builds each shape once, as physical cards. Crew, convoke and waterbend are one
-shape.
+it is for (scry, discard, search) and tunes wording, sound and motion. The stage
+builds each shape once (K25), and the session holds its state (K26). Crew,
+convoke and waterbend are one shape.
+
+### Presentation
+
+Arena is the reference (K22). What Beryl shows, in what order and from where, is
+decided once in Rust and played by the UI.
+
+- **Script.** For each update the session sends each seat a script beside the
+  view: ordered steps, each a verb applied to objects, with the steps that
+  happen together grouped. About 15 verbs: emerge, fly, land, appear, vanish,
+  flip, tap, strike, showcase, point, mark, count. The list is settled when the
+  type is designed. An arrow, a combat line or a mark is a step with a beginning
+  and an end, not something recomputed from each view. A script carries no
+  geometry and no timing.
+- **Causes.** Engine events carry their cause and what they are simultaneous
+  with. Step one infers both in the session from today's flat events. Step two
+  takes them from the interpreter (K1), where every effect entry knows its
+  source, and deletes the inference. Rollouts drop events at the sink, and the
+  tags are held to the count gate with no bump.
+- **Invariants.** A debug assertion wherever the session builds a script:
+  replaying it on the previous view gives the next view exactly, so a change
+  with no step fails. Rule invariants sit beside it: no arrow points at an
+  object that is moving or has left; an arrow is hidden before its target moves;
+  one visual per object unless a verb says otherwise. Every scenario, fixture
+  recording and fuzz game exercises them, and none runs in a rollout. Text
+  snapshots are written by hand only (K24).
+- **Stage.** One player in the UI owns a persistent DOM node per game object and
+  runs steps in order on a clock it owns. A step ends when its animation ends;
+  there are no fixed waits. Tests step the clock (K21), and a small probe proves
+  that before the animation mechanism is chosen. React keeps the chrome. The
+  desktop and phone boards are two layouts of one stage.
+- **Prompts.** The session holds a prompt's state (K26). The UI sends clicks and
+  draws the marks it gets back: eligible, selected, suggested, friendly target,
+  hostile target and the rest of a closed list, each with one look.
+- **Design language.** Data files hold each verb's values, each mark, the
+  numbered exceptions to Arena and the cases Arena's recordings do not show. The
+  stage and the tests read them, and `docs/ui-conventions.md` is generated from
+  them.
+- **Motion oracle.** One tool tracks a moving card by frame differencing and
+  prints the same numbers for an Arena clip and a Beryl capture: duration, start
+  delay, stagger, path and peak size. Arena's numbers are measured once and
+  committed under `data/` as reference data; they are measurements, not the log
+  of a run. Durations, delays and stagger are checked against a verb's values
+  with no browser. Path and peak size need a capture, taken in stepped stage
+  time when the stage or the values change, and nightly.
+- **Browser checks.** Each verb and each shape once, from both seats and in both
+  layouts, beside `shots` and its layout audits. The duplicate and motion audits
+  read the script's verbs: Arena's cast chooser shows a card twice, and its
+  tokens appear without a flight.
+- **No approval steps.** Where the user's eye is wanted (how a line looks, a new
+  verb, a rule Arena contradicts), the agent proceeds on Arena or on the nearest
+  existing verb and files a `human` bead. Nothing waits on it.
 
 ### Card pool pipeline
 
@@ -321,16 +395,17 @@ These go into AGENTS.md in the first milestone.
 
 ## Milestones
 
-Each lands in place under K11. They run as five tracks (K15).
+Each lands in place under K11. They run as six tracks (K15).
 
-| Track   | Milestones                    | Starts after                |
-| ------- | ----------------------------- | --------------------------- |
-| Engine  | 2, 3, 4, 5, in order          | milestone 1                 |
-| Prompts | 6                             | milestone 2; lands before 5 |
-| Data    | 7a                            | milestone 1                 |
-| Hygiene | file splits no milestone owns | milestone 1                 |
-| Tail    | 7b, then 8                    | milestone 5                 |
-| CI      | two steps, no milestone       | nothing; blocks nothing     |
+| Track        | Milestones                    | Starts after                   |
+| ------------ | ----------------------------- | ------------------------------ |
+| Engine       | 2, 3, 4, 5, in order          | milestone 1                    |
+| Prompts      | 6                             | milestone 2; lands before 5    |
+| Data         | 7a                            | milestone 1                    |
+| Hygiene      | file splits no milestone owns | milestone 1                    |
+| Tail         | 7b, then 8                    | milestone 5                    |
+| CI           | two steps, no milestone       | nothing; blocks nothing        |
+| Presentation | two steps, no milestone       | milestone 1; cuts over after 6 |
 
 1. **Guardrails.** The scale-rehearsal harness; the card-names test, seeded with
    the audit's inventory as a shrinking allowlist; the file-length check;
@@ -351,8 +426,10 @@ Each lands in place under K11. They run as five tracks (K15).
 5. **Rules library and card port.** `EffectCtx` dissolved; all 47 cards as
    effect data, written against milestone 6's prompt shapes; generated
    scenarios; prop cards.
-6. **Prompts.** Shapes and purposes through engine, session, protocol and UI,
-   with the save-format migration. Runs beside milestones 3 and 4.
+6. **Prompts.** Shapes and purposes through engine, session and protocol, with
+   each prompt's state held in the session (K26) and the save-format migration.
+   The old UI is adapted only enough to keep working; the stage builds each
+   shape (presentation track). Runs beside milestones 3 and 4.
 7. **Card pool.** 7a, with no engine dependency: generated characteristics for
    the whole pool, the card store over IPC, specs per requested card, the
    indexed card table. 7b: set crates, build-time registries, derived oracle
@@ -373,8 +450,21 @@ The CI track (K18 to K21) has two steps.
    oracles per changed card, bisection in `by ci`, and the weekly prune.
    Decomposed against the log as built.
 
-New cards and engine mechanics wait until milestone 5 lands. UI, mobile and AI
-ladder work continue.
+The presentation track (K22 to K30) has two steps.
+
+1. **Stage.** The rules still open settled from the recordings, and the
+   design-language data; the skills moved to the Arena reference, which starts
+   the banking of K30; the script type, verbs and marks; the session's script
+   builder with inferred causes; the invariants; the stage behind a switch,
+   first as one slice (cast a creature, its enters trigger, a token); the
+   measuring tool and Arena's numbers; then every verb, and every shape once
+   milestone 6's protocol has landed; the banked reports as cases; the cut-over,
+   which deletes `beats.ts` and the old animation code.
+2. **Causes from the interpreter.** After milestone 5: cause and simultaneity
+   tags from effect data, and the inference deleted.
+
+New cards and engine mechanics wait until milestone 5 lands. Mobile and AI
+ladder work continue, and so does UI work outside K30.
 
 ## Acceptance
 
@@ -407,12 +497,21 @@ ladder work continue.
   and a follow-up bead is filed. Then, if selection misses are under 1 per 100
   commits, a follow-up moves the browser lanes' full run to nightly.
 
-- **Reported, with no bar:** the share of failures by verdict; flakes and
-  quarantined checks; checks deleted; seconds per lane; the paper test's
-  four-way split; the render-match rate on the 47 cards; the pilot's pass count,
-  cards blocked by missing vocabulary and tokens per card; the Forge census,
-  with the missing mechanics ordered by cards blocked; the derived-only agent's
-  results against the tuned one.
+- **Presentation.** `beats.ts` and the per-component animation effects are gone,
+  and no UI file is over 800 lines. The invariants hold over every scenario and
+  the nightly fuzz. Every banked report passes as a stage case, and so do the
+  five repeated themes: the trigger lift, arrows on moved cards, the combat
+  line, paying with permanents and the scry flight. Every verb is within
+  tolerance of Arena's numbers or is a listed exception. The two weeks measured
+  for the checks bar above do not include the cut-over.
+
+- **Reported, with no bar:** bug reports per game played and how many repeat a
+  closed one; the share of failures by verdict; flakes and quarantined checks;
+  checks deleted; seconds per lane; the paper test's four-way split; the
+  render-match rate on the 47 cards; the pilot's pass count, cards blocked by
+  missing vocabulary and tokens per card; the Forge census, with the missing
+  mechanics ordered by cards blocked; the derived-only agent's results against
+  the tuned one.
 
 ## Risks
 
@@ -420,22 +519,45 @@ ladder work continue.
   ("that many", "the exiled card", "if you do") are where a card language turns
   into string variables. Milestone 2's paper test measures it on 60 cards before
   anything is built on the types.
+
 - **The interpreter costs more than estimated.** Milestone 2 measures it before
   anything is built on it, and the run stops if the gate cannot hold.
+
 - **Tracks collide.** Prompts and the kernel both edit `decision.rs`,
   `relayout.rs` and the ask sites in `effect.rs`. `enact push` rebases; the
   later push fixes the conflict.
+
 - **The save corpus constrains prompt changes.** Milestone 6 ships a format
   migration; the old vocabulary is closed and small.
+
 - **Selection misses.** Coverage is recorded nightly, so a check can depend on
   code written since. Slow CI still runs everything on every tip, and each miss
   is logged.
+
 - **A verdict is inferred wrongly.** A fix that deletes an assertion to hide a
   bug reads as a stale test. The rule needs three such updates and no catch
   before it deletes, and a `keep` comment overrides it.
+
 - **Dual APIs linger.** Old bodies and effect data coexist from milestone 2 to
   milestone 5. The card-names and file-length allowlists make the remainder
   visible.
+
+- **One instance is thin evidence.** Most of the Arena findings behind the first
+  rulings rest on one moment in one recording. Each verb is measured across
+  recordings before its numbers are pinned, and a finding that contradicts a
+  ruling files a `human` bead.
+
+- **The tracker cannot isolate a card.** Arena's table is animated and busy. If
+  frame differencing cannot follow a card, that verb's numbers are read once
+  from filmstrips and recorded with how they were taken.
+
+- **The stage is on the way to the final gate.** The cut-over needs milestone
+  6's protocol, and the file-length allowlist cannot empty until the old files
+  are deleted.
+
+- **The old table changes under the stage.** UI fixes continue until the
+  cut-over. K30 limits the churn; any other fix to the old table is repeated on
+  the stage or it is lost.
 
 ## Measurements
 
@@ -504,3 +626,30 @@ of 12 minutes.
 
 `ui-test` is 212 checks in one 12,725-line file and takes 136 to 181 seconds,
 the longest lane. All of its checks install a fake clock; 23 pause it.
+
+**UI reports.** The 180 beads labelled `bug-report`, filed 2026-11-08 to
+2026-11-10 from the app's bug button, sorted by reading each one.
+
+| Kind                                   | Reports  |
+| -------------------------------------- | -------- |
+| Motion: where things come from, timing | about 45 |
+| Static look and layout                 | about 43 |
+| Prompt and interaction flow            | about 37 |
+| Arrows and combat lines                | about 28 |
+| The AI's plays                         | about 22 |
+| The spec viewer                        | about 7  |
+| Rules                                  | about 4  |
+
+| Theme reported again            | Reports |
+| ------------------------------- | ------- |
+| A trigger lifts out of its card | 12      |
+| Paying with permanents          | 9       |
+| The scry flight                 | 7       |
+| Arrows on cards that moved      | 6       |
+| The combat line flickers        | 5       |
+
+The reports state 63 standing rules. Checked against the Arena recordings, most
+on a single instance: 27 are what Arena does, 20 differ, 7 have no Arena
+equivalent and 9 could not be told. Of the 20, six stay as Beryl exceptions and
+14 follow Arena. `ui/src` and `ui/scripts` gained 14,351 lines over the three
+days.

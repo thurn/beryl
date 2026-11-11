@@ -50,8 +50,8 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   and `ui/node_modules` shared by worktrees, the oracle builds and their last
   report in `oracles/logs/oracle.json`, and the screenshots), and `~/arena`
   (`$BERYL_ARENA`: the indexes of the Arena recordings in `~/Movies/arena`, the
-  reference for the UI's flow; `just video`, the `arena-video` skill). Never
-  crawl `~` or `/` with `find`.
+  reference for the UI; `just video`, the `arena-video` skill). Never crawl `~`
+  or `/` with `find`.
 
 ## Enact
 
@@ -167,32 +167,33 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 
 ## UI
 
-Keep [UI Conventions](docs/ui-conventions.md) up to date as the user gives UI
-feedback.
+MTG Arena is the reference for Beryl's flow, motion, timing, table layout and
+wording (`docs/project-50k.md`, K22). Before you design or change a prompt, an
+animation, an arrow or a label, find how Arena does it with the `arena-video`
+skill and match it. A still or a filmstrip settles what prose cannot.
 
-Everything in the Beryl client acts like a physical object. Cards cast shadows
-and animate and flip realistically. Things usually don't just appear, they come
-from somewhere. We never show multiple copies of the same game object. Browsers
-and prompts are not an exception to this: we animate the existing objects to
-appear in the browser, we don't make a new copy of them. Animations are fast and
-fluid. Everything you see makes sense as the motion of real cards in 3D space.
-All transitions are animated, nothing jumps to a new state. When the opponent is
-doing things, you see what is happening too, e.g. if they are looking at cards
-you might see the backs of those cards animate up.
-
-Hover inspection is an exception: a separate readable preview may show a card
-without moving the original into a huge close-up. Where the source card is
-already fairly large and space permits, prefer modest enlargement in place.
+- Beryl keeps its own skin: colors, type, icon drawings and frames, and full
+  cards that tap.
+- Beryl differs from Arena only where [UI Conventions](docs/ui-conventions.md)
+  lists a numbered exception. Check that list before copying Arena and before
+  "fixing" a difference from it.
+- The user's bug report wins over Arena and over an earlier report. Build what
+  it asks, and add, change or remove the exception in the same change.
+- What the recordings do not show is built from the motions and prompt shapes
+  Beryl already has, never a new look, and listed in UI Conventions under "Not
+  seen in Arena".
+- Never wait on the user for a UI judgement. Proceed on Arena or the nearest
+  existing behavior, and file a bead labelled `human` saying what to look at.
 
 ## Workflow
 
 - When launching more than one subagent at a time, please always use Sonnet.
-- When designing a UI, reduce the amount of words you put on screen by at least
-  50%.
+- UI wording is Arena's, exactly. Where Arena shows no label, put half the words
+  on screen that you first wrote.
 - Never ask the player a question whose answer the next screen could take: open
   the choice itself with a way to decline (a search with "find nothing", not
   "Search?" first). Never give them priority they would only pass, as with their
-  own spell alone on the stack. Arena's flow is the reference.
+  own spell alone on the stack. The first rule is a Beryl exception: Arena asks.
 - It's fine to file your own beads outside a specified enact role, but please
   offer to fix them inline in that case, don't just throw them onto the backlog.
 
