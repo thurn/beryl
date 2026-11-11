@@ -300,12 +300,12 @@
 //!   by hand, and `table::rule_bit` goes.
 //! - A static ability's change that affects players is kept current with the layers,
 //!   never found by walking the battlefield as `cast::sorcery_speed_limiter` does: the
-//!   layers' pass over the permanents already loads each face's facts, ORs its rules into
+//!   layers' pass over the permanents already loads each face's facts, adds its rules to
 //!   the set of each player they apply to once control is settled, and stores the sets as
 //!   it finishes ([`derive::Rederive::finish`], with `listening`). In a game without
 //!   [`table::Capability::RuleChanges`] the pass does none of it.
 //! - A resolved effect's change is a `Rule` entry of the Effects store on a player or the
-//!   game, ORed in as it starts and as the layers finish.
+//!   game, added to the set as it starts and as the layers finish.
 //! - A change that applies to the permanent with the ability asks its copiable values, as
 //!   today, and the Effects store for entries on it.
 //! - Which permanent makes it, to tell a player why, is asked only once the bit is set.
