@@ -5,7 +5,6 @@
   "rust/crates/beryl_engine/src/mana.rs": 1586,
   "rust/crates/beryl_scenario/src/run.rs": 971,
   "rust/crates/beryl_search/src/mcts.rs": 902,
-  "rust/crates/beryl_search/src/rollout.rs": 1175,
   "rust/crates/beryl_session/src/preview.rs": 1170,
   "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/game/Board.tsx": 3514,
