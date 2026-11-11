@@ -11,21 +11,17 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type RefObject,
 } from "react";
 import {
-  animate,
   AnimatePresence,
   motion,
   useIsPresent,
-  useMotionValue,
   useReducedMotion,
 } from "motion/react";
 import { useWaterbend } from "./waterbend";
 import { PaymentButton } from "./PaymentButton";
 import { cardEntry, faceEntry, landFace } from "../cards";
-import { BugIcon, requestBugReport } from "../components/BugReport";
 import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
 import {
   Button,
@@ -42,9 +38,7 @@ import {
   RulesText,
 } from "../components/Mana";
 import {
-  Coin,
   floating,
-  LifeOrb,
   ManaPool,
   PlayerBadge,
   Thinking,
@@ -63,7 +57,6 @@ import type {
   Kind,
   ObjectView,
   PlayerView,
-  RefusalView,
   Side,
   StackItem as StackItemView,
   StopsSetting,
@@ -145,7 +138,7 @@ import {
   type Layout,
   type Placement,
 } from "./placement";
-import { STACK, stackPlace, type Spotlight } from "./stackLayout";
+import { stackPlace, type Spotlight } from "./stackLayout";
 import {
   combatBanner,
   HALT_BUTTON,
@@ -172,19 +165,15 @@ import {
 } from "./AbilityChooser";
 import type { LogEntry } from "./log";
 import { GameLog, opponentActing } from "./Narration";
-import {
-  Inspect,
-  INSPECT_WIDTH,
-  inspectorBox,
-  type InspectPlace,
-  LibraryAnchor,
-  pileMark,
-  PileButton,
-  ZoneViewer,
-} from "./Piles";
+import { LibraryAnchor, pileMark, PileButton, ZoneViewer } from "./Piles";
 import { ManaFlow, manaMotes } from "./ManaFlow";
 import { TurnBanner } from "./TurnBanner";
-import { SoundPanel, useOpenSound } from "../audio/SoundControls";
+import { Corner, FullControlIcon, UndoButton } from "./Corner";
+import { InspectAt, inspectorPlace } from "./Inspector";
+import { Life, lifeId } from "./Life";
+import { itemId, peekId, StackPeek, stackId } from "./StackPeek";
+import { StepBanner, useBannerUp } from "./StepBanner";
+import { useOpenSound } from "../audio/SoundControls";
 import { play as playSound } from "../audio/sound";
 
 export interface BoardProps {
@@ -1977,59 +1966,15 @@ export function Board({
           />
         )}
 
-        {/* The gear's column at the top right: the gear, the bug report, and undo while there
-            is something to take back. The bug report stays over any screen. */}
-        <button
-          type="button"
-          className="icon-button bug-button bug-button-game"
-          aria-label="Report bug"
-          title={`Report bug (${MOD_KEY}B)`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={requestBugReport}
-        >
-          <BugIcon />
-        </button>
-        {/* Like the turn's controls, the gear gives way to a screen over the table. */}
-        {!inert && (
-          <button
-            type="button"
-            className="icon-button gear-button"
-            aria-label="Settings"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setSettings(!settings)}
-          >
-            <Gear />
-          </button>
-        )}
-        {settings && !inert && (
-          <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
-            <SoundPanel />
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                checked={stops.fullControl}
-                onChange={(e) =>
-                  setStops({ ...stops, fullControl: e.target.checked })
-                }
-              />
-              <span>
-                Full control
-                <small>Stop at every priority</small>
-              </span>
-            </label>
-            {onConcede && (
-              <ConcedeButton
-                onConcede={() => {
-                  setSettings(false);
-                  onConcede();
-                }}
-              />
-            )}
-            <Button variant="secondary" size="small" onClick={onLeave}>
-              Leave Game
-            </Button>
-          </div>
-        )}
+        <Corner
+          inert={inert}
+          open={settings}
+          setOpen={setSettings}
+          stops={stops}
+          setStops={setStops}
+          onLeave={onLeave}
+          onConcede={onConcede}
+        />
       </div>
       {/* Undo stays accessible while a choice covers the table. */}
       {undoable && <UndoButton onUndo={undo} />}
@@ -2037,285 +1982,8 @@ export function Board({
   );
 }
 
-/** Concede, asked once in place: the first click turns it into the confirmation, which the
- * settings closing puts back. */
-function ConcedeButton({ onConcede }: { onConcede(): void }) {
-  const [confirming, setConfirming] = useState(false);
-  return (
-    <Button
-      variant={confirming ? "primary" : "secondary"}
-      size="small"
-      onClick={confirming ? onConcede : () => setConfirming(true)}
-    >
-      {confirming ? "Confirm Concede" : "Concede"}
-    </Button>
-  );
-}
-
 /** How long a card takes to glide to a new place (CardLayer's spring), near enough, in ms. */
 const GLIDE_MS = 700;
-
-/** How long an announcing banner shows, in ms. */
-const BANNER_MS = 2500;
-
-/** Whether the banner of this key is still showing: for BANNER_MS after it appears, then not,
- * until it goes and comes again. The spinner under the opponent's orb hides meanwhile, since the
- * banner lies where it does. */
-function useBannerUp(key: string | undefined): boolean {
-  const [gone, setGone] = useState<string>();
-  useEffect(() => {
-    if (key === undefined) {
-      setGone(undefined);
-      return;
-    }
-    const timer = setTimeout(() => setGone(key), BANNER_MS);
-    return () => clearTimeout(timer);
-  }, [key]);
-  return key !== undefined && gone !== key;
-}
-
-/** A step announcement over the battlefield, such as "Combat" over "Blockers declared", between
- * the opponent's life orb and their permanents: it fades away once no longer `shown`. */
-function StepBanner({
-  title,
-  detail,
-  shown,
-  coin,
-}: {
-  title: string;
-  detail: string;
-  shown: boolean;
-  coin: boolean;
-}) {
-  const reduce = useReducedMotion() ?? false;
-  return (
-    <AnimatePresence>
-      {shown && (
-        <motion.div
-          className="step-banner"
-          role="status"
-          exit={
-            reduce ? undefined : { opacity: 0, transition: { duration: 0.4 } }
-          }
-        >
-          {coin ? (
-            <Coin className="step-banner-coin" first={false} size={40} />
-          ) : (
-            <>
-              <i className="step-banner-rule step-banner-rule-left" />
-              <i className="step-banner-diamond" />
-            </>
-          )}
-          <span className="step-banner-title">{title}</span>
-          <i className="step-banner-dot" />
-          <i className="step-banner-rule step-banner-rule-right" />
-          <i className="step-banner-underline" />
-          <span className="step-banner-detail">{detail}</span>
-          <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
-            <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
-          </svg>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-/** Full control's mark beside the turn button: a stop sign, for stopping at every priority. */
-function FullControlIcon() {
-  return (
-    <svg viewBox="0 0 24 24" role="img" aria-label="Full control">
-      <path d="M8 1.5 H16 L22.5 8 V16 L16 22.5 H8 L1.5 16 V8 Z" />
-      <path className="full-control-bars" d="M9.5 7.5 V16.5 M14.5 7.5 V16.5" />
-    </svg>
-  );
-}
-
-/** Where the inspector stands: beside the table on the side away from the card at `x`, never over a
- * life orb, which lies between the two sides. While the stack or a prompt holds the table's
- * right (`taken`), it is shown smaller in the column between the life orbs and the stack
- * instead. It never covers a card glowing as a target (`targets`, their boxes), which the
- * player may be about to pick: where its side would, it takes the other, and where both would,
- * it shrinks toward a side's outer edge until it clears them. Failing that, it covers as little
- * of them as it can. */
-function inspectorPlace(
-  x: number,
-  taken: boolean,
-  targets: Box[],
-): InspectPlace {
-  const right: InspectPlace = taken
-    ? betweenOrbsAndStack()
-    : { left: STAGE.width - INSPECT_WIDTH - 24 };
-  const sides = x >= STAGE.width / 2 ? [LEFT, right] : [right, LEFT];
-  const covered = (place: InspectPlace) => {
-    const box = inspectorBox(place);
-    return targets.reduce((sum, t) => {
-      const w = Math.min(box.right, t.right) - Math.max(box.left, t.left);
-      const h = Math.min(box.bottom, t.bottom) - Math.max(box.top, t.top);
-      return sum + (w > 0 && h > 0 ? w * h : 0);
-    }, 0);
-  };
-  for (const side of sides) {
-    const full = side.width ?? INSPECT_WIDTH;
-    for (let width = full; width >= INSPECT_MIN_WIDTH; width -= 10) {
-      // The left side keeps its left edge; the others their right one, by the stack or the
-      // stage's edge.
-      const place = {
-        ...side,
-        left: side === LEFT ? side.left : side.left + full - width,
-        width,
-      };
-      if (covered(place) === 0) return place;
-    }
-  }
-  return sides.reduce((a, b) => (covered(b) < covered(a) ? b : a));
-}
-
-/** The table's left, under the badges. */
-const LEFT: InspectPlace = { left: 24 };
-/** How narrow the inspector gets to clear a target: a scan's rules text still reads. */
-const INSPECT_MIN_WIDTH = 230;
-
-/** Right of the life orbs (x 670 to 930 on the base stage, held to its middle), left of the
- * stack (STACK.x, held to its right edge), and below the opponent's orb and above yours (y 159
- * and 618), with room for the artist's line. */
-const betweenOrbsAndStack = (): InspectPlace => ({
-  left: fromMiddle(940),
-  top: 172,
-  width: STACK.x - 54 - fromMiddle(940),
-});
-
-/** Under the gear and the bug report: takes back the player's latest answer, one per press, across the
- * opponent's turns. */
-function UndoButton({ onUndo }: { onUndo: () => void }) {
-  return (
-    <button
-      type="button"
-      className="icon-button undo-button has-tip"
-      aria-label="Undo"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onUndo}
-    >
-      <svg className="undo-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          className="undo-arrow"
-          d="M8.5 4.5 4 9l4.5 4.5M4 9h10a5.5 5.5 0 0 1 0 11h-4"
-        />
-      </svg>
-      <Tip side="left">
-        Undo<kbd>{MOD_KEY}Z</kbd>
-      </Tip>
-    </button>
-  );
-}
-
-/** The platform's command modifier, as its keyboard shortcuts name it. */
-const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl ";
-
-/** The settings gear at the top right. */
-function Gear() {
-  return (
-    <svg className="gear" viewBox="0 0 24 24" aria-label="Settings" role="img">
-      <circle className="gear-hole" cx="12" cy="12" r="4.9" />
-      <path d="M19.67 9.71 L22.34 9.69 L22.34 14.31 L19.67 14.29 L19.04 15.80 L20.95 17.68 L17.68 20.95 L15.80 19.04 L14.29 19.67 L14.31 22.34 L9.69 22.34 L9.71 19.67 L8.20 19.04 L6.32 20.95 L3.05 17.68 L4.96 15.80 L4.33 14.29 L1.66 14.31 L1.66 9.69 L4.33 9.71 L4.96 8.20 L3.05 6.32 L6.32 3.05 L8.20 4.96 L9.71 4.33 L9.69 1.66 L14.31 1.66 L14.29 4.33 L15.80 4.96 L17.68 3.05 L20.95 6.32 L19.04 8.20 Z M16.9 12 A4.9 4.9 0 1 0 7.1 12 A4.9 4.9 0 1 0 16.9 12 Z" />
-    </svg>
-  );
-}
-
-/** A life orb that counts to a new total and pulses as it changes; it glows cyan as a target
- * and is then clicked to pick that player. It flares while its player is the active player,
- * whoever holds priority: the priority pill says who that is. */
-function Life({
-  side,
-  life,
-  incoming,
-  active,
-  style,
-  target,
-  onPick,
-  onAttack,
-}: {
-  side: Side;
-  life: number;
-  /** In combat, before its damage: what the unblocked attackers will deal this player. */
-  incoming?: number;
-  active: boolean;
-  style: CSSProperties;
-  target?: Act;
-  onPick(act: Act): void;
-  onAttack?(): void;
-}) {
-  const reduce = useReducedMotion() ?? false;
-  const value = useMotionValue(life);
-  const pulse = useMotionValue(1);
-  const [shown, setShown] = useState(life);
-  useEffect(() => {
-    if (value.get() === life) return;
-    const count = animate(value, life, {
-      duration: reduce ? 0 : 0.7,
-      ease: "easeOut",
-      onUpdate: (v) => setShown(Math.round(v)),
-    });
-    const beat = reduce
-      ? undefined
-      : animate(pulse, [1.14, 1], { duration: 0.5, ease: "easeOut" });
-    return () => {
-      count.stop();
-      beat?.stop();
-    };
-  }, [life, value, pulse, reduce]);
-  const targetable = target !== undefined || onAttack !== undefined;
-  return (
-    <motion.div
-      className={targetable ? "hud life life-aimed" : "hud life"}
-      data-life={side}
-      style={{ ...style, scale: pulse }}
-    >
-      {/* As a target, the orb's whole face is clicked, not just its number; the stops on
-          either side keep theirs. */}
-      {targetable && (
-        <span
-          className="life-hit life-target"
-          role="button"
-          aria-label={
-            onAttack
-              ? "Attack opponent"
-              : side === "you"
-                ? "Target yourself"
-                : "Target opponent"
-          }
-          onClick={onAttack ?? (() => target && onPick(target))}
-        />
-      )}
-      <LifeOrb
-        life={shown}
-        active={active}
-        seat={side === "opponent" ? "opponent" : "you"}
-        anchor={lifeId(side)}
-      />
-      {incoming !== undefined && (
-        <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
-      )}
-    </motion.div>
-  );
-}
-
-/** The combat damage a player is about to take, beside their orb: a number, red when it is
- * lethal. */
-function Incoming({ amount, lethal }: { amount: number; lethal: boolean }) {
-  return (
-    <span
-      className={
-        lethal ? "life-incoming life-incoming-lethal" : "life-incoming"
-      }
-      role="status"
-      aria-label={`${amount} combat damage${lethal ? ", lethal" : ""}`}
-      data-incoming={amount}
-      data-lethal={lethal || undefined}
-    >
-      {amount > 0 ? `\u2212${amount}` : "0"}
-    </span>
-  );
-}
 
 /** An activated or triggered ability on the stack, in the stack's cascade: its source's name
  * and art over what kind of ability it is and the paragraph of rules text that says it, as
@@ -2508,55 +2176,9 @@ function abilityPlacement(
         : last.get(slot);
 }
 
-/** The element id of the ability on the stack at `index`. */
-const stackId = (index: number) => `stack-${index}`;
-
-/** The element id of the stack item at `index`: its card for a spell. */
-const itemId = (item: StackItemView, index: number) =>
-  item.kind === "spell" ? cardId(item.slot) : stackId(index);
-
-/** The element id of the strip of the stack item at `index` that peeks out from under the
- * next. */
-const peekId = (index: number) => `stack-peek-${index}`;
-
-/** The strip of the stack item at `index` of `count` that the next one leaves uncovered: its
- * name bar (STACK), which is all of it the eye can tie an arrow to. Unseen, part of the item's
- * element `within` for the arrows. */
-function StackPeek({
-  index,
-  count,
-  within,
-  nextItem,
-}: {
-  index: number;
-  count: number;
-  within: string;
-  nextItem: string;
-}) {
-  const place = stackPlace(index, count);
-  const next = stackPlace(index + 1, count);
-  return (
-    <div
-      id={peekId(index)}
-      className="hud stack-peek"
-      data-within={within}
-      data-stack-next={nextItem}
-      style={{
-        left: place.x,
-        top: place.y,
-        width: place.width,
-        height: next.y - place.y,
-      }}
-    />
-  );
-}
-
 /** What the stack's arrows keep off: every card on the screen, the stack's items, the life
  * orbs and the game log. */
 const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
-
-/** The element id of the oval of a player's life orb. */
-const lifeId = (side: Side) => `${side}-life-orb`;
 
 /** Where each token `view`'s events made, and each emblem new since `before`, comes from: the
  * spell or permanent whose ability made it, resolving at the top of the stack `before`. */
@@ -3275,38 +2897,6 @@ function CrewMeter({
         />
       ))}
     </div>
-  );
-}
-
-/** The inspector for `object`, where `place` puts it (inspectorPlace), with what is attached
- * to it. */
-function InspectAt({
-  view,
-  object,
-  place,
-  lit,
-  refusal,
-}: {
-  view: PlayerView;
-  object?: ObjectView;
-  place: InspectPlace;
-  lit?: number;
-  refusal?: RefusalView;
-}) {
-  const by =
-    refusal?.kind === "timing" && refusal.by !== null
-      ? view.objects.find((o) => o.slot === refusal.by)?.name
-      : undefined;
-  return (
-    <Inspect
-      object={object}
-      attached={view.objects.filter(
-        (o) => o.zone === "battlefield" && o.attachedTo === object?.slot,
-      )}
-      place={place}
-      lit={lit}
-      refusal={refusal && { reason: refusal, by: by ?? undefined }}
-    />
   );
 }
 
