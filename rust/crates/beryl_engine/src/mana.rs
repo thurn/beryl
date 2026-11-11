@@ -22,8 +22,7 @@ use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::ZoneKey;
-use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone};
+use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 

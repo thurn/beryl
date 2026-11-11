@@ -13,12 +13,11 @@
 //! turn, a delayed trigger, a permission to cast) is not recorded: a checkpoint names the first
 //! such thing ([`State::off_board`]), and no game is rebuilt from it.
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Object, ObjectFlags};
-use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone};
+use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::{Deserialize, Serialize};
 
 /// The board as a turn begins.

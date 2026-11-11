@@ -1,7 +1,6 @@
 //! Effect data: what the interpreter makes of the vocabulary's instructions and expressions,
 //! resolved as abilities of test permanents.
 
-use crate::state::ZoneKey;
 use beryl_card::effect::build::{
     EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
     THOSE, YOU, add_counters, controller_of, create_copy, destroy, discard, draw, exile,
@@ -19,7 +18,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
 use crate::filter::{Filter, Whose};
 use crate::ids::{Seat, Slot};
-use crate::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, Zone};
+use crate::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, Zone, ZoneKey};
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 
 use super::events::{INSECT, game, put, with_ctx};

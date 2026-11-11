@@ -17,8 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
-use crate::state::ZoneKey;
-use crate::state::{ObjectFlags, State, Zone};
+use crate::state::{ObjectFlags, State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::trigger::face;
 

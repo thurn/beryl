@@ -12,7 +12,6 @@
 
 mod common;
 
-use beryl_engine::ZoneKey;
 use std::fmt::Write;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -20,7 +19,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Outcome, Profile, Replay, Scratch, Seat,
-    StallReason, State, Step, Stops, Zone, apply, next,
+    StallReason, State, Step, Stops, Zone, ZoneKey, apply, next,
 };
 use beryl_scenario::{
     Check, Live, Scenario, answer, describe, invariants, script, setup_source, source,

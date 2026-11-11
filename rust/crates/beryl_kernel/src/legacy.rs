@@ -25,11 +25,17 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> Legacy<'_, L> {
-    /// Sets or clears flags among [`ObjectFlags::LEGACY`] on an object.
+    /// Sets or clears flags among [`ObjectFlags::LEGACY`] on an object. The layers read
+    /// whether a permanent's impending cost was paid
+    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), so their
+    /// results are stale when that changes.
     #[inline]
     pub fn set_object_flags(&mut self, slot: L::Slot, flags: u32, on: bool) {
         debug_assert_eq!(flags & !ObjectFlags::LEGACY, 0, "a flag with a mutator");
         self.0.object_mut(slot).flags.set(flags, on);
+        if flags & ObjectFlags::IMPENDING != 0 {
+            self.0.flags.derived_dirty = true;
+        }
     }
 
     /// Puts counters of a long-tail kind on an object: [`State::add_counters`] for them.

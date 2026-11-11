@@ -14,7 +14,6 @@
 //! - Not a terminal, or `TERM=dumb`: no escapes at all, just the log lines and a board table
 //!   every 10 games. `NO_COLOR` turns colors off and keeps the panel.
 
-use beryl_engine::ZoneKey;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal, Stdout, Write};
@@ -23,7 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use beryl_engine::{Decision, State, Zone};
+use beryl_engine::{Decision, State, Zone, ZoneKey};
 
 use super::game::{GameDecision, Line};
 use super::panel::{self, Frame, Now};

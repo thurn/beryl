@@ -43,7 +43,6 @@
 
 mod combat;
 
-use beryl_engine::ZoneKey;
 use std::cell::OnceCell;
 
 use beryl_cards::names;
@@ -54,7 +53,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
     Ask, Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat,
-    Slot, Step, TurnStep, Zone, apply, next,
+    Slot, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
 
 use super::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};

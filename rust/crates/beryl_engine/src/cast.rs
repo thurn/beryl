@@ -10,7 +10,6 @@
 //! Spells that cannot be paid for or targeted are never offered, and every step offers only
 //! answers that leave the rest completable, so the machine never has to rewind.
 
-use crate::state::ZoneKey;
 use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
@@ -29,7 +28,7 @@ use crate::mana::{self, Funds};
 use crate::profile::Payment;
 use crate::state::{
     CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry,
-    State, Target, TurnStep, Zone,
+    State, Target, TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 

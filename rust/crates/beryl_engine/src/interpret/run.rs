@@ -5,7 +5,6 @@
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random).
 
-use crate::state::ZoneKey;
 use beryl_card::{CopyException, Duration, Effect, LibraryPosition, Objects, Players};
 
 use crate::bitboard::Bitboard;
@@ -16,7 +15,9 @@ use crate::event::{self, Entry, Reason, TokenEntry};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
-use crate::state::{self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, Zone};
+use crate::state::{
+    self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, Zone, ZoneKey,
+};
 use crate::zone::Place;
 
 /// One resolution of an ability written as data: its context, and what it keeps between

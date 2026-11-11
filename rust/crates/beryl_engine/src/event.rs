@@ -7,7 +7,6 @@
 //! [`settle`]d the same way. The cube's other replacement and prevention effects (damage,
 //! most draws) arrive with the cards that create them.
 
-use crate::state::ZoneKey;
 pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, kind};
 use beryl_kernel::mutate::Arrival;
 
@@ -18,7 +17,7 @@ use crate::ids::{CardIx, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::state::{
-    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, token_slots,
+    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, ZoneKey, token_slots,
 };
 use crate::table::GameTable;
 use crate::trigger;

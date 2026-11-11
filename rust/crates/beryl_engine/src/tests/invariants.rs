@@ -1,8 +1,7 @@
 //! The invariant check catches a corrupted state.
 
 use super::{MIXED, begin, table};
-use crate::state::Zone;
-use crate::state::ZoneKey;
+use crate::state::{Zone, ZoneKey};
 use crate::{Profile, Seat, Slot, State};
 use beryl_kernel::board::Corruption as Break;
 

@@ -1,12 +1,11 @@
 //! The strict runner: plays a scenario through `next` and `apply` only (architecture §17.1).
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
-    Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
+    Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, ZoneKey, apply, next,
 };
 
 use crate::setup::{Slots, setup};

@@ -22,9 +22,8 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, take the best
 //!   a search finds, and scry to the bottom only the cards not worth drawing.
 
-use beryl_engine::ZoneKey;
 use beryl_engine::layout::Queue;
-use beryl_engine::{Layout, Small};
+use beryl_engine::{Layout, Small, ZoneKey};
 use std::cell::Cell;
 
 use beryl_engine::card::{

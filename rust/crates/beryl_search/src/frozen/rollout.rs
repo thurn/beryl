@@ -25,7 +25,6 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
 //!   the bottom only the cards not worth drawing.
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
     Keywords, Replacement, TargetKind, TargetSpec, Types,
@@ -34,7 +33,7 @@ use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Seat, Slot,
-    Zone,
+    Zone, ZoneKey,
 };
 
 use super::values::{CardInfo, CardValues};

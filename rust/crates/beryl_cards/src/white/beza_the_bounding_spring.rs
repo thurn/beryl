@@ -4,14 +4,13 @@
 //! opponent controls more creatures than you. Draw a card if an opponent has more cards in
 //! hand than you."
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, CardDef, Colors, Face, Flow, ManaColor, ManaCost, Subtype, Subtypes, Supertypes,
     Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
-use beryl_engine::{DecisionKind, Seat, State, Zone};
+use beryl_engine::{DecisionKind, Seat, State, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 

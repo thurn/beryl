@@ -8,8 +8,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Table};
-use crate::state::ZoneKey;
-use crate::state::{ObjectFlags, Pending, State, Zone};
+use crate::state::{ObjectFlags, Pending, State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::turn::apnap;
 

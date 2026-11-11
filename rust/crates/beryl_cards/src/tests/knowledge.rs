@@ -7,10 +7,9 @@
 //! ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Library and hand are
 //! hidden zones, even if all the cards in one such zone happen to be revealed."
 
-use beryl_engine::ZoneKey;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    CardIx, DecisionKind, GameTable, Observation, Seat, Slot, State, TurnStep, Zone,
+    CardIx, DecisionKind, GameTable, Observation, Seat, Slot, State, TurnStep, Zone, ZoneKey,
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 

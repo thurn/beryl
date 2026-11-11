@@ -5,7 +5,6 @@
 //! (spells resolving or countered, creatures dying, damage, life gained), comes before the
 //! decision it led to, on lines that start with `*`.
 
-use beryl_engine::ZoneKey;
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -14,6 +13,7 @@ use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
     Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, TurnStep, Zone,
+    ZoneKey,
 };
 
 pub struct Transcript {

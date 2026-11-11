@@ -3,7 +3,6 @@
 //! as that card remains exiled, its owner may play it. A spell cast this way costs {2} more
 //! to cast."
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Subtype, Subtypes,
     TargetKind, TargetSpec, Trigger, Types,
@@ -11,7 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
-use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Ask, DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 

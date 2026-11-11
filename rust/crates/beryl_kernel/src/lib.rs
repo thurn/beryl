@@ -29,17 +29,23 @@
 //!
 //! The object mutators are built ([`mutate`]): [`State`]'s way to an object to write is
 //! private to the crate. An attachment or a base controller changes only as a permanent
-//! enters or a spell is cast, so each is part of that mutator, and whether counters change
-//! a layer result is the rules' to say, with the card in hand (`layers::counters_matter`).
+//! enters or a spell is cast, so each is part of that mutator.
+//!
+//! The zones, the battlefield order, each player's knowledge and the derived cache are the
+//! crate's too ([`zone`], [`derive::Rederive`]). Only a mutator marks the cache stale, and only
+//! [`State::rederive`] clears the mark, so no rules code holds the flag. Whether counters
+//! change a layer result is the rules' to say, with the card in hand, so the counter
+//! mutators take that answer (`layers::counters_matter`). A zone is named by a
+//! [`state::ZoneKey`], whose rustdoc says how a shared zone and a command zone would join it.
 //!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), create a token, end one (by-w8gv.5.4; today [`zone`]) | `move_object`, `create_token`, `cease_to_exist` | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
-//! | show or hide a card (by-w8gv.5.4) | `reveal`, `look`, `forget` | each player's knowledge; the identity is settled first |
-//! | store the layers' results (by-w8gv.5.4) | `rederive`, which lends the cache to the one function that fills it | the derived table by battlefield index, the listening mask, `derived_dirty` cleared |
+//! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::restore_knowledge`] and [`State::keep_seen`] | each player's knowledge; the identity is settled first |
+//! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player or the turn (by-w8gv.5.7) | `change_life`, `add_mana`, `spend_mana`, `empty_mana`, `count_land_played`, `set_mulligan`, `begin_turn`, `begin_step`, `give_priority`, `pass_priority`, `end_game` | passes reset with priority; the per-turn counts reset with the turn; the outcome is set once |
 //! | use the stack and the queues (by-w8gv.5.8) | `put_on_stack`, `take_off_stack`, which returns the entries, `queue_trigger`, `take_triggers`, `delay_trigger`, `ask`, `settle_question` | the stack queue and the stack's bitboard hold the same spells; a question is open or priority is |
 //!
@@ -63,7 +69,9 @@
 //! sees as an event (passes, budgets, the open question, the derived cache) returns nothing,
 //! and neither does a change the rules announce as part of a larger one: what a permanent
 //! enters with is part of its zone change, and each pick of a combat declaration is part of
-//! the declaration, announced once it is whole (CR 508.1, 509.1).
+//! the declaration, announced once it is whole (CR 508.1, 509.1). The zone move itself
+//! returns nothing: its event carries the reason the pipeline moved it for, and the deal and
+//! a mulligan move cards before the game's first turn with no event at all (CR 103.5).
 //!
 //! ## Entities and records
 //!

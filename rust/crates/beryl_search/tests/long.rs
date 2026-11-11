@@ -4,10 +4,9 @@
 
 mod common;
 
-use beryl_engine::ZoneKey;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Decision, GameTable, Observation, Profile, Scratch, Seat, Slot, State, Zone, observe,
+    Decision, GameTable, Observation, Profile, Scratch, Seat, Slot, State, Zone, ZoneKey, observe,
 };
 use beryl_search::{Agent, Family, GreedyAgent, LongSearch, Search, Settings};
 use common::{mirror, play};

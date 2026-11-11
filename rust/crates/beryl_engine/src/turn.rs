@@ -7,8 +7,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue};
-use crate::state::ZoneKey;
-use crate::state::{Duration, ManaPool, Pending, State, TurnStep, Zone};
+use crate::state::{Duration, ManaPool, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),

@@ -287,7 +287,6 @@ impl<L: Layout> Board<'_, L> {
         self.0
             .legacy_mut()
             .set_object_flags(slot, ObjectFlags::IMPENDING, impending);
-        self.0.flags.derived_dirty = true;
     }
 
     /// Gives `player` the emblem of the game-table card `card`

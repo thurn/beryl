@@ -5,7 +5,6 @@
 
 mod common;
 
-use beryl_engine::ZoneKey;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -13,7 +12,7 @@ use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Observation, Outcome, Profile,
-    Relayout, Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, apply, next,
+    Relayout, Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, ZoneKey, apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};

@@ -4,8 +4,7 @@
 use super::cast::{Game, cast, index_of};
 use crate::card::{AbilityIx, Castings, FaceIx, ManaColor};
 use crate::ids::Slot;
-use crate::state::ZoneKey;
-use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone};
+use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{Choice, DecisionKind, Opt, Profile};
 

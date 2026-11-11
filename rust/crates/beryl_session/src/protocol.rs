@@ -3,7 +3,6 @@
 //! here has a generated TypeScript twin in `ui/src/generated/protocol.ts`
 //! ([`crate::typescript`]).
 
-use beryl_engine::ZoneKey;
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, Face, FaceAbility,
     FaceIx, Keywords, ManaColor, ManaCost, Types,
@@ -15,7 +14,7 @@ use beryl_engine::state::{
 };
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt,
-    Outcome, Refusal, Seat, SlotId, Small, StallReason, StepStops, Stops, Zone,
+    Outcome, Refusal, Seat, SlotId, Small, StallReason, StepStops, Stops, Zone, ZoneKey,
     can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 use serde::{Deserialize, Serialize};

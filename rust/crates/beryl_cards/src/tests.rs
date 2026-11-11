@@ -1,6 +1,5 @@
 //! The generated names, the card table and the decklists.
 
-use beryl_engine::ZoneKey;
 use std::fmt::Write;
 use std::path::PathBuf;
 
@@ -9,7 +8,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::ObjectFlags;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
-    Seat, State, Step, TurnStep, Zone, apply, next,
+    Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};

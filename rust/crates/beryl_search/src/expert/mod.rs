@@ -40,9 +40,8 @@
 
 mod combat;
 
-use beryl_engine::ZoneKey;
 use beryl_engine::layout::Queue;
-use beryl_engine::{Large, Layout, Small};
+use beryl_engine::{Large, Layout, Small, ZoneKey};
 use std::cell::OnceCell;
 
 use beryl_cards::names;

@@ -5,8 +5,7 @@ use crate::card::Types;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::profile::Limits;
-use crate::state::Zone;
-use crate::state::ZoneKey;
+use crate::state::{Zone, ZoneKey};
 use crate::{Choice, DecisionKind, Decklist, Opt, Outcome, Profile, StallReason, State};
 
 /// Plays a land-and-pass game, returning the outcome, the final state and the state hash at
