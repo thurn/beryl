@@ -24,7 +24,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
+                targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()],
                 body: bodies!(counter_and_delay),
                 ..Ability::NONE
             },

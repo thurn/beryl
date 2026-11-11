@@ -369,6 +369,16 @@ impl Ability {
             || permanent && matches!(self.body, Behavior::Data(effect) if effect.removes(target))
     }
 
+    /// Whether this counters the spell chosen for its `target`th instance of the word
+    /// "target" ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter
+    /// a spell or ability means to cancel it, removing it from the stack. It doesn't resolve
+    /// and none of its effects occur"): what its effect data does to that target
+    /// ([`Effect::counters`]), or what its card declared with [`TargetSpec::counter`].
+    pub fn counters_target(&self, target: SpecIx) -> bool {
+        (self.targets.get(target.index())).is_some_and(|spec| spec.counters_spell)
+            || matches!(self.body, Behavior::Data(effect) if effect.counters(target))
+    }
+
     /// Whether this is a loyalty ability
     /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
     pub fn is_loyalty(&self) -> bool {

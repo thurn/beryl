@@ -21,7 +21,7 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         abilities: &[Ability {
             kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
+            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()],
             may_pause: true,
             body: bodies!(counter_unless_pays_one),
             ..Ability::NONE

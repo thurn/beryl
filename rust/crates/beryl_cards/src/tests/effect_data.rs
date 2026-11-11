@@ -36,19 +36,23 @@ struct Declares {
     may_pause: bool,
     /// That it removes the permanent it targets.
     removal: bool,
+    /// That it counters the spell it targets.
+    counter: bool,
 }
 
 const NOTHING: Declares = Declares {
     may_pause: false,
     removal: false,
+    counter: false,
 };
-const MAY_PAUSE: Declares = Declares {
+const PAUSING_COUNTER: Declares = Declares {
     may_pause: true,
-    removal: false,
+    counter: true,
+    ..NOTHING
 };
 const REMOVAL: Declares = Declares {
-    may_pause: false,
     removal: true,
+    ..NOTHING
 };
 
 fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
@@ -111,7 +115,7 @@ const TWINS: &[Twin] = &[
     Twin {
         card: &mana_tithe::CARD,
         body: bodies!(counter_unless_pays_one),
-        declares: MAY_PAUSE,
+        declares: PAUSING_COUNTER,
         data: &unless_pays(&counter(TARGET), ITS_CONTROLLER, mana("{1}")),
     },
     // "Put target creature into its owner's library second from the top. Its controller
@@ -159,6 +163,7 @@ fn written_as(card: &'static CardDef, body: Behavior, declares: Declares) -> &'s
     let targets: Vec<TargetSpec> = (original.targets.iter())
         .map(|&spec| TargetSpec {
             removes_permanent: declares.removal,
+            counters_spell: declares.counter,
             ..spec
         })
         .collect();
@@ -250,5 +255,10 @@ fn a_card_written_as_data_plays_its_scenarios_as_its_body_does() {
             data.removes_target(SpecIx::new(0)),
         );
         assert_eq!(derived, declared, "{name}: whether it is removal");
+        let (declared, derived) = (
+            body.counters_target(SpecIx::new(0)),
+            data.counters_target(SpecIx::new(0)),
+        );
+        assert_eq!(derived, declared, "{name}: whether it counters its target");
     }
 }

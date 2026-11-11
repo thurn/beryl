@@ -34,6 +34,11 @@ pub struct TargetSpec {
     /// This effect removes a targeted permanent from the battlefield. Presentation metadata
     /// for confirming a player's own target, independent of target legality (CR 115.1).
     pub removes_permanent: bool,
+    /// This effect counters a targeted spell
+    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
+    /// or ability means to cancel it, removing it from the stack"). Presentation metadata, as
+    /// `removes_permanent` is.
+    pub counters_spell: bool,
 }
 
 impl TargetSpec {
@@ -46,6 +51,7 @@ impl TargetSpec {
             optional: false,
             other: false,
             removes_permanent: false,
+            counters_spell: false,
         }
     }
 
@@ -62,6 +68,15 @@ impl TargetSpec {
     pub const fn removal(self) -> Self {
         Self {
             removes_permanent: true,
+            ..self
+        }
+    }
+
+    /// Marks effects that counter the target.
+    #[must_use]
+    pub const fn counter(self) -> Self {
+        Self {
+            counters_spell: true,
             ..self
         }
     }

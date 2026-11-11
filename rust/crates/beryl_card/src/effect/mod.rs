@@ -276,6 +276,21 @@ impl Effect {
     /// into a library. Of a permanent, that is removal, which a player is told as they
     /// choose the target ([`crate::Ability::removes_target`]).
     pub const fn removes(&self, target: SpecIx) -> bool {
+        self.takes(target, Takes::Moved)
+    }
+
+    /// Whether this counters what was chosen for the `target`th instance of the word "target"
+    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
+    /// or ability means to cancel it, removing it from the stack"), which a player is told as
+    /// they choose the target ([`crate::Ability::counters_target`]).
+    pub const fn counters(&self, target: SpecIx) -> bool {
+        self.takes(target, Takes::Countered)
+    }
+
+    /// Whether this takes what was chosen for the `target`th instance of the word "target"
+    /// from where it is in the way `how` names, whatever else it does and whatever it asks
+    /// first.
+    const fn takes(&self, target: SpecIx, how: Takes) -> bool {
         match *self {
             Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -283,12 +298,15 @@ impl Effect {
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
             | Effect::PutIntoLibrary { objects, .. } => {
-                matches!(objects, Objects::Target(n) if n.get() == target.get())
+                matches!(how, Takes::Moved) && is_target(objects, target)
+            }
+            Effect::Counter(objects) => {
+                matches!(how, Takes::Countered) && is_target(objects, target)
             }
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
-                    if effects[i].removes(target) {
+                    if effects[i].takes(target, how) {
                         return true;
                     }
                     i += 1;
@@ -298,17 +316,16 @@ impl Effect {
             Effect::If {
                 then, otherwise, ..
             } => {
-                then.removes(target)
+                then.takes(target, how)
                     || match otherwise {
-                        Some(otherwise) => otherwise.removes(target),
+                        Some(otherwise) => otherwise.takes(target, how),
                         None => false,
                     }
             }
             Effect::May { effect, .. }
             | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.removes(target),
-            Effect::Counter(_)
-            | Effect::Draw { .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
+            Effect::Draw { .. }
             | Effect::Discard { .. }
             | Effect::Mill { .. }
             | Effect::Scry { .. }
@@ -322,6 +339,20 @@ impl Effect {
             | Effect::Modify { .. } => false,
         }
     }
+}
+
+/// Whether `objects` is what was chosen for the `target`th instance of the word "target".
+const fn is_target(objects: Objects, target: SpecIx) -> bool {
+    matches!(objects, Objects::Target(n) if n.get() == target.get())
+}
+
+/// How an effect takes an object from where it is ([`Effect::takes`]).
+#[derive(Clone, Copy)]
+enum Takes {
+    /// To another zone: destroyed, exiled, sacrificed, returned or put into a library.
+    Moved,
+    /// Off the stack, countered.
+    Countered,
 }
 
 /// Where in a library a card is put.
