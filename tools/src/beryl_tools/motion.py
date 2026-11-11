@@ -7,16 +7,27 @@ verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
   summary of its instances.
-- The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moment (ui/verbs.json) on
-  the stage in stepped stage time and screenshots every tick of each step of the suite's verbs.
-  Each step is held to its verb's values (its case's, where the case has its own): how long it
-  played and, in a batch of like steps, how far apart they began, by the step's own start and
-  end in stage time; whether its subject travels and how its progress is eased, by what
-  `by video measure` (video_measure.py) reads of its frames as it read Arena's clips. Its size
-  where it begins and at its peak, as multiples of its size at rest, are printed beside Arena's;
-  no value declares them. Stage time, never wall time, so machine load cannot change a result.
-  `by motion` runs it: the fast check when the stage or these data change (checks.py) and
-  nightly (nightly.py), with one run-log record a verb and layout, `motion:<verb>/<layout>`.
+- The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moments (ui/verbs.json)
+  on the stage in stepped stage time: the first (a cast, its trigger and tokens), every step of
+  the suite's verbs screenshotted at every tick; and with `--more` the moments of cards
+  changing zone (`zones` and `scry`), every step of fly, vanish and lift timed and the first of
+  each kind (a case, whose flight it is, alone or among like steps) screenshotted, its subject
+  drawn alone. Each step is held to its verb's values (its case's, where the case has its own):
+  how long it played and, in a batch of like steps, how far apart they began, by the step's own
+  start and end in stage time; and for a step screenshotted, whether its subject travels and
+  how its progress is eased, by what `by video measure` (video_measure.py) reads of its frames
+  as it read Arena's clips. Its size where it begins and at its peak, as multiples of its size
+  at rest, are printed beside Arena's; no value declares them. A step whose subject moves
+  again at once or comes to rest out of the window is not screenshotted (the tracker needs it
+  still either side and at rest in the frames), and says so. Stage time, never wall time, so
+  machine load cannot change a result. `by motion` runs it: the fast check when the stage or
+  these data change (checks.py) and nightly (nightly.py), with one run-log record a verb and
+  layout, `motion:<verb>/<layout>`.
+- `--more` runs nightly only: the moments of cards changing zone add about 100 s to the lane
+  (by-w8gv.21.38: the capture took 107 to 127 s with them and about 20 s without, at loads of
+  25 to 50 on 18 cores; `zones` is nearly all of it, its ten steps screenshotted about 350
+  frames a seat), past the fast check's 60 s. The fast check skips the verbs only they play
+  (MORE_ONLY).
 
 A number is held within one tick of the capture or SHARE of its value, whichever is larger. A
 step's delay counts from its cause, which a step's record does not name, so it is not held.
@@ -27,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
 import subprocess
 import sys
 import time
@@ -57,13 +69,15 @@ LAYOUTS = ("desktop",)
 CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
 # The suite's verbs the capture's moment plays no step of, and why: logged as skipped.
 NOT_CAPTURED: dict[str, str] = {
-    "lift": "the capture plays only the suite's first moment, where nothing lifts;"
-    " by-w8gv.21.38 plays the rest",
-    **{
-        verb: "the capture plays only the suite's first moment, which has none;"
-        " by-w8gv.21.41 captures the moments `combat` and `place`"
-        for verb in ("strike", "count", "flip")
-    },
+    verb: "the capture takes no step of it yet;"
+    " by-w8gv.21.41 captures the moments `combat` and `place`"
+    for verb in ("strike", "count", "flip")
+}
+# The suite's verbs only the moments of cards changing zone play (`--more`), which the fast
+# check leaves to the nightly run: logged as skipped without it.
+MORE_ONLY: dict[str, str] = {
+    "lift": "only the moments of cards changing zone play it, captured nightly"
+    " (`by motion --more`)",
 }
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
@@ -420,15 +434,22 @@ def capture_verdicts(
 def measure_capture(
     data: dict[str, Any], reference: dict[str, Any], folder: Path
 ) -> list[tuple[str, str, list[Verdict]]]:
-    """Each captured step under `folder` (stepped.mjs's output): its verb, its folder's name and
-    its verdicts."""
+    """Each captured step under `folder` (stepped.mjs's output): its verb, its name (its
+    layout, play and folder) and its verdicts. A step only timed, which has no frames (no
+    `rest`), has those of its timing alone."""
     out: list[tuple[str, str, list[Verdict]]] = []
     for steps_file in sorted(folder.glob("*/*/steps.json")):
         captured = json.loads(steps_file.read_text())
         timings = timing_verdicts(data, reference, captured)
         for step, timed in zip(captured["steps"], timings):
             frames = steps_file.parent / step["folder"]
-            name = f"{captured['layout']}/{captured['seat']}/{step['folder']}"
+            name = f"{captured['layout']}/{steps_file.parent.name}/{step['folder']}"
+            if "rest" not in step:
+                case = case_of(step["act"], captured["seat"])
+                why = step.get("unshot")
+                said = [Verdict(step["verb"], "frames", why, None, False, case)]
+                out.append((step["verb"], name, timed + (said if why else [])))
+                continue
             clip = video_measure.read_folder(
                 frames, "*", None, video_measure.WORK_WIDTH, None
             )
@@ -440,15 +461,18 @@ def measure_capture(
     return out
 
 
-def capture(out: Path, tick: float | None = None) -> int:
+def capture(out: Path, tick: float | None = None, more: bool = False) -> int:
     """Records the verb suite's fixtures, serves the UI and runs the stepped capture into
-    `out`, in ticks of `tick` ms (stepped.mjs's sixtieth of a second by default); its exit
-    code."""
+    `out`, in ticks of `tick` ms (stepped.mjs's sixtieth of a second by default), with the
+    moments of cards changing zone if `more`; its exit code. An earlier capture's frames are
+    removed first, so that none is measured again."""
     recorded = out / "fixtures"
     if shots.record_fixtures(recorded, selection.verb_fixtures()):
         return 1
+    shutil.rmtree(out / "frames", ignore_errors=True)
     env = shots.browser_env()
     ticks = ["--tick", str(tick)] if tick else []
+    ticks += ["--more"] if more else []
     with shots.served_ui(env) as url:
         return subprocess.run(
             [
@@ -479,7 +503,7 @@ def command(args: argparse.Namespace) -> int:
     out = paths.cache_root() / "motion" / paths.REPO.name
     began = time.monotonic()
     try:
-        code = capture(out, args.tick)
+        code = capture(out, args.tick, args.more)
     except shots.UiError as e:
         print(f"motion: {e}", file=sys.stderr)
         code = 1
@@ -505,7 +529,9 @@ def command(args: argparse.Namespace) -> int:
             ]
             if not mine:
                 said = f"{layout}: the stage played no {verb} to capture"
-                why = NOT_CAPTURED.get(verb)
+                why = NOT_CAPTURED.get(verb) or (
+                    None if args.more else MORE_ONLY.get(verb)
+                )
                 runlog.result(
                     f"motion:{verb}/{layout}", "skip" if why else "fail", took
                 )
@@ -541,6 +567,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--values",
         action="store_true",
         help="only the verbs' values beside Arena's, with no browser",
+    )
+    p.add_argument(
+        "--more",
+        action="store_true",
+        help="also the moments of cards changing zone (nightly: past the fast check's budget)",
     )
     p.add_argument(
         "--tick",

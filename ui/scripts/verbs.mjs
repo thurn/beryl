@@ -23,6 +23,7 @@ import {
     stageFaults,
     workers,
 } from "./capture.mjs";
+import { ending as endOf } from "./fixture-views.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 import { CASES as ZONES, complete } from "./verb-cases.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
@@ -345,15 +346,11 @@ async function recorded(fixture) {
 }
 
 /** What a recorded fixture ends on, as `walk` tells what the stage shows (`shows`), and how
- * many answers of its seat lead there: one for each view that waits on one. */
+ * many answers of its seat lead there (fixture-views.mjs). */
 async function ending(fixture) {
-    const shown = await views(fixture);
-    const { turn, status } = shown.at(-1);
-    return {
-        shows: [turn.number, turn.step, status],
-        answers:
-            1 + shown.filter((view) => view.status.kind === "deciding").length,
-    };
+    return endOf(
+        JSON.parse(await readFile(join(fixtures, `${fixture}.json`), "utf8")),
+    );
 }
 
 /** Every sound `run`'s page was asked for is a step's, at the stage time that step begins or

@@ -115,15 +115,16 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
 
 
 def motion_step(commit: str, out: IO[str]) -> int:
-    """The stepped capture of the stage's verbs held to their values (`by motion`, motion.py) on
-    `commit` at low priority, one run-log record a verb and layout, `motion:<verb>/<layout>`.
-    """
+    """The stepped capture of the stage's verbs held to their values (`by motion --more`,
+    motion.py) on `commit` at low priority, one run-log record a verb and layout,
+    `motion:<verb>/<layout>`."""
     from . import runlog  # It imports this module.
 
     run = runlog.Run("nightly", commit, place="nightly")
     began = time.monotonic()
     with run.step(dict(os.environ)) as (env, results):
-        command = [sys.executable, "-m", "beryl_tools.cli", "motion"]
+        # With the moments of cards changing zone, past the fast check's budget (motion.py).
+        command = [sys.executable, "-m", "beryl_tools.cli", "motion", "--more"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
         run.log("motion", "motion", code == 0, time.monotonic() - began, results)
     return code

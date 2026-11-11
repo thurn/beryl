@@ -75,6 +75,21 @@ export function summary(fixture) {
         });
 }
 
+/** What a recorded fixture (`{ messages }`) ends on, as the verb suite's walks tell what the
+ * stage shows: its last view's turn number, step and status; and how many answers of its seat
+ * lead there: one for each view that waits on one, and the first. */
+export function ending(fixture) {
+    const views = fixture.messages
+        .filter((m) => m.kind === "event")
+        .map((m) => m.payload.view);
+    const { turn, status } = views.at(-1);
+    return {
+        shows: [turn.number, turn.step, status],
+        answers:
+            1 + views.filter((view) => view.status.kind === "deciding").length,
+    };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const [file] = process.argv.slice(2);
     if (!file) {

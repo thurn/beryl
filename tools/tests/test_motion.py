@@ -1,5 +1,7 @@
+import json
 import random
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -179,7 +181,35 @@ def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown
 def test_a_verb_the_capture_does_not_play_is_one_of_the_suites() -> None:
     suite = selection.verb_suite()["verbs"]
     assert isinstance(suite, list)
-    assert set(motion.NOT_CAPTURED) <= {str(v) for v in suite}
+    assert set(motion.NOT_CAPTURED) | set(motion.MORE_ONLY) <= {str(v) for v in suite}
+
+
+def test_a_step_not_screenshotted_is_held_to_its_timing_and_says_why(
+    tmp_path: Path,
+) -> None:
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+    look = {"verb": "lift", "span": "begin"}
+    play = tmp_path / "desktop" / "theirs.scry"
+    play.mkdir(parents=True)
+    unshot = "its subject moves again just after it"
+    steps = [
+        {"n": 10, "verb": "lift", "act": look, "from": 2116, "to": 2549},
+        {"n": 12, "verb": "lift", "act": look, "from": 2574, "to": 2700},
+    ]
+    steps[0]["unshot"] = unshot
+    for step in steps:
+        step["folder"] = f"{step['n']}-lift"
+    captured = {"seat": "theirs", "layout": "desktop", "tick": 1000 / 60}
+    (play / "steps.json").write_text(json.dumps({**captured, "steps": steps}))
+    measured = motion.measure_capture(data, reference, tmp_path)
+    said = {name: [(v.measure, v.failed) for v in vs] for _, name, vs in measured}
+    # Named by its play's folder, held to its duration and no frames read; why it was not
+    # screenshotted is shown, held to nothing.
+    assert said == {
+        "desktop/theirs.scry/10-lift": [("duration", False), ("frames", False)],
+        "desktop/theirs.scry/12-lift": [("duration", True)],
+    }
 
 
 WIDTH, HEIGHT, FPS = 240, 135, 60
