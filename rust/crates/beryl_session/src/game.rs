@@ -359,10 +359,16 @@ impl Game {
         if self.review.is_none() {
             return;
         }
-        let second = self.draw_for(self.human.opponent());
+        let second = self.opponent_view();
         if let Some(emit) = &self.review {
             emit(self.session, [first.clone(), second]);
         }
+    }
+
+    /// The other seat's view of the latest update, with its script: what a review game
+    /// publishes beside the human's, and what the fuzz checks (`fuzz.rs`).
+    pub(crate) fn opponent_view(&mut self) -> PlayerView {
+        self.draw_for(self.human.opponent())
     }
 
     fn assemble(

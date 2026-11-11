@@ -3,7 +3,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
 
-from beryl_tools import nightly
+import pytest
+
+from beryl_tools import nightly, runlog
 
 NOW = datetime(2026, 11, 11, 3, 0, tzinfo=timezone.utc)
 
@@ -126,3 +128,26 @@ def test_the_coverage_age_line(own_cache: Path) -> None:
     assert "01234567" in line and "5 h ago" in line and "stale" not in line
     stale = nightly.coverage_age_line(NOW + timedelta(hours=60))
     assert "stale" in stale
+
+
+def test_the_fuzz_runs_at_low_priority_and_logs_its_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[tuple[str, list[str]]] = []
+
+    def in_tree(commit: str, command: list[str], out: IO[str] | None = None) -> int:
+        ran.append((commit, command))
+        return 101
+
+    monkeypatch.setattr(nightly.coverage, "in_tree", in_tree)
+    with open(nightly.folder() / "out.txt", "w") as out:
+        assert nightly.fuzz_step("abc123", out) == 101
+    [(commit, command)] = ran
+    assert commit == "abc123"
+    assert command[-2:] == ["just", "fuzz"]
+    assert command != ["just", "fuzz"], "the fuzz runs at low priority"
+    [record] = runlog.read_log(NOW - timedelta(days=3650))
+    assert record["check"] == "fuzz:games"
+    assert record["outcome"] == "fail"
+    assert record["script"] == "nightly"
+    assert record["commit"] == "abc123"

@@ -10,6 +10,8 @@ pub mod bugs;
 pub mod card_records;
 pub mod checkpoint;
 pub mod corpus;
+#[cfg(test)]
+mod fuzz;
 mod game;
 pub mod ipc;
 pub mod journal;

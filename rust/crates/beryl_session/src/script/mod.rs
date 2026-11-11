@@ -124,6 +124,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use act::{Act, Fact, Notice, Stream, Tally};
+#[cfg(test)]
+pub(crate) use build::PLANTED;
 pub use build::Screen;
 pub use check::{Open, carried};
 pub use replay::{failure, replay};

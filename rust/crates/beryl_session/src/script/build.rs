@@ -71,7 +71,12 @@ impl Screen {
                     ..
                 } = builder;
                 self.abilities = abilities;
-                let script = Script { reset: None, beats };
+                #[allow(unused_mut)] // A test may plant a fault in it.
+                let mut script = Script { reset: None, beats };
+                #[cfg(test)]
+                if let Some(fault) = PLANTED.get() {
+                    fault(&mut script);
+                }
                 #[cfg(debug_assertions)]
                 verify(shown, &script, &after, &spans);
                 // A release build starts the stage over rather than leave it out of step.
@@ -115,6 +120,14 @@ impl Screen {
         );
         script
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A fault planted in every script this thread's screens build, before the checks see
+    /// it: the fuzz's test that a broken builder shrinks to a few choices (`fuzz.rs`).
+    pub(crate) static PLANTED: std::cell::Cell<Option<fn(&mut Script)>> =
+        const { std::cell::Cell::new(None) };
 }
 
 /// The checks every script a debug build makes is held to (plan K24): it replays from the

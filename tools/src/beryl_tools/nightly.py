@@ -1,11 +1,12 @@
 """`by nightly`: the work that runs once a night on the development machine, from a launchd
 agent (`just nightly-install`): today, removing the cache folders of checkouts that are gone
 (`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
-check orders by (`by ci-history`) and every card's spec (`by specs --check`, the sweep the
-tests sample). It costs no agent tokens and needs no session open. Its record is this
-machine's, in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
+check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
+sample) and the fuzz (`just fuzz`: engine and session games at length, the script checks on
+throughout). It costs no agent tokens and needs no session open. Its record is this machine's,
+in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
 `last-output.txt` (the last run's output). More nightly work, such as the presentation track's
-motion captures and the nightly fuzz, joins as another [`Step`] in [`STEPS`].
+motion captures, joins as another [`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
 over [`FRESH_HOURS`] old and the machine is not busy, so the hourly retries cost nothing once a
@@ -97,11 +98,27 @@ def specs_step(commit: str, out: IO[str]) -> int:
     return coverage.in_tree(commit, system.utility(command), out)
 
 
+def fuzz_step(commit: str, out: IO[str]) -> int:
+    """`just fuzz` on `commit` at low priority: random engine games and session games at
+    length in an optimized build with debug assertions on, so the engine's invariants and every
+    script's replay check and rule invariants run throughout (plan K24). Bounded by games,
+    never by time. Its outcome goes to the run log as `fuzz:games` (runlog.py)."""
+    from . import runlog  # It imports this module.
+
+    run = runlog.Run("nightly", commit, place="nightly")
+    began = time.monotonic()
+    with run.step(dict(os.environ)) as (_, results):
+        code = coverage.in_tree(commit, system.utility(["just", "fuzz"]), out)
+        run.log("fuzz", "games", code == 0, time.monotonic() - began, results)
+    return code
+
+
 STEPS: list[Step] = [
     Step("prune", caches.prune_step),
     Step("coverage", coverage_step),
     Step("history", history_step),
     Step("specs", specs_step),
+    Step("fuzz", fuzz_step),
 ]
 
 

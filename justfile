@@ -177,10 +177,12 @@ oracle-smoke *args:
 test-rust *args:
     cd rust && cargo test "$@"
 
-# Random-game fuzzing at length: N games, optimized but with debug assertions on
+# Random-game fuzzing at length: N engine games, then N session games with every script checked, optimized but with debug assertions on
 [group('test')]
 fuzz games="10000":
-    cd rust && BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_search --test games --test shrink -- --nocapture
+    cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
+    cargo test --release -p beryl_search --test games --test shrink -- --nocapture && \
+    cargo test --release -p beryl_session --lib fuzz:: -- --nocapture
 
 # Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
 [group('test')]

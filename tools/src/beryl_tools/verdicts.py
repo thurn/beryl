@@ -106,9 +106,10 @@ def pending_checks() -> set[str]:
 @dataclass(frozen=True)
 class SlowOnly:
     """A check the pruning rule moved to slow CI alone (prune.py: never failed, and in the
-    costliest tenth of the fast check by seconds per run), on `date`: checks.fast() leaves it out
-    and slow CI runs it as before. `seconds` (a run) and `runs` are its fast-check record when it
-    moved, which keeps it in the ranking of later prunes."""
+    costliest tenth of the fast check by seconds per run), or that its bead placed there, on
+    `date`: checks.fast() leaves it out and slow CI runs it as before. `seconds` (a run) and
+    `runs` are its fast-check record when it moved, which keeps it in the ranking of later
+    prunes."""
 
     check: str
     date: str
@@ -116,7 +117,22 @@ class SlowOnly:
     runs: int
 
 
-SLOW_ONLY: tuple[SlowOnly, ...] = ()
+SLOW_ONLY: tuple[SlowOnly, ...] = (
+    # The session fuzz's handful of games (beryl_session's fuzz.rs, by-w8gv.21.12): slow CI
+    # and the nightly's `just fuzz` play them, never the fast check.
+    SlowOnly(
+        "rust:beryl_session::fuzz::session_games_keep_the_script_checks",
+        "2026-11-11",
+        2.5,
+        0,
+    ),
+    SlowOnly(
+        "rust:beryl_session::fuzz::a_planted_builder_fault_shrinks_to_a_few_choices",
+        "2026-11-11",
+        2.2,
+        0,
+    ),
+)
 
 
 def matches(path: str, globs: Iterable[str]) -> bool:
