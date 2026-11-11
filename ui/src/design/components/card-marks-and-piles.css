@@ -1,0 +1,234 @@
+/* A token is framed in pewter where a card is framed in black, as no card is. */
+.card-token {
+  background: linear-gradient(180deg, #b4b0aa, #74706b);
+}
+/* A permanent its owner doesn't control: a violet line inside its black frame, apart from the
+   glows outside it; the inspector names its owner beside the same violet. */
+.card-stolen-edge {
+  position: absolute;
+  inset: 0.12em;
+  border: 0.17em solid var(--stolen);
+  border-radius: 0.48em;
+  box-shadow: inset 0 0 0.3em rgb(180 140 255 / 55%);
+  pointer-events: none;
+}
+/* The top card of a pile of identical permanents: their count, over its art's top right. */
+.card-count {
+  position: absolute;
+  top: 1.45em;
+  right: 0.62em;
+  padding: 0 0.3em;
+  border-radius: 0.3em;
+  font: 700 1.15em/1.25 var(--font-serif);
+  color: #1d1b19;
+  background: linear-gradient(180deg, #fbf0d8, #dcc49a);
+  border: 0.06em solid #b8924e;
+  box-shadow:
+    0 0 0 0.05em rgb(30 24 18 / 70%),
+    0 0.12em 0.3em rgb(0 0 0 / 65%);
+  pointer-events: none;
+}
+
+/* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
+   wears an angular chevron above and a blocker a rounded arc below. */
+/* A glowing card: tokens.css draws the glow, outside the card and inside its black frame, over
+   the card's shadow. */
+.card-source {
+  box-shadow:
+    var(--glow-gold-in), var(--glow-gold),
+    var(--card-shadow, var(--shadow-card));
+}
+.card-target {
+  box-shadow:
+    var(--glow-cyan-in), var(--glow-cyan),
+    var(--card-shadow, var(--shadow-card));
+}
+/* Copies beneath the top card of a stack sit in its shade (an overlay: a filter would clip
+   the card's shadow at the filter region in WebKit). */
+.card-under::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgb(0 0 0 / 14%);
+}
+/* CSS filters reach an svg element in WebKit, not the shapes inside it. */
+.combat-marker {
+  position: absolute;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px rgb(255 190 80 / 100%))
+    drop-shadow(0 0 6px rgb(245 130 25 / 85%));
+}
+/* Both drawn at the card's scale: 100 units across 92–102% of a card 12em wide, the chevron
+   inside its card's width so that a row of attackers' chevrons stay apart. */
+.attack-chevron {
+  left: 4%;
+  width: 92%;
+  height: 1.9em;
+  bottom: calc(100% + 0.15em);
+}
+.block-arc {
+  left: -1%;
+  width: 102%;
+  height: 2.5em;
+  top: calc(100% - 1.6em);
+  filter: drop-shadow(0 0 2px rgb(255 200 90 / 100%))
+    drop-shadow(0 4px 9px rgb(232 159 32 / 95%));
+}
+.combat-line {
+  fill: none;
+  stroke: #ffe9b0;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+/* Card backs and piles. The back is Magic's own (Card.tsx's `BackImage`), over a plain card, a
+   brown field in a black border, that shows while it loads or where images do not. */
+.card-back {
+  position: relative;
+  flex: none;
+  box-shadow: var(--shadow-card);
+}
+.card-back,
+.card-face-down {
+  padding: 3.5%;
+  border-radius: 4.8% / 3.4%;
+  background:
+    radial-gradient(ellipse at 50% 45%, #6b4426, #4a2d18 75%) content-box,
+    #15110e;
+}
+.card-back-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.pile {
+  position: relative;
+  display: inline-block;
+}
+/* The edges of the cards beneath a pile's top card: dark, each lit along its near side. */
+.pile-edge {
+  position: absolute;
+  border-radius: var(--radius-card);
+  border: 1px solid #0c0a09;
+  border-bottom-color: #3a332e;
+  background: #1a1715;
+}
+/* A graveyard's or exile's cards lie face up: the edges beneath show their lighter rims. */
+.pile-face-up .pile-edge {
+  border-color: #4a443f;
+  border-bottom-color: #615a53;
+  background: #141210;
+}
+.pile-edge:first-child {
+  box-shadow: var(--shadow-card);
+}
+.pile-empty {
+  aspect-ratio: 63 / 88;
+  border-radius: var(--radius-card);
+  border: 1px dashed var(--metal);
+}
+.land-stack {
+  position: relative;
+  display: inline-block;
+}
+.land-count {
+  position: absolute;
+  right: 0.2em;
+  bottom: 0.15em;
+  padding: 0.05em 0.4em;
+  border-radius: 0.3em;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 22px;
+  color: #1d1b19;
+  background: linear-gradient(180deg, #fbf0d8, #dcc49a);
+  border: 1.5px solid #b8924e;
+  box-shadow:
+    0 0 0 1px rgb(30 24 18 / 70%),
+    0 3px 8px rgb(0 0 0 / 65%);
+}
+
+/* Stack items: the source's frame over a shield-shaped rules box. */
+.stack-item {
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 309 / 458;
+  padding: 0.28em 0.32em 0.5em;
+  border-radius: 0 0 50% 50% / 0 0 22% 22%;
+  background: linear-gradient(180deg, #201f1e, #161615);
+  box-shadow:
+    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
+    var(--shadow-lifted);
+  font-family: var(--font-card);
+  color: #141210;
+}
+.stack-item .card-rim {
+  flex: 1;
+  gap: 0.09em;
+  padding: 0.18em 0.38em 0.46em;
+  border-radius: 0 0 50% 50% / 0 0 20% 20%;
+}
+/* The bars sit just inside the rim; the rules text stands well in from the box's edge
+   (trigger_on_stack_with_target.png). */
+.stack-item .card-name-bar {
+  height: 1.3em;
+  margin: 0 -0.16em;
+  padding-left: 0.62em;
+}
+.stack-item .card-art {
+  flex: 0 0 6.06em;
+}
+.stack-item .card-type-bar {
+  height: 1.42em;
+  margin: 0 -0.19em;
+  padding-left: 0.78em;
+  font-size: 0.86em;
+}
+.stack-item .card-rules {
+  border-radius: 0 0 50% 50% / 0 0 34% 34%;
+  padding: 0.6em 0.1em 0.4em 0.8em;
+  font-weight: 600;
+  font-size: 0.76em;
+  line-height: 1.04;
+}
+/* Without art (ui_system.png section 05): a crisp black edge, a bright streaked border and heavy
+   rules text filling the shield. */
+.stack-item-compact {
+  --rim: #e5481b;
+  --rim-hi: #ff7d2a;
+  --rim-streaks: repeating-linear-gradient(
+    150deg,
+    transparent 0 0.3em,
+    rgb(255 200 120 / 22%) 0.4em,
+    rgb(90 10 0 / 22%) 0.55em,
+    transparent 0.7em 1em
+  );
+  padding: 0.2em 0.2em 0.42em;
+  box-shadow:
+    0 0 0 0.06em #050505,
+    0 4px 8px rgb(0 0 0 / 45%);
+}
+.stack-item-compact .card-rim {
+  padding: 0.24em 0.3em 0.22em;
+}
+.stack-item-compact .card-name-bar {
+  margin: 0 -0.12em;
+}
+.stack-item-compact .card-rules {
+  padding: 0.62em 0.05em 0.4em 0.62em;
+  font-weight: 760;
+  font-size: 0.78em;
+  letter-spacing: -0.045em;
+  line-height: 1.5;
+  color: #0d0907;
+  box-shadow:
+    0 0 0 0.08em var(--rim-lo),
+    inset 0 0 0 0.1em color-mix(in srgb, var(--rim-lo) 70%, transparent),
+    inset 0 0 0.4em rgb(60 20 10 / 30%);
+}

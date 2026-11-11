@@ -1,0 +1,508 @@
+/* The card frame, in em (a twelfth of the card's width, so a frame scales as a whole): a black
+   body, deepest at the bottom; a colored rim inset in it; name and type bars spanning the rim;
+   the art and rules box inset in the rim, each edged by the rim's dark line. Two frames share
+   these rules: the full frame (`card-full`), wherever a card is read whole, and the battlefield
+   frame (`card-field`), with a thinner top, a slimmer name bar and no text boxes. Tapping turns
+   the battlefield frame without changing it (Card.tsx). */
+.card-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.card {
+  position: relative;
+  flex: none;
+  padding: 0.48em 0.48em 0.84em;
+  border-radius: 0.6em;
+  background: linear-gradient(180deg, #252321, #1a1918);
+  box-shadow:
+    inset 0 0 0 0.06em #2e2b29,
+    inset 0 0.1em 0.04em rgb(255 255 255 / 7%),
+    var(--card-shadow, var(--shadow-card));
+  font-family: var(--font-card);
+  color: #141210;
+  transition: box-shadow 0.25s;
+}
+.card-field {
+  --name-size: 0.86em;
+  padding: 0.3em 0.56em 0.95em;
+}
+.card-rim {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  padding: 0.3em 0.44em 0.23em;
+  border-radius: 0.3em;
+  background:
+    var(--rim-streaks, none),
+    linear-gradient(
+      90deg,
+      var(--rim) 0.08em,
+      var(--rim-hi) 0.16em,
+      var(--rim) 0.28em calc(100% - 0.28em),
+      var(--rim-hi) calc(100% - 0.16em),
+      var(--rim) calc(100% - 0.08em)
+    );
+  box-shadow:
+    inset 0 0 0 0.05em var(--rim-lo),
+    inset 0 0 0 0.1em rgb(0 0 0 / 22%);
+}
+/* A whole card's rim carries faint water-like streaks (scry.png); a battlefield card's is smooth
+   and thinner, so more of the black body shows. */
+.card-full {
+  --rim-streaks: repeating-linear-gradient(
+    172deg,
+    transparent 0 0.5em,
+    rgb(255 255 255 / 16%) 0.65em,
+    transparent 0.8em 1.3em
+  );
+}
+.card-field .card-rim {
+  padding: 0.24em 0.36em 0.1em;
+}
+/* The bars' outline is the rim's dark line; a multicolored card's runs in its accent color over
+   the left part (the mockups' Baleful Strix). */
+.card-name-bar,
+.card-type-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 1.12em;
+  margin: 0 -0.38em;
+  padding: 0 0.4em;
+  border: var(--edge, 0.07em) solid transparent;
+  border-radius: 0.5em / 50%;
+  background:
+    linear-gradient(
+        180deg,
+        var(--bar-hi),
+        var(--bar) 40%,
+        var(--bar) 80%,
+        color-mix(in srgb, var(--bar) 85%, black)
+      )
+      padding-box,
+    linear-gradient(90deg, var(--accent, var(--rim-lo)) 45%, var(--rim-lo) 55%)
+      border-box;
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 55%),
+    0 0.05em 0.08em rgb(0 0 0 / 45%);
+}
+.card-field .card-name-bar {
+  height: 1em;
+  margin: 0 -0.3em;
+  padding: 0 0.26em;
+}
+.card-name {
+  overflow: hidden;
+  padding-bottom: 0.06em;
+  font-weight: 750;
+  font-size: calc(var(--name-size, 0.92em) * var(--fit, 1));
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Sizes below are in the type bar's own em (0.8 of the card's). */
+.card-type-bar {
+  overflow: hidden;
+  white-space: nowrap;
+  height: 1.32em;
+  margin: 0 -0.5em;
+  padding: 0 0.5em;
+  border-width: 0.12em;
+  font-weight: 650;
+  font-size: 0.8em;
+}
+/* A long type line shrinks to fit its bar, as a long name does (fit.ts). */
+.card-type-line {
+  overflow: hidden;
+  font-size: calc(1em * var(--fit, 1));
+}
+.card-art {
+  display: block;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  object-fit: cover;
+  background-size: cover;
+  box-shadow: 0 0 0 0.06em var(--rim-lo);
+}
+/* ...and a line of the accent, between dark ones, runs along the art's left edge inside its rim
+   and along its bottom edge over the black body (the mockups' Baleful Strix). */
+.card[class*="accent-"] .card-art {
+  box-shadow:
+    0 0 0 0.06em var(--rim-lo),
+    -0.18em 0 0 var(--accent),
+    0 0.2em 0 var(--accent),
+    -0.23em 0 0 var(--rim-lo);
+}
+.card-full .card-art {
+  flex: 0 0 7.3em;
+}
+.card-rules {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.35em 0.45em;
+  --box: color-mix(in srgb, var(--bar) 44%, #f8f5ec);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--box) 92%, white),
+    var(--box)
+  );
+  box-shadow:
+    0 0 0 0.08em var(--rim-lo),
+    inset 0 0 0 0.06em color-mix(in srgb, var(--rim-lo) 45%, transparent),
+    inset 0 0 0.3em rgb(0 0 0 / 12%);
+  /* One size for every card, the long and the short alike. */
+  font-weight: 500;
+  font-size: 0.7em;
+  line-height: 1.2;
+}
+/* The power and toughness plaque stands over the rules box's foot: the text ends above it. */
+.card-full.card-with-pt .card-rules {
+  padding-bottom: 1.1em;
+}
+.card-rules p {
+  margin: 0;
+  /* Each ability its own paragraph, as printed; long text shrinks to fit its box (Card.tsx's
+     useRulesFit). */
+  white-space: pre-line;
+  font-size: calc(1em * var(--fit, 1));
+}
+/* A card's rules text sits in its box's middle, from the left, as printed. Auto margins center
+   it but, unlike centering the box's content, never push an overflowing first line out of sight
+   while it is being fitted. */
+.card .card-rules {
+  display: flex;
+  flex-direction: column;
+}
+.card .card-rules p {
+  margin: auto 0;
+}
+/* Power and toughness in a framed plaque, numerals in a blue-black ink. The full frame draws
+   it smaller. */
+.card-pt {
+  position: absolute;
+  right: 0.68em;
+  bottom: 0.3em;
+  width: 4.2em;
+  height: 1.9em;
+  display: grid;
+  place-items: center;
+  padding-bottom: 0.18em;
+  border-radius: 0.5em;
+  font-weight: 700;
+  font-size: 1em;
+  line-height: 1;
+  color: #141210;
+  background: linear-gradient(
+    180deg,
+    var(--bar-hi),
+    var(--bar) 45%,
+    color-mix(in srgb, var(--bar) 88%, black)
+  );
+  border: 0.12em solid #14110f;
+  box-shadow:
+    inset 0 0 0 0.2em color-mix(in srgb, var(--bar) 55%, #4a3a28),
+    inset 0 0 0 0.18em rgb(0 0 0 / 35%),
+    inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
+    0 0.06em 0.2em rgb(0 0 0 / 55%);
+}
+.card-pt span {
+  font-size: 1.7em;
+}
+/* The slash no taller than the numerals. */
+.card-pt i {
+  font-style: normal;
+  font-size: 0.8em;
+}
+.card-pt b {
+  font-weight: inherit;
+  color: var(--pt-ink, #19213a);
+}
+.card-full .card-pt {
+  font-size: 0.8em;
+}
+/* Loyalty on the printed loyalty symbol (the Mana font's), where power and toughness would be:
+   pale with dark numerals, as printed. */
+.card-loyalty {
+  position: absolute;
+  right: 0.5em;
+  bottom: 0.2em;
+  display: grid;
+  place-items: center;
+  width: 4em;
+  height: 3.6em;
+  pointer-events: none;
+}
+.card-loyalty-glyph {
+  grid-area: 1 / 1;
+  font: normal 3.7em/1 Mana;
+  color: #ece6da;
+  filter: drop-shadow(0 0 0.04em #14110f)
+    drop-shadow(0 0.06em 0.12em rgb(0 0 0 / 70%));
+}
+.card-loyalty b {
+  grid-area: 1 / 1;
+  /* Center in the shield body below its top notch. */
+  translate: 0 0.16em;
+  font: 700 1.8em/1 var(--font-serif);
+  color: #1c1a19;
+}
+/* A badge whose count changed pops (Card.tsx's usePop): two names for one animation, so a
+   change during a pop starts it again. */
+.badge-pop-0 {
+  animation: badge-pop-0 0.7s ease-out;
+}
+.badge-pop-1 {
+  animation: badge-pop-1 0.7s ease-out;
+}
+@keyframes badge-pop-0 {
+  30% {
+    scale: 1.7;
+    filter: brightness(1.8) drop-shadow(0 0 0.3em #ffd76a);
+  }
+}
+@keyframes badge-pop-1 {
+  30% {
+    scale: 1.7;
+    filter: brightness(1.8) drop-shadow(0 0 0.3em #ffd76a);
+  }
+}
+.card-full .card-loyalty {
+  font-size: 0.8em;
+}
+/* Summoning sickness (CR 302.6): a large moon over the text box, where it hides no art. */
+.card-sick-moon {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  translate: -50% -50%;
+  font-size: 1.7em;
+  pointer-events: none;
+}
+.card-sick-moon .mark-badge {
+  padding: 0 0.22em;
+  height: 1.7em;
+  width: 1.7em;
+  justify-content: center;
+}
+.card-pt b.stat-up {
+  color: var(--stat-up-ink);
+}
+.card-pt b.stat-down {
+  color: var(--stat-down-ink);
+}
+
+/* A permanent's +1/+1 or -1/-1 counters (Card.tsx): their count in a disc inset at the top
+   right of the art. */
+.card-pt-counter {
+  position: absolute;
+  top: 2.3em;
+  right: 0.55em;
+  height: 1.9em;
+  padding: 0 0.45em;
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  border-radius: 0.95em;
+  font: 700 1em/1 var(--font-sans);
+  white-space: nowrap;
+  color: #fff;
+  background: radial-gradient(circle at 50% 30%, #3a3631, #141210);
+  border: 0.12em solid currentColor;
+  box-shadow: 0 0.08em 0.3em rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+.card-pt-counter b {
+  font-size: 0.85em;
+  color: var(--type);
+}
+.card-pt-counter.stat-up {
+  color: var(--stat-up);
+}
+.card-pt-counter.stat-down {
+  color: var(--stat-down);
+}
+/* A permanent's marks (Card.tsx): a dark badge along its foot, between the ability badge and
+   the plaque, wrapping upward: a token's coin, then one per kind of counter. */
+.card-counters {
+  position: absolute;
+  left: 0.62em;
+  right: 0.62em;
+  bottom: 0.3em;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 0.2em;
+  pointer-events: none;
+}
+.card-with-ability .card-counters {
+  left: 3em;
+}
+.card-abilities-2 .card-counters {
+  left: 5.4em;
+}
+.card-abilities-3 .card-counters {
+  left: 7.8em;
+}
+.card-with-pt .card-counters {
+  right: 5.1em;
+}
+.mark-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+  height: 1.8em;
+  padding: 0 0.32em 0 0.26em;
+  border-radius: 0.9em;
+  font: 700 1em/1 var(--font-sans);
+  color: var(--type);
+  background: linear-gradient(180deg, #3a3631, #1c1a17);
+  border: 0.1em solid var(--metal-bright);
+  box-shadow: 0 0.06em 0.2em rgb(0 0 0 / 60%);
+}
+.mark-badge svg {
+  width: 1.15em;
+  height: 1.15em;
+  fill: var(--mark, var(--gold));
+}
+.mark-badge b {
+  font-size: 1.1em;
+}
+.mark-plusOne {
+  --mark: var(--stat-up);
+}
+.mark-minusOne,
+.mark-damage {
+  --mark: var(--stat-down);
+}
+.mark-sick,
+.mark-token {
+  padding-right: 0.26em;
+}
+.mark-sick {
+  --mark: var(--cyan);
+}
+.mark-token {
+  --mark: #d6d2cc;
+  fill-rule: evenodd;
+}
+/* A card's scan in place of its frame (Card.tsx): the printed card itself, clipped to a card's
+   corners (3 mm on 63 by 88), over black for the corners of scans with rounder ones. */
+.card-scanned {
+  padding: 0;
+  border-radius: 4.8% / 3.4%;
+  background: #0b0a09;
+}
+.card-scan {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+/* A scan covers the frame a glow steeps in light, so the light falls over the scan's edge: a
+   line and a short falloff only. The -in glows' broad band steeps a drawn frame's thick black
+   border, but a scan's printed border is thin, so the band would tint its art and text box in a
+   box of its own. */
+.card-scanned.card-source::after,
+.card-scanned.card-target::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.card-scanned.card-source::after {
+  box-shadow:
+    inset 0 0 0 1px #fffbd0,
+    inset 0 0 3px 2px rgb(225 130 35 / 85%);
+}
+.card-scanned.card-target::after {
+  box-shadow:
+    inset 0 0 0 1px #8cf4fa,
+    inset 0 0 4px 2px rgb(5 150 215 / 90%);
+}
+/* The plate over a scan's text box that says one ability (Card.tsx's AbilityPlate): parchment
+   in a dark rim, its label on a tab across its top edge. */
+.ability-plate {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 56%;
+  bottom: 4.5%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.35em;
+  background: linear-gradient(180deg, #f8f2e2, #e6dcc4);
+  border: 0.08em solid #1b1712;
+  box-shadow:
+    inset 0 0 0 0.1em rgb(150 120 70 / 45%),
+    inset 0 0 0.6em rgb(90 60 20 / 18%),
+    0 0.08em 0.4em rgb(0 0 0 / 55%);
+  font-family: var(--font-card);
+  color: #141210;
+}
+.ability-plate-label {
+  align-self: center;
+  margin-top: 0.45em;
+  padding: 0.08em 0.6em 0.12em;
+  border-radius: 0.6em;
+  font: 650 0.62em/1.1 var(--font-card);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--type, #f2ead8);
+  background: linear-gradient(180deg, #3a3631, #1c1a17);
+  border: 0.08em solid var(--metal-bright, #c9a35c);
+  white-space: nowrap;
+}
+.ability-plate-text {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.3em 0.55em;
+  font-weight: 560;
+  font-size: 0.74em;
+  line-height: 1.22;
+}
+.ability-plate-text p {
+  margin: auto 0;
+  white-space: pre-line;
+  font-size: calc(1em * var(--fit, 1));
+}
+/* An ability on the stack: its source's scan wearing the plate. */
+.stack-item.stack-item-scanned {
+  position: relative;
+  display: block;
+  aspect-ratio: auto;
+  padding: 0;
+  border-radius: 0 0 50% 50% / 0 0 18% 18%;
+  overflow: hidden;
+  background: #0b0a09;
+}
+.stack-item-scanned .card-scan {
+  clip-path: inset(0 0 44% 0);
+}
+.stack-item-scanned .ability-plate {
+  bottom: 2%;
+  border-radius: 0 0 50% 50% / 0 0 36% 36%;
+}
+.stack-item-scanned .ability-plate-text {
+  padding: 0.3em 0.9em 1.7em;
+}
+.waterbend-tap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  padding: 5px;
+  border-radius: 50%;
+  background: rgb(15 26 32 / 85%);
+  box-shadow: 0 1px 6px #000;
+  pointer-events: none;
+}

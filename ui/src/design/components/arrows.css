@@ -1,0 +1,51 @@
+/* Arrows. */
+.arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+@keyframes arrow-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Color distinguishes relationships. A small shadow keeps each link legible over card art. */
+.arrow {
+  animation: arrow-in 160ms ease-out;
+  filter: drop-shadow(0 1px 1px rgb(22 13 12 / 75%));
+}
+.arrow.combat-link {
+  animation: none;
+  filter: none;
+}
+.combat-link .arrow-line path {
+  stroke: rgb(242 211 152 / 65%);
+  stroke-width: 1.5;
+}
+.arrow-gold {
+  --tone: #ffd27a;
+}
+.arrow-cyan {
+  --tone: #a8edf8;
+}
+.arrow-green {
+  --tone: #a5eeb2;
+}
+.arrow-red {
+  --tone: #ffa397;
+}
+.arrow-line path {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: calc(3.5px * var(--arrow-scale));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.arrow-line .arrow-head {
+  fill: var(--tone);
+  stroke: none;
+}

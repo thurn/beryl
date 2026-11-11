@@ -1,0 +1,148 @@
+/* The phase tracker: five icons between small white arrows in a dark pill with a thin grey
+   rim, lighter toward its foot. The current phase burns gold. */
+.phase-tracker {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  height: 54px;
+  padding: 0 20px;
+  list-style: none;
+  border-radius: 999px;
+  border: 1px solid #8a837c;
+  border-left-color: #5a544e;
+  border-right-color: #5a544e;
+  background: linear-gradient(180deg, #1e1b18 40%, #2a2522 80%, #2e2926);
+  box-shadow:
+    0 0 0 1px rgb(12 10 9 / 45%),
+    0 3px 6px rgb(0 0 0 / 30%);
+}
+.phase {
+  display: flex;
+  align-items: center;
+}
+.phase-icon {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+  fill: none;
+  stroke: #f0e2c4;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
+}
+.phase .phase-dark {
+  fill: #2c2825;
+}
+.phase .phase-card {
+  fill: #3e342a;
+}
+.phase .phase-shield {
+  fill: #746756;
+}
+.phase .phase-shield-dark {
+  fill: #453e38;
+}
+.phase .phase-stone {
+  fill: #5f564b;
+}
+.phase .phase-light {
+  fill: #8a8178;
+}
+.phase .phase-heavy {
+  stroke-width: 2;
+}
+.phase-current .phase-icon {
+  stroke: #fff0c8;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 1.5px rgb(255 170 50))
+    drop-shadow(0 0 3px rgb(255 130 20))
+    drop-shadow(0 0 5px rgb(230 100 10 / 65%));
+}
+.phase-current .phase-icon path {
+  fill: none;
+}
+.phase .phase-blade {
+  fill: #2c2825;
+}
+.phase-current .phase-icon .phase-blade {
+  fill: rgb(255 214 140 / 35%);
+  stroke-width: 1.1;
+}
+/* Amber haze on the pill behind the current phase, centered on its icon. */
+.phase-tracker .phase-current {
+  position: relative;
+}
+.phase-tracker .phase-current::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  right: -14px;
+  width: 60px;
+  background: radial-gradient(closest-side, rgb(210 120 40 / 28%), transparent);
+}
+.phase-arrow {
+  width: 9px;
+  height: 11px;
+  margin: 0 22px;
+  fill: #ece6de;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
+}
+
+/* Step stops (Steps.tsx): Phosphor icons in cream, filled where there is a stop, outlined and
+   dimmer where there is none; untap and cleanup, never stops, dimmer still. The current step
+   burns gold. */
+.step-stops {
+  display: grid;
+  grid-template-columns: repeat(3, var(--step-size, 22px)) 1fr repeat(
+      3,
+      var(--step-size, 22px)
+    );
+  gap: var(--step-row-gap, 6px) var(--step-gap, 9px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  position: relative;
+  display: flex;
+}
+.step-toggle {
+  display: flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.step-toggle:focus-visible {
+  border-radius: 50%;
+  outline: 1px solid #f0e2c4;
+  outline-offset: 2px;
+}
+.step-icon {
+  width: var(--step-size, 22px);
+  height: var(--step-size, 22px);
+  fill: #f0e2c4;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 75%));
+  transition:
+    opacity 120ms,
+    fill 120ms;
+}
+.step-no-stop .step-icon {
+  opacity: 0.6;
+}
+.step-fixed .step-icon {
+  opacity: 0.32;
+}
+.step-toggle:hover .step-icon {
+  opacity: 1;
+}
+.step-current .step-icon {
+  opacity: 1;
+  fill: #ffd27a;
+  filter: drop-shadow(0 0 1.5px rgb(255 170 50))
+    drop-shadow(0 0 3px rgb(255 130 20))
+    drop-shadow(0 0 5px rgb(230 100 10 / 65%));
+}

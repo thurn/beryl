@@ -1,0 +1,129 @@
+/* Buttons (ui_system.png section 02): one system for every button. A pill of one height and
+   type, under a 1.5px rim. Primary is deep amber under a gold rim with a warm glow; secondary
+   is near black under a pale rim, as heavy as the primary but cool; disabled is flat stone,
+   with no rim light, glow or shadow, and dim type: clearly inert, whichever it was. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  min-width: 8em;
+  height: var(--button-height);
+  padding: 0 0.9em;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: var(--button-font);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    filter 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.button-small {
+  min-width: 0;
+  height: 2em;
+  font-size: 15px;
+  padding: 0 1em;
+}
+.button:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+/* Reached by Tab: a bright ring clear of the button's own edge. */
+.button:focus-visible {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: 3px;
+}
+.button:not(:disabled):active {
+  transform: translateY(1px);
+}
+.button-primary {
+  color: #fffaf2;
+  text-shadow: 0 1px 1px rgb(70 25 4 / 75%);
+  border-color: #fff2b1 #eba043 #f7bc56;
+  background: linear-gradient(
+    180deg,
+    #e28322,
+    #cc6f1c 12%,
+    #b45e12 30%,
+    #a7570f 48%,
+    #ad5b10 60%,
+    #c46a18 74%,
+    #e08122 87%,
+    #f6a83c 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgb(255 240 190 / 70%),
+    0 0 0 1px rgb(60 25 5 / 85%),
+    0 0 6px 3px rgb(240 140 50 / 55%),
+    0 4px 8px rgb(0 0 0 / 35%);
+}
+.button-secondary {
+  color: #fffdfa;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 70%);
+  border-color: #e9e3da #b9b2a9 #a59e96;
+  background: linear-gradient(180deg, #2a2522, #1d1917 55%, #262120);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 14%),
+    0 0 0 1px rgb(14 9 7 / 75%),
+    0 4px 8px rgb(0 0 0 / 35%);
+}
+/* Whatever a place sets on its button, disabled wins: no rim light, glow or lift. */
+.button.button:disabled {
+  cursor: default;
+  color: #7e7873;
+  text-shadow: none;
+  border-color: #57514c;
+  background: #2f2b28;
+  box-shadow: 0 0 0 1px rgb(14 11 10 / 50%);
+  filter: none;
+  transform: none;
+}
+.button-icon {
+  flex: none;
+  display: inline-flex;
+  width: 0.8em;
+  margin-right: 0.15em;
+}
+.button:disabled .button-icon {
+  color: #6c6661;
+}
+.button-icon svg {
+  width: 100%;
+}
+
+/* The priority pill: italic serif over the dark surface in a thin grey rim, after a white
+   sparkle with a cool glow. */
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.95em;
+  height: 1.8em;
+  padding: 0 1.45em 0 1.4em;
+  border-radius: 999px;
+  border: 1.5px solid #a59e98;
+  border-top-color: #b3aca6;
+  background: #25201d;
+  box-shadow:
+    0 0 0 1px rgb(12 10 9 / 50%),
+    0 3px 6px rgb(0 0 0 / 30%);
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 21px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #f7f4ef;
+}
+.priority-pill span {
+  -webkit-text-stroke: 0.25px currentColor;
+}
+.sparkle {
+  flex: none;
+  width: 0.95em;
+  color: #fbfeff;
+  filter: drop-shadow(0 0 1px rgb(40 140 255))
+    drop-shadow(0 0 3px rgb(56 160 255 / 60%));
+}

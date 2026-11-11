@@ -1,0 +1,136 @@
+/* Mana symbols. */
+.mana-cost {
+  display: inline-flex;
+  gap: 0.12em;
+  margin-left: auto;
+  padding-left: 0.3em;
+}
+.mana-symbol {
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 50%;
+  font: normal 0.82em/1.3em Mana;
+  text-align: center;
+  color: #161412;
+  background: #cbc4ba;
+  box-shadow: -0.05em 0.1em 0 rgb(0 0 0 / 65%);
+  vertical-align: -0.12em;
+  /* A symbol inside shadowed or stroked type (a button's label, a prompt's title) takes
+     neither: on its glyph they read as a smudge across the numeral. */
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+  font-weight: normal;
+}
+/* In the UI's own type (a button's label, a prompt's title) rather than a card's text: a soft
+   shadow under the symbol, not the printed one's hard offset crescent. */
+:is(.button, .prompt-title, .dock) .mana-symbol {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+/* Costs in the name bar: small symbols, each ringed in black as on the mockups' Counterspell. */
+.mana-cost .mana-symbol {
+  font-size: 0.66em;
+  box-shadow:
+    0 0 0 0.05em #10161c,
+    -0.04em 0.08em 0.06em rgb(0 0 0 / 45%);
+}
+.mana-w {
+  background: #f6f2c8;
+}
+/* A black drop on pale cyan, as the mockups' Counterspell and Preordain draw it. */
+.mana-u {
+  color: #020405;
+  background: radial-gradient(circle at 40% 35%, #e2faff, #c4ecfb 55%, #a3d3ea);
+}
+.mana-b {
+  background: #b3a8a3;
+}
+.mana-r {
+  background: #ef9c7c;
+}
+.mana-g {
+  background: #9fcca5;
+}
+.mana-c,
+.mana-generic {
+  background: #d3cbc1;
+}
+/* A loyalty cost on its printed symbol (Mana.tsx's LoyaltyCost), a shield whose edge points
+   up, down or flat: pale with dark numerals, to stand out on the dark panels that list it. */
+.loyalty-cost {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.6em;
+  height: 1.9em;
+  vertical-align: -0.5em;
+}
+.loyalty-glyph {
+  grid-area: 1 / 1;
+  font: normal 1.9em/1 Mana;
+  color: #ece6da;
+}
+.loyalty-number {
+  grid-area: 1 / 1;
+  font: 700 0.9em/1 var(--font-serif);
+  color: #1c1a19;
+}
+.loyalty-down .loyalty-number {
+  translate: 0 -0.1em;
+}
+.loyalty-up .loyalty-number {
+  translate: 0 0.1em;
+}
+/* The paragraph of a card's rules text that says the ability an option uses. */
+.rules-lit {
+  background: var(--gold-soft);
+  box-shadow: 0 0 0 0.15em var(--gold-soft);
+  border-radius: 0.1em;
+}
+/* The keyword badges, side by side at the foot of a battlefield frame. */
+.ability-badges {
+  position: absolute;
+  left: 0.62em;
+  bottom: 0.28em;
+  display: flex;
+  gap: 0.2em;
+}
+.ability-badge {
+  position: relative;
+  --ink: #2b2b30;
+  width: 2.2em;
+  height: 2.1em;
+  border-radius: 0.38em;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: linear-gradient(180deg, #d9d9e1, #bdbdc7 55%, #9e9ea9);
+  border: 0.12em solid #151413;
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 80%),
+    0 0.08em 0.2em rgb(0 0 0 / 55%);
+}
+.ability-badge svg {
+  width: 1.5em;
+  fill: currentColor;
+}
+.ability-glyph {
+  font: normal 1.3em/1 Mana;
+}
+/* A keyword the permanent gained (until end of turn, from another card): lit green, as a
+   raised stat, and popping in as it comes. */
+.ability-gained {
+  --ink: #0f3d16;
+  background: linear-gradient(180deg, #d6f7c9, #9fe08a 55%, #6fbf5a);
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 80%),
+    0 0 0.45em 0.1em rgb(120 255 110 / 70%),
+    0 0.08em 0.2em rgb(0 0 0 / 55%);
+  animation: ability-gained-in 420ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes ability-gained-in {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}

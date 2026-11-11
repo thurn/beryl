@@ -1,0 +1,118 @@
+/* The overlay shell, on the table stage: a 1000px choice column and a 338px side column. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1000px 338px;
+  /* On the base stage; held to its middle (Stage.tsx --shift-mid), and on a narrower one closer
+     together (ChoiceOverlay.tsx side). */
+  column-gap: clamp(16px, calc(72px + 0.35 * var(--shift, 0px)), 72px);
+  align-items: start;
+  padding: 48px 0 0 calc(136px + var(--shift-mid, 0px));
+}
+/* Darkens whatever is behind; the table also blurs itself (.table-dimmed) while an overlay is up. */
+.overlay-backdrop {
+  position: absolute;
+  inset: var(--bleed, 0);
+  background: rgb(14 13 12 / 40%);
+}
+.overlay-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* The header, as in scry.png (stage pixels): the title a little left of center, then an
+   engraved silver rule, the instruction and a fainter rule; all of it over the choice's top. */
+.overlay-header {
+  position: relative;
+  width: 100%;
+  height: 159px;
+  text-align: center;
+}
+.overlay-header::before,
+.overlay-header::after {
+  content: "";
+  position: absolute;
+  box-shadow:
+    0 -1px 0 rgb(8 6 5 / 55%),
+    0 1px 0 rgb(8 6 5 / 55%);
+}
+.overlay-header::before {
+  left: 46px;
+  width: 957px;
+  top: 68px;
+  height: 2px;
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 22%) 50%, transparent 50%),
+    linear-gradient(
+      90deg,
+      transparent,
+      #c8c6c3 12%,
+      #e6e6e5 25%,
+      #e6e6e5 85%,
+      transparent
+    );
+}
+.overlay-header::after {
+  left: 94px;
+  width: 851px;
+  top: 131px;
+  height: 2px;
+  background:
+    linear-gradient(180deg, transparent 50%, rgb(0 0 0 / 45%) 50%),
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(150 147 144 / 70%) 8%,
+      #fff 17%,
+      #fff 85%,
+      rgb(150 147 144 / 70%) 92%,
+      transparent
+    );
+}
+/* Without an instruction the header is its title over one rule. */
+.overlay-bare::after {
+  display: none;
+}
+.overlay-title {
+  position: absolute;
+  inset: -6px 0 auto;
+  translate: -32.5px 0;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 64.5px;
+  line-height: 1.08;
+  color: #fefdfb;
+  text-shadow:
+    1px 3px 2px rgb(0 0 0 / 80%),
+    0 4px 10px rgb(0 0 0 / 60%),
+    0 0 14px rgb(255 255 255 / 22%);
+}
+.overlay-instruction {
+  position: absolute;
+  inset: 78px 0 auto;
+  translate: 10px 0;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 22.8px;
+  line-height: 1.2;
+  letter-spacing: 0.012em;
+  -webkit-text-stroke: 0.2px currentColor;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+.overlay-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 94px;
+  padding-top: 10px;
+}
+/* Its way back to the table, a secondary button of the one size. */
+.overlay-view {
+  min-width: var(--button-width);
+}

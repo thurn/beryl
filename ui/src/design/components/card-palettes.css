@@ -1,0 +1,75 @@
+/* The component library (docs/ui_mockups/ui_system.png). Cards size everything in em: a card's
+   font size is a twelfth of its width. */
+
+/* Frame palettes, one per color: the colored rim (with its highlight and the dark line that
+   edges it) and the name and type bars. The rules box is the bars' color thinned toward
+   parchment (.card-rules). */
+.frame-w {
+  --rim: #d3d1cd;
+  --rim-hi: #f8f8f7;
+  --rim-lo: #2e2b30;
+  --bar: #e2dfda;
+  --bar-hi: #f5f3f0;
+}
+.frame-u {
+  --rim: #2a7fc4;
+  --rim-hi: #63b3e8;
+  --rim-lo: #06275a;
+  --bar: #b9d3ea;
+  --bar-hi: #dcf0fb;
+}
+.frame-b {
+  --rim: #2e2b29;
+  --rim-hi: #5a5551;
+  --rim-lo: #0c0b0a;
+  --bar: #b4ada8;
+  --bar-hi: #d3cdc8;
+}
+.frame-r {
+  --rim: #cc2e14;
+  --rim-hi: #f7743e;
+  --rim-lo: #6d0806;
+  --bar: #e0b4a0;
+  --bar-hi: #f0d2c4;
+}
+.frame-g {
+  --rim: #2a7e51;
+  --rim-hi: #63ae80;
+  --rim-lo: #0d2f19;
+  --bar: #b6bcb0;
+  --bar-hi: #d6dbd0;
+}
+.frame-m {
+  --rim: #d9b46a;
+  --rim-hi: #f3da9b;
+  --rim-lo: #6f5422;
+  --bar: #dab872;
+  --bar-hi: #ecd197;
+}
+/* A multicolored card's gold rim is edged in its first color, as on the mockups' Baleful Strix. */
+[class*="accent-"] .card-name-bar {
+  --edge: 0.14em;
+}
+.accent-w {
+  --accent: #8a8070;
+}
+.accent-u {
+  --accent: #0f5fa8;
+}
+.accent-b {
+  --accent: #2a2624;
+}
+.accent-r {
+  --accent: #a5200c;
+}
+.accent-g {
+  --accent: #1d6a40;
+}
+/* Colorless: a pale stone frame. */
+.frame-c {
+  --rim: #ddd4c2;
+  --rim-hi: #f7f2e8;
+  --rim-lo: #6e5536;
+  --bar: #d0c7bc;
+  --bar-hi: #e2dbd1;
+}

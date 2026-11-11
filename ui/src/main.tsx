@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./design/fonts";
 import "./design/tokens.css";
-import "./design/components.css";
+import "./design/components";
 import "./screens/screens.css";
 import { installDiagnostics } from "./diagnostics";
 import { installAudio } from "./audio/sound";

@@ -1,0 +1,171 @@
+/* The opponent acting (Player.tsx' Thinking): an arc faint at its tail and bright at
+   its head, turning round a faint ring. */
+.thinking {
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+  filter: drop-shadow(0 0 3px rgb(255 150 40 / 70%));
+}
+.thinking-track {
+  fill: none;
+  stroke: rgb(255 214 150 / 22%);
+  stroke-width: 2.6;
+}
+.thinking-arc {
+  fill: none;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  animation: thinking-turn 0.8s linear infinite;
+}
+.thinking-head {
+  fill: #fff3c0;
+  stroke: none;
+}
+@keyframes thinking-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-arc {
+    animation-duration: 2s;
+  }
+}
+
+/* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
+.life-orb {
+  --orb: 1px;
+  position: relative;
+  width: calc(272 * var(--orb));
+  height: calc(116 * var(--orb));
+}
+.life-orb-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+/* The ring glows only along the rim, over a shadow. */
+.life-orb-ring {
+  fill: none;
+  stroke: #ffb444;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.life-orb-ring-glow {
+  stroke: #ff7a10;
+  stroke-width: 4;
+  opacity: 0.4;
+}
+/* A flat grey face inside a thick bevelled bezel, bright along its top (Player.tsx). */
+.life-orb-core {
+  fill: #2c2926;
+  stroke-width: 5;
+}
+.life-orb-flare {
+  fill: #ff6a00;
+}
+.life-orb-flare ellipse {
+  fill: #ff7a14;
+  opacity: 0.75;
+}
+.life-orb-halo {
+  fill: none;
+  stroke: #ff8a14;
+  stroke-width: 16;
+}
+.life-orb-bloom {
+  fill: #ffc764;
+}
+.life-orb-crescent {
+  fill: none;
+  stroke: #ffe28a;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.life-orb-total {
+  position: absolute;
+  left: 50%;
+  top: calc(57 * var(--orb));
+  translate: -50% -50%;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: calc(48 * var(--orb));
+  letter-spacing: calc(-4 * var(--orb));
+  line-height: 1;
+  color: #fdfcfa;
+  text-shadow: 0 calc(2 * var(--orb)) calc(3 * var(--orb)) rgb(0 0 0 / 80%);
+}
+/* Sized in em, 1em being the name's size. */
+.player-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.73em;
+  height: 2.09em;
+  padding: 0 4em 0 0.34em;
+  background: linear-gradient(
+    90deg,
+    rgb(24 21 19 / 55%),
+    rgb(30 26 24 / 92%) 0.34em,
+    rgb(30 26 24 / 88%) 55%,
+    transparent
+  );
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 23px;
+  color: #fff;
+  text-shadow:
+    0 1px 1px rgb(0 0 0 / 90%),
+    0 2px 5px rgb(0 0 0 / 60%);
+}
+.player-badge-emblem {
+  width: 2em;
+  height: 2em;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
+}
+.player-badge-ring {
+  fill: #151210;
+  stroke: url(#emblem-brass);
+  stroke-width: 1.5;
+}
+.player-badge-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.working-dots {
+  display: inline-flex;
+  gap: 0.22em;
+  margin-left: 0.3em;
+}
+.working-dots i {
+  width: 0.26em;
+  height: 0.26em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: working-dot 1.2s ease-in-out infinite;
+}
+.working-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.working-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes working-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .working-dots i {
+    animation: none;
+    opacity: 0.8;
+  }
+}
