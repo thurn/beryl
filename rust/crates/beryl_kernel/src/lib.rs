@@ -311,6 +311,12 @@
 //! hit recorded at each read costs it too: reporting the ability at every read of a
 //! player's rule, by finding it on the battlefield again, counted 410,363,089.
 //!
+//! Measured for by-w8gv.7.6 (396,070,902 before, 389,343,295 after): the benchmark's decks
+//! hold one card that makes a memo, a creature with evoke, so the kind is live in few of
+//! its states. A permanent enters with one write fewer, of its flags, and the record the
+//! rules carry for each object of a move is smaller by the flags' width; the zone move
+//! and [`State::signature`] pay the bit test of the keyed slots they paid already.
+//!
 //! ### Static rule changes
 //!
 //! One question, [`State::rule_applies`], answers "does this rule change apply to this
