@@ -7,8 +7,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CardDef, CastingIx, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Part,
-    Pause, Prompt, Purpose, Types,
+    Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, FaceIx, Flow, ManaColor,
+    ManaCost, Part, Pause, Prompt, Purpose, Types,
 };
 use crate::chance;
 use crate::decision::{Answers, Decision, DecisionKind, Opt, StallReason};
@@ -1151,20 +1151,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 }
 
-/// Whether the cost a permanent's spell was cast with, marked by `flag`, was paid, for an
-/// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
-/// and never changes while it stays; once it has left, the answer is what it was as the
-/// ability triggered, and it triggered only if the cost was paid.
-pub(crate) fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> bool {
-    match tr.source {
-        Some(r) if s.is_current(r) => s.object(r.slot).flags().has(flag),
-        _ => true,
-    }
-}
-
 /// "If it was kicked" ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)):
 /// "If a spell's controller declares the intention to pay any of that spell's kicker costs,
 /// that spell has been 'kicked.'"
 pub fn kicked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
-    entered_with(s, tr, ObjectFlags::KICKED)
+    trigger::entered_with(s, tr, CastingKind::Kicker)
 }

@@ -12,15 +12,14 @@ use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::cast;
-use crate::effect::entered_with;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{
-    Counters, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone,
-    placed,
+    Counters, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone, placed,
 };
 use crate::table::GameTable;
+use crate::trigger::entered_with;
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and
@@ -337,7 +336,7 @@ impl<L: Layout> Scene<'_, L> {
     /// Whether the spell was cast with this kind of cost, or the permanent's spell was
     /// ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)): "If a spell's
     /// controller declares the intention to pay any of that spell's kicker costs, that spell
-    /// has been 'kicked.'" A permanent carries a mark for each kind it can enter with
+    /// has been 'kicked.'" A permanent remembers each kind its spell paid
     /// ([`entered_with`]); none is overloaded, as only an instant or sorcery has overload
     /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
     fn paid(&self, kind: CastingKind) -> bool {
@@ -345,13 +344,6 @@ impl<L: Layout> Scene<'_, L> {
             let face = self.t.def(self.subject.card).face(self.subject.face);
             return costs.paid(face).any(|option| option.kind() == kind);
         }
-        let flag = match kind {
-            CastingKind::Kicker => ObjectFlags::KICKED,
-            CastingKind::Offspring => ObjectFlags::OFFSPRING,
-            CastingKind::Impending => ObjectFlags::IMPENDING,
-            CastingKind::Evoke => ObjectFlags::EVOKED,
-            CastingKind::Overload => return false,
-        };
-        entered_with(self.s, self.subject, flag)
+        kind != CastingKind::Overload && entered_with(self.s, self.subject, kind)
     }
 }

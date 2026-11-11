@@ -11,6 +11,7 @@ use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
+use crate::memos::MemosOf;
 use crate::rng::SplitMix64;
 use crate::state::{Counters, Derived, Object, ObjectFlags, State, Zone, ZoneKey};
 use beryl_card::FaceIx;
@@ -246,10 +247,12 @@ impl<L: Layout> State<L> {
     }
 
     /// What makes two objects interchangeable (§7.2): every field but the incarnation, the
-    /// timestamp and the battlefield index, and for a permanent its characteristics after continuous effects, so two
-    /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
-    /// creature that got -2/-0 one that didn't.
-    pub fn signature(&self, slot: L::Slot) -> (Object<L>, Option<Derived<L>>) {
+    /// timestamp and the battlefield index, for a permanent its characteristics after
+    /// continuous effects, and what it remembers of how it was cast, so two untapped basic
+    /// lands match but a stolen Mana Crypt does not match your own, nor a creature that got
+    /// -2/-0 one that didn't, nor a kicked creature one that was not. With nothing stored
+    /// about the object, its memos cost one bit test.
+    pub fn signature(&self, slot: L::Slot) -> (Object<L>, Option<Derived<L>>, MemosOf<'_, L>) {
         let o = self.object(slot);
         let derived = (o.zone == Zone::Battlefield).then(|| *self.derived(slot));
         (
@@ -260,6 +263,7 @@ impl<L: Layout> State<L> {
                 ..*o
             },
             derived,
+            self.memos(slot),
         )
     }
 

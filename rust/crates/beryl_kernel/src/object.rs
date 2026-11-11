@@ -67,23 +67,10 @@ impl ObjectFlags {
     /// A loyalty ability of this permanent was activated this turn
     /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
     pub const LOYALTY_ACTIVATED: u32 = 1 << 17;
-    /// Its spell was kicked ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)).
-    pub const KICKED: u32 = 1 << 18;
-    /// Its offspring cost was paid (CR 702.175a).
-    pub const OFFSPRING: u32 = 1 << 19;
-    /// Its impending cost was paid (CR 702.176a).
-    pub const IMPENDING: u32 = 1 << 20;
-    /// Its evoke cost was paid (CR 702.74a).
-    pub const EVOKED: u32 = 1 << 21;
-    /// The flags milestone 4 (by-w8gv.7.1) moves to memos. No mutator sets them: they are
-    /// written through [`State::legacy_mut`](crate::State::legacy_mut) alone.
-    pub const LEGACY: u32 = Self::KICKED
-        | Self::OFFSPRING
-        | Self::IMPENDING
-        | Self::EVOKED
-        | Self::EXILED_UNTIL
-        | Self::EXILED_WITH
-        | Self::LOYALTY_ACTIVATED;
+    /// The flags milestone 4 (by-w8gv.7.1) moves to memos and trackers. No mutator sets
+    /// them: they are written through [`State::legacy_mut`](crate::State::legacy_mut)
+    /// alone.
+    pub const LEGACY: u32 = Self::EXILED_UNTIL | Self::EXILED_WITH | Self::LOYALTY_ACTIVATED;
 
     #[inline]
     pub fn has(self, flag: u32) -> bool {

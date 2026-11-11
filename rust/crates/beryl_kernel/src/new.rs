@@ -11,7 +11,7 @@ use crate::pending::Pending;
 use crate::player::{ManaPool, MulliganStatus, Player};
 use crate::profile::Profile;
 use crate::rng::Rng;
-use crate::state::{Budgets, Effects, Flags, State, Zones};
+use crate::state::{Budgets, Effects, Flags, Memos, State, Zones};
 use crate::store::Store;
 use crate::table::GameTable;
 use crate::turn::Turn;
@@ -125,7 +125,7 @@ impl<L: Layout> State<L> {
             delayed: Default::default(),
             effects: Effects::empty(),
             keyed: Bitboard::EMPTY,
-            entered_x: Default::default(),
+            memos: Memos::empty(),
             pending: Pending::None,
             knowledge: Table::filled(Bitboard::EMPTY),
             rng: Rng::new(0),

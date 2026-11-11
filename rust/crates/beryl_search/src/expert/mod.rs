@@ -47,8 +47,8 @@ use std::cell::OnceCell;
 
 use beryl_cards::names;
 use beryl_engine::card::{
-    Ability, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, ObjectAbility, Purpose,
-    Types,
+    Ability, CastingKind, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor,
+    ObjectAbility, Purpose, Types,
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -553,7 +553,7 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether a permanent is an Overlord cast for impending, not yet a creature.
     fn impending(&self, slot: L::Slot) -> bool {
-        self.obs().object(slot).flags().has(ObjectFlags::IMPENDING)
+        self.obs().memos(slot).paid(CastingKind::Impending)
     }
 
     /// Whether a counterspell we have seen in the opponent's hand (Thundertrap Trainer and

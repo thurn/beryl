@@ -1,7 +1,9 @@
 //! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
-use crate::card::{Ability, AbilityIx, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
+use crate::card::{
+    Ability, AbilityIx, CastingKind, Delayed, Face, FaceAbility, FaceIx, Trigger, Types,
+};
 use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter;
 use crate::fixed::Full;
@@ -364,4 +366,19 @@ pub(crate) fn put_on_stack<L: Layout>(
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
 pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {
     s.delay_trigger(trigger)
+}
+
+/// Whether a cost of `kind` was paid for a permanent's spell, for an intervening "if" of its
+/// enters ability (CR 603.4). The permanent remembers it from the moment it enters and never
+/// otherwise while it stays; once it has left, the answer is what it was as the ability
+/// triggered, and it triggered only if the cost was paid.
+pub(crate) fn entered_with<L: Layout>(
+    s: &State<L>,
+    tr: &PendingTrigger<L>,
+    kind: CastingKind,
+) -> bool {
+    match tr.source {
+        Some(r) if s.is_current(r) => s.paid(r.slot, kind),
+        _ => true,
+    }
 }

@@ -2,7 +2,7 @@
 //! `apply` on positions set up with the cards of [`super::cast`].
 
 use super::cast::{Game, cast, index_of};
-use crate::card::{Castings, FaceIx, ManaColor, ObjectAbility};
+use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility};
 use crate::event::{self, Reason};
 use crate::ids::Slot;
 use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone, ZoneKey};
@@ -279,7 +279,7 @@ fn kicker_x_announces_an_x_of_at_least_one_and_marks_the_permanent() {
     g.pass_both();
     let o = g.s.object(diver);
     assert_eq!(o.zone(), Zone::Battlefield);
-    assert!(o.flags().has(ObjectFlags::KICKED));
+    assert!(g.s.paid(diver, CastingKind::Kicker));
     assert_eq!(g.s.x_of(diver), 2);
 }
 
@@ -300,7 +300,7 @@ fn offspring_is_an_additional_cost_offered_only_when_payable() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(with_offspring);
     g.pass_both();
-    assert!(g.s.object(trainer).flags().has(ObjectFlags::OFFSPRING));
+    assert!(g.s.paid(trainer, CastingKind::Offspring));
 }
 
 #[test]
@@ -323,7 +323,7 @@ fn impending_is_an_alternative_cost_that_enters_with_time_counters() {
     g.pass_both();
     let o = g.s.object(overlord);
     assert_eq!(o.zone(), Zone::Battlefield);
-    assert!(o.flags().has(ObjectFlags::IMPENDING));
+    assert!(g.s.paid(overlord, CastingKind::Impending));
     assert_eq!(o.counters().long_tail(), Some((CounterKind::Time, 4)));
 }
 

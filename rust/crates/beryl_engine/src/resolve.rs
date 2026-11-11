@@ -23,8 +23,7 @@ use crate::interpret;
 use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
 use crate::state::{
-    CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone,
-    placed,
+    CounterKind, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone, placed,
 };
 use crate::table::GameTable;
 
@@ -307,16 +306,9 @@ fn enter_battlefield<L: Layout>(
         ..Entry::default()
     };
     for option in entry.costs.paid(face) {
-        match option {
-            CastingOption::Kicker { .. } => how.flags |= ObjectFlags::KICKED,
-            CastingOption::Offspring(_) => how.flags |= ObjectFlags::OFFSPRING,
-            CastingOption::Impending { counters, .. } => {
-                how.flags |= ObjectFlags::IMPENDING;
-                how.counters = Some((CounterKind::Time, counters));
-            }
-            CastingOption::Evoke { .. } => how.flags |= ObjectFlags::EVOKED,
-            // An instant or sorcery's, which never enters.
-            CastingOption::Overload { .. } => {}
+        how.paid = how.paid.with(option.kind());
+        if let CastingOption::Impending { counters, .. } = option {
+            how.counters = Some((CounterKind::Time, counters));
         }
     }
     event::move_batch(

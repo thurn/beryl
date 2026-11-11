@@ -4,13 +4,14 @@
 use beryl_kernel::derive::Rederive;
 
 use crate::card::{
-    AbilityKind, Affected, Colors, Modification, Rules, StaticCondition, Subtypes, Types,
+    AbilityKind, Affected, CastingKind, Colors, Modification, Rules, StaticCondition, Subtypes,
+    Types,
 };
 use crate::event::{Sink, kind};
 use crate::filter;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue};
-use crate::state::{CounterKind, Derived, GrantRef, LayerChange, ObjectFlags, State, Zone};
+use crate::state::{CounterKind, Derived, GrantRef, LayerChange, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -128,7 +129,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
                 StaticCondition::Always => true,
                 StaticCondition::HasCounter(kind) => o.counters().get(kind) > 0,
                 StaticCondition::Impending => {
-                    o.flags().has(ObjectFlags::IMPENDING) && o.counters().get(CounterKind::Time) > 0
+                    o.counters().get(CounterKind::Time) > 0 && s.paid(slot, CastingKind::Impending)
                 }
             };
             let target = match spec.affected {

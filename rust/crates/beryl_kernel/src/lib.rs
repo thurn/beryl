@@ -129,9 +129,8 @@
 //!
 //! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
 //! (by-w8gv.7.1) deletes and has not yet moved to a store ("Stores"), which therefore gets
-//! no typed mutator: `entered_x`; the [`state::ObjectFlags`] `KICKED`, `OFFSPRING`,
-//! `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and `LOYALTY_ACTIVATED`; and
-//! [`state::Counters`]' long-tail kind (`other_kind`, `other`).
+//! no typed mutator: the [`state::ObjectFlags`] `EXILED_UNTIL`, `EXILED_WITH` and
+//! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
 //! [`legacy::Legacy`]'s rustdoc lists each with the store that replaces it. Reads use the
 //! getters. Milestone 4 deletes the accessor with the last of them (by-w8gv.7.10). The zone
 //! move and the turn's resets clear those flags inside the kernel, with everything else an
@@ -149,7 +148,9 @@
 //! ([`effects`]) and the capability bits ([`table::Capability`]) (by-w8gv.7.2); a player as
 //! the affected side, the rule-change payload and [`State::rule_applies`] (by-w8gv.7.3);
 //! the permission to cast and the cost change as payloads, and flashback's zone-change
-//! replacement (by-w8gv.7.4).
+//! replacement (by-w8gv.7.4); the Memos store ([`memos`]) with what a permanent remembers
+//! of its spell, the costs paid and the value of X, and [`State::signature`]'s comparison
+//! of memos (by-w8gv.7.6).
 //!
 //! ### Where everything goes
 //!
@@ -162,8 +163,8 @@
 //! | the `permissions` queue, `CastPermission`; its `this_turn` | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them | by-w8gv.7.4, built |
 //! | `CastPermission::extra`, `Casting::extra` | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) | by-w8gv.7.4, built |
 //! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `event::exiled_instead`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
-//! | `State::entered_x` | Memos: the permanent's `X` | by-w8gv.7.6 |
-//! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast, one kind for each casting option of the vocabulary's list | by-w8gv.7.6 |
+//! | `State::entered_x` | Memos: the permanent's `X` ([`memos::Memo::X`]) | by-w8gv.7.6, built |
+//! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, [`State::link`], [`State::exiled_with`], `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ("Duration and expiry" says how it outlives that object) | by-w8gv.7.7 |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent | by-w8gv.7.8 |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table, keyed (object, kind), beside the three kinds every game reads, which stay in the object | by-w8gv.7.9 |
@@ -184,7 +185,7 @@
 //! | the keyed slots, shared by every store | one set of slots | | | 32 | 128 |
 //! | Effects' locked-in sets | a table of sets of slots, which an entry names by index | 32 | 4 | 136 | a `Vec` |
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 1 for each eight rules of the list | 2 players, twice | 4 | the same |
-//! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 4 | 32 | 136 | a `Vec` |
+//! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
 //! | Counters | a queue of (slot, kind, count) | 3 | 32 | 104 | a `Vec` |
 //!
@@ -198,7 +199,8 @@
 //! order ([`State`]'s rustdoc). It is 20,040 after by-w8gv.7.3 too: the four bytes of rule
 //! sets are those `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is
 //! 19,832: the `permissions` queue gave back 80 and each of the stack's 64 entries two
-//! bytes, [`state::StackEntry`] being 58 bytes without its two flags.
+//! bytes, [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it
+//! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -208,7 +210,7 @@
 //! | by-w8gv.7.3 | +16 (landed: 0) | the rule sets, a byte each while the list has at most eight rules, less `sorceries_as_flash` |
 //! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
 //! | by-w8gv.7.5 | +136 | the locked-in sets |
-//! | by-w8gv.7.6 | +88 | the Memos store less `entered_x` (50) |
+//! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
 //! | by-w8gv.7.7 | 0 | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 | two sets of slots |
 //! | by-w8gv.7.9 | +104 | the counters table |
@@ -256,10 +258,10 @@
 //!   chokepoints that bump an incarnation ([`State::move_object`],
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
 //!   store has an entry about, so the move tests one bit and calls nothing else. This
-//!   replaces three sweeps: `State::drop_stale_effects` and
-//!   `Legacy::end_permissions_of_turn` (gone), and the one in `Legacy::remember_x`, which
-//!   goes with its queue. A permission to cast a card "for as long as it remains exiled" is
-//!   an entry of no stated duration on the card: it ends as the card leaves.
+//!   replaces three sweeps, all gone: `State::drop_stale_effects`,
+//!   `Legacy::end_permissions_of_turn` and the one in `Legacy::remember_x`. A permission to
+//!   cast a card "for as long as it remains exiled" is an entry of no stated duration on
+//!   the card: it ends as the card leaves.
 //!
 //! Memos clear the same way, as their object ends. A memo that names another object (the
 //! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
@@ -360,22 +362,23 @@
 //! | the hash | `Hash` of the entries and not of the store's indices (its kinds, the keyed slots), so a hash of a state is a hash of the game: [`State`]'s own `Hash` feeds its fields in a fixed order whatever order they are laid out in, which `beryl_bench`'s pin of its corpus holds to |
 //! | another layout, and what does not fit one | [`relayout::Relayout`] and `Store::fits`, from [`State::fits`] |
 //! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, and the keyed slots are exactly the stores' keys |
-//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records |
-//! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`]): an effect is public, a memo as public as its object |
+//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent |
+//! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`], [`Observation::memos`]): an effect is public, a memo as public as its object |
 //! | an object ending, a duration ending | `Store::forget` and `Store::expire`, from the two moments above |
-//! | [`State::signature`] | compares what the stores hold about the object, behind the keyed bit, for what its layer results do not already show (by-w8gv.7.6 builds it with the first memo) |
+//! | [`State::signature`] | compares what the stores hold about the object, behind the keyed bit, for what its layer results do not already show: its memos ([`memos::MemosOf`]) |
 //!
 //! ### The API
 //!
 //! A write is a [`State`] mutator, `#[inline]` and generic over the layout:
-//! [`State::start_effect`] and [`State::expire`] so far. One whose change a player sees
+//! [`State::start_effect`], [`State::remember`] and [`State::expire`] so far. One whose change a player sees
 //! returns its [`event::Event`] and pushes nothing; starting or ending an effect is no
 //! event of its own, since the rules announce what it is part of, as they do a change of
 //! control. The mutator that changes a layer input sets `derived_dirty` itself. A store
 //! that is full returns [`fixed::Full`]. Reads are queries by kind
 //! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`],
-//! [`State::cast_permissions`], [`State::cost_increase`]), with
-//! [`State::effects`] for tools, tests and views. No `&mut` to a store leaves the crate.
+//! [`State::cast_permissions`], [`State::cost_increase`], [`State::paid`],
+//! [`State::x_of`]), with [`State::effects`] and [`State::memos`] for tools, tests and
+//! views. No `&mut` to a store leaves the crate.
 //!
 //! ## Sets and orders
 //!
@@ -540,6 +543,7 @@ pub mod invariants;
 mod knowledge;
 pub mod layout;
 pub mod legacy;
+pub mod memos;
 pub mod mutate;
 mod new;
 mod object;

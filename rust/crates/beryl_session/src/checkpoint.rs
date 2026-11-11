@@ -13,10 +13,10 @@
 //! turn, a delayed trigger, a permission to cast) is not recorded: a checkpoint names the first
 //! such thing ([`State::off_board`]), and no game is rebuilt from it.
 
-use beryl_engine::card::{FaceIx, Types};
+use beryl_engine::card::{CastingKind, CastingKinds, FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Object, ObjectFlags};
+use beryl_engine::state::{CounterKind, Memo, Object, ObjectFlags};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::{Deserialize, Serialize};
@@ -312,7 +312,12 @@ impl Checkpoint {
                 s.board().set_counters(slot, c.kind.kind(), c.count);
             }
             s.board().set_damage(slot, b.damage);
-            s.board().set_impending(slot, b.impending);
+            if b.impending {
+                let impending = CastingKinds::NONE.with(CastingKind::Impending);
+                s.board()
+                    .remember(slot, Memo::Paid(impending))
+                    .map_err(full)?;
+            }
             if b.face == Face::Down {
                 for p in Seat::BOTH {
                     s.board().set_known(p, slot, b.known.contains(&p.get()));
@@ -542,7 +547,7 @@ fn permanent<L: Layout>(
         counters: Counter::on(o),
         damage: o.damage(),
         attached_to: o.attached_to().and_then(place),
-        impending: o.flags().has(ObjectFlags::IMPENDING),
+        impending: s.paid(slot, CastingKind::Impending),
         known: if face == Face::Down {
             knowers(s, slot)
         } else {

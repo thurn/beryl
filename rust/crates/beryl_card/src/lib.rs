@@ -36,7 +36,7 @@ pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types
 pub use continuous::{
     Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules, StaticCondition,
 };
-pub use cost::{CastingKind, CastingOption, Castings, Cost};
+pub use cost::{CastingKind, CastingKinds, CastingOption, Castings, Cost};
 pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility,
 };

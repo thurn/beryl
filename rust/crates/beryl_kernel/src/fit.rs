@@ -165,11 +165,6 @@ impl<L: Layout> State<L> {
             capacity(|s: &State<M>| &s.delayed),
         )?;
         self.stores_fit::<M>()?;
-        room(
-            "the values of X",
-            self.entered_x.len(),
-            capacity(|s: &State<M>| &s.entered_x),
-        )?;
         for player in self.players.iter() {
             room(
                 "a player's emblems",

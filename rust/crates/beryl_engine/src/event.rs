@@ -11,13 +11,15 @@ pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, k
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, AbilityKind, FaceAbility, FaceIx, Replacement, Types};
+use crate::card::{AbilityIx, AbilityKind, CastingKinds, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
-use crate::state::{CounterKind, Counters, MoveReplacement, ObjectFlags, ObjectRef, State, Zone};
+use crate::state::{
+    CounterKind, Counters, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Zone,
+};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -38,18 +40,19 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub counters: Option<(CounterKind, u8)>,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
     pub pay_life: bool,
-    /// What its spell was cast with that its abilities read: [`ObjectFlags`] such as
-    /// kicked, and the value of X
+    /// What its spell was cast with that its abilities read, which it enters remembering
+    /// ([`Memo`]): the kinds of cost paid, such as a kicker cost, and the value of X
     /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)).
-    pub flags: u32,
+    pub paid: CastingKinds,
     pub x: u8,
     /// The object an Aura spell attaches to as it resolves (CR 608.3c).
     pub attach: Option<L::Slot>,
 }
 
-/// Gives the permanent that just entered in `slot` what it enters with. The kinds of counter
-/// and the flags milestone 4 (by-w8gv.7.1) moves to memos go raw, through the legacy accessor.
-fn arrive<L: Layout>(s: &mut State<L>, slot: L::Slot, entry: Entry<L>) {
+/// Gives the permanent that just entered in `slot` what it enters with, and has it remember
+/// what its spell was cast with. The kinds of counter milestone 4 (by-w8gv.7.1) moves to a
+/// store go raw, through the legacy accessor.
+fn arrive<L: Layout>(s: &mut State<L>, slot: L::Slot, entry: Entry<L>) -> Result<(), Full> {
     let long_tail = entry
         .counters
         .filter(|&(kind, _)| Counters::is_long_tail(kind));
@@ -71,7 +74,14 @@ fn arrive<L: Layout>(s: &mut State<L>, slot: L::Slot, entry: Entry<L>) {
     if let Some((kind, n)) = long_tail {
         s.legacy_mut().set_counters(slot, kind, n);
     }
-    s.legacy_mut().set_object_flags(slot, entry.flags, true);
+    if !entry.paid.is_empty() {
+        s.remember(slot, Memo::Paid(entry.paid))?;
+    }
+    // Only a nonzero X is remembered: a permanent with no memo of one answers 0.
+    if entry.x > 0 {
+        s.remember(slot, Memo::X(entry.x))?;
+    }
+    Ok(())
 }
 
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
@@ -196,11 +206,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         }
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
-            arrive(s, slot, entry);
-            if entry.x > 0 {
-                let r = s.object_ref(slot);
-                s.legacy_mut().remember_x(r, entry.x)?;
-            }
+            arrive(s, slot, entry)?;
         }
         sink.push(changed(s.object_ref(slot), from, dest));
     }

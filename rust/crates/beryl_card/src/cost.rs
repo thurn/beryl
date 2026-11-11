@@ -114,6 +114,39 @@ pub enum CastingKind {
     Evoke,
 }
 
+/// A set of [`CastingKind`]s: the keywords whose costs were paid for one spell, as the
+/// permanent it becomes remembers them. A bit for each kind of the list.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CastingKinds(u8);
+
+impl CastingKinds {
+    pub const NONE: CastingKinds = CastingKinds(0);
+
+    /// The set with `kind` in it too.
+    #[inline]
+    #[must_use]
+    pub const fn with(self, kind: CastingKind) -> CastingKinds {
+        assert!((kind as u32) < u8::BITS, "more kinds than the set has bits");
+        CastingKinds(self.0 | 1 << kind as u8)
+    }
+
+    #[inline]
+    pub const fn contains(self, kind: CastingKind) -> bool {
+        self.0 & CastingKinds::NONE.with(kind).0 != 0
+    }
+
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The set as a bitmask, a bit for each kind in the order of the list.
+    #[inline]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
 impl CastingOption {
     /// "Overload [cost]", whose changed text is the face's ability at `ability`, counting
     /// from 0: [`CastingOption::Overload`], as a card file writes it.

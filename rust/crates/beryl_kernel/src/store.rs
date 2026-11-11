@@ -62,6 +62,17 @@ pub(crate) struct Ended {
     pub layer_input: bool,
 }
 
+impl Ended {
+    /// What two stores' endings changed together.
+    #[inline]
+    pub(crate) fn and(self, other: Ended) -> Ended {
+        Ended {
+            any: self.any | other.any,
+            layer_input: self.layer_input | other.layer_input,
+        }
+    }
+}
+
 /// What a store implements once, whatever kinds of entry it holds (the crate's contract,
 /// "Stores"). With `Clone` and equality, which it derives, a `Hash` of its entries alone
 /// and [`Relayout`], this is everything the kernel asks of a store outside its own mutators
@@ -99,7 +110,7 @@ impl<L: Layout> State<L> {
     /// ends as that turn begins). The layer results are stale if one of their inputs ended.
     #[inline]
     pub fn expire(&mut self, ended: Duration) {
-        let done = self.effects.expire(ended);
+        let done = self.effects.expire(ended).and(self.memos.expire(ended));
         self.settle_ended(done);
     }
 
@@ -120,7 +131,7 @@ impl<L: Layout> State<L> {
     #[cold]
     #[inline(never)]
     fn forget_keyed(&mut self, slot: L::Slot) {
-        let done = self.effects.forget(slot);
+        let done = self.effects.forget(slot).and(self.memos.forget(slot));
         self.settle_ended(done);
     }
 
@@ -141,24 +152,31 @@ impl<L: Layout> State<L> {
     #[inline]
     fn settle_ended(&mut self, done: Ended) {
         if done.any {
-            self.keyed = self.effects.keys();
+            self.keyed = self.store_keys();
         }
         if done.layer_input {
             self.flags.derived_dirty = true;
         }
     }
 
+    /// The slots a store has an entry about as an object: what `keyed` holds.
+    fn store_keys(&self) -> Bitboard<L::Slot> {
+        self.effects.keys() | self.memos.keys()
+    }
+
     /// Whether layout `M` has room for what the stores hold ([`State::fits`]).
     pub(crate) fn stores_fit<M: Layout>(&self) -> Result<(), Misfit> {
-        self.effects.fits::<M>()
+        self.effects.fits::<M>()?;
+        self.memos.fits::<M>()
     }
 
     /// The stores' invariants ([`State::check_invariants`]): each store's own, and that the
     /// keyed slots are exactly those a store has an entry about.
     pub(crate) fn check_stores(&self, t: &GameTable) -> Result<(), Violation> {
         self.effects.check(self, t)?;
+        self.memos.check(self, t)?;
         check(
-            self.keyed == self.effects.keys(),
+            self.keyed == self.store_keys(),
             "the keyed slots disagree with the stores",
             None,
         )
@@ -166,6 +184,8 @@ impl<L: Layout> State<L> {
 
     /// What of the stores a turn-start checkpoint would lose ([`State::off_board`]).
     pub(crate) fn stores_lingering(&self, t: &GameTable) -> Option<String> {
-        self.effects.lingering(self, t)
+        self.effects
+            .lingering(self, t)
+            .or_else(|| self.memos.lingering(self, t))
     }
 }

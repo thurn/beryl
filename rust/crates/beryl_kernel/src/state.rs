@@ -7,6 +7,7 @@ pub use crate::effects::{
     Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, MoveReplacement, Payload,
     Permission, Permitted,
 };
+pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
@@ -150,12 +151,9 @@ pub struct State<L: Layout = Small> {
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.
     pub(crate) effects: Effects<L>,
-    /// The value of X the spells that became these permanents were cast with, for their
-    /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
-    /// "the value of X for that ability is the same as the value of X for that spell". Only
-    /// a nonzero X is kept, and only while the permanent stays. Milestone 4 (by-w8gv.7.1)
-    /// deletes it; written through [`State::legacy_mut`].
-    pub(crate) entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
+    /// The Memos store ([`crate::memos`]): [`State::remember`] writes it, and the zone
+    /// move ends what it holds about an object.
+    pub(crate) memos: Memos<L>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -187,7 +185,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             triggers,
             delayed,
             effects,
-            entered_x,
+            memos,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -201,7 +199,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         triggers.hash(h);
         delayed.hash(h);
         effects.hash(h);
-        entered_x.hash(h);
+        memos.hash(h);
         pending.hash(h);
         knowledge.hash(h);
         rng.hash(h);
@@ -333,14 +331,6 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn pending(&self) -> &Pending<L> {
         &self.pending
-    }
-
-    /// The value of X the permanent in `slot` was cast with (CR 107.3m), 0 if none.
-    pub fn x_of(&self, slot: L::Slot) -> u8 {
-        self.entered_x
-            .iter()
-            .find(|&&(r, _)| r.slot == slot && self.is_current(r))
-            .map_or(0, |&(_, x)| x)
     }
 
     /// Whether `player` knows the identity of the object in `slot`.

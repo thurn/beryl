@@ -5,9 +5,7 @@
 use beryl_card::CounterKind;
 
 use crate::event::Event;
-use crate::fixed::Full;
-use crate::ids::SlotId;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::state::State;
 
@@ -16,8 +14,7 @@ use crate::state::State;
 ///
 /// | Behind the accessor | Written by | Replaced by |
 /// | --- | --- | --- |
-/// | `entered_x` | [`Legacy::remember_x`] | a memo of the permanent in the Memos store |
-/// | the [`ObjectFlags::LEGACY`] flags: `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH`, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | memos of the object in the Memos store |
+/// | the [`ObjectFlags::LEGACY`] flags: `EXILED_UNTIL`, `EXILED_WITH`, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | memos of the exiled card in the Memos store; a tracker of the permanent |
 /// | [`Counters`]' long-tail kind (`other_kind`, `other`) | [`Legacy::add_counters`], [`Legacy::remove_counters`], [`Legacy::set_counters`] | counter kinds generated from a list, each with its own count |
 pub struct Legacy<'a, L: Layout>(&'a mut State<L>);
 
@@ -32,16 +29,11 @@ impl<L: Layout> State<L> {
 
 impl<L: Layout> Legacy<'_, L> {
     /// Sets or clears flags among [`ObjectFlags::LEGACY`] on an object. The layers read
-    /// whether a permanent's impending cost was paid
-    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), so their
-    /// results are stale when that changes.
+    /// none of them.
     #[inline]
     pub fn set_object_flags(&mut self, slot: L::Slot, flags: u32, on: bool) {
         debug_assert_eq!(flags & !ObjectFlags::LEGACY, 0, "a flag with a mutator");
         self.0.object_mut(slot).flags.set(flags, on);
-        if flags & ObjectFlags::IMPENDING != 0 {
-            self.0.flags.derived_dirty = true;
-        }
     }
 
     /// Puts counters of a long-tail kind on an object: [`State::add_counters`] for them.
@@ -79,17 +71,5 @@ impl<L: Layout> Legacy<'_, L> {
     pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
         debug_assert!(Counters::is_long_tail(kind));
         *self.0.object_mut(slot).counters.get_mut(kind) = n;
-    }
-
-    /// Remembers the nonzero X the spell that became the permanent `object` was cast with
-    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)), forgetting those of
-    /// permanents that have left.
-    #[inline]
-    pub fn remember_x(&mut self, object: ObjectRef<L>, x: u8) -> Result<(), Full> {
-        let s = &mut *self.0;
-        let objects = &s.objects;
-        s.entered_x
-            .retain(|&(r, _)| objects[r.slot.index()].incarnation == r.incarnation);
-        s.entered_x.push((object, x))
     }
 }

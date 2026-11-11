@@ -14,7 +14,8 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, Counters, ManaPool, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone,
+    CounterKind, Counters, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, TurnStep,
+    Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -257,13 +258,11 @@ impl<L: Layout> Board<'_, L> {
         self.0.object_mut(slot).damage = damage;
     }
 
-    /// Whether the permanent in `slot` was cast for its impending cost
-    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
-    pub fn set_impending(&mut self, slot: L::Slot, impending: bool) {
-        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        self.0
-            .legacy_mut()
-            .set_object_flags(slot, ObjectFlags::IMPENDING, impending);
+    /// Has the permanent in `slot` remember `memo` of the spell it was, as one cast that
+    /// way would ([`State::remember`]): that its impending cost was paid
+    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), say.
+    pub fn remember(&mut self, slot: L::Slot, memo: Memo) -> Result<(), Full> {
+        self.0.remember(slot, memo)
     }
 
     /// Gives `player` the emblem of the game-table card `card`

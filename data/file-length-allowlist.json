@@ -1,6 +1,6 @@
 {
   "rust/crates/beryl_engine/src/cast.rs": 1766,
-  "rust/crates/beryl_engine/src/effect.rs": 1170,
+  "rust/crates/beryl_engine/src/effect.rs": 1159,
   "rust/crates/beryl_engine/src/engine.rs": 830,
   "rust/crates/beryl_engine/src/mana.rs": 1585,
   "tools/src/beryl_tools/xmage.py": 1080,
