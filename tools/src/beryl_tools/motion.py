@@ -7,6 +7,8 @@ verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
   summary of its instances.
+- `by motion --film <verb> [case]` films a verb for the independent motion review, which
+  decides when a verb is done: motion_film.py.
 - The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moments (ui/verbs.json)
   on the stage in stepped stage time: the first (a cast, its trigger and tokens), every step of
   the suite's verbs screenshotted at every tick; and with `--more` the moments of cards
@@ -17,7 +19,8 @@ verb as its values say.
   start and end in stage time; and for a step screenshotted, whether its subject travels and
   how its progress is eased, by what `by video measure` (video_measure.py) reads of its frames
   as it read Arena's clips. Its size where it begins and at its peak, as multiples of its size
-  at rest, are printed beside Arena's; no value declares them. A step whose subject moves
+  at rest, are printed beside Arena's, and how its path bows, how far it turns and how it is
+  squashed (video_shape.py); no value declares them. A step whose subject moves
   again at once or comes to rest out of the window is not screenshotted (the tracker needs it
   still either side and at rest in the frames), and says so. Stage time, never wall time, so
   machine load cannot change a result. `by motion` runs it: the fast check when the stage or
@@ -46,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import conventions, paths, runlog, selection, shots, video_measure
+from . import conventions, paths, runlog, selection, shots, video_measure, video_shape
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -319,13 +322,16 @@ def curve_class(curve: str | None) -> str | None:
 class Seen:
     """A step as the tracker found it: whether its subject travelled; how far along its path
     it was at half its time; its size where it began and at its peak over its size at rest;
-    or why it could not be followed."""
+    how its path bows and how far it turns and is squashed on the way (video_shape.py); or why
+    it could not be followed."""
 
     travels: bool
     half: float | None = None
     start: float | None = None
     peak: float | None = None
     failure: str | None = None
+    bow: video_shape.Bow | None = None
+    shape: video_shape.Shape | None = None
 
     @property
     def curve(self) -> str | None:
@@ -379,6 +385,8 @@ def seen(clip: video_measure.Clip, landing: tuple[float, float] | None = None) -
         half=round(progress_at_half(card), 3),
         start=round(card.blobs[0].size / card.rest.size, 3),
         peak=round(card.peak[0], 3),
+        bow=video_shape.card_bow(clip, card),
+        shape=video_shape.shape(clip, card),
     )
 
 
@@ -391,7 +399,8 @@ def capture_verdicts(
 ) -> list[Verdict]:
     """What the tracker found of one step of `verb`, held to its curve (its `case`'s): nothing
     travels for `none`, and neither is held where the verb has no curve. Its sizes are shown
-    beside Arena's, held to nothing."""
+    beside Arena's, and its path's bow, its turn and its squash for the motion review, held to
+    nothing."""
     declared = next(v for v in data.get("verbs", []) if v["name"] == verb)
     curve = values_of(declared, case)["curve"]
     arena_curve = arena_of(reference, verb, "curve", case)
@@ -428,6 +437,9 @@ def capture_verdicts(
         if value is not None:
             arena = arena_of(reference, verb, measure, case)
             out.append(Verdict(verb, measure, f"{value:g}", None, False, case, arena))
+    if found.travels and not found.failure:
+        for measure, said in video_shape.words(found.bow, found.shape):
+            out.append(Verdict(verb, measure, said, None, False, case))
     return out
 
 
@@ -497,6 +509,10 @@ def command(args: argparse.Namespace) -> int:
         print(e, file=sys.stderr)
         return 1
     reference = motion()
+    if args.film:
+        from . import motion_film  # It imports this module.
+
+        return motion_film.command(args)
     if args.values:
         print("\n".join(values_report(data, reference)))
         return 0
@@ -561,7 +577,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "motion",
         help="hold the stage to each verb's own values, Arena's beside: the stepped capture,"
-        " or --values",
+        " or --values; or film a verb for the motion review",
     )
     p.add_argument(
         "--values",
@@ -572,6 +588,23 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--more",
         action="store_true",
         help="also the moments of cards changing zone (nightly: past the fast check's budget)",
+    )
+    p.add_argument(
+        "--film",
+        nargs="+",
+        metavar=("VERB", "CASE"),
+        help="film a verb, or one case of it, for the motion review: the stage's takes as"
+        " sheets, Arena's instances beside, and the reviewer's brief",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
+        help="with --film, every take of the verb, not the first of each case",
+    )
+    p.add_argument(
+        "--instances",
+        default="2",
+        help="with --film, how many of Arena's instances of each case (default 2)",
     )
     p.add_argument(
         "--tick",

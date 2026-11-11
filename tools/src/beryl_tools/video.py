@@ -678,6 +678,16 @@ def listing(_: argparse.Namespace) -> int:
     return 0
 
 
+def sampled(fps: float, crop: str | None) -> list[str]:
+    """The filters that take a recording's table `fps` times a second, cut to `crop` (x,y,w,h
+    in the table's pixels) if given."""
+    filters = [f"fps={fps:g}", TABLE]
+    if crop:
+        x, y, w, h = (int(part) for part in crop.split(","))
+        filters.append(f"crop={w}:{h}:{x}:{y}")
+    return filters
+
+
 def film(args: argparse.Namespace) -> int:
     """Tiles the frames from `at` on into one image, left to right then down, and prints its
     path and each row's times."""
@@ -688,10 +698,7 @@ def film(args: argparse.Namespace) -> int:
         count = max(1, round(span * fps))
         cols = min(cols, count)
         rows = math.ceil(count / cols)
-        filters = [f"fps={fps:g}", TABLE]
-        if args.crop:
-            x, y, w, h = (int(part) for part in args.crop.split(","))
-            filters.append(f"crop={w}:{h}:{x}:{y}")
+        filters = sampled(fps, args.crop)
         filters += [f"scale={int(args.width)}:-2", f"tile={cols}x{rows}:padding=4"]
         name = f"{shot_name(start)[:-4]}-{span:g}s-{fps:g}fps"
         name += f"-{args.crop.replace(',', '_')}" if args.crop else ""

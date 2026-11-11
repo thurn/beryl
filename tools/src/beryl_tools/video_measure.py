@@ -383,19 +383,26 @@ def on_table(clip: Clip, x: float, y: float) -> tuple[float, float]:
     return ((clip.left + x * clip.scale) / w, (clip.top + y * clip.scale) / h)
 
 
-def report(clip: Clip, cards: list[Card], since: float) -> dict[str, object]:
-    """The measurements as JSON: seconds on the clip's clock, milliseconds for spans."""
+def report(
+    clip: Clip,
+    cards: list[Card],
+    since: float,
+    shapes: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """The measurements as JSON: seconds on the clip's clock, milliseconds for spans. Each of
+    `shapes`, a card's bow, turn and squash (video_shape.py), is told with its card."""
 
     def ms(seconds: float) -> int:
         return round(seconds * 1000)
 
     out: list[dict[str, object]] = []
-    for card in cards:
+    for n, card in enumerate(cards):
         peak, peak_at = card.peak
         rest_w = (card.rest.x1 - card.rest.x0) * clip.scale / clip.table[0]
         rest_h = (card.rest.y1 - card.rest.y0) * clip.scale / clip.table[1]
         out.append(
             {
+                **(shapes[n] if shapes else {}),
                 "start": round(card.start, 3),
                 "end": round(card.end, 3),
                 "duration_ms": ms(card.end - card.start),
@@ -619,8 +626,11 @@ def overlay(clip: Clip, moved: list[tuple[list[Blob], Blob | None]], name: str) 
 
 
 def command(args: argparse.Namespace) -> int:
-    """Measures, prints the table (or JSON) and the overlay's path; exits 1 with a reason and
-    no numbers when the clip does not isolate the cards."""
+    """Measures, prints the table (or JSON), each card's bow, turn and squash, and the
+    overlay's path; exits 1 with a reason and no numbers when the clip does not isolate the
+    cards."""
+    from . import video_shape  # It imports this module.
+
     source = Path(args.source).expanduser()
     try:
         if source.is_dir():
@@ -661,12 +671,22 @@ def command(args: argparse.Namespace) -> int:
     except (VideoError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
-    found = report(clip, cards, since)
+    shapes = [
+        (
+            video_shape.card_bow(clip, card, int(args.threshold)),
+            video_shape.shape(clip, card, int(args.threshold)),
+        )
+        for card in cards
+    ]
+    found = report(clip, cards, since, [video_shape.told(*s) for s in shapes])
     found["overlay"] = str(image)
     if args.json:
         print(json.dumps(found, indent=2))
     else:
         print(table_text(found, at))
+        for n, shaped in enumerate(shapes, 1):
+            said = "; ".join(f"{m} {text}" for m, text in video_shape.words(*shaped))
+            print(f"shape of card {n}: {said}")
         print(f"overlay: {image}")
     return 0
 

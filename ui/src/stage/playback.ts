@@ -11,12 +11,17 @@ import { animationFrames } from "./clock.ts";
 import { desktop } from "./desktop.ts";
 import { Feed } from "./feed.ts";
 import { ScriptStage } from "./stage.ts";
-import { timingOf } from "./timing.ts";
+import { caseOf, timingOf } from "./timing.ts";
 
 /** The stage, for a test to step and read (`window.berylStage`, under a driven browser only,
  * as playback.ts's `berylShown`): `clock` (`now`, `advance`, `hold`, `release`), `idle`,
- * `settle`, `step`, `pose` and `shown`. */
-type Hooked = Window & { berylStage?: ScriptStage; berylBehind?: boolean };
+ * `settle`, `step`, `pose` and `shown`; and the case a step is of (`window.berylCase`), for a
+ * capture to name its steps as the data does. */
+type Hooked = Window & {
+  berylStage?: ScriptStage;
+  berylCase?: typeof caseOf;
+  berylBehind?: boolean;
+};
 
 let page: { stage: ScriptStage; feed: Feed } | undefined;
 
@@ -33,7 +38,10 @@ export function pageStage() {
     });
     soundSteps(stage);
     page = { stage, feed: new Feed(stage) };
-    if (navigator.webdriver) (window as Hooked).berylStage = stage;
+    if (navigator.webdriver) {
+      (window as Hooked).berylStage = stage;
+      (window as Hooked).berylCase = caseOf;
+    }
   }
   return page;
 }
