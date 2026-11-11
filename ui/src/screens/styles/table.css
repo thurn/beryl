@@ -189,6 +189,26 @@
     0 0 14px rgb(230 40 30 / 75%);
   color: #fff;
 }
+/* By how much a life total is changing, for as long as its count plays on the stage: a bare
+   number on the orb's other rim, red under the total for a loss and green over it for a
+   gain. */
+.life-change {
+  position: absolute;
+  right: calc(50% + 34px);
+  bottom: 4px;
+  font: 700 26px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 90%);
+  pointer-events: none;
+}
+.life-change-loss {
+  color: #ff6a55;
+}
+.life-change-gain {
+  top: 4px;
+  bottom: auto;
+  color: #7fe08a;
+}
 /* The settings gear at the top right: brushed grey metal. */
 .gear {
   fill: currentColor;

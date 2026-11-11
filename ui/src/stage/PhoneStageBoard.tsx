@@ -34,6 +34,7 @@ import { phoneLayout } from "../mobile/layout";
 import type { PhoneBoard } from "../mobile/PhoneBoard";
 import "../mobile/phone.css";
 import { Faces } from "./Faces.tsx";
+import { lifeChange } from "./notices.ts";
 import { useSurface } from "./mount.ts";
 import { phone } from "./phone.ts";
 import {
@@ -79,7 +80,7 @@ export function PhoneStageBoard({
   const { stage, feed } = pageStage();
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
-  const { table } = useSyncExternalStore(stage.subscribe, () => stage.shown);
+  const { table, counts } = useSyncExternalStore(stage.subscribe, () => stage.shown);
   // The table is laid out for a phone this size while this board shows it.
   useLayoutEffect(() => {
     if (viewport) stage.relayout(phone(viewport));
@@ -159,6 +160,7 @@ export function PhoneStageBoard({
                 side={side}
                 view={table}
                 incoming={beforeDamage ? incoming(table, side) : undefined}
+                change={lifeChange(counts, side)}
               />
               {side === "you" ? (
                 <PhoneDock

@@ -21,7 +21,7 @@ import {
   type Spot,
   type Viewport,
 } from "../mobile/layout";
-import { drawn, emerging } from "./desktop.ts";
+import { drawn, emerging, middle } from "./desktop.ts";
 import {
   abilityName,
   type Anchors,
@@ -48,6 +48,7 @@ const upright = (place: Place, depth: number, face: Pose["face"]): Pose => ({
   width: place.width,
   rotation: 0,
   skew: 0,
+  turn: 0,
   opacity: 1,
   depth,
   face,
@@ -214,4 +215,5 @@ export const phone = (viewport: Viewport): StageLayout => ({
   anchors: (view) => anchors(view, viewport),
   emerging,
   drawn,
+  middle,
 });

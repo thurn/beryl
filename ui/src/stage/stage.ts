@@ -16,9 +16,11 @@
 // verb takes, which is all a `fly` is. The step's own card or ability travels over everything
 // at rest; what only makes room for it (a row closing up, a phone's rows as its stack comes
 // and goes) moves at the depth it rests at, under what flies. A verb whose subject does not
-// travel from where it was gives it a track of its own (`#enter`): an `emerge` starts on the
-// ability's source, an `appear` is there at once and only fades in, and a card you draw is
-// held up on its way. A card that leaves face down and lands face up turns over on the way.
+// travel from where it was gives it a track of its own (enter.ts): an `emerge` starts on the
+// ability's source, an `appear` is there at once and only fades in, a card you draw is held up
+// on its way, a `tap` turns its permanent, a `strike` is its creature's lunge, and a `flip`
+// turns a permanent over where it lies. A card that leaves face down and lands face up turns
+// over on the way.
 //
 // One verb's subject does not go where the table has it as the step begins: what a `vanish`
 // takes goes from sight where it was, dressed as it was, for as long as the verb takes, and
@@ -44,23 +46,16 @@ import type {
   Verb,
 } from "../generated/protocol";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
-import {
-  abilityName,
-  type Dress,
-  type Name,
-  type Resting,
-  type StageLayout,
-} from "./layout.ts";
+import { entering } from "./enter.ts";
+import type { Dress, Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
 import {
   dissolve,
   drawsToRead,
-  fade,
   glide,
-  HELD_TURN,
-  heldUp,
+  moverOf,
   subjectOf,
   along,
   TURN,
@@ -113,6 +108,16 @@ export interface Shown {
    * they began. The banners around the table show for as long as their step is here, on the
    * stage's time. */
   notices: readonly ScriptStep[];
+  /** The numbers changing now: the `count` steps under way, in the order they began, each
+   * with the table it found. What shows that a number changed (the change beside a life
+   * total) shows for as long as its step is here. */
+  counts: readonly Counting[];
+}
+
+/** A `count` step under way, and the table as it found it. */
+export interface Counting {
+  step: ScriptStep;
+  found?: Table;
 }
 
 /** The step playing now: its place in its script counting every step, its verb, its start
@@ -187,8 +192,8 @@ const sameDress = (a: Dress, b: Dress) =>
 
 export class ScriptStage {
   readonly clock: StageClock;
-  /** How each step is played. */
-  timings: (act: Act) => Timing;
+  /** How each step is played, given the table it finds. */
+  timings: (act: Act, found?: PlayerView) => Timing;
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
@@ -215,6 +220,7 @@ export class ScriptStage {
     view: undefined,
     busy: false,
     notices: [],
+    counts: [],
   };
   #stale = false;
 
@@ -223,7 +229,7 @@ export class ScriptStage {
   constructor(options: {
     layout: StageLayout;
     surface?: Surface;
-    timings: (act: Act) => Timing;
+    timings: (act: Act, found?: PlayerView) => Timing;
     frames?: Frames;
   }) {
     this.#layout = options.layout;
@@ -442,7 +448,7 @@ export class ScriptStage {
         );
       if (over && over.to <= to && (!next || over.to <= next.from)) {
         over.ended = true;
-        this.#stale ||= over.verb === "announce";
+        this.#stale ||= over.verb === "announce" || over.verb === "count";
         if (over.verb === "vanish") this.#left(over);
         this.#tell(over, "end");
         continue;
@@ -485,8 +491,11 @@ export class ScriptStage {
     let from = this.#at;
     let turn = this.#at;
     playback.end = this.#at;
+    // Each step is timed by the table it will find: the beat's earlier steps played.
+    let table = this.#table!;
     playback.steps = playback.beats[playback.beat]!.map((step, i) => {
-      const timing = this.timings(step.act);
+      const timing = this.timings(step.act, table.view);
+      table = apply(table, step.act);
       from = Math.max(from, turn + timing.delay);
       turn += timing.stagger;
       const to = from + timing.duration;
@@ -510,6 +519,12 @@ export class ScriptStage {
     run.begun = true;
     run.found = this.#table!;
     this.#tell(run, "start");
+    const mover = moverOf(run.step.act);
+    const moved = mover === undefined ? undefined : this.#entries.get(mover);
+    const was = moved && {
+      resting: moved.covered ?? moved.resting,
+      pose: this.#poseOf(mover!, moved, run.from),
+    };
     this.#set(apply(this.#table!, run.step.act));
     // A step about what an earlier one is still taking from sight finds it gone already.
     const subject = subjectOf(run.step.act);
@@ -529,7 +544,7 @@ export class ScriptStage {
       };
     }
     this.#lay(run.from, run);
-    if (run.to > run.from) this.#enter(run);
+    if (run.to > run.from) this.#enter(run, was);
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
@@ -543,56 +558,34 @@ export class ScriptStage {
     this.#lay(run.to);
   }
 
-  /** The motion of a step's own subject where that is no glide from where it was. Each starts
-   * from the model as the step begins, whatever the scripts before it were and however they
-   * were cut: nothing here reads a view. */
-  #enter(run: Run) {
+  /** Gives what the step moves its own motion, where that is no glide from where it was
+   * (enter.ts), `was` being how it was before the step's act. */
+  #enter(run: Run, was: { resting: Resting; pose: Pose } | undefined) {
     const { act } = run.step;
-    const track = (pose: Track["pose"]): Track => ({
-      from: run.from,
-      to: run.to,
-      pose,
-      own: true,
+    const mover = moverOf(act);
+    const found = entering(act, run.ease, {
+      layout: this.#layout,
+      table: this.#table!.view,
+      placed: (name) => {
+        const entry = this.#entries.get(name);
+        return (
+          entry && {
+            resting: entry.resting,
+            pose: this.#poseOf(name, entry, run.from),
+          }
+        );
+      },
+      was,
+      moving:
+        mover !== undefined && this.#entries.get(mover)?.track !== undefined,
+      several: this.#playback!.steps.some(
+        (other) => other !== run && drawsToRead(other.step.act),
+      ),
     });
-    switch (act.verb) {
-      case "emerge": {
-        // Out of its source, wherever that is now; with none on the table, it is on the
-        // stack at once.
-        const entry = this.#entries.get(abilityName(act.id));
-        const source = entry?.resting.source;
-        const from = source && this.#entries.get(source.slot);
-        if (!entry || !from) return;
-        const start = this.#layout.emerging(
-          this.#poseOf(source.slot, from, run.from),
-          entry.resting.pose,
-        );
-        entry.track = track(glide(start, run.ease, true));
-        return;
-      }
-      case "appear": {
-        // No flight, wherever it was before.
-        const entry = this.#entries.get(act.object.slot);
-        if (entry) entry.track = track(fade(run.ease));
-        return;
-      }
-      case "fly": {
-        // Your draw is held up to be read on its way, unless it is one of several: Arena's
-        // three cards of one spell pass at their own size (`WQiYBv23buw 29:14.2`).
-        const entry = this.#entries.get(act.object.slot);
-        const several = this.#playback!.steps.some(
-          (other) => other !== run && drawsToRead(other.step.act),
-        );
-        if (!entry?.track || several || !drawsToRead(act)) return;
-        const start = this.#poseOf(act.object.slot, entry, run.from);
-        this.#fly(act.object.slot, entry, {
-          ...track(heldUp(start, run.ease, this.#layout.drawn)),
-          turn: start.face === "back" ? HELD_TURN : undefined,
-        });
-        return;
-      }
-      default:
-        return;
-    }
+    const entry = found && this.#entries.get(found.name);
+    if (!entry) return;
+    const track = { ...found.track, from: run.from, to: run.to };
+    this.#fly(found.name, entry, track, found.cover);
   }
 
   /** Tells those who follow that `run` begins or ends. */
@@ -683,13 +676,18 @@ export class ScriptStage {
     }
   }
 
-  /** Puts `entry` on `track`: until the track turns it over, it is dressed as a card back. */
-  #fly(name: Name, entry: Entry, track: Track) {
+  /** Puts `entry` on `track`: until the track turns it over, it is dressed as `cover`, or
+   * with none as a card back. */
+  #fly(name: Name, entry: Entry, track: Track, cover?: Resting) {
     entry.track = track;
-    const covered = track.turn !== undefined && !entry.resting.dress.back;
+    const covered =
+      track.turn !== undefined && (cover || !entry.resting.dress.back);
     if (!covered && !entry.covered) return;
     entry.covered = covered
-      ? { ...entry.resting, dress: { ...entry.resting.dress, back: true } }
+      ? (cover ?? {
+          ...entry.resting,
+          dress: { ...entry.resting.dress, back: true },
+        })
       : undefined;
     this.#surface?.dress(name, entry.covered ?? entry.resting);
     entry.moved = true;
@@ -725,7 +723,8 @@ export class ScriptStage {
       ),
       view: this.#view,
       busy,
-      notices: this.#notices(),
+      notices: this.#under("announce", this.#shown.notices, (run) => run.step),
+      counts: this.#under("count", this.#shown.counts, (run) => run),
     };
     for (const listener of [...this.#listeners]) listener();
   }
@@ -752,14 +751,13 @@ export class ScriptStage {
     return { from: at, to: at + duration, pose: glide(from, ease, true) };
   }
 
-  /** The announcements under way, the same list as shown while none begins or ends. */
-  #notices(): readonly ScriptStep[] {
-    const before = this.#shown.notices;
+  /** The steps of `verb` under way, each as `of` gives it: `before`, the list last shown,
+   * while none begins or ends. */
+  #under<T>(verb: Verb, before: readonly T[], of: (run: Run) => T) {
     const now = (this.#playback?.steps ?? [])
-      .filter((run) => run.verb === "announce" && run.begun && !run.ended)
-      .map((run) => run.step);
-    return now.length === before.length &&
-      now.every((step, i) => step === before[i])
+      .filter((run) => run.verb === verb && run.begun && !run.ended)
+      .map(of);
+    return now.length === before.length && now.every((x, i) => x === before[i])
       ? before
       : now;
   }

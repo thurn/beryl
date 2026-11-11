@@ -6,7 +6,7 @@
 // duration snaps.
 import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json";
-import type { Act } from "../generated/protocol";
+import type { Act, PlayerView } from "../generated/protocol";
 import { SNAP, type Timing } from "./stage.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
@@ -62,9 +62,28 @@ const cases = new Map(
 
 /** Arena's name for the case the step `act` is of (data/arena-motion.json's `case`; `by
  * motion` reads a capture's steps the same, tools' motion.py `case_of`): none for a case
- * Arena's instances do not have, which is played with its verb's values. */
-export function caseOf(act: Act): string | undefined {
+ * Arena's instances do not have, which is played with its verb's values. `found` is the table
+ * the step finds, which says whether a life total rises or falls. */
+export function caseOf(act: Act, found?: PlayerView): string | undefined {
   switch (act.verb) {
+    case "tap":
+      return act.object.tapped ? "tap" : "untap";
+    case "strike":
+      return act.to.kind === "player"
+        ? "unblocked attacker"
+        : "blocked attacker";
+    case "count":
+      switch (act.tally.kind) {
+        case "life": {
+          const was = found?.players[act.tally.player].life;
+          if (was === undefined || was === act.tally.life) return undefined;
+          return act.tally.life > was ? "life gain" : "life loss";
+        }
+        case "counters":
+          return act.tally.counter === "loyalty" ? "loyalty" : "counter";
+        default:
+          return undefined;
+      }
     case "fly":
       switch (`${act.from}>${act.object.zone}`) {
         case "hand>stack":
@@ -117,12 +136,15 @@ export function caseOf(act: Act): string | undefined {
  * single cards, so its data has no stagger for the case. */
 const BATCH_EXILE = 300;
 
-/** The data's timing of the step `act`: its case's, or its verb's. An ability that has
- * finished is no verb's median: it is removed at once (UI Conventions, "A finished ability";
- * Arena's is gone between two frames). */
-export function timingOf(act: Act): Timing {
+/** The data's timing of the step `act`, which finds the table `table`: its case's, or its
+ * verb's. An ability that has finished is no verb's median: it is removed at once (UI
+ * Conventions, "A finished ability"; Arena's is gone between two frames). So is a card's name
+ * learned where it lies in no one's sight (a look at your own library, which its prompt
+ * shows): only a permanent turns over (UI Conventions, "A card turning face up"). */
+export function timingOf(act: Act, table?: PlayerView): Timing {
   if (act.verb === "vanish" && act.subject.kind === "ability") return SNAP;
-  const found = caseOf(act);
+  if (act.verb === "flip" && act.object.zone !== "battlefield") return SNAP;
+  const found = caseOf(act, table);
   const own =
     (found === undefined ? undefined : cases.get(act.verb)?.get(found)) ??
     verbs.get(act.verb) ??

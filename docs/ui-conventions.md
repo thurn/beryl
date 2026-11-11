@@ -369,7 +369,8 @@ held to by `just motion`.
   about 1.1 s and shows its new face as the effect clears; it neither turns nor
   grows (WCknTZNbraE 35:49.2, WCknTZNbraE 1:23:36.8, UrGalw_f35w 49:06.5).
   Beryl: 1130 ms, in place.
-- **tap.** A permanent turns as it taps or untaps. Arena tilts a tapped
+- **tap.** A permanent turns a quarter as it taps or untaps, its whole card
+  about its own middle, in the time Arena's tilt takes. Arena tilts a tapped
   permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
   restores it in about 0.1 s (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1,
   0VsYGs88NXA 31:13.15). Exempt: exception 2.

@@ -35,7 +35,9 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * in a column 100 apart at x 2000, bottom first; a library's cards in one place, at x 3000
  * and y 500. Cards in no zone drawn here (a graveyard's) rest nowhere. A card with no name
  * shows its back. An ability lifts out of its source 10 in from its corner, at half its width,
- * and a drawn card is held up 300 above its place in the hand at twice its width. */
+ * and a drawn card is held up 300 above its place in the hand at twice its width. A card is
+ * 1.4 times as tall as it is wide, and a tapped permanent lies on its side; the players' life
+ * totals are at x 1000, yours at y 900 and the opponent's at y -400. */
 export const row = {
     rest({ view: table, abilities }) {
         const out = new Map();
@@ -45,6 +47,7 @@ export const row = {
             width: 100,
             rotation: 0,
             skew: 0,
+            turn: 0,
             opacity: 1,
             depth,
             face,
@@ -85,8 +88,18 @@ export const row = {
         });
         return out;
     },
-    anchors() {
-        throw new Error("no test asks for an anchor");
+    anchors: () => ({
+        life: (side) => ({
+            middle: { x: 1000, y: side === "you" ? 900 : -400 },
+        }),
+    }),
+    middle({ object, dress }, pose) {
+        const lies = dress.zone === "battlefield" && object?.tapped;
+        const [wide, tall] = lies ? [1.4, 1] : [1, 1.4];
+        return {
+            x: pose.x + (pose.width * wide) / 2,
+            y: pose.y + (pose.width * tall) / 2,
+        };
     },
     emerging: (source, rest) => ({
         ...rest,

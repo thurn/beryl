@@ -6,7 +6,7 @@
 // audits (ui/scripts/capture.mjs) go by.
 import type { Name, Point, Resting } from "./layout.ts";
 import type { Pointer, Under } from "./pointer.ts";
-import { transformOf, type Pose } from "./pose.ts";
+import { transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
 
 /** The name a node's `data-stage` says. */
@@ -159,5 +159,7 @@ export class DomSurface implements Surface {
     style.transform = transformOf(pose, frame);
     style.opacity = String(pose.opacity);
     style.zIndex = String(Math.round(pose.depth));
+    // The card inside is turned by the skin's rule for it (stage.css).
+    style.setProperty("--turn", turnOf(pose));
   }
 }

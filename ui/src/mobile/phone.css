@@ -228,6 +228,10 @@ body.phone {
   padding: 1px 5px;
   font-size: 13px;
 }
+.phone-orb .life-change {
+  right: calc(50% + 24px);
+  font-size: 15px;
+}
 .phone-thinking {
   position: absolute;
   left: calc(50% + 48px);

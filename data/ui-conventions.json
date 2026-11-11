@@ -1289,7 +1289,7 @@
     },
     {
       "name": "tap",
-      "shows": "A permanent turns as it taps or untaps.",
+      "shows": "A permanent turns a quarter as it taps or untaps, its whole card about its own middle, in the time Arena's tilt takes.",
       "arena": {
         "does": "Arena tilts a tapped permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap restores it in about 0.1 s.",
         "evidence": [
@@ -1308,10 +1308,24 @@
         ]
       },
       "values": {
-        "duration": null,
+        "duration": 220,
         "delay": null,
         "stagger": null,
-        "curve": null
+        "curve": "ease-out"
+      },
+      "cases": {
+        "tap": {
+          "duration": 220,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-out"
+        },
+        "untap": {
+          "duration": 100,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-out"
+        }
       },
       "exempt": 2
     },

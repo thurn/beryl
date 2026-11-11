@@ -13,7 +13,7 @@ import type { PlayerView, Side, StopsSetting } from "../generated/protocol";
 import { incoming } from "../game/combat";
 import { FullControlIcon } from "../game/Corner";
 import { InspectAt, inspectorPlace } from "../game/Inspector";
-import { Incoming, lifeId } from "../game/Life";
+import { Incoming, LifeChange, lifeId } from "../game/Life";
 import type { LogEntry } from "../game/log";
 import { GameLog, opponentActing } from "../game/Narration";
 import { PileButton, ZoneViewer } from "../game/Piles";
@@ -26,7 +26,7 @@ import { TurnAnnouncement } from "../game/TurnBanner";
 import { knownLibraries, zonePiles } from "../game/zoneViews";
 import { desktop } from "./desktop.ts";
 import type { Name } from "./layout.ts";
-import { announced, coinBanner, scryWords } from "./notices.ts";
+import { announced, coinBanner, lifeChange, scryWords } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
 
 const SIDES = ["opponent", "you"] as const;
@@ -57,7 +57,7 @@ export function Hud({
   logOpen: boolean;
   onLog(): void;
 }) {
-  const { table, notices } = useSyncExternalStore(
+  const { table, notices, counts } = useSyncExternalStore(
     stage.subscribe,
     () => stage.shown,
   );
@@ -93,6 +93,7 @@ export function Hud({
         const { corner } = anchors.life(side);
         const { life } = table.players[side];
         const damage = beforeDamage ? incoming(table, side) : undefined;
+        const change = lifeChange(counts, side);
         return (
           <div
             key={side}
@@ -109,6 +110,7 @@ export function Hud({
             {damage !== undefined && (
               <Incoming amount={damage} lethal={damage > 0 && damage >= life} />
             )}
+            {change !== undefined && <LifeChange by={change} />}
           </div>
         );
       })}

@@ -13,6 +13,11 @@ export interface Pose {
   rotation: number;
   /** Its lean, as everything lying on the table leans away from the middle. */
   skew: number;
+  /** How far its card is turned from how it is dressed, clockwise about the card's own
+   * middle: nothing at rest, where a tapped permanent is dressed lying (the skin turns its
+   * frame a quarter in its slot), and what a card that is tapping or untapping has yet to
+   * turn (tracks.ts `turned`). */
+  turn: number;
   opacity: number;
   /** What it is drawn over: the greater is in front. */
   depth: number;
@@ -39,6 +44,7 @@ export function between(
     width: mix(from.width, to.width),
     rotation: mix(from.rotation, to.rotation),
     skew: mix(from.skew, to.skew),
+    turn: mix(from.turn, to.turn),
     opacity: mix(from.opacity, to.opacity),
     depth: (aloft ? ALOFT : 0) + to.depth,
     face: to.face,
@@ -52,12 +58,18 @@ export const samePose = (a: Pose, b: Pose) =>
   a.width === b.width &&
   a.rotation === b.rotation &&
   a.skew === b.skew &&
+  a.turn === b.turn &&
   a.opacity === b.opacity &&
   a.depth === b.depth &&
   a.face === b.face;
 
 /** The CSS transform that draws a frame `frame` wide at `pose`, about its top-left corner:
- * moved, then scaled, turned and leaned, the order game/layout.ts places cards in. */
+ * moved, then scaled, turned and leaned, the order game/layout.ts places cards in. A pose's
+ * `turn` is not the node's but its card's, inside it (`turnOf`). */
 export const transformOf = (pose: Pose, frame: number) =>
   `translate(${pose.x}px, ${pose.y}px) scale(${pose.width / frame}) ` +
   `rotate(${pose.rotation}deg) skewX(${pose.skew}deg)`;
+
+/** The CSS `rotate` of the card inside a node at `pose`, which the skin's own quarter turn of a
+ * tapped frame is added to (stage.css): none at rest. */
+export const turnOf = (pose: Pose) => (pose.turn ? `${pose.turn}deg` : "");

@@ -19,7 +19,7 @@ import {
 } from "../components/Controls";
 import { LifeOrb } from "../components/Player";
 import { attackPlan, blockPlan } from "../game/combat";
-import { Incoming } from "../game/Life";
+import { Incoming, LifeChange } from "../game/Life";
 import {
   follow,
   suggestedDamage,
@@ -65,15 +65,18 @@ export function Piles({
 }
 
 /** `side`'s life orb, on the center line of their strip, with the combat damage they are
- * about to take when `incoming` says it. */
+ * about to take when `incoming` says it, and by how much their total is changing while
+ * `change` says it. */
 export function Orb({
   side,
   view,
   incoming,
+  change,
 }: {
   side: Side;
   view: PlayerView;
   incoming?: number;
+  change?: number;
 }) {
   const { life } = view.players[side];
   return (
@@ -82,6 +85,7 @@ export function Orb({
       {incoming !== undefined && (
         <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
       )}
+      {change !== undefined && <LifeChange by={change} />}
     </div>
   );
 }

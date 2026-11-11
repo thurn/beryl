@@ -18,6 +18,7 @@ import {
   abilityName,
   type Anchors,
   type Name,
+  type Point,
   type Resting,
   type StackAbility,
   type StageLayout,
@@ -46,6 +47,7 @@ const resting = (object: ObjectView, place: Placement): Resting => ({
     width: place.width * place.scale,
     rotation: place.rotate,
     skew: place.skew,
+    turn: 0,
     opacity: place.opacity,
     depth: place.z,
     face:
@@ -81,6 +83,7 @@ const ability = (
       width: place.width,
       rotation: 0,
       skew: 0,
+      turn: 0,
       opacity: 1,
       depth: STACK_Z + index,
       face: "front",
@@ -175,6 +178,24 @@ export function drawn(rest: Pose): Pose {
   };
 }
 
+const radians = (degrees: number) => (degrees * Math.PI) / 180;
+
+/** The middle of its card: of the frame, which a tapped permanent's lies turned a quarter in
+ * (components/Card.tsx's slot), leaned and then turned about the pose's corner as the node is
+ * (pose.ts `transformOf`). */
+export function middle({ object, dress }: Resting, pose: Pose): Point {
+  const lies = dress.zone === "battlefield" && object?.tapped === true;
+  const long = pose.width / CARD_ASPECT;
+  const down = (lies ? pose.width : long) / 2;
+  const across =
+    (lies ? long : pose.width) / 2 + Math.tan(radians(pose.skew)) * down;
+  const turn = radians(pose.rotation);
+  return {
+    x: pose.x + across * Math.cos(turn) - down * Math.sin(turn),
+    y: pose.y + across * Math.sin(turn) + down * Math.cos(turn),
+  };
+}
+
 function anchors(table: PlayerView): Anchors {
   const piles = [...zonePiles(table, NO_ORDER), ...knownLibraries(table)];
   return {
@@ -203,6 +224,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   anchors,
   emerging,
   drawn,
+  middle,
 });
 
 /** The desktop's table with nothing over it. */
