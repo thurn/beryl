@@ -3,11 +3,14 @@
 // which the cut-over retires. Usage:
 //   node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]
 // A check is `verb:<verb>/<seat>/<layout>` (ui/verbs.json lists them), named whole or in
-// part to run it alone, and logged by that name. Each opens the moment's fixture with `?stage`,
+// part to run it alone, and logged by that name. Each opens the moment's fixture with `?stage`
+// in its layout's windows (the desktop's, or each phone size ui/shots.json has with `?phone`),
 // holds the stage's clock, plays the recording on as its seat did, and steps the clock inside
 // one `page.evaluate`, reading `stage.step` and `stage.pose`: no check waits on the page's
 // time, so none depends on the machine's speed. It plays the moment in ticks of 16 ms and of
-// 100 ms, which must read the same. Exits non-zero if a check fails or a page logs an error.
+// 100 ms, which must read the same. Every run also holds the page's sounds to its steps: each
+// asked for at the stage time its step begins or ends, and none otherwise. Exits non-zero if a
+// check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -39,13 +42,46 @@ const wanted = (check) =>
     (filters.length === 0 || filters.some((f) => check.includes(f))) &&
     (!chosen || chosen.has(check));
 
-/** The sizes of tick every check plays the moment in. */
+/** The sizes of tick every check plays the moment in, at its layout's first window; at the
+ * others the last alone, the stage's time being no layout's. */
 const TICKS = [16, 100];
+const { shots } = JSON.parse(
+    await readFile(new URL("../shots.json", import.meta.url), "utf8"),
+);
+/** Each window size the shots take of a route `asks` picks out, once. */
+const windows = (asks) => [
+    ...new Map(
+        shots
+            .filter((shot) => asks(new URL(shot.route, base).searchParams))
+            .map(({ width, height }) => [
+                `${width}x${height}`,
+                { width, height },
+            ]),
+    ).values(),
+];
+/** What each layout of the stage is checked at and by: the query that asks for it, its
+ * windows, and whether its battlefield is laid out again as the stack comes and goes and as a
+ * row fills. A phone's is (src/mobile/layout.ts): its middle band grows for the stack, a row's
+ * cards shrink to fit, and identical permanents stack as one. So there a lift's source and a
+ * new token's neighbours glide to their new places meanwhile, where the desktop's stay. */
+const LAYOUTS = {
+    desktop: {
+        query: "stage",
+        windows: [{ width: 1600, height: 900 }],
+        reflows: false,
+    },
+    phone: {
+        query: "phone&stage",
+        windows: windows((query) => query.has("phone")),
+        reflows: true,
+    },
+};
 /** How long the stage stands idle between a seat's answers, in stage ms. */
 const GAP = 250;
 /** The most answers a moment takes: the cast, the resolution and the trigger's, with room. */
 const ANSWERS = 6;
-/** The stage's height, whose upper half is the opponent's (src/game/layout.ts STAGE). */
+/** The desktop stage's height, whose upper half is the opponent's (src/game/layout.ts STAGE).
+ * A phone's halves meet in its middle band. */
 const MIDDLE = 450;
 /** How far over what rests a moving node is drawn (src/stage/pose.ts ALOFT). */
 const ALOFT = 900;
@@ -58,8 +94,11 @@ const CARD_ASPECT = 63 / 88;
  * come onto the stack and gone. Returns each step `stage.step` showed, in order, with every
  * node's pose by `stage.pose` before it, as it began, half way and as it ended, where a tick
  * landed there; and how the page's nodes differed from the model at any of those. A step that
- * takes no time shows only in what the samples around it hold. */
-async function walk({ tick, gap, answers }) {
+ * takes no time shows only in what the samples around it hold. Also every edge of a step the
+ * stage told (`stage.follow`) with the sounds that step asks for (src/audio/steps.ts), and
+ * the sounds the page was asked for meanwhile (`window.berylSounds`), all in stage time; and
+ * where the two halves of the table meet. */
+async function walk({ tick, gap, answers, middle }) {
     const stage = window.berylStage;
     const { clock } = stage;
     clock.hold();
@@ -75,6 +114,16 @@ async function walk({ tick, gap, answers }) {
     };
     const layer = document.querySelector(".card-layer");
     const faults = [];
+    const heard = window.berylSounds.length;
+    const edges = [];
+    const unfollow = stage.follow((edge) =>
+        edges.push({
+            edge: edge.edge,
+            at: edge.at - origin,
+            verb: edge.step.act.verb,
+            cues: window.berylStepSounds(edge),
+        }),
+    );
     const near = (a, b, by) => Math.abs(a - b) <= by;
     /** Why the page's node for `name` is not where the model has it, if it is not. */
     const differs = (name, pose, frame) => {
@@ -171,10 +220,21 @@ async function walk({ tick, gap, answers }) {
         }
         if (!done) reach(clock.now + gap);
     }
+    unfollow();
+    const band = document
+        .querySelector(".phone-middle")
+        ?.getBoundingClientRect();
     return {
         steps,
         faults,
         done,
+        edges,
+        sounds: window.berylSounds
+            .slice(heard)
+            .map(({ sound, at, delay }) => ({ sound, at: at - origin, delay })),
+        middle: band
+            ? (band.top + band.bottom) / 2 - layer.getBoundingClientRect().top
+            : middle,
         // What the old playback and card layer leave on a page they run on.
         old: {
             shown: window.berylShown?.length ?? 0,
@@ -245,10 +305,34 @@ function onlyMoved(run, step, zones, names = []) {
     }
 }
 
-/** Which half of the table `pose` lies in is the half of the seat that plays the moment. */
-function onSide(pose, seat, what) {
-    const far = middleOf(pose).y < MIDDLE;
+/** Which half of `run`'s table `pose` lies in is the half of the seat that plays the moment. */
+function onSide(run, pose, seat, what) {
+    const far = middleOf(pose).y < run.middle;
     assert.equal(far, seat === "theirs", `${what} lies at y ${pose.y}`);
+}
+
+/** `run`'s page was asked for `sound` at the stage time `at`, with no delay. */
+function sounded(run, sound, at, what) {
+    assert.ok(
+        run.sounds.some((s) => s.sound === sound && s.at === at && !s.delay),
+        `${what}: no ${sound} at ${at} ms among ${JSON.stringify(run.sounds)}`,
+    );
+}
+
+/** Every sound `run`'s page was asked for is a step's, at the stage time that step begins or
+ * ends as the step says, with no delay; and every sound a step asks for was asked for then,
+ * once however many steps ask at one time. */
+function soundsFollowSteps(run) {
+    const asked = [];
+    for (const { edge, at, cues } of run.edges) {
+        for (const cue of cues) {
+            const same = (s) => s.sound === cue.sound && s.at === at;
+            if (cue.edge === edge && !asked.some(same)) {
+                asked.push({ sound: cue.sound, at, delay: 0 });
+            }
+        }
+    }
+    assert.deepEqual(run.sounds, asked, "the sounds against the steps");
 }
 
 /** What each verb's check asks of the moment as `seat` saw it: `whole`, a run of the fixture
@@ -257,6 +341,8 @@ const CASES = {
     // A card flies from where it lay to where it then lies, over everything at rest, and
     // nothing moves but the zones it left and entered: the spell from its hand to the stack,
     // and the permanent from the stack to its side of the battlefield.
+    // The spell sounds as it is cast, and the permanent is placed as it lands: at the end of
+    // its flight, whenever that is.
     fly({ whole, seat }) {
         const flights = whole.steps.filter((s) => s.verb === "fly");
         const [cast, resolve] = flights;
@@ -292,8 +378,15 @@ const CASES = {
             assert.equal(end.opacity, 1);
             onlyMoved(whole, flight, [flight.act.from, flight.act.object.zone]);
         }
-        onSide(before(whole, cast).poses[card], seat, "the hand it left");
-        onSide(resolve.at.to.poses[card], seat, "the permanent");
+        onSide(
+            whole,
+            before(whole, cast).poses[card],
+            seat,
+            "the hand it left",
+        );
+        onSide(whole, resolve.at.to.poses[card], seat, "the permanent");
+        sounded(whole, "cast", cast.from, "the spell as it is cast");
+        sounded(whole, "place", resolve.to, "the permanent as it lands");
         // It stays where it landed: the trigger lifts out of it there.
         const lift = stepOf(whole, "emerge");
         assert.deepEqual(
@@ -305,8 +398,9 @@ const CASES = {
     // A trigger lifts out of its source: it begins small in the source's middle, wherever the
     // source rests when the step begins, and ends on the stack; the source stays as it is.
     // The lift is the same whether the session sent the moment whole or cut it into views
-    // (the most re-filed motion: 12 reports on by-w8gv.21, each another batching).
-    emerge({ whole, cut }) {
+    // (the most re-filed motion: 12 reports on by-w8gv.21, each another batching). Where the
+    // battlefield makes room for the stack, the source glides to its new place meanwhile.
+    emerge({ whole, cut, reflows }) {
         const lifts = [whole, cut].map((run) => {
             const lift = stepOf(run, "emerge");
             const ability = `a${lift.act.id}`;
@@ -319,9 +413,9 @@ const CASES = {
             );
             const from = lift.at.from.poses[source];
             assert.deepEqual(
-                from,
-                was.poses[source],
-                "its source rests as the lift begins",
+                reflows ? where(from) : from,
+                reflows ? where(was.poses[source]) : was.poses[source],
+                "its source is where it rested as the lift begins",
             );
             const [a, b] = [middleOf(start), middleOf(from)];
             assert.ok(
@@ -336,11 +430,15 @@ const CASES = {
             );
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
             assert.equal(lift.at.to.zones[ability], "stack");
-            assert.deepEqual(
-                lift.at.to.poses[source],
-                from,
-                "its source stays as it is",
-            );
+            const after = lift.at.to.poses[source];
+            if (reflows) {
+                assert.equal(lift.at.to.zones[source], "battlefield");
+                assert.ok(after.depth < ALOFT, "its source is at rest again");
+                assert.equal(after.opacity, 1);
+            } else {
+                assert.deepEqual(after, from, "its source stays as it is");
+            }
+            sounded(run, "ability", lift.from, "the ability as it lifts");
             onlyMoved(run, lift, ["stack"], [ability]);
             // It is on the stack until its ability is done.
             const next = run.steps[run.steps.indexOf(lift) + 1];
@@ -362,8 +460,10 @@ const CASES = {
 
     // A token is at its place from the first and comes to be seen there: no flight, and
     // nothing moves but the battlefield making room. The tokens of a batch begin one after
-    // another, and an earlier one makes room for the next as the row does.
-    appear({ whole, seat }) {
+    // another, and an earlier one makes room for the next as the row does: sideways, and
+    // where identical permanents stack and a row shrinks to fit, by less than a card any way.
+    // Each is placed, by its sound, as it appears.
+    appear({ whole, seat, reflows }) {
         const tokens = whole.steps.filter(
             (s) => s.verb === "appear" && s.act.from === "nowhere",
         );
@@ -379,16 +479,18 @@ const CASES = {
             assert.equal(end.opacity, 1);
             assert.ok(end.depth < ALOFT);
             assert.equal(last.at.to.zones[name], "battlefield");
-            onSide(end, seat, "the token");
+            onSide(whole, end, seat, "the token");
+            sounded(whole, "place", token.from, "the token as it appears");
             const seen = tokens
                 .slice(tokens.indexOf(token))
                 .flatMap((s) => Object.values(s.at));
             for (const sample of seen) {
                 const pose = sample.poses[name];
+                const sideways = pose.y === end.y && pose.width === end.width;
                 assert.ok(
-                    pose.y === end.y &&
-                        pose.width === end.width &&
-                        Math.abs(pose.x - end.x) < end.width,
+                    (reflows
+                        ? Math.abs(pose.y - end.y) < end.width
+                        : sideways) && Math.abs(pose.x - end.x) < end.width,
                     `at ${sample.at} ms it is not at its place`,
                 );
             }
@@ -408,7 +510,8 @@ const CASES = {
     },
 
     // A finished ability is gone at once: whole on the stack in every sample up to the end of
-    // the step before its `vanish`, and nowhere from that one on, with no fade between.
+    // the step before its `vanish`, and nowhere from that one on, with no fade between, and
+    // no sound of its own.
     vanish({ whole, script }) {
         const lift = stepOf(whole, "emerge");
         const ability = `a${lift.act.id}`;
@@ -432,9 +535,20 @@ const CASES = {
         assert.ok(gone > 0, "the script has no vanish for the ability");
         assert.deepEqual(whole.steps.at(-1).act, script[gone - 1]);
         assert.equal(last.at, whole.steps.at(-1).to);
+        const told = whole.edges.filter((edge) => edge.verb === "vanish");
+        assert.ok(told.length > 0, "the stage told of no vanish");
+        assert.deepEqual(
+            told.flatMap((edge) => edge.cues),
+            [],
+        );
     },
 };
 assert.deepEqual(Object.keys(CASES), verbs, "ui/verbs.json and the cases");
+assert.deepEqual(
+    layouts.filter((layout) => !LAYOUTS[layout]?.windows.length),
+    [],
+    "ui/verbs.json's layouts and their windows",
+);
 
 const browser = await launch();
 const queue = workers(6);
@@ -442,10 +556,11 @@ const errors = [];
 let failed = false;
 let ran = 0;
 
-/** A context whose pages fetch the fixtures this run recorded, not what Vite serves. */
-async function open() {
+/** A context of windows of `size`, whose pages fetch the fixtures this run recorded, not what
+ * Vite serves. */
+async function open(size) {
     const context = await browser.newContext({
-        viewport: { width: 1600, height: 900 },
+        viewport: size,
         deviceScaleFactor: 1,
     });
     await context.route("**/fixtures/*.json", (route) =>
@@ -461,17 +576,18 @@ async function open() {
     return context;
 }
 
-/** Plays `fixture` from its first view on the stage of a page of its own in `context`, which
- * `watch` is shown first and returns what to do before the page closes, in ticks of `tick`;
- * and checks what holds of every run: the page drew what the model said, nothing but the
- * stage's clock moved a node, and the old playback and card layer took no part. */
-async function play(context, watch, fixture, tick) {
+/** Plays `fixture` from its first view on the stage of a page of its own in `context`, asked
+ * for by `query`, which `watch` is shown first and returns what to do before the page closes,
+ * in ticks of `tick`; and checks what holds of every run: the page drew what the model said,
+ * nothing but the stage's clock moved a node, its sounds were its steps', and the old
+ * playback and card layer took no part. */
+async function play(context, watch, query, fixture, tick) {
     const page = await context.newPage();
     const done = await watch(page);
     let hung = false;
     const playOut = async () => {
         await page.goto(
-            new URL(`/?stage&fixture=${fixture}&at=1#/game`, base).href,
+            new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
         );
         await page.waitForFunction(
             () => window.berylStage && document.querySelector(".stage-node"),
@@ -481,6 +597,7 @@ async function play(context, watch, fixture, tick) {
             tick,
             gap: GAP,
             answers: ANSWERS,
+            middle: MIDDLE,
         });
         assert.deepEqual(
             run.faults.slice(0, 5),
@@ -494,6 +611,7 @@ async function play(context, watch, fixture, tick) {
             "the old playback or card layer ran",
         );
         assert.equal(run.done, true, "the moment did not play out");
+        soundsFollowSteps(run);
         return run;
     };
     try {
@@ -530,7 +648,8 @@ for (const verb of verbs) {
             ran += 1;
             await queue(async () => {
                 const started = performance.now();
-                const context = await open();
+                const { query, windows, reflows } = LAYOUTS[layout];
+                const contexts = [];
                 const seen = [];
                 let threw = false;
                 let covered;
@@ -557,31 +676,49 @@ for (const verb of verbs) {
                     // Only the lift is asked how its views were batched.
                     const names =
                         verb === "emerge" ? ["whole", "cut"] : ["whole"];
-                    const runs = { seat };
-                    for (const name of names) {
-                        const each = [];
-                        for (const tick of TICKS) {
-                            each.push(
-                                await play(context, watch, fixture[name], tick),
-                            );
+                    const script = await recorded(fixture.whole);
+                    for (const [i, size] of windows.entries()) {
+                        const at = `${size.width}x${size.height}`;
+                        const context = await open(size);
+                        contexts.push(context);
+                        const runs = { seat, script, reflows };
+                        for (const name of names) {
+                            const each = [];
+                            for (const tick of i ? TICKS.slice(-1) : TICKS) {
+                                each.push(
+                                    await play(
+                                        context,
+                                        watch,
+                                        query,
+                                        fixture[name],
+                                        tick,
+                                    ),
+                                );
+                            }
+                            for (const read of ["steps", "sounds"]) {
+                                assert.deepEqual(
+                                    each.at(-1)[read],
+                                    each[0][read],
+                                    `${name} at ${at}: ticks of ${TICKS[1]} ms read otherwise than ${TICKS[0]}`,
+                                );
+                            }
+                            inOrder(each[0], await recorded(fixture[name]));
+                            runs[name] = each[0];
                         }
-                        assert.deepEqual(
-                            each[1].steps,
-                            each[0].steps,
-                            `${name}: ticks of ${TICKS[1]} ms read otherwise than ${TICKS[0]}`,
-                        );
-                        inOrder(each[0], await recorded(fixture[name]));
-                        runs[name] = each[0];
+                        try {
+                            CASES[verb](runs);
+                        } catch (e) {
+                            e.message = `at ${at}: ${e.message}`;
+                            throw e;
+                        }
                     }
-                    runs.script = await recorded(fixture.whole);
-                    CASES[verb](runs);
                     console.log(`ok: ${check}`);
                 } catch (e) {
                     failed = true;
                     threw = true;
                     console.error(`FAILED: ${check}\n${e.stack ?? e}`);
                 } finally {
-                    await context.close();
+                    for (const context of contexts) await context.close();
                 }
                 errors.push(...seen);
                 recordResult(

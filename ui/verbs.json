@@ -1,7 +1,7 @@
 {
-  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat of `moment` and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. `moment` is what they all watch, a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), as fixtures of ui/fixtures.json for each seat: `whole`, the moment in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). A verb listed here has a case of its name in verbs.mjs.",
+  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat of `moment` and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. `moment` is what they all watch, a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), as fixtures of ui/fixtures.json for each seat: `whole`, the moment in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). A verb listed here has a case of its name in verbs.mjs, and a layout an entry of its name in that script's LAYOUTS: the windows it is checked at (a phone's are the phone sizes of ui/shots.json) and what differs in it.",
   "verbs": ["fly", "emerge", "appear", "vanish"],
-  "layouts": ["desktop"],
+  "layouts": ["desktop", "phone"],
   "moment": {
     "yours": { "whole": "combat-declare", "cut": "verbs-cast-stops" },
     "theirs": {
