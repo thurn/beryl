@@ -21,7 +21,9 @@ use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Outcome, Profile, Replay, Scratch, Seat,
     StallReason, State, Step, Stops, Zone, apply, next,
 };
-use beryl_scenario::{Live, Scenario, answer, describe, script, setup_source, source};
+use beryl_scenario::{
+    Check, Live, Scenario, answer, describe, invariants, script, setup_source, source,
+};
 use common::games;
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -41,16 +43,6 @@ const MOST_CHOICES: usize = 600;
 struct Game {
     seed: u64,
     choices: Vec<u16>,
-}
-
-/// What must hold at every position a game reaches.
-type Check = fn(&GameTable, &State) -> Result<(), String>;
-
-/// The engine's own checks.
-fn invariants(t: &GameTable, s: &State) -> Result<(), String> {
-    s.check_invariants(t).map_err(|v| format!("{v:?}"))?;
-    s.check_references(t)
-        .map_err(|v| format!("a reference: {v:?}"))
 }
 
 impl Game {
