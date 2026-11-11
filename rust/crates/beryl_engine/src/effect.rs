@@ -21,8 +21,8 @@ use crate::mana;
 use crate::profile::Payment;
 use crate::query::Copiable;
 use crate::state::{
-    Affects, CastPermission, CounterKind, Duration, LayerChange, ObjectFlags, ObjectRef, Payload,
-    PendingTrigger, StackEntry, State, Target, TargetPlace, TriggerInfo, Zone, ZoneKey,
+    Affects, CounterKind, Duration, LayerChange, ObjectFlags, ObjectRef, Payload, PendingTrigger,
+    StackEntry, State, Target, TargetPlace, TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
@@ -31,6 +31,7 @@ use crate::{layers, trigger};
 use beryl_card::prompt;
 
 mod ask;
+mod permit;
 
 /// What a body runs against: the working state and tables, the event sink, the stack entry
 /// resolving (its source, controller, targets, X and what triggered it), and where its
@@ -319,49 +320,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         Ok(())
     }
 
-    /// Lets `player` cast the card in `object`'s slot from the zone it is in, for as long as
-    /// it stays there, or until end of turn with `this_turn`. A spell cast this way costs
-    /// `extra` generic mana more, and with `exile` it is exiled rather than put into its
-    /// owner's graveyard.
-    pub fn allow_cast(
-        &mut self,
-        object: ObjectRef<L>,
-        player: Seat,
-        extra: u8,
-        this_turn: bool,
-        exile: bool,
-    ) {
-        let r = self.state.legacy_mut().add_permission(CastPermission {
-            object,
-            player,
-            extra,
-            this_turn,
-            exile,
-            flashback: false,
-        });
-        self.checked(r);
-    }
-
-    /// The card in `object`'s slot gains flashback until end of turn, its flashback cost
-    /// equal to its mana cost, for `player` (Snapcaster Mage)
-    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
-    /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an
-    /// instant or sorcery spell by paying [cost] rather than paying its mana cost' and 'If the
-    /// flashback cost was paid, exile this card instead of putting it anywhere else any time
-    /// it would leave the stack.'" Only its owner can cast it from their graveyard, so
-    /// `player` is its owner.
-    pub fn grant_flashback(&mut self, object: ObjectRef<L>, player: Seat) {
-        let r = self.state.legacy_mut().add_permission(CastPermission {
-            object,
-            player,
-            extra: 0,
-            this_turn: true,
-            exile: false,
-            flashback: true,
-        });
-        self.checked(r);
-    }
-
     /// Lets `player` cast the card in `object`'s slot during this resolution, without paying
     /// its mana cost when `free`. The body's last action: the card is offered as it finishes
     /// resolving, which is when a spell cast during resolution would otherwise have
@@ -445,7 +403,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go
     /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
     /// corresponding zone." A spell leaves the stack without resolving, or is exiled instead
-    /// ([`cast::exiled_instead`]).
+    /// ([`event::exiled_instead`]).
     pub fn return_to_hand(&mut self, object: ObjectRef<L>) {
         if !self.state.is_current(object) {
             return;
@@ -461,7 +419,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Puts a spell on top of its owner's library, or on the bottom unless `top`. It leaves
-    /// the stack without resolving, or is exiled instead ([`cast::exiled_instead`]).
+    /// the stack without resolving, or is exiled instead ([`event::exiled_instead`]).
     pub fn put_spell_into_library(&mut self, spell: ObjectRef<L>, top: bool) {
         if !self.state.is_current(spell) {
             return;

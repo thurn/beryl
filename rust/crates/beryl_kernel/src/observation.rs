@@ -7,8 +7,7 @@ use crate::ids::{CardId, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
-    CastPermission, Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn,
-    Zone, ZoneKey,
+    Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use beryl_card::FaceIx;
@@ -148,14 +147,6 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// first moves that card ... from where it is to the stack".
     pub fn stack(&self) -> &'a [StackEntry<L>] {
         self.state.stack()
-    }
-
-    /// Who may cast which card from a zone it could not otherwise be cast from, and for how
-    /// much more: public, as the effects that grant them are. Elite Spellbinder's exiled card
-    /// is face up ([CR 406.3](https://yawgatog.com/resources/magic-rules/#R4063): "Exiled cards
-    /// are, by default, kept face up and may be examined by any player at any time").
-    pub fn permissions(&self) -> &'a [CastPermission<L>] {
-        self.state.permissions()
     }
 
     /// The triggered abilities waiting to be put on the stack. Each names its public source;

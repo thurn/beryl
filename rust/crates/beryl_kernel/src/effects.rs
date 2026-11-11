@@ -10,9 +10,9 @@
 //! nothing live costs its reader one AND.
 //!
 //! Built so far: an object (by-w8gv.7.2) and a player (by-w8gv.7.3) as the affected side,
-//! and the layer change, the zone-change replacement and the rule change as payloads. The
-//! game and locked-in sets as sides, and cost changes and permissions as payloads, are
-//! designed in the contract and built with their first users (by-w8gv.7.4, by-w8gv.7.5).
+//! and the layer change, the zone-change replacement, the rule change, the permission to
+//! cast and the cost change (by-w8gv.7.4) as payloads. The game and locked-in sets as sides
+//! are designed in the contract and built with their first users (by-w8gv.7.5).
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
 //! ability or one of these effects makes it.
@@ -154,6 +154,64 @@ impl LayerChange {
 pub enum MoveReplacement {
     /// "If it would be put into a graveyard, exile it instead."
     ExileInsteadOfGraveyard,
+    /// What paying a flashback cost does to the spell
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "If the flashback
+    /// cost was paid, exile this card instead of putting it anywhere else any time it would
+    /// leave the stack."
+    Flashback,
+}
+
+/// A permission to cast the affected card from the zone it is in, with the terms a spell
+/// cast under it is cast on
+/// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
+/// cast a spell only if a rule or effect allows that player to cast it". It is an entry on
+/// one incarnation of the card, so it ends when the card leaves that zone
+/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), whatever its duration.
+///
+/// The terms are about the spell, which is a new object: as it is cast the rules start
+/// them on it, a [`Payload::Cost`] for the increase and a [`Payload::Move`] for the
+/// replacement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Permission {
+    /// Who may cast the card, which need not be its owner.
+    pub player: Seat,
+    /// Generic mana the spell costs more, as in "A spell cast this way costs {2} more to
+    /// cast."
+    pub increase: u8,
+    /// Where the spell goes instead as it leaves the stack: "If that spell would be put
+    /// into your graveyard, exile it instead.", or flashback's own.
+    pub replacement: Option<MoveReplacement>,
+}
+
+impl Permission {
+    /// Whether the card has flashback by it, its flashback cost the card's mana cost
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
+    /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an
+    /// instant or sorcery spell by paying [cost] rather than paying its mana cost'". Paying it
+    /// is an alternative cost, so no other can be chosen with it.
+    #[inline]
+    pub fn is_flashback(self) -> bool {
+        self.replacement == Some(MoveReplacement::Flashback)
+    }
+}
+
+/// A change to what the affected spell costs, applied as its total cost is determined
+/// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): "The total cost is the
+/// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs
+/// and cost increases, and minus all cost reductions."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CostChange {
+    /// It costs this much generic mana more.
+    Increase(u8),
+}
+
+/// A permission to cast in force: the card it is about, its terms, and the card whose
+/// spell or ability granted it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Permitted<L: Layout = Small> {
+    pub card: ObjectRef<L>,
+    pub terms: Permission,
+    pub source: L::Card,
 }
 
 /// What a continuous effect does.
@@ -168,6 +226,10 @@ pub enum Payload {
     /// effects affect game rules rather than objects." The rule is the vocabulary's own:
     /// it names no player, and the affected side is who it applies to.
     Rule(Rule),
+    /// Lets a player cast the affected card from the zone it is in.
+    Cast(Permission),
+    /// Changes what the affected spell costs.
+    Cost(CostChange),
 }
 
 impl Payload {
@@ -178,6 +240,8 @@ impl Payload {
             Payload::Layer(_) => Kinds::LAYER,
             Payload::Move(_) => Kinds::MOVE,
             Payload::Rule(_) => Kinds::RULE,
+            Payload::Cast(_) => Kinds::CAST,
+            Payload::Cost(_) => Kinds::COST,
         }
     }
 }
@@ -191,6 +255,8 @@ impl Kinds {
     const LAYER: u16 = 1 << 0;
     const MOVE: u16 = 1 << 1;
     const RULE: u16 = 1 << 2;
+    const CAST: u16 = 1 << 3;
+    const COST: u16 = 1 << 4;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -377,11 +443,14 @@ impl<L: Layout> Store<L> for Effects<L> {
     }
 
     fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String> {
-        // The first entry about an object: a rule change on a player is listed after the
-        // permissions ([`State::rule_change_lingering`]), where saves have always had it.
+        // The first entry about an object that is no permission to cast: those, and then a
+        // rule change on a player, are listed after these
+        // ([`State::cast_permission_lingering`], [`State::rule_change_lingering`]), where
+        // and as saves have always had them.
         let (e, on) = self
             .entries
             .iter()
+            .filter(|e| !matches!(e.payload, Payload::Cast(_)))
             .find_map(|e| Some((e, e.affected.as_object()?)))?;
         Some(format!(
             "an effect of {} on {} lasting {}",
@@ -491,7 +560,7 @@ impl<L: Layout> State<L> {
             .iter()
             .filter_map(|e| match e.payload {
                 Payload::Layer(change) => Some((e, change)),
-                Payload::Move(_) | Payload::Rule(_) => None,
+                _ => None,
             })
     }
 
@@ -509,6 +578,67 @@ impl<L: Layout> State<L> {
                 Payload::Move(replacement) if e.affected == affected => Some(replacement),
                 _ => None,
             })
+    }
+
+    /// The permissions to cast, in the order they began: who may cast which card from a
+    /// zone it could not otherwise be cast from, and on what terms. Each names its card's
+    /// current object (the store's invariant). With none live, one AND.
+    #[inline]
+    pub fn cast_permissions(&self) -> impl Iterator<Item = Permitted<L>> + '_ {
+        self.effects.of(Kinds::CAST).iter().filter_map(|e| {
+            match (e.payload, e.affected.as_object()) {
+                (Payload::Cast(terms), Some(card)) => Some(Permitted {
+                    card,
+                    terms,
+                    source: e.source,
+                }),
+                _ => None,
+            }
+        })
+    }
+
+    /// The generic mana the cost changes on the spell `object` add to its cost
+    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
+    /// costs and cost increases"). With no cost change live on any object, one AND.
+    #[inline]
+    pub fn cost_increase(&self, object: ObjectRef<L>) -> u8 {
+        let affected = Affects::object(object);
+        self.effects
+            .of(Kinds::COST)
+            .iter()
+            .filter(|e| e.affected == affected)
+            .fold(0, |total, e| match e.payload {
+                Payload::Cost(CostChange::Increase(n)) => total.saturating_add(n),
+                _ => total,
+            })
+    }
+
+    /// The objects an effect that is no layer change is on: a card someone is permitted to
+    /// cast, a spell with a cost change or a replacement of where it goes. A layer change
+    /// shows in a permanent's layer results and these show nowhere on the object, so the
+    /// rules treat none of them as interchangeable with another object
+    /// ([`State::signature`]). With no such effect live, one AND.
+    #[inline]
+    pub fn told_apart_by_effects(&self) -> Bitboard<L::Slot> {
+        self.effects
+            .of(!Kinds::LAYER)
+            .iter()
+            .filter(|e| !matches!(e.payload, Payload::Layer(_)))
+            .filter_map(|e| e.affected.as_object())
+            .map(|r| r.slot)
+            .collect()
+    }
+
+    /// The first permission to cast that a turn-start checkpoint would lose, in words
+    /// ([`State::off_board`]): the words and the place in that list that saves hold for
+    /// one, which name the player and the card and not what granted it.
+    pub(crate) fn cast_permission_lingering(&self, t: &GameTable) -> Option<String> {
+        let p = self.cast_permissions().next()?;
+        Some(format!(
+            "player {}'s permission to cast {}",
+            p.terms.player.get(),
+            t.def(self.card(p.card.slot)).name
+        ))
     }
 
     /// The first rule change on a player that a turn-start checkpoint would lose, in words
@@ -575,6 +705,14 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// a slot, which is a public handle.
     pub fn effects(&self) -> &'a [ContinuousEffect<L>] {
         self.shown().effects()
+    }
+
+    /// Who may cast which card from a zone it could not otherwise be cast from, and on what
+    /// terms: public, as the effects that grant them are. A card exiled until someone casts
+    /// it is face up ([CR 406.3](https://yawgatog.com/resources/magic-rules/#R4063): "Exiled
+    /// cards are, by default, kept face up and may be examined by any player at any time").
+    pub fn cast_permissions(&self) -> impl Iterator<Item = Permitted<L>> + 'a {
+        self.shown().cast_permissions()
     }
 }
 

@@ -27,11 +27,12 @@ use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};
 use crate::mana::{self, Funds};
+use crate::permission;
 use crate::profile::Payment;
 use crate::rule_change;
 use crate::state::{
-    Affects, CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending,
-    StackEntry, State, Target, TurnStep, Zone, ZoneKey,
+    Affects, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry, State,
+    Target, TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 
@@ -112,14 +113,6 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
         || face.keywords.contains(Keywords::FLASH)
         || (face.types.intersects(Types::SORCERY)
             && rule_change::applies(s, t, Rule::SorceriesAsFlash, Affects::Player(player)))
-}
-
-/// The permission that lets `player` cast the card in `slot`, if one does.
-fn permission<L: Layout>(s: &State<L>, player: Seat, slot: L::Slot) -> Option<CastPermission<L>> {
-    s.permissions()
-        .iter()
-        .copied()
-        .find(|p| p.object.slot == slot && p.player == player && s.is_current(p.object))
 }
 
 /// Where a card is cast from, and what that changes.
@@ -270,9 +263,10 @@ fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<u8> {
 
 /// A spell's total cost ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)):
 /// "The total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus
-/// all additional costs and cost increases, and minus all cost reductions." A permission's
-/// increase, such as Elite Spellbinder's {2}, is the engine's cost-modifier hook (§6.3).
-fn spell_cost(face: &Face, costs: Castings, x: u8, extra: u8, free: bool) -> ManaCost {
+/// all additional costs and cost increases, and minus all cost reductions." `increase` is
+/// the generic mana of the cost increases: a permission's, read of the permission before the
+/// spell is cast and of the cost changes on the spell after (§6.3).
+fn spell_cost(face: &Face, costs: Castings, x: u8, increase: u8, free: bool) -> ManaCost {
     let mut cost = if free { ManaCost::NONE } else { face.cost };
     for o in costs.paid(face) {
         if o.is_alternative() {
@@ -282,7 +276,7 @@ fn spell_cost(face: &Face, costs: Castings, x: u8, extra: u8, free: bool) -> Man
     for o in costs.paid(face).filter(|o| !o.is_alternative()) {
         cost = cost.plus(o.cost());
     }
-    cost.plus(ManaCost::generic(extra)).with_x(x)
+    cost.plus(ManaCost::generic(increase)).with_x(x)
 }
 
 /// The objects or players a target spec can choose.
@@ -529,8 +523,11 @@ fn refused<L: Layout>(
     if !in_time(s, t, now, face, from) {
         return Some(Refusal::Timing { by: None });
     }
-    let (extra, free) = match from {
-        From::Priority => (permission(s, player, slot).map_or(0, |p| p.extra), false),
+    let (increase, free) = match from {
+        From::Priority => (
+            permission::of(s, player, slot).map_or(0, |p| p.terms.increase),
+            false,
+        ),
         From::Resolution { free } => (0, free),
     };
     // The checks are pure, so their order changes nothing but their cost: the mana, found
@@ -538,7 +535,7 @@ fn refused<L: Layout>(
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    let cost = spell_cost(face, costs, x, extra, free);
+    let cost = spell_cost(face, costs, x, increase, free);
     if !now
         .funds(s, t)
         .is_some_and(|f| f.pays(s, t, cost, Bitboard::EMPTY))
@@ -587,7 +584,7 @@ pub(crate) fn refusal<L: Layout>(
     let Some(def) = s.card_def(t, slot) else {
         return Ok(land);
     };
-    let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
+    let flashback = permission::of(s, player, slot).is_some_and(|p| p.terms.is_flashback());
     let mut most = land;
     for f in def.face_ixs() {
         let face = def.face(f);
@@ -623,9 +620,9 @@ pub(crate) fn refusal<L: Layout>(
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
 fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
-    for p in s.permissions() {
-        if p.player == player && s.is_current(p.object) {
-            cards.insert(p.object.slot);
+    for p in s.cast_permissions() {
+        if p.terms.player == player {
+            cards.insert(p.card.slot);
         }
     }
     cards
@@ -659,8 +656,8 @@ fn cast_options<L: Layout>(
         .in_candidate_order(collapse(s, cards))
         .filter_map(with_def)
     {
-        let flashback =
-            from == From::Priority && permission(s, player, slot).is_some_and(|p| p.flashback);
+        let flashback = from == From::Priority
+            && permission::of(s, player, slot).is_some_and(|p| p.terms.is_flashback());
         for f in def.face_ixs() {
             let face = def.face(f);
             if face.transformed {
@@ -948,7 +945,7 @@ pub(crate) fn begin_cast<L: Layout>(
     let Opt::Cast { slot, face, costs } = option else {
         unreachable!("a cast option");
     };
-    let permission = permission(s, player, slot);
+    let permission = permission::of(s, player, slot);
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let (card, _) = s.copiable(slot).record(t);
     s.become_spell(slot, face, player);
@@ -959,10 +956,11 @@ pub(crate) fn begin_cast<L: Layout>(
         card,
         face,
         costs,
-        exile: permission.is_some_and(|p| p.exile || p.flashback),
-        flashback: permission.is_some_and(|p| p.flashback),
         ..StackEntry::default()
     })?;
+    if let Some(permission) = permission {
+        permission::begin_on_spell(s, slot, permission)?;
+    }
     let free = resolving.unwrap_or(false);
     let def_face = t.def(card).face(face);
     let c = Casting {
@@ -975,7 +973,6 @@ pub(crate) fn begin_cast<L: Layout>(
         spec: SpecIx::default(),
         graveyard_from: 0,
         left: 0,
-        extra: permission.map_or(0, |p| p.extra),
         free,
         resolving: resolving.is_some(),
         remaining: ManaCost::NONE,
@@ -1023,7 +1020,6 @@ pub(crate) fn begin_activate<L: Layout>(
         spec: SpecIx::default(),
         graveyard_from: 0,
         left: 0,
-        extra: 0,
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
@@ -1074,7 +1070,6 @@ pub(crate) fn target_trigger<L: Layout>(
         spec: SpecIx::default(),
         graveyard_from: 0,
         left: 0,
-        extra: 0,
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
@@ -1097,10 +1092,18 @@ fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpe
 }
 
 /// The total mana cost of the spell or ability being cast, once X is announced.
-fn total_cost<L: Layout>(t: &GameTable, entry: &StackEntry<L>, c: &Casting) -> ManaCost {
+fn total_cost<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry<L>,
+    c: &Casting,
+) -> ManaCost {
     let face = t.def(entry.card).face(entry.face);
     match entry.ability {
-        None => spell_cost(face, entry.costs, entry.x, c.extra, c.free),
+        None => {
+            let increase = entry.spell().map_or(0, |spell| s.cost_increase(spell));
+            spell_cost(face, entry.costs, entry.x, increase, c.free)
+        }
         Some(ability) => {
             let mut cost = face.ability(ability).cost.mana.with_x(entry.x);
             cost.generic -= c.bent;
@@ -1116,7 +1119,7 @@ fn total_cost<L: Layout>(t: &GameTable, entry: &StackEntry<L>, c: &Casting) -> M
 /// cost increases, and minus all cost reductions."
 pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<ManaCost> {
     match *s.pending() {
-        Pending::Casting(c) => Some(total_cost(t, &StackEntry { x, ..top(s) }, &c)),
+        Pending::Casting(c) => Some(total_cost(s, t, &StackEntry { x, ..top(s) }, &c)),
         _ => None,
     }
 }
@@ -1224,7 +1227,7 @@ fn begin_payment<L: Layout>(
             event::remove_counters(s, t, sink, source, kind, 1)?;
         }
         if a.cost.waterbend > 0 {
-            c.left = a.cost.waterbend.min(total_cost(t, &entry, &c).generic);
+            c.left = a.cost.waterbend.min(total_cost(s, t, &entry, &c).generic);
             if c.left > 0 && !waterbend_options(s, t, &c)?.is_empty() {
                 c.step = CastStep::Waterbend;
                 s.ask(Pending::Casting(c));
@@ -1247,7 +1250,7 @@ fn waterbend_options<L: Layout>(
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     let entry = top(s);
-    let cost = total_cost(t, &entry, c);
+    let cost = total_cost(s, t, &entry, c);
     let mut objects: L::Queue<Opt<L>, 64> = Default::default();
     if c.left > 0 {
         let mut fewer = cost;
@@ -1293,7 +1296,7 @@ fn pay_mana<L: Layout>(
     mut c: Casting,
 ) -> Result<(), Full> {
     let entry = top(s);
-    let cost = total_cost(t, &entry, &c);
+    let cost = total_cost(s, t, &entry, &c);
     match s.profile().payment {
         Payment::Manual => {
             c.remaining = cost;
@@ -1387,7 +1390,7 @@ fn finish<L: Layout>(
                 targets: entry.targets.clone(),
                 x: entry.x,
                 costs: entry.costs,
-                flashback: entry.flashback,
+                flashback: permission::flashback_paid(s, spell),
             },
         )?;
     } else {
@@ -1428,7 +1431,7 @@ fn x_options<L: Layout>(
     for x in least..(least.saturating_add(64)) {
         let mut probe = entry.clone();
         probe.x = x;
-        if !mana::payable(s, t, c.player, total_cost(t, &probe, c), exclude)? {
+        if !mana::payable(s, t, c.player, total_cost(s, t, &probe, c), exclude)? {
             break;
         }
         out.push(Opt::Number(x))?;
@@ -1516,7 +1519,7 @@ pub(crate) fn decision<L: Layout>(
         },
         CastStep::Plan => {
             let entry = top(s);
-            let cost = total_cost(t, &entry, c);
+            let cost = total_cost(s, t, &entry, c);
             let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for i in 0..plans.len() {
@@ -1549,7 +1552,7 @@ pub(crate) fn decision<L: Layout>(
         CastStep::Waterbend => options(
             DecisionKind::ManaPayment,
             waterbend_options(s, t, c)?,
-            Prompt::new(Purpose::Waterbend).cost(total_cost(t, &top(s), c)),
+            Prompt::new(Purpose::Waterbend).cost(total_cost(s, t, &top(s), c)),
         ),
         // The cards lie in the zone the cost exiles from, the hand or the graveyard.
         CastStep::Exile => Decision {
@@ -1600,7 +1603,7 @@ pub(crate) fn perform<L: Layout>(
                 unreachable!("a payment plan");
             };
             let entry = top(s);
-            let cost = total_cost(t, &entry, &c);
+            let cost = total_cost(s, t, &entry, &c);
             let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             mana::pay(
                 s,
@@ -1712,23 +1715,18 @@ pub(crate) fn counter<L: Layout>(
     Ok(true)
 }
 
-/// Whether a spell that leaves the stack for `to` is exiled instead: one cast with flashback
-/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback
-/// cost was paid, exile this card instead of putting it anywhere else any time it would
-/// leave the stack."), and one its permission exiles rather than put into a graveyard.
-pub(crate) fn exiled_instead<L: Layout>(entry: &StackEntry<L>, to: Zone) -> bool {
-    entry.flashback || (entry.exile && to == Zone::Graveyard)
-}
-
 /// Takes a spell off the stack for an effect that moves its card to `to` without its
-/// resolving: where the card goes, or nothing if the spell is not on the stack.
+/// resolving: where the card goes ([`event::exiled_instead`]), or nothing if the spell is
+/// not on the stack.
 pub(crate) fn unstack<L: Layout>(s: &mut State<L>, spell: ObjectRef<L>, to: Zone) -> Option<Zone> {
-    let exiled = exiled_instead(&s.take_off_stack(spell)?, to);
+    s.take_off_stack(spell)?;
+    let exiled = event::exiled_instead(s, spell, to);
     Some(if exiled { Zone::Exile } else { to })
 }
 
 /// Moves the card of a spell whose entry is off the stack, and which did not become a
-/// permanent, to `to`, or to exile instead ([`exiled_instead`]).
+/// permanent, to `to`, or to exile instead: the move applies the replacements on the spell
+/// ([`event::exiled_instead`]).
 pub(crate) fn leave_stack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -1737,14 +1735,13 @@ pub(crate) fn leave_stack<L: Layout>(
     to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
-    let exiled = exiled_instead(entry, to);
-    let to = if exiled { Zone::Exile } else { to };
     let spell = entry.spell().expect("a spell leaving the stack");
     event::move_one(s, t, sink, spell.slot, to, reason)
 }
 
-/// The objects a pending reference names: stack targets, the sources of abilities on the stack
-/// and cast permissions. They are never interchangeable with another object (§7.2).
+/// The objects a pending reference names: stack targets, the sources of abilities on the
+/// stack, and the objects an effect that their characteristics do not show is on, as a
+/// permission to cast a card is. They are never interchangeable with another object (§7.2).
 ///
 /// An ability's source can be its own target: its targets are chosen before its costs are
 /// paid ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c), [CR
@@ -1765,8 +1762,5 @@ pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
             }
         }
     }
-    for p in s.permissions() {
-        b.insert(p.object.slot);
-    }
-    b
+    b | s.told_apart_by_effects()
 }

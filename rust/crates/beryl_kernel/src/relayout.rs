@@ -9,8 +9,8 @@ use crate::event::{Event, LossCause, Recipient};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
-    CastPermission, Derived, GrantRef, Lki, Object, ObjectRef, Pending, PendingTrigger, Player,
-    Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
+    Derived, GrantRef, Lki, Object, ObjectRef, Pending, PendingTrigger, Player, Resolving, SLOTS,
+    StackEntry, State, Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -196,8 +196,6 @@ impl<L: Layout> Relayout for StackEntry<L> {
             targets: queue(self.targets.as_slice(), Target::relayout),
             x: self.x,
             costs: self.costs,
-            exile: self.exile,
-            flashback: self.flashback,
         }
     }
 }
@@ -213,21 +211,6 @@ impl<L: Layout> Relayout for PendingTrigger<L> {
             ability: self.ability,
             controller: self.controller,
             info: self.info.relayout(),
-        }
-    }
-}
-
-impl<L: Layout> Relayout for CastPermission<L> {
-    type In<M: Layout> = CastPermission<M>;
-
-    fn relayout<M: Layout>(&self) -> CastPermission<M> {
-        CastPermission {
-            object: self.object.relayout(),
-            player: self.player,
-            extra: self.extra,
-            this_turn: self.this_turn,
-            exile: self.exile,
-            flashback: self.flashback,
         }
     }
 }
@@ -674,7 +657,6 @@ impl<L: Layout> Relayout for State<L> {
             delayed,
             effects,
             keyed,
-            permissions,
             entered_x,
             pending,
             knowledge,
@@ -705,7 +687,6 @@ impl<L: Layout> Relayout for State<L> {
             delayed: queue(delayed.as_slice(), PendingTrigger::relayout),
             effects: effects.relayout(),
             keyed: bits(*keyed),
-            permissions: queue(permissions.as_slice(), CastPermission::relayout),
             entered_x: queue(entered_x.as_slice(), |&(r, x)| (r.relayout(), x)),
             pending: pending.relayout(),
             knowledge: per_player(knowledge, |&k| bits(k)),

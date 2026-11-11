@@ -129,8 +129,7 @@
 //!
 //! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
 //! (by-w8gv.7.1) deletes and has not yet moved to a store ("Stores"), which therefore gets
-//! no typed mutator: the `permissions` queue; `entered_x`; [`state::CastPermission`]'s
-//! `extra`, `exile` and `flashback`; the [`state::ObjectFlags`] `KICKED`, `OFFSPRING`,
+//! no typed mutator: `entered_x`; the [`state::ObjectFlags`] `KICKED`, `OFFSPRING`,
 //! `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and `LOYALTY_ACTIVATED`; and
 //! [`state::Counters`]' long-tail kind (`other_kind`, `other`).
 //! [`legacy::Legacy`]'s rustdoc lists each with the store that replaces it. Reads use the
@@ -148,7 +147,9 @@
 //! when they land; a bead that builds a part amends its text. Built so far: the shared
 //! core ([`store`]), the Effects store for objects with its layer and zone-change payloads
 //! ([`effects`]) and the capability bits ([`table::Capability`]) (by-w8gv.7.2); a player as
-//! the affected side, the rule-change payload and [`State::rule_applies`] (by-w8gv.7.3).
+//! the affected side, the rule-change payload and [`State::rule_applies`] (by-w8gv.7.3);
+//! the permission to cast and the cost change as payloads, and flashback's zone-change
+//! replacement (by-w8gv.7.4).
 //!
 //! ### Where everything goes
 //!
@@ -158,9 +159,9 @@
 //! | `Continuous::ExileInsteadOfGraveyard` | Effects: an entry on an object, payload [`effects::Payload::Move`] | by-w8gv.7.2, built |
 //! | `Player::sorceries_as_flash` | Effects: an entry on a player, payload [`effects::Payload::Rule`], lasting until that player's next turn | by-w8gv.7.3, built |
 //! | the `Rule` mask (`rule_bit`, a `u8`) | `beryl_card`'s `Rules`, a set sized from the list of rules; a static ability's rule changes for players are found with the layers ("Static rule changes") | by-w8gv.7.3, built |
-//! | the `permissions` queue, [`state::CastPermission`]; its `this_turn` | Effects: an entry on the card, payload a permission naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object | by-w8gv.7.4 |
-//! | `CastPermission::extra`, `Casting::extra` | Effects: a cost change on the spell, started as it is cast from the permission's terms; the cost is a read of the cost changes on the spell | by-w8gv.7.4 |
-//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts a zone-change replacement on the spell: exile instead of a graveyard, or flashback's exile instead of anywhere else (CR 702.34a). `cast::exiled_instead` then asks [`State::move_replacements`] alone | by-w8gv.7.4 |
+//! | the `permissions` queue, `CastPermission`; its `this_turn` | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them | by-w8gv.7.4, built |
+//! | `CastPermission::extra`, `Casting::extra` | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) | by-w8gv.7.4, built |
+//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `event::exiled_instead`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
 //! | `State::entered_x` | Memos: the permanent's `X` | by-w8gv.7.6 |
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast, one kind for each casting option of the vocabulary's list | by-w8gv.7.6 |
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, [`State::link`], [`State::exiled_with`], `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ("Duration and expiry" says how it outlives that object) | by-w8gv.7.7 |
@@ -195,14 +196,17 @@
 //! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after
 //! by-w8gv.7.2: 40 for the store's mask and the keyed slots, 8 of padding for the field
 //! order ([`State`]'s rustdoc). It is 20,040 after by-w8gv.7.3 too: the four bytes of rule
-//! sets are those `sorceries_as_flash` and its padding gave back. The limit is 20,480. Each bead may change the size at its
+//! sets are those `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is
+//! 19,832: the `permissions` queue gave back 80 and each of the stack's 64 entries two
+//! bytes, [`state::StackEntry`] being 58 bytes without its two flags.
+//! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
 //!
 //! | Bead | Allotment | Why |
 //! | --- | --- | --- |
 //! | by-w8gv.7.3 | +16 (landed: 0) | the rule sets, a byte each while the list has at most eight rules, less `sorceries_as_flash` |
-//! | by-w8gv.7.4 | -200 or lower | the `permissions` queue (82) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
+//! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
 //! | by-w8gv.7.5 | +136 | the locked-in sets |
 //! | by-w8gv.7.6 | +88 | the Memos store less `entered_x` (50) |
 //! | by-w8gv.7.7 | 0 | its memos are entries of by-w8gv.7.6's store |
@@ -228,7 +232,7 @@
 //! won't change."). The fields are the variant's own, so every side fits four bytes.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
-//! rule change (built), a cost change or a permission (by-w8gv.7.4). A payload is a
+//! rule change, a permission to cast or a cost change (built). A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
 //! rule change is the vocabulary's own `Rule`, which names no player: the affected side is
@@ -252,8 +256,10 @@
 //!   chokepoints that bump an incarnation ([`State::move_object`],
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
 //!   store has an entry about, so the move tests one bit and calls nothing else. This
-//!   replaces three sweeps: `State::drop_stale_effects` (gone), and the ones in
-//!   `Legacy::end_permissions_of_turn` and `Legacy::remember_x`, which go with their queues.
+//!   replaces three sweeps: `State::drop_stale_effects` and
+//!   `Legacy::end_permissions_of_turn` (gone), and the one in `Legacy::remember_x`, which
+//!   goes with its queue. A permission to cast a card "for as long as it remains exiled" is
+//!   an entry of no stated duration on the card: it ends as the card leaves.
 //!
 //! Memos clear the same way, as their object ends. A memo that names another object (the
 //! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
@@ -281,7 +287,9 @@
 //! | Hot read | With the kind absent | With it live |
 //! | --- | --- | --- |
 //! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds |
-//! | `event::destination` ([`State::move_replacements`]) | the zone compared, then one AND | one pass comparing each entry's affected object |
+//! | `event::destination` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
+//! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
+//! | the objects that are no other's twin for what an effect does to them ([`State::told_apart_by_effects`]) | one AND of the kinds that are no layer change | one pass |
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
 //! | the turn's reset | Effects: the store's length read twice a turn. Trackers: nothing in a game no card of which reads them | Effects: one pass. Trackers: eight words cleared in place of two flags on every permanent |
 //! | [`State::signature`] | one bit test of the keyed slots | the object's memos compared too; its layer changes already show in its layer results |
@@ -365,7 +373,8 @@
 //! event of its own, since the rules announce what it is part of, as they do a change of
 //! control. The mutator that changes a layer input sets `derived_dirty` itself. A store
 //! that is full returns [`fixed::Full`]. Reads are queries by kind
-//! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`]), with
+//! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`],
+//! [`State::cast_permissions`], [`State::cost_increase`]), with
 //! [`State::effects`] for tools, tests and views. No `&mut` to a store leaves the crate.
 //!
 //! ## Sets and orders
@@ -526,7 +535,6 @@ pub mod event;
 pub mod filter;
 mod fit;
 pub mod fixed;
-mod floating;
 pub mod ids;
 pub mod invariants;
 mod knowledge;

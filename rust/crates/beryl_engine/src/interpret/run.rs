@@ -341,7 +341,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// Takes the spells among `objects` off the stack, for an effect that moves their cards
     /// to `to` without their resolving, and exiles those that are exiled instead
-    /// ([`crate::cast::exiled_instead`]). Returns the objects still to move.
+    /// ([`crate::event::exiled_instead`]). Returns the objects still to move.
     fn unstack(&mut self, objects: Bitboard<L::Slot>, to: Zone) -> Bitboard<L::Slot> {
         let mut flashback = Bitboard::EMPTY;
         let spells = objects & crate::cast::spells(self.ctx.state);
@@ -349,8 +349,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         // stack keep their order, so the order these come off in is nothing.
         for slot in self.ctx.state.in_candidate_order(spells) {
             let spell = self.ctx.state.object_ref(slot);
-            let entry = self.ctx.state.take_off_stack(spell);
-            if entry.is_some_and(|entry| crate::cast::exiled_instead(&entry, to)) {
+            let taken = self.ctx.state.take_off_stack(spell).is_some();
+            if taken && crate::event::exiled_instead(self.ctx.state, spell, to) {
                 flashback.insert(slot);
             }
         }

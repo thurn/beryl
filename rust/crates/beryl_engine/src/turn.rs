@@ -196,8 +196,6 @@ pub(crate) fn cleanup_discard<L: Layout>(
 fn finish_cleanup<L: Layout>(s: &mut State<L>) {
     s.clear_damage();
     s.expire(Duration::EndOfTurn);
-    // Permissions that last this turn end, and those whose card has left its zone are gone.
-    s.legacy_mut().end_permissions_of_turn();
     s.set_cleanup_check(true);
 }
 

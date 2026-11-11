@@ -235,15 +235,12 @@ fn casting_options<L: Layout>(
         return String::new();
     };
     // CR 702.34a: a flashback cost is an alternative cost, so no other is paid with it. A
-    // permission lasts until the turn ends, so one whose card has since changed zones, as
-    // when Timetwister draws it again, no longer names this object.
-    let incarnation = obs.object(slot).incarnation();
-    if obs.permissions().iter().any(|p| {
-        p.object.slot == slot
-            && p.object.incarnation == incarnation
-            && p.player == obs.viewer()
-            && p.flashback
-    }) {
+    // permission names its card's current object: one whose card has since changed zones,
+    // as when Timetwister draws it again, has ended.
+    if obs
+        .cast_permissions()
+        .any(|p| p.card.slot == slot && p.terms.player == obs.viewer() && p.terms.is_flashback())
+    {
         return " with flashback".to_owned();
     }
     costs

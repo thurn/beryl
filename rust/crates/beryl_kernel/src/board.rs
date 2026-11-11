@@ -51,7 +51,6 @@ impl<L: Layout> State<L> {
     /// again. Nothing else on [`State`] outlasts a turn: the stack is empty between turns,
     /// combat and per-turn counts end with the turn, and summoning sickness is on the board.
     pub fn off_board(&self, t: &GameTable) -> Option<String> {
-        let name = |slot: L::Slot| t.def(self.card(slot)).name;
         if self.turn.step != TurnStep::Upkeep {
             return Some(format!("the {:?} step, not the upkeep", self.turn.step));
         }
@@ -73,12 +72,8 @@ impl<L: Layout> State<L> {
         if let Some(stored) = self.stores_lingering(t) {
             return Some(stored);
         }
-        if let Some(p) = self.permissions.as_slice().first() {
-            return Some(format!(
-                "player {}'s permission to cast {}",
-                p.player.get(),
-                name(p.object.slot)
-            ));
+        if let Some(permission) = self.cast_permission_lingering(t) {
+            return Some(permission);
         }
         self.rule_change_lingering()
     }

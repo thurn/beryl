@@ -247,3 +247,155 @@ fn effects_end_with_their_duration_and_with_their_object() {
     assert!(!s.is_derived_stale());
     assert_eq!(s.move_replacements(first).count(), 0);
 }
+
+/// A permission for player 1 to cast the card, for {2} more.
+fn permission(replacement: Option<MoveReplacement>) -> Permission {
+    Permission {
+        player: Seat::P1,
+        increase: 2,
+        replacement,
+    }
+}
+
+#[test]
+fn a_permission_to_cast_ends_with_its_turn_or_with_its_card() {
+    let t = GameTable::new(&ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
+    let mut s: State<Small> = State::empty(Profile::EXACT);
+    let (this_turn, while_there) = (nth(&s, 1), nth(&s, 2));
+    let flashback = permission(Some(MoveReplacement::Flashback));
+    let plain = permission(None);
+    s.start_effect(
+        CardIx::FIRST,
+        Affects::object(this_turn),
+        Payload::Cast(flashback),
+        Duration::EndOfTurn,
+    )
+    .unwrap();
+    s.start_effect(
+        CardIx::FIRST,
+        Affects::object(while_there),
+        Payload::Cast(plain),
+        Duration::Indefinite,
+    )
+    .unwrap();
+    let permitted = |s: &State<Small>| s.cast_permissions().collect::<Vec<_>>();
+    assert_eq!(
+        permitted(&s),
+        [
+            Permitted {
+                card: this_turn,
+                terms: flashback,
+                source: CardIx::FIRST,
+            },
+            Permitted {
+                card: while_there,
+                terms: plain,
+                source: CardIx::FIRST,
+            },
+        ]
+    );
+    assert!(flashback.is_flashback() && !plain.is_flashback());
+    // A permission is no input of the layers, changes no cost and replaces no move: its
+    // terms are the spell's, once there is one. Its card is no other card's twin.
+    assert!(!s.is_derived_stale());
+    assert_eq!(s.cost_increase(this_turn), 0);
+    assert_eq!(s.move_replacements(this_turn).count(), 0);
+    assert_eq!(
+        s.told_apart_by_effects(),
+        [this_turn.slot, while_there.slot].into_iter().collect()
+    );
+    assert_eq!(s.check_stores(&t), Ok(()));
+
+    // Another player's next turn ends neither; the end of the turn ends the one that lasts
+    // this turn; the other ends with its card's object and not before.
+    s.expire(Duration::UntilYourNextTurn(Seat::P1));
+    assert_eq!(permitted(&s).len(), 2);
+    s.expire(Duration::EndOfTurn);
+    assert_eq!(permitted(&s).len(), 1);
+    assert_eq!(permitted(&s)[0].card, while_there);
+    assert_eq!(s.keyed, Bitboard::single(while_there.slot));
+    s.expire(Duration::EndOfTurn);
+    assert_eq!(permitted(&s).len(), 1);
+    s.forget_stored(while_there.slot);
+    assert_eq!(permitted(&s), []);
+    assert!(s.keyed.is_empty() && s.told_apart_by_effects().is_empty());
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+#[test]
+fn a_permission_and_a_spells_terms_survive_small_to_large_and_back() {
+    let mut small: State<Small> = State::empty(Profile::EXACT);
+    let (card, spell) = (nth(&small, 4), nth(&small, 9));
+    let terms = permission(Some(MoveReplacement::ExileInsteadOfGraveyard));
+    small
+        .start_effect(
+            CardIx::from_index(3),
+            Affects::object(card),
+            Payload::Cast(terms),
+            Duration::Indefinite,
+        )
+        .unwrap();
+    // What a spell cast on such terms carries: its cost increases, added together, and
+    // the replacement of where it goes.
+    for payload in [
+        Payload::Cost(CostChange::Increase(2)),
+        Payload::Cost(CostChange::Increase(1)),
+        Payload::Move(MoveReplacement::Flashback),
+    ] {
+        small
+            .start_effect(
+                CardIx::FIRST,
+                Affects::object(spell),
+                payload,
+                Duration::Indefinite,
+            )
+            .unwrap();
+    }
+    assert_eq!(small.cost_increase(spell), 3);
+    assert_eq!(small.cost_increase(card), 0);
+
+    let large: State<Large> = small.widen();
+    assert_eq!(
+        large.cast_permissions().collect::<Vec<_>>(),
+        [Permitted {
+            card: nth(&large, 4),
+            terms,
+            source: LargeCardIx::from_index(3),
+        }]
+    );
+    assert_eq!(large.cost_increase(nth(&large, 9)), 3);
+    assert_eq!(
+        large.move_replacements(nth(&large, 9)).collect::<Vec<_>>(),
+        [MoveReplacement::Flashback]
+    );
+    let back: State<Small> = large.relayout();
+    assert_eq!(back, small);
+    assert_eq!(back.effects.keys(), small.keyed);
+}
+
+/// A game of one card, to name a permitted card in a save's words.
+static ONE_CARD: crate::table::CardTable = crate::table::CardTable::new(&[&beryl_card::CardDef {
+    name: "Test Card",
+    faces: &[beryl_card::Face::EMPTY],
+    tokens: &[],
+}]);
+
+#[test]
+fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
+    let t = GameTable::new(&ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
+    let mut s: State<Small> = State::empty(Profile::EXACT);
+    s.start_effect(
+        CardIx::FIRST,
+        Affects::object(nth(&s, 0)),
+        Payload::Cast(permission(None)),
+        Duration::Indefinite,
+    )
+    .unwrap();
+    // After an effect on an object, where the list has always had permissions: the
+    // store's own entry for it names none.
+    assert_eq!(s.stores_lingering(&t), None);
+    assert_eq!(
+        s.cast_permission_lingering(&t).as_deref(),
+        Some("player 1's permission to cast Test Card")
+    );
+}

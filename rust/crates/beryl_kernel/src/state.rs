@@ -4,9 +4,9 @@
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
 pub use crate::effects::{
-    Affects, ContinuousEffect, EFFECTS, Effects, LayerChange, MoveReplacement, Payload,
+    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, MoveReplacement, Payload,
+    Permission, Permitted,
 };
-pub use crate::floating::CastPermission;
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
@@ -150,9 +150,6 @@ pub struct State<L: Layout = Small> {
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.
     pub(crate) effects: Effects<L>,
-    /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
-    /// store.
-    pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
     /// The value of X the spells that became these permanents were cast with, for their
     /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
     /// "the value of X for that ability is the same as the value of X for that spell". Only
@@ -190,7 +187,6 @@ impl<L: Layout> std::hash::Hash for State<L> {
             triggers,
             delayed,
             effects,
-            permissions,
             entered_x,
         } = self;
         objects.hash(h);
@@ -205,7 +201,6 @@ impl<L: Layout> std::hash::Hash for State<L> {
         triggers.hash(h);
         delayed.hash(h);
         effects.hash(h);
-        permissions.hash(h);
         entered_x.hash(h);
         pending.hash(h);
         knowledge.hash(h);
@@ -468,12 +463,6 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn stack(&self) -> &[StackEntry<L>] {
         self.stack.as_slice()
-    }
-
-    /// The permissions to cast a card from a zone it could not otherwise be cast from.
-    #[inline]
-    pub fn permissions(&self) -> &[CastPermission<L>] {
-        self.permissions.as_slice()
     }
 
     /// The one way to an object to write, which never leaves the crate.

@@ -1,6 +1,7 @@
 //! One tree of the search: its nodes, and growing it by iterations.
 
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::{Affects, Duration, Payload};
 use beryl_engine::{
     Choice, Decision, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat,
     SlotId, State, Step, Stops, apply, next, observe,
@@ -212,15 +213,29 @@ impl<L: Layout> Tree<L> {
 }
 
 /// Whether two views of a game show the same: the turn, the players, the stack, the
-/// waiting triggers and permissions, and every slot's object as far as the viewer knows it.
+/// waiting triggers, the effects no object shows and every slot's object as far as the
+/// viewer knows it.
 pub(crate) fn shows_the_same<L: Layout>(a: Observation<'_, L>, b: Observation<'_, L>) -> bool {
     a.turn() == b.turn()
         && Seat::BOTH.iter().all(|&p| a.player(p) == b.player(p))
         && a.stack() == b.stack()
         && a.triggers() == b.triggers()
-        && a.permissions() == b.permissions()
+        && unshown_effects(a).eq(unshown_effects(b))
         && L::Slot::all()
             .all(|slot| a.knows(slot) == b.knows(slot) && a.object(slot) == b.object(slot))
+}
+
+/// The continuous effects that show on no object: a permission to cast a card, the terms
+/// a spell was cast on, a rule changed for a player. Each as what it does to what for how
+/// long, and not when it began or what began it, which two games that show the same may
+/// differ in.
+fn unshown_effects<L: Layout>(
+    o: Observation<'_, L>,
+) -> impl Iterator<Item = (Affects<L>, Payload, Duration)> {
+    o.effects()
+        .iter()
+        .filter(|e| !matches!(e.payload, Payload::Layer(_)))
+        .map(|e| (e.affected, e.payload, e.duration))
 }
 
 /// The profile below a tree's root. The root decision was offered under the game's profile;

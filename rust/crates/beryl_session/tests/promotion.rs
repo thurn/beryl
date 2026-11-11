@@ -12,14 +12,14 @@ use beryl_cards::names::{
 };
 use beryl_cards::tokens::TREASURE;
 use beryl_engine::card::{
-    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Trigger, Types,
+    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
-use beryl_engine::state::{ObjectFlags, Pending};
+use beryl_engine::state::{EFFECTS, ObjectFlags, Pending};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Observation, Opt, State,
-    TurnStep, bodies,
+    TurnStep, Zone, ZoneKey, bodies,
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, Budget, GameAgent};
@@ -115,13 +115,44 @@ fn play(game: &mut Game, mut watch: impl FnMut(&PlayerView, Option<&State<Large>
     }
 }
 
-/// One more Snapcaster Mage than a `Small` state has cast permissions (8): each one's trigger
-/// gives the Counterspell in the human's graveyard flashback until end of turn, a permission
-/// of its own. Short libraries end the game soon after.
-const NINE_SNAPCASTERS: Scenario = Scenario::new("nine-snapcasters")
+/// A test spell that lets its controller cast each card in their graveyard this turn, one
+/// more time over than a `Small` state has continuous effects ([`EFFECTS`]): each permission
+/// is an effect of its own. No card of the pool starts that many at once.
+static OPEN_VAULT: CardDef = CardDef {
+    name: "Open Vault",
+    faces: &[Face {
+        cost: ManaCost::NONE,
+        types: Types::SORCERY,
+        colors: Colors::NONE,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            body: bodies!(permit_over_and_over),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+#[allow(clippy::unnecessary_wraps)] // a body's signature
+fn permit_over_and_over<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+    let you = ctx.controller();
+    let graveyard = ctx.state().zone(ZoneKey::Of(you, Zone::Graveyard));
+    for slot in ctx.state().in_candidate_order(graveyard) {
+        let card = ctx.state().object_ref(slot);
+        for _ in 0..=EFFECTS {
+            ctx.allow_cast(card, you, 0, true, false);
+        }
+    }
+    Ok(())
+}
+
+/// The Counterspell in the human's graveyard is what the vault permits. Short libraries end
+/// the game soon after.
+const VAULT: Scenario = Scenario::new("vault")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ISLAND); 18])
-    .hand(P0, &[SNAPCASTER_MAGE; 9])
+    .battlefield(P0, &[Permanent::new(ISLAND)])
+    .hand(P0, &["Open Vault"])
     .graveyard(P0, &[COUNTERSPELL])
     .library(P0, &[ISLAND, ISLAND, ISLAND])
     .battlefield(P1, &[Permanent::new(PLAINS)])
@@ -129,28 +160,31 @@ const NINE_SNAPCASTERS: Scenario = Scenario::new("nine-snapcasters")
 
 #[test]
 fn a_game_past_a_small_capacity_plays_on_in_large() {
-    let casts = [Action::cast(P0, SNAPCASTER_MAGE); 9];
+    let cards: Vec<&'static CardDef> = vec![
+        &OPEN_VAULT,
+        CARDS.get(COUNTERSPELL).unwrap(),
+        CARDS.get(ISLAND).unwrap(),
+        CARDS.get(PLAINS).unwrap(),
+    ];
+    let cards: &'static CardTable = Box::leak(Box::new(CardTable::new(cards.leak())));
     let mut game = game(
-        &CARDS,
-        &NINE_SNAPCASTERS,
-        |t| Script::new(t, &casts, false),
+        cards,
+        &VAULT,
+        |t| Script::new(t, &[Action::cast(P0, "Open Vault")], false),
         random,
         StopsSetting::default(),
     );
     let mut most_permissions = 0;
     let outcome = play(&mut game, |_, large| {
         if let Some(s) = large {
-            most_permissions = most_permissions.max(s.permissions().len());
+            most_permissions = most_permissions.max(s.cast_permissions().count());
         }
     });
     assert!(
         matches!(outcome, OutcomeView::Win { .. }),
         "the game ends in a win, not a stall: {outcome:?}"
     );
-    assert_eq!(
-        most_permissions, 9,
-        "every Snapcaster's permission was kept"
-    );
+    assert_eq!(most_permissions, EFFECTS + 1, "every permission was kept");
 }
 
 /// Forty-five Overlords of the Mistmoors attack each turn, and each attack makes two Insect

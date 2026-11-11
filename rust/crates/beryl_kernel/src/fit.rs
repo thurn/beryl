@@ -166,11 +166,6 @@ impl<L: Layout> State<L> {
         )?;
         self.stores_fit::<M>()?;
         room(
-            "the cast permissions",
-            self.permissions.len(),
-            capacity(|s: &State<M>| &s.permissions),
-        )?;
-        room(
             "the values of X",
             self.entered_x.len(),
             capacity(|s: &State<M>| &s.entered_x),

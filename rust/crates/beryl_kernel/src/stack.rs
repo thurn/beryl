@@ -180,13 +180,6 @@ pub struct StackEntry<L: Layout = Small> {
     pub x: u8,
     /// The face's casting options paid.
     pub costs: Castings,
-    /// If the spell would be put into its owner's graveyard, it is exiled instead.
-    pub exile: bool,
-    /// Cast for its flashback cost, so it is exiled wherever else it would go as it leaves
-    /// the stack ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "If the
-    /// flashback cost was paid, exile this card instead of putting it anywhere else any time
-    /// it would leave the stack."
-    pub flashback: bool,
 }
 
 impl Copy for StackEntry<Small> {}

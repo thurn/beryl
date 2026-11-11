@@ -568,11 +568,11 @@ impl<L: Layout> Expert<'_, L> {
         };
         let mana = self.mana(self.opp());
         // Our Elite Spellbinder's exile shows the card too, castable for {2} more.
-        let exiled = self.obs().permissions().iter().any(|p| {
-            p.player == self.opp()
-                && self.obs().object(p.object.slot).zone() == Zone::Exile
-                && counter(p.object.slot)
-                && mana >= 2 + i32::from(p.extra)
+        let exiled = self.obs().cast_permissions().any(|p| {
+            p.terms.player == self.opp()
+                && self.obs().object(p.card.slot).zone() == Zone::Exile
+                && counter(p.card.slot)
+                && mana >= 2 + i32::from(p.terms.increase)
         });
         exiled || (mana >= 2 && self.hand(self.opp()).any(counter))
     }

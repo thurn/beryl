@@ -8,6 +8,7 @@ use ts_rs::TS;
 
 use super::{
     Counter, Mana, Side, StackItem, Step, TargetRef, Why, ZoneName, side, slots, stack_item,
+    stack_item_cast,
 };
 
 /// One thing that happened (architecture §8.1), by public slot and relative to the viewer.
@@ -202,7 +203,6 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
             card,
             face: obs.object(spell.slot).face(),
             costs,
-            flashback,
             ..StackEntry::default()
         },
         None => StackEntry::default(),
@@ -214,7 +214,7 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
         x,
         ..entry
     };
-    stack_item(t, obs, &entry)
+    stack_item_cast(t, obs, &entry, flashback && obs.card(spell.slot).is_some())
 }
 
 /// An [`Event::CountersAdded`] or [`Event::CountersRemoved`] as the viewer is told it.

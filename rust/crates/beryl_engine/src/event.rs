@@ -224,15 +224,29 @@ pub(crate) fn move_batch_to<L: Layout>(
     Ok(())
 }
 
-/// Where an object actually goes after floating replacement effects. The only one the cards
-/// create is "exile it instead" of a graveyard, and no two of them can apply to one event
+/// Whether `object`, about to move to `to`, is exiled instead by a replacement effect on
+/// it: "exile it instead" of a graveyard, or a flashback cost's, which is on the spell
+/// alone and exiles it wherever else it would go
+/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback
+/// cost was paid, exile this card instead of putting it anywhere else any time it would
+/// leave the stack."). With no such effect on any object it is one AND.
+pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: Zone) -> bool {
+    s.move_replacements(object).any(|r| match r {
+        MoveReplacement::ExileInsteadOfGraveyard => to == Zone::Graveyard,
+        MoveReplacement::Flashback => true,
+    })
+}
+
+/// Where an object actually goes after the replacement effects on it
+/// ([`exiled_instead`]). Each sends it to exile, and no two of them can apply to one event
 /// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
 /// never becomes a choice.
 fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
-    let exiled = to == Zone::Graveyard
-        && s.move_replacements(s.object_ref(slot))
-            .any(|r| r == MoveReplacement::ExileInsteadOfGraveyard);
-    if exiled { Zone::Exile } else { to }
+    if exiled_instead(s, s.object_ref(slot), to) {
+        Zone::Exile
+    } else {
+        to
+    }
 }
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.

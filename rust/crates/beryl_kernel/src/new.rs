@@ -125,7 +125,6 @@ impl<L: Layout> State<L> {
             delayed: Default::default(),
             effects: Effects::empty(),
             keyed: Bitboard::EMPTY,
-            permissions: Default::default(),
             entered_x: Default::default(),
             pending: Pending::None,
             knowledge: Table::filled(Bitboard::EMPTY),

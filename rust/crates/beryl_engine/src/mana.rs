@@ -857,16 +857,15 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             }
         }
     }
-    let mine = |p: &&crate::state::CastPermission<L>| p.player == player && s.is_current(p.object);
-    for p in s.permissions().iter().filter(mine) {
+    for p in s.cast_permissions().filter(|p| p.terms.player == player) {
         // Only a card is cast (CR 601.2a).
-        let faces = s.card_def(t, p.object.slot).map_or_default(|def| def.faces);
+        let faces = s.card_def(t, p.card.slot).map_or_default(|def| def.faces);
         for face in faces {
             if castable(face) {
                 let cost = face.cost;
                 ahead.add(
                     ManaCost {
-                        generic: cost.generic.saturating_add(p.extra),
+                        generic: cost.generic.saturating_add(p.terms.increase),
                         ..cost
                     },
                     None,

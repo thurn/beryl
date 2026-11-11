@@ -22,6 +22,7 @@ mod face_down;
 mod interpret;
 mod layers;
 mod mana;
+mod permission;
 mod reference;
 mod resolve;
 mod rule_change;
@@ -72,6 +73,7 @@ pub use invariants::{At, Violation};
 pub use layout::{Large, Layout, Small};
 pub use mana::mana_contribution;
 pub use observation::Observation;
+pub use permission::flashback_paid;
 pub use profile::{
     Breakpoint, Limits, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers,
     next_step_stop, next_stop,

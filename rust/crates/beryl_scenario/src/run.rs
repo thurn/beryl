@@ -362,10 +362,9 @@ impl Runner {
         };
         let flashback = self
             .s
-            .permissions()
-            .iter()
-            .filter(|p| p.flashback && self.s.is_current(p.object))
-            .map(|p| self.name(p.object.slot))
+            .cast_permissions()
+            .filter(|p| p.terms.is_flashback())
+            .map(|p| self.name(p.card.slot))
             .collect();
         let face_down = self
             .s

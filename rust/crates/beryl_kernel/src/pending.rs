@@ -52,8 +52,6 @@ pub struct Casting {
     pub graveyard_from: u8,
     /// Targets still to choose for it, or what another step still has to pay.
     pub left: u8,
-    /// Generic mana a permission adds to the cost.
-    pub extra: u8,
     /// Cast without paying its mana cost
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
     pub free: bool,

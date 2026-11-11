@@ -6,7 +6,6 @@ use beryl_card::CounterKind;
 
 use crate::event::Event;
 use crate::fixed::Full;
-use crate::floating::CastPermission;
 use crate::ids::SlotId;
 use crate::layout::{Layout, Queue};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
@@ -17,7 +16,6 @@ use crate::state::State;
 ///
 /// | Behind the accessor | Written by | Replaced by |
 /// | --- | --- | --- |
-/// | the `permissions` queue, with [`CastPermission`]'s `extra`, `exile` and `flashback` | [`Legacy::add_permission`], [`Legacy::end_permissions_of_turn`] | permission, cost-change and replacement payloads in the Effects store |
 /// | `entered_x` | [`Legacy::remember_x`] | a memo of the permanent in the Memos store |
 /// | the [`ObjectFlags::LEGACY`] flags: `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH`, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | memos of the object in the Memos store |
 /// | [`Counters`]' long-tail kind (`other_kind`, `other`) | [`Legacy::add_counters`], [`Legacy::remove_counters`], [`Legacy::set_counters`] | counter kinds generated from a list, each with its own count |
@@ -81,24 +79,6 @@ impl<L: Layout> Legacy<'_, L> {
     pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
         debug_assert!(Counters::is_long_tail(kind));
         *self.0.object_mut(slot).counters.get_mut(kind) = n;
-    }
-
-    /// Lets a player cast a card from a zone it could not otherwise be cast from, or on
-    /// other terms than its own.
-    #[inline]
-    pub fn add_permission(&mut self, permission: CastPermission<L>) -> Result<(), Full> {
-        self.0.permissions.push(permission)
-    }
-
-    /// Ends the permissions that last this turn, and those whose card has left its zone
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
-    #[inline]
-    pub fn end_permissions_of_turn(&mut self) {
-        let s = &mut *self.0;
-        let objects = &s.objects;
-        s.permissions.retain(|p| {
-            !p.this_turn && objects[p.object.slot.index()].incarnation == p.object.incarnation
-        });
     }
 
     /// Remembers the nonzero X the spell that became the permanent `object` was cast with

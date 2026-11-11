@@ -420,8 +420,8 @@ pub(super) fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
 /// The costs the spell `e` was cast with: a flashback cost, which is an alternative cost
 /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)), or else the options of
 /// its face that were paid.
-fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>) -> Vec<PaidCost> {
-    if e.flashback {
+fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> Vec<PaidCost> {
+    if flashback {
         return vec![PaidCost::Flashback];
     }
     e.costs
@@ -436,10 +436,26 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>) -> Vec<PaidCost> {
         .collect()
 }
 
+/// A spell or ability on the stack as the viewer of `obs` sees it. Whether a flashback
+/// cost was paid for a spell is the game's to say while the spell is on the stack.
 pub(super) fn stack_item<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     e: &StackEntry<L>,
+) -> StackItem {
+    let flashback = e
+        .spell()
+        .is_some_and(|spell| beryl_engine::flashback_paid(obs.shown(), spell));
+    stack_item_cast(t, obs, e, flashback)
+}
+
+/// [`stack_item`] for a spell known to have been cast for a flashback cost or not, as its
+/// cast said.
+pub(super) fn stack_item_cast<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    e: &StackEntry<L>,
+    flashback: bool,
 ) -> StackItem {
     let targets = e
         .targets
@@ -458,7 +474,7 @@ pub(super) fn stack_item<L: Layout>(
             slot: source.expect("a spell's card"),
             targets,
             x: e.x,
-            paid: paid_costs(t, e),
+            paid: paid_costs(t, e, flashback),
         },
         Some(ability) => {
             let face = t.def(e.card).face(e.face);
