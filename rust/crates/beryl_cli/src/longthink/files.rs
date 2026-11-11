@@ -314,6 +314,9 @@ mod tests {
         keep_lines(&dir.join("missing"), 0).unwrap();
     }
 
+    /// Retries for a forked child that has not yet exec'd to let go of the lock's file.
+    const RELEASE_RETRIES: usize = 1_000_000;
+
     /// A second lock names the first holder; the holder's notes read back while it holds
     /// the lock, and nothing once it lets go.
     #[test]
@@ -327,7 +330,15 @@ mod tests {
         assert!(e.ends_with(&format!("process {pid}")), "{e}");
         assert_eq!(holder(&dir).unwrap(), Some(format!("{pid}\na note\n")));
         drop(held);
-        assert_eq!(holder(&dir).unwrap(), None);
+        // A flock belongs to the open file description, not the Lock: a subprocess another
+        // test in this binary is forking holds a copy until it execs (std marks the fd
+        // CLOEXEC, which closes it at exec, not at fork), and under load that window is long.
+        // So wait for it by a count of retries, not by the clock.
+        let released = (0..RELEASE_RETRIES).any(|_| {
+            std::thread::yield_now();
+            holder(&dir).unwrap().is_none()
+        });
+        assert!(released, "the lock outlived its holder");
         lock(&dir).unwrap();
     }
 
