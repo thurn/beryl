@@ -12,6 +12,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -61,7 +62,7 @@ pub static CARD: CardDef = CardDef {
 /// A spell returned to its owner's hand leaves the stack without resolving; a permanent
 /// leaves the battlefield.
 fn bounce<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(0) {
+    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
         ctx.return_to_hand(target);
     }
     Ok(())

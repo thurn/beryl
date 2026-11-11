@@ -161,6 +161,11 @@
 //! sorts next, or it does to each member something no event shows. A walk whose order an
 //! event, a queue or a zone would show takes a rules order instead.
 //!
+//! A stack entry's targets are named the same way: a [`state::TargetPlace`] is a target's
+//! place in the entry's list, a [`state::TargetPlaces`] is a set of them with `insert`,
+//! `contains` and `is_empty`, and [`state::placed`] gives the targets with their places in
+//! the order they were chosen (CR 601.2c).
+//!
 //! ## Queries
 //!
 //! Other crates read derived answers, not fields ([`query`]). A slot's definition index and

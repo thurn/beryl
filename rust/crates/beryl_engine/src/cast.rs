@@ -448,7 +448,7 @@ pub(crate) fn still_legal<L: Layout>(
     ability: &Ability,
     target: Target<L>,
 ) -> bool {
-    let spec = &ability.targets[target.spec.index()];
+    let spec = &ability.targets[target.spec().index()];
     let you = entry.controller;
     let Some(r) = target.as_object() else {
         return target
@@ -1484,7 +1484,7 @@ fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Target
     let itself = entry.spell().map(|r| r.slot);
     match candidates(s, t, spec, c.player, itself, entry.x, source_of(&entry)) {
         TargetSet::Objects(mut b) => {
-            for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
+            for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
                 if let Some(r) = target.as_object() {
                     b.remove(r.slot);
                 }
@@ -1492,7 +1492,7 @@ fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Target
             TargetSet::Objects(b)
         }
         TargetSet::Players(mut p) => {
-            for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
+            for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
                 if let Some(player) = target.as_player() {
                     p &= !(1 << player.get());
                 }

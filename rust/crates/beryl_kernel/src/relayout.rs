@@ -93,8 +93,8 @@ impl<L: Layout> Relayout for Target<L> {
 
     fn relayout<M: Layout>(&self) -> Target<M> {
         match (self.as_object(), self.as_player()) {
-            (Some(r), _) => Target::object(self.spec, r.relayout()),
-            (None, Some(p)) => Target::player(self.spec, p),
+            (Some(r), _) => Target::object(self.spec(), r.relayout()),
+            (None, Some(p)) => Target::player(self.spec(), p),
             (None, None) => Target::default(),
         }
     }

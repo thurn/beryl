@@ -18,7 +18,8 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::state::{
-    self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, Zone, ZoneKey,
+    self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, TargetPlaces, Zone,
+    ZoneKey, placed,
 };
 use crate::zone::Place;
 
@@ -38,7 +39,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// settled as its resolution began, once for the whole effect
     /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or
     /// ability specifies targets, it checks whether the targets are still legal."
-    pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>, legal: u8) -> Self {
+    pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>, legal: TargetPlaces) -> Self {
         let entry = &ctx.entry;
         let subject = PendingTrigger {
             source: entry.object,
@@ -254,17 +255,16 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// the instructions after (CR 608.2h): "the effect uses the object's last known
     /// information."
     fn remember(&mut self, leaving: Bitboard<L::Slot>) {
-        for i in 0..self.ctx.entry.targets.len() {
-            let target = self.ctx.entry.targets.as_slice()[i];
+        for (place, target) in placed(self.ctx.entry.targets.as_slice()) {
             let Some(object) = target.as_object() else {
                 continue;
             };
-            if self.registers.legal & (1 << i) != 0
+            if self.registers.legal.contains(place)
                 && self.ctx.state.is_current(object)
                 && leaving.contains(object.slot)
             {
-                self.registers.known[i] = self.scene().known(object.slot);
-                self.registers.noted |= 1 << i;
+                self.registers.known[place.index()] = self.scene().known(object.slot);
+                self.registers.noted.insert(place);
             }
         }
     }

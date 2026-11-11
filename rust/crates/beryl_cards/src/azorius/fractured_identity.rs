@@ -7,7 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
 use beryl_engine::filter::Filter;
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, TargetPlace};
 use beryl_engine::{Layout, bodies};
 use beryl_engine::{Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
@@ -47,7 +47,7 @@ pub static CARD: CardDef = CardDef {
 /// has the permanent's copiable values ([`beryl_engine::State::copiable`], CR 707.2): not its
 /// counters, so a planeswalker's copy enters with its printed loyalty (CR 306.5b).
 fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(permanent) = ctx.target_object(0) else {
+    let Some(permanent) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let controller = ctx.state().controller(permanent.slot);

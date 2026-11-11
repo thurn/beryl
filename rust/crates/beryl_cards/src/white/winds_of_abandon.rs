@@ -12,6 +12,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -63,7 +64,7 @@ fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard<L:
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
 /// move it to the exile zone from wherever it is."
 fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(0) else {
+    let Some(creature) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     exile_and_fetch(ctx, Bitboard::single(creature.slot))

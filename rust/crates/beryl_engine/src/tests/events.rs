@@ -18,8 +18,8 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::query::Copiable;
 use crate::state::{
-    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
-    ZoneKey,
+    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TargetPlace,
+    TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::{
@@ -1580,7 +1580,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
 }
 
 fn steal_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    if let Some(artifact) = ctx.target_object(0) {
+    if let Some(artifact) = ctx.target_object(TargetPlace::FIRST) {
         ctx.gain_control(artifact, Duration::Indefinite);
     }
     Ok(())

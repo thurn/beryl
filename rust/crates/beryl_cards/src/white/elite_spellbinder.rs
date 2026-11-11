@@ -10,6 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -23,7 +24,7 @@ use crate::names;
 /// is the mana cost "plus all additional costs and cost increases". The card is nonland, so
 /// playing it is casting it.
 fn spellbind<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(them) = ctx.target_player(0) else {
+    let Some(them) = ctx.target_player(TargetPlace::FIRST) else {
         return Ok(());
     };
     let you = ctx.controller();

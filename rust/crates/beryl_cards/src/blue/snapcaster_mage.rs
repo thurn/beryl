@@ -8,6 +8,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
@@ -22,7 +23,7 @@ use crate::names;
 /// the stack.'" The card is in its owner's graveyard, and its owner is the trigger's
 /// controller.
 fn grant<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(0) {
+    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
         ctx.grant_flashback(card, ctx.controller());
     }
     Ok(())

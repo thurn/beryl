@@ -14,7 +14,7 @@ use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{Seat, Slot};
-use crate::state::{CounterKind, Pending, TurnStep, Zone, ZoneKey};
+use crate::state::{CounterKind, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
@@ -32,14 +32,14 @@ const CREATURE: Filter = Filter::Types(Types::CREATURE);
 const LANDS: Filter = Filter::Types(Types::LAND);
 
 fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(0) {
+    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
         ctx.destroy(target);
     }
     Ok(())
 }
 
 fn bounce_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(0) {
+    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
         ctx.move_to(target, Zone::Hand, Reason::Effect);
     }
     Ok(())
@@ -47,7 +47,7 @@ fn bounce_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// "Counter target spell unless its controller pays {1}."
 fn tithe<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let controller = ctx.spell_controller(spell).expect("a spell on the stack");
@@ -59,7 +59,7 @@ fn tithe<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// "Counter target spell. Exile it instead of putting it into its owner's graveyard."
 fn counter_exile<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(0) {
+    if let Some(spell) = ctx.target_object(TargetPlace::FIRST) {
         ctx.counter(spell, true);
     }
     Ok(())
@@ -84,7 +84,7 @@ fn ponder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "You may cast target instant or sorcery card from your graveyard this turn. If that spell
 /// would be put into your graveyard, exile it instead."
 fn flashback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(0) {
+    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
         let you = ctx.controller();
         ctx.allow_cast(card, you, 0, true, true);
     }
@@ -94,7 +94,7 @@ fn flashback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "Target instant or sorcery card in your graveyard gains flashback until end of turn. The
 /// flashback cost is equal to its mana cost."
 fn snapback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(0) {
+    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
         let you = ctx.controller();
         ctx.grant_flashback(card, you);
     }
@@ -103,7 +103,7 @@ fn snapback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// "Return target spell to its owner's hand."
 fn bounce_spell<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(0) {
+    if let Some(spell) = ctx.target_object(TargetPlace::FIRST) {
         ctx.return_to_hand(spell);
     }
     Ok(())
@@ -112,7 +112,7 @@ fn bounce_spell<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "Look at target opponent's hand. You may exile a nonland card from it. For as long as that
 /// card remains exiled, its owner may cast it. A spell cast this way costs {2} more to cast."
 fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(opponent) = ctx.target_player(0) else {
+    let Some(opponent) = ctx.target_player(TargetPlace::FIRST) else {
         return Ok(());
     };
     let s = ctx.state();

@@ -12,7 +12,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::Zone;
+use beryl_engine::state::{TargetPlace, Zone};
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -59,7 +59,7 @@ pub static CARD: CardDef = CardDef {
 /// Iceberg has already left by the time this resolves, the permanent isn't exiled
 /// ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
 fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
+    if let Some(permanent) = ctx.target_object(TargetPlace::FIRST) {
         ctx.exile_until_source_leaves(permanent);
     }
     Ok(())

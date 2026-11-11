@@ -9,6 +9,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{Bitboard, DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -22,7 +23,7 @@ use crate::names;
 /// evoke's sacrifice ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)): "Once
 /// activated or triggered, an ability exists on the stack independently of its source."
 fn tuck<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let owner = ctx.state().object(spell.slot).owner;

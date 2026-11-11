@@ -7,7 +7,10 @@ pub use crate::floating::{CastPermission, Continuous, Duration, FloatingEffect};
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
-pub use crate::stack::{Lki, PendingTrigger, StackEntry, TARGETS, Target, TriggerInfo};
+pub use crate::stack::{
+    Lki, PendingTrigger, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces, TriggerInfo,
+    placed,
+};
 pub use crate::turn::Turn;
 
 use beryl_card::FaceIx;

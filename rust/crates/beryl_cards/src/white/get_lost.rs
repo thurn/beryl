@@ -11,7 +11,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, TargetPlace};
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -86,7 +86,7 @@ pub static MAP: CardDef = CardDef {
 /// expected to be in; if it's no longer in that zone, ... the effect uses the object's last
 /// known information."
 fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(permanent) = ctx.target_object(0) else {
+    let Some(permanent) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let controller = ctx.state().controller(permanent.slot);
@@ -97,7 +97,7 @@ fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)).
 fn explore<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(0) else {
+    let Some(creature) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     ctx.explore(creature)

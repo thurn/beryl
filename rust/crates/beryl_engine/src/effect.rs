@@ -22,7 +22,7 @@ use crate::profile::Payment;
 use crate::query::Copiable;
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, ObjectFlags, ObjectRef, PendingTrigger,
-    StackEntry, State, Target, TriggerInfo, Zone, ZoneKey,
+    StackEntry, State, Target, TargetPlace, TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
@@ -157,24 +157,24 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.entry.costs.contains(option)
     }
 
-    /// The `i`th chosen target if it is still legal, `None` if it was not chosen or is
+    /// The target chosen at `place` if it is still legal, `None` if it was not chosen or is
     /// illegal now ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "Illegal
     /// targets, if any, won't be affected by parts of a resolving spell's effect for which
     /// they're illegal."
-    pub fn target(&self, i: usize) -> Option<Target<L>> {
-        let target = *self.entry.targets.as_slice().get(i)?;
+    pub fn target(&self, place: TargetPlace) -> Option<Target<L>> {
+        let target = *self.entry.targets.as_slice().get(place.index())?;
         cast::still_legal(self.state, self.table, &self.entry, self.ability, target)
             .then_some(target)
     }
 
-    /// The `i`th target as an object, if it is one and still legal.
-    pub fn target_object(&self, i: usize) -> Option<ObjectRef<L>> {
-        self.target(i).and_then(Target::as_object)
+    /// The target at `place` as an object, if it is one and still legal.
+    pub fn target_object(&self, place: TargetPlace) -> Option<ObjectRef<L>> {
+        self.target(place).and_then(Target::as_object)
     }
 
-    /// The `i`th target as a player, if it is one and still legal.
-    pub fn target_player(&self, i: usize) -> Option<Seat> {
-        self.target(i).and_then(Target::as_player)
+    /// The target at `place` as a player, if it is one and still legal.
+    pub fn target_player(&self, place: TargetPlace) -> Option<Seat> {
+        self.target(place).and_then(Target::as_player)
     }
 
     /// The game index of a card or token the game's table holds.

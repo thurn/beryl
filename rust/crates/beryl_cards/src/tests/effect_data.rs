@@ -14,6 +14,7 @@ use beryl_card::{Effect, LibraryPosition, SpecIx};
 use beryl_engine::card::{Ability, Behavior, CardDef, Face, Flow, ManaCost, TargetSpec, mana};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Event, TokenEntry};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{CardTable, Layout, State, bodies, coverage};
 
 use crate::white::{get_lost, mana_tithe, oust, portable_hole, reprieve};
@@ -51,7 +52,7 @@ const REMOVAL: Declares = Declares {
 };
 
 fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let Some(controller) = ctx.spell_controller(spell) else {
@@ -65,7 +66,7 @@ fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 /// Reads the controller before the move: in a library the creature has none.
 fn second_from_the_top<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(0) else {
+    let Some(creature) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let controller = ctx.state().controller(creature.slot);
@@ -75,7 +76,7 @@ fn second_from_the_top<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 }
 
 fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(permanent) = ctx.target_object(0) else {
+    let Some(permanent) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let controller = ctx.state().controller(permanent.slot);
@@ -85,14 +86,14 @@ fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 }
 
 fn exile_until_it_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(0) {
+    if let Some(permanent) = ctx.target_object(TargetPlace::FIRST) {
         ctx.exile_until_source_leaves(permanent);
     }
     Ok(())
 }
 
 fn return_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(0) {
+    if let Some(spell) = ctx.target_object(TargetPlace::FIRST) {
         ctx.return_to_hand(spell);
     }
     ctx.draw(ctx.controller(), 1);

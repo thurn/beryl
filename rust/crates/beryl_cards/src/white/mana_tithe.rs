@@ -6,6 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -34,7 +35,7 @@ pub static CARD: CardDef = CardDef {
 /// [a player does something else]" means "[A player may do something else]. If [that player
 /// doesn't], [do something]." A controller who can't pay is never asked.
 fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let Some(controller) = ctx.spell_controller(spell) else {

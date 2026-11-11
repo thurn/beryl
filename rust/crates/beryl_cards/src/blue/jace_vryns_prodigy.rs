@@ -18,7 +18,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, TargetPlace};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -145,7 +145,7 @@ static WEAKEN: Effect = modify(
 /// follows wherever it would go to the graveyard: resolving, countered or fizzling
 /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)).
 fn recast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(0) {
+    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
         ctx.allow_cast(card, ctx.controller(), 0, true, true);
     }
     Ok(())

@@ -17,7 +17,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, TargetPlace};
 use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -80,7 +80,7 @@ pub static CARD: CardDef = CardDef {
 /// look at or change the order of cards in a library." Moving it within the library is no
 /// zone change, so it stays the same object.
 fn fateseal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(player) = ctx.target_player(0) else {
+    let Some(player) = ctx.target_player(TargetPlace::FIRST) else {
         return Ok(());
     };
     let Some(top) = ctx.top_of_library(player, 1).sole() else {
@@ -134,7 +134,7 @@ static BOUNCE: Effect = return_to_hand(TARGET);
 /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library
 /// ... randomize the cards within it so that no player knows their order."
 fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(player) = ctx.target_player(0) else {
+    let Some(player) = ctx.target_player(TargetPlace::FIRST) else {
         return Ok(());
     };
     let library = ctx.state().zone(ZoneKey::Of(player, Zone::Library));

@@ -8,6 +8,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -43,7 +44,7 @@ pub static CARD: CardDef = CardDef {
 /// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
 /// "Delayed triggered abilities are created during the resolution of spells or abilities".
 fn counter_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let value = ctx.spell_mana_value(spell).unwrap_or(0);

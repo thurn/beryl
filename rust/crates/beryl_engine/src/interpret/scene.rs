@@ -16,7 +16,10 @@ use crate::effect::entered_with;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
-use crate::state::{Counters, ObjectFlags, PendingTrigger, State, TARGETS, Target, Zone};
+use crate::state::{
+    Counters, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone,
+    placed,
+};
 use crate::table::GameTable;
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
@@ -78,17 +81,17 @@ pub(super) struct Known {
 /// What a resolution keeps between its instructions.
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Registers<L: Layout> {
-    /// The targets that were legal as the resolution began, a bit for each by its place in
-    /// the entry's list
+    /// The targets that were legal as the resolution began, by their places in the entry's
+    /// list
     /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or
     /// ability specifies targets, it checks whether the targets are still legal" as it
     /// begins to resolve, and "Illegal targets, if any, won't be affected by parts of a
     /// resolving spell's effect for which they're illegal."
-    pub(super) legal: u8,
-    /// The targets an instruction set out to move, a bit for each, and what was known of
-    /// each as it did. One that is no longer where it was has moved; one the instruction
+    pub(super) legal: TargetPlaces,
+    /// The targets an instruction set out to move, and what was known of each, by its
+    /// place, as it did. One that is no longer where it was has moved; one the instruction
     /// could not move is read where it is.
-    pub(super) noted: u8,
+    pub(super) noted: TargetPlaces,
     pub(super) known: [Known; TARGETS],
     pub(super) outcome: Outcome<L>,
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
@@ -117,12 +120,10 @@ impl<L: Layout> Scene<'_, L> {
 
     /// The targets chosen for the `spec`th instance of the word "target" that were legal as
     /// the resolution began, with their places in the entry's list.
-    fn targets(&self, spec: SpecIx) -> impl Iterator<Item = (usize, Target<L>)> + '_ {
-        self.targets
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(move |&(i, target)| target.spec == spec && self.registers.legal & (1 << i) != 0)
+    fn targets(&self, spec: SpecIx) -> impl Iterator<Item = (TargetPlace, Target<L>)> + '_ {
+        placed(self.targets).filter(move |&(place, target)| {
+            target.spec() == spec && self.registers.legal.contains(place)
+        })
     }
 
     /// The targets among [`Scene::targets`] the effect has moved, as they were last known.
@@ -135,13 +136,13 @@ impl<L: Layout> Scene<'_, L> {
         };
         spec.into_iter()
             .flat_map(|spec| self.targets(spec))
-            .filter(|&(i, target)| {
-                self.registers.noted & (1 << i) != 0
+            .filter(|&(place, target)| {
+                self.registers.noted.contains(place)
                     && target
                         .as_object()
                         .is_some_and(|object| !self.s.is_current(object))
             })
-            .map(|(i, _)| &self.registers.known[i])
+            .map(|(place, _)| &self.registers.known[place.index()])
     }
 
     /// The objects `objects` names that are where they were: one that has changed zones is

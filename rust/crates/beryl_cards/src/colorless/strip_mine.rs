@@ -6,6 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, Seat, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -42,7 +43,7 @@ pub static CARD: CardDef = CardDef {
 /// [CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a): "To destroy a permanent,
 /// move it from the battlefield to its owner's graveyard."
 fn destroy_land<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(land) = ctx.target_object(0) {
+    if let Some(land) = ctx.target_object(TargetPlace::FIRST) {
         ctx.destroy(land);
     }
     Ok(())

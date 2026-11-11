@@ -22,7 +22,10 @@ use crate::fixed::Full;
 use crate::interpret;
 use crate::layout::{Layout, Queue};
 use crate::scratch::Scratch;
-use crate::state::{CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, Zone};
+use crate::state::{
+    CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone,
+    placed,
+};
 use crate::table::GameTable;
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
@@ -156,8 +159,8 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     Ok(spare)
 }
 
-/// The targets of `entry` that are still legal as it begins to resolve, a bit for each by its
-/// place in the entry's list
+/// The targets of `entry` that are still legal as it begins to resolve, by their places in
+/// the entry's list
 /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or ability
 /// specifies targets, it checks whether the targets are still legal." Found once: whether it
 /// resolves at all and what effect data may act on both read this.
@@ -166,12 +169,11 @@ pub(crate) fn legal_targets<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
     ability: &Ability,
-) -> u8 {
-    const _: () = assert!(crate::state::TARGETS <= 8, "a bit for each target");
-    let mut legal = 0;
-    for (i, &target) in entry.targets.iter().enumerate() {
+) -> TargetPlaces {
+    let mut legal = TargetPlaces::NONE;
+    for (place, target) in placed(entry.targets.as_slice()) {
         if cast::still_legal(s, t, entry, ability, target) {
-            legal |= 1 << i;
+            legal.insert(place);
         }
     }
     legal
@@ -223,8 +225,10 @@ fn run<L: Layout>(
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
     // targeted (CR 115.6) and resolves.
-    let legal = ability.map_or(0, |ability| legal_targets(s, t, entry, ability));
-    if ability.is_some() && !entry.targets.is_empty() && legal == 0 {
+    let legal = ability.map_or(TargetPlaces::NONE, |ability| {
+        legal_targets(s, t, entry, ability)
+    });
+    if ability.is_some() && !entry.targets.is_empty() && legal.is_empty() {
         if entry.is_spell() {
             cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }

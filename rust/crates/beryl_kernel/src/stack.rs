@@ -19,49 +19,140 @@ use crate::state::State;
 pub const TARGETS: usize = 8;
 
 /// One chosen target: an object or a player, and the instance of the word "target" it was
-/// chosen for (an index into the ability's target specs). Four bytes, as an [`ObjectRef`]
-/// with its padding used, where an enum of the two would take eight: a player has no slot
-/// and the player in place of the incarnation.
+/// chosen for (an index into the ability's target specs).
+///
+/// Four bytes, where an enum of an [`ObjectRef`] and a [`Seat`] beside the spec would take
+/// six: `slot` says which of the two it is, and `rest` is what else names that one. No field
+/// is public, so [`Target::object`] and [`Target::player`] are the only way in and
+/// [`Target::as_object`] and [`Target::as_player`] the only way out, and `rest` is never read
+/// as the wrong one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Target<L: Layout = Small> {
-    pub spec: SpecIx,
+    spec: SpecIx,
+    /// The targeted object's slot; none for a player.
     slot: Option<L::Slot>,
-    incarnation: u16,
+    /// The targeted object's incarnation, or the targeted player's seat.
+    rest: u16,
 }
 
 const _: () = assert!(size_of::<Target<Small>>() == 4);
 
 impl<L: Layout> Target<L> {
+    #[inline]
     pub fn object(spec: SpecIx, object: ObjectRef<L>) -> Target<L> {
         Target {
             spec,
             slot: Some(object.slot),
-            incarnation: object.incarnation,
+            rest: object.incarnation,
         }
     }
 
+    #[inline]
     pub fn player(spec: SpecIx, player: Seat) -> Target<L> {
         Target {
             spec,
             slot: None,
-            incarnation: u16::from(player.get()),
+            rest: u16::from(player.get()),
         }
     }
 
+    /// The instance of the word "target" it was chosen for.
+    #[inline]
+    pub fn spec(self) -> SpecIx {
+        self.spec
+    }
+
     /// The targeted object, if it is one.
+    #[inline]
     pub fn as_object(self) -> Option<ObjectRef<L>> {
         self.slot.map(|slot| ObjectRef {
             slot,
-            incarnation: self.incarnation,
+            incarnation: self.rest,
         })
     }
 
     /// The targeted player, if it is one.
+    #[inline]
     pub fn as_player(self) -> Option<Seat> {
         match self.slot {
-            None => Seat::try_new(self.incarnation as u8),
+            None => Seat::try_new(self.rest as u8),
             Some(_) => None,
         }
+    }
+}
+
+/// The place of a chosen target in a stack entry's list of them
+/// ([`StackEntry::targets`]), counting from 0 in the order they were chosen
+/// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player announces
+/// their choice of an appropriate object or player for each target the spell requires."
+///
+/// It is not the target's [`SpecIx`]: one instance of the word "target" may choose several
+/// targets or none, so the two count differently, and neither is passed for the other.
+///
+/// ```compile_fail
+/// use beryl_card::SpecIx;
+/// use beryl_kernel::state::{ObjectRef, Target, TargetPlace};
+///
+/// // The first place is not the first instance of the word "target".
+/// let target: Target = Target::object(TargetPlace::FIRST, ObjectRef::default());
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TargetPlace(u8);
+
+impl TargetPlace {
+    /// The place of the first target chosen.
+    pub const FIRST: TargetPlace = TargetPlace(0);
+
+    /// The place `place`, counting from 0.
+    #[inline]
+    pub const fn new(place: u8) -> TargetPlace {
+        assert!(
+            (place as usize) < TARGETS,
+            "a stack entry has TARGETS places"
+        );
+        TargetPlace(place)
+    }
+
+    /// The position in the list.
+    #[inline]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Each of `targets`, a stack entry's, with its place, in the order they were chosen
+/// (CR 601.2c).
+#[inline]
+pub fn placed<L: Layout>(
+    targets: &[Target<L>],
+) -> impl Iterator<Item = (TargetPlace, Target<L>)> + '_ {
+    debug_assert!(targets.len() <= TARGETS);
+    (targets.iter().enumerate()).map(|(i, &target)| (TargetPlace(i as u8), target))
+}
+
+/// A set of the places of one stack entry's targets: a byte, a bit for each place. It has no
+/// order of its own; [`placed`] gives the targets in the order they were chosen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TargetPlaces(u8);
+
+const _: () = assert!(TARGETS <= 8, "a bit for each place");
+
+impl TargetPlaces {
+    pub const NONE: TargetPlaces = TargetPlaces(0);
+
+    #[inline]
+    pub fn insert(&mut self, place: TargetPlace) {
+        self.0 |= 1 << place.0;
+    }
+
+    #[inline]
+    pub fn contains(self, place: TargetPlace) -> bool {
+        self.0 & (1 << place.0) != 0
+    }
+
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
     }
 }
 
@@ -263,5 +354,46 @@ impl<L: Layout> State<L> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A target comes out as what it went in as, and never as the other.
+    #[test]
+    fn a_target_is_an_object_or_a_player() {
+        let spec = SpecIx::new(1);
+        let object = ObjectRef {
+            slot: crate::ids::Slot::new(1),
+            incarnation: 1,
+        };
+        let chosen: Target = Target::object(spec, object);
+        assert_eq!((chosen.spec(), chosen.as_object()), (spec, Some(object)));
+        assert_eq!(chosen.as_player(), None);
+        let chosen: Target = Target::player(spec, Seat::P1);
+        assert_eq!((chosen.spec(), chosen.as_player()), (spec, Some(Seat::P1)));
+        assert_eq!(chosen.as_object(), None);
+    }
+
+    /// Targets are placed in the order they were chosen, and a set of places holds what was
+    /// put in it.
+    #[test]
+    fn places_count_the_targets_in_the_order_chosen() {
+        let targets: [Target; 3] = [
+            Target::player(SpecIx::new(0), Seat::P0),
+            Target::player(SpecIx::new(0), Seat::P1),
+            Target::player(SpecIx::new(1), Seat::P0),
+        ];
+        let places: Vec<TargetPlace> = placed(&targets).map(|(place, _)| place).collect();
+        assert_eq!(
+            places,
+            [TargetPlace::FIRST, TargetPlace::new(1), TargetPlace::new(2)]
+        );
+        let mut set = TargetPlaces::NONE;
+        assert!(set.is_empty() && size_of::<TargetPlaces>() == 1);
+        set.insert(places[2]);
+        assert!(set.contains(places[2]) && !set.contains(places[0]) && !set.is_empty());
     }
 }

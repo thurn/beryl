@@ -7,6 +7,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -38,7 +39,7 @@ pub static CARD: CardDef = CardDef {
 /// spell is countered this way, put it on top of its owner's library instead of into its
 /// owner's graveyard.')", so the countered spell goes straight to exile.
 fn counter_unless_pays_three<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(0) else {
+    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
     let Some(controller) = ctx.spell_controller(spell) else {

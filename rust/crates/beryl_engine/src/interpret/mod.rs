@@ -18,7 +18,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Bodies, Layout};
-use crate::state::{ObjectRef, PendingTrigger, State};
+use crate::state::{ObjectRef, PendingTrigger, State, TargetPlaces};
 use crate::table::GameTable;
 
 use run::Run;
@@ -29,7 +29,7 @@ use scene::{Registers, Scene};
 /// spell or ability follows its instructions in the order written." `legal` is its targets
 /// that were legal as its resolution began ([`crate::resolve::legal_targets`]).
 #[inline]
-pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: u8) -> Flow {
+pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: TargetPlaces) -> Flow {
     let ability: &'static Ability = ctx.ability;
     match ability.body {
         Behavior::Custom(custom) => {
@@ -44,7 +44,11 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: u8) -> Flow 
 /// a permanent spell, which has no ability to run, or a mana ability, which
 /// [`mana_ability`] does without coming here.
 #[inline(never)]
-fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect, legal: u8) -> Flow {
+fn data<L: Layout>(
+    ctx: &mut EffectCtx<'_, L>,
+    effect: &'static Effect,
+    legal: TargetPlaces,
+) -> Flow {
     debug_assert!(
         !ctx.ability.may_pause || effect.asks(),
         "an ability declares may_pause, but its effect never asks"
@@ -91,7 +95,7 @@ pub(crate) fn mana_ability<L: Layout>(
     let mut ctx = EffectCtx::new(s, t, sink, &activation(), ability);
     ctx.mana = color;
     // A mana ability never asks a question, and has no targets (CR 605.1a).
-    let _ = resolve(&mut ctx, 0);
+    let _ = resolve(&mut ctx, TargetPlaces::NONE);
     ctx.finish()
 }
 

@@ -9,7 +9,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::{self, EffectCtx};
 use beryl_engine::filter::Filter;
-use beryl_engine::state::Duration;
+use beryl_engine::state::{Duration, TargetPlace};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies, conditions};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -20,7 +20,7 @@ use crate::names;
 /// so indefinitely ([CR 611.2b](https://yawgatog.com/resources/magic-rules/#R6112b)). No
 /// Equipment is among the cards, so attaching never comes up.
 fn steal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(artifact) = ctx.target_object(0) {
+    if let Some(artifact) = ctx.target_object(TargetPlace::FIRST) {
         ctx.gain_control(artifact, Duration::Indefinite);
     }
     Ok(())
