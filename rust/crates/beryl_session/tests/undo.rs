@@ -15,7 +15,9 @@ use beryl_engine::card::Purpose;
 use beryl_engine::{Choice, Decision, Layout, Observation, Seat, State, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision, Budget};
-use beryl_session::protocol::{Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName};
+use beryl_session::protocol::{
+    Candidate, DecisionView, Kind, PassTo, Side, StackItem, Step, ZoneName,
+};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, SessionError, SessionId, StartGame, Status,
@@ -192,7 +194,9 @@ fn play_and_check(seed: u64, decisions: usize, every: usize) -> usize {
 fn check_undo(game: &Game, points: &[Answered], now: &PlayerView, all: bool) -> usize {
     let (mut probe, resumed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
     assert_eq!(without_id(resumed.clone()), without_id(now.clone()));
-    let mut back = now.clone();
+    // The replayed game numbers its decisions itself: it was asked the targets the live
+    // game's session took.
+    let mut back = resumed;
     for (left, point) in points.iter().enumerate().rev() {
         let id = deciding(&back).unwrap().id;
         assert!(probe.open().unwrap().undo(id).is_ok());
@@ -322,15 +326,22 @@ fn passing_on_goes_past_the_stops_in_its_step() {
                 "the log records the pass on"
             );
             passed += 1;
-            // It stops at a later step, or sooner only for a decision other than priority:
-            // never for what the opponent casts meanwhile.
+            // It stops at a later step, or sooner only for a decision other than priority or
+            // for a spell or ability the opponent put on the stack meanwhile.
             if let Some(next) = deciding(&view)
                 && next.kind == Kind::Priority
                 && !next.halt
             {
                 let (turn, step) = at(&view);
+                let theirs = |item: &StackItem| match item {
+                    StackItem::Spell { slot, .. } => (view.objects.iter())
+                        .any(|o| o.slot == *slot && o.controller == Side::Opponent),
+                    StackItem::Ability { controller, .. } => *controller == Side::Opponent,
+                };
+                let opposed =
+                    (view.stack.iter()).any(|item| theirs(item) && !resumed.stack.contains(item));
                 assert!(
-                    (turn, step) != from || matches!(to, PassTo::NextTurn),
+                    (turn, step) != from || matches!(to, PassTo::NextTurn) || opposed,
                     "seed {seed}: stopped again in the step it passed on from"
                 );
             }

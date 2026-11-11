@@ -394,7 +394,7 @@ export function Board({
   );
   const picked =
     picks?.view === view ? picks.picked : new Set(picking?.initial ?? []);
-  // A stack spell may be preselected, but it becomes a target only on confirmation.
+  // A spell picked on the stack becomes a target only on confirmation; none opens picked.
   const stackTargets =
     deciding && decision?.kind === "target"
       ? decision.candidates.flatMap(({ option, ...candidate }, index) => {
@@ -404,19 +404,15 @@ export function Board({
             : [];
         })
       : [];
-  const opposingSpells = stackTargets.filter(
-    ({ object }) => object.controller === "opponent",
-  );
-  const defaultSpell =
-    stackTargets.length > 1 &&
-    stackTargets.length === decision?.candidates.length &&
-    opposingSpells.length === 1
-      ? opposingSpells[0]?.act
-      : undefined;
   const selectedSpell =
     stackTargets.length > 0 && stackPick?.view === view
       ? stackPick.act
-      : defaultSpell;
+      : undefined;
+  // Among two or more spells, a click picks one for the Confirm button, as in Arena's
+  // browser of the stack (UI Conventions, "Targeting a spell").
+  const browsingSpells =
+    stackTargets.length > 1 &&
+    stackTargets.length === decision?.candidates.length;
   const sourceSpell =
     decision?.source == null ? undefined : objects.get(decision.source);
   const counteringSpell =
@@ -1218,7 +1214,7 @@ export function Board({
       const act = acts[0]!;
       if (
         stackTargets.some((target) => target.act.index === act.index) &&
-        (selectedSpell || selfCounter(act))
+        (browsingSpells || selfCounter(act))
       ) {
         setStackPick({ view, act });
       } else {

@@ -8713,8 +8713,9 @@ await check(
     { fixture: "target-own", at: own.length, ready: ".prompt" },
 );
 
-// A target picked on the stack remains tentative until Confirm. The committed link below
-// Counterspell is Mana Tithe's, and both ends touch the exposed name strips.
+// Among two spells on the stack none opens picked, and a target picked remains tentative
+// until Confirm. The committed link below Counterspell is Mana Tithe's, and both ends touch
+// the exposed name strips.
 const counterViews = await load("counterspell-targets");
 const counterTarget = counterViews.at(-1);
 const counterDecision = counterTarget.status.decision;
@@ -8738,9 +8739,15 @@ async function pickStackCard(page, slot) {
 }
 
 await check(
-    "Counterspell previews its opposing target and confirms changes",
+    "Counterspell opens with no spell picked and confirms the one clicked",
     async (page) => {
         const prompt = page.getByRole("dialog");
+        assert.doesNotMatch(await prompt.innerText(), /Mana Tithe|Mana Crypt/);
+        assert.equal(
+            await prompt.getByRole("button", { name: "Confirm" }).count(),
+            0,
+        );
+        await pickStackCard(page, titheSlot);
         assert.match(await prompt.innerText(), /Target Mana Tithe/);
         assert.deepEqual(await chosen(page), []);
         await pickStackCard(page, cryptSlot);
@@ -8951,15 +8958,21 @@ if (wanted(objectColors)) {
     }
 }
 
+// The session takes Reprieve's lone target, the opponent's spell alone on the stack, so the
+// page is never asked for it: the cast and its planned payment are all it sends.
 const reprieveTitle =
-    "Reprieve answers its lone stack target before planned payment";
+    "Reprieve takes its lone stack target before planned payment";
 if (wanted(reprieveTitle)) {
     const recording = await load("reprieve-target");
-    const targetAt = recording.findIndex(
-        (v) => v.status.decision?.kind === "target",
+    assert.ok(
+        recording.every((v) => v.status.decision?.kind !== "target"),
+        "the session asks for no target",
+    );
+    const paymentAt = recording.findIndex(
+        (v) => v.status.decision?.kind === "paymentPlan",
     );
     const start = recording.findLastIndex(
-        (v, i) => i < targetAt && v.status.decision?.kind === "priority",
+        (v, i) => i < paymentAt && v.status.decision?.kind === "priority",
     );
     const castAt = recording[start].status.decision.candidates.findIndex(
         (c) => c.label === "Cast Reprieve",
@@ -8969,17 +8982,14 @@ if (wanted(reprieveTitle)) {
         cast.payments.length > 1,
         "the cast has an explicit payment plan",
     );
-    const payment = recording.find(
-        (v, i) => i > targetAt && v.status.decision?.kind === "paymentPlan",
-    );
-    const planAt = payment.status.decision.candidates.findIndex(
+    const planAt = recording[paymentAt].status.decision.candidates.findIndex(
         (c) => c.option.index === cast.payments[0].plan,
     );
     await check(
         reprieveTitle,
         async (page) => {
             await page.click(slotOf(cast.option.slot));
-            assert.deepEqual(await settled(page, 3), [castAt, 0, planAt]);
+            assert.deepEqual(await settled(page, 2), [castAt, planAt]);
         },
         {
             fixture: "reprieve-target",

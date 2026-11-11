@@ -10,9 +10,10 @@
 #![allow(dead_code)]
 
 use beryl_cards::CARDS;
-use beryl_engine::Seat;
+use beryl_engine::layout::Queue as _;
+use beryl_engine::{Candidates, Choice, Decision, Layout, Observation, Opt, Seat};
 use beryl_scenario::Scenario;
-use beryl_search::{Budget, GameAgent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
 use beryl_session::protocol::{Candidate, DecisionView, ObjectView, Side, ZoneName};
 use beryl_session::script::Subject;
@@ -159,6 +160,31 @@ impl Play {
         (self.view.objects.iter())
             .find(|o| o.slot == slot)
             .expect("an object of the view")
+    }
+}
+
+/// An opponent that casts whatever it can, and otherwise takes each decision's first
+/// candidate.
+pub struct Casts(pub u32);
+
+impl<L: Layout> Agent<L> for Casts {
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
+        self.0 += 1;
+        let cast = match &d.candidates {
+            Candidates::Options(options) => {
+                (options.iter()).position(|o| matches!(o, Opt::Cast { .. }))
+            }
+            Candidates::Objects(_) => None,
+        };
+        Choice(cast.unwrap_or(0) as u16)
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(AgentDecision(self.0))
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.0 = to.0;
     }
 }
 

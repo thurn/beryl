@@ -92,14 +92,15 @@ impl Game {
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
     /// orders their simultaneous triggers ([`crate::prompt::trigger_to_stack`]), searches
-    /// their library whenever they may ([`Game::searches_unasked`]), and takes unambiguous
-    /// lethal combat assignments ([`beryl_engine::preferred_damage`]). Waterbend remains a
-    /// human payment choice even when mana alone could pay it.
+    /// their library whenever they may ([`Game::searches_unasked`]), takes unambiguous
+    /// lethal combat assignments ([`beryl_engine::preferred_damage`]), and aims at the
+    /// opponent's spell where it is all there is to target ([`Game::lone_target`]). Waterbend
+    /// remains a human payment choice even when mana alone could pay it.
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
-    /// each as an [`Entry::Auto`]. Replays play recorded damage assignments directly,
-    /// including any manual choices made before automatic assignment was added.
+    /// each as an [`Entry::Auto`]. Replays play recorded damage assignments and targets
+    /// directly, including any manual choices made before the session took them.
     pub(super) fn auto_answer(&self, d: &Decision<Large>, replaying: bool) -> Option<Choice> {
         if d.kind == DecisionKind::Priority && self.passing.is_some_and(|p| self.passes_for(p)) {
             debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
@@ -120,6 +121,7 @@ impl Game {
                 beryl_engine::preferred_damage(&b.state, &d.relayout())
                     .and_then(|(choice, unambiguous)| unambiguous.then_some(choice))
             }),
+            DecisionKind::Target if !replaying => self.lone_target(d),
             DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
@@ -141,6 +143,26 @@ impl Game {
         d.prompt.purpose == Purpose::MaySearch
     }
 
+    /// The answer to `d`, a choice of one target, where all there is to target is an
+    /// opponent's spell on the stack: the session takes it for the human, as Arena puts a
+    /// Counterspell at a lone spell straight onto the stack (UI Conventions, "Targeting a
+    /// spell"). The spell choosing cannot be its own target
+    /// ([CR 115.5](https://yawgatog.com/resources/magic-rules/#R1155): "A spell or ability on
+    /// the stack is an illegal target for itself"). The human's own spell is still asked
+    /// about (UI Conventions, exception 7).
+    pub(super) fn lone_target(&self, d: &Decision<Large>) -> Option<Choice> {
+        if d.len() != 1 {
+            return None;
+        }
+        let slot = d.candidates.object(Choice(0))?;
+        let theirs = |e: &StackEntry<Large>| {
+            e.ability.is_none()
+                && e.controller != self.human
+                && e.object.is_some_and(|o| o.slot == slot)
+        };
+        self.board.stack().iter().any(theirs).then_some(Choice(0))
+    }
+
     /// Whether the top of the stack is the human's own spell or ability and, since their
     /// latest answer in this step, nothing of the opponent's came onto the stack: what they
     /// cast, its triggers, and its resolution, or the resolution of an opponent's response
@@ -148,15 +170,22 @@ impl Game {
     /// answer. Their priority then would only let them respond to themselves, as an Arena
     /// player auto-passes.
     pub(super) fn own_top(&self) -> bool {
+        let own = |e: &StackEntry<Large>| e.controller == self.human;
+        self.board.stack().last().is_some_and(own) && !self.opposed()
+    }
+
+    /// Whether something the human does not control came onto the stack since their latest
+    /// answer in this step: an opponent's spell or ability they have not yet had priority
+    /// over.
+    pub(super) fn opposed(&self) -> bool {
         let answered = self.answered.as_deref().unwrap_or_default();
         let now = self.board.stack();
-        let own = |e: &StackEntry<Large>| e.controller == self.human;
         let kept = answered
             .iter()
             .zip(&now)
             .take_while(|(then, now)| then == now)
             .count();
-        now.last().is_some_and(own) && now[kept..].iter().all(own)
+        now[kept..].iter().any(|e| e.controller != self.human)
     }
 
     /// Whether the human's priority, with the stack empty, comes in a combat step where they

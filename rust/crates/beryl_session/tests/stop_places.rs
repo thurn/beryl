@@ -4,13 +4,19 @@
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    ISLAND, MANA_CRYPT, PLAINS, SNAPCASTER_MAGE, THE_WANDERING_EMPEROR, THUNDERTRAP_TRAINER,
+    COUNTERSPELL, ISLAND, MANA_CRYPT, PLAINS, SNAPCASTER_MAGE, THE_WANDERING_EMPEROR,
+    THUNDERTRAP_TRAINER,
 };
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step, StepSet};
+use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step, StepSet, ZoneName};
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
+
+#[path = "common/play.rs"]
+mod play;
+
+use play::{Casts, Play, to_human};
 
 const SESSION: SessionId = SessionId(1);
 const HUMAN: Seat = Seat::P0;
@@ -309,4 +315,41 @@ fn a_cleared_main_phase_stop_passes_it_by() {
     );
     assert_eq!(priority_in(&asked, Side::You, Step::PostcombatMain), 1);
     assert_passes_land_where_named(&asked);
+}
+
+/// The opponent's turn, with two Mana Crypts to cast one after the other, each of which the
+/// human could counter.
+const TWO_SPELLS_IN_TURN: Scenario = Scenario::new("two-spells-in-turn")
+    .at(2, P1, TurnStep::PrecombatMain)
+    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .hand(P0, &[COUNTERSPELL])
+    .library(P0, LANDS)
+    .hand(P1, &[MANA_CRYPT, MANA_CRYPT])
+    .library(P1, LANDS);
+
+/// Passing on to the next stop ends where the opponent puts a spell on the stack: the human
+/// gets priority over it, with the pass button resolving it (UI Conventions, "Passing to the
+/// end step"), and passing it is a pass of its own.
+#[test]
+fn passing_on_stops_for_a_spell_the_opponent_casts() {
+    let mut play = Play::against(&TWO_SPELLS_IN_TURN, Some(Box::new(Casts(0))));
+    let crypts = |play: &Play, zone| play.named(MANA_CRYPT, zone, Side::Opponent).len();
+    // The first Mana Crypt is on the stack: the human passes on, past its resolution.
+    let first = play.decision();
+    assert_eq!(crypts(&play, ZoneName::Stack), 1);
+    assert_eq!(first.pass_to, Some(PassTo::Resolve));
+    assert!(first.pass_on.is_some(), "no pass on: {first:?}");
+    let pass = play.game.open().unwrap().pass_on(first.id).unwrap();
+    play.game.pass_on(pass);
+    play.view = to_human(&mut play.game);
+    // The second is cast once the first resolved, and stops them.
+    let second = play.decision();
+    assert_eq!(second.kind, Kind::Priority);
+    assert_eq!(second.pass_to, Some(PassTo::Resolve));
+    assert_eq!(play.view.turn.step, Step::PrecombatMain);
+    assert_eq!(crypts(&play, ZoneName::Battlefield), 1);
+    assert_eq!(crypts(&play, ZoneName::Stack), 1);
+    // The pass on is over: this pass resolves the spell and no more.
+    play.choose(|c| *c == Candidate::Pass);
+    assert_eq!(crypts(&play, ZoneName::Battlefield), 2);
 }

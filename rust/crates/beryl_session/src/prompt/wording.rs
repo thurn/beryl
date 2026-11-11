@@ -481,12 +481,12 @@ pub(crate) const OWN_TARGET: Wording = Wording {
     ..NONE
 };
 
-/// What a target prompt says while a spell on the stack is picked and waits to be confirmed.
-/// Composed: Arena picks a spell in a browser of the stack, "Target a spell."
-/// (`jD7VqaT8VC8 17:54.5`).
+/// What a target prompt among the spells on the stack says: Arena's browser of the stack,
+/// "Target a spell." (`jD7VqaT8VC8 17:54.5`, `SN9QFe2kM4Y 26:54.0`), with nothing picked, and
+/// the spell picked while it waits to be confirmed, which is composed.
 pub(crate) const AIMED: Wording = Wording {
     title: "Target {name}",
-    unnamed: "Choose a target.",
+    unnamed: "Target a spell.",
     ..NONE
 };
 

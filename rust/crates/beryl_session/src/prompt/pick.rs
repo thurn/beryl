@@ -116,8 +116,8 @@ pub(crate) struct Objects {
     friendly: Option<Vec<Subject>>,
     /// Those the prompt asks about before it answers with them, each with its question.
     warned: Vec<(Subject, String)>,
-    /// The prompt opened with one picked, which its button confirms: what it says of each
-    /// while it is the one picked. Empty where a click on one answers.
+    /// The pick waits for the prompt's button, which confirms it: what the prompt says of
+    /// each while it is the one picked. Empty where a click on one answers.
     aimed: Vec<(Subject, String)>,
     /// The buttons' words, `{picked}` and `{of}` still to fill.
     confirm: String,
@@ -195,21 +195,20 @@ impl Objects {
             .filter(|&on| removes && of(on).is_some_and(|o| o.zone == ZoneName::Battlefield))
             .map(|on| says(on, &OWN_TARGET))
             .collect();
-        // Among spells on the stack alone, one of them an opponent's, that one opens picked:
-        // the spell a response is most often for. The pick then waits for the button, so a
-        // click on another changes it and none answers.
+        // Among two or more spells on the stack, the pick waits for the button, as in Arena's
+        // browser of the stack, and none opens picked (UI Conventions, "Targeting a spell"):
+        // a click on a spell picks it, and one on another takes its place.
         let spell = |&on: &Subject| of(on).is_some_and(|o| o.zone == ZoneName::Stack);
-        let theirs: Vec<Subject> = (eligible.iter().copied())
-            .filter(|on| !friendly.contains(on))
-            .collect();
-        let preset = match theirs[..] {
-            [one] if !counted && eligible.len() > 1 && eligible.iter().all(spell) => Some(one),
-            _ => None,
-        };
-        let aimed = (eligible.iter().copied())
-            .filter(|_| preset.is_some())
+        let browsed = !counted && most == 1 && eligible.len() > 1 && eligible.iter().all(spell);
+        let aimed: Vec<_> = (eligible.iter().copied())
+            .filter(|_| browsed)
             .map(|on| says(on, &AIMED))
             .collect();
+        let title = if browsed {
+            Holes::default().title(&AIMED)
+        } else {
+            prompt.title.clone()
+        };
         // A target in a pile is laid out to be picked: the table shows a graveyard's top card
         // alone, and no card of an exile or a library.
         let piled = |zone| {
@@ -223,12 +222,12 @@ impl Objects {
             .collect();
         Objects {
             purpose: Purpose::Target,
-            title: prompt.title.clone(),
+            title,
             eligible,
             tray,
             least,
             most,
-            picked: preset.into_iter().collect(),
+            picked: Vec::new(),
             opens: if counted { Opens::Count } else { Opens::Picks },
             ends: false,
             confirmed: false,
@@ -300,7 +299,7 @@ impl Objects {
     }
 
     /// Whether a click on an object answers: one object, with no end to the picks offered, in
-    /// a prompt that did not open with one picked. A target answers wherever it is picked;
+    /// a prompt whose pick does not wait for its button. A target answers wherever it is picked;
     /// another card only where it lies on the table, since a tray's cards and a hand's are
     /// looked over first.
     fn answers_by_click(&self) -> bool {

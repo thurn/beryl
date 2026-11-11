@@ -16,10 +16,9 @@ use beryl_cards::names::{
     TEFERI_TIME_RAVELER, THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
 };
 use beryl_engine::card::Purpose;
-use beryl_engine::layout::Queue as _;
-use beryl_engine::{Candidates, Choice, Decision, Layout, Observation, Opt, Seat, TurnStep};
+use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
-use beryl_search::{Agent, AgentDecision, Budget};
+use beryl_search::Budget;
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeView};
 use beryl_session::protocol::{Candidate, DecisionView, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
@@ -27,7 +26,7 @@ use beryl_session::save::Kind as SavedKind;
 use beryl_session::{
     CandidateIndex, Game, Prepared, SessionError, Sessions, StartGame, Status, StopsSetting,
 };
-use play::{Play, SESSION, cards};
+use play::{Casts, Play, SESSION, cards};
 
 /// The choices of the log from entry `from` on: the kind of decision each answered and
 /// whether it continues the one before.
@@ -177,31 +176,6 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
     assert_eq!(spellbinders(&own), 1);
 }
 
-/// An opponent that casts whatever it can, and otherwise takes each decision's first
-/// candidate.
-struct Casts(u32);
-
-impl<L: Layout> Agent<L> for Casts {
-    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.0 += 1;
-        let cast = match &d.candidates {
-            Candidates::Options(options) => {
-                (options.iter()).position(|o| matches!(o, Opt::Cast { .. }))
-            }
-            Candidates::Objects(_) => None,
-        };
-        Choice(cast.unwrap_or(0) as u16)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(self.0))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.0 = to.0;
-    }
-}
-
 /// P0 casts a Mana Crypt, P1 answers it with Mana Tithe, and P0 holds a Counterspell.
 const TITHED: Scenario = Scenario::new("stack targets")
     .at(3, P0, TurnStep::PrecombatMain)
@@ -212,10 +186,11 @@ const TITHED: Scenario = Scenario::new("stack targets")
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
-/// Among spells on the stack alone, the one opponent's spell opens picked, and the pick waits
-/// for the button: a click on another spell changes it, and none answers.
+/// Among two or more spells on the stack none opens picked, and the pick waits for the
+/// button, as in Arena's browser of the stack: a click on a spell picks it, one on another
+/// takes its place, and none answers.
 #[test]
-fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
+fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
     let tithed = || Play::against(&TITHED, Some(Box::new(Casts(0))));
     let mut play = tithed();
     let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
@@ -225,13 +200,21 @@ fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
     assert_eq!(play.on(counterspell), None, "Counterspell is cast");
     assert!(play.decision().prompt.is(Purpose::Target));
     let open = format!(
+        "pick target: Target a spell.\n\
+         picked 0 of 1\n\
+         eligible {}\n\
+         confirm(Submit 0)\n",
+        cards(&[crypt, tithe]),
+    );
+    assert_eq!(play.prompt(), open);
+    let on_tithe = format!(
         "pick target: Target Mana Tithe\n\
          picked 1 of 1: #{tithe}\n\
          eligible #{crypt}\n\
          hostile-target #{tithe}\n\
          confirm[Submit 1]*\n"
     );
-    assert_eq!(play.prompt(), open);
+    assert_eq!(play.on(tithe).as_deref(), Some(on_tithe.as_str()));
     // The viewer's own spell takes the pick's place, and a second click on it leaves none.
     assert_eq!(
         play.on(crypt).unwrap(),
@@ -243,17 +226,8 @@ fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
              confirm[Submit 1]*\n"
         )
     );
-    assert_eq!(
-        play.on(crypt).unwrap(),
-        format!(
-            "pick target: Choose a target.\n\
-             picked 0 of 1\n\
-             eligible {}\n\
-             confirm(Submit 0)\n",
-            cards(&[crypt, tithe]),
-        )
-    );
-    assert_eq!(play.on(tithe).as_deref(), Some(open.as_str()));
+    assert_eq!(play.on(crypt).as_deref(), Some(open.as_str()));
+    assert_eq!(play.on(tithe).as_deref(), Some(on_tithe.as_str()));
     // The button answers, as picking the Mana Tithe does.
     let mut picked = tithed();
     picked.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == crypt));
@@ -262,6 +236,61 @@ fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
     assert_eq!(play.press(ButtonId::Confirm), None);
     assert_eq!(play.game.state(), picked.game.state());
     assert_eq!(play.game.replay().log, picked.game.replay().log);
+}
+
+/// P1 casts a Mana Crypt in their main phase, and P0 holds a Counterspell.
+const LONE_SPELL: Scenario = Scenario::new("lone spell")
+    .at(2, P1, TurnStep::PrecombatMain)
+    .hand(P0, &[COUNTERSPELL])
+    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .hand(P1, &[MANA_CRYPT])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// With the opponent's spell alone on the stack, a spell that targets a spell takes it: no
+/// prompt asks, and the log has the target as the session's answer. Full control asks.
+#[test]
+fn a_lone_opposing_spell_is_targeted_unasked() {
+    let lone = || Play::against(&LONE_SPELL, Some(Box::new(Casts(0))));
+    let mut play = lone();
+    let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
+    let crypt = play.named(MANA_CRYPT, ZoneName::Stack, Side::Opponent)[0];
+    let from = play.game.replay().log.len();
+    assert_eq!(play.on(counterspell), None, "Counterspell is cast");
+    let log = &play.game.replay().log[from..];
+    let taken: Vec<&Entry> = (log.iter())
+        .filter(|entry| {
+            matches!(entry, Entry::Auto(c)
+            if c.what.as_ref().is_some_and(|w| w.kind == SavedKind::Target))
+        })
+        .collect();
+    assert_eq!(taken.len(), 1, "the session took the target: {log:?}");
+    assert!(
+        !choices(&play, from)
+            .iter()
+            .any(|&(kind, _)| kind == SavedKind::Target),
+        "the human was asked for the target: {log:?}"
+    );
+    // The Mana Crypt is countered.
+    while play.object(crypt).zone == ZoneName::Stack {
+        assert!(!play.decision().prompt.is(Purpose::Target));
+        play.choose(|_| true);
+    }
+    assert_eq!(play.object(crypt).zone, ZoneName::Graveyard);
+
+    // Under full control the target is a prompt, which a click answers.
+    let mut exact = lone();
+    exact.view = exact.game.set_stops(StopsSetting::EXACT).unwrap();
+    assert_eq!(exact.on(counterspell), None, "Counterspell is cast");
+    assert_eq!(
+        exact.prompt(),
+        format!(
+            "pick target: Choose a target.\n\
+             picked 0 of 1\n\
+             eligible #{crypt}\n"
+        )
+    );
+    assert_eq!(exact.on(crypt), None, "the click answers");
 }
 
 /// P0 casts Snapcaster Mage with an instant and a sorcery in their graveyard.

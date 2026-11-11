@@ -256,10 +256,12 @@ impl Game {
                     Some((_, outcomes)) => outcomes.push(outcome),
                     None => before.push(outcome),
                 },
-                // Damage assignments are recorded choices, even when suggested
-                // automatically. Replaying them preserves earlier manual choices.
+                // Damage assignments and targets are recorded choices, even when the
+                // session took them. Replaying them preserves earlier manual choices.
                 None if matches!(entry, Entry::Auto(c)
-                    if c.what.as_ref().is_some_and(|w| w.kind == save::Kind::DamageDivision)) =>
+                if c.what.as_ref().is_some_and(|w| {
+                    matches!(w.kind, save::Kind::DamageDivision | save::Kind::Target)
+                })) =>
                 {
                     steps.push((entry, Vec::new()));
                 }

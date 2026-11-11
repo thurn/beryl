@@ -252,8 +252,7 @@
     {
       "name": "reprieve-target",
       "board": "reprieve-target",
-      "until": "first target decision for seat 0",
-      "after": 1
+      "until": "first paymentPlan decision for seat 0"
     },
     {
       "name": "arrow-ability",

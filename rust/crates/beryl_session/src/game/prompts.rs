@@ -119,9 +119,10 @@ impl Game {
     /// Passes the human's priority, at their open decision, with `answer` (checked by
     /// [`OpenDecision::pass_on`]), and goes on passing it for them until their next stop in a
     /// later step: where passing would stop them again in this one, for the stack resolving or
-    /// combat damage, this goes on past it, through whatever the opponent does: the human
-    /// asked to pass until then, as Arena's end-turn button does. They stop sooner only at a
-    /// decision other than a priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
+    /// combat damage, this goes on past it, as Arena's end-turn button does. They stop sooner
+    /// where an opponent puts a spell or ability on the stack, which they get priority to
+    /// answer (UI Conventions, "Passing to the end step"), and at a decision other than a
+    /// priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
     /// passes on the same way. [`Game::next_view`] plays on from it.
     pub fn pass_on(&mut self, answer: Answer) {
         let started = self.start_passing();
