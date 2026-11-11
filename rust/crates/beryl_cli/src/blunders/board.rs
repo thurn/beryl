@@ -2,7 +2,7 @@
 //! reproduces its game.
 
 use beryl_engine::card::FaceIx;
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, Memo};
 use beryl_engine::{
     CardIx, GameTable, Profile, Seat, Slot, State, TurnStep, Zone, two_player::TwoPlayerSeat as _,
 };
@@ -119,10 +119,12 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
             let slot = from_library(&s, p, &x.card)?;
             s.board().place(slot, Zone::Exile).map_err(full)?;
             if let Some(i) = x.with {
-                s.board().set_exiled_with(slot, permanent(i)?);
+                let with = Memo::ExiledWith(permanent(i)?);
+                s.board().remember(slot, with).map_err(full)?;
             }
             if let Some(i) = x.until {
-                s.board().set_exiled_until(slot, permanent(i)?);
+                let until = Memo::ExiledUntil(permanent(i)?);
+                s.board().remember(slot, until).map_err(full)?;
             }
         }
         let mut order: Vec<Slot> = Vec::with_capacity(side.library.len());

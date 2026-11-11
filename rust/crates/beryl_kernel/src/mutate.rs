@@ -307,16 +307,6 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Records that the object in `source` exiled the card in `slot`
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a),
-    /// [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). Which of the two links
-    /// it is is a flag of milestone 4's ([`State::legacy_mut`]).
-    #[inline]
-    pub fn link(&mut self, slot: L::Slot, source: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Exile);
-        self.object_mut(slot).linked = Some(source);
-    }
-
     /// Makes a creature an attacking creature
     /// ([CR 508.1k](https://yawgatog.com/resources/magic-rules/#R5081k)): "Each chosen
     /// creature still controlled by the active player becomes an attacking creature." It

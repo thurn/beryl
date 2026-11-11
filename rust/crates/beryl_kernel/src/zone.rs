@@ -74,7 +74,6 @@ impl<L: Layout> State<L> {
         o.damage = 0;
         o.counters = Counters::default();
         o.attached_to = None;
-        o.linked = None;
         o.face = FaceIx::FRONT;
         o.combat = None;
         let owner = o.owner.index();
@@ -106,7 +105,7 @@ impl<L: Layout> State<L> {
             self.zones.members[owner][to as usize].insert(slot);
         }
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
-            forget_exiled_with(self, slot);
+            self.forget_exiled_with(slot);
         }
         // CR 400.2: cards in public zones are seen by every player.
         if to.is_public() {
@@ -240,7 +239,7 @@ impl<L: Layout> State<L> {
             incarnation,
             ..Object::EMPTY
         };
-        forget_exiled_with(self, slot);
+        self.forget_exiled_with(slot);
         for k in self.knowledge.as_mut_slice() {
             k.remove(slot);
         }
@@ -289,24 +288,6 @@ fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
             let k = &mut s.knowledge[p.index()];
             k.remove(moved);
             *k &= !hand;
-        }
-    }
-}
-
-/// Unlinks the cards exiled with an earlier object in `slot`, as a new object arrives there
-/// (or a token's slot is freed). The cards stay "exiled with" the object that exiled them
-/// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
-/// refers only to cards in the exile zone that were put there as a result of an instruction
-/// to exile them in the first ability." An ability of that object still on the stack after it
-/// left finds them; the new object is not that object
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not.
-fn forget_exiled_with<L: Layout>(s: &mut State<L>, slot: L::Slot) {
-    let exile = s.in_zone(Zone::Exile);
-    for x in exile.iter() {
-        let o = s.object_mut(x);
-        if o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(slot) {
-            o.flags.set(ObjectFlags::EXILED_WITH, false);
-            o.linked = None;
         }
     }
 }

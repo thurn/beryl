@@ -150,7 +150,7 @@ impl<L: Layout> State<L> {
     /// Keeps the state in agreement with entries that ended: the set of keyed slots, and
     /// `derived_dirty`.
     #[inline]
-    fn settle_ended(&mut self, done: Ended) {
+    pub(crate) fn settle_ended(&mut self, done: Ended) {
         if done.any {
             self.keyed = self.store_keys();
         }

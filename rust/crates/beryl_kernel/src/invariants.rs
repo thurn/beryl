@@ -75,7 +75,7 @@ impl<L: Layout> State<L> {
                 )?;
             }
             check(o.card.index() < t.len(), "no such card", at)?;
-            for link in [o.attached_to, o.linked, o.combat] {
+            for link in [o.attached_to, o.combat] {
                 check(
                     link.is_none_or(|l| self.object(l).zone != Zone::Nowhere),
                     "a link to an empty slot",
@@ -90,23 +90,10 @@ impl<L: Layout> State<L> {
                 "attached to an object off the battlefield",
                 at,
             )?;
-            // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
-            check(
-                !o.flags.has(ObjectFlags::EXILED_UNTIL) || on_battlefield(o.linked),
-                "exiled until a permanent that already left",
-                at,
-            )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
-                // What may stay off the battlefield: being a token, and a link to the
-                // permanent that exiled it "until" it leaves (CR 610.3) or whose ability
-                // refers to the cards exiled with it (CR 607.2a).
-                let kept = ObjectFlags::TOKEN
-                    | ObjectFlags::ONE_ONE
-                    | ObjectFlags::EXILED_UNTIL
-                    | ObjectFlags::EXILED_WITH;
-                let exiled_by = o
-                    .flags
-                    .has(ObjectFlags::EXILED_UNTIL | ObjectFlags::EXILED_WITH);
+                // What may stay off the battlefield: being a token. What exiled a card is
+                // a memo of it, held to the exile zone by the Memos store's own check.
+                let kept = ObjectFlags::TOKEN | ObjectFlags::ONE_ONE;
                 check(
                     *o == Object {
                         card: o.card,
@@ -116,9 +103,8 @@ impl<L: Layout> State<L> {
                         base_controller: o.owner,
                         timestamp: o.timestamp,
                         flags: ObjectFlags(o.flags.0 & kept),
-                        linked: if exiled_by { o.linked } else { None },
                         ..Object::EMPTY
-                    } && (!exiled_by || o.zone == Zone::Exile),
+                    },
                     "permanent status off the battlefield",
                     at,
                 )?;

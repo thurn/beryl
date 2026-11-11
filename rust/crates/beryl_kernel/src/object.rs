@@ -36,11 +36,6 @@ impl ObjectFlags {
     /// modify a characteristic as part of the copying process. The final set of values for
     /// that characteristic becomes part of the copiable values of the copy."
     pub const ONE_ONE: u32 = 1 << 4;
-    /// Exiled until the permanent in `linked` leaves the battlefield (CR 610.3).
-    pub const EXILED_UNTIL: u32 = 1 << 5;
-    /// Exiled by an ability of the object in `linked`, whose linked ability refers to the
-    /// cards "exiled with" it ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
-    pub const EXILED_WITH: u32 = 1 << 6;
     /// A blocking creature ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g)).
     /// The attacker it blocks is in `combat`.
     pub const BLOCKING: u32 = 1 << 8;
@@ -67,10 +62,9 @@ impl ObjectFlags {
     /// A loyalty ability of this permanent was activated this turn
     /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
     pub const LOYALTY_ACTIVATED: u32 = 1 << 17;
-    /// The flags milestone 4 (by-w8gv.7.1) moves to memos and trackers. No mutator sets
-    /// them: they are written through [`State::legacy_mut`](crate::State::legacy_mut)
-    /// alone.
-    pub const LEGACY: u32 = Self::EXILED_UNTIL | Self::EXILED_WITH | Self::LOYALTY_ACTIVATED;
+    /// The flag milestone 4 (by-w8gv.7.1) moves to a tracker. No mutator sets it: it is
+    /// written through [`State::legacy_mut`](crate::State::legacy_mut) alone.
+    pub const LEGACY: u32 = Self::LOYALTY_ACTIVATED;
 
     #[inline]
     pub fn has(self, flag: u32) -> bool {
@@ -170,8 +164,6 @@ pub struct Object<L: Layout = Small> {
     pub(crate) counters: Counters,
     /// The object an Aura or Equipment is attached to.
     pub(crate) attached_to: Option<L::Slot>,
-    /// The object that exiled, imprinted or hid this one.
-    pub(crate) linked: Option<L::Slot>,
     /// Battlefield entry order, for layers.
     pub(crate) timestamp: u16,
     /// Which face is up.
@@ -204,7 +196,6 @@ impl<L: Layout> Object<L> {
             other: 0,
         },
         attached_to: None,
-        linked: None,
         timestamp: 0,
         face: FaceIx::FRONT,
         combat: None,
@@ -338,14 +329,6 @@ impl<L: Layout> Object<L> {
         self.attached_to
     }
 
-    /// The object that exiled this one
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a),
-    /// [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)).
-    #[inline]
-    pub fn linked(&self) -> Option<L::Slot> {
-        self.linked
-    }
-
     /// When it entered the battlefield or last turned face up, among the layers' timestamps
     /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)).
     #[inline]
@@ -386,7 +369,6 @@ impl<L: Layout> std::hash::Hash for Object<L> {
             damage,
             counters,
             attached_to,
-            linked,
             timestamp,
             face,
             combat,
@@ -401,7 +383,6 @@ impl<L: Layout> std::hash::Hash for Object<L> {
         damage.hash(h);
         counters.hash(h);
         attached_to.hash(h);
-        linked.hash(h);
         timestamp.hash(h);
         face.hash(h);
         combat.hash(h);

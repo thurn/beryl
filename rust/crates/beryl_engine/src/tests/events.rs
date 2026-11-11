@@ -727,14 +727,61 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     let land = find(&s, &t, p, "Test Land");
     let land_ref = s.object_ref(land);
     with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.exile_linked(land_ref));
-    assert_eq!(s.object(land).linked(), Some(token));
+    assert_eq!(s.memos(land).exiled_with(), Some(token));
     let token_ref = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
     // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert_eq!(s.object(land).zone(), Zone::Exile);
-    assert_eq!(s.object(land).linked(), None);
+    assert_eq!(s.memos(land).exiled_with(), None);
+}
+
+#[test]
+fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let land = find(&s, &t, p, "Test Land");
+    let land_ref = s.object_ref(land);
+    // An ability of the bear as it is now, which stays that object's wherever it goes.
+    let ability = PendingTrigger {
+        source: Some(s.object_ref(bear)),
+        card: s.copiable(bear).record(&t).0,
+        controller: p,
+        ..PendingTrigger::default()
+    };
+    let found = |s: &mut State, x: &mut Scratch| {
+        let ctx = EffectCtx::new(s, &t, &mut x.events, &ability, &Ability::NONE);
+        let found = ctx.exiled_with_source();
+        ctx.finish().unwrap();
+        found
+    };
+    with_ctx(&t, &mut s, &mut x, bear, |ctx| ctx.exile_linked(land_ref));
+    assert_eq!(found(&mut s, &mut x), Bitboard::single(land));
+
+    // The bear dies with the ability still to resolve: it finds the card (CR 607.2a).
+    let bear_ref = s.object_ref(bear);
+    with_ctx(&t, &mut s, &mut x, bear, |ctx| ctx.destroy(bear_ref));
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(bear).zone(), Zone::Graveyard);
+    assert_eq!(found(&mut s, &mut x), Bitboard::single(land));
+
+    // The card returns as a new object (CR 400.7), which exiled nothing: the card in exile
+    // stays there, exiled with nothing any more.
+    event::move_one(
+        &mut s,
+        &t,
+        &mut x.events,
+        bear,
+        Zone::Battlefield,
+        Reason::Effect,
+    )
+    .unwrap();
+    assert!(found(&mut s, &mut x).is_empty());
+    assert!(s.exiled_with(bear).is_empty());
+    assert_eq!(s.object(land).zone(), Zone::Exile);
+    assert_eq!(s.memos(land).exiled_with(), None);
 }
 
 #[test]
@@ -1419,7 +1466,7 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(s.controller(bear), q);
-    assert!(!s.object(bear).flags().has(ObjectFlags::EXILED_UNTIL));
+    assert_eq!(s.memos(bear).exiled_until(), None);
 
     // CR 610.3b: if the exiler leaves before its trigger resolves, nothing is exiled.
     let (t, mut s, p) = game();

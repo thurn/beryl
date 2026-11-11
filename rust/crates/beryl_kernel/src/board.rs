@@ -169,34 +169,6 @@ impl<L: Layout> Board<'_, L> {
         Ok(())
     }
 
-    /// Links the exiled card in `slot` to the permanent in `source` as one of the cards
-    /// "exiled with" it, as an ability of `source` exiling it would have
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has an
-    /// activated or triggered ability printed on it that instructs a player to exile one or more
-    /// cards and an ability printed on it that refers either to 'the exiled cards' or to cards
-    /// 'exiled with [this object],' these abilities are linked."
-    pub fn set_exiled_with(&mut self, slot: L::Slot, source: L::Slot) {
-        debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
-        debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
-        self.0.link(slot, source);
-        self.0
-            .legacy_mut()
-            .set_object_flags(slot, ObjectFlags::EXILED_WITH, true);
-    }
-
-    /// Links the exiled card in `slot` to the permanent in `source`, which returns it when it
-    /// leaves the battlefield
-    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot effects
-    /// cause an object to change zones 'until' a specified event occurs."
-    pub fn set_exiled_until(&mut self, slot: L::Slot, source: L::Slot) {
-        debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
-        debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
-        self.0.link(slot, source);
-        self.0
-            .legacy_mut()
-            .set_object_flags(slot, ObjectFlags::EXILED_UNTIL, true);
-    }
-
     /// Creates a token of the game-table card `card` on the battlefield, owned and controlled
     /// by `owner` ([CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player
     /// who creates a token is its owner"), with face `face` up and, for a copy that is 1/1 by
@@ -258,10 +230,12 @@ impl<L: Layout> Board<'_, L> {
         self.0.object_mut(slot).damage = damage;
     }
 
-    /// Has the permanent in `slot` remember `memo` of the spell it was, as one cast that
-    /// way would ([`State::remember`]): that its impending cost was paid
-    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), say.
-    pub fn remember(&mut self, slot: L::Slot, memo: Memo) -> Result<(), Full> {
+    /// Has the object in `slot` remember `memo` ([`State::remember`]): a permanent, of the
+    /// spell it was, as one cast that way would, that its impending cost was paid
+    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), say; a card
+    /// in exile, the permanent that exiled it, as an ability of that permanent exiling it
+    /// would have.
+    pub fn remember(&mut self, slot: L::Slot, memo: Memo<L>) -> Result<(), Full> {
         self.0.remember(slot, memo)
     }
 

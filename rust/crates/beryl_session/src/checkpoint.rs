@@ -346,10 +346,12 @@ impl Checkpoint {
                 let slot = from_library(t, s, p, &x.card)?;
                 s.board().place(slot, Zone::Exile).map_err(full)?;
                 if let Some(i) = x.with {
-                    s.board().set_exiled_with(slot, permanent(i)?);
+                    let with = Memo::ExiledWith(permanent(i)?);
+                    s.board().remember(slot, with).map_err(full)?;
                 }
                 if let Some(i) = x.until {
-                    s.board().set_exiled_until(slot, permanent(i)?);
+                    let until = Memo::ExiledUntil(permanent(i)?);
+                    s.board().remember(slot, until).map_err(full)?;
                 }
             }
             arrange_library(t, s, p, side, seed)?;
@@ -473,18 +475,11 @@ fn side<L: Layout>(
     let mut exile: Vec<Exiled> = s
         .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Exile)))
         .map(|slot| {
-            let o = s.object(slot);
-            let link = |flag| {
-                o.flags()
-                    .has(flag)
-                    .then_some(o.linked())
-                    .flatten()
-                    .and_then(place)
-            };
+            let memos = s.memos(slot);
             Exiled {
                 card: name(t, s, slot),
-                with: link(ObjectFlags::EXILED_WITH),
-                until: link(ObjectFlags::EXILED_UNTIL),
+                with: memos.exiled_with().and_then(place),
+                until: memos.exiled_until().and_then(place),
             }
         })
         .collect();

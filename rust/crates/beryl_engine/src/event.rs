@@ -183,7 +183,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         moves.push((slot, o.zone(), dest, entry))?;
         if o.zone() == Zone::Battlefield {
             trigger::match_leaving(s, t, slot, dest)?;
-            returning |= exiled_until(s, slot);
+            returning |= s.exiled_until(slot);
         }
     }
     let changed = |object, from, to| Event::ZoneChange {
@@ -253,14 +253,6 @@ fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
     } else {
         to
     }
-}
-
-/// The objects exiled until the permanent in `slot` leaves the battlefield.
-fn exiled_until<L: Layout>(s: &State<L>, slot: L::Slot) -> Bitboard<L::Slot> {
-    s.in_zone(Zone::Exile).filter(|x| {
-        let o = s.object(x);
-        o.flags().has(ObjectFlags::EXILED_UNTIL) && o.linked() == Some(slot)
-    })
 }
 
 /// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):

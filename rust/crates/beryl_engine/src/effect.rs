@@ -21,7 +21,7 @@ use crate::mana;
 use crate::profile::Payment;
 use crate::query::Copiable;
 use crate::state::{
-    Affects, CounterKind, Duration, LayerChange, ObjectFlags, ObjectRef, Payload, PendingTrigger,
+    Affects, CounterKind, Duration, LayerChange, Memo, ObjectRef, Payload, PendingTrigger,
     StackEntry, State, Target, TargetPlace, TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::GameTable;
@@ -807,10 +807,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.object(object.slot).zone() == Zone::Exile {
-            self.state.link(object.slot, source.slot);
-            self.state
-                .legacy_mut()
-                .set_object_flags(object.slot, ObjectFlags::EXILED_UNTIL, true);
+            let r = self
+                .state
+                .remember(object.slot, Memo::ExiledUntil(source.slot));
+            self.check(r);
         }
     }
 
@@ -832,10 +832,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let source = self.source();
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.is_current(source) && self.state.object(object.slot).zone() == Zone::Exile {
-            self.state.link(object.slot, source.slot);
-            self.state
-                .legacy_mut()
-                .set_object_flags(object.slot, ObjectFlags::EXILED_WITH, true);
+            let r = self
+                .state
+                .remember(object.slot, Memo::ExiledWith(source.slot));
+            self.check(r);
         }
     }
 

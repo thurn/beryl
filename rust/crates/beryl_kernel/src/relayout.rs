@@ -229,7 +229,6 @@ impl<L: Layout> Relayout for Object<L> {
             damage: self.damage,
             counters: self.counters,
             attached_to: self.attached_to.map(slot),
-            linked: self.linked.map(slot),
             timestamp: self.timestamp,
             face: self.face,
             combat: self.combat.map(slot),

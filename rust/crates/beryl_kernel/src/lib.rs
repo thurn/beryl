@@ -48,7 +48,7 @@
 //! | --- | --- | --- |
 //! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
-//! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
+//! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
@@ -129,8 +129,8 @@
 //!
 //! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
 //! (by-w8gv.7.1) deletes and has not yet moved to a store ("Stores"), which therefore gets
-//! no typed mutator: the [`state::ObjectFlags`] `EXILED_UNTIL`, `EXILED_WITH` and
-//! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
+//! no typed mutator: the [`state::ObjectFlags`] `LOYALTY_ACTIVATED`; and
+//! [`state::Counters`]' long-tail kind (`other_kind`, `other`).
 //! [`legacy::Legacy`]'s rustdoc lists each with the store that replaces it. Reads use the
 //! getters. Milestone 4 deletes the accessor with the last of them (by-w8gv.7.10). The zone
 //! move and the turn's resets clear those flags inside the kernel, with everything else an
@@ -150,7 +150,7 @@
 //! the permission to cast and the cost change as payloads, and flashback's zone-change
 //! replacement (by-w8gv.7.4); the Memos store ([`memos`]) with what a permanent remembers
 //! of its spell, the costs paid and the value of X, and [`State::signature`]'s comparison
-//! of memos (by-w8gv.7.6).
+//! of memos (by-w8gv.7.6); what exiled a card, as memos of the card (by-w8gv.7.7).
 //!
 //! ### Where everything goes
 //!
@@ -165,7 +165,7 @@
 //! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `event::exiled_instead`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
 //! | `State::entered_x` | Memos: the permanent's `X` ([`memos::Memo::X`]) | by-w8gv.7.6, built |
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
-//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, [`State::link`], [`State::exiled_with`], `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ("Duration and expiry" says how it outlives that object) | by-w8gv.7.7 |
+//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent | by-w8gv.7.8 |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table, keyed (object, kind), beside the three kinds every game reads, which stay in the object | by-w8gv.7.9 |
 //! | `ObjectFlags::ONE_ONE` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
@@ -211,7 +211,7 @@
 //! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
 //! | by-w8gv.7.5 | +136 | the locked-in sets |
 //! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
-//! | by-w8gv.7.7 | 0 | its memos are entries of by-w8gv.7.6's store |
+//! | by-w8gv.7.7 | 0 (landed: 0) | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 | two sets of slots |
 //! | by-w8gv.7.9 | +104 | the counters table |
 //! | by-w8gv.7.10 | 0 or lower | deletes only |
@@ -266,9 +266,11 @@
 //! Memos clear the same way, as their object ends. A memo that names another object (the
 //! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
 //! exiled with that object after it has left its zone, for an ability of it still on the
-//! stack, until a new object arrives in the slot (CR 607.2a, as `zone::forget_exiled_with`
-//! holds today). So the move also ends the memos naming the slot an object arrives in, on
-//! the battlefield or back in the pool, behind one AND of the Memos store's kinds.
+//! stack, until a new object arrives in the slot (CR 607.2a). So the move also ends the
+//! memos naming the slot an object arrives in, on the battlefield or back in the pool
+//! (`State::forget_exiled_with`), behind one AND of the Memos store's kinds. A card exiled
+//! "until" a permanent leaves needs no such end: the rules return it as the permanent
+//! leaves (CR 610.3), and the store's invariant holds that permanent to the battlefield.
 //!
 //! Trackers of this turn are cleared whole as the turn begins, inside
 //! [`State::begin_turn`] with the lands played, and a permanent's bits as it leaves the
@@ -383,8 +385,9 @@
 //! that is full returns [`fixed::Full`]. Reads are queries by kind
 //! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`],
 //! [`State::cast_permissions`], [`State::cost_increase`], [`State::paid`],
-//! [`State::x_of`]), with [`State::effects`] and [`State::memos`] for tools, tests and
-//! views. No `&mut` to a store leaves the crate.
+//! [`State::x_of`], [`State::exiled_with`], [`State::exiled_until`]), with
+//! [`State::effects`] and [`State::memos`] for tools, tests and views. No `&mut` to a
+//! store leaves the crate.
 //!
 //! ## Sets and orders
 //!

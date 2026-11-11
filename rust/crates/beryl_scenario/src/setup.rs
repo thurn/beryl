@@ -2,7 +2,7 @@
 //! library, in slots numbered as [`Slots`] says, and moves to its zone.
 
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::CounterKind;
+use beryl_engine::state::{CounterKind, Memo};
 use beryl_engine::{CardIx, CardTable, GameTable, Profile, Seat, Slot, State, Zone};
 
 use crate::{Failure, Scenario};
@@ -120,7 +120,9 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
             for &name in b.exiled_with {
                 let card = library_slot(&s, t, p, name);
                 s.board().place(card, Zone::Exile).map_err(full)?;
-                s.board().set_exiled_with(card, slot);
+                s.board()
+                    .remember(card, Memo::ExiledWith(slot))
+                    .map_err(full)?;
             }
         }
         // Top first: the last placed is on top.

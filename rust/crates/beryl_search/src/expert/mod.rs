@@ -593,7 +593,7 @@ impl<L: Layout> Expert<'_, L> {
                 self.obs().controller(slot).opponent(),
                 Zone::Exile,
             )))
-            .filter(|&s| self.obs().object(s).linked() == Some(slot))
+            .filter(|&s| self.obs().memos(s).exiled_until() == Some(slot))
             .map(|s| self.value(s))
             .sum()
     }

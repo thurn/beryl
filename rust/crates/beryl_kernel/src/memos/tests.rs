@@ -119,12 +119,10 @@ fn signature_tells_two_permanents_apart_by_a_memo() {
 #[test]
 fn memos_survive_small_to_large_and_back() {
     let (t, mut small, slots) = bears(2);
-    let evoked = Memo::Paid(
-        CastingKinds::NONE
-            .with(CastingKind::Evoke)
-            .with(CastingKind::Kicker),
-    );
-    small.remember(slots[0], evoked).unwrap();
+    let paid = CastingKinds::NONE
+        .with(CastingKind::Evoke)
+        .with(CastingKind::Kicker);
+    small.remember(slots[0], Memo::Paid(paid)).unwrap();
     small.remember(slots[1], Memo::X(5)).unwrap();
     derive(&t, &mut small);
 
@@ -132,7 +130,7 @@ fn memos_survive_small_to_large_and_back() {
     let wide = |slot: Slot| slot.to::<LargeSlot>().unwrap();
     assert_eq!(
         large.memos(wide(slots[0])).iter().collect::<Vec<_>>(),
-        [evoked]
+        [Memo::Paid(paid)]
     );
     // The wide game reads by kind and ends a permanent's memos as the narrow one does.
     assert!(large.paid(wide(slots[0]), CastingKind::Evoke));
@@ -158,10 +156,11 @@ fn a_full_store_returns_full_and_a_wide_one_grows() {
     let wide = |slot: Slot| slot.to::<LargeSlot>().unwrap();
     let (&last, filling) = slots.split_last().unwrap();
     for &slot in filling {
-        for memo in [KICKED, Memo::X(1)] {
-            assert_eq!(small.remember(slot, memo), Ok(()));
-            assert_eq!(large.remember(wide(slot), memo), Ok(()));
-        }
+        assert_eq!(small.remember(slot, KICKED), Ok(()));
+        assert_eq!(small.remember(slot, Memo::X(1)), Ok(()));
+        let paid = CastingKinds::NONE.with(CastingKind::Kicker);
+        assert_eq!(large.remember(wide(slot), Memo::Paid(paid)), Ok(()));
+        assert_eq!(large.remember(wide(slot), Memo::X(1)), Ok(()));
     }
     assert_eq!(small.remember(last, Memo::X(4)), Err(Full));
     // What did not fit is in no index.
@@ -179,4 +178,74 @@ fn a_full_store_returns_full_and_a_wide_one_grows() {
             capacity: MEMOS,
         })
     );
+}
+
+/// The `n`th card of the first player's library, exiled.
+fn exiled(s: &mut State, n: usize) -> Slot {
+    let slot = s.library(Seat::P0)[n];
+    s.board().place(slot, Zone::Exile).unwrap();
+    slot
+}
+
+#[test]
+fn a_card_stays_exiled_with_an_object_until_a_new_one_takes_its_slot() {
+    let (t, mut s, slots) = bears(2);
+    let (source, other) = (slots[0], slots[1]);
+    let (first, second, third) = (exiled(&mut s, 0), exiled(&mut s, 1), exiled(&mut s, 2));
+    s.remember(first, Memo::ExiledWith(source)).unwrap();
+    s.remember(second, Memo::ExiledWith(source)).unwrap();
+    s.remember(third, Memo::ExiledWith(other)).unwrap();
+    derive(&t, &mut s);
+    assert_eq!(s.exiled_with(source), [first, second].into_iter().collect());
+    assert_eq!(s.exiled_with(other), Bitboard::single(third));
+    assert_eq!(s.memos(first).exiled_with(), Some(source));
+    assert_eq!(s.memos(first).exiled_until(), None);
+    assert_eq!(s.check_stores(&t), Ok(()));
+    // Cards exiled with one object are alike; with another, not.
+    assert_eq!(s.signature(first), s.signature(second));
+    assert_ne!(s.signature(first), s.signature(third));
+
+    // A card that leaves exile forgets what exiled it: it is a new object (CR 400.7).
+    s.move_object(&mut Sink::off(), second, Zone::Hand, Place::Top)
+        .unwrap();
+    assert_eq!(s.exiled_with(source), Bitboard::single(first));
+
+    // The source leaves: an ability of it still on the stack finds the card (CR 607.2a).
+    s.move_object(&mut Sink::off(), source, Zone::Graveyard, Place::Top)
+        .unwrap();
+    assert_eq!(s.exiled_with(source), Bitboard::single(first));
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
+
+    // The card returns to the battlefield as a new object, which exiled nothing.
+    s.move_object(&mut Sink::off(), source, Zone::Battlefield, Place::Top)
+        .unwrap();
+    assert!(s.exiled_with(source).is_empty());
+    assert_eq!(s.memos(first).exiled_with(), None);
+    assert!(!s.keyed.contains(first) && s.keyed.contains(third));
+    assert_eq!(s.exiled_with(other), Bitboard::single(third));
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+#[test]
+fn what_exiled_a_card_survives_small_to_large_and_back() {
+    let (t, mut small, slots) = bears(1);
+    let card = exiled(&mut small, 0);
+    small.remember(card, Memo::ExiledUntil(slots[0])).unwrap();
+    derive(&t, &mut small);
+    // The permanent is on the battlefield, as the store's check holds it to be.
+    assert_eq!(small.check_stores(&t), Ok(()));
+
+    let large: State<Large> = small.widen();
+    let wide = |slot: Slot| slot.to::<LargeSlot>().unwrap();
+    assert_eq!(
+        large.exiled_until(wide(slots[0])),
+        Bitboard::single(wide(card))
+    );
+    assert_eq!(large.memos(wide(card)).exiled_until(), Some(wide(slots[0])));
+    assert!(large.exiled_with(wide(slots[0])).is_empty());
+    assert_eq!(large.check_stores(&t), Ok(()));
+    let back: State<Small> = large.relayout();
+    assert_eq!(back, small);
 }

@@ -14,7 +14,7 @@ use crate::state::State;
 ///
 /// | Behind the accessor | Written by | Replaced by |
 /// | --- | --- | --- |
-/// | the [`ObjectFlags::LEGACY`] flags: `EXILED_UNTIL`, `EXILED_WITH`, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | memos of the exiled card in the Memos store; a tracker of the permanent |
+/// | the [`ObjectFlags::LEGACY`] flag, `LOYALTY_ACTIVATED` | [`Legacy::set_object_flags`] | a tracker of the permanent |
 /// | [`Counters`]' long-tail kind (`other_kind`, `other`) | [`Legacy::add_counters`], [`Legacy::remove_counters`], [`Legacy::set_counters`] | counter kinds generated from a list, each with its own count |
 pub struct Legacy<'a, L: Layout>(&'a mut State<L>);
 

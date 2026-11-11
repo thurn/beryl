@@ -362,16 +362,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
                 .collect()
         }),
         attached_to: some(o.attached_to()),
-        exiled_by: if flags.has(ObjectFlags::EXILED_UNTIL) {
-            some(o.linked())
-        } else {
-            None
-        },
-        exiled_with: if flags.has(ObjectFlags::EXILED_WITH) {
-            some(o.linked())
-        } else {
-            None
-        },
+        exiled_by: some(obs.memos(slot).exiled_until()),
+        exiled_with: some(obs.memos(slot).exiled_with()),
         combat: if flags.has(ObjectFlags::ATTACKING) {
             let attacks_walker = flags.has(ObjectFlags::ATTACKS_PLANESWALKER);
             let planeswalker = if attacks_walker {
