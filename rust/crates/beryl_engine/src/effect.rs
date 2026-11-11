@@ -6,17 +6,19 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Pause, Types};
+use crate::card::{
+    Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Part, Pause, Prompt, Purpose,
+    Types,
+};
 use crate::chance;
-use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
+use crate::decision::{Answers, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Queue, Small, index};
 use crate::mana;
-use crate::observation::Observation;
-use crate::profile::{Payment, Stops};
+use crate::profile::Payment;
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, ObjectFlags, ObjectRef, PendingTrigger,
     StackEntry, State, Target, TriggerInfo, Zone, ZoneKey,
@@ -25,6 +27,9 @@ use crate::table::GameTable;
 use crate::zone::Place;
 use crate::{cast, face_down};
 use crate::{layers, trigger};
+use beryl_card::prompt;
+
+mod ask;
 
 /// What a body runs against: the working state and tables, the event sink, the stack entry
 /// resolving (its source, controller, targets, X and what triggered it), and where its
@@ -223,190 +228,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
     }
 
-    /// Asks a question (§7.3). A question with one answer is answered silently, except under
-    /// [`Stops::Forced`]. Otherwise the choice record answers it, or an inline source does, or
-    /// the body pauses here. Once the game is over, as when a player won it mid-resolution,
-    /// the body asks nothing more.
-    fn ask(&mut self, d: &Decision<L>) -> Result<Choice, Pause> {
-        debug_assert!(
-            self.ability.asks(),
-            "a body asked a question without declaring may_pause"
-        );
-        debug_assert!(!d.is_empty(), "a question with no answer");
-        if self.state.outcome().is_some() {
-            return Err(Pause);
-        }
-        if d.len() == 1 && self.state.profile().stops != Stops::Forced {
-            return Ok(Choice(0));
-        }
-        if let Some(&c) = self.record.get(self.used) {
-            self.used += 1;
-            return Ok(Choice(c.into()));
-        }
-        if let Some(answers) = self.answers.as_deref_mut()
-            && answers.inline()
-        {
-            // An inline answer is a decision like any other, so it counts toward the budget
-            // as a paused question would when `next` returns it.
-            if self.state.budgets().decisions >= self.state.profile().limits.decisions_per_turn {
-                self.stall(StallReason::DecisionsPerTurn);
-                return Err(Pause);
-            }
-            self.state.count_decision();
-            let answer = answers.answer(Observation::new(self.state, d.player), d);
-            debug_assert!(
-                answer.is_some(),
-                "an inline answer source declined to answer"
-            );
-            if let Some(c) = answer {
-                return Ok(c);
-            }
-        }
-        self.question = Some(d.clone());
-        Err(Pause)
-    }
-
-    fn ask_options(
-        &mut self,
-        player: Seat,
-        kind: DecisionKind,
-        opts: &[Opt<L>],
-        ask: Ask<L>,
-    ) -> Result<Opt<L>, Pause> {
-        let mut list: L::Queue<Opt<L>, 64> = Default::default();
-        for &o in opts {
-            if list.push(o).is_err() {
-                self.full = true;
-                return Err(Pause);
-            }
-        }
-        let d = Decision {
-            player,
-            kind,
-            candidates: Candidates::Options(list),
-            ask,
-        };
-        let c = self.ask(&d)?;
-        Ok(d.candidates.option(c).expect("an answer among the options"))
-    }
-
-    /// Asks `player` yes or no, for the purpose `ask`.
-    pub fn choose_yes_no(&mut self, player: Seat, ask: Ask<L>) -> Result<bool, Pause> {
-        Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No], ask)? == Opt::Yes)
-    }
-
-    /// Asks `player` to choose up to `n` of `candidates`, one at a time, each answer either one
-    /// more object or [`Opt::Done`], for the purpose `ask`. Interchangeable candidates are one
-    /// answer (§7.2).
-    pub fn choose_up_to(
-        &mut self,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        n: u8,
-        ask: Ask<L>,
-    ) -> Result<Bitboard<L::Slot>, Pause> {
-        let mut chosen = Bitboard::EMPTY;
-        while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
-            match self.choose_or_done(player, candidates & !chosen, ask)? {
-                Some(slot) => chosen.insert(slot),
-                None => break,
-            }
-        }
-        Ok(chosen)
-    }
-
-    /// Asks `player` for one more of `candidates`, as an [`Opt::Object`], or [`Opt::Done`].
-    /// Interchangeable candidates are one answer (§7.2).
-    fn choose_or_done(
-        &mut self,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        ask: Ask<L>,
-    ) -> Result<Option<L::Slot>, Pause> {
-        let mut opts: L::Queue<Opt<L>, 64> = Default::default();
-        let left = crate::engine::collapse(self.state, candidates);
-        for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
-            if opts.push(o).is_err() {
-                self.full = true;
-                return Err(Pause);
-            }
-        }
-        Ok(
-            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice(), ask)? {
-                Opt::Object(slot) => Some(slot),
-                _ => None,
-            },
-        )
-    }
-
-    /// Asks `player` to choose one of `candidates`, which must not be empty, for the purpose
-    /// `ask`.
-    pub fn choose_object(
-        &mut self,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        ask: Ask<L>,
-    ) -> Result<L::Slot, Pause> {
-        self.ask_object(player, DecisionKind::ChooseObject, candidates, ask)
-    }
-
-    fn ask_object(
-        &mut self,
-        player: Seat,
-        kind: DecisionKind,
-        candidates: Bitboard<L::Slot>,
-        ask: Ask<L>,
-    ) -> Result<L::Slot, Pause> {
-        let d = Decision {
-            player,
-            kind,
-            candidates: Candidates::Objects(crate::engine::collapse(self.state, candidates)),
-            ask,
-        };
-        let c = self.ask(&d)?;
-        Ok(d.candidates.object(c).expect("an answer among the objects"))
-    }
-
-    /// `player` discards a card of their choice
-    /// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)): "By default, effects
-    /// that cause a player to discard a card allow the affected player to choose which card
-    /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
-    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef<L>>, Pause> {
-        self.discard_one_of(player, self.state.zone(ZoneKey::Of(player, Zone::Hand)))
-    }
-
-    /// `player` discards one of `cards`, cards in their hand, of their choice, as Thirst for
-    /// Discovery's "discard a basic land card" (CR 701.9b). Returns the card in the
-    /// graveyard, or `None` when there is none to discard.
-    pub fn discard_one_of(
-        &mut self,
-        player: Seat,
-        cards: Bitboard<L::Slot>,
-    ) -> Result<Option<ObjectRef<L>>, Pause> {
-        debug_assert!((cards & !self.state.zone(ZoneKey::Of(player, Zone::Hand))).is_empty());
-        if cards.is_empty() {
-            return Ok(None);
-        }
-        let slot = self.ask_object(player, DecisionKind::Discard, cards, Ask::Plain)?;
-        self.discard(self.state.object_ref(slot));
-        Ok(Some(self.state.object_ref(slot)))
-    }
-
-    /// Asks `player` to choose one of `candidates`, or none when they may decline: a yes or
-    /// no first, then the object, both for the purpose `ask`. With no candidates there is
-    /// nothing to ask.
-    pub fn may_choose_object(
-        &mut self,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        ask: Ask<L>,
-    ) -> Result<Option<L::Slot>, Pause> {
-        if candidates.is_empty() || !self.choose_yes_no(player, ask)? {
-            return Ok(None);
-        }
-        self.choose_object(player, candidates, ask).map(Some)
-    }
-
     /// "[Effect] unless [player] pays [cost]"
     /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the
     /// same thing as '[A player may do something else]. If [that player doesn't], [do
@@ -421,7 +242,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         if !self.checked(r) {
             return Ok(false);
         }
-        if !self.choose_yes_no(player, Ask::UnlessPays { cost })? {
+        let prompt = Prompt::new(Purpose::UnlessPays).cost(cost);
+        if !self.choose_yes_no(player, prompt, Bitboard::EMPTY)? {
             return Ok(false);
         }
         self.pay(player, cost)?;
@@ -449,7 +271,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                     player,
                     DecisionKind::ManaPayment,
                     options.as_slice(),
-                    Ask::Plain,
+                    Prompt::new(Purpose::Mana).cost(remaining),
+                    Bitboard::EMPTY,
                 )?;
                 let r =
                     mana::manual_pay(self.state, self.table, self.sink, player, remaining, option);
@@ -476,7 +299,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             player,
             DecisionKind::PaymentPlan,
             opts.as_slice(),
-            Ask::Plain,
+            Prompt::new(Purpose::Mana).cost(cost).part(Part::Plan),
+            Bitboard::EMPTY,
         )?
         else {
             unreachable!("a plan");
@@ -749,8 +573,12 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         if self.on_battlefield(object) {
             self.add_counters(object, CounterKind::PlusOne, 1);
         }
+        // The card is revealed, on top of the library: a yes puts it into the graveyard.
+        let prompt = Prompt::new(Purpose::Explore)
+            .count(1)
+            .places(prompt::Place::Graveyard, prompt::Place::Top);
         if let Some(slot) = top
-            && self.choose_yes_no(player, Ask::Explore)?
+            && self.choose_yes_no(player, prompt, Bitboard::single(slot))?
         {
             self.move_to(self.state.object_ref(slot), Zone::Graveyard, Reason::Effect);
         }
@@ -831,12 +659,19 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Every arrangement is one sequence of answers. [CR 701.22b](https://yawgatog.com/resources/magic-rules/#R70122b):
     /// "If a player is instructed to scry 0, no scry event occurs."
     pub fn scry(&mut self, player: Seat, n: u8) -> Flow {
-        let ask = Ask::Scry { count: n };
+        // One prompt: the cards for the bottom, at most all of them, then the order of the
+        // rest on top.
+        let scry = Prompt::new(Purpose::Scry)
+            .count(n)
+            .places(prompt::Place::Bottom, prompt::Place::Top);
         let mut left = self.top_of_library(player, n);
         self.look_at(player, left);
         let mut bottom = 0;
         while !left.is_empty() {
-            let Some(slot) = self.choose_or_done(player, left, ask)? else {
+            let bottom_pick = scry
+                .most(u8::try_from(left.count()).unwrap_or(n))
+                .part(Part::First);
+            let Some(slot) = self.choose_or_done(player, left, bottom_pick)? else {
                 break;
             };
             let r = self.state.reorder_library(slot, Place::Bottom);
@@ -846,7 +681,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         let mut order: L::Queue<L::Slot, 60> = Default::default();
         while left.count() > 1 {
-            let slot = self.choose_object(player, left, ask)?;
+            let slot = self.choose_object(player, left, scry.part(Part::Second))?;
             left.remove(slot);
             let _ = order.push(slot);
         }
@@ -878,7 +713,11 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             return Ok(());
         }
         self.look_at(player, top);
-        let chosen = self.choose_object(player, top, Ask::ManifestDread)?;
+        let prompt = Prompt::new(Purpose::ManifestDread)
+            .count(2)
+            .most(1)
+            .places(prompt::Place::Battlefield, prompt::Place::Graveyard);
+        let chosen = self.choose_object(player, top, prompt)?;
         let r = face_down::manifest(self.state, self.table, self.sink, chosen, player);
         self.check(r);
         let mut rest = top;
@@ -956,7 +795,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let library = self.state.zone(ZoneKey::Of(player, Zone::Library));
         self.look_at(player, library);
         let found = filter.select(self.state, self.table, library, player);
-        self.choose_up_to(player, found, n, Ask::Search { max: n })
+        self.choose_up_to(player, found, n, Prompt::new(Purpose::Search).most(n))
     }
 
     /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:
@@ -1206,7 +1045,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 you,
                 DecisionKind::AttackTarget,
                 opts.as_slice(),
-                Ask::AttackTarget { attackers: tokens },
+                Prompt::new(Purpose::Attack).part(Part::Aim),
+                tokens,
             )?
             else {
                 unreachable!("a defender")
@@ -1325,7 +1165,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             you,
         );
         for slot in self
-            .choose_up_to(you, lands, n, Ask::Untap { max: n })?
+            .choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?
             .iter()
         {
             let land = self.state.object_ref(slot);

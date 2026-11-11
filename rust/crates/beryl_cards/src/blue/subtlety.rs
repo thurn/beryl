@@ -5,11 +5,11 @@
 
 use beryl_engine::card::{
     Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost,
-    Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Place, Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{Ask, DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Bitboard, DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -26,7 +26,8 @@ fn tuck<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         return Ok(());
     };
     let owner = ctx.state().object(spell.slot).owner;
-    let top = ctx.choose_yes_no(owner, Ask::TopOrBottom { card: spell.slot })?;
+    let top_or_bottom = Prompt::new(Purpose::TopOrBottom).places(Place::Top, Place::Bottom);
+    let top = ctx.choose_yes_no(owner, top_or_bottom, Bitboard::single(spell.slot))?;
     ctx.put_spell_into_library(spell, top);
     Ok(())
 }

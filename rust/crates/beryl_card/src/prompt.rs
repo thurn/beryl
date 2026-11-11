@@ -25,7 +25,8 @@
 //! holds is fixed by the shape and the part, never by the purpose:
 //!
 //! - at a [`Part::Whether`] or [`Part::Instead`], the objects the picks after a yes choose
-//!   among;
+//!   among; the pick after a [`Part::Whether`] carries the same set, of which its candidates
+//!   are one of each group of interchangeable objects;
 //! - at a [`Part::Aim`], the objects being aimed;
 //! - for a [`Shape::YesNo`] or a [`Shape::Mode`], the objects the question is about;
 //! - for a [`Shape::Divide`], the objects still to be given a share, the first of them next;

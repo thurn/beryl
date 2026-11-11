@@ -5,13 +5,13 @@
 //! the rest on the bottom of your library in a random order."
 
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, ManaCost, Subtype,
-    Subtypes, Trigger, Types,
+    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, ManaCost, Place, Prompt,
+    Purpose, Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -29,13 +29,11 @@ fn dig<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let mut rest = ctx.top_of_library(you, 4);
     ctx.look_at(you, rest);
     let spells = NONCREATURE_NONLAND.select(ctx.state(), ctx.table(), rest, you);
-    let look = Ask::Look {
-        player: you,
-        zone: Zone::Library,
-        count: 4,
-        to: Zone::Hand,
-        eligible: spells,
-    };
+    // The top four are looked at, for one card to put into the hand.
+    let look = Prompt::new(Purpose::Look)
+        .count(4)
+        .most(1)
+        .places(Place::Hand, Place::None);
     if let Some(slot) = ctx.may_choose_object(you, spells, look)? {
         ctx.reveal(slot);
         ctx.move_to(ctx.state().object_ref(slot), Zone::Hand, Reason::Effect);

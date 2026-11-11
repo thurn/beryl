@@ -19,14 +19,6 @@
     "CounterKind::Chorus",
     "Cost::waterbend",
     "CastStep::Waterbend",
-    "DecisionKind::Waterbend",
-    "Ask::Waterbend",
-    "Ask::Take",
-    "Ask::Bottom",
-    "Ask::DiscardBasicLand",
-    "Ask::TopOrBottom",
-    "Ask::MayMove",
-    "Ask::MaySearch",
-    "Ask::ManifestDread"
+    "DecisionKind::Waterbend"
   ]
 }

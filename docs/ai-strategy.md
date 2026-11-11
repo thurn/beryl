@@ -290,10 +290,10 @@ from the champion, so a loser is dropped by not setting it.
 02. **Anchor at combat and finds** (B). `guarded` covers only a priority
     decision where greedy passes and the search casts. Extend it to `Attacker`
     and `AttackTarget` at near-ties, and to a search's find (`ChooseUpTo` under
-    `Ask::Search`), where a card to hand is never worse than nothing. Evidence:
-    the Spirit held back and the Crypt declined, both outside the anchor. Risk:
-    by-7wl.1 put a broad anchor at 0.04 to 0.07 a game by the search's biased
-    estimate; the screen and the match measure it properly.
+    `Purpose::Search`), where a card to hand is never worse than nothing.
+    Evidence: the Spirit held back and the Crypt declined, both outside the
+    anchor. Risk: by-7wl.1 put a broad anchor at 0.04 to 0.07 a game by the
+    search's biased estimate; the screen and the match measure it properly.
 
 03. **Decided positions default to greedy** (B). Where the root's estimate is
     above 0.9 or below 0.1, widen the anchor to every decision kind and raise

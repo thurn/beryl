@@ -11,9 +11,9 @@ use beryl_card::effect::build::{
 use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects};
 
 use crate::card::{
-    Ability, AbilityKind, Behavior, FaceAbility, Modification, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Prompt, Purpose,
+    TargetKind, TargetSpec, Types,
 };
-use crate::decision::Ask;
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
 use crate::filter::{Filter, Whose};
@@ -257,7 +257,15 @@ fn a_choice_in_the_data_pauses_until_it_is_answered() {
     );
 
     let question = resolve(&t, &mut { s }, &mut x, source, &SCRY, &[], &[]).unwrap();
-    assert_eq!(question.ask, Ask::Scry { count: 2 });
+    // The first pick of a scry: a card for the bottom, of the two looked at.
+    assert_eq!(
+        question.prompt,
+        Prompt::new(Purpose::Scry)
+            .count(2)
+            .most(2)
+            .places(Place::Bottom, Place::Top)
+            .part(Part::First)
+    );
     for ability in [&MAY, &DISCARD, &SCRY] {
         assert!(ability.asks());
     }

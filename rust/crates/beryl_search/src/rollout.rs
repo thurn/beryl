@@ -28,12 +28,12 @@ use std::cell::Cell;
 
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
-    Keywords, Replacement, TargetKind, TargetSpec, Trigger, Types,
+    Keywords, Purpose, Replacement, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
-    Answers, Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
+    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
     Scratch, Seat, State, Step, Zone, apply_decided, next,
 };
 
@@ -203,7 +203,7 @@ impl RolloutPolicy {
             // only those not worth drawing go. Anything else, such as lands to untap, is worth
             // taking by its value.
             DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
-                Some(slot) if matches!(d.ask, Ask::Search { .. }) => {
+                Some(slot) if d.prompt.purpose == Purpose::Search => {
                     Some(1 + p.in_hand(slot).max(0))
                 }
                 Some(slot) if obs.object(slot).zone == Zone::Library => {

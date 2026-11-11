@@ -2,11 +2,12 @@
 //! discard a basic land card."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Supertypes, Types,
+    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Part, Prompt, Purpose, Supertypes,
+    Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::{Ask, DecisionKind, Seat, Zone, ZoneKey};
+use beryl_engine::{DecisionKind, Seat, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
@@ -50,16 +51,13 @@ fn draw_three_discard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.draw(you, 3);
     let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
     let basics = BASIC_LAND.select(ctx.state(), ctx.table(), hand, you);
-    if !basics.is_empty()
-        && hand.count() >= 2
-        && ctx.choose_yes_no(you, Ask::DiscardBasicLand { count: 2 })?
-    {
+    // One prompt: a yes discards one of the basic lands in place of the two cards.
+    let instead = Prompt::new(Purpose::Discard).most(2).part(Part::Instead);
+    if !basics.is_empty() && hand.count() >= 2 && ctx.choose_yes_no(you, instead, basics)? {
         ctx.discard_one_of(you, basics)?;
         return Ok(());
     }
-    for _ in 0..2 {
-        ctx.discard_a_card(you)?;
-    }
+    ctx.discard_cards(you, 2)?;
     Ok(())
 }
 

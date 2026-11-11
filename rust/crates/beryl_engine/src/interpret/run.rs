@@ -5,11 +5,12 @@
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random).
 
-use beryl_card::{CopyException, Duration, Effect, LibraryPosition, Objects, Players};
+use beryl_card::{
+    CopyException, Duration, Effect, LibraryPosition, Objects, Players, Prompt, Purpose,
+};
 
 use crate::bitboard::Bitboard;
 use crate::card::{CardDef, FaceAbility, Flow, ManaCost, ManaSet, Modification};
-use crate::decision::Ask;
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Reason, TokenEntry};
 use crate::ids::Seat;
@@ -19,6 +20,9 @@ use crate::state::{
     self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, Zone, ZoneKey,
 };
 use crate::zone::Place;
+
+/// The yes or no of an [`Effect::May`], about nothing but the effect.
+const MAY: Prompt = Prompt::new(Purpose::May);
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -97,7 +101,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             // player announces these while applying the effect."
             Effect::May { player, effect } => {
                 let agreed = match self.one(player) {
-                    Some(player) => self.ctx.choose_yes_no(player, Ask::Plain)?,
+                    Some(player) => self.ctx.choose_yes_no(player, MAY, Bitboard::EMPTY)?,
                     None => false,
                 };
                 return self.carry_out_or_nothing(agreed.then_some(effect));
@@ -430,12 +434,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     fn discard(&mut self, players: Players, count: u8) -> Result<Outcome<L>, crate::card::Pause> {
         let mut discarded = Bitboard::EMPTY;
         for player in self.in_turn_order(players) {
-            for _ in 0..count {
-                let Some(card) = self.ctx.discard_a_card(player)? else {
-                    break;
-                };
-                discarded.insert(card.slot);
-            }
+            discarded |= self.ctx.discard_cards(player, count)?;
         }
         Ok(Outcome::acted_on(discarded))
     }

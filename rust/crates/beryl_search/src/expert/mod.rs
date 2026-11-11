@@ -46,13 +46,13 @@ use std::cell::OnceCell;
 
 use beryl_cards::names;
 use beryl_engine::card::{
-    Ability, AbilityIx, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, Types,
+    Ability, AbilityIx, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, Purpose, Types,
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
-    Ask, Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat,
-    Step, TurnStep, Zone, apply, next,
+    Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat, Step,
+    TurnStep, Zone, apply, next,
 };
 
 use crate::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};
@@ -606,9 +606,13 @@ impl<L: Layout> Expert<'_, L> {
     /// way out of an emptying library. From a look at our own library, as Thundertrap
     /// Trainer's, or for the top of a scry, dying: the removal we can cast now.
     fn take_from_hand(&self, d: &Decision<L>) -> Option<Choice> {
-        let (player, zone) = match d.ask {
-            Ask::Look { player, zone, .. } => (player, zone),
-            Ask::Scry { .. } => (self.me(), Zone::Library),
+        let (player, zone) = match d.prompt.purpose {
+            // The cards looked at lie in their owner's library or hand.
+            Purpose::Look => {
+                let card = self.obs().object(d.about.first()?);
+                (card.owner, card.zone)
+            }
+            Purpose::Scry => (self.me(), Zone::Library),
             _ => return None,
         };
         // Our library: dying, the answer we can cast now.
@@ -2708,7 +2712,7 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Permanents to untap, as Time Spiral's "You untap up to six lands": ours only.
     fn choose_up_to(&self, d: &Decision<L>) -> Option<Choice> {
-        if !matches!(d.ask, Ask::Untap { .. }) {
+        if d.prompt.purpose != Purpose::Untap {
             return None;
         }
         Some(best(d, |c| match c.option() {
@@ -2726,9 +2730,10 @@ impl<L: Layout> Expert<'_, L> {
     /// one the opponent would want, or one we would not. An explore, as a Map's: put the
     /// revealed card into the graveyard only if it is not worth drawing.
     fn yes_no(&self, d: &Decision<L>) -> Option<Choice> {
-        let player = match d.ask {
-            Ask::Fateseal { player } => player,
-            Ask::Explore => self.me(),
+        let player = match d.prompt.purpose {
+            // The card looked at is the top of its owner's library.
+            Purpose::Fateseal => self.obs().object(d.about.first()?).owner,
+            Purpose::Explore => self.me(),
             _ => return None,
         };
         let &top = self.obs().library(player).last()?;

@@ -3,6 +3,7 @@
 //! does not know. Every type here has a generated TypeScript twin in
 //! `ui/src/generated/protocol.ts` ([`crate::typescript`]).
 
+mod ask;
 mod build;
 mod candidates;
 mod decide;

@@ -7,10 +7,9 @@
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, Face, FaceIx, Flow, Keywords,
-    ManaColor, ManaCost, ManaSet, Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec,
-    Trigger, Types,
+    ManaColor, ManaCost, ManaSet, Prompt, Purpose, Rule, Subtype, Subtypes, Supertypes, TargetKind,
+    TargetSpec, Trigger, Types,
 };
-use crate::decision::Ask;
 use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
@@ -66,13 +65,16 @@ fn counter_exile<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
+/// A choice of one object, for nothing a purpose names.
+const CHOOSE: Prompt = Prompt::new(Purpose::Choose).most(1);
+
 /// "Draw two cards, then put a card from your hand on top of your library."
 fn ponder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 2);
     let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
     if !hand.is_empty() {
-        let card = ctx.choose_object(you, hand, Ask::Plain)?;
+        let card = ctx.choose_object(you, hand, CHOOSE)?;
         let card = ctx.state().object_ref(card);
         ctx.move_to(card, Zone::Library, Reason::Effect);
     }
@@ -119,10 +121,11 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         .iter()
         .filter(|&slot| !LANDS.matches(s, ctx.table, slot, opponent))
         .collect();
-    if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), Ask::Plain)? {
+    let may = Prompt::new(Purpose::May);
+    if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), may, Bitboard::EMPTY)? {
         return Ok(());
     }
-    let card = ctx.choose_object(ctx.controller(), nonland, Ask::Plain)?;
+    let card = ctx.choose_object(ctx.controller(), nonland, CHOOSE)?;
     ctx.move_to(ctx.state().object_ref(card), Zone::Exile, Reason::Exile);
     let exiled = ctx.state().object_ref(card);
     ctx.allow_cast(exiled, opponent, 2, false, false);
@@ -136,7 +139,7 @@ fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if hand.is_empty() {
         return Ok(());
     }
-    let card = ctx.choose_object(you, hand, Ask::Plain)?;
+    let card = ctx.choose_object(you, hand, CHOOSE)?;
     ctx.move_to(
         ctx.state().object_ref(card),
         Zone::Graveyard,
@@ -151,9 +154,7 @@ fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 1);
-    for _ in 0..2 {
-        ctx.discard_a_card(you)?;
-    }
+    ctx.discard_cards(you, 2)?;
     Ok(())
 }
 

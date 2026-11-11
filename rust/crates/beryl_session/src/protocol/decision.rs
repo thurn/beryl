@@ -92,7 +92,8 @@ pub enum RefusalView {
     Target,
 }
 
-/// What a decision asks ([`Ask`](beryl_engine::Ask)), by public slot and relative to the viewer.
+/// What a decision asks, from its [`Prompt`](beryl_engine::card::Prompt), by public slot and
+/// relative to the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AskView {

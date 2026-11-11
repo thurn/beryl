@@ -15,9 +15,9 @@ use std::cell::{Cell, OnceCell};
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
-    Keywords, ManaCost, Needs, Rule, TargetKind, TargetSpec, Timing, Types,
+    Keywords, ManaCost, Needs, Part, Prompt, Purpose, Rule, TargetKind, TargetSpec, Timing, Types,
 };
-use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
+use crate::decision::{Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{self, Evaluate, Filter};
@@ -1531,14 +1531,21 @@ pub(crate) fn decision<L: Layout>(
     sink: &mut Sink<L>,
     c: &Casting,
 ) -> Result<Decision<L>, Full> {
-    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>| Decision {
+    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>, prompt: Prompt| Decision {
         player: c.player,
         kind,
         candidates: Candidates::Options(list),
-        ask: Ask::Plain,
+        prompt,
+        about: Bitboard::EMPTY,
     };
+    // The targets of one spec are one prompt, which says how many are still to choose.
+    let target = Prompt::new(Purpose::Target).most(c.left);
     Ok(match c.step {
-        CastStep::X => options(DecisionKind::X, x_options(s, t, c)?),
+        CastStep::X => options(
+            DecisionKind::X,
+            x_options(s, t, c)?,
+            Prompt::new(Purpose::X),
+        ),
         CastStep::TargetCount => {
             let entry = top(s);
             let spec = &specs(t, &entry)[usize::from(c.spec)];
@@ -1547,39 +1554,37 @@ pub(crate) fn decision<L: Layout>(
             for n in 0..=most {
                 list.push(Opt::Number(n as u8))?;
             }
-            options(DecisionKind::TargetCount, list)
+            let count = Prompt::new(Purpose::Target)
+                .most(spec.count)
+                .part(Part::Count);
+            options(DecisionKind::TargetCount, list, count)
         }
         CastStep::Target => match target_options(s, t, c) {
             TargetSet::Objects(b) => Decision {
                 player: c.player,
                 kind: DecisionKind::Target,
                 candidates: Candidates::Objects(collapse(s, b)),
-                ask: Ask::Plain,
+                prompt: target,
+                about: Bitboard::EMPTY,
             },
             TargetSet::Players(p) => {
                 let mut list: L::Queue<Opt<L>, 64> = Default::default();
                 for player in Seat::BOTH.into_iter().filter(|q| p & (1 << q.get()) != 0) {
                     list.push(Opt::Player(player))?;
                 }
-                options(DecisionKind::Target, list)
+                options(DecisionKind::Target, list, target)
             }
         },
         CastStep::Plan => {
             let entry = top(s);
-            let plans = mana::plans(
-                s,
-                t,
-                sink,
-                c.player,
-                total_cost(t, &entry, c),
-                Bitboard::EMPTY,
-                false,
-            )?;
+            let cost = total_cost(t, &entry, c);
+            let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for i in 0..plans.len() {
                 list.push(Opt::Plan(index::<L>(i)))?;
             }
-            options(DecisionKind::PaymentPlan, list)
+            let plan = Prompt::new(Purpose::Mana).cost(cost).part(Part::Plan);
+            options(DecisionKind::PaymentPlan, list, plan)
         }
         CastStep::Crew => {
             let entry = top(s);
@@ -1590,39 +1595,31 @@ pub(crate) fn decision<L: Layout>(
                     s,
                     crew_candidates(s, c.player, source_of(&entry).expect("a Vehicle to crew")),
                 )),
-                ask: Ask::Crew {
-                    crew: entry_ability(t, &entry).map_or(0, |a| a.cost.crew),
-                    left: c.left,
-                },
+                // The crew cost's power, and what of it is still to tap.
+                prompt: Prompt::new(Purpose::Crew)
+                    .count(entry_ability(t, &entry).map_or(0, |a| a.cost.crew))
+                    .most(c.left),
+                about: Bitboard::EMPTY,
             }
         }
         CastStep::Manual => options(
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
+            Prompt::new(Purpose::Mana).cost(c.remaining),
         ),
-        CastStep::Waterbend => Decision {
-            ask: Ask::Waterbend {
-                cost: total_cost(t, &top(s), c),
-            },
-            ..options(DecisionKind::Waterbend, waterbend_options(s, t, c)?)
+        CastStep::Waterbend => options(
+            DecisionKind::Waterbend,
+            waterbend_options(s, t, c)?,
+            Prompt::new(Purpose::Waterbend).cost(total_cost(t, &top(s), c)),
+        ),
+        // The cards lie in the zone the cost exiles from, the hand or the graveyard.
+        CastStep::Exile => Decision {
+            player: c.player,
+            kind: DecisionKind::ExileCost,
+            candidates: Candidates::Objects(exile_choices(s, t, c)),
+            prompt: Prompt::new(Purpose::ExileCost).most(c.left),
+            about: Bitboard::EMPTY,
         },
-        CastStep::Exile => {
-            let entry = top(s);
-            let face = t.def(entry.card).face(entry.face);
-            let zone = match ExileCost::of(face, entry.costs) {
-                Some(ExileCost::Graveyard(_)) => Zone::Graveyard,
-                _ => Zone::Hand,
-            };
-            Decision {
-                player: c.player,
-                kind: DecisionKind::ExileCost,
-                candidates: Candidates::Objects(exile_choices(s, t, c)),
-                ask: Ask::ExileCards {
-                    zone,
-                    count: c.left,
-                },
-            }
-        }
     })
 }
 

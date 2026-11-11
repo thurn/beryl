@@ -17,7 +17,7 @@ use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, ObjectRef, Pending, StackEntry, Turn};
 use beryl_engine::{
-    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
+    Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
     NextStop, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, Small,
     StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
     view,
@@ -1855,7 +1855,7 @@ impl Game {
     /// shuffle loses a player a card they put back on top, a cost not worth a question before
     /// every search: a player who must keep it plays under exact stops, which ask.
     fn searches_unasked(d: &Decision<Large>) -> bool {
-        d.ask == Ask::MaySearch
+        d.prompt.purpose == beryl_engine::card::Purpose::MaySearch
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their

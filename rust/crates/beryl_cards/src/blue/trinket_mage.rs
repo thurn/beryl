@@ -3,12 +3,13 @@
 //! it into your hand, then shuffle."
 
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Trigger, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Prompt, Purpose, Subtype, Subtypes, Trigger,
+    Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
-use beryl_engine::{Ask, DecisionKind, Zone};
+use beryl_engine::{Bitboard, DecisionKind, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -26,7 +27,7 @@ const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::Ma
 /// "To reveal a card, show that card to all players for a brief time."
 fn tutor<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    if !ctx.choose_yes_no(you, Ask::MaySearch)? {
+    if !ctx.choose_yes_no(you, Prompt::new(Purpose::MaySearch), Bitboard::EMPTY)? {
         return Ok(());
     }
     if let Some(slot) = ctx.search_library(you, TRINKET)? {

@@ -1,12 +1,14 @@
 //! Building a [`PlayerView`] from one player's [`Observation`].
 
-use beryl_engine::card::{Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Types};
+use beryl_engine::card::{
+    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Part, Purpose, Shape, Types,
+};
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry};
 use beryl_engine::{
-    Ask, Decision, DecisionKind, GameTable, Layout, Observation, Outcome, Seat, SlotId, Small,
-    Zone, ZoneKey,
+    Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, Zone,
+    ZoneKey,
 };
 
 use super::{
@@ -162,10 +164,10 @@ pub(super) fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<
         } => Some(d),
         _ => None,
     };
-    decision.and_then(|d| match d.ask {
-        Ask::AttackTarget { attackers } => Some(slots(attackers.iter())),
-        _ => None,
-    })
+    // The aim of an attack names the creatures being aimed.
+    decision
+        .filter(|d| d.prompt.purpose == Purpose::Attack && d.prompt.part == Part::Aim)
+        .map(|d| slots(d.about.iter()))
 }
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
@@ -194,49 +196,42 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
     }
 }
 
+/// What the opponent sees of the cards `d`'s prompt has its player look through: the hand or
+/// the library its object set lies in, or else its candidates, and how much of it.
 fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<CardHandling> {
-    let library = |player, count: Option<u8>| {
-        let size = obs.library(player).len();
-        let count = count.map(|n| n.min(u8::try_from(size).unwrap_or(u8::MAX)));
-        (size > 0 && count != Some(0)).then(|| CardHandling::Library {
-            side: side(obs, player),
-            count,
-            scry: matches!(d.ask, Ask::Scry { .. }).then_some(true),
-        })
-    };
-    let hand = |player| {
-        (!obs.zone(ZoneKey::Of(player, Zone::Hand)).is_empty()).then(|| CardHandling::Hand {
-            side: side(obs, player),
-        })
-    };
-    match d.ask {
-        Ask::Scry { count } | Ask::Take { count, .. } | Ask::Bottom { count } => {
-            library(d.player, Some(count))
+    // A yes or no, or a mode, about a card shows the opponent nothing more than the table
+    // does: the card is revealed (an explore's) or being played (a land that may cost life, a
+    // card offered to cast). The two that are looks at hidden cards do.
+    if matches!(d.prompt.shape(), Shape::YesNo | Shape::Mode)
+        && !matches!(d.prompt.purpose, Purpose::Fateseal | Purpose::Mulligan)
+    {
+        return None;
+    }
+    let shown = d.about.first().or_else(|| match &d.candidates {
+        Candidates::Objects(cards) => cards.first(),
+        Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
+            Opt::Object(slot) => Some(slot),
+            _ => None,
+        }),
+    })?;
+    let card = obs.object(shown);
+    let player = card.owner;
+    match card.zone {
+        Zone::Library => {
+            // The top cards the prompt counts, or the whole library.
+            let size = obs.library(player).len();
+            let count = (d.prompt.count > 0)
+                .then(|| d.prompt.count.min(u8::try_from(size).unwrap_or(u8::MAX)));
+            Some(CardHandling::Library {
+                side: side(obs, player),
+                count,
+                scry: (d.prompt.purpose == Purpose::Scry).then_some(true),
+            })
         }
-        Ask::Look {
-            player,
-            zone,
-            count,
-            ..
-        } => match zone {
-            Zone::Library => library(player, Some(count)),
-            Zone::Hand => hand(player),
-            _ => None,
-        },
-        Ask::Fateseal { player } => library(player, Some(1)),
-        Ask::ManifestDread => library(d.player, Some(2)),
-        Ask::Search { .. } => library(d.player, None),
-        Ask::PutBack { .. }
-        | Ask::DiscardBasicLand { .. }
-        | Ask::ExileCards {
-            zone: Zone::Hand, ..
-        } => hand(d.player),
-        _ => match d.kind {
-            DecisionKind::KeepOrMulligan | DecisionKind::PutOnBottom | DecisionKind::Discard => {
-                hand(d.player)
-            }
-            _ => None,
-        },
+        Zone::Hand => Some(CardHandling::Hand {
+            side: side(obs, player),
+        }),
+        _ => None,
     }
 }
 

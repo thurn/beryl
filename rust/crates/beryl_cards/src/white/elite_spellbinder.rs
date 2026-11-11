@@ -4,13 +4,13 @@
 //! to cast."
 
 use beryl_engine::card::{
-    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Place, Prompt,
+    Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
-use beryl_engine::{Ask, DecisionKind, TurnStep, Zone, ZoneKey};
+use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -31,13 +31,10 @@ fn spellbind<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.look_at(you, hand);
     let nonland =
         Filter::Not(&Filter::Types(Types::LAND)).select(ctx.state(), ctx.table(), hand, you);
-    let look = Ask::Look {
-        player: them,
-        zone: Zone::Hand,
-        count: u8::try_from(hand.count()).unwrap_or(u8::MAX),
-        to: Zone::Exile,
-        eligible: nonland,
-    };
+    // The whole hand is looked at, for one card to exile.
+    let look = Prompt::new(Purpose::Look)
+        .most(1)
+        .places(Place::Exile, Place::None);
     if let Some(slot) = ctx.may_choose_object(you, nonland, look)? {
         ctx.move_to(ctx.state().object_ref(slot), Zone::Exile, Reason::Exile);
         let exiled = ctx.state().object_ref(slot);

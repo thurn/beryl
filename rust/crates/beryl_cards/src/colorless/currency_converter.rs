@@ -6,12 +6,12 @@
 use beryl_card::Effect;
 use beryl_card::effect::build::{YOU, discard, draw, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Subtype,
-    Subtypes, Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Place,
+    Prompt, Purpose, Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
-use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Bitboard, DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -50,11 +50,8 @@ fn exile_discarded<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if !s.is_current(card) || s.object(card.slot).zone != Zone::Graveyard {
         return Ok(());
     }
-    let ask = Ask::MayMove {
-        card: card.slot,
-        to: Zone::Exile,
-    };
-    if ctx.choose_yes_no(ctx.controller(), ask)? {
+    let exile = Prompt::new(Purpose::Move).places(Place::Exile, Place::None);
+    if ctx.choose_yes_no(ctx.controller(), exile, Bitboard::single(card.slot))? {
         ctx.exile_linked(card);
     }
     Ok(())
@@ -74,7 +71,11 @@ fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if exiled.is_empty() {
         return Ok(());
     }
-    let slot = ctx.choose_object(ctx.controller(), exiled, Ask::Plain)?;
+    let slot = ctx.choose_object(
+        ctx.controller(),
+        exiled,
+        Prompt::new(Purpose::Choose).most(1),
+    )?;
     let card = ctx.state().object_ref(slot);
     let def = ctx.table().def(ctx.state().card(slot));
     let land = def.front().types.contains(Types::LAND);

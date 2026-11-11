@@ -1,15 +1,17 @@
 //! Building the open decision, its refusals and what passing leads to.
 
+use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{StackEntry, TurnStep};
 use beryl_engine::{
-    Ask, Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt,
-    Refusal, SlotId, Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
+    Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt, Refusal,
+    SlotId, Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 
+use super::ask::ask_view;
 use super::{
     AskView, Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView,
-    Refused, StopsSetting, candidate, mana_text, name, side, slots, stack_item,
+    Refused, StopsSetting, candidate, name, stack_item,
 };
 
 pub(super) fn decision_view<L: Layout>(
@@ -42,7 +44,7 @@ pub(super) fn decision_view<L: Layout>(
         kind: d.kind.into(),
         candidates,
         resolving: resolving.map(|e| stack_item(t, obs, e)),
-        ask: ask_view(obs, d.ask),
+        ask: ask_view(obs, d),
         pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops).into()),
         pass_on: if d.kind == DecisionKind::Priority {
             pass_on(obs, stops).map(Into::into)
@@ -119,59 +121,6 @@ pub(super) fn halt_view<L: Layout>(
     }
 }
 
-fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask<L>) -> AskView {
-    match ask {
-        Ask::Plain => AskView::Plain,
-        Ask::AttackTarget { attackers } => AskView::AttackTarget {
-            attackers: attackers.iter().map(SlotId::num).collect(),
-        },
-        Ask::Scry { count } => AskView::Scry { count },
-        Ask::Look {
-            player,
-            zone,
-            count,
-            to,
-            eligible,
-        } => AskView::Look {
-            player: side(obs, player),
-            zone: zone.into(),
-            count,
-            to: to.into(),
-            eligible: slots(eligible.iter()),
-        },
-        Ask::PutBack { count } => AskView::PutBack { count },
-        Ask::Fateseal { player } => AskView::Fateseal {
-            player: side(obs, player),
-        },
-        Ask::Take { count, take } => AskView::Take { count, take },
-        Ask::Bottom { count } => AskView::Bottom { count },
-        Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
-        Ask::MayMove { card, to } => AskView::MayMove {
-            card: card.num(),
-            to: to.into(),
-        },
-        Ask::Explore => AskView::Explore,
-        Ask::ManifestDread => AskView::ManifestDread,
-        Ask::ExileCards { zone, count } => AskView::ExileCards {
-            zone: zone.into(),
-            count,
-        },
-        Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.num() },
-        Ask::Search { max } => AskView::Search { max },
-        Ask::MaySearch => AskView::MaySearch,
-        Ask::Untap { max } => AskView::Untap { max },
-        Ask::Crew { crew, left } => AskView::Crew { crew, left },
-        Ask::Waterbend { cost } => AskView::Waterbend {
-            cost: mana_text(cost),
-        },
-        Ask::UnlessPays { cost } => AskView::UnlessPays {
-            cost: mana_text(cost),
-        },
-        Ask::PayLife { life, .. } => AskView::PayLife { life },
-        Ask::Cleanup { count } => AskView::Cleanup { count },
-    }
-}
-
 /// [`DecisionView::pass_to`]: the engine's [`next_stop`], less the declare blockers step for a
 /// defender with nothing to block with under the smart stops ([`skip_idle_blocks`]).
 pub(super) fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> NextStop {
@@ -232,8 +181,9 @@ fn decision_source<L: Layout>(
     d: &Decision<L>,
     resolving: Option<&StackEntry<L>>,
 ) -> Option<u16> {
-    let slot = match (d.kind, d.ask) {
-        (_, Ask::PayLife { land, .. }) => Some(land),
+    let slot = match (d.kind, d.prompt.purpose) {
+        // The land entering asks.
+        (_, Purpose::PayLife) => d.about.first(),
         (
             DecisionKind::Priority
             | DecisionKind::Attacker

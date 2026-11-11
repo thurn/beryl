@@ -485,7 +485,7 @@ expressed as an IR (the path **D1** rejected), were considered and dropped.
 ### 7.1 The decision value
 
 ```rust
-pub struct Decision { pub player: u8, pub kind: DecisionKind, pub candidates: Candidates, pub ask: Ask }
+pub struct Decision { pub player: u8, pub kind: DecisionKind, pub candidates: Candidates, pub prompt: Prompt, pub about: Bitboard }
 pub enum Candidates { Objects(Bitboard), Options(Fixed<Opt, 64>) }
 ```
 
@@ -501,11 +501,17 @@ engine and its search. A save records an answer by what it does
 (`beryl_session::save`, §14), and every `DecisionKind` and `Opt` has a
 description there, checked by exhaustive matches.
 
-The kind says the shape of an answer; `Ask` says what a question is for where
-the kind alone does not: a scry, a look that may take a card, a fateseal, an
-explore, "untap up to six", "unless pays", the cleanup discard. Card code states
-it where it asks, so the UI and agents dispatch on it and never on the name of
-the card asking.
+The kind says the form of one answer. The `Prompt` (`beryl_card::prompt`) says
+which prompt the pick belongs to: its purpose, from a closed list (a scry, a
+look that may take a card, a fateseal, an explore, "untap up to six", "unless
+pays", the cleanup discard); the shape that purpose is answered in; the shape's
+parameters (counts, destinations, a mana cost); and the part of the shape this
+pick answers. `about` is the set of objects the prompt concerns beyond the
+pick's candidates. The record has no slot in it, so it is the same in every
+layout, and a decision is no bigger for it. Card code states the prompt where it
+asks, so the UI and agents dispatch on it and never on the name of the card
+asking, and a card whose question fits a purpose needs no code outside its own
+file.
 
 ### 7.2 What the engine settles itself
 

@@ -7,8 +7,8 @@
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed, Face, FaceIx,
-    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Replacement, StaticCondition, Subtype,
-    Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Prompt, Purpose, Replacement,
+    StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
@@ -1560,10 +1560,11 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
                     .find(|&slot| t.def(paused.object(slot).card).name == "Test Human")
                     .expect("the Human on the battlefield as it is asked about");
                 assert_eq!(
-                    d.ask,
-                    crate::Ask::AttackTarget {
-                        attackers: crate::Bitboard::single(shown)
-                    }
+                    (d.prompt, d.about),
+                    (
+                        Prompt::new(Purpose::Attack).part(Part::Aim),
+                        crate::Bitboard::single(shown)
+                    )
                 );
                 let o = paused.object(shown);
                 assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));

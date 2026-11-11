@@ -6,8 +6,8 @@
 //! (CR 508.1, 509.1 return the game to before an illegal one).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Keywords, Types};
-use crate::decision::{Ask, Candidates, Choice, Decision, DecisionKind, Opt};
+use crate::card::{Keywords, Part, Prompt, Purpose, Types};
+use crate::decision::{Candidates, Choice, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Recipient, Sink};
 use crate::fixed::Full;
@@ -109,7 +109,7 @@ pub(crate) fn attack_decision<L: Layout>(
     attacker: Option<L::Slot>,
 ) -> Result<Decision<L>, Full> {
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
-    let (player, kind) = if attacker.is_none() {
+    let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
         let able: Bitboard<L::Slot> = s
             .battlefield()
@@ -120,18 +120,18 @@ pub(crate) fn attack_decision<L: Layout>(
         for slot in collapse(s, able).iter() {
             list.push(Opt::Attack(slot))?;
         }
-        (s.turn().active(), DecisionKind::Attacker)
+        (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
         list = attack_targets(s, defender(s));
-        (s.turn().active(), DecisionKind::AttackTarget)
+        (s.turn().active(), DecisionKind::AttackTarget, Part::Aim)
     };
     Ok(Decision {
         player,
         kind,
         candidates: Candidates::Options(list),
-        ask: attacker.map_or(Ask::Plain, |slot| Ask::AttackTarget {
-            attackers: Bitboard::single(slot),
-        }),
+        // The creature just chosen is the one being aimed.
+        prompt: Prompt::new(Purpose::Attack).part(part),
+        about: attacker.map_or(Bitboard::EMPTY, Bitboard::single),
     })
 }
 
@@ -298,7 +298,9 @@ pub(crate) fn block_decision<L: Layout>(
             player,
             kind: DecisionKind::BlockTarget,
             candidates: Candidates::Objects(collapse(s, attackers)),
-            ask: Ask::Plain,
+            // The creature just chosen is the one being aimed.
+            prompt: Prompt::new(Purpose::Block).part(Part::Aim),
+            about: Bitboard::single(blocker),
         });
     }
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
@@ -316,7 +318,8 @@ pub(crate) fn block_decision<L: Layout>(
         player,
         kind: DecisionKind::Blocker,
         candidates: Candidates::Options(list),
-        ask: Ask::Plain,
+        prompt: Prompt::new(Purpose::Block),
+        about: Bitboard::EMPTY,
     })
 }
 
@@ -478,7 +481,8 @@ pub(crate) fn division_decision<L: Layout>(
         player: s.turn().active(),
         kind: DecisionKind::DamageDivision,
         candidates: Candidates::Options(list),
-        ask: Ask::Plain,
+        prompt: Prompt::new(Purpose::CombatDamage),
+        about: Bitboard::EMPTY,
     })
 }
 

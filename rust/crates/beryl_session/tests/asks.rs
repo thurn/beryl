@@ -2,8 +2,9 @@
 //! it: the UI and the agents read a question's meaning from it, never from the card asking.
 
 use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_engine::card::{Part, Purpose};
 use beryl_engine::state::Pending;
-use beryl_engine::{Ask, Observation, Scratch, view};
+use beryl_engine::{Observation, Scratch, view};
 use beryl_session::protocol::{AskView, CardHandling, Kind, Moment, Side, ZoneName, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 
@@ -58,9 +59,10 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
         .unwrap();
     let mut checked = false;
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
-        let Ask::AttackTarget { attackers } = d.ask else {
+        if d.prompt.purpose != Purpose::Attack || d.prompt.part != Part::Aim {
             return;
-        };
+        }
+        let attackers = d.about;
         let mut x = Scratch::new();
         let shown = view(s, t, &mut x);
         let resolving = matches!(s.pending(), Pending::Resolving(_))
@@ -121,7 +123,7 @@ fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
         .unwrap();
     let mut checked = false;
     beryl_scenario::visit(&CARDS, &scenarios[0], |t, s, d| {
-        if !matches!(d.ask, Ask::Take { take: 2, .. }) {
+        if (d.prompt.purpose, d.prompt.part, d.prompt.most) != (Purpose::Arrange, Part::First, 2) {
             return;
         }
         let mut x = Scratch::new();
@@ -357,7 +359,7 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
 
 #[test]
 fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
-    use beryl_engine::{DecisionKind, Zone};
+    use beryl_engine::{Choice, DecisionKind, Zone};
     use beryl_scenario::{Action, P0, Permanent, Scenario};
 
     const SCENARIO: Scenario =
@@ -382,13 +384,10 @@ fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
             ]);
     let mut checked = false;
     beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-        if !matches!(
-            d.ask,
-            Ask::ExileCards {
-                zone: Zone::Graveyard,
-                ..
-            }
-        ) {
+        let in_graveyard = |slot| s.object(slot).zone == Zone::Graveyard;
+        if d.prompt.purpose != Purpose::ExileCost
+            || !d.candidates.object(Choice(0)).is_some_and(in_graveyard)
+        {
             return;
         }
         let mut scratch = Scratch::new();

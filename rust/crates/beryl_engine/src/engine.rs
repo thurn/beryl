@@ -2,10 +2,9 @@
 //! (architecture §3, §7).
 
 use crate::bitboard::Bitboard;
-use crate::card::{FaceIx, Types};
+use crate::card::{FaceIx, Prompt, Purpose, Types};
 use crate::decision::{
-    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, StallReason,
-    Step,
+    Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, StallReason, Step,
 };
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
@@ -314,49 +313,63 @@ pub(crate) fn decision<L: Layout>(
                 for &i in triggers.iter() {
                     list.push(Opt::Trigger(i))?;
                 }
-                Ok(Decision {
-                    player,
-                    kind: DecisionKind::TriggerOrder,
-                    candidates: Candidates::Options(list),
-                    ask: Ask::Plain,
-                })
+                let kind = DecisionKind::TriggerOrder;
+                let order = Prompt::new(Purpose::TriggerOrder);
+                Ok(Decision::options(player, kind, list, order))
             }
             None => priority_decision(s, t),
         },
-        Pending::PlayOrDraw { chooser } => {
-            options(chooser, DecisionKind::PlayOrDraw, &[Opt::Play, Opt::Draw])
-        }
+        Pending::PlayOrDraw { chooser } => options(
+            chooser,
+            DecisionKind::PlayOrDraw,
+            &[Opt::Play, Opt::Draw],
+            Prompt::new(Purpose::PlayOrDraw),
+        ),
         Pending::Mulligans => match start::mulligan_question(s) {
-            (p, true) => Ok(objects(
+            (p, true) => Ok(Decision::objects(
                 p,
                 DecisionKind::PutOnBottom,
                 collapse(s, turn::hand(s, p)),
+                Prompt::new(Purpose::PutOnBottom).most(s.player(p).to_bottom),
             )),
-            (p, false) => options(p, DecisionKind::KeepOrMulligan, &[Opt::Keep, Opt::Mulligan]),
+            // The question is about the hand to keep.
+            (p, false) => Ok(options(
+                p,
+                DecisionKind::KeepOrMulligan,
+                &[Opt::Keep, Opt::Mulligan],
+                Prompt::new(Purpose::Mulligan),
+            )?
+            .about(turn::hand(s, p))),
         },
         Pending::Discard => {
             let p = s.turn().active();
             let count = s.hand_size(p).saturating_sub(turn::MAX_HAND_SIZE);
-            Ok(Decision {
-                ask: Ask::Cleanup {
-                    count: u8::try_from(count).unwrap_or(u8::MAX),
-                },
-                ..objects(p, DecisionKind::Discard, collapse(s, turn::hand(s, p)))
-            })
+            Ok(Decision::objects(
+                p,
+                DecisionKind::Discard,
+                collapse(s, turn::hand(s, p)),
+                Prompt::new(Purpose::Cleanup).most(u8::try_from(count).unwrap_or(u8::MAX)),
+            ))
         }
         Pending::LegendRule { kept } => {
             let (p, group) =
                 sba::unresolved_legends(s, t, kept).expect("a legend-rule group without a keeper");
-            Ok(objects(p, DecisionKind::LegendRule, collapse(s, group)))
+            let keep = Prompt::new(Purpose::LegendRule).most(1);
+            Ok(Decision::objects(
+                p,
+                DecisionKind::LegendRule,
+                collapse(s, group),
+                keep,
+            ))
         }
-        Pending::EnterPayingLife { slot, life } => Ok(Decision {
-            ask: Ask::PayLife { land: slot, life },
-            ..options(
-                s.object(slot).owner,
-                DecisionKind::PayLife,
-                &[Opt::Yes, Opt::No],
-            )?
-        }),
+        // The question is about the land entering, for this much life.
+        Pending::EnterPayingLife { slot, life } => Ok(options(
+            s.object(slot).owner,
+            DecisionKind::PayLife,
+            &[Opt::Yes, Opt::No],
+            Prompt::new(Purpose::PayLife).count(life),
+        )?
+        .about(Bitboard::single(slot))),
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker),
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker),
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),
@@ -369,25 +382,14 @@ pub(crate) fn decision<L: Layout>(
             object,
             player,
             free,
-        } => Ok(Decision {
+        } => Ok(Decision::options(
             player,
-            kind: DecisionKind::CastOffer,
-            candidates: Candidates::Options(cast::offer_options(s, t, object, player, free)?),
-            ask: Ask::Plain,
-        }),
-    }
-}
-
-fn objects<L: Layout>(
-    player: Seat,
-    kind: DecisionKind,
-    candidates: Bitboard<L::Slot>,
-) -> Decision<L> {
-    Decision {
-        player,
-        kind,
-        candidates: Candidates::Objects(candidates),
-        ask: Ask::Plain,
+            DecisionKind::CastOffer,
+            cast::offer_options(s, t, object, player, free)?,
+            Prompt::new(Purpose::CastOffer),
+        )
+        // The question is about the card offered.
+        .about(Bitboard::single(object.slot))),
     }
 }
 
@@ -395,17 +397,13 @@ fn options<L: Layout>(
     player: Seat,
     kind: DecisionKind,
     opts: &[Opt<L>],
+    prompt: Prompt,
 ) -> Result<Decision<L>, Full> {
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
     for &o in opts {
         list.push(o)?;
     }
-    Ok(Decision {
-        player,
-        kind,
-        candidates: Candidates::Options(list),
-        ask: Ask::Plain,
-    })
+    Ok(Decision::options(player, kind, list, prompt))
 }
 
 /// The priority holder's legal actions, passing first.
@@ -419,7 +417,8 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
         player,
         kind: DecisionKind::Priority,
         candidates: Candidates::Options(Default::default()),
-        ask: Ask::Plain,
+        prompt: Prompt::new(Purpose::Priority),
+        about: Bitboard::EMPTY,
     };
     let Candidates::Options(list) = &mut d.candidates else {
         unreachable!("built with options");

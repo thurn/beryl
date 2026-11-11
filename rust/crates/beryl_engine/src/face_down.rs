@@ -8,8 +8,8 @@
 //! hidden is its card: its controller knows it, the other player doesn't (architecture §13).
 
 use crate::bitboard::Bitboard;
-use crate::card::{FaceIx, ManaCost, Types};
-use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
+use crate::card::{FaceIx, ManaCost, Part, Prompt, Purpose, Types};
+use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::Full;
@@ -157,9 +157,10 @@ pub(crate) fn decision<L: Layout>(
     remaining: ManaCost,
 ) -> Result<Decision<L>, Full> {
     let player = s.controller(slot);
-    let (kind, list) = if s.profile().payment == Payment::Manual {
+    let (kind, part, list) = if s.profile().payment == Payment::Manual {
         (
             DecisionKind::ManaPayment,
+            Part::Pick,
             mana::manual_options(s, t, player, remaining, Bitboard::EMPTY)?,
         )
     } else {
@@ -168,13 +169,14 @@ pub(crate) fn decision<L: Layout>(
         for i in 0..plans.len() {
             list.push(Opt::Plan(index::<L>(i)))?;
         }
-        (DecisionKind::PaymentPlan, list)
+        (DecisionKind::PaymentPlan, Part::Plan, list)
     };
     Ok(Decision {
         player,
         kind,
         candidates: Candidates::Options(list),
-        ask: Ask::Plain,
+        prompt: Prompt::new(Purpose::Mana).cost(remaining).part(part),
+        about: Bitboard::EMPTY,
     })
 }
 

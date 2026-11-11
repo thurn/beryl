@@ -3,7 +3,7 @@
 //! [`crate::Large`] is lossless; values a `Small` game produced fit back into `Small`.
 
 use crate::bitboard::Bitboard;
-use crate::decision::{Ask, Candidates, Decision, Opt, Refusal, Step};
+use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::event::{Event, LossCause, Recipient};
 use crate::ids::SlotId;
 use crate::layout::{Item, Layout, Queue, Table, index};
@@ -319,57 +319,6 @@ impl<L: Layout> Relayout for Opt<L> {
     }
 }
 
-impl<L: Layout> Relayout for Ask<L> {
-    type In<M: Layout> = Ask<M>;
-
-    fn relayout<M: Layout>(&self) -> Ask<M> {
-        match *self {
-            Ask::Plain => Ask::Plain,
-            Ask::AttackTarget { attackers } => Ask::AttackTarget {
-                attackers: bits(attackers),
-            },
-            Ask::Scry { count } => Ask::Scry { count },
-            Ask::Look {
-                player,
-                zone,
-                count,
-                to,
-                eligible,
-            } => Ask::Look {
-                player,
-                zone,
-                count,
-                to,
-                eligible: bits(eligible),
-            },
-            Ask::PutBack { count } => Ask::PutBack { count },
-            Ask::Fateseal { player } => Ask::Fateseal { player },
-            Ask::Take { count, take } => Ask::Take { count, take },
-            Ask::Bottom { count } => Ask::Bottom { count },
-            Ask::DiscardBasicLand { count } => Ask::DiscardBasicLand { count },
-            Ask::TopOrBottom { card } => Ask::TopOrBottom { card: slot(card) },
-            Ask::MayMove { card, to } => Ask::MayMove {
-                card: slot(card),
-                to,
-            },
-            Ask::Explore => Ask::Explore,
-            Ask::Search { max } => Ask::Search { max },
-            Ask::MaySearch => Ask::MaySearch,
-            Ask::Untap { max } => Ask::Untap { max },
-            Ask::Crew { crew, left } => Ask::Crew { crew, left },
-            Ask::Waterbend { cost } => Ask::Waterbend { cost },
-            Ask::UnlessPays { cost } => Ask::UnlessPays { cost },
-            Ask::PayLife { land, life } => Ask::PayLife {
-                land: slot(land),
-                life,
-            },
-            Ask::Cleanup { count } => Ask::Cleanup { count },
-            Ask::ManifestDread => Ask::ManifestDread,
-            Ask::ExileCards { zone, count } => Ask::ExileCards { zone, count },
-        }
-    }
-}
-
 impl<L: Layout> Relayout for Candidates<L> {
     type In<M: Layout> = Candidates<M>;
 
@@ -389,7 +338,9 @@ impl<L: Layout> Relayout for Decision<L> {
             player: self.player,
             kind: self.kind,
             candidates: self.candidates.relayout(),
-            ask: self.ask.relayout(),
+            // The prompt has no slot in it: it is the same in every layout.
+            prompt: self.prompt,
+            about: bits(self.about),
         }
     }
 }

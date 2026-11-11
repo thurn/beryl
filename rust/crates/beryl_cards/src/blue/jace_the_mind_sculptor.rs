@@ -11,14 +11,14 @@ use beryl_card::Effect;
 use beryl_card::effect::build::{TARGET, return_to_hand};
 use beryl_engine::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Part, Place,
+    Prompt, Purpose, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
-use beryl_engine::{Ask, DecisionKind, TurnStep, Zone, ZoneKey};
+use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -89,7 +89,11 @@ fn fateseal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let top = ctx.state().object_ref(top);
     let you = ctx.controller();
     ctx.look_at(you, Bitboard::single(top.slot));
-    if ctx.choose_yes_no(you, Ask::Fateseal { player })? {
+    // A yes puts the card looked at on the bottom; a no leaves it on top.
+    let fateseal = Prompt::new(Purpose::Fateseal)
+        .count(1)
+        .places(Place::Bottom, Place::Top);
+    if ctx.choose_yes_no(you, fateseal, Bitboard::single(top.slot))? {
         ctx.put_library_card_on_bottom(top);
     }
     Ok(())
@@ -107,7 +111,11 @@ fn brainstorm<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         if hand.is_empty() {
             break;
         }
-        let card = ctx.choose_object(you, hand, Ask::PutBack { count })?;
+        let put_back = Prompt::new(Purpose::PutBack)
+            .most(count)
+            .places(Place::OnTop, Place::None)
+            .part(Part::First);
+        let card = ctx.choose_object(you, hand, put_back)?;
         let card = ctx.state().object_ref(card);
         ctx.move_to(card, Zone::Library, Reason::Effect);
     }

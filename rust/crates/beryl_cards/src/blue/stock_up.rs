@@ -1,10 +1,13 @@
 //! Stock Up. {2}{U} Sorcery. "Look at the top five cards of your library. Put two of them
 //! into your hand and the rest on the bottom of your library in any order."
 
-use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
+use beryl_engine::card::{
+    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose,
+    Types,
+};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::{Ask, Bitboard, DecisionKind, Zone};
+use beryl_engine::{Bitboard, DecisionKind, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
@@ -42,12 +45,15 @@ fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let looked = ctx.top_of_library(you, LOOK);
     ctx.look_at(you, looked);
     let count = looked.count() as u8;
+    // One prompt: the cards for the hand, then the order of the rest on the bottom.
+    let arrange = Prompt::new(Purpose::Arrange).places(Place::Hand, Place::Bottom);
     let mut taken = Bitboard::EMPTY;
     if count <= TAKE {
         taken = looked;
     } else {
         for take in (1..=TAKE).rev() {
-            let slot = ctx.choose_object(you, looked & !taken, Ask::Take { count, take })?;
+            let hand = arrange.count(count).most(take).part(Part::First);
+            let slot = ctx.choose_object(you, looked & !taken, hand)?;
             taken.insert(slot);
         }
     }
@@ -55,7 +61,8 @@ fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let mut rest = looked & !taken;
     while !rest.is_empty() {
         let count = rest.count() as u8;
-        let slot = ctx.choose_object(you, rest, Ask::Bottom { count })?;
+        let bottom = arrange.count(count).part(Part::Second);
+        let slot = ctx.choose_object(you, rest, bottom)?;
         ctx.put_library_card_on_bottom(ctx.state().object_ref(slot));
         rest.remove(slot);
     }

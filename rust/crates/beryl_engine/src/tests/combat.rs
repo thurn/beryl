@@ -3,7 +3,8 @@
 
 use super::begin;
 use crate::card::{
-    Ability, AbilityIx, CardDef, Face, Flow, Keywords, Subtype, Subtypes, Trigger, Types,
+    Ability, AbilityIx, CardDef, Face, Flow, Keywords, Part, Prompt, Purpose, Subtype, Subtypes,
+    Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
@@ -12,7 +13,7 @@ use crate::profile::{Breakpoint, stops_for};
 use crate::state::{CounterKind, ObjectFlags, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
-    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
+    Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next,
 };
 use crate::{Layout, bodies};
@@ -397,11 +398,13 @@ fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
     g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
     // With a planeswalker to attack, the defender is a real choice (CR 508.1b).
     let target = g.expect(DecisionKind::AttackTarget);
+    // The aim of the same prompt as the pick, about the creature just chosen.
     assert_eq!(
-        target.ask,
-        crate::Ask::AttackTarget {
-            attackers: crate::Bitboard::single(ogre)
-        }
+        (target.prompt, target.about),
+        (
+            Prompt::new(Purpose::Attack).part(Part::Aim),
+            crate::Bitboard::single(ogre)
+        )
     );
     assert_eq!(
         options(&target),
@@ -830,7 +833,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
         first.candidates,
         Candidates::Objects([bear, sentry].into_iter().collect())
     );
-    assert_eq!(first.ask, Ask::Crew { crew: 3, left: 3 });
+    assert_eq!(first.prompt, Prompt::new(Purpose::Crew).count(3).most(3));
     g.pick_object(DecisionKind::Crew, bear);
     // One creature is left, so the second pick is applied silently. Crew uses the stack.
     g.expect(DecisionKind::Priority);

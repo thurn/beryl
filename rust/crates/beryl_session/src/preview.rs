@@ -7,13 +7,13 @@
 
 use std::collections::BTreeMap;
 
-use beryl_engine::card::{AbilityKind, Subtype, Types};
+use beryl_engine::card::{AbilityKind, Purpose, Subtype, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
-    Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
-    Scratch, Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, mana_contribution,
-    next, target_removes_permanent,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay, Scratch,
+    Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, mana_contribution, next,
+    target_removes_permanent,
 };
 
 use crate::Status;
@@ -211,7 +211,7 @@ fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<
                     plan: Some(plan.into()),
                     ..Payment::default()
                 },
-                (DecisionKind::YesNo, Opt::Yes) if matches!(d.ask, Ask::UnlessPays { .. }) => {
+                (DecisionKind::YesNo, Opt::Yes) if d.prompt.purpose == Purpose::UnlessPays => {
                     return vec![unless_paid(s, t, d, i)];
                 }
                 _ => return Vec::new(),
@@ -432,9 +432,7 @@ pub(crate) fn waterbend<L: Layout>(
     first: &Decision<L>,
     selected: &[u16],
 ) -> Option<WaterbendPreview> {
-    let Ask::Waterbend { cost } = first.ask else {
-        return None;
-    };
+    let cost = (first.prompt.purpose == Purpose::Waterbend).then_some(first.prompt.cost)?;
     let sources = waterbend_sources(before, t, first);
     let generic = cost.symbols.iter().all(|&n| n == 0);
     // The engine offers manual mana activations in this step for generic costs. If a
@@ -963,7 +961,7 @@ mod tests {
             ]);
         let mut seen = None;
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-            if matches!(d.ask, Ask::UnlessPays { .. }) {
+            if d.prompt.purpose == Purpose::UnlessPays {
                 let untapped = |slot: u16| {
                     !s.object(Slot::from_index(usize::from(slot)))
                         .flags
