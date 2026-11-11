@@ -126,9 +126,10 @@ is recorded whether it passes or not.
   paired scores from positions against the shuffle; if they buy nothing, they
   go.
 - **The proxy budget.** Matches run at 3M engine steps a decision, one thread a
-  game, 18 games at a time: roughly 20 to 30 s of wall clock a game. Run-003's
-  families kept their order from 3M to 30M, which is the assumption the
-  confirmation step checks.
+  game, a game a hardware thread at a time (18 on the Mac, 20 on the Windows
+  machine): roughly 20 to 30 s of wall clock a game. Run-003's families kept
+  their order from 3M to 30M, which is the assumption the confirmation step
+  checks.
 - **Confirmation at 10M.** A challenger that passes at 3M plays 400 games at 10M
   (about 8 hours). Its Wilson 95% interval must clear 50%. A pass is shipped at
   30M.

@@ -7,7 +7,7 @@
 //!   decision by default. The champion defaults to the registry's Deep Searcher family
 //!   ([`beryl_search::DEEP_SEARCHER`]).
 //! - **Paired seeds.** Pair `p` plays seed [`game_seed`]`(seed, 0, p)` twice, the challenger
-//!   in the first seat and then in the second, [`GAMES_AT_ONCE`] games at a time on one thread
+//!   in the first seat and then in the second, [`games_at_once`] games at a time on one thread
 //!   each. A seed reproduces the match: the verdict is read off the pairs in order, so games
 //!   still running when it comes are not counted.
 //! - **The test.** A sequential probability ratio test over the pairs, swept, split or lost
@@ -46,8 +46,12 @@ use crate::longthink::{DecisionRecord, GameRecord, Verdict as GameVerdict, cache
 use crate::positions::{Position, start};
 use crate::tournament::{game_seed, wilson};
 
-/// Games played at once, one thread each (docs/ai-strategy.md §4.1).
-pub const GAMES_AT_ONCE: usize = 18;
+/// Games played at once, one thread each and one a hardware thread (docs/ai-strategy.md
+/// §4.1): 18 on an M5 Max, 20 on an i7-12700F, where 20 play 6% more games an hour than 18.
+/// Games count in seed order, so how many run at once changes no result.
+pub fn games_at_once() -> usize {
+    thread::available_parallelism().map_or(1, usize::from)
+}
 
 /// The proxy budget, in engine steps a decision.
 const PROXY: u64 = 3_000_000;
@@ -570,7 +574,7 @@ pub fn run(
         failure: None,
     });
     let progress = Mutex::new(&mut progress);
-    let workers = GAMES_AT_ONCE.min(games as usize);
+    let workers = games_at_once().min(games as usize);
     thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| {

@@ -35,7 +35,7 @@ use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, LongSearch, Sett
 
 use crate::anchor_replay::{GameLine, duel, games, log, mean_and_error, start};
 use crate::game::{mirror, parse_work, seat_seeds};
-use crate::ladder::{GAMES_AT_ONCE, resolve};
+use crate::ladder::{games_at_once, resolve};
 use crate::longthink::game::Line;
 
 /// A cost a game beyond which the screen's result is written beside the match's (§4.2).
@@ -142,7 +142,7 @@ fn screen_game(
 }
 
 /// Replays the first `limit` games of the match in `dir` (all without one), the challenger
-/// `build` makes asked each of `champion`'s decisions, [`GAMES_AT_ONCE`] games at a time.
+/// `build` makes asked each of `champion`'s decisions, [`games_at_once`] games at a time.
 pub fn screen(
     dir: &Path,
     champion: &str,
@@ -158,7 +158,7 @@ pub fn screen(
     let next_game = AtomicUsize::new(0);
     let found: Mutex<Vec<(usize, Result<GameScreen, String>)>> = Mutex::new(Vec::new());
     thread::scope(|scope| {
-        for _ in 0..GAMES_AT_ONCE.min(all.len()) {
+        for _ in 0..games_at_once().min(all.len()) {
             scope.spawn(|| {
                 loop {
                     let i = next_game.fetch_add(1, Ordering::Relaxed);

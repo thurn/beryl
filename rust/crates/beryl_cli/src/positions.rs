@@ -37,7 +37,7 @@ use beryl_session::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 
 use crate::game::{mirror, parse_work, seat_seeds};
-use crate::ladder::GAMES_AT_ONCE;
+use crate::ladder::games_at_once;
 use crate::longthink::{cache, files};
 use crate::tournament::game_seed;
 use crate::transcript::Transcript;
@@ -186,7 +186,7 @@ pub fn build(b: &Build, progress: impl Fn(u32) + Sync) -> Result<Built, String> 
     let done = AtomicU32::new(0);
     let found: Mutex<Vec<(u32, Result<GameCuts, String>)>> = Mutex::new(Vec::new());
     thread::scope(|scope| {
-        for _ in 0..GAMES_AT_ONCE.min(b.games as usize) {
+        for _ in 0..games_at_once().min(b.games as usize) {
             scope.spawn(|| {
                 loop {
                     let g = next_game.fetch_add(1, Ordering::Relaxed);
