@@ -18,6 +18,7 @@ import {
     stageFaults,
     workers,
 } from "./capture.mjs";
+import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -467,7 +468,8 @@ async function open() {
 async function play(context, watch, fixture, tick) {
     const page = await context.newPage();
     const done = await watch(page);
-    try {
+    let hung = false;
+    const playOut = async () => {
         await page.goto(
             new URL(`/?stage&fixture=${fixture}&at=1#/game`, base).href,
         );
@@ -493,8 +495,15 @@ async function play(context, watch, fixture, tick) {
         );
         assert.equal(run.done, true, "the moment did not play out");
         return run;
+    };
+    try {
+        return await hangGuard(playOut(), CHECK_SECONDS, fixture).catch((e) => {
+            hung = e instanceof HangError;
+            throw e;
+        });
     } finally {
-        await done();
+        // A page that hung would hold its coverage too: closing the context ends it.
+        if (!hung) await done();
         await page.close();
     }
 }

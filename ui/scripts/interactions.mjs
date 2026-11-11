@@ -30,6 +30,7 @@ import {
     workers,
 } from "./capture.mjs";
 import { audit, collect, record } from "./audit.mjs";
+import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 /** The checks the fast check chose (`by ui-test --select`, tools' selection.py), by exact title,
@@ -243,7 +244,8 @@ async function check(
             );
             let booted = false;
             let threw = false;
-            try {
+            let hung = false;
+            const play = async () => {
                 assert.ok(["paused", "off"].includes(clock), clock);
                 if (clock === "paused") await page.clock.install();
                 if (init) await page.addInitScript(init);
@@ -257,6 +259,12 @@ async function check(
                 if (clock === "paused") await pause(page);
                 await body(page);
                 await assertSounded(page);
+            };
+            try {
+                await hangGuard(play(), CHECK_SECONDS, title).catch((e) => {
+                    hung = e instanceof HangError;
+                    throw e;
+                });
                 console.log(`ok: ${title}`);
             } catch (e) {
                 const lost = seen.some((s) => s.includes("net::ERR_"));
@@ -265,7 +273,8 @@ async function check(
                 threw = true;
                 console.error(`FAILED: ${title}\n${e.stack ?? e}`);
             } finally {
-                covered = await finish();
+                // A page that hung would hold its coverage too: closing the context ends it.
+                if (!hung) covered = await finish();
                 await context.close();
             }
             errors.push(...seen);
