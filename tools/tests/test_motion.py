@@ -348,6 +348,8 @@ def test_a_step_is_timed_by_the_case_the_page_told(tmp_path: Path) -> None:
     count = next(verb for verb in data["verbs"] if verb["name"] == "count")
     count["cases"]["life gain"]["duration"] = 500
     count["cases"]["life loss"]["duration"] = 300
+    turn = next(verb for verb in data["verbs"] if verb["name"] == "tap")
+    turn["cases"]["untap"]["duration"] = 100
     reference: dict[str, Any] = motion.motion()
     play = tmp_path / "desktop" / "yours.combat"
     play.mkdir(parents=True)
@@ -378,7 +380,9 @@ def test_a_stagger_after_a_step_held_back_is_what_the_stage_waits() -> None:
     """The stage begins a beat's steps in order: a strike held back by the delay of a life
     total's count before it begins after its turn, and the like strike after it then begins
     less than a stagger later, by when its own turn comes."""
-    data: dict[str, Any] = conventions.load()
+    data: dict[str, Any] = copy.deepcopy(conventions.load())
+    strike = next(verb for verb in data["verbs"] if verb["name"] == "strike")
+    strike["cases"]["blocked attacker"]["stagger"] = 220
     reference: dict[str, Any] = motion.motion()
     at_blocker: dict[str, Any] = {"verb": "strike", "to": {"kind": "object", "slot": 3}}
     case: str = "blocked attacker"
@@ -401,7 +405,9 @@ def test_a_stagger_after_a_step_held_back_is_what_the_stage_waits() -> None:
 def test_a_fights_two_blows_are_held_to_one_time() -> None:
     """Two creatures that strike each other do so as one: the blow dealt back begins with the
     strike it answers, and one stagger later would fail."""
-    data: dict[str, Any] = conventions.load()
+    data: dict[str, Any] = copy.deepcopy(conventions.load())
+    strike = next(verb for verb in data["verbs"] if verb["name"] == "strike")
+    strike["cases"]["blocked attacker"]["stagger"] = 220
     reference: dict[str, Any] = motion.motion()
 
     def blow(source: int, slot: int) -> dict[str, Any]:
