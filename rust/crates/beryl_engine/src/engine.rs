@@ -332,7 +332,7 @@ pub(crate) fn decision<L: Layout>(
                 p,
                 DecisionKind::PutOnBottom,
                 collapse(s, turn::hand(s, p)),
-                Prompt::new(Purpose::PutOnBottom).most(s.player(p).to_bottom),
+                Prompt::new(Purpose::PutOnBottom).most(s.player(p).to_bottom()),
             )),
             // The question is about the hand to keep.
             (p, false) => Ok(options(
@@ -366,7 +366,7 @@ pub(crate) fn decision<L: Layout>(
         }
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
-            s.object(slot).owner,
+            s.object(slot).owner(),
             DecisionKind::PayLife,
             &[Opt::Yes, Opt::No],
             Prompt::new(Purpose::PayLife).count(life),
@@ -722,7 +722,7 @@ fn play_land<L: Layout>(
     s.give_priority(player);
     let face = land_face(s, t, slot).expect("a land face");
     match event::life_to_enter(t, s.copiable(slot).turned(face)) {
-        Some(life) if s.player(player).life >= i16::from(life) => {
+        Some(life) if s.player(player).life() >= i16::from(life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }
@@ -802,7 +802,7 @@ fn collapse_ordered<L: Layout>(
 ) -> Bitboard<L::Slot> {
     let signature = |slot: L::Slot| s.signature(slot);
     let known = |slot: L::Slot| {
-        matches!(s.object(slot).zone, Zone::Hand | Zone::Library)
+        matches!(s.object(slot).zone(), Zone::Hand | Zone::Library)
             .then(|| Seat::BOTH.map(|p| s.knows(p, slot)))
     };
     // Found only once two candidates are of one card: until then every one is kept, named by
@@ -813,7 +813,7 @@ fn collapse_ordered<L: Layout>(
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
         let of_card = |k: L::Slot| s.copiable(k).key() == s.copiable(slot).key();
-        if s.object(slot).face == FaceIx::DOWN || !kept.any(of_card) {
+        if s.object(slot).face() == FaceIx::DOWN || !kept.any(of_card) {
             kept.insert(slot);
             continue;
         }

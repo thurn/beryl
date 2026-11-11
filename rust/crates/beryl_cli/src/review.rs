@@ -112,7 +112,7 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                 break;
             }
             Walked::Decide { d, c, happened } => {
-                let turn = walk.s.turn().number;
+                let turn = walk.s.turn().number();
                 if only.is_some_and(|n| turn > n) {
                     transcript.note("(the review stops after the turn it was asked for)");
                     break;

@@ -71,7 +71,7 @@ pub(crate) fn declare<L: Layout>(
 /// bottomed cards are hidden either way.
 fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
     let hand = s.hand_size(player) as u8;
-    s.keep_hand(player, s.player(player).mulligans.min(hand));
+    s.keep_hand(player, s.player(player).mulligans().min(hand));
 }
 
 /// Puts one card from a player's hand on the bottom of their library after a mulligan.
@@ -108,23 +108,25 @@ fn advance_mulligans<L: Layout>(
     loop {
         for &p in &order {
             let player = s.player(p);
-            if player.mulligan == MulliganStatus::Undeclared && player.mulligans >= STARTING_HAND {
+            if player.mulligan() == MulliganStatus::Undeclared
+                && player.mulligans() >= STARTING_HAND
+            {
                 keep(s, p);
             }
         }
         // Bottom picks come first: they finish the hand just kept.
-        if order.iter().any(|&p| s.player(p).to_bottom > 0) {
+        if order.iter().any(|&p| s.player(p).to_bottom() > 0) {
             return Ok(());
         }
         if order
             .iter()
-            .any(|&p| s.player(p).mulligan == MulliganStatus::Undeclared)
+            .any(|&p| s.player(p).mulligan() == MulliganStatus::Undeclared)
         {
             return Ok(());
         }
         let mut any = false;
         for &p in &order {
-            if s.player(p).mulligan != MulliganStatus::WillMulligan {
+            if s.player(p).mulligan() != MulliganStatus::WillMulligan {
                 continue;
             }
             any = true;
@@ -146,12 +148,12 @@ fn advance_mulligans<L: Layout>(
 /// Who answers the open mulligan question, and whether it is a bottom pick.
 pub(crate) fn mulligan_question<L: Layout>(s: &State<L>) -> (Seat, bool) {
     let order = turn_order(s);
-    if let Some(&p) = order.iter().find(|&&p| s.player(p).to_bottom > 0) {
+    if let Some(&p) = order.iter().find(|&&p| s.player(p).to_bottom() > 0) {
         return (p, true);
     }
     let p = order
         .into_iter()
-        .find(|&p| s.player(p).mulligan == MulliganStatus::Undeclared)
+        .find(|&p| s.player(p).mulligan() == MulliganStatus::Undeclared)
         .unwrap_or(order[0]);
     (p, false)
 }

@@ -522,7 +522,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
         s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
             .unwrap();
     }
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     (t, s, p)
 }
 
@@ -598,8 +598,8 @@ fn advance_to(
 ) -> Decision {
     loop {
         let d = decide_with(t, s, x);
-        if s.turn().step == step
-            && s.turn().active == active
+        if s.turn().step() == step
+            && s.turn().active() == active
             && s.stack().is_empty()
             && s.triggers().is_empty()
         {
@@ -657,7 +657,7 @@ fn an_enters_trigger_resolves_after_the_land_is_played() {
     apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
     assert_eq!(s.triggers().len(), 1);
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p).life, 21);
+    assert_eq!(s.player(p).life(), 21);
     let events: Vec<Event> = x.events.drain().collect();
     let entered = events
         .iter()
@@ -693,11 +693,11 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
         ctx.deal_damage(Recipient::Permanent(ctx.source()), 3);
     });
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(sphinx).zone, Zone::Graveyard);
+    assert_eq!(s.object(sphinx).zone(), Zone::Graveyard);
     let token = *s
         .battlefield()
         .iter()
-        .find(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .find(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
         .expect("a token copy");
     assert_eq!(s.definition_name(&t, token), "Test Sphinx");
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (3, 3));
@@ -706,7 +706,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
     assert!(s.triggers().is_empty());
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(token).zone, Zone::Nowhere);
+    assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert!(!s.zone(ZoneKey::Of(p, Zone::Graveyard)).contains(token));
 }
 
@@ -726,14 +726,14 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     let land = find(&s, &t, p, "Test Land");
     let land_ref = s.object_ref(land);
     with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.exile_linked(land_ref));
-    assert_eq!(s.object(land).linked, Some(token));
+    assert_eq!(s.object(land).linked(), Some(token));
     let token_ref = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
     // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(token).zone, Zone::Nowhere);
-    assert_eq!(s.object(land).zone, Zone::Exile);
-    assert_eq!(s.object(land).linked, None);
+    assert_eq!(s.object(token).zone(), Zone::Nowhere);
+    assert_eq!(s.object(land).zone(), Zone::Exile);
+    assert_eq!(s.object(land).linked(), None);
 }
 
 #[test]
@@ -745,7 +745,7 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
     let walker = put(&t, &mut s, &mut x, p, "Test Walker");
     let healthy = put(&t, &mut s, &mut x, p, "Test Bear");
     assert_eq!(
-        s.object(walker).counters.loyalty,
+        s.object(walker).counters().loyalty,
         3,
         "enters with its loyalty"
     );
@@ -766,9 +766,9 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
     });
     resolve_all(&t, &mut s, &mut x);
     for slot in [hurt, shrunk, walker] {
-        assert_eq!(s.object(slot).zone, Zone::Graveyard);
+        assert_eq!(s.object(slot).zone(), Zone::Graveyard);
     }
-    assert_eq!(s.object(healthy).zone, Zone::Battlefield);
+    assert_eq!(s.object(healthy).zone(), Zone::Battlefield);
 }
 
 #[test]
@@ -796,14 +796,14 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     // Two Raider triggers and one Adeline trigger.
     assert_eq!(s.triggers().len(), 3);
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p).life, 22);
+    assert_eq!(s.player(p).life(), 22);
     let human = *s
         .battlefield()
         .iter()
         .find(|&&slot| s.definition_name(&t, slot) == "Test Human")
         .unwrap();
     let o = s.object(human);
-    assert!(o.flags.has(ObjectFlags::TAPPED) && o.flags.has(ObjectFlags::ATTACKING));
+    assert!(o.flags().has(ObjectFlags::TAPPED) && o.flags().has(ObjectFlags::ATTACKING));
     // A creature put onto the battlefield attacking was never declared: no new triggers.
     assert!(s.triggers().is_empty());
     // Adeline counts the creatures her controller controls, the Human included.
@@ -843,7 +843,7 @@ fn combat_damage_to_a_player_triggers_and_noncombat_damage_does_not() {
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).count();
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.zone(ZoneKey::Of(p, Zone::Hand)).count(), hand + 1);
-    assert_eq!(s.player(q).life, 16);
+    assert_eq!(s.player(q).life(), 16);
 }
 
 #[test]
@@ -887,7 +887,7 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
             .iter()
             .any(|e| matches!(e, Event::CoinFlip { won: true, .. }));
         flips[usize::from(won)] += 1;
-        assert_eq!(s.player(q).life, if won { 20 } else { 17 });
+        assert_eq!(s.player(q).life(), if won { 20 } else { 17 });
     }
     assert!(flips[0] > 0 && flips[1] > 0, "{flips:?}");
 }
@@ -914,7 +914,9 @@ fn order_decisions(distinct: bool) -> (Seat, Vec<(Seat, usize)>) {
         if d.kind == DecisionKind::TriggerOrder {
             asked.push((d.player, d.len()));
         }
-        if s.turn().step == TurnStep::PrecombatMain && s.turn().active == p && s.stack().is_empty()
+        if s.turn().step() == TurnStep::PrecombatMain
+            && s.turn().active() == p
+            && s.stack().is_empty()
         {
             turns += 1;
             if turns == 2 {
@@ -978,10 +980,10 @@ fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
     // Created in the precombat main phase: the next main phase is the postcombat one.
     advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
     assert!(s.delayed().is_empty());
-    assert_eq!(s.player(p).mana[ManaColor::Colorless], 2);
+    assert_eq!(s.player(p).mana()[ManaColor::Colorless], 2);
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
     assert_eq!(
-        s.player(p).mana,
+        s.player(p).mana(),
         ManaPool::default(),
         "it triggered only once"
     );
@@ -993,7 +995,7 @@ fn an_emblem_triggers_from_the_command_zone() {
     let mut x = Scratch::new();
     let land = put(&t, &mut s, &mut x, p, "Test Emblem Land");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p).emblems.len(), 1);
+    assert_eq!(s.player(p).emblems().len(), 1);
     // The emblem stays when its creator leaves.
     with_ctx(&t, &mut s, &mut x, land, |ctx| ctx.destroy(ctx.source()));
     let spell = s.object_ref(find(&s, &t, p, "Test Land"));
@@ -1022,7 +1024,7 @@ fn an_emblem_triggers_from_the_command_zone() {
     event::settle(&mut s, &t, &mut x.events, them).unwrap();
     assert_eq!(s.triggers().len(), 1, "only its owner's spells");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p.opponent()).life, 19);
+    assert_eq!(s.player(p.opponent()).life(), 19);
 }
 
 #[test]
@@ -1033,7 +1035,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
     put(&t, &mut s, &mut x, p, "Test Overlord");
     // Overlord's enters trigger makes two Insects: one event, one story counter.
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(staff).counters.get(CounterKind::Story), 1);
+    assert_eq!(s.object(staff).counters().get(CounterKind::Story), 1);
     // Noncreature tokens don't count.
     with_ctx(&t, &mut s, &mut x, staff, |ctx| {
         ctx.create_tokens(&MAP, 2, TokenEntry::default());
@@ -1051,7 +1053,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
 fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let tapped = |s: &State, slot: Slot| s.object(slot).flags.has(ObjectFlags::TAPPED);
+    let tapped = |s: &State, slot: Slot| s.object(slot).flags().has(ObjectFlags::TAPPED);
     let tapland = put(&t, &mut s, &mut x, p, "Test Tapland");
     assert!(tapped(&s, tapland));
     // Seachrome Coast: untapped with two or fewer other lands, tapped with three.
@@ -1086,9 +1088,9 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
             .find(|&i| d.candidates.option(Choice(i)) == Some(answer))
             .unwrap();
         apply(&mut s, &t, &mut x, &mut Replay, Choice(c));
-        assert_eq!(s.object(springs).zone, Zone::Battlefield);
+        assert_eq!(s.object(springs).zone(), Zone::Battlefield);
         assert_eq!(tapped(&s, springs), enters_tapped);
-        assert_eq!(s.player(p).life, life);
+        assert_eq!(s.player(p).life(), life);
     }
 
     // A player who can't pay isn't asked.
@@ -1108,9 +1110,9 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
         .unwrap();
     apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
-    assert_eq!(s.object(springs).zone, Zone::Battlefield);
+    assert_eq!(s.object(springs).zone(), Zone::Battlefield);
     assert!(tapped(&s, springs));
-    assert_eq!(s.player(p).life, 2);
+    assert_eq!(s.player(p).life(), 2);
 }
 
 #[test]
@@ -1129,8 +1131,8 @@ fn exile_instead_of_the_graveyard_replaces_the_move() {
         ctx.destroy(a_ref);
         ctx.destroy(ctx.source());
     });
-    assert_eq!(s.object(a).zone, Zone::Exile);
-    assert_eq!(s.object(b).zone, Zone::Graveyard);
+    assert_eq!(s.object(a).zone(), Zone::Exile);
+    assert_eq!(s.object(b).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -1143,7 +1145,7 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
         ctx.put_onto_battlefield(r, FaceIx::FRONT, Some((CounterKind::Time, 4)));
     });
-    assert_eq!(s.object(overlord).counters.get(CounterKind::Time), 4);
+    assert_eq!(s.object(overlord).counters().get(CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
     let r = s.object_ref(overlord);
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
@@ -1209,10 +1211,10 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
         let r = ctx.state().object_ref(bear);
         ctx.put_onto_battlefield(r, FaceIx::FRONT, None);
     });
-    assert_eq!(s.object(aura).attached_to, None);
+    assert_eq!(s.object(aura).attached_to(), None);
     assert_eq!(types(&s, bear), Types::CREATURE);
     decide_with(&t, &mut s, &mut x);
-    assert_eq!(s.object(aura).zone, Zone::Graveyard);
+    assert_eq!(s.object(aura).zone(), Zone::Graveyard);
 
     // On a token, the token ceases to exist and the Aura goes, in one check.
     let (t, mut s, p) = game();
@@ -1228,8 +1230,8 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let r = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
     decide_with(&t, &mut s, &mut x);
-    assert_eq!(s.object(token).zone, Zone::Nowhere);
-    assert_eq!(s.object(aura).zone, Zone::Graveyard);
+    assert_eq!(s.object(token).zone(), Zone::Nowhere);
+    assert_eq!(s.object(aura).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -1253,9 +1255,9 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     let copy = *s
         .battlefield()
         .iter()
-        .find(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .find(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
         .expect("a token copy");
-    assert_eq!((s.object(copy).owner, s.controller(copy)), (p, p));
+    assert_eq!((s.object(copy).owner(), s.controller(copy)), (p, p));
 }
 
 #[test]
@@ -1271,7 +1273,7 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
     with_ctx(&t, &mut s, &mut x, staff, |ctx| {
         ctx.remove_counters(r, CounterKind::Time, 1);
     });
-    assert_eq!(s.object(staff).counters.get(CounterKind::Story), 2);
+    assert_eq!(s.object(staff).counters().get(CounterKind::Story), 2);
     assert!(x.events.events().is_empty());
 }
 
@@ -1288,21 +1290,21 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
         ctx.gain_control(r, Duration::Indefinite);
     });
     assert_eq!(s.controller(theirs), p);
-    assert_eq!(s.object(theirs).owner, q);
-    assert!(s.object(theirs).flags.has(ObjectFlags::SUMMONING_SICK));
+    assert_eq!(s.object(theirs).owner(), q);
+    assert!(s.object(theirs).flags().has(ObjectFlags::SUMMONING_SICK));
     assert_eq!(s.derived(mine).power, 2, "Adeline counts it");
     // It untaps in its new controller's untap step and goes to its owner's graveyard.
     s.board().set_tapped(theirs, true);
     advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
     assert!(
-        s.object(theirs).flags.has(ObjectFlags::TAPPED),
+        s.object(theirs).flags().has(ObjectFlags::TAPPED),
         "not in its owner's"
     );
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    assert!(!s.object(theirs).flags.has(ObjectFlags::TAPPED));
+    assert!(!s.object(theirs).flags().has(ObjectFlags::TAPPED));
     assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
     with_ctx(&t, &mut s, &mut x, mine, |ctx| ctx.destroy(r));
-    assert_eq!(s.object(theirs).zone, Zone::Graveyard);
+    assert_eq!(s.object(theirs).zone(), Zone::Graveyard);
     assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(theirs));
     assert!(s.effects().is_empty(), "the effect ended with its object");
 }
@@ -1335,7 +1337,7 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
         .find(|&slot| s.card_behind(slot) != s.card_behind(mine))
         .unwrap();
     s.board().swap_cards(mine, other);
-    let turn = s.turn().number + 1;
+    let turn = s.turn().number() + 1;
     s.set_profile(Profile {
         breakpoint: Some(Breakpoint {
             turn,
@@ -1388,7 +1390,7 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     let mut x = Scratch::new();
     let trainer = put(&t, &mut s, &mut x, p, "Test Trainer");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p).life, 21);
+    assert_eq!(s.player(p).life(), 21);
     let values = s.copiable(trainer).except_one_one();
     let mut token = Bitboard::EMPTY;
     with_ctx(&t, &mut s, &mut x, trainer, |ctx| {
@@ -1397,7 +1399,7 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     let token = token.sole().unwrap();
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (1, 1));
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(p).life, 22, "the copy's enters trigger");
+    assert_eq!(s.player(p).life(), 22, "the copy's enters trigger");
 }
 
 #[test]
@@ -1408,12 +1410,12 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     let bear = put(&t, &mut s, &mut x, q, "Test Bear");
     let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(bear).zone, Zone::Exile);
+    assert_eq!(s.object(bear).zone(), Zone::Exile);
     let r = s.object_ref(iceberg);
     with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
-    assert_eq!(s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(s.controller(bear), q);
-    assert!(!s.object(bear).flags.has(ObjectFlags::EXILED_UNTIL));
+    assert!(!s.object(bear).flags().has(ObjectFlags::EXILED_UNTIL));
 
     // CR 610.3b: if the exiler leaves before its trigger resolves, nothing is exiled.
     let (t, mut s, p) = game();
@@ -1424,7 +1426,7 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     let r = s.object_ref(iceberg);
     with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(s.object(bear).zone(), Zone::Battlefield);
 }
 
 #[cfg(debug_assertions)]
@@ -1564,8 +1566,10 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
                     )
                 );
                 let o = paused.object(shown);
-                assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
-                assert_eq!(o.combat, None);
+                assert!(
+                    o.flags().has(ObjectFlags::ATTACKING) && o.flags().has(ObjectFlags::TAPPED)
+                );
+                assert_eq!(o.combat(), None);
                 pick(Opt::Defender(Some(walker)))
             }
             _ => Choice(0),
@@ -1573,10 +1577,10 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         apply(&mut s, &t, &mut x, &mut Replay, choice);
     };
     let o = s.object(human);
-    assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
-    assert!(o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER));
-    assert_eq!(o.combat, Some(walker));
-    assert_eq!(s.object(cathar).combat, None);
+    assert!(o.flags().has(ObjectFlags::ATTACKING) && o.flags().has(ObjectFlags::TAPPED));
+    assert!(o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER));
+    assert_eq!(o.combat(), Some(walker));
+    assert_eq!(s.object(cathar).combat(), None);
 }
 
 fn steal_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
@@ -1754,6 +1758,6 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
             .sole();
     });
     let copy = copy.expect("a token copy");
-    assert_eq!(s.object(copy).face, FaceIx::BACK);
+    assert_eq!(s.object(copy).face(), FaceIx::BACK);
     assert!(Filter::ManaValueAtMost(0).matches(&s, &t, copy, Seat::P1));
 }

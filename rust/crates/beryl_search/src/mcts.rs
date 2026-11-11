@@ -288,7 +288,8 @@ impl<L: Layout> Mcts<L> {
         // a zone change.
         for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
             let o = obs.object(slot);
-            if obs.knows(slot) != knew || (o.incarnation != incarnation && kept.moves != Some(slot))
+            if obs.knows(slot) != knew
+                || (o.incarnation() != incarnation && kept.moves != Some(slot))
             {
                 return None;
             }
@@ -379,7 +380,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
                 chain,
                 choice,
                 seen: L::Slot::all()
-                    .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
+                    .map(|slot| (obs.object(slot).incarnation(), obs.knows(slot)))
                     .collect(),
                 moves: names(d, choice),
             });

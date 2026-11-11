@@ -695,7 +695,7 @@ impl Game {
         let t = GameTable::new(&CAST_CARDS, [deck, deck]).unwrap();
         let mut s = State::new(&t, 5, profile);
         begin(&t, &mut s);
-        let me = s.turn().starting_player;
+        let me = s.turn().starting_player();
         for p in Seat::BOTH {
             // Any order: the test puts what it needs back on top.
             for slot in s.in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand))) {

@@ -139,7 +139,7 @@ pub fn play(
     }
     Ok(Played {
         outcome,
-        turns: s.turn().number,
+        turns: s.turn().number(),
         decisions,
     })
 }

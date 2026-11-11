@@ -180,7 +180,7 @@ impl RolloutPolicy {
                 })
             }
             DecisionKind::YesNo | DecisionKind::PayLife => {
-                let yes = d.kind == DecisionKind::YesNo || obs.player(p.me).life > 10;
+                let yes = d.kind == DecisionKind::YesNo || obs.player(p.me).life() > 10;
                 best(d, |c| {
                     Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
                 })
@@ -191,7 +191,7 @@ impl RolloutPolicy {
             DecisionKind::ChooseObject => pick.choose(d, |c| {
                 c.object().map(|slot| {
                     let o = obs.object(slot);
-                    if o.zone == Zone::Hand && o.owner == p.me {
+                    if o.zone() == Zone::Hand && o.owner() == p.me {
                         -p.in_hand(slot)
                     } else {
                         p.value(slot)
@@ -206,7 +206,7 @@ impl RolloutPolicy {
                 Some(slot) if d.prompt.purpose == Purpose::Search => {
                     Some(1 + p.in_hand(slot).max(0))
                 }
-                Some(slot) if obs.object(slot).zone == Zone::Library => {
+                Some(slot) if obs.object(slot).zone() == Zone::Library => {
                     Some(DRAW_MIN - p.in_hand(slot))
                 }
                 Some(slot) => Some(p.value(slot)),
@@ -220,7 +220,7 @@ impl RolloutPolicy {
                 _ => Some(0),
             }),
             DecisionKind::AttackTarget => pick.choose(d, |c| match c.option() {
-                Some(Opt::Defender(None)) => Some(if obs.player(p.me.opponent()).life <= 6 {
+                Some(Opt::Defender(None)) => Some(if obs.player(p.me.opponent()).life() <= 6 {
                     1000
                 } else {
                     0
@@ -417,7 +417,7 @@ impl<L: Layout> Policy<'_, L> {
         };
         let mut v = i32::from(info.value);
         let o = self.obs.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.zone() == Zone::Battlefield {
             if self.expert
                 && let Some(v) = crate::expert::appraise(self, slot, v)
             {
@@ -432,7 +432,7 @@ impl<L: Layout> Policy<'_, L> {
                 v += 3 * i32::from(d.power.max(0));
             }
             if d.types.intersects(Types::PLANESWALKER) {
-                v += 4 * i32::from(o.counters.loyalty);
+                v += 4 * i32::from(o.counters().loyalty);
             }
         }
         v
@@ -478,7 +478,7 @@ impl<L: Layout> Policy<'_, L> {
     /// [`DecisionKind::PutOnBottom`] picks them.
     pub(crate) fn keep(&self) -> bool {
         let mut kept = self.obs.zone(ZoneKey::Of(self.me, Zone::Hand));
-        for _ in 0..self.obs.player(self.me).mulligans {
+        for _ in 0..self.obs.player(self.me).mulligans() {
             // Of the least wanted alike, the first in candidate order goes: the policy's pick.
             let least = self.obs.in_candidate_order(kept);
             match least.min_by_key(|&slot| self.in_hand(slot)) {
@@ -581,17 +581,17 @@ impl<L: Layout> Policy<'_, L> {
             return 0;
         }
         let o = self.obs.object(slot);
-        if o.face == FaceIx::FRONT && info.draws(i) && !self.may_draw() {
+        if o.face() == FaceIx::FRONT && info.draws(i) && !self.may_draw() {
             return 0;
         }
-        if o.face == FaceIx::FRONT && info.empties(i) {
+        if o.face() == FaceIx::FRONT && info.empties(i) {
             return if self.obs.library(self.me).len() <= 7 {
                 1000
             } else {
                 0
             };
         }
-        let a = &self.t.def(card).face(o.face).abilities[usize::from(i)];
+        let a = &self.t.def(card).face(o.face()).abilities[usize::from(i)];
         let v = match a.cost.loyalty {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
@@ -637,7 +637,7 @@ impl<L: Layout> Policy<'_, L> {
                         && self
                             .t
                             .def(card)
-                            .face(self.obs.object(slot).face)
+                            .face(self.obs.object(slot).face())
                             .abilities
                             .iter()
                             .any(|a| {
@@ -779,10 +779,10 @@ impl<L: Layout> Policy<'_, L> {
             _ => match c.object() {
                 Some(slot) => {
                     let o = self.obs.object(slot);
-                    let controller = if matches!(o.zone, Zone::Battlefield | Zone::Stack) {
+                    let controller = if matches!(o.zone(), Zone::Battlefield | Zone::Stack) {
                         self.obs.controller(slot)
                     } else {
-                        o.owner
+                        o.owner()
                     };
                     (controller, self.value(slot))
                 }
@@ -797,7 +797,7 @@ impl<L: Layout> Policy<'_, L> {
     }
 
     pub(crate) fn flags(&self, slot: L::Slot) -> ObjectFlags {
-        self.obs.object(slot).flags
+        self.obs.object(slot).flags()
     }
 
     /// Whether `blocker` could block `attacker`, by evasion
@@ -811,7 +811,7 @@ impl<L: Layout> Policy<'_, L> {
     /// Whether `by`'s power is at least the damage left to kill `slot`.
     pub(crate) fn kills(&self, by: L::Slot, slot: L::Slot) -> bool {
         let left =
-            i16::from(self.obs.derived(slot).toughness) - i16::from(self.obs.object(slot).damage);
+            i16::from(self.obs.derived(slot).toughness) - i16::from(self.obs.object(slot).damage());
         i16::from(self.obs.derived(by).power) >= left
     }
 
@@ -842,12 +842,12 @@ impl<L: Layout> Policy<'_, L> {
             .filter(|&&a| {
                 let o = self.obs.object(a);
                 self.obs.controller(a) == self.me
-                    && o.flags.has(ObjectFlags::ATTACKING)
-                    && o.combat == Some(walker)
+                    && o.flags().has(ObjectFlags::ATTACKING)
+                    && o.combat() == Some(walker)
             })
             .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
             .sum();
-        if sent < i32::from(self.obs.object(walker).counters.loyalty) {
+        if sent < i32::from(self.obs.object(walker).counters().loyalty) {
             self.value(walker)
         } else {
             -1
@@ -861,7 +861,7 @@ impl<L: Layout> Policy<'_, L> {
     pub(crate) fn blocked(&self, attacker: L::Slot) -> bool {
         self.obs.battlefield().iter().any(|&b| {
             let o = self.obs.object(b);
-            o.flags.has(ObjectFlags::BLOCKING) && o.combat == Some(attacker)
+            o.flags().has(ObjectFlags::BLOCKING) && o.combat() == Some(attacker)
         })
     }
 
@@ -892,7 +892,7 @@ impl<L: Layout> Policy<'_, L> {
             (true, false) => Some(300 + va),
             (true, true) if va >= vb => Some(200 + va - vb),
             (false, false) => Some(100 + power),
-            _ if self.unblocked_damage() >= i32::from(self.obs.player(self.me).life)
+            _ if self.unblocked_damage() >= i32::from(self.obs.player(self.me).life())
                 && !self.flags(attacker).has(ObjectFlags::ATTACKS_PLANESWALKER) =>
             {
                 // Above declining (0) at any blocker value, the cheapest blocker first.
@@ -916,8 +916,8 @@ impl<L: Layout> Policy<'_, L> {
         self.obs.battlefield().iter().copied().find(|&b| {
             let o = self.obs.object(b);
             self.obs.controller(b) == self.me
-                && o.flags.has(ObjectFlags::BLOCKING)
-                && o.combat.is_none()
+                && o.flags().has(ObjectFlags::BLOCKING)
+                && o.combat().is_none()
         })
     }
 }
@@ -1026,7 +1026,7 @@ fn play_out<A: Answers<L>, L: Layout>(
     loop {
         match next(s, t, x, answers) {
             Step::Over(outcome) => return Some(outcome),
-            Step::Decide(_) if s.turn().number >= turn => return None,
+            Step::Decide(_) if s.turn().number() >= turn => return None,
             Step::Decide(d) => {
                 let c = choose(answers, Observation::new(s, d.player), &d);
                 apply_decided(s, t, x, answers, &d, c);

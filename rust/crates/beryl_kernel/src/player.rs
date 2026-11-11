@@ -55,30 +55,29 @@ impl std::ops::IndexMut<ManaColor> for ManaPool {
 /// One player (architecture §4.4).
 ///
 /// Written only by [`State`]'s mutators: nothing outside the crate reaches one to write. The
-/// fields stay `pub` to read until by-w8gv.5.9 moves the readers in other crates to the
-/// getters.
+/// fields are `pub(crate)`: other crates read them through the getters.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Player<L: Layout = Small> {
-    pub life: i16,
+    pub(crate) life: i16,
     /// Unspent mana.
-    pub mana: ManaPool,
-    pub lands_played: u8,
+    pub(crate) mana: ManaPool,
+    pub(crate) lands_played: u8,
     /// Attempted to draw from an empty library since state-based actions were last checked
     /// (CR 704.5b).
-    pub drew_from_empty: bool,
-    pub mulligans: u8,
-    pub mulligan: MulliganStatus,
+    pub(crate) drew_from_empty: bool,
+    pub(crate) mulligans: u8,
+    pub(crate) mulligan: MulliganStatus,
     /// Cards still to put on the bottom of the hand just kept, one per mulligan taken.
-    pub to_bottom: u8,
+    pub(crate) to_bottom: u8,
     /// The emblems the player has, as game indices
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An emblem is a
     /// marker used to represent an object that has one or more abilities, but usually no
     /// other characteristics."
-    pub emblems: L::Queue<CardIx, 4>,
+    pub(crate) emblems: L::Queue<CardIx, 4>,
     /// "Until your next turn, you may cast sorcery spells as though they had flash." (Teferi,
     /// Time Raveler) Milestone 4 (by-w8gv.7.1) deletes it: written only through
     /// [`State::legacy_mut`].
-    pub sorceries_as_flash: bool,
+    pub(crate) sorceries_as_flash: bool,
 }
 
 impl Copy for Player<Small> {}

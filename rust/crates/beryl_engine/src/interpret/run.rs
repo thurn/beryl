@@ -242,13 +242,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// card or token on the battlefield."
     fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
         let s = &*self.ctx.state;
-        (self.scene().objects(objects)).filter(|slot| s.object(slot).zone == Zone::Battlefield)
+        (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() == Zone::Battlefield)
     }
 
     /// The objects `objects` names that are not in `zone` already.
     fn elsewhere_than(&self, objects: Objects, zone: Zone) -> Bitboard<L::Slot> {
         let s = &*self.ctx.state;
-        (self.scene().objects(objects)).filter(|slot| s.object(slot).zone != zone)
+        (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() != zone)
     }
 
     /// Notes what is known of the targets among `leaving` before the effect moves them, for
@@ -276,7 +276,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// object."
     fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
         let s = &*self.ctx.state;
-        Outcome::acted_on(permanents.filter(|slot| s.object(slot).zone != Zone::Battlefield))
+        Outcome::acted_on(permanents.filter(|slot| s.object(slot).zone() != Zone::Battlefield))
     }
 
     /// Moves the permanents `objects` names off the battlefield together with `act`.
@@ -401,7 +401,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The outcome of an instruction that moved `objects` to `zone`: those that are there.
     fn now_in(&self, objects: Bitboard<L::Slot>, zone: Zone) -> Outcome<L> {
         let s = &*self.ctx.state;
-        Outcome::acted_on(objects.filter(|slot| s.object(slot).zone == zone))
+        Outcome::acted_on(objects.filter(|slot| s.object(slot).zone() == zone))
     }
 
     /// "[Player] draws [count] cards" (CR 121.1). The outcome is the cards drawn.
@@ -462,9 +462,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         }
         let mut total = 0;
         for player in self.in_turn_order(players) {
-            let before = self.ctx.state.player(player).life;
+            let before = self.ctx.state.player(player).life();
             change(self.ctx, player, amount);
-            total += u32::from(self.ctx.state.player(player).life.abs_diff(before));
+            total += u32::from(self.ctx.state.player(player).life().abs_diff(before));
         }
         Outcome::of(Bitboard::EMPTY, total)
     }
@@ -540,7 +540,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let permanents = self.permanents(objects);
         let counters = |run: &Self| -> u32 {
             let s = &*run.ctx.state;
-            permanents.sum(|slot| u32::from(s.object(slot).counters.get(kind)))
+            permanents.sum(|slot| u32::from(s.object(slot).counters().get(kind)))
         };
         let before = counters(self);
         self.each_permanent(permanents, |ctx, object| {

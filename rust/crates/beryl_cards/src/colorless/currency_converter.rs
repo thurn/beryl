@@ -47,7 +47,7 @@ fn exile_discarded<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         return Ok(());
     };
     let s = ctx.state();
-    if !s.is_current(card) || s.object(card.slot).zone != Zone::Graveyard {
+    if !s.is_current(card) || s.object(card.slot).zone() != Zone::Graveyard {
         return Ok(());
     }
     let exile = Prompt::new(Purpose::Move).places(Place::Exile, Place::None);

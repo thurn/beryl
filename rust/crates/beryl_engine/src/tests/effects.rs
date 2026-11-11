@@ -57,7 +57,7 @@ fn resolve(
 ) -> Option<Decision> {
     let mut entry = StackEntry {
         object: Some(source),
-        controller: s.object(source.slot).owner,
+        controller: s.object(source.slot).owner(),
         card: s.copiable(source.slot).record(t).0,
         ability: Some(FaceAbility::own(0)),
         ..StackEntry::default()
@@ -85,7 +85,7 @@ fn game_with_source() -> (GameTable, State, Scratch, Seat, ObjectRef) {
 }
 
 fn life(s: &State, player: Seat) -> i16 {
-    s.player(player).life
+    s.player(player).life()
 }
 
 fn hand(s: &State, player: Seat) -> u32 {
@@ -93,7 +93,7 @@ fn hand(s: &State, player: Seat) -> u32 {
 }
 
 fn zone_of(s: &State, slot: Slot) -> Zone {
-    s.object(slot).zone
+    s.object(slot).zone()
 }
 
 #[test]
@@ -220,7 +220,7 @@ fn each_player_takes_their_turn_at_an_effect_from_the_active_player() {
             _ => None,
         })
         .collect();
-    assert_eq!(lost, [s.turn().active, s.turn().active.opponent()]);
+    assert_eq!(lost, [s.turn().active(), s.turn().active().opponent()]);
 }
 
 #[test]
@@ -392,7 +392,7 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
         .filter(|&&slot| s.name(&t, slot) == "Test Insect" && s.controller(slot) == p)
         .count();
     assert_eq!(insects, 2);
-    assert_eq!(s.object(source.slot).counters.get(CounterKind::Story), 0);
+    assert_eq!(s.object(source.slot).counters().get(CounterKind::Story), 0);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (21, 16));
     assert!(!COUNT_UP.asks());
 }
@@ -405,7 +405,7 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &COPY, &targets, &[]).is_none());
     let copies: Vec<Slot> = (s.battlefield().iter().copied())
-        .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .filter(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
         .collect();
     assert_eq!(copies.len(), 1);
     assert_eq!(s.copiable(copies[0]), s.copiable(bear));

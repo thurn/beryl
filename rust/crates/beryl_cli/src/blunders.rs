@@ -394,7 +394,7 @@ pub fn reach(e: &Entry) -> Result<Reached, String> {
     loop {
         match walk.next().map_err(drift)? {
             Walked::Decide { d, c, .. } => {
-                let turn = walk.s.turn().number;
+                let turn = walk.s.turn().number();
                 if turn > e.turn {
                     return Err(drift(format!(
                         "turn {} has no decision {}",

@@ -98,7 +98,7 @@ pub(crate) fn face_up_options<L: Layout>(
         .battlefield()
         .iter()
         .copied()
-        .filter(|&slot| s.object(slot).face == FaceIx::DOWN && s.controller(slot) == player)
+        .filter(|&slot| s.object(slot).face() == FaceIx::DOWN && s.controller(slot) == player)
         .collect();
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, face_down)) {

@@ -70,7 +70,7 @@ fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 fn sacrifice_and_scry<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let iceberg = ctx.source();
     if !ctx.state().is_current(iceberg)
-        || ctx.state().object(iceberg.slot).zone != Zone::Battlefield
+        || ctx.state().object(iceberg.slot).zone() != Zone::Battlefield
     {
         return Ok(());
     }

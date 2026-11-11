@@ -384,7 +384,7 @@ fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
             ]);
     let mut checked = false;
     beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-        let in_graveyard = |slot| s.object(slot).zone == Zone::Graveyard;
+        let in_graveyard = |slot| s.object(slot).zone() == Zone::Graveyard;
         if d.prompt.purpose != Purpose::ExileCost
             || !d.candidates.object(Choice(0)).is_some_and(in_graveyard)
         {

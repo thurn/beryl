@@ -63,7 +63,7 @@ fn activated<L: Layout>(
     match ability {
         ObjectAbility::Own(i) => Some((s.copiable(slot), FaceAbility::Own(i))),
         ObjectAbility::Granted(k) => {
-            if s.object(slot).zone != Zone::Battlefield {
+            if s.object(slot).zone() != Zone::Battlefield {
                 return None;
             }
             let grant = s.derived(slot).granted[usize::from(k)]?;
@@ -125,7 +125,7 @@ fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -
 fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
-        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash)
+        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash())
 }
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
@@ -732,7 +732,7 @@ fn crew_candidates<L: Layout>(s: &State<L>, player: Seat, vehicle: L::Slot) -> B
             slot != vehicle
                 && s.controller(slot) == player
                 && s.derived(slot).types.contains(Types::CREATURE)
-                && !s.object(slot).flags.has(ObjectFlags::TAPPED)
+                && !s.object(slot).flags().has(ObjectFlags::TAPPED)
         })
         .collect()
 }
@@ -771,9 +771,9 @@ fn activatable<L: Layout>(
     // can activate its activated ability". CR 702.29a: cycling "functions only while the card
     // with cycling is in a player's hand."
     let in_place = if a.cost.discard_self {
-        o.zone == Zone::Hand && o.owner == player
+        o.zone() == Zone::Hand && o.owner() == player
     } else {
-        o.zone == Zone::Battlefield && s.controller(slot) == player
+        o.zone() == Zone::Battlefield && s.controller(slot) == player
     };
     if !in_place {
         return false;
@@ -783,9 +783,9 @@ fn activatable<L: Layout>(
         // 602.5a: "A creature's activated ability with the tap symbol ... in its activation
         // cost can't be activated unless the creature has been under its controller's control
         // since the start of their most recent turn."
-        if o.flags.has(ObjectFlags::TAPPED)
+        if o.flags().has(ObjectFlags::TAPPED)
             || (s.derived(slot).types.intersects(Types::CREATURE)
-                && o.flags.has(ObjectFlags::SUMMONING_SICK))
+                && o.flags().has(ObjectFlags::SUMMONING_SICK))
         {
             return false;
         }
@@ -795,7 +795,10 @@ fn activatable<L: Layout>(
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if a.cost.remove.is_some_and(|kind| o.counters.get(kind) == 0) {
+    if a.cost
+        .remove
+        .is_some_and(|kind| o.counters().get(kind) == 0)
+    {
         return false;
     }
     let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {
@@ -803,15 +806,15 @@ fn activatable<L: Layout>(
         // time they have priority and the stack is empty during a main phase of their turn,
         // but only if no player has previously activated a loyalty ability of that permanent
         // that turn."
-        if o.flags.has(ObjectFlags::LOYALTY_ACTIVATED) {
+        if o.flags().has(ObjectFlags::LOYALTY_ACTIVATED) {
             return false;
         }
         // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
         // unless the permanent has at least that many loyalty counters on it."
-        if i16::from(o.counters.loyalty) + i16::from(loyalty) < 0 {
+        if i16::from(o.counters().loyalty) + i16::from(loyalty) < 0 {
             return false;
         }
-        !(o.flags.has(ObjectFlags::ENTERED_THIS_TURN)
+        !(o.flags().has(ObjectFlags::ENTERED_THIS_TURN)
             && has_rule(s, t, slot, Rule::InstantLoyaltyTheTurnItEntered))
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
@@ -871,7 +874,7 @@ fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
                 && s.derived(slot)
                     .types
                     .intersects(Types::ARTIFACT.union(Types::CREATURE))
-                && !s.object(slot).flags.has(ObjectFlags::TAPPED)
+                && !s.object(slot).flags().has(ObjectFlags::TAPPED)
         })
         .collect()
 }
@@ -918,12 +921,12 @@ fn activation_options<L: Layout>(
     let facts = |slot: L::Slot| s.copiable(slot).facts(t);
     let objects = objects.filter(|slot| {
         facts(slot).activates()
-            || (s.object(slot).zone == Zone::Battlefield
+            || (s.object(slot).zone() == Zone::Battlefield
                 && s.derived(slot).granted.iter().any(Option::is_some))
     });
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, objects)) {
-        let granted = if s.object(slot).zone == Zone::Battlefield {
+        let granted = if s.object(slot).zone() == Zone::Battlefield {
             s.derived(slot).granted.len() as u8
         } else {
             0

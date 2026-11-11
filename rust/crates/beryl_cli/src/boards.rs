@@ -1735,7 +1735,7 @@ impl Scripted {
         next: Option<Action>,
     ) -> Option<Choice> {
         let scripted = matches!(next, Some(Action::Answer { kind, .. }) if kind == d.kind);
-        if d.kind == DecisionKind::Discard && s.turn().step == TurnStep::Cleanup && !scripted {
+        if d.kind == DecisionKind::Discard && s.turn().step() == TurnStep::Cleanup && !scripted {
             return Some(Choice(0));
         }
         if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker)
@@ -1761,7 +1761,8 @@ impl<L: Layout> Agent<L> for Scripted {
         // what it answers is on the stack. It waits for its turn and step too.
         let turn = s.turn();
         let due = self.script.front().is_some_and(|&(at, _, gate)| {
-            lock(&self.progress).taken >= at && gate.is_none_or(|g| (turn.number, turn.step) >= g)
+            lock(&self.progress).taken >= at
+                && gate.is_none_or(|g| (turn.number(), turn.step()) >= g)
         });
         // A "may" its script answers that the session folds into the question it leads to (a
         // search's choice, with Done to find nothing): a yes is the choice itself, a no is Done.

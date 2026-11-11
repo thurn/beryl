@@ -16,7 +16,7 @@ const LEGENDS: &Decklist = &[(40, "Test Legend")];
 
 /// Two legends from the starting player's library onto the battlefield.
 fn two_legends(s: &mut State) -> (Seat, Slot, Slot) {
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     let lib = s.library(p);
     let (a, b) = (lib[0], lib[1]);
     s.move_object(
@@ -56,7 +56,7 @@ fn the_legend_rule_asks_which_to_keep_when_the_two_differ() {
     assert_eq!(d.kind, DecisionKind::Priority);
     assert!(s.battlefield().contains(&b));
     assert!(!s.battlefield().contains(&a));
-    assert_eq!(s.object(a).zone, Zone::Graveyard);
+    assert_eq!(s.object(a).zone(), Zone::Graveyard);
     assert_eq!(s.graveyard(p).last(), Some(&a));
 }
 
@@ -77,7 +77,7 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
     let t = table([LEGENDS, LEGENDS]);
     let mut s = State::new(&t, 1, Profile::EXACT);
     begin(&t, &mut s);
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     let mine = s.library(p)[0];
     let stolen = s.library(p.opponent())[0];
     s.move_object(
@@ -108,7 +108,7 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     let t = table([MIXED, MIXED]);
     let mut s = State::new(&t, 3, Profile::EXACT);
     begin(&t, &mut s);
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     let q = p.opponent();
     let from_library = s.library(p)[0];
     assert!(!s.knows(p, from_library));
@@ -168,7 +168,7 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let t = table([MIXED, MIXED]);
     let mut s = State::new(&t, 9, Profile::EXACT);
     begin(&t, &mut s);
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     // Any order: every card is checked.
     let hand: Vec<Slot> = s
         .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
@@ -186,10 +186,10 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let before: Vec<(Slot, CardIx, u16)> = s
         .library(p)
         .iter()
-        .map(|&slot| (slot, card(&s, slot), s.object(slot).incarnation))
+        .map(|&slot| (slot, card(&s, slot), s.object(slot).incarnation()))
         .collect();
     s.shuffle_library(p);
-    let after = |slot: Slot| (card(&s, slot), s.object(slot).incarnation);
+    let after = |slot: Slot| (card(&s, slot), s.object(slot).incarnation());
     let mut cards_before: Vec<CardIx> = before.iter().map(|b| b.1).collect();
     let mut cards_after: Vec<CardIx> = before.iter().map(|b| after(b.0).0).collect();
     assert_ne!(cards_before, cards_after, "identities were dealt anew");
@@ -212,7 +212,7 @@ fn filters_select_by_type_and_owner() {
     let t = table([MIXED, MIXED]);
     let mut s = State::new(&t, 9, Profile::EXACT);
     begin(&t, &mut s);
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     let lands = Filter::Types(Types::LAND).select(&s, &t, hand, p);
     let others = Filter::Not(&Filter::Types(Types::LAND)).select(&s, &t, hand, p);
@@ -251,5 +251,5 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
         ctx.mana = color;
         crate::interpret::resolve(&mut ctx, crate::state::TargetPlaces::NONE).unwrap();
     }
-    assert_eq!(s.player(Seat::P0).mana.amounts(), [1, 1, 0, 0, 0, 0]);
+    assert_eq!(s.player(Seat::P0).mana().amounts(), [1, 1, 0, 0, 0, 0]);
 }

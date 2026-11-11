@@ -64,7 +64,7 @@ pub(super) struct Sim<'a> {
 impl Sim<'_> {
     /// The answer to a combat decision in the determinized position `start`.
     pub fn choose(&mut self, start: &State, d: &Decision) -> Choice {
-        let turn = start.turn().number;
+        let turn = start.turn().number();
         if self.plan.turn != turn {
             *self.plan = Plan {
                 turn,
@@ -201,11 +201,11 @@ impl Sim<'_> {
     /// survive.
     fn dies_for_nothing(&self, s: &State, attacker: Slot) -> bool {
         let left =
-            |slot: Slot| i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage);
+            |slot: Slot| i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
         s.battlefield().iter().any(|&b| {
             s.controller(b) != self.me
                 && s.derived(b).types.intersects(Types::CREATURE)
-                && !s.object(b).flags.has(ObjectFlags::TAPPED)
+                && !s.object(b).flags().has(ObjectFlags::TAPPED)
                 && can_block(s, b, attacker)
                 && i16::from(s.derived(b).power) >= left(attacker)
                 && i16::from(s.derived(attacker).power) < left(b)
@@ -225,7 +225,7 @@ impl Sim<'_> {
         free.sort_by_key(|&a| power(a));
         let mut plan = Vec::new();
         for w in walkers {
-            let loyalty = i32::from(s.object(w).counters.loyalty);
+            let loyalty = i32::from(s.object(w).counters().loyalty);
             if let Some(i) = free.iter().position(|&a| power(a) >= loyalty) {
                 plan.push(Declare::Attack(free.remove(i), Some(w)));
                 continue;
@@ -286,7 +286,7 @@ impl Sim<'_> {
         let mut free = blockers.to_vec();
         free.sort_by_key(|&b| p.value(b));
         let mut through: i32 = attackers.iter().map(|&a| power(a)).sum();
-        let life = i32::from(s.player(self.me).life);
+        let life = i32::from(s.player(self.me).life());
         let mut plan = Vec::new();
         for a in attackers {
             if through < life {
@@ -372,7 +372,7 @@ impl Sim<'_> {
     ) -> i32 {
         let mut s = *start;
         self.x.counts.copied();
-        let turn = s.turn().number;
+        let turn = s.turn().number();
         let mut inline = Inline {
             policy: self.policy,
             t: self.t,
@@ -381,8 +381,8 @@ impl Sim<'_> {
         // The opponent's blocks, planned as we plan ours, one level deep.
         let mut theirs = Plan::default();
         loop {
-            let step = s.turn().step;
-            if s.turn().number != turn
+            let step = s.turn().step();
+            if s.turn().number() != turn
                 || matches!(
                     step,
                     TurnStep::EndOfCombat | TurnStep::PostcombatMain | TurnStep::End
@@ -437,7 +437,7 @@ impl Sim<'_> {
             };
             apply(&mut s, self.t, self.x, &mut inline, c);
         }
-        self.score(&s, s.turn().active == self.me)
+        self.score(&s, s.turn().active() == self.me)
     }
 
     /// A position's score for us: the permanents' values on each side, other than lands,
@@ -469,7 +469,7 @@ impl Sim<'_> {
                 })
                 .count() as i16
         };
-        let mine = s.player(me).life - 2 * crypts(me);
+        let mine = s.player(me).life() - 2 * crypts(me);
         // Their creatures are a clock on us, the more so the lower our life.
         let clock: i32 = s
             .battlefield()
@@ -478,7 +478,7 @@ impl Sim<'_> {
             .map(|&c| i32::from(s.derived(c).power.max(0)))
             .sum();
         e -= clock * if mine <= 10 { 3 } else { 1 };
-        e += life(mine) - life(s.player(me.opponent()).life - 2 * crypts(me.opponent()));
+        e += life(mine) - life(s.player(me.opponent()).life() - 2 * crypts(me.opponent()));
         // After our attack, our attackers stay tapped through their turn; after our blocks,
         // all of ours untap before they attack again.
         let back = swing_back(s, me, !ours, mine <= 5);
@@ -495,7 +495,7 @@ impl Sim<'_> {
                 s.controller(w) == me && s.derived(w).types.intersects(Types::PLANESWALKER)
             })
             .map(|&w| {
-                if back >= i32::from(s.object(w).counters.loyalty) {
+                if back >= i32::from(s.object(w).counters().loyalty) {
                     p.value(w)
                 } else {
                     6 * back
@@ -513,7 +513,7 @@ impl Sim<'_> {
         let emperor = s.battlefield().iter().any(|&w| {
             s.controller(w) != self.me
                 && s.definition_name(self.t, w) == names::THE_WANDERING_EMPEROR
-                && s.object(w).counters.loyalty >= 3
+                && s.object(w).counters().loyalty >= 3
         });
         if !ours || !emperor {
             return 0;
@@ -523,7 +523,7 @@ impl Sim<'_> {
             .filter(|&&c| {
                 s.controller(c) == self.me
                     && s.derived(c).types.intersects(Types::CREATURE)
-                    && s.object(c).flags.has(ObjectFlags::TAPPED)
+                    && s.object(c).flags().has(ObjectFlags::TAPPED)
             })
             .map(|&c| p.value(c))
             .max()
@@ -560,7 +560,7 @@ fn swing_back(s: &State, me: Seat, untap: bool, fragile: bool) -> i32 {
         .filter(|&b| {
             s.controller(b) == me
                 && creature(b)
-                && (untap || !s.object(b).flags.has(ObjectFlags::TAPPED))
+                && (untap || !s.object(b).flags().has(ObjectFlags::TAPPED))
         })
         .map(|b| flies(b, Keywords::FLYING.union(Keywords::REACH)))
         .collect();
@@ -620,7 +620,7 @@ fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<S
         .copied()
         .filter(|&c| named.iter().any(|&n| like(s, n, c)))
         .filter(|&c| {
-            let f = s.object(c).flags;
+            let f = s.object(c).flags();
             !f.has(ObjectFlags::ATTACKING) && !f.has(ObjectFlags::BLOCKING)
         })
         .collect()
@@ -633,8 +633,8 @@ fn like(s: &State, a: Slot, b: Slot) -> bool {
             && s.copiable(a).key() == s.copiable(b).key()
             && s.derived(a).power == s.derived(b).power
             && s.derived(a).toughness == s.derived(b).toughness
-            && s.object(a).flags.has(ObjectFlags::TAPPED)
-                == s.object(b).flags.has(ObjectFlags::TAPPED))
+            && s.object(a).flags().has(ObjectFlags::TAPPED)
+                == s.object(b).flags().has(ObjectFlags::TAPPED))
 }
 
 /// Whether `blocker` could block `attacker`, by evasion
@@ -650,7 +650,7 @@ fn attacking(s: &State, me: Seat) -> Vec<Slot> {
     s.battlefield()
         .iter()
         .copied()
-        .filter(|&a| s.controller(a) != me && s.object(a).flags.has(ObjectFlags::ATTACKING))
+        .filter(|&a| s.controller(a) != me && s.object(a).flags().has(ObjectFlags::ATTACKING))
         .collect()
 }
 

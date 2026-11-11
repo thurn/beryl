@@ -33,11 +33,11 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
         },
         (Purpose::Scry, ..) => AskView::Scry { count },
         (Purpose::Look, _, Some(card), Some(to)) => AskView::Look {
-            player: side(obs, card.owner),
-            zone: card.zone.into(),
+            player: side(obs, card.owner()),
+            zone: card.zone().into(),
             // A hand is looked at whole.
-            count: match card.zone {
-                Zone::Hand => u8::try_from(obs.zone(ZoneKey::Of(card.owner, Zone::Hand)).count())
+            count: match card.zone() {
+                Zone::Hand => u8::try_from(obs.zone(ZoneKey::Of(card.owner(), Zone::Hand)).count())
                     .unwrap_or(u8::MAX),
                 _ => count,
             },
@@ -46,7 +46,7 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
         },
         (Purpose::PutBack, ..) => AskView::PutBack { count: most },
         (Purpose::Fateseal, _, Some(card), _) => AskView::Fateseal {
-            player: side(obs, card.owner),
+            player: side(obs, card.owner()),
         },
         (Purpose::Arrange, ..) if part == Part::First => AskView::Take { count, take: most },
         (Purpose::Arrange, ..) => AskView::Bottom { count },
@@ -60,7 +60,7 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
         (Purpose::Explore, ..) => AskView::Explore,
         (Purpose::ManifestDread, ..) => AskView::ManifestDread,
         (Purpose::ExileCost, _, Some(card), _) => AskView::ExileCards {
-            zone: card.zone.into(),
+            zone: card.zone().into(),
             count: most,
         },
         (Purpose::TopOrBottom, Some(card), ..) => AskView::TopOrBottom { card: card.num() },

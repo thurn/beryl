@@ -12,7 +12,7 @@ use crate::state::{ManaPool, ObjectFlags, TurnStep, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
-    g.s.object(slot).flags.has(ObjectFlags::TAPPED)
+    g.s.object(slot).flags().has(ObjectFlags::TAPPED)
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn plans_that_differ_only_in_which_lands_tap_are_not_a_decision() {
     ];
     g.pick(cast(bear));
     assert_eq!(
-        g.s.object(bear).zone,
+        g.s.object(bear).zone(),
         Zone::Stack,
         "paid without a question"
     );
@@ -70,8 +70,8 @@ fn plans_that_leave_different_mana_floating_are_a_decision() {
     assert_eq!(d.len(), 2);
     g.pick(Opt::Plan(1));
     assert!(tapped(&g, crypt));
-    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 0, 0, 0, 0, 1]);
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.player(g.me).mana().amounts(), [0, 0, 0, 0, 0, 1]);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
 }
 
 /// A {1}{W} spell with a Plains, a Strip Mine and a W/U dual: the Plains pays {W}, and the
@@ -86,7 +86,7 @@ fn strip_or_dual(payment: Payment) -> (bool, bool) {
     let strip = g.give(g.me, "Test Strip", Zone::Battlefield);
     let dual = g.give(g.me, "Test Dual", Zone::Battlefield);
     g.pick(cast(bear));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     (tapped(&g, strip), tapped(&g, dual))
 }
 
@@ -114,7 +114,7 @@ fn flash_keeps_the_plains(human: bool) -> bool {
     g.at(g.them, TurnStep::End);
     g.s.board().set_priority(g.me);
     g.pick(cast(flasher));
-    assert_eq!(g.s.object(flasher).zone, Zone::Stack);
+    assert_eq!(g.s.object(flasher).zone(), Zone::Stack);
     !tapped(&g, plains)
 }
 
@@ -145,7 +145,7 @@ fn a_human_payment_keeps_two_copies_of_a_card_payable_together() {
     g.give(g.me, "Test Land", Zone::Battlefield);
     let dual = g.give(g.me, "Test Dual", Zone::Battlefield);
     g.pick(cast(bear));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     assert!(!tapped(&g, island) && !tapped(&g, dual));
 }
 
@@ -164,7 +164,7 @@ fn main_phase_keeps_the_plains(lands_played: u8) -> bool {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.s.board().set_lands_played(g.me, lands_played);
     g.pick(cast(diver));
-    assert_eq!(g.s.object(diver).zone, Zone::Stack);
+    assert_eq!(g.s.object(diver).zone(), Zone::Stack);
     !tapped(&g, plains)
 }
 
@@ -186,7 +186,7 @@ fn a_human_payment_taps_lands_before_a_mana_creature() {
     g.give(g.me, "Test Land", Zone::Battlefield);
     g.give(g.me, "Test Dual", Zone::Battlefield);
     g.pick(cast(bear));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     assert!(!tapped(&g, elf));
 }
 
@@ -217,7 +217,7 @@ fn manual_payment_makes_every_tap_a_decision() {
     });
     // Only the Plains can pay the {W} left: no question.
     assert!(tapped(&g, land));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
 }
 
 #[test]
@@ -260,14 +260,14 @@ fn a_payment_never_taps_a_source_it_could_leave_untapped() {
         // {3}{W}: the Crypt and two Plains pay it. Tapping the third Plains as well would
         // only float {C}, so it is no plan of its own.
         g.pick(cast(overlord));
-        assert_eq!(g.s.object(overlord).zone, Zone::Stack, "{payment:?}");
+        assert_eq!(g.s.object(overlord).zone(), Zone::Stack, "{payment:?}");
         assert!(tapped(&g, crypt), "{payment:?}");
         assert_eq!(
             lands.iter().filter(|&&l| tapped(&g, l)).count(),
             2,
             "{payment:?}"
         );
-        assert_eq!(g.s.player(g.me).mana, ManaPool::default(), "{payment:?}");
+        assert_eq!(g.s.player(g.me).mana(), ManaPool::default(), "{payment:?}");
     }
 }
 
@@ -314,7 +314,7 @@ fn pay_and_check(
     plan: &mana::Plan,
     context: &str,
 ) -> ([u8; 6], usize) {
-    let pool = g.s.player(g.me).mana.amounts();
+    let pool = g.s.player(g.me).mana().amounts();
     let mut paid = g.s;
     mana::pay(
         &mut paid,
@@ -328,8 +328,8 @@ fn pay_and_check(
     .unwrap();
     // CR 601.2h: the cost is paid in full, and only from the mana the tapped and sacrificed
     // sources made and the pool held.
-    let sacrificed = |slot: Slot| paid.object(slot).zone == Zone::Graveyard;
-    let used = |slot: Slot| paid.object(slot).flags.has(ObjectFlags::TAPPED) || sacrificed(slot);
+    let sacrificed = |slot: Slot| paid.object(slot).zone() == Zone::Graveyard;
+    let used = |slot: Slot| paid.object(slot).flags().has(ObjectFlags::TAPPED) || sacrificed(slot);
     let made: u32 = slots
         .iter()
         .zip(names)
@@ -337,7 +337,7 @@ fn pay_and_check(
         .map(|(_, name)| u32::from(makes(name).1))
         .sum();
     let total = |amounts: [u8; 6]| amounts.iter().map(|&n| u32::from(n)).sum::<u32>();
-    let after = paid.player(g.me).mana.amounts();
+    let after = paid.player(g.me).mana().amounts();
     assert_eq!(
         made + total(pool) - total(after),
         cost.total(0),
@@ -465,10 +465,10 @@ fn a_spell_payable_only_with_a_treasure_sacrifices_it_as_it_is_cast() {
         );
         // {1}{W}: the Plains pays {W}, the Treasure {1}, with no question.
         g.pick(cast(bear));
-        assert_eq!(g.s.object(bear).zone, Zone::Stack, "{payment:?}");
+        assert_eq!(g.s.object(bear).zone(), Zone::Stack, "{payment:?}");
         assert!(tapped(&g, land), "{payment:?}");
-        assert_eq!(g.s.object(treasure).zone, Zone::Graveyard, "{payment:?}");
-        assert_eq!(g.s.player(g.me).mana, ManaPool::default(), "{payment:?}");
+        assert_eq!(g.s.object(treasure).zone(), Zone::Graveyard, "{payment:?}");
+        assert_eq!(g.s.player(g.me).mana(), ManaPool::default(), "{payment:?}");
     }
 }
 
@@ -484,8 +484,12 @@ fn a_spell_payable_from_lands_keeps_the_treasure() {
         g.give(g.me, "Test Land", Zone::Battlefield);
         g.give(g.me, "Test Island", Zone::Battlefield);
         g.pick(cast(bear));
-        assert_eq!(g.s.object(bear).zone, Zone::Stack, "{payment:?}");
-        assert_eq!(g.s.object(treasure).zone, Zone::Battlefield, "{payment:?}");
+        assert_eq!(g.s.object(bear).zone(), Zone::Stack, "{payment:?}");
+        assert_eq!(
+            g.s.object(treasure).zone(),
+            Zone::Battlefield,
+            "{payment:?}"
+        );
         assert!(!tapped(&g, treasure), "{payment:?}");
     }
 }
@@ -504,9 +508,9 @@ fn sacrificing_a_treasure_is_offered_when_it_keeps_more_payable() {
     assert_eq!(d.kind, DecisionKind::PaymentPlan);
     assert_eq!(d.len(), 2);
     g.pick(Opt::Plan(1));
-    assert_eq!(g.s.object(treasure).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(treasure).zone(), Zone::Graveyard);
     assert!(!tapped(&g, strip));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
 }
 
 #[test]
@@ -520,9 +524,9 @@ fn the_greedy_payment_spends_the_strip_before_the_treasure() {
     let strip = g.give(g.me, "Test Strip", Zone::Battlefield);
     let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
     g.pick(cast(bear));
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     assert!(tapped(&g, strip));
-    assert_eq!(g.s.object(treasure).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(treasure).zone(), Zone::Battlefield);
 }
 
 #[test]
@@ -544,8 +548,8 @@ fn manual_payment_offers_the_treasure_as_a_source() {
         slot: treasure,
         color: ManaColor::Blue,
     });
-    assert_eq!(g.s.object(treasure).zone, Zone::Graveyard);
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(treasure).zone(), Zone::Graveyard);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
 }
 
 /// The exact profile, with `g.me` tapping their mana sources at priority as a human may.
@@ -579,19 +583,19 @@ fn the_named_player_taps_a_source_at_priority_and_pays_with_its_mana() {
         color: ManaColor::Blue,
     });
     assert!(tapped(&g, dual));
-    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 1, 0, 0, 0, 0]);
+    assert_eq!(g.s.player(g.me).mana().amounts(), [0, 1, 0, 0, 0, 0]);
     // CR 117.3c: they keep priority, and may still cast with the mana.
     assert!(g.offers_cast(bear));
     // The floating {U} pays the {1}, not the Island leaving it floating (§10).
     g.pick(cast(bear));
     assert_eq!(
-        g.s.object(bear).zone,
+        g.s.object(bear).zone(),
         Zone::Stack,
         "paid without a question"
     );
     assert!(tapped(&g, land));
     assert!(!tapped(&g, island));
-    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+    assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
 }
 
 #[test]
@@ -610,7 +614,7 @@ fn floating_mana_no_source_left_could_make_is_still_a_choice() {
     assert_eq!(d.len(), 2);
     // The engine's default, the first plan, spends the floating mana.
     g.choose(crate::Choice(0));
-    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+    assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
 }
 
 #[test]
@@ -653,16 +657,16 @@ fn floating_mana_empties_as_the_step_ends() {
         ..tapping(&g)
     });
     let land = g.give(g.me, "Test Land", Zone::Battlefield);
-    let step = g.s.turn().step;
+    let step = g.s.turn().step();
     g.pick(Opt::Mana {
         slot: land,
         color: ManaColor::White,
     });
-    assert_eq!(g.s.player(g.me).mana.amounts(), [1, 0, 0, 0, 0, 0]);
+    assert_eq!(g.s.player(g.me).mana().amounts(), [1, 0, 0, 0, 0, 0]);
     // CR 500.4: "When a step or phase ends, any unused mana left in a player's mana pool
     // empties."
-    while g.s.turn().step == step {
+    while g.s.turn().step() == step {
         g.choose(crate::Choice(0));
     }
-    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+    assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
 }

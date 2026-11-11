@@ -133,8 +133,8 @@ impl Chosen {
             continuation: false,
             what: Some(Described {
                 player: d.player.get(),
-                turn: s.turn().number,
-                step: s.turn().step.into(),
+                turn: s.turn().number(),
+                step: s.turn().step().into(),
                 kind: d.kind.into(),
                 act,
                 nth,
@@ -217,11 +217,11 @@ fn in_order<L: Layout>(
             .object(c)
             .or_else(|| d.candidates.option(c)?.object_named(s))?;
         let o = s.object(slot);
-        match o.zone {
+        match o.zone() {
             Zone::Battlefield => Some((0, s.battlefield().iter().position(|&b| b == slot)?)),
             Zone::Graveyard => Some((
-                1 + o.owner.index(),
-                s.graveyard(o.owner).iter().position(|&g| g == slot)?,
+                1 + o.owner().index(),
+                s.graveyard(o.owner()).iter().position(|&g| g == slot)?,
             )),
             _ => None,
         }
@@ -238,7 +238,7 @@ fn in_order<L: Layout>(
 /// The turn and step the position `s` is in.
 pub fn when<L: Layout>(s: &State<L>) -> (u16, StepName) {
     let turn = s.turn();
-    (turn.number, turn.step.into())
+    (turn.number(), turn.step().into())
 }
 
 /// What is being decided: [`DecisionKind`], under names a save keeps.
@@ -675,35 +675,35 @@ impl Obj {
     pub fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Obj {
         let o = s.object(slot);
         let controller = s.controller(slot);
-        let permanent = o.zone == Zone::Battlefield;
+        let permanent = o.zone() == Zone::Battlefield;
         Obj {
             name: s.name(t, slot).to_owned(),
-            zone: o.zone.into(),
+            zone: o.zone().into(),
             controller: controller.get(),
-            owner: (o.owner != controller).then_some(o.owner.get()),
-            tapped: o.flags.has(ObjectFlags::TAPPED),
-            shown: matches!(o.zone, Zone::Hand | Zone::Library)
-                && s.knows(o.owner.opponent(), slot),
+            owner: (o.owner() != controller).then_some(o.owner().get()),
+            tapped: o.flags().has(ObjectFlags::TAPPED),
+            shown: matches!(o.zone(), Zone::Hand | Zone::Library)
+                && s.knows(o.owner().opponent(), slot),
             before_v5: false,
-            token: permanent && o.flags.has(ObjectFlags::TOKEN),
+            token: permanent && o.flags().has(ObjectFlags::TOKEN),
             sick: permanent
-                && o.flags.has(ObjectFlags::SUMMONING_SICK)
+                && o.flags().has(ObjectFlags::SUMMONING_SICK)
                 && s.derived(slot).types.contains(Types::CREATURE),
             counters: if permanent {
                 Counter::on(o)
             } else {
                 Vec::new()
             },
-            damage: if permanent { o.damage } else { 0 },
-            attacking: permanent && o.flags.has(ObjectFlags::ATTACKING),
-            blocking: permanent && o.flags.has(ObjectFlags::BLOCKING),
-            blocked: permanent && o.flags.has(ObjectFlags::BLOCKED),
+            damage: if permanent { o.damage() } else { 0 },
+            attacking: permanent && o.flags().has(ObjectFlags::ATTACKING),
+            blocking: permanent && o.flags().has(ObjectFlags::BLOCKING),
+            blocked: permanent && o.flags().has(ObjectFlags::BLOCKED),
             against: o
-                .combat
+                .combat()
                 .filter(|&other| {
                     permanent
-                        && o.flags.0 & (ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) != 0
-                        && s.object(other).zone == Zone::Battlefield
+                        && o.flags().0 & (ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) != 0
+                        && s.object(other).zone() == Zone::Battlefield
                 })
                 .map(|other| s.name(t, other).to_owned()),
             before_v6: false,

@@ -97,7 +97,7 @@ pub fn player_view<L: Layout>(
     };
     if let Some(entry) = resolving
         && let Some(r) = entry.spell()
-        && obs.object(r.slot).zone == Zone::Stack
+        && obs.object(r.slot).zone() == Zone::Stack
     {
         objects.push(object_view(t, obs, r.slot));
     }
@@ -139,10 +139,10 @@ pub fn player_view<L: Layout>(
         handling,
         pending_attackers: pending_attackers(obs, moment),
         turn: TurnView {
-            number: turn.number,
-            active: side(obs, turn.active),
-            step: turn.step.into(),
-            priority: side(obs, turn.priority),
+            number: turn.number(),
+            active: side(obs, turn.active()),
+            step: turn.step().into(),
+            priority: side(obs, turn.priority()),
             starting: obs.starting_player().map(|p| side(obs, p)),
             flip_winner: None,
         },
@@ -176,9 +176,9 @@ pub(super) fn pending_attackers<L: Layout>(
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
     let player = obs.player(p);
-    let [white, blue, black, red, green, colorless] = player.mana.amounts();
+    let [white, blue, black, red, green, colorless] = player.mana().amounts();
     PlayerState {
-        life: player.life,
+        life: player.life(),
         mana: ManaPool {
             white,
             blue,
@@ -187,13 +187,13 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
             green,
             colorless,
         },
-        lands_played: player.lands_played,
-        mulligans: player.mulligans,
-        mulligan: player.mulligan.into(),
+        lands_played: player.lands_played(),
+        mulligans: player.mulligans(),
+        mulligan: player.mulligan().into(),
         library: slots(obs.library(p).iter().copied()),
         graveyard: slots(obs.graveyard(p).iter().copied()),
         emblems: player
-            .emblems
+            .emblems()
             .iter()
             .map(|&e| t.def(e).name.to_owned())
             .collect(),
@@ -221,8 +221,8 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
         }),
     })?;
     let card = obs.object(shown);
-    let player = card.owner;
-    match card.zone {
+    let player = card.owner();
+    match card.zone() {
         Zone::Library => {
             // The top cards the prompt counts, or the whole library.
             let size = obs.library(player).len();
@@ -262,7 +262,7 @@ pub(super) fn name<L: Layout>(
     obs: Observation<'_, L>,
     slot: L::Slot,
 ) -> Option<&'static str> {
-    let face = match obs.object(slot).face {
+    let face = match obs.object(slot).face() {
         FaceIx::DOWN => FaceIx::FRONT,
         face => face,
     };
@@ -282,8 +282,8 @@ pub(super) fn face_name<L: Layout>(
 
 fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
-    let flags = o.flags;
-    let on_battlefield = o.zone == Zone::Battlefield;
+    let flags = o.flags();
+    let on_battlefield = o.zone() == Zone::Battlefield;
     let derived = on_battlefield.then(|| obs.derived(slot));
     let types = derived.map_or(Types::NONE, |d| d.types);
     let creature = types.contains(Types::CREATURE);
@@ -297,7 +297,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
     ]
     .into_iter()
     .filter_map(|kind| {
-        let count = o.counters.get(kind);
+        let count = o.counters().get(kind);
         (count > 0).then(|| CounterView {
             kind: kind.into(),
             count,
@@ -307,11 +307,11 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
     let some = |s: Option<L::Slot>| s.map(SlotId::num);
     ObjectView {
         slot: slot.num(),
-        zone: o.zone.into(),
-        owner: side(obs, o.owner),
+        zone: o.zone().into(),
+        owner: side(obs, o.owner()),
         controller: side(obs, obs.controller(slot)),
         name: name(t, obs, slot).map(str::to_owned),
-        facing: if o.face == FaceIx::DOWN {
+        facing: if o.face() == FaceIx::DOWN {
             Facing::Down
         } else {
             Facing::Up
@@ -319,7 +319,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         token: flags.has(ObjectFlags::TOKEN),
         tapped: flags.has(ObjectFlags::TAPPED),
         summoning_sick: creature && flags.has(ObjectFlags::SUMMONING_SICK),
-        damage: o.damage,
+        damage: o.damage(),
         counters,
         types: CardType::ALL
             .iter()
@@ -337,20 +337,24 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
                 .map(|&(_, k)| k)
                 .collect()
         }),
-        attached_to: some(o.attached_to),
+        attached_to: some(o.attached_to()),
         exiled_by: if flags.has(ObjectFlags::EXILED_UNTIL) {
-            some(o.linked)
+            some(o.linked())
         } else {
             None
         },
         exiled_with: if flags.has(ObjectFlags::EXILED_WITH) {
-            some(o.linked)
+            some(o.linked())
         } else {
             None
         },
         combat: if flags.has(ObjectFlags::ATTACKING) {
             let attacks_walker = flags.has(ObjectFlags::ATTACKS_PLANESWALKER);
-            let planeswalker = if attacks_walker { some(o.combat) } else { None };
+            let planeswalker = if attacks_walker {
+                some(o.combat())
+            } else {
+                None
+            };
             Some(Combat::Attacking {
                 planeswalker,
                 target_departed: (attacks_walker && planeswalker.is_none()).then_some(true),
@@ -358,7 +362,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             })
         } else if flags.has(ObjectFlags::BLOCKING) {
             Some(Combat::Blocking {
-                attacker: some(o.combat),
+                attacker: some(o.combat()),
             })
         } else {
             None

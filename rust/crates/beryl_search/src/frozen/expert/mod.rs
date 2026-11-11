@@ -210,7 +210,7 @@ impl Agent for ExpertAgent {
             // Crew with the creatures that could not attack anyway, then the least valuable.
             DecisionKind::Crew => best(d, |c| {
                 let slot = c.object()?;
-                let sick = obs.object(slot).flags.has(ObjectFlags::SUMMONING_SICK);
+                let sick = obs.object(slot).flags().has(ObjectFlags::SUMMONING_SICK);
                 Some(i32::from(sick) * 1000 - e.value(slot))
             }),
             DecisionKind::PayLife => e.pay_life(d),
@@ -239,14 +239,14 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
     // Jace, Wielder of Mysteries on a short library is about to win: "If you would draw a
     // card while your library has no cards in it, you win the game instead."
     if name(slot) == Some(names::JACE_WIELDER_OF_MYSTERIES) && wins_by_decking(p, controller) {
-        return Some(JACE_WINS + 6 * i32::from(o.counters.loyalty));
+        return Some(JACE_WINS + 6 * i32::from(o.counters().loyalty));
     }
     if obs.derived(slot).types.intersects(Types::PLANESWALKER) {
-        let loyalty = i32::from(o.counters.loyalty);
+        let loyalty = i32::from(o.counters().loyalty);
         // One within three of its ultimate is about to win the game.
         let ultimate = obs.card(slot).and_then(|c| {
             p.t.def(c)
-                .face(o.face)
+                .face(o.face())
                 .abilities
                 .iter()
                 .filter_map(|a| a.cost.loyalty)
@@ -256,7 +256,7 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         return Some(base / 2 + 6 * loyalty + if near { 40 } else { 0 });
     }
     let neutralized = obs.battlefield().iter().any(|&a| {
-        obs.object(a).attached_to == Some(slot)
+        obs.object(a).attached_to() == Some(slot)
             && obs.controller(a) != controller
             && name(a) == Some(names::SWIFT_RECONFIGURATION)
     });
@@ -282,7 +282,7 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         return Some(base / 2 + 3 * i32::from(obs.derived(slot).power.max(0)));
     }
     // Jace, Vryn's Prodigy loots every turn and becomes a planeswalker.
-    if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face == FaceIx::FRONT {
+    if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face() == FaceIx::FRONT {
         return Some(base + 20);
     }
     if name(slot) == Some(names::MANA_CRYPT) {
@@ -313,7 +313,7 @@ fn returns_as_token(p: &Policy<'_>, slot: Slot) -> bool {
     p.obs
         .card(slot)
         .is_some_and(|c| p.t.def(c).name == names::SPHINX_OF_FALSE_CONCLUSIONS)
-        && !p.obs.object(slot).flags.has(ObjectFlags::TOKEN)
+        && !p.obs.object(slot).flags().has(ObjectFlags::TOKEN)
 }
 
 /// When a priority decision comes: what the expert may do then.
@@ -375,7 +375,7 @@ impl Expert<'_> {
         let (power, toughness) = (f.power.unwrap_or(0), f.toughness.unwrap_or(0));
         attackers.iter().any(|&a| {
             let d = self.obs().derived(a);
-            let left = d.toughness - self.obs().object(a).damage as i8;
+            let left = d.toughness - self.obs().object(a).damage() as i8;
             self.value(a) >= 20 && (power >= left || d.power < toughness)
         })
     }
@@ -399,7 +399,7 @@ impl Expert<'_> {
 
     /// Whether a permanent has one of `types`; false for anything not on the battlefield.
     fn has_type(&self, slot: Slot, types: Types) -> bool {
-        self.obs().object(slot).zone == Zone::Battlefield
+        self.obs().object(slot).zone() == Zone::Battlefield
             && self.obs().derived(slot).types.intersects(types)
     }
 
@@ -409,7 +409,7 @@ impl Expert<'_> {
     }
 
     fn tapped(&self, slot: Slot) -> bool {
-        self.obs().object(slot).flags.has(ObjectFlags::TAPPED)
+        self.obs().object(slot).flags().has(ObjectFlags::TAPPED)
     }
 
     fn lands(&self, controller: Seat) -> usize {
@@ -424,7 +424,7 @@ impl Expert<'_> {
         let pool: i32 = self
             .obs()
             .player(who)
-            .mana
+            .mana()
             .amounts()
             .iter()
             .map(|&m| i32::from(m))
@@ -474,7 +474,7 @@ impl Expert<'_> {
     /// How many of a player's untapped sources make white, and how many blue (a dual land
     /// counts for both); floating mana counts too.
     fn colors_up(&self, who: Seat) -> (i32, i32) {
-        let pool = self.obs().player(who).mana;
+        let pool = self.obs().player(who).mana();
         let (mut white, mut blue) = (
             i32::from(pool[ManaColor::White]),
             i32::from(pool[ManaColor::Blue]),
@@ -513,7 +513,7 @@ impl Expert<'_> {
     }
 
     fn life(&self) -> i32 {
-        i32::from(self.obs().player(self.me()).life)
+        i32::from(self.obs().player(self.me()).life())
     }
 
     fn hand(&self, who: Seat) -> Bitboard {
@@ -532,7 +532,7 @@ impl Expert<'_> {
 
     /// Whether a permanent is an Overlord cast for impending, not yet a creature.
     fn impending(&self, slot: Slot) -> bool {
-        self.obs().object(slot).flags.has(ObjectFlags::IMPENDING)
+        self.obs().object(slot).flags().has(ObjectFlags::IMPENDING)
     }
 
     /// Whether a counterspell we have seen in the opponent's hand (Thundertrap Trainer and
@@ -549,7 +549,7 @@ impl Expert<'_> {
         // Our Elite Spellbinder's exile shows the card too, castable for {2} more.
         let exiled = self.obs().permissions().iter().any(|p| {
             p.player == self.opp()
-                && self.obs().object(p.object.slot).zone == Zone::Exile
+                && self.obs().object(p.object.slot).zone() == Zone::Exile
                 && counter(p.object.slot)
                 && mana >= 2 + i32::from(p.extra)
         });
@@ -572,7 +572,7 @@ impl Expert<'_> {
                 self.obs().controller(slot).opponent(),
                 Zone::Exile,
             )))
-            .filter(|&s| self.obs().object(s).linked == Some(slot))
+            .filter(|&s| self.obs().object(s).linked() == Some(slot))
             .map(|s| self.value(s))
             .sum()
     }
@@ -588,7 +588,7 @@ impl Expert<'_> {
                 let card = self
                     .obs()
                     .object(self.obs().in_candidate_order(d.about).next()?);
-                (card.owner, card.zone)
+                (card.owner(), card.zone())
             }
             Purpose::Scry => (self.me(), Zone::Library),
             _ => return None,
@@ -703,8 +703,8 @@ impl Expert<'_> {
             return Timing::Respond(top);
         }
         let turn = obs.turn();
-        let ours = turn.active == self.me();
-        match turn.step {
+        let ours = turn.active() == self.me();
+        match turn.step() {
             TurnStep::PrecombatMain if ours => Timing::Main { precombat: true },
             TurnStep::PostcombatMain if ours => Timing::Main { precombat: false },
             TurnStep::DeclareAttackers if !ours => Timing::TheirAttack,
@@ -885,7 +885,7 @@ impl Expert<'_> {
                 continue;
             };
             let o = self.obs().object(r.slot);
-            let ours = match o.zone {
+            let ours = match o.zone() {
                 Zone::Battlefield | Zone::Stack => self.obs().controller(r.slot) == self.me(),
                 _ => false,
             };
@@ -966,7 +966,12 @@ impl Expert<'_> {
         }
         let power = |s: Slot| i32::from(self.obs().derived(s).power.max(0));
         let flies = |s: Slot| self.obs().derived(s).keywords.intersects(Keywords::FLYING);
-        let sick = |s: Slot| self.obs().object(s).flags.has(ObjectFlags::SUMMONING_SICK);
+        let sick = |s: Slot| {
+            self.obs()
+                .object(s)
+                .flags()
+                .has(ObjectFlags::SUMMONING_SICK)
+        };
         let mut crew: Vec<Slot> = self
             .creatures(self.me())
             .filter(|&s| !self.tapped(s))
@@ -991,7 +996,7 @@ impl Expert<'_> {
             .filter(|&s| !self.tapped(s))
             .map(|s| self.reaches(s))
             .collect();
-        through(attackers, blockers) >= i32::from(self.obs().player(self.opp()).life)
+        through(attackers, blockers) >= i32::from(self.obs().player(self.opp()).life())
     }
 
     /// Our uncrewed Vehicle, if any: a creature of ours the opponent's Swift Reconfiguration
@@ -1000,7 +1005,7 @@ impl Expert<'_> {
         self.permanents(self.me()).find(|&s| {
             !self.has_type(s, Types::CREATURE)
                 && self.obs().battlefield().iter().any(|&a| {
-                    self.obs().object(a).attached_to == Some(s)
+                    self.obs().object(a).attached_to() == Some(s)
                         && self.is(a, names::SWIFT_RECONFIGURATION)
                 })
         })
@@ -1148,7 +1153,7 @@ impl Expert<'_> {
             return 1800;
         }
         // Jace, Telepath Unbound's −3 let us cast it this turn only, for loyalty already paid.
-        if self.obs().object(slot).zone == Zone::Graveyard && self.flashback(slot) {
+        if self.obs().object(slot).zone() == Zone::Graveyard && self.flashback(slot) {
             return 1500;
         }
         if let Some(v) = self.card_cast(slot, name, costs) {
@@ -1162,7 +1167,7 @@ impl Expert<'_> {
             // Instant-speed removal waits for an attacker or the end step unless its target
             // is urgent, Jace, Telepath Unbound's −3 lets us cast it this turn only, or the
             // opponent could not counter it now.
-            let flashback = self.obs().object(slot).zone == Zone::Graveyard;
+            let flashback = self.obs().object(slot).zone() == Zone::Graveyard;
             let urgent = removal.0 >= MAJOR || removal.1 || flashback || !self.opp_can_counter();
             // Not with the counterspell's mana, short of a planeswalker or dying.
             let keeps = removal.1 || self.dying() || {
@@ -1293,7 +1298,7 @@ impl Expert<'_> {
                 // After any threat worth casting, and after combat: a wheel shuffles away what
                 // we hold.
                 if self.wheel_worth(name == names::TIME_SPIRAL)
-                    && !(self.obs().turn().step == TurnStep::PrecombatMain && self.can_attack())
+                    && !(self.obs().turn().step() == TurnStep::PrecombatMain && self.can_attack())
                 {
                     150
                 } else {
@@ -1368,7 +1373,7 @@ impl Expert<'_> {
         let white = |s: Slot| self.makes(s).0;
         self.mana(self.me()) - cost <= 0
             && !self.hand(opp).is_empty()
-            && (self.obs().player(opp).mana[ManaColor::White] > 0
+            && (self.obs().player(opp).mana()[ManaColor::White] > 0
                 || self.permanents(opp).any(|s| !self.tapped(s) && white(s)))
             && self.in_game(names::MANA_TITHE)
             && !self.seen(names::MANA_TITHE)
@@ -1509,9 +1514,9 @@ impl Expert<'_> {
             && self.creatures(self.me()).any(|s| {
                 let o = self.obs().object(s);
                 self.is(s, names::JACE_VRYNS_PRODIGY)
-                    && o.face == FaceIx::FRONT
-                    && !o.flags.has(ObjectFlags::TAPPED)
-                    && !o.flags.has(ObjectFlags::SUMMONING_SICK)
+                    && o.face() == FaceIx::FRONT
+                    && !o.flags().has(ObjectFlags::TAPPED)
+                    && !o.flags().has(ObjectFlags::SUMMONING_SICK)
             })
     }
 
@@ -1519,8 +1524,8 @@ impl Expert<'_> {
     fn can_attack(&self) -> bool {
         self.creatures(self.me()).any(|s| {
             let o = self.obs().object(s);
-            !o.flags.has(ObjectFlags::TAPPED)
-                && !o.flags.has(ObjectFlags::SUMMONING_SICK)
+            !o.flags().has(ObjectFlags::TAPPED)
+                && !o.flags().has(ObjectFlags::SUMMONING_SICK)
                 && self.obs().derived(s).power > 0
         })
     }
@@ -1551,13 +1556,13 @@ impl Expert<'_> {
             .creatures(self.me())
             .map(|s| i32::from(self.obs().derived(s).power.max(0)))
             .sum();
-        let winning = power >= i32::from(self.obs().player(self.opp()).life);
+        let winning = power >= i32::from(self.obs().player(self.opp()).life());
         // Nor when far behind, facing a swing for half our life or low on it: a wheel refills
         // the hand that wins the game for them.
         let behind = 2 * self.threat_past(None) >= self.life()
             || self.life() <= 7
             || (self.board(self.opp()) - self.board(self.me()) >= 100
-                && self.life() < i32::from(self.obs().player(self.opp()).life));
+                && self.life() < i32::from(self.obs().player(self.opp()).life()));
         // Out of cards, it refuels us at least as much as them.
         let refill = gain >= 2 || (gain >= 0 && ours <= 1);
         // A wheel shuffles our graveyard back in: the way out of drawing from an empty library.
@@ -1614,7 +1619,7 @@ impl Expert<'_> {
     fn artifacts(&self, controller: Seat) -> impl Iterator<Item = Slot> + '_ {
         self.permanents(controller).filter(|&s| {
             self.obs().card(s).is_some_and(|c| {
-                let face = self.obs().object(s).face;
+                let face = self.obs().object(s).face();
                 self.p.t.def(c).face(face).types.intersects(Types::ARTIFACT)
             })
         })
@@ -1636,7 +1641,7 @@ impl Expert<'_> {
         // Oust's 3 life can be the 3 that keeps a low opponent alive, or that our attack this
         // turn falls short by, with the removal we have; and the card it puts into their
         // library is one to draw from a library that would otherwise run out.
-        let life = i32::from(self.obs().player(self.opp()).life);
+        let life = i32::from(self.obs().player(self.opp()).life());
         if name == names::OUST
             && ((!self.dying() && (life <= 6 || self.attack_power(&[], None) + 3 >= life))
                 || self.lethal_blockers().is_some()
@@ -1677,11 +1682,12 @@ impl Expert<'_> {
             .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
             .max_by_key(|&s| self.removal_rank(name, s))?;
         let walker = self.has_type(target, Types::PLANESWALKER);
-        let ours = self.obs().turn().active == self.me();
+        let ours = self.obs().turn().active() == self.me();
         // A planeswalker our attack can kill this turn needs no removal.
         if walker
             && ours
-            && self.attack_power(&[], None) >= i32::from(self.obs().object(target).counters.loyalty)
+            && self.attack_power(&[], None)
+                >= i32::from(self.obs().object(target).counters().loyalty)
         {
             return None;
         }
@@ -1731,9 +1737,9 @@ impl Expert<'_> {
     fn lethal_blockers(&self) -> Option<&[Slot]> {
         self.lethal
             .get_or_init(|| {
-                let life = i32::from(self.obs().player(self.opp()).life);
-                if self.obs().turn().step != TurnStep::PrecombatMain
-                    || self.obs().turn().active != self.me()
+                let life = i32::from(self.obs().player(self.opp()).life());
+                if self.obs().turn().step() != TurnStep::PrecombatMain
+                    || self.obs().turn().active() != self.me()
                 {
                     return None;
                 }
@@ -1778,11 +1784,11 @@ impl Expert<'_> {
                 !self
                     .obs()
                     .object(s)
-                    .flags
+                    .flags()
                     .has(ObjectFlags::LOYALTY_ACTIVATED)
             })
             .filter(|&s| {
-                let loyalty = self.obs().object(s).counters.loyalty;
+                let loyalty = self.obs().object(s).counters().loyalty;
                 match self.name(s) {
                     Some(names::JACE_THE_MIND_SCULPTOR) => loyalty >= 1,
                     Some(names::TEFERI_TIME_RAVELER) => loyalty >= 3,
@@ -1833,7 +1839,7 @@ impl Expert<'_> {
     /// creatures but those `removed`, `pumped` with one more power, as before combat; blocked
     /// as [`through`] has it.
     fn attack_power(&self, removed: &[Slot], pumped: Option<Slot>) -> i32 {
-        if self.obs().turn().step != TurnStep::PrecombatMain {
+        if self.obs().turn().step() != TurnStep::PrecombatMain {
             return 0;
         }
         let flies = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
@@ -1841,7 +1847,7 @@ impl Expert<'_> {
             .creatures(self.me())
             .filter(|&s| {
                 let o = self.obs().object(s);
-                !o.flags.has(ObjectFlags::TAPPED) && !o.flags.has(ObjectFlags::SUMMONING_SICK)
+                !o.flags().has(ObjectFlags::TAPPED) && !o.flags().has(ObjectFlags::SUMMONING_SICK)
             })
             .map(|s| {
                 let power =
@@ -1869,7 +1875,7 @@ impl Expert<'_> {
     /// counter on up to one target creature. It gains first strike until end of turn.") makes
     /// our attack lethal when it is not without it: one that gets past the blockers.
     fn emperor_lethal(&self) -> Option<Slot> {
-        let life = i32::from(self.obs().player(self.opp()).life);
+        let life = i32::from(self.obs().player(self.opp()).life());
         if self.attack_power(&[], None) >= life {
             return None;
         }
@@ -1895,7 +1901,7 @@ impl Expert<'_> {
             return 0;
         };
         let def = self.p.t.def(card);
-        if o.zone == Zone::Battlefield
+        if o.zone() == Zone::Battlefield
             && self
                 .obs()
                 .derived(slot)
@@ -1908,7 +1914,7 @@ impl Expert<'_> {
                 0
             };
         }
-        let a = &def.face(o.face).abilities[usize::from(i)];
+        let a = &def.face(o.face()).abilities[usize::from(i)];
         match def.name {
             // "{T}, Sacrifice Strip Mine: Destroy target land."
             names::STRIP_MINE if !a.targets.is_empty() => {
@@ -1936,8 +1942,8 @@ impl Expert<'_> {
     fn walker_ability(&self, slot: Slot) -> Option<u8> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
-        let face = self.p.t.def(card).face(o.face);
-        let loyalty = i32::from(o.counters.loyalty);
+        let face = self.p.t.def(card).face(o.face());
+        let loyalty = i32::from(o.counters().loyalty);
         // An ability that would leave no loyalty is no option, short of an ultimate or a bounce
         // that opens lethal; the walker then grows instead.
         let lethal = self.opens_lethal()
@@ -1954,7 +1960,7 @@ impl Expert<'_> {
         // Nor one that draws by choice when that could deck us, as Teferi, Hero of
         // Dominaria's +1.
         let draws = |i: u8| {
-            o.face == FaceIx::FRONT && self.p.values.get(card).draws(i) && !self.draw_safe(1)
+            o.face() == FaceIx::FRONT && self.p.values.get(card).draws(i) && !self.draw_safe(1)
         };
         self.preferred_ability(slot)
             .filter(|&i| keeps(i) && !draws(i))
@@ -1972,8 +1978,8 @@ impl Expert<'_> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
         let def = self.p.t.def(card);
-        let face = def.face(o.face);
-        let loyalty = i32::from(o.counters.loyalty);
+        let face = def.face(o.face());
+        let loyalty = i32::from(o.counters().loyalty);
         let by_cost = |cost: i8| {
             face.abilities
                 .iter()
@@ -1981,7 +1987,7 @@ impl Expert<'_> {
                 .map(|i| i as u8)
         };
         let threatened = self.threat_past(None);
-        let face_name = def.face_name(o.face);
+        let face_name = def.face_name(o.face());
         match face_name {
             names::JACE_THE_MIND_SCULPTOR => by_cost(self.mind_sculptor(loyalty, threatened)),
             names::TEFERI_TIME_RAVELER => {
@@ -2076,7 +2082,7 @@ impl Expert<'_> {
         }
         // A token worth returning is gone for good.
         let token = self.creatures(self.opp()).any(|s| {
-            self.obs().object(s).flags.has(ObjectFlags::TOKEN) && self.bounce_value(s) >= 40
+            self.obs().object(s).flags().has(ObjectFlags::TOKEN) && self.bounce_value(s) >= 40
         });
         // +2 leaves him at loyalty + 2; the opponent's swing back decides the rest.
         if threatened >= loyalty + 2 {
@@ -2171,7 +2177,7 @@ impl Expert<'_> {
     fn their_attack(&self, o: Opt) -> i32 {
         let attackers: Vec<Slot> = self
             .creatures(self.opp())
-            .filter(|&s| self.obs().object(s).flags.has(ObjectFlags::ATTACKING))
+            .filter(|&s| self.obs().object(s).flags().has(ObjectFlags::ATTACKING))
             .collect();
         if attackers.is_empty() {
             return 0;
@@ -2181,17 +2187,17 @@ impl Expert<'_> {
             .map(|&s| i32::from(self.obs().derived(s).power.max(0)))
             .sum();
         // An attack that kills us, or leaves us at 3 life or less, is worth a chump blocker.
-        let chump = damage >= i32::from(self.obs().player(self.me()).life) - 3;
+        let chump = damage >= i32::from(self.obs().player(self.me()).life()) - 3;
         // An attack for half our life or more, or one that kills a planeswalker of ours, is
         // worth any removal on it.
         let kills_walker = self.permanents(self.me()).any(|w| {
             self.has_type(w, Types::PLANESWALKER) && {
                 let at: i32 = attackers
                     .iter()
-                    .filter(|&&a| self.obs().object(a).combat == Some(w))
+                    .filter(|&&a| self.obs().object(a).combat() == Some(w))
                     .map(|&a| i32::from(self.obs().derived(a).power.max(0)))
                     .sum();
-                at > 0 && at >= i32::from(self.obs().object(w).counters.loyalty)
+                at > 0 && at >= i32::from(self.obs().object(w).counters().loyalty)
             }
         });
         let pressing = 2 * damage >= self.life() || kills_walker;
@@ -2274,7 +2280,7 @@ impl Expert<'_> {
                 slot,
                 ability: ObjectAbility::Own(i),
             } => {
-                if self.obs().object(slot).zone == Zone::Battlefield
+                if self.obs().object(slot).zone() == Zone::Battlefield
                     && self.has_type(slot, Types::PLANESWALKER)
                 {
                     return if self.walker_ability(slot) == Some(i.get()) {
@@ -2306,7 +2312,7 @@ impl Expert<'_> {
     /// untapped sources could pay for, color by color, and a little for each mana.
     fn castable(&self) -> i32 {
         let me = self.me();
-        let pool = self.obs().player(me).mana;
+        let pool = self.obs().player(me).mana();
         // White only, blue only, either, and colorless sources.
         let (mut w, mut u, mut both, mut c) = (
             i32::from(pool[ManaColor::White]),
@@ -2359,7 +2365,7 @@ impl Expert<'_> {
     /// enters-the-battlefield ability comes back with it again.
     fn returned(&self, slot: Slot) -> i32 {
         let v = self.value(slot);
-        if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
+        if self.obs().object(slot).flags().has(ObjectFlags::TOKEN) {
             return v + 15;
         }
         // A planeswalker comes back with its printed loyalty: returning it takes the loyalty
@@ -2367,8 +2373,8 @@ impl Expert<'_> {
         if self.has_type(slot, Types::PLANESWALKER)
             && let Some(card) = self.obs().card(slot)
         {
-            let f = self.p.t.def(card).face(self.obs().object(slot).face);
-            let gained = i32::from(self.obs().object(slot).counters.loyalty)
+            let f = self.p.t.def(card).face(self.obs().object(slot).face());
+            let gained = i32::from(self.obs().object(slot).counters().loyalty)
                 - i32::from(f.loyalty.unwrap_or(0));
             return 6 * gained.max(0) + 4 * i32::from(f.cost.mana_value());
         }
@@ -2381,7 +2387,7 @@ impl Expert<'_> {
                 let host = self
                     .obs()
                     .object(slot)
-                    .attached_to
+                    .attached_to()
                     .filter(|&h| self.obs().controller(h) == self.me())
                     .and_then(|h| self.obs().card(h));
                 v + host.map_or(0, |c| i32::from(self.p.values.get(c).value))
@@ -2504,7 +2510,7 @@ impl Expert<'_> {
                 let o = self.obs().object(slot);
                 Some(if self.obs().controller(slot) != self.opp() {
                     -self.value(slot)
-                } else if o.zone == Zone::Battlefield {
+                } else if o.zone() == Zone::Battlefield {
                     self.bounce_value(slot)
                 } else {
                     // A spell of theirs on the stack: what Sink into Stupor was cast against.
@@ -2516,10 +2522,13 @@ impl Expert<'_> {
         if let Some(c) = self.removal_target(d) {
             return Some(c);
         }
-        if turn.active == self.me() && turn.step == TurnStep::PrecombatMain && self.opens_lethal() {
+        if turn.active() == self.me()
+            && turn.step() == TurnStep::PrecombatMain
+            && self.opens_lethal()
+        {
             return self.blocker_target(d);
         }
-        if turn.active == self.me() || turn.step != TurnStep::DeclareAttackers {
+        if turn.active() == self.me() || turn.step() != TurnStep::DeclareAttackers {
             return self.dying_target(d);
         }
         // An effect that helps its target, as The Wandering Emperor's +1, is the policy's.
@@ -2585,7 +2594,7 @@ impl Expert<'_> {
         if e.controller != self.me()
             || !(e.is_spell() || name == names::AANGS_ICEBERG)
             || !REMOVAL.contains(&name)
-            || (turn.active != self.me() && turn.step == TurnStep::DeclareAttackers)
+            || (turn.active() != self.me() && turn.step() == TurnStep::DeclareAttackers)
             || !matches!(d.candidates, beryl_engine::Candidates::Objects(_))
         {
             return None;
@@ -2602,9 +2611,9 @@ impl Expert<'_> {
 
     fn attacking(&self, slot: Slot) -> bool {
         let o = self.obs().object(slot);
-        o.zone == Zone::Battlefield
+        o.zone() == Zone::Battlefield
             && self.obs().controller(slot) == self.opp()
-            && o.flags.has(ObjectFlags::ATTACKING)
+            && o.flags().has(ObjectFlags::ATTACKING)
     }
 
     /// In their combat, what removing their permanent in `slot` is worth: a lethal attack's
@@ -2619,18 +2628,18 @@ impl Expert<'_> {
         let power = |s: Slot| i32::from(self.obs().derived(s).power.max(0));
         let damage: i32 = self
             .creatures(self.opp())
-            .filter(|&s| self.attacking(s) && self.obs().object(s).combat.is_none())
+            .filter(|&s| self.attacking(s) && self.obs().object(s).combat().is_none())
             .map(power)
             .sum();
         if damage >= self.life() {
             return 100_000 + 1000 * power(slot) + v;
         }
-        if 2 * damage >= self.life() && self.obs().object(slot).combat.is_none() {
+        if 2 * damage >= self.life() && self.obs().object(slot).combat().is_none() {
             return 100_000 + v;
         }
-        let walker = self.obs().object(slot).combat.filter(|&w| {
+        let walker = self.obs().object(slot).combat().filter(|&w| {
             self.has_type(w, Types::PLANESWALKER)
-                && power(slot) >= i32::from(self.obs().object(w).counters.loyalty)
+                && power(slot) >= i32::from(self.obs().object(w).counters().loyalty)
         });
         v + walker.map_or(0, |w| self.value(w))
     }
@@ -2674,7 +2683,7 @@ impl Expert<'_> {
             let o = self.obs().object(slot);
             Some(if self.obs().controller(slot) != self.opp() {
                 -self.value(slot)
-            } else if o.zone == Zone::Battlefield && self.has_type(slot, Types::CREATURE) {
+            } else if o.zone() == Zone::Battlefield && self.has_type(slot, Types::CREATURE) {
                 self.value(slot) + 40 * i32::from(self.obs().derived(slot).power.max(0))
             } else {
                 self.value(slot)
@@ -2704,11 +2713,10 @@ impl Expert<'_> {
     fn yes_no(&self, d: &Decision) -> Option<Choice> {
         let player = match d.prompt.purpose {
             // The card looked at is the top of its owner's library.
-            Purpose::Fateseal => {
-                self.obs()
-                    .object(self.obs().in_candidate_order(d.about).next()?)
-                    .owner
-            }
+            Purpose::Fateseal => self
+                .obs()
+                .object(self.obs().in_candidate_order(d.about).next()?)
+                .owner(),
             Purpose::Explore => self.me(),
             _ => return None,
         };

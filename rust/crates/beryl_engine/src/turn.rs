@@ -225,7 +225,7 @@ pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
         && s.stack().is_empty()
-        && s.player(player).lands_played < 1
+        && s.player(player).lands_played() < 1
 }
 
 /// The cards in a player's hand.

@@ -161,7 +161,9 @@ pub(crate) fn move_batch_to<L: Layout>(
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in
         // its current zone instead."
-        if o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere) {
+        if o.flags().has(ObjectFlags::TOKEN)
+            && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere)
+        {
             continue;
         }
         let dest = destination(s, slot, to);
@@ -170,8 +172,8 @@ pub(crate) fn move_batch_to<L: Layout>(
         } else {
             entry
         };
-        moves.push((slot, o.zone, dest, entry))?;
-        if o.zone == Zone::Battlefield {
+        moves.push((slot, o.zone(), dest, entry))?;
+        if o.zone() == Zone::Battlefield {
             trigger::match_leaving(s, t, slot, dest)?;
             returning |= exiled_until(s, slot);
         }
@@ -242,7 +244,7 @@ fn exiled_until<L: Layout>(s: &State<L>, slot: L::Slot) -> Bitboard<L::Slot> {
     (s.zone(ZoneKey::Of(Seat::P0, Zone::Exile)) | s.zone(ZoneKey::Of(Seat::P1, Zone::Exile)))
         .filter(|x| {
             let o = s.object(x);
-            o.flags.has(ObjectFlags::EXILED_UNTIL) && o.linked == Some(slot)
+            o.flags().has(ObjectFlags::EXILED_UNTIL) && o.linked() == Some(slot)
         })
 }
 
@@ -261,7 +263,7 @@ fn enter_replacements<L: Layout>(
 ) -> Entry<L> {
     let o = s.object(slot);
     let face = s.copiable(slot).turned(entry.face).face(t);
-    let controller = entry.controller.unwrap_or(o.owner);
+    let controller = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
         if ability.kind != AbilityKind::Replacement {
             continue;
@@ -311,7 +313,7 @@ fn pay_life_to_enter<L: Layout>(
 ) -> Result<(), Full> {
     let o = s.object(slot);
     let face = s.copiable(slot).turned(entry.face).face(t);
-    let player = entry.controller.unwrap_or(o.owner);
+    let player = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
         if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement {
             lose_life(s, t, sink, player, n)?;
@@ -572,7 +574,7 @@ pub(crate) fn create_tokens<L: Layout>(
     how: TokenEntry,
 ) -> Result<Bitboard<L::Slot>, Full> {
     let mut tokens = Bitboard::EMPTY;
-    let mut free = token_slots().filter(|&slot| s.object(slot).zone == Zone::Nowhere);
+    let mut free = token_slots().filter(|&slot| s.object(slot).zone() == Zone::Nowhere);
     for _ in 0..count {
         let slot = free.next().ok_or(Full)?;
         tokens.insert(slot);

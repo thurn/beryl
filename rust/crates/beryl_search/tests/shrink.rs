@@ -130,7 +130,7 @@ impl Game {
             if setup.is_none() {
                 let turn = s.turn();
                 if d.kind != DecisionKind::Priority
-                    || d.player != turn.active
+                    || d.player != turn.active()
                     || !s.stack().is_empty()
                 {
                     let _ = writeln!(opening, "// {taken}");
@@ -184,7 +184,7 @@ fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     let turn = s.turn();
     let mut scenario = Scenario::new("")
         .seed(seed)
-        .at(turn.number, turn.active, turn.step);
+        .at(turn.number(), turn.active(), turn.step());
     for p in Seat::BOTH {
         // The state lists a library bottom first.
         let library: Vec<&'static str> = s
@@ -194,7 +194,7 @@ fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
             .map(|&slot| s.name(t, slot))
             .collect();
         scenario = scenario
-            .life(p, s.player(p).life)
+            .life(p, s.player(p).life())
             .hand(p, names(p, Zone::Hand))
             .library(p, library.leak());
     }
@@ -301,6 +301,7 @@ fn seen(t: &GameTable, s: &State, d: &Decision) -> String {
     let turn = s.turn();
     format!(
         "turn {} {:?}: {candidates:?}; hands {hands:?}",
-        turn.number, turn.step
+        turn.number(),
+        turn.step()
     )
 }

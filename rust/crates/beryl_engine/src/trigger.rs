@@ -77,8 +77,8 @@ pub(crate) fn match_event<L: Layout>(
             }
         }
         for player in Seat::BOTH {
-            let emblems = s.player(player).emblems.clone();
-            for &card in emblems.iter() {
+            for index in 0..s.player(player).emblems().len() {
+                let card = s.player(player).emblems()[index];
                 if t.listens(card) & k == 0 {
                     continue;
                 }
@@ -174,7 +174,7 @@ fn fires<L: Layout>(
         {
             let matching = tokens
                 .filter(|slot| {
-                    s.object(slot).zone == Zone::Battlefield
+                    s.object(slot).zone() == Zone::Battlefield
                         && s.derived(slot).types.intersects(types)
                 })
                 .count();
@@ -193,7 +193,7 @@ fn fires<L: Layout>(
                 reason: Reason::Discard,
                 ..
             },
-        ) if s.object(object.slot).owner == you => Some(info(Some(object), you, 0)),
+        ) if s.object(object.slot).owner() == you => Some(info(Some(object), you, 0)),
         (Trigger::YouDraw, Event::Draw { player, .. }) if player == you => Some(info(None, you, 0)),
         _ => None,
     }
@@ -246,7 +246,7 @@ pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki 
         toughness: d.toughness,
         types: d.types,
         controller: d.controller,
-        token: o.flags.has(ObjectFlags::TOKEN),
+        token: o.flags().has(ObjectFlags::TOKEN),
     }
 }
 

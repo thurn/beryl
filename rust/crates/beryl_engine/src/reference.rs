@@ -170,7 +170,7 @@ type Units = Fixed<u8, UNITS>;
 /// recent turn began."
 fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Units> {
     let mut units = Units::new();
-    for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
+    for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
         for _ in 0..n {
             units.push(1u8 << k).ok()?;
         }
@@ -178,10 +178,10 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
     for &slot in s.battlefield() {
         let d = s.derived(slot);
         let o = s.object(slot);
-        if d.controller != player || o.flags.has(ObjectFlags::TAPPED) {
+        if d.controller != player || o.flags().has(ObjectFlags::TAPPED) {
             continue;
         }
-        if d.types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK) {
+        if d.types.intersects(Types::CREATURE) && o.flags().has(ObjectFlags::SUMMONING_SICK) {
             continue;
         }
         let mut kinds = 0u8;

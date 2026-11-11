@@ -48,7 +48,7 @@ fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard<L:
     for player in Seat::BOTH {
         // A creature a replacement kept from exile was not "exiled this way".
         let n = controlled[player.index()]
-            .filter(|slot| ctx.state().object(slot).zone == Zone::Exile)
+            .filter(|slot| ctx.state().object(slot).zone() == Zone::Exile)
             .count();
         let Ok(n @ 1..) = u8::try_from(n) else {
             continue;

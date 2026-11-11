@@ -39,19 +39,19 @@ fn a_creature_spell_goes_on_the_stack_then_resolves_onto_the_battlefield() {
     ];
     g.pick(cast(bear));
     // CR 601.2a: on the stack under its caster's control; CR 601.2i: they get priority.
-    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     assert_eq!(g.s.stack().len(), 1);
     for land in lands {
-        assert!(g.s.object(land).flags.has(ObjectFlags::TAPPED));
+        assert!(g.s.object(land).flags().has(ObjectFlags::TAPPED));
     }
-    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
-    assert_eq!(g.s.turn().priority, g.me);
+    assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
+    assert_eq!(g.s.turn().priority(), g.me);
     g.pass_both();
-    assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(g.s.controller(bear), g.me);
     assert!(g.s.stack().is_empty());
     // CR 117.3b: the active player receives priority after a resolution.
-    assert_eq!(g.s.turn().priority, g.me);
+    assert_eq!(g.s.turn().priority(), g.me);
 }
 
 #[test]
@@ -100,8 +100,8 @@ fn a_spell_whose_targets_all_became_illegal_does_not_resolve() {
     )
     .unwrap();
     g.pass_both();
-    assert_eq!(g.s.object(bear).zone, Zone::Battlefield, "unaffected");
-    assert_eq!(g.s.object(removal).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(bear).zone(), Zone::Battlefield, "unaffected");
+    assert_eq!(g.s.object(removal).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -119,8 +119,8 @@ fn a_target_is_chosen_among_the_legal_ones() {
     assert_eq!(d.len(), 2);
     g.pick_object(theirs);
     g.pass_both();
-    assert_eq!(g.s.object(theirs).zone, Zone::Graveyard);
-    assert_eq!(g.s.object(mine).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(theirs).zone(), Zone::Graveyard);
+    assert_eq!(g.s.object(mine).zone(), Zone::Battlefield);
 }
 
 /// A game whose profile asks `asks` for a lone target of their own cast
@@ -159,7 +159,7 @@ fn a_lone_target_of_a_cast_is_asked_only_of_the_player_the_profile_names() {
         } else {
             // Announced silently, and resolved as both players can only pass.
             assert_ne!(d.kind, DecisionKind::Target);
-            assert_eq!(g.s.object(mine).zone, Zone::Graveyard);
+            assert_eq!(g.s.object(mine).zone(), Zone::Graveyard);
         }
     }
     // Naming the other player asks this one nothing.
@@ -169,7 +169,7 @@ fn a_lone_target_of_a_cast_is_asked_only_of_the_player_the_profile_names() {
     g.give(g.me, "Test Land", Zone::Battlefield);
     let mine = g.give(g.me, "Test Bear", Zone::Battlefield);
     assert_ne!(answer(&mut g, cast(removal)).kind, DecisionKind::Target);
-    assert_eq!(g.s.object(mine).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(mine).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -180,11 +180,11 @@ fn a_lone_target_of_a_trigger_is_chosen_silently_even_for_the_player_the_profile
     let bear = g.give(g.them, "Test Bear", Zone::Battlefield);
     g.pick(cast(stinger));
     g.pass_both();
-    assert_eq!(g.s.object(stinger).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(stinger).zone(), Zone::Battlefield);
     // CR 603.3d: the trigger goes on the stack aimed at the one opposing creature, unasked,
     // and resolves as both players can only pass.
     assert_ne!(g.decide().kind, DecisionKind::Target);
-    assert_eq!(g.s.object(bear).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(bear).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -210,16 +210,20 @@ fn counter_unless_pays_asks_the_spells_controller_only_when_they_can_pay() {
             assert_eq!((d.kind, d.player), (DecisionKind::YesNo, g.them));
             assert!(g.is_paused());
             // The committed state is still the one before the Tithe resolved.
-            assert_eq!(g.s.object(tithe).zone, Zone::Stack);
+            assert_eq!(g.s.object(tithe).zone(), Zone::Stack);
             g.pick(Opt::Yes);
-            assert_eq!(g.s.object(bear).zone, Zone::Stack, "paid, so not countered");
+            assert_eq!(
+                g.s.object(bear).zone(),
+                Zone::Stack,
+                "paid, so not countered"
+            );
             g.pass_both();
-            assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
+            assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
         } else {
             // No question: they cannot pay.
-            assert_eq!(g.s.object(bear).zone, Zone::Graveyard, "countered");
+            assert_eq!(g.s.object(bear).zone(), Zone::Graveyard, "countered");
         }
-        assert_eq!(g.s.object(tithe).zone, Zone::Graveyard);
+        assert_eq!(g.s.object(tithe).zone(), Zone::Graveyard);
     }
 }
 
@@ -236,8 +240,8 @@ fn a_spell_countered_by_an_exiling_counter_is_exiled() {
     g.choose(Choice(0));
     g.pick(cast(lies));
     g.pass_both();
-    assert_eq!(g.s.object(bear).zone, Zone::Exile);
-    assert_eq!(g.s.object(lies).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(bear).zone(), Zone::Exile);
+    assert_eq!(g.s.object(lies).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -273,8 +277,8 @@ fn kicker_x_announces_an_x_of_at_least_one_and_marks_the_permanent() {
     g.pick(Opt::Number(2));
     g.pass_both();
     let o = g.s.object(diver);
-    assert_eq!(o.zone, Zone::Battlefield);
-    assert!(o.flags.has(ObjectFlags::KICKED));
+    assert_eq!(o.zone(), Zone::Battlefield);
+    assert!(o.flags().has(ObjectFlags::KICKED));
     assert_eq!(g.s.x_of(diver), 2);
 }
 
@@ -295,7 +299,7 @@ fn offspring_is_an_additional_cost_offered_only_when_payable() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(with_offspring);
     g.pass_both();
-    assert!(g.s.object(trainer).flags.has(ObjectFlags::OFFSPRING));
+    assert!(g.s.object(trainer).flags().has(ObjectFlags::OFFSPRING));
 }
 
 #[test]
@@ -317,9 +321,9 @@ fn impending_is_an_alternative_cost_that_enters_with_time_counters() {
     g.pick(impending);
     g.pass_both();
     let o = g.s.object(overlord);
-    assert_eq!(o.zone, Zone::Battlefield);
-    assert!(o.flags.has(ObjectFlags::IMPENDING));
-    assert_eq!(o.counters.long_tail(), Some((CounterKind::Time, 4)));
+    assert_eq!(o.zone(), Zone::Battlefield);
+    assert!(o.flags().has(ObjectFlags::IMPENDING));
+    assert_eq!(o.counters().long_tail(), Some((CounterKind::Time, 4)));
 }
 
 #[test]
@@ -345,12 +349,12 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
         "CR 305.9: a land face can't be cast"
     );
     g.pick(Opt::PlayLand(stupor));
-    assert_eq!(g.s.object(stupor).zone, Zone::Battlefield);
-    assert_eq!(g.s.object(stupor).face, FaceIx::BACK);
+    assert_eq!(g.s.object(stupor).zone(), Zone::Battlefield);
+    assert_eq!(g.s.object(stupor).face(), FaceIx::BACK);
     // Its land face is a source of blue: with the two Islands, {U}{U}{U}.
     let uuu = crate::card::ManaCost::new(0, [0, 3, 0, 0, 0, 0]);
     assert!(crate::mana::payable(&g.s, &g.t, g.me, uuu, crate::Bitboard::EMPTY).unwrap());
-    assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
 }
 
 #[test]
@@ -376,7 +380,7 @@ fn loyalty_abilities_are_sorcery_speed_and_once_a_turn() {
     g.main(g.me);
     g.pick(plus);
     // CR 606.4: the counter is the cost, paid on activation.
-    assert_eq!(g.s.object(raveler).counters.loyalty, 3);
+    assert_eq!(g.s.object(raveler).counters().loyalty, 3);
     g.pass_both();
     let d = g.current();
     assert!(index_of(&d, plus).is_none(), "once a turn");
@@ -394,8 +398,8 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     g.choose(Choice(0));
     g.pick(cast(emperor));
     g.pass_both();
-    assert_eq!(g.s.object(emperor).zone, Zone::Battlefield);
-    assert_eq!(g.s.object(emperor).counters.loyalty, 3, "CR 306.5b");
+    assert_eq!(g.s.object(emperor).zone(), Zone::Battlefield);
+    assert_eq!(g.s.object(emperor).counters().loyalty, 3, "CR 306.5b");
     let plus = Opt::Activate {
         slot: emperor,
         ability: ObjectAbility::own(1),
@@ -403,7 +407,7 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     // The active player gets priority after the resolution and passes.
     g.choose(Choice(0));
     g.pick(plus);
-    assert_eq!(g.s.object(emperor).counters.loyalty, 4);
+    assert_eq!(g.s.object(emperor).counters().loyalty, 4);
     g.pass_both();
     // The turn it did not enter, it is sorcery speed again.
     g.s.board().set_entered_this_turn(emperor, false);
@@ -447,7 +451,7 @@ fn sorceries_can_be_cast_as_though_they_had_flash_until_your_next_turn() {
     g.choose(Choice(0));
     assert!(g.offers_cast(ponder));
     crate::turn::begin_turn(&mut g.s, &g.t, &mut g.x.events).unwrap();
-    if g.s.turn().active != g.me {
+    if g.s.turn().active() != g.me {
         crate::turn::begin_turn(&mut g.s, &g.t, &mut g.x.events).unwrap();
     }
     g.at(g.me, TurnStep::Upkeep);
@@ -467,7 +471,7 @@ fn cycling_discards_from_hand_as_a_cost_and_draws_on_resolution() {
         slot: hq,
         ability: ObjectAbility::own(1),
     });
-    assert_eq!(g.s.object(hq).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(hq).zone(), Zone::Graveyard);
     assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 0);
     g.pass_both();
     assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 1);
@@ -486,12 +490,12 @@ fn an_ability_whose_source_was_sacrificed_still_resolves() {
     assert_eq!(d.kind, DecisionKind::Target, "its own land is a target too");
     g.pick_object(land);
     assert_eq!(
-        g.s.object(strip).zone,
+        g.s.object(strip).zone(),
         Zone::Graveyard,
         "sacrificed as a cost"
     );
     g.pass_both();
-    assert_eq!(g.s.object(land).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(land).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -512,7 +516,7 @@ fn a_card_can_be_cast_from_a_graveyard_this_turn_and_is_then_exiled() {
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::ChooseObject);
     g.choose(Choice(0));
-    assert_eq!(g.s.object(ponder).zone, Zone::Exile);
+    assert_eq!(g.s.object(ponder).zone(), Zone::Exile);
 }
 
 /// [CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback cost
@@ -531,12 +535,12 @@ fn a_spell_cast_with_flashback_is_exiled_wherever_else_it_would_go() {
     g.pick(cast(snapback));
     g.pass_both();
     g.pick(cast(ponder));
-    assert_eq!(g.s.object(ponder).zone, Zone::Stack);
+    assert_eq!(g.s.object(ponder).zone(), Zone::Stack);
     // P0 can only pass, which `next` does silently: P1 holds priority.
     g.pick(cast(bounce));
     g.pass_both();
-    assert_eq!(g.s.object(ponder).zone, Zone::Exile);
-    assert_eq!(g.s.object(bounce).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(ponder).zone(), Zone::Exile);
+    assert_eq!(g.s.object(bounce).zone(), Zone::Graveyard);
 }
 
 #[test]
@@ -548,7 +552,7 @@ fn a_permission_from_exile_costs_its_increase_more() {
     g.pick(cast(binder));
     g.pass_both();
     g.pick(Opt::Yes);
-    assert_eq!(g.s.object(bear).zone, Zone::Exile);
+    assert_eq!(g.s.object(bear).zone(), Zone::Exile);
     g.main(g.them);
     g.give(g.them, "Test Land", Zone::Battlefield);
     g.give(g.them, "Test Land", Zone::Battlefield);
@@ -557,7 +561,7 @@ fn a_permission_from_exile_costs_its_increase_more() {
     g.give(g.them, "Test Land", Zone::Battlefield);
     g.pick(cast(bear));
     g.pass_both();
-    assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
 }
 
 #[test]
@@ -573,13 +577,13 @@ fn a_resolution_may_offer_a_free_cast_with_no_priority_in_between() {
     assert_eq!(d.kind, DecisionKind::CastOffer);
     g.pick(cast(bear));
     assert_eq!(
-        g.s.object(bear).zone,
+        g.s.object(bear).zone(),
         Zone::Stack,
         "cast for free, at upkeep"
     );
-    assert_eq!(g.s.object(looter).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(looter).zone(), Zone::Graveyard);
     g.pass_both();
-    assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
 }
 
 #[test]
@@ -606,7 +610,7 @@ fn a_paused_resolution_leaves_the_committed_state_unchanged_and_view_replays_it(
         "the two cards drawn"
     );
     let candidate = d.candidates.object(Choice(0)).unwrap();
-    assert_eq!(view.object(candidate).zone, Zone::Hand);
+    assert_eq!(view.object(candidate).zone(), Zone::Hand);
     g.choose(Choice(0));
     assert!(matches!(g.s.pending(), Pending::None));
     assert_eq!(g.s.zone(ZoneKey::Of(g.me, Zone::Hand)).count(), 1);
@@ -629,8 +633,8 @@ fn a_mana_ability_taps_for_the_color_chosen() {
         slot: island,
         color: ManaColor::Blue,
     });
-    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 1, 0, 0, 0, 0]);
-    assert!(g.s.object(island).flags.has(ObjectFlags::TAPPED));
+    assert_eq!(g.s.player(g.me).mana().amounts(), [0, 1, 0, 0, 0, 0]);
+    assert!(g.s.object(island).flags().has(ObjectFlags::TAPPED));
 }
 
 #[test]
@@ -648,7 +652,7 @@ fn a_triggered_ability_chooses_its_targets_as_it_goes_on_the_stack() {
         }
         g.pick(cast(stinger));
         g.pass_both();
-        assert_eq!(g.s.object(stinger).zone, Zone::Battlefield);
+        assert_eq!(g.s.object(stinger).zone(), Zone::Battlefield);
         if creatures == 0 {
             // CR 603.3d: no legal target, so it is removed from the stack.
             g.decide();
@@ -660,8 +664,8 @@ fn a_triggered_ability_chooses_its_targets_as_it_goes_on_the_stack() {
         g.pick_object(bears[1]);
         assert_eq!(g.s.stack().len(), 1);
         g.pass_both();
-        assert_eq!(g.s.object(bears[1]).zone, Zone::Graveyard);
-        assert_eq!(g.s.object(bears[0]).zone, Zone::Battlefield);
+        assert_eq!(g.s.object(bears[1]).zone(), Zone::Graveyard);
+        assert_eq!(g.s.object(bears[0]).zone(), Zone::Battlefield);
     }
 }
 

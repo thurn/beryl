@@ -26,7 +26,7 @@ fn tuck<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
         return Ok(());
     };
-    let owner = ctx.state().object(spell.slot).owner;
+    let owner = ctx.state().object(spell.slot).owner();
     let top_or_bottom = Prompt::new(Purpose::TopOrBottom).places(Place::Top, Place::Bottom);
     let top = ctx.choose_yes_no(owner, top_or_bottom, Bitboard::single(spell.slot))?;
     ctx.put_spell_into_library(spell, top);

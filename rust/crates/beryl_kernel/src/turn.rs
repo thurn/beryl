@@ -19,26 +19,25 @@ use crate::state::{Budgets, State};
 /// Where the game is in its turns (architecture §4.4).
 ///
 /// Written only by [`State`]'s mutators: nothing outside the crate reaches one to write. The
-/// fields stay `pub` to read until by-w8gv.5.9 moves the readers in other crates to the
-/// getters.
+/// fields are `pub(crate)`: other crates read them through the getters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Turn {
     /// 0 before the first turn.
-    pub number: u16,
-    pub active: Seat,
-    pub starting_player: Seat,
-    pub step: TurnStep,
+    pub(crate) number: u16,
+    pub(crate) active: Seat,
+    pub(crate) starting_player: Seat,
+    pub(crate) step: TurnStep,
     /// The player with priority.
-    pub priority: Seat,
+    pub(crate) priority: Seat,
     /// Players who have passed in succession (CR 117.4).
-    pub passes: u8,
+    pub(crate) passes: u8,
     /// The cleanup step is checking for state-based actions (CR 514.3a): if none are
     /// performed, the turn ends instead of a player receiving priority.
-    pub cleanup_check: bool,
+    pub(crate) cleanup_check: bool,
     /// Creatures were declared as attackers this combat, so the declare blockers and combat
     /// damage steps happen even if none is attacking any more
     /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
-    pub attacked: bool,
+    pub(crate) attacked: bool,
 }
 
 impl Turn {

@@ -180,7 +180,7 @@ impl Counter {
         CounterName::ALL
             .into_iter()
             .filter_map(|kind| {
-                let count = o.counters.get(kind.kind());
+                let count = o.counters().get(kind.kind());
                 (count > 0).then_some(Counter { kind, count })
             })
             .collect()
@@ -247,8 +247,8 @@ impl Checkpoint {
                 .map(|i| u16::try_from(i).expect("a battlefield fits u16"))
         };
         Checkpoint {
-            turn: s.turn().number,
-            active: s.turn().active.get(),
+            turn: s.turn().number(),
+            active: s.turn().active().get(),
             players: Seat::BOTH.map(|p| side(t, s, p, &place)),
             battlefield: battlefield
                 .iter()
@@ -469,9 +469,9 @@ fn side<L: Layout>(
         .map(|slot| {
             let o = s.object(slot);
             let link = |flag| {
-                o.flags
+                o.flags()
                     .has(flag)
-                    .then_some(o.linked)
+                    .then_some(o.linked())
                     .flatten()
                     .and_then(place)
             };
@@ -499,7 +499,7 @@ fn side<L: Layout>(
         })
         .collect();
     Side {
-        life: s.player(p).life,
+        life: s.player(p).life(),
         hand,
         shown,
         graveyard: s
@@ -513,8 +513,7 @@ fn side<L: Layout>(
         known,
         emblems: s
             .player(p)
-            .emblems
-            .as_slice()
+            .emblems()
             .iter()
             .map(|&card| t.def(card).name.to_owned())
             .collect(),
@@ -529,20 +528,20 @@ fn permanent<L: Layout>(
     place: &impl Fn(L::Slot) -> Option<u16>,
 ) -> Permanent {
     let o = s.object(slot);
-    let face = Face::of(o.face);
+    let face = Face::of(o.face());
     Permanent {
         card: name(t, s, slot),
-        owner: o.owner.get(),
+        owner: o.owner().get(),
         controller: s.base_controller(slot).get(),
         face,
-        token: o.flags.has(ObjectFlags::TOKEN),
-        one_one: o.flags.has(ObjectFlags::ONE_ONE),
-        tapped: o.flags.has(ObjectFlags::TAPPED),
-        sick: o.flags.has(ObjectFlags::SUMMONING_SICK),
+        token: o.flags().has(ObjectFlags::TOKEN),
+        one_one: o.flags().has(ObjectFlags::ONE_ONE),
+        tapped: o.flags().has(ObjectFlags::TAPPED),
+        sick: o.flags().has(ObjectFlags::SUMMONING_SICK),
         counters: Counter::on(o),
-        damage: o.damage,
-        attached_to: o.attached_to.and_then(place),
-        impending: o.flags.has(ObjectFlags::IMPENDING),
+        damage: o.damage(),
+        attached_to: o.attached_to().and_then(place),
+        impending: o.flags().has(ObjectFlags::IMPENDING),
         known: if face == Face::Down {
             knowers(s, slot)
         } else {

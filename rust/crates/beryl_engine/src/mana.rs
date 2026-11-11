@@ -121,12 +121,12 @@ fn source<L: Layout>(
         mana != ManaFace::Not || read_source(s, t, player, face()).is_none(),
         "a face the table calls no source makes mana"
     );
-    if mana == ManaFace::Not || d.controller != player || o.flags.has(ObjectFlags::TAPPED) {
+    if mana == ManaFace::Not || d.controller != player || o.flags().has(ObjectFlags::TAPPED) {
         return None;
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
-    if d.types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK) {
+    if d.types.intersects(Types::CREATURE) && o.flags().has(ObjectFlags::SUMMONING_SICK) {
         return None;
     }
     if let ManaFace::Plain {
@@ -314,7 +314,7 @@ pub(crate) fn available<L: Layout>(
     exclude: Bitboard<L::Slot>,
 ) -> Result<Units, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
-    Ok(sources.units(s.player(player).mana.amounts(), &Table::filled(0)))
+    Ok(sources.units(s.player(player).mana().amounts(), &Table::filled(0)))
 }
 
 /// Everything a player could pay mana with now, found once for the many payability checks of
@@ -335,7 +335,7 @@ pub(crate) struct Funds<L: Layout = Small> {
 impl<L: Layout> Funds<L> {
     pub(crate) fn of(s: &State<L>, t: &GameTable, player: Seat) -> Result<Funds<L>, Full> {
         let mut units = Units::NONE;
-        for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
+        for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
             units.add(1 << k, u16::from(n));
         }
         let mut slots = Bitboard::EMPTY;
@@ -678,7 +678,7 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
     }
     for &slot in s.battlefield() {
         let o = s.object(slot);
-        if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+        if s.controller(slot) != player || o.flags().has(ObjectFlags::TAPPED) {
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {
@@ -775,7 +775,7 @@ fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
 fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
-        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash)
+        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash())
 }
 
 /// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as
@@ -815,7 +815,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
 fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let mut ahead: Ahead<L> = Ahead::default();
     let sorcery = sorcery_window(s, player);
-    let land_drop = sorcery && s.player(player).lands_played < 1;
+    let land_drop = sorcery && s.player(player).lands_played() < 1;
     // A transforming card's back face is never cast: "A double-faced spell is cast with its
     // front face up by default" ([CR 712.11](https://yawgatog.com/resources/magic-rules/#R71211)).
     // A land is played, not cast ([CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
@@ -876,7 +876,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     }
     for &slot in s.battlefield() {
         let o = s.object(slot);
-        if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+        if s.controller(slot) != player || o.flags().has(ObjectFlags::TAPPED) {
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {
@@ -1081,7 +1081,7 @@ pub(crate) fn plans<L: Layout>(
 ) -> Result<L::Queue<Plan<L>, 64>, Full> {
     sink.work.solver_runs += 1;
     let sources = Sources::of(s, t, player, exclude)?;
-    let pool = s.player(player).mana.amounts();
+    let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Plan<L>, 64> = Default::default();
     if greedy {
         let mut best: Option<(u8, Plan<L>)> = None;
@@ -1194,7 +1194,7 @@ fn looking_ahead<L: Layout>(
     for k in kept.iter() {
         best.push(outlook(sources, k, &ahead, &creatures))?;
     }
-    each_plan(cost, s.player(player).mana.amounts(), sources, &mut |p| {
+    each_plan(cost, s.player(player).mana().amounts(), sources, &mut |p| {
         let sacrificed = sources.sacrificed(p);
         if let Some(i) = kept
             .iter()
@@ -1277,7 +1277,7 @@ pub(crate) fn pay<L: Layout>(
         }
         s.spend_mana(player, ManaColor::ALL[kind], n);
     }
-    debug_assert_eq!(s.player(player).mana.amounts(), plan.left);
+    debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
     Ok(())
 }
 
@@ -1463,7 +1463,7 @@ pub(crate) fn manual_options<L: Layout>(
     exclude: Bitboard<L::Slot>,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
-    let pool = s.player(player).mana.amounts();
+    let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     for kind in 0..KINDS {
         if pool[kind] == 0 || !helps(remaining, kind) {

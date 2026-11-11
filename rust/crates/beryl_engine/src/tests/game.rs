@@ -23,13 +23,13 @@ fn land_and_pass_decks_the_player_on_the_draw_first() {
     for profile in [Profile::EXACT, Profile::SMART] {
         for seed in 0..4 {
             let (outcome, s, hashes) = land_and_pass([LANDS, LANDS], seed, profile);
-            let starting = s.turn().starting_player;
+            let starting = s.turn().starting_player();
             // Each library holds 33 cards after the opening hands. The starting player skips
             // their first draw, so the other player is the first to draw from an empty library,
             // on their 34th turn: turn 68.
             assert_eq!(outcome, Outcome::Win(starting), "seed {seed}");
-            assert_eq!(s.turn().number, 68);
-            assert!(s.player(starting.opponent()).drew_from_empty);
+            assert_eq!(s.turn().number(), 68);
+            assert!(s.player(starting.opponent()).drew_from_empty());
             assert_eq!(s.library(starting).len(), 0);
             // One land a turn: the starting player played 34, the other 33.
             assert_eq!(s.battlefield().len(), 67);
@@ -70,7 +70,7 @@ fn choosing_to_draw_makes_the_other_player_start() {
         |_, _| {},
     );
     let starting = chooser.unwrap().opponent();
-    assert_eq!(s.turn().starting_player, starting);
+    assert_eq!(s.turn().starting_player(), starting);
     assert_eq!(outcome, Outcome::Win(starting));
 }
 
@@ -84,15 +84,15 @@ fn only_the_active_player_plays_one_land_in_a_main_phase() {
             return;
         }
         let turn = s.turn();
-        assert_eq!(d.player, turn.priority);
+        assert_eq!(d.player, turn.priority());
         // With nothing else to do, priority is a decision only when a land can be played.
         assert_eq!(d.len(), 2);
-        assert_eq!(d.player, turn.active);
+        assert_eq!(d.player, turn.active());
         assert!(matches!(
-            turn.step,
+            turn.step(),
             crate::state::TurnStep::PrecombatMain | crate::state::TurnStep::PostcombatMain
         ));
-        assert_eq!(s.player(d.player).lands_played, 0);
+        assert_eq!(s.player(d.player).lands_played(), 0);
         let Some(Opt::PlayLand(slot)) = d.candidates.option(Choice(1)) else {
             panic!("expected a land play");
         };
@@ -112,7 +112,7 @@ fn cleanup_discards_down_to_seven() {
     let mut s = State::new(&t, 5, Profile::SMART);
     let mut discards = 0;
     let outcome = play(&t, &mut s, land_go, |s, d| {
-        let active = s.turn().active;
+        let active = s.turn().active();
         // The player who isn't active ended their own turn at seven cards or fewer.
         assert!(s.zone(ZoneKey::Of(active.opponent(), Zone::Hand)).count() <= 7);
         if d.kind == DecisionKind::Discard {
@@ -121,7 +121,7 @@ fn cleanup_discards_down_to_seven() {
             discards += 1;
         }
     });
-    assert_eq!(outcome, Outcome::Win(s.turn().starting_player));
+    assert_eq!(outcome, Outcome::Win(s.turn().starting_player()));
     assert!(discards > 5);
     for p in Seat::BOTH {
         assert_eq!(
@@ -144,7 +144,7 @@ fn a_game_past_its_turn_budget_stalls() {
     let mut s = State::new(&t, 0, profile);
     let outcome = play(&t, &mut s, land_go, |_, _| {});
     assert_eq!(outcome, Outcome::Stalled(StallReason::Turns));
-    assert_eq!(s.turn().number, 10);
+    assert_eq!(s.turn().number(), 10);
 }
 
 #[test]

@@ -108,9 +108,10 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
         let types = d.types;
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
-                || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
-        let unattached = o.attached_to.is_none() && d.subtypes.contains(Subtype::Aura);
-        if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
+                || (o.damage() > 0 && i16::from(o.damage()) >= i16::from(d.toughness)));
+        let unattached = o.attached_to().is_none() && d.subtypes.contains(Subtype::Aura);
+        if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
+        {
             graveyard.insert(slot);
         }
     }
@@ -122,7 +123,8 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
             away |= s.zone(ZoneKey::Of(player, zone));
         }
     }
-    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags.has(ObjectFlags::TOKEN));
+    let tokens =
+        (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags().has(ObjectFlags::TOKEN));
     (graveyard, tokens, legendary)
 }
 
@@ -141,9 +143,9 @@ fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
     // Both may hold at one check: life is named.
     let causes = Seat::BOTH.map(|player| {
         let p = s.player(player);
-        if p.life <= 0 {
+        if p.life() <= 0 {
             Some(LossCause::Life)
-        } else if p.drew_from_empty {
+        } else if p.drew_from_empty() {
             Some(LossCause::Library)
         } else {
             None

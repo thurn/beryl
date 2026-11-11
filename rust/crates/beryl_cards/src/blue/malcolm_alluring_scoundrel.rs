@@ -33,7 +33,7 @@ fn chorus<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let discarded = ctx.discard_a_card(you)?;
     let s = ctx.state();
     let chorus = if s.is_current(malcolm) {
-        s.object(malcolm.slot).counters.get(CounterKind::Chorus)
+        s.object(malcolm.slot).counters().get(CounterKind::Chorus)
     } else {
         0
     };

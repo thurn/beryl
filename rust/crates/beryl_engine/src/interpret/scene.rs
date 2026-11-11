@@ -208,11 +208,11 @@ impl<L: Layout> Scene<'_, L> {
             Players::OwnerOf(objects) => {
                 let mut who = PlayerSet::NOBODY;
                 for slot in self.s.in_candidate_order(self.objects(objects)) {
-                    who.insert(self.s.object(slot).owner);
+                    who.insert(self.s.object(slot).owner());
                 }
                 if let Objects::Target(spec) = objects {
                     for object in self.targets(spec).filter_map(|(_, t)| t.as_object()) {
-                        who.insert(self.s.object(object.slot).owner);
+                        who.insert(self.s.object(object.slot).owner());
                     }
                 }
                 who
@@ -236,7 +236,7 @@ impl<L: Layout> Scene<'_, L> {
             power: self.s.power(self.t, slot),
             toughness: self.s.toughness(self.t, slot),
             mana_value: self.s.mana_value(self.t, slot),
-            counters: self.s.object(slot).counters,
+            counters: self.s.object(slot).counters(),
         }
     }
 
@@ -277,7 +277,7 @@ impl<L: Layout> Scene<'_, L> {
             ),
             Amount::Counters(objects, kind) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.s.object(slot).counters.get(kind)),
+                |scene, slot| i32::from(scene.s.object(slot).counters().get(kind)),
                 |known| i32::from(known.counters.get(kind)),
             ),
         }

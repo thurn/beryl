@@ -106,7 +106,7 @@ fn stops_in(scenario: &Scenario, stops: StopsSetting) -> Vec<Stop> {
 
 fn stops_against(scenario: &Scenario, stops: StopsSetting, agent: &str) -> Vec<Stop> {
     let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
-    let last = state.turn().number + 2;
+    let last = state.turn().number() + 2;
     let random = beryl_search::agent("random").unwrap();
     let opponent = beryl_search::agent(agent).unwrap();
     let mut game = Game::prepared(

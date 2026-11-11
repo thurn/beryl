@@ -16,9 +16,10 @@ fn mulligans_until(
         let d = decide(t, s);
         let c = match d.kind {
             DecisionKind::PlayOrDraw | DecisionKind::PutOnBottom => Choice(0),
-            DecisionKind::KeepOrMulligan => {
-                Choice(u16::from(mulligan(d.player, s.player(d.player).mulligans)))
-            }
+            DecisionKind::KeepOrMulligan => Choice(u16::from(mulligan(
+                d.player,
+                s.player(d.player).mulligans(),
+            ))),
             _ => return (d, log),
         };
         log.push((d.kind, d.player));
@@ -31,7 +32,7 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     let t = table([MIXED, MIXED]);
     let mut s = State::new(&t, 11, Profile::EXACT);
     let (first, log) = mulligans_until(&t, &mut s, |_, n| n == 0);
-    let p = s.turn().starting_player;
+    let p = s.turn().starting_player();
     let q = p.opponent();
     assert_eq!(first.kind, DecisionKind::Priority);
     // Both declare and mulligan at once; then each keeps their new seven and only then puts a
@@ -48,7 +49,7 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
         ]
     );
     for player in [p, q] {
-        assert_eq!(s.player(player).mulligans, 1);
+        assert_eq!(s.player(player).mulligans(), 1);
         assert_eq!(s.library(player).len(), 34);
         let bottom = s.library(player)[0];
         assert!(s.knows(player, bottom));
@@ -84,7 +85,7 @@ fn a_player_decides_on_a_full_new_seven_before_putting_cards_on_the_bottom() {
             DecisionKind::PutOnBottom,
         ]
     );
-    assert_eq!(s.player(Seat::P0).mulligans, 2);
+    assert_eq!(s.player(Seat::P0).mulligans(), 2);
     assert_eq!(s.library(Seat::P0).len(), 35);
 }
 
@@ -93,8 +94,8 @@ fn a_player_can_mulligan_down_to_nothing() {
     let t = table([LANDS, LANDS]);
     let mut s = State::new(&t, 2, Profile::EXACT);
     let (_, log) = mulligans_until(&t, &mut s, |player, _| player == Seat::P0);
-    assert_eq!(s.player(Seat::P0).mulligans, 7);
-    assert_eq!(s.player(Seat::P1).mulligans, 0);
+    assert_eq!(s.player(Seat::P0).mulligans(), 7);
+    assert_eq!(s.player(Seat::P1).mulligans(), 0);
     // The eighth declaration is never asked: the hand would already be empty.
     let asked = log
         .iter()
@@ -115,7 +116,7 @@ fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_libra
     let mut checked = 0;
     let agent = |obs: Observation<'_>, d: &Decision| match d.kind {
         // Mulligan once each, to put a known card into each library.
-        DecisionKind::KeepOrMulligan if obs.player(d.player).mulligans == 0 => Choice(1),
+        DecisionKind::KeepOrMulligan if obs.player(d.player).mulligans() == 0 => Choice(1),
         _ => land_go(obs, d),
     };
     play(&t, &mut s, agent, |s, _| {

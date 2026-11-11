@@ -134,7 +134,7 @@ pub(super) fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -
 pub(crate) fn pass_on<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> Option<NextStop> {
     match pass_to(obs, stops) {
         NextStop::Resolve | NextStop::CombatDamage => {
-            let later = next_step_stop(obs, stops.step_stops(), obs.turn().step);
+            let later = next_step_stop(obs, stops.step_stops(), obs.turn().step());
             Some(skip_idle_blocks(obs, stops, later))
         }
         NextStop::Step(_) | NextStop::NextTurn => None,
@@ -153,7 +153,7 @@ fn skip_idle_blocks<L: Layout>(
     match next {
         NextStop::Step(TurnStep::DeclareBlockers)
             if !stops.full_control
-                && obs.turn().active != obs.viewer()
+                && obs.turn().active() != obs.viewer()
                 && !can_declare_blockers(obs) =>
         {
             next_step_stop(obs, stops.step_stops(), TurnStep::DeclareBlockers)
@@ -196,7 +196,7 @@ fn decision_source<L: Layout>(
                 return None;
             };
             opts.iter().find_map(|&o| match o {
-                Opt::Lethal(blocker) => obs.object(blocker).combat,
+                Opt::Lethal(blocker) => obs.object(blocker).combat(),
                 _ => None,
             })
         }

@@ -85,8 +85,8 @@ impl Transcript {
             .unwrap_or(happened.len());
         self.events(t, s, &happened[..split]);
         let turn = s.turn();
-        if self.turn != Some(turn.number) {
-            self.turn = Some(turn.number);
+        if self.turn != Some(turn.number()) {
+            self.turn = Some(turn.number());
             self.board(t, s);
         }
         self.events(t, s, &happened[split..]);
@@ -109,9 +109,9 @@ impl Transcript {
         let _ = writeln!(
             self.text,
             "\n== Turn {}, {} active, {:?} ==",
-            turn.number,
-            self.who(turn.active),
-            turn.step
+            turn.number(),
+            self.who(turn.active()),
+            turn.step()
         );
         for p in Seat::BOTH {
             let player = s.player(p);
@@ -130,7 +130,7 @@ impl Transcript {
                 self.text,
                 "{}: life {}, library {}, graveyard {}\n  hand: {}\n  board: {}",
                 self.who(p),
-                player.life,
+                player.life(),
                 s.library(p).len(),
                 s.graveyard(p).len(),
                 list(&hand),
@@ -145,7 +145,7 @@ impl Transcript {
         for slot in s.battlefield().iter().copied().chain(stack) {
             let o = s.object(slot);
             self.seen
-                .insert(slot, (o.incarnation, name(t, s, slot), o.owner));
+                .insert(slot, (o.incarnation(), name(t, s, slot), o.owner()));
         }
     }
 
@@ -153,7 +153,7 @@ impl Transcript {
     /// else as it was last seen, for one that has since changed zones or ceased to exist.
     fn called(&self, t: &GameTable, s: &State, r: ObjectRef) -> String {
         let o = s.object(r.slot);
-        if o.zone != Zone::Nowhere && o.incarnation == r.incarnation {
+        if o.zone() != Zone::Nowhere && o.incarnation() == r.incarnation {
             return name(t, s, r.slot);
         }
         match self.last_seen(r) {
@@ -166,10 +166,10 @@ impl Transcript {
     /// that has ceased to exist has none now.
     fn owner(&self, s: &State, r: ObjectRef) -> Seat {
         let o = s.object(r.slot);
-        if o.zone != Zone::Nowhere && o.incarnation == r.incarnation {
-            return o.owner;
+        if o.zone() != Zone::Nowhere && o.incarnation() == r.incarnation {
+            return o.owner();
         }
-        self.last_seen(r).map_or(o.owner, |(_, &owner)| owner)
+        self.last_seen(r).map_or(o.owner(), |(_, &owner)| owner)
     }
 
     /// How the object was last seen at a decision, if it was that object or the one it
@@ -256,9 +256,9 @@ impl Transcript {
         let _ = writeln!(
             self.text,
             "\n== {result} on turn {}; life {} to {} ==",
-            s.turn().number,
-            s.player(Seat::P0).life,
-            s.player(Seat::P1).life
+            s.turn().number(),
+            s.player(Seat::P0).life(),
+            s.player(Seat::P1).life()
         );
     }
 }
@@ -300,7 +300,7 @@ fn list(items: &[String]) -> String {
 /// The name of the card in a slot, by the face it has up; a face-down permanent, which has no
 /// name, by its card's, and a copy of one, a token with no name (CR 708.2), as such.
 fn name(t: &GameTable, s: &State, slot: Slot) -> String {
-    match s.object(slot).face {
+    match s.object(slot).face() {
         FaceIx::DOWN => format!("face-down {}", s.definition_name(t, slot)),
         _ => match s.copiable(slot).name(t) {
             "" => "nameless token".to_owned(),
@@ -313,7 +313,7 @@ fn name(t: &GameTable, s: &State, slot: Slot) -> String {
 /// that a reader can tell whose it is.
 fn candidate(t: &GameTable, s: &State, slot: Slot) -> String {
     let n = name(t, s, slot);
-    match s.object(slot).zone {
+    match s.object(slot).zone() {
         Zone::Battlefield | Zone::Stack => format!("{n} (P{})", s.controller(slot).get()),
         _ => n,
     }
@@ -327,7 +327,7 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
     if d.types.intersects(Types::CREATURE) {
         let _ = write!(text, " {}/{}", d.power, d.toughness);
     }
-    let c = o.counters;
+    let c = o.counters();
     let common = [
         (CounterKind::PlusOne, c.plus_one),
         (CounterKind::MinusOne, c.minus_one),
@@ -338,13 +338,13 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
             let _ = write!(text, " [{n} {}]", counter(kind));
         }
     }
-    if o.damage > 0 {
-        let _ = write!(text, " ({} damage)", o.damage);
+    if o.damage() > 0 {
+        let _ = write!(text, " ({} damage)", o.damage());
     }
-    if o.flags.has(ObjectFlags::TAPPED) {
+    if o.flags().has(ObjectFlags::TAPPED) {
         text.push_str(" (tapped)");
     }
-    if let Some(host) = o.attached_to {
+    if let Some(host) = o.attached_to() {
         let _ = write!(text, " (on {})", name(t, s, host));
     }
     text

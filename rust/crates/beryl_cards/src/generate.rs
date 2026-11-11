@@ -238,16 +238,16 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
     for _ in 0..80 {
         let s = live.state();
         let turn = *s.turn();
-        if turn.number != TURN || s.outcome().is_some() {
+        if turn.number() != TURN || s.outcome().is_some() {
             break;
         }
         let intent = if !s.stack().is_empty() {
             Intent::Resolve
         } else if played < plays {
             Intent::Play
-        } else if combat && !advanced && (turn.step as u8) < TurnStep::BeginningOfCombat as u8 {
+        } else if combat && !advanced && (turn.step() as u8) < TurnStep::BeginningOfCombat as u8 {
             Intent::Advance
-        } else if advanced && (turn.step as u8) <= TurnStep::CombatDamage as u8 {
+        } else if advanced && (turn.step() as u8) <= TurnStep::CombatDamage as u8 {
             Intent::Fight
         } else {
             Intent::End
@@ -271,7 +271,7 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
         // The turn as the game stopped: a step or a turn may have passed since the last
         // action, where nobody could act.
         let now = *live.state().turn();
-        if now.number != TURN {
+        if now.number() != TURN {
             break;
         }
         let picks = unambiguous(&live, &d);
@@ -286,7 +286,7 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
             .into_iter()
             .filter(|a| !matches!(a, Action::Answer { .. }))
             .collect();
-        let past_combat = (now.step as u8) > TurnStep::CombatDamage as u8;
+        let past_combat = (now.step() as u8) > TurnStep::CombatDamage as u8;
         // Something went on the stack as the game played on, as a trigger of what resolved:
         // passing is what this stop allows, where only a resolution could stop otherwise.
         let arrived = !live.state().stack().is_empty() && !matches!(intent, Intent::Resolve);
@@ -295,7 +295,9 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
             Intent::Resolve if !options.is_empty() && rng.below(3) == 0 => pick(&mut rng, &options),
             Intent::Resolve => Action::Resolve,
             Intent::Play
-                if d.player == P0 && now.step == TurnStep::PrecombatMain && !options.is_empty() =>
+                if d.player == P0
+                    && now.step() == TurnStep::PrecombatMain
+                    && !options.is_empty() =>
             {
                 played += 1;
                 pick(&mut rng, &options)

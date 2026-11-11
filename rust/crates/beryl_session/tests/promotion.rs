@@ -179,7 +179,7 @@ fn tokens_past_the_small_slots_play_on_in_large() {
             let tokens = s
                 .battlefield()
                 .iter()
-                .filter(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+                .filter(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
                 .count();
             most_tokens = most_tokens.max(tokens);
         }

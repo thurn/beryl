@@ -157,8 +157,8 @@ impl Runner {
             Some(Action::Resolve) => {
                 let now = self.s.turn();
                 Some(Breakpoint {
-                    turn: now.number,
-                    step: now.step,
+                    turn: now.number(),
+                    step: now.step(),
                 })
             }
             _ => None,
@@ -177,8 +177,8 @@ impl Runner {
                     if let Some(pick) = self.forced_pick(&d) {
                         let turn = self.s.turn();
                         self.forced.push(Forced {
-                            turn: turn.number,
-                            step: turn.step,
+                            turn: turn.number(),
+                            step: turn.step(),
                             answer: Action::answer(d.player, d.kind, pick),
                         });
                     }
@@ -243,7 +243,7 @@ impl Runner {
             Action::AdvanceTo { turn, step } => loop {
                 let d = self.decision()?;
                 let now = self.s.turn();
-                let here = (now.number, now.step as u8);
+                let here = (now.number(), now.step() as u8);
                 let target = (turn, step as u8);
                 if here > target {
                     return Err(format!(
@@ -254,7 +254,7 @@ impl Runner {
                 if d.kind != DecisionKind::Priority {
                     return Err(format!("unscripted decision: {}", self.describe(&d)));
                 }
-                if here == target && d.player == now.active {
+                if here == target && d.player == now.active() {
                     // Stopped: keep the decision, and stop no more.
                     self.s.set_profile(TRACED);
                     return Ok(());
@@ -352,7 +352,7 @@ impl Runner {
             .s
             .battlefield()
             .iter()
-            .filter(|&&slot| self.s.object(slot).face == FaceIx::DOWN)
+            .filter(|&&slot| self.s.object(slot).face() == FaceIx::DOWN)
             .map(|&slot| self.name(slot))
             .collect();
         let mut creatures = [0u8; 2];
@@ -368,9 +368,9 @@ impl Runner {
             creatures,
             flashback,
             face_down,
-            turn: turn.number,
-            step: turn.step,
-            active: turn.active,
+            turn: turn.number(),
+            step: turn.step(),
+            active: turn.active(),
             decider,
             kind,
             stack,
@@ -434,7 +434,7 @@ impl Runner {
                 count,
             } => tally(
                 self.permanents(player, card)
-                    .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TAPPED))
+                    .filter(|&slot| s.object(slot).flags().has(ObjectFlags::TAPPED))
                     .count(),
                 count,
             ),
@@ -449,7 +449,7 @@ impl Runner {
                 count,
             } => tally(
                 self.permanents(player, card)
-                    .filter(|&slot| s.object(slot).face == FaceIx::DOWN)
+                    .filter(|&slot| s.object(slot).face() == FaceIx::DOWN)
                     .count(),
                 count,
             ),
@@ -459,7 +459,7 @@ impl Runner {
                 count,
             } => tally(
                 self.permanents(player, card)
-                    .filter(|&slot| s.object(slot).flags.has(ObjectFlags::ATTACKING))
+                    .filter(|&slot| s.object(slot).flags().has(ObjectFlags::ATTACKING))
                     .count(),
                 count,
             ),
@@ -472,7 +472,7 @@ impl Runner {
             } => {
                 let slot = self
                     .permanents(player, card)
-                    .find(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN) == token)
+                    .find(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN) == token)
                     .ok_or_else(|| {
                         let what = if token { "token" } else { "card" };
                         format!("player {player} controls no {card} {what}")
@@ -499,7 +499,7 @@ impl Runner {
                 count,
             } => {
                 let slot = self.permanent(player, card)?;
-                let n = s.object(slot).counters.get(kind);
+                let n = s.object(slot).counters().get(kind);
                 (n.to_string(), count.to_string())
             }
             _ => unreachable!("an assertion about permanents"),
@@ -511,7 +511,7 @@ impl Runner {
         let s = &self.s;
         let (actual, expected) = match assertion {
             Assertion::Life { player, life } => {
-                (s.player(player).life.to_string(), life.to_string())
+                (s.player(player).life().to_string(), life.to_string())
             }
             Assertion::Count {
                 player,
@@ -552,7 +552,10 @@ impl Runner {
                 player,
                 color,
                 amount,
-            } => (s.player(player).mana[color].to_string(), amount.to_string()),
+            } => (
+                s.player(player).mana()[color].to_string(),
+                amount.to_string(),
+            ),
             Assertion::Decision {
                 player,
                 kind,
@@ -620,7 +623,7 @@ impl Runner {
         for player in Seat::BOTH {
             out.push(Assertion::Life {
                 player,
-                life: s.player(player).life,
+                life: s.player(player).life(),
             });
         }
         for player in Seat::BOTH {
@@ -673,7 +676,7 @@ impl Runner {
             .collect();
         let (down, up): (Vec<Slot>, Vec<Slot>) = mine
             .into_iter()
-            .partition(|&slot| s.object(slot).face == FaceIx::DOWN);
+            .partition(|&slot| s.object(slot).face() == FaceIx::DOWN);
         let up_names: Vec<&'static str> = up.iter().map(|&slot| self.name(slot)).collect();
         // A nameless permanent, as a face-down copy, has nothing an oracle could name it by.
         for card in distinct(&up_names).into_iter().filter(|c| !c.is_empty()) {
@@ -682,7 +685,7 @@ impl Runner {
                 .copied()
                 .filter(|&slot| self.name(slot) == card)
                 .collect();
-            let flag = |slot: Slot, f: u32| s.object(slot).flags.has(f);
+            let flag = |slot: Slot, f: u32| s.object(slot).flags().has(f);
             out.push(Assertion::Controls {
                 player,
                 card,
@@ -725,7 +728,7 @@ impl Runner {
             }
             if let [slot] = named[..] {
                 for kind in COUNTER_KINDS {
-                    let n = s.object(slot).counters.get(kind);
+                    let n = s.object(slot).counters().get(kind);
                     if n > 0 {
                         out.push(Assertion::Counters {
                             player,
@@ -965,8 +968,8 @@ pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> Stri
         "player {} {:?} in turn {} {:?}, among [{}]",
         d.player,
         d.kind,
-        turn.number,
-        turn.step,
+        turn.number(),
+        turn.step(),
         candidates.join(", ")
     )
 }

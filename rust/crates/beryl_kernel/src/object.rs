@@ -3,8 +3,7 @@
 //!
 //! Only the kernel writes an object: through [`State`](crate::State)'s mutators, the zone and
 //! chance chokepoints, the board door and the legacy accessor. No `&mut Object` leaves the
-//! crate. Transitional: the fields are still `pub` to read; by-w8gv.5.9 moves the readers in
-//! other crates to the getters below and makes the fields private.
+//! crate. Other crates read an object through the getters below.
 
 use beryl_card::{
     Colors, CounterKind, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone,
@@ -163,37 +162,37 @@ impl Counters {
 
 /// The base data of the object in one slot (architecture §4.2).
 ///
-/// Transitional: the fields are `pub` to read. Only the kernel can write one, since no
-/// `&mut Object` leaves the crate; by-w8gv.5.9 makes the fields private behind the getters.
+/// The fields are `pub(crate)`: other crates read an object through its getters, and only
+/// the kernel can write one, since no `&mut Object` leaves the crate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: the definition its values are read from. The kernel's
     /// own: others ask a query ([`crate::query`]) or [`crate::Observation::card`].
     pub(crate) card: CardIx,
     /// Bumped on every zone change (CR 400.7), so stale references are detectable.
-    pub incarnation: u16,
-    pub zone: Zone,
-    pub owner: Seat,
+    pub(crate) incarnation: u16,
+    pub(crate) zone: Zone,
+    pub(crate) owner: Seat,
     /// The controller before continuous effects: the owner, but for a spell and a permanent
     /// ([`State::controller`](crate::State::controller),
     /// [`State::base_controller`](crate::State::base_controller)).
     pub(crate) base_controller: Seat,
-    pub flags: ObjectFlags,
+    pub(crate) flags: ObjectFlags,
     /// Damage marked this turn.
-    pub damage: u8,
-    pub counters: Counters,
+    pub(crate) damage: u8,
+    pub(crate) counters: Counters,
     /// The object an Aura or Equipment is attached to.
-    pub attached_to: Option<L::Slot>,
+    pub(crate) attached_to: Option<L::Slot>,
     /// The object that exiled, imprinted or hid this one.
-    pub linked: Option<L::Slot>,
+    pub(crate) linked: Option<L::Slot>,
     /// Battlefield entry order, for layers.
-    pub timestamp: u16,
+    pub(crate) timestamp: u16,
     /// Which face is up.
-    pub face: FaceIx,
+    pub(crate) face: FaceIx,
     /// In combat: the planeswalker an attacker attacks, or the attacker a blocker blocks;
     /// `None` for an attacker attacking a player, or once that object has left the
     /// battlefield.
-    pub combat: Option<L::Slot>,
+    pub(crate) combat: Option<L::Slot>,
     /// The object's index in [`State::battlefield`], so finding a permanent's `derived` is
     /// one read rather than a search of the battlefield; [`OFF_BATTLEFIELD`] off it. Only
     /// [`State::enter_battlefield`] and [`State::leave_battlefield`] change it, and it fills

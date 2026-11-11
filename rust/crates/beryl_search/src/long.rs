@@ -413,7 +413,8 @@ impl<L: Layout> LongSearch<L> {
         // a zone change.
         for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
             let o = obs.object(slot);
-            if obs.knows(slot) != knew || (o.incarnation != incarnation && kept.moves != Some(slot))
+            if obs.knows(slot) != knew
+                || (o.incarnation() != incarnation && kept.moves != Some(slot))
             {
                 return None;
             }
@@ -898,7 +899,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
                 chain,
                 choice,
                 seen: L::Slot::all()
-                    .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
+                    .map(|slot| (obs.object(slot).incarnation(), obs.knows(slot)))
                     .collect(),
                 moves: names(d, choice),
             });
@@ -1014,7 +1015,7 @@ impl<L: Layout> Tree<L> {
             allowed: None,
             origin: 0,
         };
-        tree.origin = tree.state.turn().number;
+        tree.origin = tree.state.turn().number();
         if !resample {
             tree.state = tree.deal(t, &mut rng);
             tree.extra += WORLD_STEPS;
@@ -1139,7 +1140,7 @@ impl<L: Layout> Tree<L> {
     fn keeps_to(&self, s: &State<L>, truth: &State<L>) -> bool {
         let shown = |slot: L::Slot| match self.family.sight {
             Sight::Hidden => false,
-            Sight::Hands => truth.object(slot).zone == Zone::Hand,
+            Sight::Hands => truth.object(slot).zone() == Zone::Hand,
             Sight::Omniscient => true,
         };
         Seat::BOTH.iter().all(|&p| s.library(p) == truth.library(p))
@@ -1312,7 +1313,7 @@ impl<L: Layout> Tree<L> {
                 value(outcome, self.turns(s))
             }
             Leaf::Cutoff { turns } => {
-                let turn = s.turn().number.saturating_add(u16::from(turns));
+                let turn = s.turn().number().saturating_add(u16::from(turns));
                 if let Some(outcome) = soft_rollout_to(s, t, &mut self.x, policy, &mut soft, turn) {
                     value(outcome, self.turns(s))
                 } else {
@@ -1332,7 +1333,7 @@ impl<L: Layout> Tree<L> {
 
     /// The turns from the tree's first root to `s`.
     fn turns(&self, s: &State<L>) -> u16 {
-        s.turn().number.saturating_sub(self.origin)
+        s.turn().number().saturating_sub(self.origin)
     }
 }
 

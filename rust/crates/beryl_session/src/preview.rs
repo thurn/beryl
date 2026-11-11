@@ -439,7 +439,7 @@ pub(crate) fn waterbend<L: Layout>(
     let pool = if generic {
         before
             .player(first.player)
-            .mana
+            .mana()
             .amounts()
             .into_iter()
             .map(u16::from)
@@ -650,7 +650,7 @@ fn waterbend_plan<L: Layout>(
 fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u16> {
     let untapped = |s: &State<L>, slot| {
         let o = s.object(slot);
-        o.zone == Zone::Battlefield && !o.flags.has(ObjectFlags::TAPPED)
+        o.zone() == Zone::Battlefield && !o.flags().has(ObjectFlags::TAPPED)
     };
     let sacrifices_for_mana = |slot: L::Slot| {
         let face = before.copiable(slot).face(t);
@@ -729,7 +729,7 @@ mod tests {
         assert!(
             s.battlefield()
                 .iter()
-                .all(|&slot| !s.object(slot).flags.has(ObjectFlags::TAPPED))
+                .all(|&slot| !s.object(slot).flags().has(ObjectFlags::TAPPED))
         );
     }
 
@@ -963,7 +963,7 @@ mod tests {
             if d.prompt.purpose == Purpose::UnlessPays {
                 let untapped = |slot: u16| {
                     !s.object(Slot::from_index(usize::from(slot)))
-                        .flags
+                        .flags()
                         .has(ObjectFlags::TAPPED)
                 };
                 let paid = payments(s, t, d);

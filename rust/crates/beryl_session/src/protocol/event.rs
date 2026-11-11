@@ -200,7 +200,7 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
     let entry = match obs.card(spell.slot) {
         Some(card) => StackEntry {
             card,
-            face: obs.object(spell.slot).face,
+            face: obs.object(spell.slot).face(),
             costs,
             flashback,
             ..StackEntry::default()

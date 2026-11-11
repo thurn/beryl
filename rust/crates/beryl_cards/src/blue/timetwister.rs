@@ -44,7 +44,7 @@ fn twist<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
 pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
     let s = ctx.state();
-    let active = s.turn().active;
+    let active = s.turn().active();
     let players = [active, active.opponent()];
     let cards = players.iter().fold(Bitboard::EMPTY, |b, &p| {
         b | s.zone(ZoneKey::Of(p, Zone::Hand)) | s.zone(ZoneKey::Of(p, Zone::Graveyard))

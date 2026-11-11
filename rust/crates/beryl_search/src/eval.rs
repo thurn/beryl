@@ -49,7 +49,7 @@ const LIBRARY_SHORT: usize = 5;
 /// Player `p`'s features in `s`.
 pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Features {
     let mut f = [0.0; FEATURES];
-    f[0] = f64::from(s.player(p).life.clamp(-10, 40));
+    f[0] = f64::from(s.player(p).life().clamp(-10, 40));
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     f[1] = f64::from(hand.count());
     f[2] = hand.sum(|slot| f64::from(values.of(s.copiable(slot).key()).value));
@@ -67,7 +67,7 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
             f[5] += f64::from(d.power.max(0));
         }
         if d.types.intersects(Types::PLANESWALKER) {
-            f[6] += f64::from(s.object(slot).counters.loyalty);
+            f[6] += f64::from(s.object(slot).counters().loyalty);
         }
     }
     f[7] = LIBRARY_SHORT.saturating_sub(s.library(p).len()) as f64;

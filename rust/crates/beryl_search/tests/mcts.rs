@@ -308,7 +308,7 @@ fn subtree_reuse_stays_within_one_action() {
                 .any(|&i| (before.index..after.index).contains(&i))
                 && Slot::all().all(|slot| {
                     was.knows(slot) == now.knows(slot)
-                        && (was.object(slot).incarnation == now.object(slot).incarnation
+                        && (was.object(slot).incarnation() == now.object(slot).incarnation()
                             || moves == Some(slot))
                 });
             if chain < AgentDecision(k) {

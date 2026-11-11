@@ -30,8 +30,8 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Over(outcome) => break outcome,
             Step::Decide(d) => {
-                if s.turn().number != turn {
-                    turn = s.turn().number;
+                if s.turn().number() != turn {
+                    turn = s.turn().number();
                     let [a, b] = Seat::BOTH.map(|p| features(&s, &values, p).0);
                     let mut diff = [0.0; FEATURES];
                     for (i, d) in diff.iter_mut().enumerate() {

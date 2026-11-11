@@ -564,7 +564,7 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
         let beryl_engine::Step::Decide(decision) = step else {
             return Err("Game ended during playground setup".to_owned());
         };
-        boards::lock(&progress).turn = state.turn().number;
+        boards::lock(&progress).turn = state.turn().number();
         let ready = boards::lock(&progress).done()
             && moment.play.first().is_none_or(|a| {
                 actor(a).is_none_or(|seat| seat == decision.player)

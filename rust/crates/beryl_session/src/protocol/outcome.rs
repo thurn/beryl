@@ -120,8 +120,8 @@ pub(super) fn outcome_view<L: Layout>(
                 Some(LossCause::Concede) => (LossReason::Concede, None),
                 // Without the loss's event, the state-based losses are read off the loser,
                 // life first as the engine names them.
-                None if loser.life <= 0 => (LossReason::Life, None),
-                None if loser.drew_from_empty => (LossReason::Library, None),
+                None if loser.life() <= 0 => (LossReason::Life, None),
+                None if loser.drew_from_empty() => (LossReason::Library, None),
                 None => (LossReason::Effect, None),
             };
             OutcomeView::Win {

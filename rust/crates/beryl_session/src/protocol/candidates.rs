@@ -58,7 +58,7 @@ pub(super) fn candidate<L: Layout>(
             Candidate::Attack { slot: slot.num() },
         ),
         Opt::Defender(None) => (
-            format!("Attack {}", player(obs.turn().active.opponent())),
+            format!("Attack {}", player(obs.turn().active().opponent())),
             Candidate::Defender { planeswalker: None },
         ),
         Opt::Defender(Some(slot)) => (
@@ -131,7 +131,7 @@ fn mana_candidate<L: Layout>(
 ) -> (String, Candidate) {
     let ability = obs.card(slot).and_then(|card| {
         t.def(card)
-            .face(obs.object(slot).face)
+            .face(obs.object(slot).face())
             .abilities
             .iter()
             .filter(|a| a.kind == AbilityKind::Mana && a.produces.includes(color))
@@ -159,7 +159,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
         Opt::Activate {
             slot,
             ability: ObjectAbility::Own(i),
-        } => (t.def(obs.card(slot)?).face(obs.object(slot).face), i),
+        } => (t.def(obs.card(slot)?).face(obs.object(slot).face()), i),
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];
             (t.def(trigger.card).face(trigger.face), trigger.ability)
@@ -223,7 +223,7 @@ fn casting_options<L: Layout>(
     // CR 702.34a: a flashback cost is an alternative cost, so no other is paid with it. A
     // permission lasts until the turn ends, so one whose card has since changed zones, as
     // when Timetwister draws it again, no longer names this object.
-    let incarnation = obs.object(slot).incarnation;
+    let incarnation = obs.object(slot).incarnation();
     if obs.permissions().iter().any(|p| {
         p.object.slot == slot
             && p.object.incarnation == incarnation
@@ -283,7 +283,11 @@ fn activated_cost<L: Layout>(
     ability: ObjectAbility,
 ) -> Option<String> {
     let (card, face, ability) = match ability {
-        ObjectAbility::Own(i) => (obs.card(slot)?, obs.object(slot).face, FaceAbility::Own(i)),
+        ObjectAbility::Own(i) => (
+            obs.card(slot)?,
+            obs.object(slot).face(),
+            FaceAbility::Own(i),
+        ),
         ObjectAbility::Granted(k) => {
             let grant = obs.derived(slot).granted[usize::from(k)]?;
             (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))

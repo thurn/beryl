@@ -272,7 +272,7 @@ fn a_game_of_the_three_lands_runs_to_decking() {
             Step::Decide(d) => apply(&mut s, &t, &mut x, &mut Replay, choose(&d)),
         }
     };
-    assert_eq!(outcome, Outcome::Win(s.turn().starting_player));
+    assert_eq!(outcome, Outcome::Win(s.turn().starting_player()));
     assert_eq!(s.battlefield().len(), 67);
 }
 
@@ -512,7 +512,7 @@ fn a_cleanup_discard_triggers_currency_converter() {
         ]);
     let mut seen = Vec::new();
     beryl_scenario::visit(&CARDS, &DISCARD, |_, s, d| {
-        seen.push((s.turn().number, s.turn().step, d.player, d.kind));
+        seen.push((s.turn().number(), s.turn().step(), d.player, d.kind));
     })
     .unwrap();
     let cleanup = |player, kind| (3, TurnStep::Cleanup, player, kind);
@@ -550,11 +550,11 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| s.object(slot).face == FaceIx::DOWN);
+            .find(|&slot| s.object(slot).face() == FaceIx::DOWN);
         if let Some(slot) = face_down {
             snapcaster = Some(slot);
             let det = Observation::new(s, Seat::P1).determinize(t, &mut SplitMix64::new(3));
-            assert_eq!(det.object(slot).face, FaceIx::DOWN);
+            assert_eq!(det.object(slot).face(), FaceIx::DOWN);
             det.check_invariants(t).unwrap();
         }
         if let Some(slot) = snapcaster {
@@ -589,10 +589,10 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .battlefield()
         .iter()
         .copied()
-        .find(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .find(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
         .expect("the copy");
     assert_eq!(s.controller(copy), Seat::P1);
-    assert_eq!(s.object(copy).face, FaceIx::FRONT);
+    assert_eq!(s.object(copy).face(), FaceIx::FRONT);
     assert_eq!(s.copiable(copy).record(&t).0, t.face_down_copy());
     assert_eq!(s.card_behind(copy), None);
     assert!(s.knows(Seat::P0, copy) && s.knows(Seat::P1, copy));
@@ -772,7 +772,7 @@ fn a_quiet_pointless_activation_makes_no_stop() {
                             ability: ObjectAbility::own(2),
                         })
                 });
-                return (s.turn().number, s.turn().step, offered);
+                return (s.turn().number(), s.turn().step(), offered);
             }
             apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
         }
@@ -895,7 +895,7 @@ fn each_payment_mode_finishes_mana_before_exile_choices() {
         assert_eq!(
             s.battlefield()
                 .iter()
-                .filter(|&&slot| s.object(slot).flags.has(ObjectFlags::TAPPED))
+                .filter(|&&slot| s.object(slot).flags().has(ObjectFlags::TAPPED))
                 .count(),
             3
         );

@@ -470,7 +470,7 @@ fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
     loop {
         let d = match next(s, t, &mut x, &mut Replay) {
             Step::Over(outcome) => return Some(outcome),
-            Step::Decide(_) if s.turn().number > turn => return None,
+            Step::Decide(_) if s.turn().number() > turn => return None,
             Step::Decide(d) => d,
         };
         let shown = *view(s, t, &mut x);
@@ -580,7 +580,7 @@ fn subtlety_is_not_evoked_on_an_empty_stack() {
     let (t, mut s) = arrange(&IDLE);
     let mut expert = ExpertAgent::new(&t, 7);
     let mut x = Scratch::new();
-    while s.turn().number <= 6 {
+    while s.turn().number() <= 6 {
         let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
             panic!("the game ended");
         };

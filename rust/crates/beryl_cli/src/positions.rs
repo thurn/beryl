@@ -228,7 +228,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
     let mut agents = seeds.map(|s| LongSearch::<beryl_engine::Small>::new(t, b.settings, s));
     let mut s = State::new(t, seed, Profile::SMART);
     let mut x = Scratch::new();
-    let mut at = (s.turn().number, s.turn().step);
+    let mut at = (s.turn().number(), s.turn().step());
     let mut out = GameCuts {
         cuts: 0,
         clean: 0,
@@ -240,15 +240,16 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
             None => {
                 let turn = s.turn();
                 // A turn is seen as its upkeep begins, as a save's checkpoint is taken.
-                if turn.number != at.0 && TURNS.contains(&turn.number) {
+                if turn.number() != at.0 && TURNS.contains(&turn.number()) {
                     out.cuts += 1;
                     let board = Checkpoint::of(t, &s);
                     if clean(&board) {
                         out.clean += 1;
-                        let score_seed = SplitMix64::new(seed ^ u64::from(turn.number)).next_u64();
+                        let score_seed =
+                            SplitMix64::new(seed ^ u64::from(turn.number())).next_u64();
                         let mut position = Position {
                             seed,
-                            turn: turn.number,
+                            turn: turn.number(),
                             estimates: [0.0; 2],
                             board,
                         };
@@ -259,15 +260,15 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
                             let for_active = [estimates[active], 1.0 - estimates[1 - active]];
                             if for_active.iter().all(|&e| b.band[0] <= e && e <= b.band[1]) {
                                 out.kept
-                                    .push((format!("g{g:04}-t{}.json", turn.number), position));
+                                    .push((format!("g{g:04}-t{}.json", turn.number()), position));
                             }
                         }
                     }
                 }
-                if turn.number > *TURNS.end() {
+                if turn.number() > *TURNS.end() {
                     break;
                 }
-                at = (turn.number, turn.step);
+                at = (turn.number(), turn.step());
             }
             Some(Step::Over(_)) => break,
             Some(Step::Decide(d)) => {
@@ -294,7 +295,7 @@ fn estimates(
     let mut searches =
         seat_seeds(seed).map(|s| LongSearch::<beryl_engine::Small>::new(t, settings, s));
     let mut found: [Option<f64>; 2] = [None; 2];
-    while s.turn().number <= position.turn + SCORE_TURNS {
+    while s.turn().number() <= position.turn + SCORE_TURNS {
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             return Ok(None);
         };
@@ -442,7 +443,7 @@ mod tests {
             assert!(TURNS.contains(&p.turn), "{name}");
             let mut s = start(&t, p, 99).unwrap();
             assert_eq!(
-                s.turn().number,
+                s.turn().number(),
                 p.turn - 1,
                 "{name}: before the turn begins"
             );

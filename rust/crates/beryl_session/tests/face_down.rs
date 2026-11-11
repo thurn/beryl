@@ -88,7 +88,7 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         .copied()
         .find(|&slot| {
             s.object(slot)
-                .flags
+                .flags()
                 .has(beryl_engine::state::ObjectFlags::TOKEN)
         })
         .expect("the copy");

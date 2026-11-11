@@ -60,7 +60,7 @@ pub(crate) fn counters_matter<L: Layout>(
     kind: CounterKind,
 ) -> bool {
     matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
-        || s.object(slot).zone != Zone::Battlefield
+        || s.object(slot).zone() != Zone::Battlefield
         || face(s, t, slot).abilities.iter().any(|a| {
             a.layer.is_some_and(|spec| match spec.condition {
                 StaticCondition::Always => false,
@@ -120,14 +120,14 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             let Some(spec) = ability.layer else { continue };
             let applies = match spec.condition {
                 StaticCondition::Always => true,
-                StaticCondition::HasCounter(kind) => o.counters.get(kind) > 0,
+                StaticCondition::HasCounter(kind) => o.counters().get(kind) > 0,
                 StaticCondition::Impending => {
-                    o.flags.has(ObjectFlags::IMPENDING) && o.counters.get(CounterKind::Time) > 0
+                    o.flags().has(ObjectFlags::IMPENDING) && o.counters().get(CounterKind::Time) > 0
                 }
             };
             let target = match spec.affected {
                 Affected::Itself => Some(i),
-                Affected::Enchanted => o.attached_to.and_then(|a| s.battlefield_position(a)),
+                Affected::Enchanted => o.attached_to().and_then(|a| s.battlefield_position(a)),
             };
             if let (true, Some(target)) = (applies, target) {
                 crate::coverage::hit(ability);
@@ -135,7 +135,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
                 // can create at once.
                 let _ = list.get_or_insert_with(Default::default).push(Apply {
                     layer: spec.modification.layer() as u8,
-                    timestamp: o.timestamp,
+                    timestamp: o.timestamp(),
                     order: n as u8,
                     target: target as u8,
                     source: what.record(t).0,
@@ -148,7 +148,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         let Continuous::Layer(m) = e.effect else {
             continue;
         };
-        if s.object(e.affected.slot).zone != Zone::Battlefield {
+        if s.object(e.affected.slot).zone() != Zone::Battlefield {
             continue;
         }
         if let Some(target) = s.battlefield_position(e.affected.slot) {
@@ -177,7 +177,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     // that modify power and/or toughness (but don't set power and/or toughness to a specific
     // number or value) are applied." Additions commute, so they follow the effects.
     for i in 0..len {
-        let c = s.object(s.battlefield()[i]).counters;
+        let c = s.object(s.battlefield()[i]).counters();
         let d = &mut s.results()[i];
         let delta = c.plus_one as i8 - c.minus_one as i8;
         d.power = d.power.saturating_add(delta);

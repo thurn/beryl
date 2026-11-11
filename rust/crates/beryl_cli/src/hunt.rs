@@ -236,7 +236,7 @@ fn reconstruct(t: &GameTable, p: &Packet) -> Result<(State, Decision), String> {
     let displayed = view(&s, t, &mut x);
     if labels(t, displayed, &d) != p.labels
         || d.player.get() != p.seat
-        || s.turn().number != p.turn
+        || s.turn().number() != p.turn
         || format!("{:?}", d.kind) != p.kind
     {
         return Err("candidate position drifted".into());
@@ -510,7 +510,7 @@ fn collect(
         if history.len() % 50 == 0 {
             eprintln!(
                 "game {game}, turn {}, decision {} ({}s elapsed)",
-                s.turn().number,
+                s.turn().number(),
                 history.len(),
                 clock.start.elapsed().as_secs()
             );
@@ -544,7 +544,7 @@ fn collect(
                     id: format!("g{game:05}-d{:05}", history.len()),
                     seed,
                     decision: history.len(),
-                    turn: state.turn().number,
+                    turn: state.turn().number(),
                     seat: d.player.get(),
                     kind: format!("{:?}", d.kind),
                     reasons,
@@ -626,7 +626,7 @@ mod tests {
             let p = Packet {
                 seed,
                 decision: history.len(),
-                turn: state.turn().number,
+                turn: state.turn().number(),
                 seat: d.player.get(),
                 kind: format!("{:?}", d.kind),
                 history: history.clone(),

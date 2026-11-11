@@ -24,7 +24,7 @@ fn defender<L: Layout>(s: &State<L>) -> Seat {
 }
 
 fn flags<L: Layout>(s: &State<L>, slot: L::Slot) -> ObjectFlags {
-    s.object(slot).flags
+    s.object(slot).flags()
 }
 
 fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
@@ -51,7 +51,7 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
         .copied()
         .filter(|&slot| {
             let o = s.object(slot);
-            o.flags.has(ObjectFlags::BLOCKING) && o.combat == Some(attacker)
+            o.flags().has(ObjectFlags::BLOCKING) && o.combat() == Some(attacker)
         })
         .collect()
 }
@@ -62,7 +62,7 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
 pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
-        .filter_map(|&slot| s.object(slot).combat)
+        .filter_map(|&slot| s.object(slot).combat())
         .collect()
 }
 
@@ -77,9 +77,9 @@ fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == s.turn().active()
         && is_creature(s, slot)
-        && !o.flags.has(ObjectFlags::TAPPED)
-        && !o.flags.has(ObjectFlags::SUMMONING_SICK)
-        && !o.flags.has(ObjectFlags::ATTACKING)
+        && !o.flags().has(ObjectFlags::TAPPED)
+        && !o.flags().has(ObjectFlags::SUMMONING_SICK)
+        && !o.flags().has(ObjectFlags::ATTACKING)
 }
 
 /// Whether the active player has a creature that can attack now, so that declaring attackers
@@ -244,8 +244,8 @@ fn finish_attack<L: Layout>(
 /// can't be blocked except by creatures with flying and/or reach."
 fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bool {
     let a = s.object(attacker);
-    a.flags.has(ObjectFlags::ATTACKING)
-        && !(a.flags.has(ObjectFlags::ATTACKS_PLANESWALKER) && a.combat.is_none())
+    a.flags().has(ObjectFlags::ATTACKING)
+        && !(a.flags().has(ObjectFlags::ATTACKS_PLANESWALKER) && a.combat().is_none())
         && (!has(s, attacker, Keywords::FLYING)
             || has(s, blocker, Keywords::FLYING)
             || has(s, blocker, Keywords::REACH))
@@ -261,8 +261,8 @@ fn may_block<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == defender(s)
         && is_creature(s, slot)
-        && !o.flags.has(ObjectFlags::TAPPED)
-        && !o.flags.has(ObjectFlags::BLOCKING)
+        && !o.flags().has(ObjectFlags::TAPPED)
+        && !o.flags().has(ObjectFlags::BLOCKING)
         && s.battlefield().iter().any(|&a| can_block(s, slot, a))
 }
 
@@ -398,7 +398,7 @@ fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 /// damage marked on a creature is greater than or equal to its toughness, that creature has
 /// been dealt lethal damage". At least 1.
 fn lethal<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage);
+    let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
     u8::try_from(left.clamp(1, 255)).unwrap_or(1)
 }
 
@@ -580,23 +580,23 @@ fn deal<L: Layout>(
                 amount,
             })
         };
-        if o.flags.has(ObjectFlags::BLOCKING) {
+        if o.flags().has(ObjectFlags::BLOCKING) {
             // CR 510.1d: "A blocking creature assigns combat damage to the creatures it's
             // blocking. If it isn't currently blocking any creatures ..., it assigns no
             // combat damage."
-            if let Some(other) = o.combat {
+            if let Some(other) = o.combat() {
                 push(Recipient::Permanent(s.object_ref(other)), amount)?;
             }
-        } else if o.flags.has(ObjectFlags::BLOCKED) {
+        } else if o.flags().has(ObjectFlags::BLOCKED) {
             for (b, n) in division(s, slot, lethal).iter() {
                 push(Recipient::Permanent(s.object_ref(*b)), *n)?;
             }
-        } else if o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER) {
+        } else if o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER) {
             // CR 510.1b: "An unblocked creature assigns its combat damage to the player,
             // planeswalker, or battle it's attacking. If it isn't currently attacking anything
             // (if, for example, it was attacking a planeswalker that has left the
             // battlefield), it assigns no combat damage."
-            if let Some(other) = o.combat {
+            if let Some(other) = o.combat() {
                 push(Recipient::Permanent(s.object_ref(other)), amount)?;
             }
         } else {
@@ -670,17 +670,17 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
-        let side = if o.flags.has(ObjectFlags::ATTACKING) {
+        let side = if o.flags().has(ObjectFlags::ATTACKING) {
             active
-        } else if o.flags.has(ObjectFlags::BLOCKING) {
+        } else if o.flags().has(ObjectFlags::BLOCKING) {
             active.opponent()
         } else {
             continue;
         };
         if !is_creature(s, slot) || s.controller(slot) != side {
             s.remove_from_combat(slot);
-        } else if o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER)
-            && let Some(walker) = o.combat
+        } else if o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER)
+            && let Some(walker) = o.combat()
             && (s.controller(walker) != active.opponent()
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {

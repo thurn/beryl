@@ -357,7 +357,7 @@ pub fn play(
     transcript.end(t, &s, outcome, &happened);
     Ok(Played {
         outcome,
-        turns: s.turn().number,
+        turns: s.turn().number(),
         lines,
         transcript: transcript.text().to_owned(),
     })

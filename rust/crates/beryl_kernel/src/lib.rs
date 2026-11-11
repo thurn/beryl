@@ -90,10 +90,10 @@
 //! ## Entities and records
 //!
 //! [`State`], [`state::Object`], [`state::Player`], [`state::Turn`] and [`state::Zones`] are
-//! entities: private fields, read through `#[inline]` getters (by-w8gv.5.9 for the readers in
-//! other crates), written by mutators. An object has its getters, one for each field and one
-//! for each status flag, and so do a player and the turn, one for each field; their fields
-//! stay `pub` to read until by-w8gv.5.9, and nothing outside the crate can write one. An
+//! entities: private fields, read through `#[inline]` getters, written by mutators. An
+//! object has its getters, one for each field and one for each status flag, and so do a
+//! player and the turn, one for each field; their fields are `pub(crate)` for the kernel's own
+//! mutators, and nothing outside the crate can read or write one directly. An
 //! object's definition index and base controller are private already: they are read
 //! through the queries below.
 //!

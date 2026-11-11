@@ -58,8 +58,8 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
     while let Some(mut view) = game.next_view() {
         let turn = game.state().turn();
         if matches!(view.status, Status::Deciding { .. })
-            && turn.number >= 3
-            && turn.active == HUMAN
+            && turn.number() >= 3
+            && turn.active() == HUMAN
             && let Some(stops) = switch.take()
         {
             view = game.set_stops(stops).unwrap();
@@ -81,11 +81,11 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
         if decision.kind == Kind::Priority && !decision.halt {
             for e in game.state().stack() {
                 if e.controller != HUMAN {
-                    seen.answered.push((*e, turn.active));
+                    seen.answered.push((*e, turn.active()));
                 }
             }
-            if turn.active != HUMAN {
-                seen.their_steps.push((turn.number, turn.step));
+            if turn.active() != HUMAN {
+                seen.their_steps.push((turn.number(), turn.step()));
             }
         }
         let index = decision

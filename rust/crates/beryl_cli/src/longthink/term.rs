@@ -431,8 +431,8 @@ impl Display {
         let seats = [you, you.opponent()];
         p.asked = Some(Asked {
             decision,
-            turn: s.turn().number,
-            life: seats.map(|q| s.player(q).life),
+            turn: s.turn().number(),
+            life: seats.map(|q| s.player(q).life()),
             hand: seats.map(|q| s.zone(ZoneKey::Of(q, Zone::Hand)).count()),
             budget: p.budgets[d.player.index()],
             at: Instant::now(),

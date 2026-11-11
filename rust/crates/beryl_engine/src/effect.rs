@@ -455,7 +455,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         if !self.state.is_current(object) {
             return;
         }
-        let to = match self.state.object(object.slot).zone {
+        let to = match self.state.object(object.slot).zone() {
             Zone::Battlefield => Some(Zone::Hand),
             Zone::Stack => cast::unstack(self.state, object, Zone::Hand),
             _ => None,
@@ -609,7 +609,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
     /// move it from its owner's hand to that player's graveyard."
     pub fn discard(&mut self, card: ObjectRef<L>) {
-        if self.state.is_current(card) && self.state.object(card.slot).zone == Zone::Hand {
+        if self.state.is_current(card) && self.state.object(card.slot).zone() == Zone::Hand {
             self.move_to(card, Zone::Graveyard, Reason::Discard);
         }
     }
@@ -646,7 +646,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// "You may put that card on the bottom of that player's library." It stays in the
     /// library, so it is still the same object.
     pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
-        if self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Library {
+        if self.state.is_current(object) && self.state.object(object.slot).zone() == Zone::Library {
             let r = self.state.reorder_library(object.slot, Place::Bottom);
             self.check(r);
         }
@@ -753,7 +753,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
         let o = *self.state.object(object.slot);
-        if o.zone != Zone::Exile {
+        if o.zone() != Zone::Exile {
             return;
         }
         let r = event::move_batch(
@@ -764,7 +764,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             Zone::Battlefield,
             Reason::Effect,
             Entry {
-                controller: Some(o.owner),
+                controller: Some(o.owner()),
                 face: FaceIx::BACK,
                 ..Entry::default()
             },
@@ -829,7 +829,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     fn on_battlefield(&self, object: ObjectRef<L>) -> bool {
-        self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Battlefield
+        self.state.is_current(object) && self.state.object(object.slot).zone() == Zone::Battlefield
     }
 
     /// Exiles an object until this ability's source leaves the battlefield
@@ -852,7 +852,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             return;
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
-        if self.state.object(object.slot).zone == Zone::Exile {
+        if self.state.object(object.slot).zone() == Zone::Exile {
             self.state.link(object.slot, source.slot);
             self.state
                 .legacy_mut()
@@ -877,7 +877,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         let source = self.source();
         self.move_to(object, Zone::Exile, Reason::Exile);
-        if self.state.is_current(source) && self.state.object(object.slot).zone == Zone::Exile {
+        if self.state.is_current(source) && self.state.object(object.slot).zone() == Zone::Exile {
             self.state.link(object.slot, source.slot);
             self.state
                 .legacy_mut()
@@ -1208,7 +1208,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 /// ability triggered, and it triggered only if the cost was paid.
 pub(crate) fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> bool {
     match tr.source {
-        Some(r) if s.is_current(r) => s.object(r.slot).flags.has(flag),
+        Some(r) if s.is_current(r) => s.object(r.slot).flags().has(flag),
         _ => true,
     }
 }

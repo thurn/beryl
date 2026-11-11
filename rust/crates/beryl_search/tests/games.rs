@@ -244,7 +244,7 @@ fn determinization_keeps_the_size_of_every_hidden_group() {
             let cards = |s: &State| {
                 let mut v: Vec<CardIx> = Slot::all()
                     .filter(|&slot| {
-                        s.object(slot).owner == p && s.object(slot).zone != Zone::Nowhere
+                        s.object(slot).owner() == p && s.object(slot).zone() != Zone::Nowhere
                     })
                     .filter_map(|slot| s.card_behind(slot))
                     .collect();

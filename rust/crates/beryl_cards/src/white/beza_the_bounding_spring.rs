@@ -55,7 +55,7 @@ fn compare<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if controls(ctx.state(), them, Types::LAND) > controls(ctx.state(), you, Types::LAND) {
         ctx.create_tokens(&TREASURE, 1, TokenEntry::default());
     }
-    if ctx.state().player(them).life > ctx.state().player(you).life {
+    if ctx.state().player(them).life() > ctx.state().player(you).life() {
         ctx.gain_life(you, 4);
     }
     let creatures = |s: &State<L>, p| controls(s, p, Types::CREATURE);

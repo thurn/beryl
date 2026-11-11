@@ -153,7 +153,7 @@ fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             return;
         };
-        if s.turn().number >= turn {
+        if s.turn().number() >= turn {
             out.push(s);
             cuts.next();
         }
@@ -243,7 +243,7 @@ pub fn record(
         }
         summary.rollouts += 1;
         summary.inline += a.answers.len() as u64 - (summary.decisions - before);
-        summary.turns += u64::from(s.turn().number - start.turn().number);
+        summary.turns += u64::from(s.turn().number() - start.turn().number());
         scripts.push(Script {
             start: *start,
             answers: a.answers,
@@ -274,7 +274,7 @@ fn score(outcome: Outcome, s: &State) -> u64 {
         Outcome::Draw => 2,
         Outcome::Stalled(_) => 3,
     };
-    ended + u64::from(s.turn().number)
+    ended + u64::from(s.turn().number())
 }
 
 /// Copies each start into `into`, one `memcpy` each.
@@ -282,7 +282,7 @@ pub fn copy_states(starts: &[State], into: &mut State) -> u64 {
     let mut sum = 0;
     for start in starts {
         *into = *std::hint::black_box(start);
-        sum += u64::from(std::hint::black_box(&*into).turn().number);
+        sum += u64::from(std::hint::black_box(&*into).turn().number());
     }
     sum
 }
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn corpus_never_changes() {
         let c = Corpus::new();
-        let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number).collect();
+        let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number()).collect();
         assert_eq!(turns, CUTS.repeat(2 * GAMES as usize));
         assert_eq!(stable_hash(&c.positions), 2_025_536_284_596_752_749);
     }

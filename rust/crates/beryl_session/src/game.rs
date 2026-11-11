@@ -411,7 +411,7 @@ impl Boards {
             .state
             .battlefield()
             .iter()
-            .any(|&slot| b.state.object(slot).flags.has(ObjectFlags::BLOCKING)))
+            .any(|&slot| b.state.object(slot).flags().has(ObjectFlags::BLOCKING)))
     }
 
     fn outcome(&self) -> Option<Outcome> {
@@ -741,7 +741,7 @@ impl Game {
             _ => None,
         };
         Game {
-            seen: (turn.number, turn.step),
+            seen: (turn.number(), turn.step()),
             answered: None,
             stops: replay.stops,
             table,
@@ -824,7 +824,7 @@ impl Game {
         match game.replay_log(file, &mut checks) {
             Ok(()) => {}
             Err(SessionError::BadReplay { reason }) => {
-                let rebuilt = checks.rebuild(file, game.board.turn().number, reason)?;
+                let rebuilt = checks.rebuild(file, game.board.turn().number(), reason)?;
                 game = Game::begin(cards, &rebuilt, session)?;
                 game.replay_log(&rebuilt, &mut Checks::new(&rebuilt))?;
             }
@@ -876,7 +876,7 @@ impl Game {
                 reason: format!("the checkpoint of turn {}: {reason}", from.turn),
             })?;
         let turn = state.turn();
-        game.seen = (turn.number, turn.step);
+        game.seen = (turn.number(), turn.step());
         game.board = Boards::new(&state);
         game.flip_winner = None;
         game.replay.chooser = None;
@@ -1241,7 +1241,7 @@ impl Game {
         journal::info(
             "replay",
             what,
-            json!({ "turn": turn.number, "step": format!("{:?}", turn.step), "entry": entry }),
+            json!({ "turn": turn.number(), "step": format!("{:?}", turn.step()), "entry": entry }),
         );
     }
 
@@ -1249,7 +1249,7 @@ impl Game {
     fn parted(&self, what: &str) -> SessionError {
         let turn = self.board.turn();
         SessionError::BadReplay {
-            reason: format!("turn {} {:?}: {what}", turn.number, turn.step),
+            reason: format!("turn {} {:?}: {what}", turn.number(), turn.step()),
         }
     }
 
@@ -1471,8 +1471,8 @@ impl Game {
         let turn = self.board.turn();
         let m = AgentMove {
             log: self.replay.log.len(),
-            turn: turn.number,
-            step: turn.step.into(),
+            turn: turn.number(),
+            step: turn.step().into(),
             kind,
             candidates,
             chosen: c.0,
@@ -1547,7 +1547,7 @@ impl Game {
             let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
             crate::protocol::pass_on(obs, self.stops)
         })?;
-        let turn = self.board.turn().number;
+        let turn = self.board.turn().number();
         Some(match next {
             NextStop::Step(step) => (turn, step),
             NextStop::NextTurn => (turn + 1, TurnStep::Untap),
@@ -1562,7 +1562,7 @@ impl Game {
     /// attacks with meanwhile.
     fn passes_for(&self, passing: PassingOn) -> bool {
         let turn = self.board.turn();
-        (turn.number, turn.step) < passing.until
+        (turn.number(), turn.step()) < passing.until
     }
 
     /// Checks `index` as an answer to the human's open decision `id`.
@@ -1763,8 +1763,8 @@ impl Game {
             self.at = match step {
                 None => {
                     let turn = self.board.turn();
-                    let began = turn.number != self.seen.0;
-                    self.seen = (turn.number, turn.step);
+                    let began = turn.number() != self.seen.0;
+                    self.seen = (turn.number(), turn.step());
                     self.answered = None;
                     if began {
                         let checkpoint =
@@ -1891,8 +1891,8 @@ impl Game {
             return false;
         }
         let turn = self.board.turn();
-        let attacker = turn.active == self.human;
-        match turn.step {
+        let attacker = turn.active() == self.human;
+        match turn.step() {
             TurnStep::DeclareAttackers => attacker,
             TurnStep::DeclareBlockers => !self.any_blocking(),
             _ => false,
@@ -1913,8 +1913,8 @@ impl Game {
     /// again; the agent never sees them.
     fn halts(&mut self) -> bool {
         let turn = self.board.turn();
-        let halting_step = turn.step == TurnStep::PrecombatMain
-            && turn.active == self.human
+        let halting_step = turn.step() == TurnStep::PrecombatMain
+            && turn.active() == self.human
             && self.stops.yours.has(TurnStep::PrecombatMain);
         if self.review.is_some() || self.stops.full_control || !halting_step {
             return false;

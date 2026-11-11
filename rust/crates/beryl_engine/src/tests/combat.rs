@@ -179,7 +179,7 @@ impl Game {
         let mut s = State::new(&t, seed, profile);
         let d = begin(&t, &mut s);
         assert_eq!(d.kind, DecisionKind::Priority);
-        let attacker = s.turn().active;
+        let attacker = s.turn().active();
         Game {
             t,
             s,
@@ -266,7 +266,7 @@ impl Game {
 
     /// Plays on until the postcombat main phase, where the breakpoint stops the game again.
     fn finish_combat(&mut self) {
-        let turn = self.s.turn().number;
+        let turn = self.s.turn().number();
         self.s.set_profile(Profile {
             breakpoint: Some(Breakpoint {
                 turn,
@@ -276,7 +276,7 @@ impl Game {
         });
         let d = self.decide();
         assert_eq!(
-            (d.kind, self.s.turn().step),
+            (d.kind, self.s.turn().step()),
             (DecisionKind::Priority, TurnStep::PostcombatMain),
             "{d:?}"
         );
@@ -295,11 +295,11 @@ impl Game {
     }
 
     fn life(&self, player: Seat) -> i16 {
-        self.s.player(player).life
+        self.s.player(player).life()
     }
 
     fn on_battlefield(&self, slot: Slot) -> bool {
-        self.s.object(slot).zone == Zone::Battlefield
+        self.s.object(slot).zone() == Zone::Battlefield
     }
 }
 
@@ -336,13 +336,13 @@ fn unblocked_attackers_tap_and_deal_damage_to_the_defending_player() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear.max(other)));
     // Once only "done" is left, it is applied silently (§7.2).
     g.pick(DecisionKind::Attacker, Opt::Done);
-    assert!(g.s.object(bear).flags.has(ObjectFlags::TAPPED));
-    assert!(!g.s.object(ogre).flags.has(ObjectFlags::TAPPED));
+    assert!(g.s.object(bear).flags().has(ObjectFlags::TAPPED));
+    assert!(!g.s.object(ogre).flags().has(ObjectFlags::TAPPED));
     g.finish_combat();
     assert_eq!(g.life(d), 16);
     assert_eq!(g.life(a), 20);
     // Combat is over: nothing is attacking any more.
-    assert!(!g.s.object(bear).flags.has(ObjectFlags::ATTACKING));
+    assert!(!g.s.object(bear).flags().has(ObjectFlags::ATTACKING));
     let damage = g.x.events.events().iter().filter(|e| {
         matches!(
             e,
@@ -381,8 +381,8 @@ fn vigilance_attacks_without_tapping() {
     let sentry = g.put(g.attacker, "Sentry");
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(sentry));
-    assert!(g.s.object(sentry).flags.has(ObjectFlags::ATTACKING));
-    assert!(!g.s.object(sentry).flags.has(ObjectFlags::TAPPED));
+    assert!(g.s.object(sentry).flags().has(ObjectFlags::ATTACKING));
+    assert!(!g.s.object(sentry).flags().has(ObjectFlags::TAPPED));
     g.finish_combat();
     assert_eq!(g.life(g.defender()), 19);
 }
@@ -416,7 +416,7 @@ fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
     g.finish_combat();
     // 3 damage removes all 3 loyalty counters (CR 120.3c); at 0 loyalty the planeswalker
     // goes to its owner's graveyard (CR 704.5i). The Bear hit the player.
-    assert_eq!(g.s.object(walker).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(walker).zone(), Zone::Graveyard);
     assert_eq!(g.life(d), 18);
 }
 
@@ -431,7 +431,7 @@ fn a_planeswalker_survives_damage_short_of_its_loyalty() {
     g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     g.finish_combat();
     assert!(g.on_battlefield(walker));
-    assert_eq!(g.s.object(walker).counters.loyalty, 1);
+    assert_eq!(g.s.object(walker).counters().loyalty, 1);
     assert_eq!(g.life(d), 20);
 }
 
@@ -510,8 +510,8 @@ fn a_division_among_blockers_is_offered_by_which_blockers_die() {
         // Both blockers dealt their damage: 3 kills the Ogre.
         assert!(!g.on_battlefield(ogre));
         if !kill {
-            assert_eq!(g.s.object(bear).damage + g.s.object(spider).damage, 3);
-            assert!(g.s.object(bear).damage < 2);
+            assert_eq!(g.s.object(bear).damage() + g.s.object(spider).damage(), 3);
+            assert!(g.s.object(bear).damage() < 2);
         }
     }
 }
@@ -554,7 +554,10 @@ fn damage_below_lethal_goes_onto_blockers_in_the_order_they_entered() {
     g.pick(DecisionKind::Blocker, Opt::Block(low));
     g.pick(DecisionKind::Blocker, Opt::Block(high));
     g.finish_combat();
-    assert_eq!((g.s.object(high).damage, g.s.object(low).damage), (3, 0));
+    assert_eq!(
+        (g.s.object(high).damage(), g.s.object(low).damage()),
+        (3, 0)
+    );
 }
 
 #[test]
@@ -595,7 +598,7 @@ fn first_strike_adds_a_damage_step_only_when_present() {
     // The Knight kills the Bear before it can strike back.
     assert!(!g.on_battlefield(bear));
     assert!(g.on_battlefield(knight));
-    assert_eq!(g.s.object(knight).damage, 0);
+    assert_eq!(g.s.object(knight).damage(), 0);
     let steps = g.steps();
     let at = |step| steps.iter().position(|&s| s == step).unwrap();
     assert!(at(TurnStep::DeclareBlockers) < at(TurnStep::FirstStrikeDamage));
@@ -634,8 +637,8 @@ fn a_first_striker_deals_no_regular_damage_and_others_deal_theirs_second() {
     g.pick(DecisionKind::Blocker, Opt::Block(spider));
     g.pick_object(DecisionKind::BlockTarget, knight);
     g.finish_combat();
-    assert_eq!(g.s.object(spider).damage, 2);
-    assert_eq!(g.s.object(knight).damage, 1);
+    assert_eq!(g.s.object(spider).damage(), 2);
+    assert_eq!(g.s.object(knight).damage(), 1);
     assert_eq!(g.life(d), 18);
 }
 
@@ -659,7 +662,7 @@ fn an_attacker_stays_blocked_when_its_blocker_leaves() {
     .unwrap();
     g.finish_combat();
     assert_eq!(g.life(d), 20);
-    assert_eq!(g.s.object(ogre).damage, 0);
+    assert_eq!(g.s.object(ogre).damage(), 0);
 }
 
 #[test]
@@ -739,13 +742,13 @@ fn attackers_blocked_by_different_creatures_are_not_interchangeable() {
 
 /// Stops at the active player's priority in `step` of this turn.
 fn stop_at(g: &mut Game, step: TurnStep) {
-    let turn = g.s.turn().number;
+    let turn = g.s.turn().number();
     g.s.set_profile(Profile {
         breakpoint: Some(Breakpoint { turn, step }),
         ..Profile::EXACT
     });
     let d = g.decide();
-    assert_eq!((d.kind, g.s.turn().step), (DecisionKind::Priority, step));
+    assert_eq!((d.kind, g.s.turn().step()), (DecisionKind::Priority, step));
 }
 
 #[test]
@@ -780,7 +783,7 @@ fn a_creature_put_onto_the_battlefield_attacking_was_never_declared() {
             .copied()
             .find(|&slot| g.s.definition_name(&g.t, slot) == "Recruit")
             .unwrap();
-    let flags = g.s.object(recruit).flags;
+    let flags = g.s.object(recruit).flags();
     assert!(flags.has(ObjectFlags::ATTACKING) && flags.has(ObjectFlags::TAPPED));
     g.finish_combat();
     assert_eq!(g.life(a), 20);
@@ -837,7 +840,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     g.pick_object(DecisionKind::Crew, bear);
     // One creature is left, so the second pick is applied silently. Crew uses the stack.
     g.expect(DecisionKind::Priority);
-    assert!(g.s.object(sentry).flags.has(ObjectFlags::TAPPED));
+    assert!(g.s.object(sentry).flags().has(ObjectFlags::TAPPED));
     assert_eq!(g.s.stack().len(), 1);
     assert!(!is_creature(&g, wagon));
     g.pick(DecisionKind::Priority, Opt::Pass);
@@ -851,7 +854,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     g.finish_combat();
     assert_eq!(g.life(d), 17);
     // Until end of turn: at the next turn's first stop it is an artifact again.
-    let next_turn = g.s.turn().number + 1;
+    let next_turn = g.s.turn().number() + 1;
     stop_at_turn(&mut g, next_turn, TurnStep::PrecombatMain);
     assert!(!is_creature(&g, wagon));
 }
@@ -882,7 +885,7 @@ fn stop_at_turn(g: &mut Game, turn: u16, step: TurnStep) {
     });
     loop {
         let d = g.decide();
-        if (g.s.turn().number, g.s.turn().step) == (turn, step) {
+        if (g.s.turn().number(), g.s.turn().step()) == (turn, step) {
             assert_eq!(d.kind, DecisionKind::Priority);
             return;
         }
@@ -971,7 +974,7 @@ fn passing_goes_to_the_next_smart_stop() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     // Blockers being declared, passing deals combat damage.
     g.pick(DecisionKind::Blocker, Opt::Block(ogre));
-    assert_eq!(g.s.turn().step, TurnStep::DeclareBlockers);
+    assert_eq!(g.s.turn().step(), TurnStep::DeclareBlockers);
     assert_eq!(next(&g, a, Stops::Smart), NextStop::CombatDamage);
     assert_eq!(next(&g, d, Stops::Exact), NextStop::CombatDamage);
     // After combat, the active player's pass ends the turn; the defender's goes to the end
