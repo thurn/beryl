@@ -102,23 +102,17 @@ export class DomSurface implements Surface {
       }
       return undefined;
     };
-    const on = <
-      K extends
-        | "pointerover"
-        | "pointerout"
-        | "pointerdown"
-        | "pointermove"
-        | "pointerup"
-        | "pointercancel",
-    >(
-      kind: K,
+    const on = (
+      kind: `pointer${"over" | "out" | "down" | "move" | "up" | "cancel"}`,
       heard: (e: PointerEvent) => void,
     ) => {
       layer.addEventListener(kind, heard);
       return () => layer.removeEventListener(kind, heard);
     };
+    // A finger is nowhere once it is lifted: only a pointer that hovers is followed.
     const where = (e: PointerEvent) => {
-      this.#pointer = { x: e.clientX, y: e.clientY };
+      if (e.pointerType !== "touch")
+        this.#pointer = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener("pointermove", where, { passive: true });
     this.#repoint = () => {

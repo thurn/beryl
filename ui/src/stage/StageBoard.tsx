@@ -63,6 +63,11 @@ export function StageBoard({
       e.preventDefault();
       if (undoable) undo();
     } else if ((e.key === " " || e.key === "Enter") && onSkip) {
+      // A control that has the focus keeps its own key.
+      const control =
+        e.target instanceof Element &&
+        e.target.closest("button, input, select, textarea, a");
+      if (control) return;
       e.preventDefault();
       onSkip();
     }
