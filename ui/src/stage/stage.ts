@@ -23,8 +23,9 @@
 // over on the way.
 //
 // One verb's subject does not go where the table has it as the step begins: what a `vanish`
-// takes goes from sight where it was, dressed as it was, for as long as the verb takes, and
-// only as the step ends is it at its new place, or no more (`#lay`, `#left`).
+// takes goes from sight where it was, dressed as it was, and only as the step ends is it at
+// its new place, or no more (`#lay`, `#left`). What it leaves room for closes up once it has
+// gone, late in the step (tracks.ts GONE).
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
@@ -52,6 +53,7 @@ import { heldPose, Pointer } from "./pointer.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
 import {
+  closing,
   dissolve,
   drawsToRead,
   glide,
@@ -661,13 +663,17 @@ export class ScriptStage {
         // Only the card a `fly` is about travels over what rests; what another verb's
         // change moves (a record that lays its card elsewhere) goes there as what makes room
         // does. It turns over on the way if it leaves face down and lands face up.
+        // What a card that leaves makes room for waits until it has gone.
         const flies = run!.verb === "fly" && subjectOf(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
         this.#fly(name, entry, {
           from: at,
           to: run!.to,
-          pose: glide(start, run!.ease, flies, turns),
+          pose:
+            run!.verb === "vanish"
+              ? closing(start, run!.ease)
+              : glide(start, run!.ease, flies, turns),
           turn: turns ? TURN : undefined,
           own: flies,
         });

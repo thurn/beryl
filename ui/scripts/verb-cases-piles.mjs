@@ -56,6 +56,33 @@ export const CASES = {
                 );
             }
         }
+        // Cards put back from a hand fly straight to the library, one after another (not
+        // seen: "Cards a look returns").
+        const returned = flights.filter((s) => routeOf(s) === "hand>library");
+        assert.ok(returned.length >= 2, `${returned.length} cards put back`);
+        for (const [i, flight] of returned.entries()) {
+            const name = flight.act.object.slot;
+            const what = `the put-back of ${name} at ${flight.from} ms`;
+            const was = before(piles, flight);
+            const [start, half, end] = ["from", "middle", "to"].map(
+                (at) => flight.at[at]?.poses[name],
+            );
+            assert.equal(was.zones[name], "hand", what);
+            if (start) {
+                assert.deepEqual(
+                    where(start),
+                    where(was.poses[name]),
+                    `${what}: it leaves from where it lay`,
+                );
+            }
+            assert.ok(half.depth >= ALOFT, `${what}: it flies`);
+            assert.ok(
+                half.width <= Math.max(was.poses[name].width, end.width) + 0.01,
+                `${what}: straight, not held up`,
+            );
+            assert.equal(flight.at.to.zones[name], "library", what);
+            if (i) assert.ok(returned[i - 1].to <= flight.from, what);
+        }
         for (const pile of ["graveyard", "exile"]) {
             const cast = flights.filter((s) => routeOf(s) === `${pile}>stack`);
             assert.equal(cast.length, 1, `cards cast from ${pile}`);
@@ -111,8 +138,46 @@ export const CASES = {
     },
 
     // A card exiled under its host rests tucked under it once it has gone from where it lay
-    // (UI Conventions, exception 6).
-    vanish({ piles }) {
+    // (UI Conventions, exception 6). Nothing makes room for a card that leaves until it has
+    // gone: half way through the step of a card that leaves alone, all else is where it lay
+    // (Arena's row closes up after, 3sEoP_s4DQE 24:49.6).
+    vanish({ piles, zones }) {
+        for (const run of [zones, piles]) {
+            const left = run.steps.filter(
+                (s) =>
+                    s.verb === "vanish" &&
+                    s.act.subject.kind === "object" &&
+                    s.to > s.from,
+            );
+            // One that leaves while another card moves, each making room for whichever has
+            // gone or arrived, is left out.
+            const moving = run.steps.filter((s) =>
+                ["fly", "appear", "vanish", "emerge"].includes(s.verb),
+            );
+            const alone = left.filter((gone) =>
+                moving.every(
+                    (other) =>
+                        other === gone ||
+                        other.to <= gone.from ||
+                        gone.to <= other.from,
+                ),
+            );
+            assert.ok(alone.length > 0, "no card left alone");
+            for (const gone of alone) {
+                const half = gone.at.middle;
+                if (!half) continue;
+                const was = before(run, gone).poses;
+                for (const [name, pose] of Object.entries(was)) {
+                    if (Number(name) === gone.act.subject.slot) continue;
+                    if (!half.poses[name]) continue;
+                    assert.deepEqual(
+                        where(half.poses[name]),
+                        where(pose),
+                        `${name} made room half way through the vanish at ${gone.from} ms`,
+                    );
+                }
+            }
+        }
         const tucked = piles.steps.filter(
             (s) => s.verb === "vanish" && s.act.object?.exiledBy != null,
         );
@@ -120,8 +185,8 @@ export const CASES = {
         const [gone] = tucked;
         const name = gone.act.subject.slot;
         const host = gone.act.object.exiledBy;
-        const { zones, poses } = gone.at.to;
-        assert.equal(zones[name], "exile");
+        const { poses } = gone.at.to;
+        assert.equal(gone.at.to.zones[name], "exile");
         assert.ok(beside(poses[name], poses[host]), "it rests by its host");
         assert.ok(poses[name].depth < poses[host].depth, "it rests under it");
     },

@@ -3,10 +3,10 @@
 
 use beryl_cards::names::{
     AANGS_ICEBERG, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL,
-    CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, ISLAND, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT,
-    OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE, REPRIEVE, SNAPCASTER_MAGE, STOCK_UP,
-    SWIFT_RECONFIGURATION, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
-    THIRST_FOR_DISCOVERY, TRINKET_MAGE,
+    CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR,
+    JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE,
+    REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, TEFERI_TIME_RAVELER,
+    THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -14,6 +14,13 @@ use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 use super::shorthand::{
     INSECT_TOKEN, ISLAND_, LANDS, PLAINS_, TREASURE_TOKEN, cast_with_option, choose, play_land,
 };
+
+/// A library for the many draws of verbs-piles: Jace, Wielder of Mysteries wins its controller
+/// the game on a draw from an empty one.
+const DRAWS: &[&str] = &[
+    ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS,
+    ISLAND, PLAINS, ISLAND, PLAINS,
+];
 
 /// Boards for the verb suite.
 pub(super) const VERBS: &[Scenario] = &[
@@ -76,7 +83,8 @@ pub(super) const VERBS: &[Scenario] = &[
     // the Thirst for Discovery in its graveyard flashback, and it casts Thirst from there,
     // draws three, discards a land and exiles Thirst; it exiles the opponent's Mana Crypt
     // under Portable Hole; its Elite Spellbinder exiles their Teferi, Time Raveler from their
-    // hand; and its Jace, Wielder of Mysteries mills it two and draws. In their turn the
+    // hand; its Jace, Wielder of Mysteries mills it two and draws; and Jace, the Mind Sculptor
+    // draws it three and puts two back. In their turn the
     // opponent casts Teferi from exile and returns Portable Hole to its owner's hand with it,
     // so Mana Crypt comes back, and attacks with Adeline, whose Human token enters attacking.
     Scenario::new("verbs-piles")
@@ -85,6 +93,7 @@ pub(super) const VERBS: &[Scenario] = &[
             P0,
             &[
                 Permanent::new(JACE_WIELDER_OF_MYSTERIES),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
                 ISLAND_,
                 ISLAND_,
                 ISLAND_,
@@ -99,7 +108,7 @@ pub(super) const VERBS: &[Scenario] = &[
         )
         .hand(P0, &[SNAPCASTER_MAGE, PORTABLE_HOLE, ELITE_SPELLBINDER])
         .graveyard(P0, &[THIRST_FOR_DISCOVERY])
-        .library(P0, LANDS)
+        .library(P0, DRAWS)
         .battlefield(
             P1,
             &[
@@ -128,6 +137,9 @@ pub(super) const VERBS: &[Scenario] = &[
             // cast would cast it in answer from the chair the session does not pass for.
             Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1),
             Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+            Action::activate(P0, JACE_THE_MIND_SCULPTOR, 1),
+            choose(P0, DecisionKind::ChooseObject, PLAINS),
+            choose(P0, DecisionKind::ChooseObject, PLAINS),
             Action::cast(P1, TEFERI_TIME_RAVELER),
             Action::activate(P1, TEFERI_TIME_RAVELER, 2),
             Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),

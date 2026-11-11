@@ -30,10 +30,28 @@ export const fade =
   (ease: Timing["ease"]): Path =>
   (progress, rest) => ({ ...rest, opacity: rest.opacity * ease(progress) });
 
-/** An entry that goes from sight where it was at `start`, and never travels. */
+/** How far through its step a card that leaves has gone from sight: what it leaves room for
+ * closes up only then, in the rest of the step. Arena's row closes up after the permanent
+ * that left it is gone (3sEoP_s4DQE 24:49.6 to 24:49.8, a creature returned to its hand). */
+export const GONE = 0.7;
+
+/** An entry that goes from sight where it was at `start`, and never travels: gone at `GONE`
+ * of its step. */
 export const dissolve =
   (start: Pose, ease: Timing["ease"]): Path =>
-  (progress) => ({ ...start, opacity: start.opacity * (1 - ease(progress)) });
+  (progress) => ({
+    ...start,
+    opacity: start.opacity * (1 - ease(Math.min(1, progress / GONE))),
+  });
+
+/** An entry that was at `start` and makes room as a card leaves: it stays there until the card
+ * has gone (`GONE`), then glides to where it rests, at its resting depth. */
+export const closing =
+  (start: Pose, ease: Timing["ease"]): Path =>
+  (progress, rest) =>
+    progress < GONE
+      ? start
+      : between(start, rest, ease((progress - GONE) / (1 - GONE)), false);
 
 /** How a card held up on its way is shared out over its step: the share of the time it
  * flies in, and the share it is held. Arena's draw at a turn's start flies in for about 600

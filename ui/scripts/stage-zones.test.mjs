@@ -1,11 +1,12 @@
 // Cards changing zone on the stage, with no browser (`npm test`): what a `vanish` takes goes
-// from sight where it was and is only then at its new place, a card that leaves face down
+// from sight where it was and is only then at its new place, what it leaves room for waits
+// until it has gone, a card that leaves face down
 // turns over on its way, your draw is held up to be read, and the cards the opponent looks at
 // lift for as long as the look lasts. The same in a browser, from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
-import { HELD, TURN } from "../src/stage/tracks.ts";
+import { GONE, HELD, TURN } from "../src/stage/tracks.ts";
 import { object, reach, stage, view } from "./stage-table.mjs";
 
 const vanish = (slot, why, to) => ({
@@ -31,13 +32,18 @@ for (const tick of [16, 100, 1000]) {
         assert.equal(made.pose(2).x, 400);
         assert.equal(made.pose(2).opacity, 1);
         assert.equal(made.shown.resting.get(2).dress.zone, "battlefield");
-        // The table has it gone already: the row closes up under it meanwhile.
+        // The table has it gone already, but the row closes up only once it has gone.
         assert.deepEqual(made.shown.table.battlefield, [1, 3]);
         reach(made.clock, 200, tick);
         if (made.clock.now === 200) {
             assert.equal(made.pose(2).x, 400);
             assert.equal(made.pose(2).y, 0);
-            assert.equal(made.pose(2).opacity, 0.5);
+            assert.equal(made.pose(2).opacity, 1 - 0.5 / GONE);
+            assert.equal(made.pose(3).x, 800);
+        }
+        reach(made.clock, 340, tick);
+        if (made.clock.now === 340) {
+            assert.equal(made.pose(2).opacity, 0);
             assert.equal(made.pose(3).x, 600);
             assert.ok(made.pose(3).depth < 900, "what makes room is not aloft");
         }
@@ -67,7 +73,7 @@ test("a token that ceases to exist keeps its node until its vanish is over", () 
     made.clock.advance(399);
     assert.ok(surface.nodes.has(7));
     assert.equal(made.pose(7).x, 400);
-    assert.ok(made.pose(7).opacity > 0 && made.pose(7).opacity < 0.01);
+    assert.equal(made.pose(7).opacity, 0);
     assert.equal(surface.log.at(-1), "make 7");
     made.clock.advance(1);
     assert.equal(made.pose(7), null);
