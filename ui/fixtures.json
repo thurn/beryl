@@ -103,6 +103,24 @@
       "until": "first priority decision for seat 1 from turn 5"
     },
     {
+      "name": "verbs-opening-theirs",
+      "seed": 34,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first chooseObject decision for seat 1"
+    },
+    {
+      "name": "verbs-piles",
+      "board": "verbs-piles",
+      "until": "first blocker decision for seat 0 from turn 4"
+    },
+    {
+      "name": "verbs-piles-theirs",
+      "board": "verbs-piles",
+      "until": "first priority decision for seat 1 from turn 4",
+      "where": ["step postcombatMain"]
+    },
+    {
       "name": "verbs-scry",
       "board": "verbs-scry",
       "until": "first halt for seat 0 from turn 4"

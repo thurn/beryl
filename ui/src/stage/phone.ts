@@ -5,10 +5,13 @@
 // everything a step can move rests somewhere: the opponent's hand as backs at the top edge,
 // and the top card of each library and graveyard on its pile in its player's strip, the rest
 // of a pile unseen beneath it. The phone draws no exile pile and no emblem yet: an exiled card
-// rests unseen under its owner's graveyard, and an emblem's ability has no source to lift
-// out of.
+// rests unseen under its owner's graveyard, unless a permanent holds it, and an emblem's
+// ability has no source to lift out of. A card exiled until a permanent leaves, or with its
+// ability, is tucked under that permanent as the desktop's is (UI Conventions, exception 6).
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
+import { BENEATH_STEP } from "../game/placement";
+import { held as holder } from "../game/zoneViews";
 import {
   BACKS,
   backSpot,
@@ -91,14 +94,38 @@ function rest({ view, abilities, handled }: Table, viewport: Viewport) {
   const rows = cards
     .filter((spot) => spot.zone === "battlefield")
     .sort((a, b) => a.z - b.z);
+  // Each a depth apart from the next, for what it holds in exile to lie between.
   rows.forEach((spot, rank) => {
     const object = objects.get(spot.slot)!;
     out.set(spot.slot, {
       object,
-      pose: upright(spot, DEPTH.field + rank, faceOf(object)),
+      pose: upright(spot, DEPTH.field + 2 * rank + 1, faceOf(object)),
       dress: dressed("battlefield", "field", spot.width),
     });
   });
+  // What a permanent holds in exile peeks out from under it, each a step further to the left
+  // and toward its controller.
+  const onField = new Set(view.battlefield);
+  const holding = new Map<number, number>();
+  for (const object of view.objects) {
+    const host = holder(object, onField);
+    const under = host === undefined ? undefined : out.get(host);
+    if (!under?.object) continue;
+    const n = (holding.get(host!) ?? 0) + 1;
+    holding.set(host!, n);
+    const { pose } = under;
+    const toward = under.object.controller === "you" ? 1 : -1;
+    const height = pose.width / CARD_ASPECT;
+    out.set(object.slot, {
+      object,
+      pose: {
+        ...upright(pose, pose.depth - 1, faceOf(object)),
+        x: pose.x - n * pose.width * BENEATH_STEP.x,
+        y: pose.y + toward * n * height * BENEATH_STEP.y,
+      },
+      dress: dressed("exile", "beneath", pose.width),
+    });
+  }
   let held = 0;
   for (const spot of cards) {
     if (spot.zone !== "hand") continue;

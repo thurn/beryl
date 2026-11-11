@@ -2,10 +2,11 @@
 //! changes a verb's check asks for, recorded from both seats.
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER, DAMN,
-    ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE,
-    REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, THE_WANDERING_EMPEROR,
-    THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
+    AANGS_ICEBERG, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL,
+    CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, ISLAND, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT,
+    OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE, REPRIEVE, SNAPCASTER_MAGE, STOCK_UP,
+    SWIFT_RECONFIGURATION, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
+    THIRST_FOR_DISCOVERY, TRINKET_MAGE,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -70,6 +71,71 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::cast(P1, STOCK_UP),
             Action::cast(P0, REPRIEVE),
             choose(P0, DecisionKind::Target, STOCK_UP),
+        ]),
+    // Cards leaving and entering piles the other ways: the first seat's Snapcaster Mage gives
+    // the Thirst for Discovery in its graveyard flashback, and it casts Thirst from there,
+    // draws three, discards a land and exiles Thirst; it exiles the opponent's Mana Crypt
+    // under Portable Hole; its Elite Spellbinder exiles their Teferi, Time Raveler from their
+    // hand; and its Jace, Wielder of Mysteries mills it two and draws. In their turn the
+    // opponent casts Teferi from exile and returns Portable Hole to its owner's hand with it,
+    // so Mana Crypt comes back, and attacks with Adeline, whose Human token enters attacking.
+    Scenario::new("verbs-piles")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(JACE_WIELDER_OF_MYSTERIES),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[SNAPCASTER_MAGE, PORTABLE_HOLE, ELITE_SPELLBINDER])
+        .graveyard(P0, &[THIRST_FOR_DISCOVERY])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(ADELINE_RESPLENDENT_CATHAR),
+                Permanent::new(MANA_CRYPT),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P1, &[TEFERI_TIME_RAVELER, ISLAND])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, SNAPCASTER_MAGE),
+            choose(P0, DecisionKind::Target, THIRST_FOR_DISCOVERY),
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            choose(P0, DecisionKind::ChooseObject, ISLAND),
+            Action::cast(P0, PORTABLE_HOLE),
+            choose(P0, DecisionKind::Target, MANA_CRYPT),
+            Action::cast(P0, ELITE_SPELLBINDER),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            // Last of its turn: a seat with its own ability on the stack and a spell still to
+            // cast would cast it in answer from the chair the session does not pass for.
+            Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1),
+            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+            Action::cast(P1, TEFERI_TIME_RAVELER),
+            Action::activate(P1, TEFERI_TIME_RAVELER, 2),
+            Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+            choose(P1, DecisionKind::Target, PORTABLE_HOLE),
+            choose(P1, DecisionKind::Attacker, ADELINE_RESPLENDENT_CATHAR),
+            Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+            // The token's: it attacks the player, not their planeswalker.
+            Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
         ]),
     // The first seat scries two with Aang's Iceberg and puts one of them on the bottom.
     Scenario::new("verbs-scry")

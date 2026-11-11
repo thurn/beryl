@@ -27,6 +27,7 @@ import { ending as endOf } from "./fixture-views.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 import { CASES as ZONES, complete } from "./verb-cases.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
+import { CASES as PILES } from "./verb-cases-piles.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -373,7 +374,8 @@ function soundsFollowSteps(run) {
 const CASES = Object.fromEntries(
     verbs.map((verb) => [
         verb,
-        (runs) => [ZONES, PLACE].forEach((cases) => cases[verb]?.(runs)),
+        (runs) =>
+            [ZONES, PLACE, PILES].forEach((cases) => cases[verb]?.(runs)),
     ]),
 );
 assert.deepEqual(

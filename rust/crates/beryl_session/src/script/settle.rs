@@ -8,6 +8,7 @@
 use super::build::{Builder, activator};
 use super::infer;
 use super::moves::{COUNTERS, counted, set_counters};
+use super::table::Table;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::{ObjectView, Side, StackItem, Why, ZoneName};
 
@@ -36,8 +37,53 @@ impl Builder<'_> {
                 None,
             );
         }
-        // The stack's own order places what is bound for it.
-        for next in after.objects.values().filter(|o| o.zone != ZoneName::Stack) {
+        // The stack's own order places what is bound for it. A mulligan's hand has gone back
+        // before the next is dealt, a beat of its own: every card of it, those whose slots the
+        // shuffled library deals out again too, which it has given other cards. A hand dealt
+        // again is as large as it was; the cards a kept hand puts on the bottom leave it smaller.
+        let hand = |table: &Table, side: Side| {
+            table
+                .objects
+                .values()
+                .filter(|o| o.owner == side && o.zone == ZoneName::Hand)
+                .count()
+        };
+        let shuffled: Vec<Side> = after
+            .objects
+            .values()
+            .filter(|o| self.mulligan(o) && hand(after, o.owner) >= hand(&self.table, o.owner))
+            .map(|o| o.owner)
+            .collect();
+        let redealt: Vec<u16> = after
+            .objects
+            .values()
+            .filter(|o| {
+                shuffled.contains(&o.owner)
+                    && o.zone == ZoneName::Hand
+                    && self
+                        .table
+                        .objects
+                        .get(&o.slot)
+                        .is_some_and(|w| w.zone == ZoneName::Hand)
+            })
+            .map(|o| o.slot)
+            .collect();
+        let (back, rest): (Vec<&ObjectView>, Vec<&ObjectView>) = after
+            .objects
+            .values()
+            .filter(|o| o.zone != ZoneName::Stack)
+            .partition(|o| self.mulligan(o) || redealt.contains(&o.slot));
+        for &next in &back {
+            let card = if next.zone == ZoneName::Library {
+                next.clone()
+            } else {
+                unknown_in_library(next)
+            };
+            self.arrive(Some(ZoneName::Hand), &card, None);
+        }
+        self.open &= back.is_empty();
+        let dealt_again = back.into_iter().filter(|o| redealt.contains(&o.slot));
+        for next in rest.into_iter().chain(dealt_again) {
             match self.table.objects.get(&next.slot).map(|o| o.zone) {
                 Some(zone) if zone == next.zone => self.record(next),
                 from => self.arrive(from, next, None),
@@ -57,13 +103,32 @@ impl Builder<'_> {
             let others = now.iter().filter(|&&s| s != next.slot).count();
             (at < others).then(|| u16::try_from(at).ok()).flatten()
         });
+        // An opening hand is dealt, and a mulligan's goes back, with no event before the
+        // first turn: their cards do not travel, as none a view's events move before the game
+        // does (`infer::show`).
+        let dealt = self.table.turn.number == 0
+            && (self.mulligan(next)
+                || (from == Some(ZoneName::Library) && next.zone == ZoneName::Hand));
         let (from, why) = match from {
             None => (ZoneName::Nowhere, Why::Created),
+            Some(from) if dealt && next.zone == ZoneName::Hand => (from, Why::Draw),
             // A cast taken back: the card is in its hand again.
             Some(from) if next.zone == ZoneName::Hand => (from, Why::Return),
             Some(from) => (from, Why::Effect),
         };
-        self.travel(from, why, next.clone(), at, item, false, None);
+        self.travel(from, why, next.clone(), at, item, dealt, None);
+    }
+
+    /// Whether `next` is a card of a hand going back to its library before the first turn: a
+    /// mulligan's.
+    fn mulligan(&self, next: &ObjectView) -> bool {
+        self.table.turn.number == 0
+            && next.zone == ZoneName::Library
+            && self
+                .table
+                .objects
+                .get(&next.slot)
+                .is_some_and(|o| o.zone == ZoneName::Hand)
     }
 
     /// The object's record is the view's, by the steps that show what changed of it: a turn,
@@ -275,5 +340,20 @@ impl Builder<'_> {
                 None,
             );
         }
+    }
+}
+
+/// The card in `object`'s slot as a library holds it: unknown, with none of what a hand or
+/// the battlefield shows of it.
+fn unknown_in_library(object: &ObjectView) -> ObjectView {
+    ObjectView {
+        zone: ZoneName::Library,
+        controller: object.owner,
+        name: None,
+        types: Vec::new(),
+        keywords: Vec::new(),
+        pt: None,
+        counters: Vec::new(),
+        ..object.clone()
     }
 }

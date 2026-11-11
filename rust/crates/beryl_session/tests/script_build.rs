@@ -590,6 +590,80 @@ fn a_shuffle_sets_the_library() {
     assert_eq!(second, text(&expected));
 }
 
+/// `appear` of an opening hand and `vanish` of a mulligan's: before the first turn a hand is
+/// dealt with no event, its cards seen where they come to lie (Arena's case "opening hand"),
+/// both seats' at once. A mulligan's hand goes back first, in a beat of its own, every card of
+/// it, those whose slots the shuffled library deals out again among them; then the next is
+/// dealt.
+#[test]
+fn an_opening_hand_appears_and_a_mulligans_goes_back_first() {
+    let deck = || -> Vec<(u8, String)> {
+        let cards = WU_CONTROL.iter();
+        cards.map(|&(n, name)| (n, name.to_owned())).collect()
+    };
+    let start = StartGame {
+        seed: 34,
+        decks: [deck(), deck()],
+        human: Seat::P0,
+        opponent: "greedy".to_owned(),
+        stops: StopsSetting::SMART,
+    };
+    let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
+    let mut scripts = Vec::new();
+    for answer in [Some("Mulligan"), None] {
+        let mut last = None;
+        while let Some(view) = game.next_view() {
+            scripts.push(view.script.as_ref().map(ToString::to_string));
+            last = Some(view);
+        }
+        let Some(answer) = answer else { break };
+        let Some(Status::Deciding { decision }) = last.map(|v| v.status) else {
+            panic!("no keep or mulligan");
+        };
+        let at = decision.candidates.iter().position(|c| c.label == answer);
+        let at = u16::try_from(at.expect("a mulligan to take")).unwrap();
+        let at = CandidateIndex(at);
+        game.choose(game.answer(decision.id, at).unwrap());
+    }
+    let dealt = [
+        "appear #33 (Plains) library>hand draw",
+        "& appear #34 (No More Lies) library>hand draw",
+        "& appear #35 (Jace, Wielder of Mysteries) library>hand draw",
+        "& appear #36 (Subtlety) library>hand draw",
+        "& appear #37 (Abhorrent Oculus) library>hand draw",
+        "& appear #38 (Tundra) library>hand draw",
+        "& appear #39 (Island) library>hand draw",
+        "& appear #289 library>hand draw",
+        "& appear #290 library>hand draw",
+        "& appear #291 library>hand draw",
+        "& appear #292 library>hand draw",
+        "& appear #293 library>hand draw",
+        "& appear #294 library>hand draw",
+        "& appear #295 library>hand draw",
+        "& set turn 0 opponent untap",
+        "+lift opponent hand",
+    ];
+    assert_eq!(scripts[1].as_deref(), Some(text(&dealt).as_str()));
+    let again = [
+        "vanish #33 hand>library top effect",
+        "& vanish #34 hand>library top effect",
+        "& vanish #35 hand>library @21 effect",
+        "& vanish #36 hand>library @31 effect",
+        "& vanish #37 hand>library @6 effect",
+        "& vanish #38 hand>library @32 effect",
+        "& vanish #39 hand>library top effect",
+        "appear #4 (Stock Up) library>hand draw",
+        "& appear #12 (Oust) library>hand draw",
+        "& appear #28 (Island) library>hand draw",
+        "& appear #30 (Seachrome Coast) library>hand draw",
+        "& appear #33 (Plains) library>hand draw",
+        "& appear #34 (Teferi, Hero of Dominaria) library>hand draw",
+        "& appear #39 (Counterspell) library>hand draw",
+        "& set you library 33",
+    ];
+    assert_eq!(scripts.last().unwrap().as_deref(), Some(text(&again).as_str()));
+}
+
 /// The views of a seeded game of ten of the human's answers, each the first candidate, with
 /// the last of them then taken back.
 fn game_views() -> Vec<PlayerView> {

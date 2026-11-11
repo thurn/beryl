@@ -38,11 +38,20 @@
     "place": {
       "yours": "verbs-place",
       "theirs": "verbs-place-theirs"
+    },
+    "opening": {
+      "yours": "opening-bottom",
+      "theirs": "verbs-opening-theirs"
+    },
+    "piles": {
+      "yours": "verbs-piles",
+      "theirs": "verbs-piles-theirs"
     }
   },
   "watches": {
-    "fly": ["zones", "place"],
-    "vanish": ["zones", "scry"],
+    "fly": ["zones", "place", "piles"],
+    "appear": ["opening", "piles"],
+    "vanish": ["zones", "scry", "piles"],
     "lift": ["scry"],
     "tap": ["combat", "place"],
     "strike": ["combat"],
