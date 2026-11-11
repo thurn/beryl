@@ -266,8 +266,12 @@ fn quoted(text: &str) -> Vec<&str> {
 /// the table: a composed entry reworded here is reworded there.
 #[test]
 fn ui_conventions_quotes_the_tables_composed_words() {
-    let path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../data/ui-conventions.json");
+    // Read at run time: a test binary from the shared target directory may have been built in
+    // a worktree that no longer exists.
+    let path = std::path::PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
+    )
+    .join("../../../data/ui-conventions.json");
     let data: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).expect("the conventions' data"))
             .expect("the conventions are JSON");
