@@ -531,6 +531,62 @@ export type CardType = "artifact" | "creature" | "enchantment" | "instant" | "la
 
 export type Keyword = "firstStrike" | "flying" | "reach" | "vigilance";
 
+export type Script = { 
+/**
+ * The stage starts over from the view's table, with no motion: a seat's first view, and
+ * an undone one.
+ */
+reset?: Reset, 
+/**
+ * In order; the steps of one beat happen together.
+ */
+beats: Array<Array<ScriptStep>>, };
+
+export type Reset = { 
+/**
+ * The numbers of the abilities on the view's stack, bottom first.
+ */
+abilities: Array<number>, };
+
+export type ScriptStep = { act: Act, 
+/**
+ * The spell, ability, permanent or player responsible; none for the rules of the game.
+ */
+cause?: Subject, };
+
+export type Subject = { "kind": "object", slot: number, } | { "kind": "ability", id: number, } | { "kind": "player", player: Side, };
+
+export type Act = { "verb": "fly", from: ZoneName, why: Why, object: ObjectView, 
+/**
+ * Where in its zone's order it goes, counted from the bottom of a pile or the first
+ * permanent: none is the end, in a new zone, and where it was, in the same one.
+ */
+at?: number, 
+/**
+ * The spell it becomes, when it goes to the stack.
+ */
+item?: StackItem, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: number, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
+/**
+ * None when the source has no place on the table.
+ */
+from?: Subject, to: Subject, stream: Stream, amount: number, object?: ObjectView, } | { "verb": "count", tally: Tally, } | { "verb": "set", fact: Fact, } | { "verb": "showcase", object: ObjectView, } | { "verb": "dwell", subject: Subject, } | { "verb": "announce", notice: Notice, } | { "verb": "point", span: Span, arrow: Arrow, from: Subject, to: Subject, } | { "verb": "mark", span: Span, mark: Mark, on: Subject, } | { "verb": "lift", span: Span, handling: CardHandling, };
+
+export type Stream = { "kind": "mana", color: Mana, } | { "kind": "damage" };
+
+export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "stats", object: ObjectView, };
+
+export type Fact = { "kind": "turn", number: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<number>, } | { "kind": "item", subject: Subject, item: StackItem, };
+
+export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, };
+
+export type Span = "begin" | "end";
+
+export type Verb = "fly" | "appear" | "vanish" | "emerge" | "flip" | "tap" | "strike" | "streak" | "count" | "set" | "showcase" | "dwell" | "announce" | "point" | "mark" | "lift";
+
+export type Mark = "eligible" | "selected" | "suggested" | "paying" | "friendly-target" | "hostile-target";
+
+export type Arrow = "friendly-target" | "hostile-target" | "source" | "attack" | "block";
+
 /** Each command: its arguments, its result, and the error it rejects with. */
 export type Commands = {
   app_info: { args: Record<string, never>; result: AppInfo; error: never };

@@ -64,6 +64,54 @@ def test_bad_data_is_refused() -> None:
     assert conventions.problems(with_sections)
 
 
+VERB = {
+    "name": "fly",
+    "shows": "A card travels.",
+    "arena": {
+        "does": "A land glides.",
+        "evidence": [{"recording": "UrGalw_f35w", "time": "16:14.8"}],
+    },
+    "values": {"duration": None, "delay": None, "stagger": None, "curve": None},
+}
+MARK = {"name": "hostile-target", "means": "Not its chooser's.", "look": "Red."}
+
+
+def listed(verbs: list[dict[str, Any]], marks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        **data(),
+        "lists": [
+            {"key": "verbs", "heading": "Verbs", "intro": ["How things move."]},
+            {"key": "marks", "heading": "Marks"},
+        ],
+        "verbs": verbs,
+        "marks": marks,
+    }
+
+
+def test_the_page_lists_verbs_and_marks_after_the_rulings() -> None:
+    page = conventions.render(listed([VERB], [MARK]))
+    assert page == (
+        "# UI Conventions\n\nArena is the reference.\n\n"
+        "## Verbs\n\nHow things move.\n\n"
+        "- **fly.** A card travels. A land glides (UrGalw_f35w 16:14.8).\n\n"
+        "## Marks\n\n- **hostile-target.** Not its chooser's. Red.\n"
+    )
+
+
+def test_bad_lists_are_refused() -> None:
+    assert not conventions.problems(listed([VERB], [MARK]))
+    timed = {**VERB, "values": {"duration": 0.4}}
+    unfilmed = {**VERB, "arena": {"does": "It flies.", "evidence": [{"time": "x"}]}}
+    silent = {"name": "Hostile Target", "look": "Red."}
+    found = conventions.problems(listed([VERB, timed, unfilmed], [MARK, silent]))
+    # A verb listed twice (twice), values of the wrong shape, a moment that is no recording
+    # and no time, a mark with no name and no meaning.
+    assert len(found) == 7, found
+    unheaded = listed([VERB], [MARK])
+    unheaded["lists"].pop()
+    assert conventions.problems(unheaded)
+
+
 def test_the_check_fails_on_a_stale_page(tmp_path: Path) -> None:
     source = tmp_path / "ui-conventions.json"
     source.write_text(json.dumps(data(EXCEPTION)))

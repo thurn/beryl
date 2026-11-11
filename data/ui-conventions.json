@@ -39,6 +39,22 @@
       ]
     }
   ],
+  "lists": [
+    {
+      "key": "verbs",
+      "heading": "Verbs",
+      "intro": [
+        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve are measured from Arena and kept in the data (K27); none is filled yet."
+      ]
+    },
+    {
+      "key": "marks",
+      "heading": "Marks",
+      "intro": [
+        "A mark is the only highlight a card, an ability or a player carries, in a script or in a prompt (K26). The list is closed, and each mark has one look. What a card's own state says (tapped, summoning sick, counters, attacking) is its face, not a mark."
+      ]
+    }
+  ],
   "entries": [
     {
       "kind": "exception",
@@ -776,8 +792,649 @@
     },
     {
       "kind": "not-seen",
+      "name": "The opponent's draws and discards",
+      "rule": "A card the opponent draws flies face down from their library to their hand. One they discard flies to their graveyard and turns face up on the way, as their spells do. Only the player's own are seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Milled cards",
+      "rule": "They fly from the library to the graveyard face up, one after another as draws do. None is held up large first. No mill is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Cards leaving a graveyard",
+      "rule": "A card returned to the battlefield or to a hand flies there from its pile. None is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "An ability with no source on the battlefield",
+      "rule": "It emerges from the pile its source lies in, and appears on the stack when it has no source. No trigger from a graveyard is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A cost paid as a spell resolves",
+      "rule": "Mana streaks from its sources into the resolving spell or ability, as into a spell being cast. No such payment is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A copy on the stack",
+      "rule": "It appears on the stack with no flight. None is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A permanent changing sides",
+      "rule": "It flies across the battlefield to its new controller's row.",
+      "arena": {
+        "does": "Seen only before and after its move",
+        "evidence": [
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "27:39.5"
+          },
+          {
+            "recording": "gIhJjyoJ0_M",
+            "time": "53:21.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Equipment",
+      "rule": "It flies to the creature it becomes attached to.",
+      "arena": {
+        "does": "The equip ability leaves the stack with a flash at the creature; the equipment's own move is not seen",
+        "evidence": [
+          {
+            "recording": "krskVfn2v5Q",
+            "time": "46:10.45"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Other numbers",
+      "rule": "A changed power and toughness, and mana left in a pool, count as a life total does. Neither is seen."
+    },
+    {
+      "kind": "not-seen",
       "name": "The phone",
       "rule": "It plays what the desktop plays; its layout and gestures are Beryl's own."
+    }
+  ],
+  "verbs": [
+    {
+      "name": "fly",
+      "shows": "A card travels from where it is to its new place, turning over on the way if its face changes, and flashes as it lands on the battlefield: a land played, a spell cast, a permanent spell resolving, a draw, a discard, an aura onto its permanent.",
+      "arena": {
+        "does": "A played land glides from the hand to its slot in about 0.6 s. The opponent's spell leaves their hand as a card back and is face up when it reaches the stack, about 0.4 s. A resolving permanent flies to its slot in about 0.5 s and the slot flashes. A drawn card shows large beside the library and glides into the hand in about 0.5 s; three are drawn a third of a second apart. A discard drops to the graveyard at hand size in about 0.3 s.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "16:14.8"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "16:46.3"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "16:47.15"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "22:00.0"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "23:23.5"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "17:01.3"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "16:15.8"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "29:14.3"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "39:04.3"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "1:01:50.3"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "appear",
+      "shows": "A card comes to be at its place with no flight: a token, the opening hand, a card a look put in the graveyard.",
+      "arena": {
+        "does": "A token appears whole with a short glow, a batch as one group. The opening hand and a mulligan's new hand are there at once.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "17:38.4"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "23:57.0"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "15:48"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "54:16.6"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:23.9"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "vanish",
+      "shows": "A card or an ability goes from where it is with no flight, and a card is then at its new place: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving.",
+      "arena": {
+        "does": "A destroyed permanent falls to ash in 0.7 to 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a returned one glows and is gone; none flies to a pile or a hand. A countered spell crumbles on the stack. A resolved instant darkens and dissolves there; once it was seen to shrink into its graveyard after. A finished ability is gone between two frames.",
+        "evidence": [
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "27:36.4"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:25.4"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "26:06.7"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "19:28.5"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "24:49.4"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "39:50.0"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "29:15.67"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "22:01.3"
+          },
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "39:46.9"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "emerge",
+      "shows": "An ability lifts out of its source and goes on the stack. The source stays as it is.",
+      "arena": {
+        "does": "A small copy of the card appears on the source and travels along a curve to the stack, growing, in 0.4 to 0.5 s; an activated ability does the same. Two triggers of one event leave a third of a second apart. A dies trigger leaves before its source breaks up.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "20:39.3"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "19:48.5"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "19:58.25"
+          },
+          {
+            "recording": "krskVfn2v5Q",
+            "time": "46:07.2"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "49:08.0"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "26:56.75"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "flip",
+      "shows": "A card turns over where it lies. Not seen in Arena: built as \"A card turning face up\" says.",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "tap",
+      "shows": "A permanent turns as it taps or untaps. Beryl's own, by exception 2.",
+      "arena": {
+        "does": "Arena tilts a tapped permanent's art crop a few degrees; no motion between the two was caught.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "19:35.6"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "31:13.3"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "strike",
+      "shows": "A creature lunges at what it deals combat damage to and drifts back.",
+      "arena": {
+        "does": "Each attacker lunges from its row to the player's avatar or to its blocker, the screen flashes, and it drifts back in 0.5 to 0.9 s. A blocked attacker strikes about 0.4 s before an unblocked one. First strike is a strike of its own, seconds earlier.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:25.4"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "25:55.6"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "35:35.5"
+          },
+          {
+            "recording": "sMpAJ0HKDdg",
+            "time": "54:54.0"
+          },
+          {
+            "recording": "sMpAJ0HKDdg",
+            "time": "54:57.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "streak",
+      "shows": "A streak leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits.",
+      "arena": {
+        "does": "Each tapped land sends one streak of its color to the spell on the stack in about 0.3 s. A burn spell or ability glows, and a streak of fire crosses to its target in about 0.25 s, with a burst where it lands; the spell leaves after.",
+        "evidence": [
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "33:32.45"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:30.85"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "22:00.6"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "20:40.88"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "38:36.7"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "31:37.8"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "count",
+      "shows": "A number changes and shows that it did: a life total, a kind of counter, a power and toughness, a mana pool.",
+      "arena": {
+        "does": "A life total jumps to its new value; the change floats up from the avatar, red for a loss, and a gain bursts green. A counter's badge settles onto its permanent after a flash. A planeswalker's loyalty changes about a second after its ability reaches the stack.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:25.7"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "25:55.6"
+          },
+          {
+            "recording": "sMpAJ0HKDdg",
+            "time": "54:54.5"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "31:13.25"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "19:59.25"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "set",
+      "shows": "The table changes and nothing moves: a step of the turn begins, a library is shuffled, a permanent's characteristics change.",
+      "arena": {
+        "does": "Nothing animates as a step begins, and nothing shows on a library when it is shuffled.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "19:36.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "28:10.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "showcase",
+      "shows": "A card is held up for both players to read: it joins the \"Revealed Cards\" pile at the top left.",
+      "arena": {
+        "does": "Revealed cards gather under a \"Revealed Cards\" pill at the top left, which opens into a browser of them and stays afterward.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "22:08.5"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "29:42.9"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "dwell",
+      "shows": "Nothing moves while a spell or ability is read: the opponent's, before it resolves unanswered.",
+      "arena": {
+        "does": "The opponent's spell sits on the stack for about a second before it resolves.",
+        "evidence": [
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "22:00.4"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "23:22.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "announce",
+      "shows": "A notice passes over the table while play goes on under it: the turn banner, the pill that says what a scry did, a coin tossed.",
+      "arena": {
+        "does": "\"Your Turn\" or \"Opponent's Turn\" glows at the centre for about a second while cards move under it. A pill above an avatar reads \"Scry: 1 top, 1 bottom.\" for about 2.5 s. A coin a card flips is tossed mid-table and lands in about 1.3 s.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "19:35.7"
+          },
+          {
+            "recording": "WCknTZNbraE",
+            "time": "16:39.7"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "41:27.3"
+          },
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "52:54.6"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "14:52.7"
+          },
+          {
+            "recording": "WCknTZNbraE",
+            "time": "16:42.0"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "point",
+      "shows": "An arrow or line between two things, from the step that begins it to the step that ends it: to a target, from an ability to its source, from an attacker to what it attacks, from a blocker to its attacker.",
+      "arena": {
+        "does": "A cyan arc runs from a spell or ability to its target until it resolves. A thin line joins an ability to its source from the frame it lifts. A thin gold line runs from a blocker to its attacker until combat damage is done. An attacker has no line to the player, only its chevron.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "31:35.05"
+          },
+          {
+            "recording": "bJQDi6NIrZA",
+            "time": "55:08.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "20:39.3"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:21.5"
+          },
+          {
+            "recording": "sMpAJ0HKDdg",
+            "time": "54:50"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "25:52.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "mark",
+      "shows": "A mark from the list below on a card, an ability or a player, from the step that begins it to the step that ends it.",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    },
+    {
+      "name": "lift",
+      "shows": "Cards the opponent is handling come away from their pile, face down, from the step that begins the look to the step that ends it.",
+      "arena": {
+        "does": "Cards the opponent scries come off their library face down at its size and lie beside it.",
+        "evidence": [
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "52:54.6"
+          },
+          {
+            "recording": "qF4GF-vfc8Y",
+            "time": "52:59.9"
+          }
+        ]
+      },
+      "values": {
+        "duration": null,
+        "delay": null,
+        "stagger": null,
+        "curve": null
+      }
+    }
+  ],
+  "marks": [
+    {
+      "name": "eligible",
+      "means": "The player may pick or use it now: a card to play, a permanent with an ability, a legal target, an attacker or blocker to declare, an option.",
+      "look": "A cyan outline.",
+      "arena": {
+        "does": "Arena outlines all of these in one cyan, and neither dims nor outlines what cannot be picked.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "17:59.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "19:43.5"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "26:55.0"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:20.5"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "19:51.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "selected",
+      "means": "The player has picked it in the open prompt.",
+      "look": "A gold outline.",
+      "arena": {
+        "does": "A clicked attacker and a chosen blocker turn gold.",
+        "evidence": [
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "33:30.5"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "42:50.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "suggested",
+      "means": "The offered default would use it: a permanent Auto Pay would tap.",
+      "look": "An ember ring. Not seen in Arena."
+    },
+    {
+      "name": "paying",
+      "means": "Picked to pay a cost.",
+      "look": "The permanent turns and carries a tap mark, with no outline. Not seen in Arena."
+    },
+    {
+      "name": "friendly-target",
+      "means": "A target its chooser controls.",
+      "look": "A green outline, by exception 4."
+    },
+    {
+      "name": "hostile-target",
+      "means": "A target its chooser does not control.",
+      "look": "A red outline, by exception 4."
     }
   ]
 }

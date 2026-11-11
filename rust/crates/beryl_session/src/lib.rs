@@ -18,6 +18,7 @@ pub mod preview;
 pub mod protocol;
 pub mod replay;
 pub mod save;
+pub mod script;
 mod session;
 mod sessions;
 pub mod typescript;

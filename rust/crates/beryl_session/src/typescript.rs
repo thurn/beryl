@@ -18,6 +18,10 @@ use crate::protocol::{
     SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
     ZoneName,
 };
+use crate::script::{
+    Act, Arrow, Fact, Mark, Notice, Reset, Script, Span, Step as ScriptStep, Stream, Subject,
+    Tally, Verb,
+};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 /// Where the generated file lives, from the repository root.
@@ -94,6 +98,19 @@ pub fn typescript() -> String {
         Mana::decl(&cfg),
         CardType::decl(&cfg),
         Keyword::decl(&cfg),
+        Script::decl(&cfg),
+        Reset::decl(&cfg),
+        ScriptStep::decl(&cfg),
+        Subject::decl(&cfg),
+        Act::decl(&cfg),
+        Stream::decl(&cfg),
+        Tally::decl(&cfg),
+        Fact::decl(&cfg),
+        Notice::decl(&cfg),
+        Span::decl(&cfg),
+        Verb::decl(&cfg),
+        Mark::decl(&cfg),
+        Arrow::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\

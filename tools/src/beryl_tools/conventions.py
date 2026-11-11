@@ -5,6 +5,11 @@ generated from it. `by conventions` writes the page; the repo lane fails when it
 Each entry has a kind: a numbered Beryl `exception`, a rule `settled` as Arena, one with
 `no-equivalent` in Arena, one `not-seen` in the recordings, or one still `open`. It states the
 rule, the report beads behind it, and what Arena does with the recording moments that show it.
+
+The closed lists follow: the `verbs` a script's steps apply, each with what it shows, what Arena
+does and the values the stage plays it with, and the `marks` a card can carry, each with what it
+means and its one look. Their names are the session's (`beryl_session`'s `script::Verb` and
+`script::Mark`), and a test there fails when the two disagree.
 """
 
 from __future__ import annotations
@@ -29,6 +34,47 @@ REPORT: re.Pattern[str] = re.compile(r"^by-[0-9a-z]+(\.[0-9]+)*$")
 # A YouTube id, as the recordings in ~/arena are named, and a time in the recording.
 RECORDING: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]{11}$")
 TIME: re.Pattern[str] = re.compile(r"^(\d+:)?\d{1,2}:\d{2}(\.\d+)?$")
+# The closed lists, and what each of their members must say besides its name.
+LISTS: dict[str, tuple[str, ...]] = {"verbs": ("shows",), "marks": ("means", "look")}
+NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
+# What the stage plays a verb with: none until it is measured from Arena (K27).
+VALUES = ("duration", "delay", "stagger", "curve")
+
+
+def evidence_problems(where: str, entry: dict[str, Any]) -> list[str]:
+    """Why an entry's Arena evidence does not name moments in recordings."""
+    found: list[str] = []
+    for moment in entry.get("arena", {}).get("evidence", []):
+        if not RECORDING.match(moment.get("recording", "")):
+            found.append(f"{where}: {moment.get('recording')!r} is not a recording")
+        if not TIME.match(moment.get("time", "")):
+            found.append(f"{where}: {moment.get('time')!r} is not a time")
+    return found
+
+
+def list_problems(data: dict[str, Any]) -> list[str]:
+    """Why the closed lists cannot be rendered."""
+    found: list[str] = []
+    headed = [section.get("key") for section in data.get("lists", [])]
+    if headed != [key for key in LISTS if key in data]:
+        found.append(f"lists: want a heading for each of {list(LISTS)}, have {headed}")
+    for key, fields in LISTS.items():
+        names: list[str] = []
+        for i, member in enumerate(data.get(key, [])):
+            name = member.get("name", "")
+            where = f"{key} {i} ({name or '?'})"
+            if not NAME.match(name):
+                found.append(f"{where}: {name!r} is not a name")
+            if name in names:
+                found.append(f"{where}: listed twice")
+            names.append(name)
+            for field in fields:
+                if not member.get(field):
+                    found.append(f"{where}: needs {field}")
+            if key == "verbs" and tuple(member.get("values", {})) != VALUES:
+                found.append(f"{where}: values are {list(VALUES)}, each a number or null")
+            found += evidence_problems(where, member)
+    return found
 
 
 def problems(data: dict[str, Any]) -> list[str]:
@@ -52,16 +98,12 @@ def problems(data: dict[str, Any]) -> list[str]:
         for report in entry.get("reports", []):
             if not REPORT.match(report):
                 found.append(f"{where}: {report!r} is not a bead id")
-        for moment in entry.get("arena", {}).get("evidence", []):
-            if not RECORDING.match(moment.get("recording", "")):
-                found.append(f"{where}: {moment.get('recording')!r} is not a recording")
-            if not TIME.match(moment.get("time", "")):
-                found.append(f"{where}: {moment.get('time')!r} is not a time")
+        found += evidence_problems(where, entry)
     if numbers != list(range(1, len(numbers) + 1)):
         found.append(
             f"exceptions: numbered {numbers}, want 1 to {len(numbers)} in order"
         )
-    return found
+    return found + list_problems(data)
 
 
 def cite(text: str, refs: list[str]) -> str:
@@ -74,12 +116,22 @@ def cite(text: str, refs: list[str]) -> str:
 
 def item(entry: dict[str, Any]) -> str:
     """One entry as the text of its list item."""
-    text = f"**{entry['name']}.** {cite(entry['rule'], entry.get('reports', []))}"
-    arena = entry.get("arena")
-    if arena:
-        moments = [f"{m['recording']} {m['time']}" for m in arena.get("evidence", [])]
-        text += " " + cite(arena["does"], moments)
-    return text
+    return f"**{entry['name']}.** {cite(entry['rule'], entry.get('reports', []))}{arena(entry)}"
+
+
+def arena(entry: dict[str, Any]) -> str:
+    """What Arena does, citing its moments, to follow an entry's own text; empty with none."""
+    found = entry.get("arena")
+    if not found:
+        return ""
+    moments = [f"{m['recording']} {m['time']}" for m in found.get("evidence", [])]
+    return " " + cite(found["does"], moments)
+
+
+def member(key: str, entry: dict[str, Any]) -> str:
+    """One verb or mark as the text of its list item."""
+    said = " ".join(entry[field] for field in LISTS[key])
+    return f"**{entry['name']}.** {said}{arena(entry)}"
 
 
 def render(data: dict[str, Any]) -> str:
@@ -95,6 +147,10 @@ def render(data: dict[str, Any]) -> str:
             out.append("\n".join(f"{e['number']}. {item(e)}" for e in entries))
         else:
             out.append("\n".join(f"- {item(e)}" for e in entries))
+    for section in data.get("lists", []):
+        key = section["key"]
+        out += [f"## {section['heading']}", *section.get("intro", [])]
+        out.append("\n".join(f"- {member(key, e)}" for e in data[key]))
     return mdformat.text(
         "\n\n".join(out) + "\n", options=MDFORMAT_OPTIONS, extensions={"gfm"}
     )
