@@ -14,15 +14,32 @@ use crate::layout::PerSeat;
 #[derive(Debug)]
 pub struct CardTable {
     cards: &'static [&'static CardDef],
+    /// Each name's first card, built on first use by [`CardTable::get`]. Never iterated: the order
+    /// the engine sees is [`CardTable::cards`]'s.
+    by_name: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CardDef>>,
 }
 
 impl CardTable {
     pub const fn new(cards: &'static [&'static CardDef]) -> Self {
-        Self { cards }
+        Self {
+            cards,
+            by_name: std::sync::OnceLock::new(),
+        }
     }
 
+    /// The card called `name`: the first of that name in the table, as a scan of
+    /// [`CardTable::cards`] would find it.
     pub fn get(&self, name: &str) -> Option<&'static CardDef> {
-        self.cards.iter().copied().find(|c| c.name == name)
+        self.by_name
+            .get_or_init(|| {
+                let mut map = std::collections::HashMap::with_capacity(self.cards.len());
+                for &card in self.cards {
+                    map.entry(card.name).or_insert(card);
+                }
+                map
+            })
+            .get(name)
+            .copied()
     }
 
     #[inline]
@@ -384,4 +401,40 @@ pub fn is_sacrificed(a: &Ability) -> bool {
                 sacrifice_self: true,
                 ..Cost::TAP
             }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static ALPHA: CardDef = CardDef {
+        name: "Alpha",
+        faces: &[],
+        tokens: &[],
+    };
+    static BETA: CardDef = CardDef {
+        name: "Beta",
+        faces: &[],
+        tokens: &[],
+    };
+    /// A second definition under Alpha's name.
+    static ALPHA_AGAIN: CardDef = CardDef {
+        name: "Alpha",
+        faces: &[],
+        tokens: &[],
+    };
+    static TABLE: CardTable = CardTable::new(&[&ALPHA, &BETA, &ALPHA_AGAIN]);
+
+    #[test]
+    fn get_finds_each_name_and_misses_unknown() {
+        assert!(std::ptr::eq(TABLE.get("Beta").unwrap(), &raw const BETA));
+        assert!(TABLE.get("Gamma").is_none());
+        assert!(TABLE.get("").is_none());
+    }
+
+    #[test]
+    fn get_returns_the_first_definition_of_a_name() {
+        assert!(std::ptr::eq(TABLE.get("Alpha").unwrap(), &raw const ALPHA));
+        assert_eq!(TABLE.cards().len(), 3);
+    }
 }
