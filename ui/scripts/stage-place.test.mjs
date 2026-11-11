@@ -348,9 +348,14 @@ test("creatures that strike one another meet half way, at one time", () => {
     assert.ok(Math.abs(made.pose(1).x - met) < 1e-9);
     assert.ok(Math.abs(made.pose(2).x - (400 - met)) < 1e-9);
     assert.equal(made.pose(1).y, 0);
-    // The earlier strike of the beat is drawn over the later.
+    // The earlier strike of the beat is drawn over the later, until its blow has been seen:
+    // then one still on its way goes over it, and all are over what rests.
     assert.ok(made.pose(1).depth > made.pose(2).depth);
     assert.ok(made.pose(2).depth > made.pose(3).depth);
+    made.clock.advance((STRIKE.seen - STRIKE.hit) * 1000);
+    assert.ok(made.pose(3).depth > made.pose(1).depth);
+    assert.ok(made.pose(1).depth > made.pose(2).depth);
+    assert.ok(made.pose(2).depth >= ALOFT);
     made.settle();
     assert.equal(made.pose(1).x, 0);
     assert.equal(made.pose(2).x, 400);

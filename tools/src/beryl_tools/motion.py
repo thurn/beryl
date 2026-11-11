@@ -35,12 +35,14 @@ verb as its values say.
   more than one mover, or a card that never comes to rest): the verb declares no curve, so its
   duration and stagger are held and what the tracker found is shown. A count of
   counters changes a badge on a card that stays put: its travel is held (in place). A count of
-  life is drawn over the life orb by the screen (src/stage/Chrome.tsx LifeChange, animated by
-  CSS on the page's clock, which the capture stops), not the stage: it is only timed. A tap
-  turns its card a quarter about its own middle, which is no travel, and video_shape reads a
-  turn only of a card the tracker follows from one place to another: its steps are timed, as
-  every verb's are against its own values, and never screenshotted, until the motion review
-  wants a measure of a card turning where it lies.
+  life moves no card: the screen draws the change beside the life orb (src/stage/Chrome.tsx
+  LifeChange) and an effect of the stage's flares the orb and drifts the change on the stage's
+  clock (src/stage/effects.ts), which no tracker of cards reads: it is only timed. A tap turns
+  its card a quarter about its own middle where it lies, which is no travel, before it and its
+  row go to their places, and video_shape reads a turn only of a card the tracker follows from
+  one place to another: its steps are timed, as every verb's are against its own values, and
+  never screenshotted, until the motion review wants a measure of a card turning where it
+  lies. The two blows of one fight begin at one time (`meets`), not a stagger apart.
 - `--more` runs nightly only: its moments add about two minutes to the lane, past the fast
   check's 60 s (by-w8gv.21.38: the capture took 107 to 127 s with the moments of cards
   changing zone and about 20 s without, at loads of 25 to 50 on 18 cores, `zones` nearly all

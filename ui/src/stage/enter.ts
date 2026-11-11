@@ -12,7 +12,7 @@ import {
   type Resting,
   type StageLayout,
 } from "./layout.ts";
-import { ALOFT, type Pose } from "./pose.ts";
+import type { Pose } from "./pose.ts";
 import {
   drawsToRead,
   fade,
@@ -75,6 +75,10 @@ const middleOf = (layout: StageLayout, { resting, pose }: Placed) =>
 
 /** How much of half its art's height the face of a life orb is (table.css `.life-hit`). */
 const FACE = 0.8;
+
+/** How far into the face of a life orb, from its rim to its middle, a striker that dives
+ * onto it goes: the total stays in sight. */
+const INTO = 0.55;
 
 /** A pose `size` times as large about the middle of the card `resting` is dressed as. */
 const sized =
@@ -203,9 +207,9 @@ function enters(
           ),
         );
       // On a player it stops at the rim of the orb's face, which the total is read on, or
-      // with its edge on the orb's middle where it dives.
+      // where it dives, with its edge short of the number in the orb's middle.
       const bitten = apart(life ? 0 : STRIKE.bite * width * size);
-      const landed = life ? apart(Math.min(theirs.x, theirs.y)) : 0;
+      const landed = life ? apart(Math.min(theirs.x, theirs.y) * INTO) : 0;
       const near = bitten + (landed - bitten) * dive;
       const met = scene.beat.some((other) => meets(other, act));
       const go = Math.max(STRIKE.least * width, (far - near) / (met ? 2 : 1));
@@ -214,8 +218,7 @@ function enters(
         y: unit.y * length,
       });
       const about = sized(layout, striker.resting);
-      // The earlier strike of a beat is over the later: its blow lands first.
-      const over = 2 * ALOFT - scene.beat.indexOf(act);
+      const nth = Math.min(scene.beat.indexOf(act), 50);
       // What a blow does to a card shows as it lands: until then the card it strikes is
       // drawn from the record the step found, and so is one that strikes back, which the
       // other's step has covered already.
@@ -223,7 +226,7 @@ function enters(
       const lunging: Entering = {
         name: act.source,
         track: {
-          ...own(lunge(by(go), by(STRIKE.back * width), size, about, over)),
+          ...own(lunge(by(go), by(STRIKE.back * width), size, about, nth)),
           turn: veiled ? STRIKE.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,

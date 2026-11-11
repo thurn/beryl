@@ -205,11 +205,14 @@ const inOut = (progress: number) =>
  * than the striker (a phone's small permanents and its life totals) it dives onto instead,
  * shrinking as it goes, or it would lie over the neighbours more than over what it strikes:
  * not at all for something `small.from` of its length, wholly for something `small.to`, when
- * it lands `small.least` of its own size. */
+ * it lands `small.least` of its own size. Until `seen` of its step, when its blow has been
+ * seen, a striker is over every card; from then it is under the strikers still on their way
+ * to theirs, so that one whose way crosses it goes over it. */
 export const STRIKE = {
   wind: 0.15,
   hit: 0.45,
-  back: 0.18,
+  seen: 0.57,
+  back: 0.3,
   bite: 0.38,
   least: 0.3,
   small: { from: 0.7, to: 0.55, least: 0.6 },
@@ -232,15 +235,16 @@ export function struck(progress: number): [toward: number, back: number] {
 /** A creature's lunge at what it deals combat damage to and its return to where it rests:
  * the blow is `toward` away from it as the step begins, and it first pulls `back` the other
  * way. It is `size` times as large at the blow, by `about`, which gives a pose that large
- * about its card's middle. Never turned, and at the depth `over`, which is over everything
- * at rest and over the strikes of its beat that come after it. */
+ * about its card's middle. Never turned. It is the `nth` strike of its beat: over everything
+ * at rest throughout, over the strikes after it until its blow has been seen, and from then
+ * under every strike still on its way. */
 export const lunge =
   (
     toward: Point,
     back: Point,
     size: number,
     about: (pose: Pose, size: number) => Pose,
-    over: number,
+    nth: number,
   ): Path =>
   (progress, rest) => {
     const [to, away] = struck(progress);
@@ -249,9 +253,13 @@ export const lunge =
       ...pose,
       x: pose.x + toward.x * to - back.x * away,
       y: pose.y + toward.y * to - back.y * away,
-      depth: over,
+      depth: (progress < STRIKE.seen ? 2 * ALOFT : ALOFT + DRAWN_BACK) - nth,
     };
   };
+
+/** How far over what rests a striker that draws back is: over as many strikes as a beat has
+ * after it, and under what flies. */
+const DRAWN_BACK = 60;
 
 /** Whether the strikes `a` and `b` are the two blows of one fight: each creature strikes the
  * other. They are played as one, at one time (the script puts them together:
