@@ -116,6 +116,60 @@ def test_bad_lists_are_refused() -> None:
     assert conventions.problems(unheaded)
 
 
+EFFECT: dict[str, Any] = {
+    "name": "settle",
+    "shows": "A wash of light.",
+    "layer": "over",
+    "values": {"duration": 350, "delay": None, "curve": "ease-out"},
+}
+
+
+def affected(
+    uses: list[dict[str, Any]], effect: dict[str, Any] = EFFECT
+) -> dict[str, Any]:
+    """Conventions whose one verb, with a case, begins `uses` of the one effect."""
+    case = {"duration": 400, "delay": None, "stagger": None, "curve": "ease-out"}
+    out = listed([{**VERB, "cases": {"land played": case}, "effects": uses}], [MARK])
+    out["lists"].insert(1, {"key": "effects", "heading": "Effects"})
+    return {**out, "effects": [effect]}
+
+
+def test_the_page_lists_effects_and_the_verbs_that_begin_them() -> None:
+    lands = {"effect": "settle", "when": "end", "into": "battlefield"}
+    played = {"effect": "settle", "when": "start", "case": "land played"}
+    page = " ".join(conventions.render(affected([lands, played])).split())
+    assert (
+        "- **fly.** A card travels. A land glides (UrGalw_f35w 16:14.8). Effects: "
+        "settle as it ends (into the battlefield), settle as it begins (land played). "
+    ) in page
+    assert (
+        "## Effects "
+        "- **settle.** A wash of light. Drawn over its card. Beryl: 350 ms, ease-out. "
+    ) in page
+
+
+def test_bad_effects_are_refused() -> None:
+    lands = {"effect": "settle", "when": "end", "into": "battlefield"}
+    assert not conventions.problems(affected([lands]))
+    # An effect that is none, a time that is no end of a step, a case the verb has not, and
+    # a word the stage does not read.
+    for use in (
+        {**lands, "effect": "sparkle"},
+        {**lands, "when": "midway"},
+        {**lands, "case": "discard"},
+        {**lands, "on": "landing"},
+    ):
+        assert len(conventions.problems(affected([use]))) == 1, use
+    # An effect drawn nowhere, timed in no ms, or eased by no curve.
+    for effect in (
+        {**EFFECT, "layer": "beside"},
+        {**EFFECT, "values": {"duration": 0.3, "delay": None, "curve": "linear"}},
+        {**EFFECT, "values": {"duration": 300, "delay": None, "curve": None}},
+        {**EFFECT, "values": {"duration": 300}},
+    ):
+        assert len(conventions.problems(affected([lands], effect))) == 1, effect
+
+
 def test_the_check_fails_on_a_stale_page(tmp_path: Path) -> None:
     source = tmp_path / "ui-conventions.json"
     source.write_text(json.dumps(data(EXCEPTION)))

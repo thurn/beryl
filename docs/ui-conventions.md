@@ -344,13 +344,14 @@ held to by `just motion`.
   size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w
   16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3,
   UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI
-  1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out.
+  1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle as it ends
+  (into the battlefield).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. A token appears whole with a
   short glow, a batch as one group. The opening hand and a mulligan's new hand
   are there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w
   15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after
-  its cause, 33 ms apart, in place.
+  its cause, 33 ms apart, in place. Effects: glow as it begins (token).
 - **vanish.** A card or an ability goes from where it is with no flight, and a
   card is then at its new place: destroyed, exiled, sacrificed, countered,
   returned to a hand, or done resolving. A destroyed permanent falls to ash in
@@ -361,7 +362,8 @@ held to by `just motion`.
   (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w
   19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67,
   pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Beryl: 565 ms, 260 ms after its
-  cause, in place.
+  cause, in place. Effects: dissolve as it begins, blanch as it begins (exiled),
+  glow as it begins (bounced).
 - **emerge.** An ability lifts out of its source and goes on the stack. The
   source stays as it is. A small copy of the card appears on the source and
   travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated
@@ -375,7 +377,7 @@ held to by `just motion`.
   says). A transforming card is covered by an effect (a lava slab, a cocoon) for
   about 1.1 s and shows its new face as the effect clears; it neither turns nor
   grows (WCknTZNbraE 35:49.2, WCknTZNbraE 1:23:36.8, UrGalw_f35w 49:06.5).
-  Beryl: 1130 ms, in place.
+  Beryl: 1130 ms, in place. Effects: cover as it begins.
 - **tap.** A permanent turns a quarter as it taps or untaps, its whole card
   about its own middle, in the time Arena's tilt takes. Arena tilts a tapped
   permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
@@ -441,6 +443,29 @@ held to by `just motion`.
   opponent scries come off their library face down at its size and lie beside it
   (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9). Beryl: 433 ms, 500 ms apart,
   ease-out.
+
+## Effects
+
+An effect is light or a change of surface on one card, begun by a step of a verb
+as it starts or as it ends and played on the stage's clock
+(`ui/src/stage/effects.ts`): it never moves a card and never holds up the
+script. The list is closed, each effect has one look in Beryl's skin
+(`ui/src/stage/stage.css`), and a verb names the effects its steps begin. A mark
+says what a player may do; an effect says what just happened, and is gone.
+
+- **glow.** A halo of warm light around a card, bright at once, that spreads and
+  fades: the card is new here, or is leaving whole. Drawn under its card. Beryl:
+  300 ms, ease-out.
+- **settle.** A wash of light over a card and a halo around it, bright as it
+  lands and gone as it settles. Drawn over its card. Beryl: 350 ms, ease-out.
+- **dissolve.** A card darkens and breaks up along a stippled edge from the top
+  down, for as long as its step: it is going to a graveyard. Drawn over its
+  card. Beryl: linear.
+- **blanch.** A card is lost in white light, for as long as its step: it is
+  going to exile. Drawn over its card. Beryl: linear.
+- **cover.** A veil of light closes over a card, hides it while it changes, and
+  clears from what it now is, for as long as its step. Drawn over its card.
+  Beryl: linear.
 
 ## Marks
 

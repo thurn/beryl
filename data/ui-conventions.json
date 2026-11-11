@@ -48,6 +48,13 @@
       ]
     },
     {
+      "key": "effects",
+      "heading": "Effects",
+      "intro": [
+        "An effect is light or a change of surface on one card, begun by a step of a verb as it starts or as it ends and played on the stage's clock (`ui/src/stage/effects.ts`): it never moves a card and never holds up the script. The list is closed, each effect has one look in Beryl's skin (`ui/src/stage/stage.css`), and a verb names the effects its steps begin. A mark says what a player may do; an effect says what just happened, and is gone."
+      ]
+    },
+    {
       "key": "marks",
       "heading": "Marks",
       "intro": [
@@ -1070,7 +1077,14 @@
           "stagger": 233,
           "curve": "ease-out"
         }
-      }
+      },
+      "effects": [
+        {
+          "effect": "settle",
+          "when": "end",
+          "into": "battlefield"
+        }
+      ]
     },
     {
       "name": "appear",
@@ -1119,7 +1133,14 @@
           "stagger": null,
           "curve": "none"
         }
-      }
+      },
+      "effects": [
+        {
+          "effect": "glow",
+          "when": "start",
+          "case": "token"
+        }
+      ]
     },
     {
       "name": "vanish",
@@ -1214,7 +1235,23 @@
           "stagger": null,
           "curve": "none"
         }
-      }
+      },
+      "effects": [
+        {
+          "effect": "dissolve",
+          "when": "start"
+        },
+        {
+          "effect": "blanch",
+          "when": "start",
+          "case": "exiled"
+        },
+        {
+          "effect": "glow",
+          "when": "start",
+          "case": "bounced"
+        }
+      ]
     },
     {
       "name": "emerge",
@@ -1294,7 +1331,13 @@
             "time": "49:06.5"
           }
         ]
-      }
+      },
+      "effects": [
+        {
+          "effect": "cover",
+          "when": "start"
+        }
+      ]
     },
     {
       "name": "tap",
@@ -1753,6 +1796,58 @@
         "delay": null,
         "stagger": 500,
         "curve": "ease-out"
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "glow",
+      "shows": "A halo of warm light around a card, bright at once, that spreads and fades: the card is new here, or is leaving whole.",
+      "layer": "under",
+      "values": {
+        "duration": 300,
+        "delay": null,
+        "curve": "ease-out"
+      }
+    },
+    {
+      "name": "settle",
+      "shows": "A wash of light over a card and a halo around it, bright as it lands and gone as it settles.",
+      "layer": "over",
+      "values": {
+        "duration": 350,
+        "delay": null,
+        "curve": "ease-out"
+      }
+    },
+    {
+      "name": "dissolve",
+      "shows": "A card darkens and breaks up along a stippled edge from the top down, for as long as its step: it is going to a graveyard.",
+      "layer": "over",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "blanch",
+      "shows": "A card is lost in white light, for as long as its step: it is going to exile.",
+      "layer": "over",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "cover",
+      "shows": "A veil of light closes over a card, hides it while it changes, and clears from what it now is, for as long as its step.",
+      "layer": "over",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "curve": "linear"
       }
     }
   ],

@@ -18,6 +18,12 @@ discard), its `cases` hold each case's own, and a value a case leaves null is th
 recordings, how each was taken and their summary, or why the recordings cannot show the verb.
 `by conventions` derives the summaries from the instances, and the check fails when they
 disagree. A verb another numbered exception covers is `exempt`.
+
+The `effects` are the third closed list: the light and changes of surface the stage plays on a
+card, each with what it shows, the `layer` it is drawn in (under its card or over it) and its
+own values, a duration of null lasting as long as the step that begins it. A verb's `effects`
+are those its steps begin, each `when` its step starts or ends: every step's, or only those of
+a `case`, or `into` a zone. A case with effects of its own begins none of its verb's.
 """
 
 from __future__ import annotations
@@ -44,11 +50,20 @@ REPORT: re.Pattern[str] = re.compile(r"^by-[0-9a-z]+(\.[0-9]+)*$")
 RECORDING: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]{11}$")
 TIME: re.Pattern[str] = re.compile(r"^(\d+:)?\d{1,2}:\d{2}(\.\d+)?$")
 # The closed lists, and what each of their members must say besides its name.
-LISTS: dict[str, tuple[str, ...]] = {"verbs": ("shows",), "marks": ("means", "look")}
+LISTS: dict[str, tuple[str, ...]] = {
+    "verbs": ("shows",),
+    "effects": ("shows",),
+    "marks": ("means", "look"),
+}
 NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
 # What the stage plays a verb with, Beryl's own; null where the verb (or a case, its verb) has
 # none.
 VALUES = ("duration", "delay", "stagger", "curve")
+# What the stage plays an effect with: a duration of null is its step's.
+EFFECT_VALUES = ("duration", "delay", "curve")
+# Where an effect is drawn against the card it is on, and which end of its step begins it.
+LAYERS = ("under", "over")
+WHENS = ("start", "end")
 
 MOTION: Path = paths.REPO / "data" / "arena-motion.json"
 # How an instance was taken: by `by video measure`, or counted on a filmstrip.
@@ -95,6 +110,9 @@ def list_problems(data: dict[str, Any]) -> list[str]:
                     found.append(f"{where}: needs {field}")
             if key == "verbs":
                 found += value_problems(where, member, exceptions(data))
+                found += use_problems(where, member, data)
+            if key == "effects":
+                found += effect_problems(where, member)
             found += evidence_problems(where, member)
     return found
 
@@ -120,6 +138,37 @@ def value_problems(where: str, verb: dict[str, Any], numbered: list[int]) -> lis
             found.append(f"{where}: curve {values['curve']!r} is not one of {CURVES}")
     if "exempt" in verb and verb["exempt"] not in numbered:
         found.append(f"{where}: exempt by {verb['exempt']!r}, not an exception")
+    return found
+
+
+def effect_problems(where: str, effect: dict[str, Any]) -> list[str]:
+    """Why an effect does not say where it is drawn and how it is played."""
+    found: list[str] = []
+    if effect.get("layer") not in LAYERS:
+        found.append(f"{where}: layer is one of {LAYERS}")
+    values = effect.get("values", {})
+    if tuple(values) != EFFECT_VALUES or any(
+        not isinstance(values[v], (int, type(None))) for v in EFFECT_VALUES[:2]
+    ):
+        found.append(f"{where}: values are {list(EFFECT_VALUES)}, each ms or null")
+    elif values["curve"] not in CURVES:
+        found.append(f"{where}: curve {values['curve']!r} is not one of {CURVES}")
+    return found
+
+
+def use_problems(where: str, verb: dict[str, Any], data: dict[str, Any]) -> list[str]:
+    """Why the effects a verb's steps begin are not effects, or not begun by its steps."""
+    found: list[str] = []
+    effects = [effect.get("name") for effect in data.get("effects", [])]
+    for use in verb.get("effects", []):
+        if use.get("effect") not in effects:
+            found.append(f"{where}: {use.get('effect')!r} is not an effect")
+        if use.get("when") not in WHENS:
+            found.append(f"{where}: an effect begins at one of {WHENS}")
+        if "case" in use and use["case"] not in verb.get("cases", {}):
+            found.append(f"{where}: {use['case']!r} is not one of its cases")
+        if set(use) - {"effect", "when", "case", "into"}:
+            found.append(f"{where}: an effect's use is effect, when, case and into")
     return found
 
 
@@ -288,9 +337,27 @@ def arena(entry: dict[str, Any]) -> str:
 
 
 def member(key: str, entry: dict[str, Any]) -> str:
-    """One verb or mark as the text of its list item."""
+    """One verb, effect or mark as the text of its list item."""
     said = " ".join(entry[field] for field in LISTS[key])
-    return f"**{entry['name']}.** {said}{arena(entry)}{timing(entry)}"
+    if key == "effects":
+        said += f" Drawn {entry['layer']} its card."
+    return f"**{entry['name']}.** {said}{arena(entry)}{timing(entry)}{uses(entry)}"
+
+
+def uses(verb: dict[str, Any]) -> str:
+    """The effects a verb's steps begin, in words, to follow its values; empty with none."""
+    said = [
+        " ".join(
+            [
+                use["effect"],
+                "as it begins" if use["when"] == "start" else "as it ends",
+                *([f"({use['case']})"] if "case" in use else []),
+                *([f"(into the {use['into']})"] if "into" in use else []),
+            ]
+        )
+        for use in verb.get("effects", [])
+    ]
+    return f" Effects: {', '.join(said)}." if said else ""
 
 
 def timing(verb: dict[str, Any]) -> str:
