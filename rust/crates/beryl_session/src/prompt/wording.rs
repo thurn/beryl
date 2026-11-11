@@ -316,6 +316,13 @@ pub(crate) const OWN_TARGET: Wording = Wording {
     ..NONE
 };
 
+/// What a target prompt says while a spell on the stack is picked and waits to be confirmed.
+pub(crate) const AIMED: Wording = Wording {
+    title: "Target {name}",
+    unnamed: "Choose a target",
+    ..NONE
+};
+
 /// Where a pass of priority leads, for the pass button's words ([`pass_words`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PassLeads {

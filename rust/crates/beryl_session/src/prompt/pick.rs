@@ -13,7 +13,7 @@ use beryl_engine::{Layout, target_removes_permanent};
 
 use self::priority::Priority;
 use super::held::{Clicked, Run, Step, Table, Want};
-use super::wording::{Holes, OWN_TARGET};
+use super::wording::{AIMED, Holes, OWN_TARGET, Wording};
 use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeName, ShapeView};
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
 use crate::script::{Mark, Subject};
@@ -100,6 +100,9 @@ pub(crate) struct Objects {
     friendly: Option<Vec<Subject>>,
     /// Those the prompt asks about before it answers with them, each with its question.
     warned: Vec<(Subject, String)>,
+    /// The prompt opened with one picked, which its button confirms: what it says of each
+    /// while it is the one picked. Empty where a click on one answers.
+    aimed: Vec<(Subject, String)>,
     /// The buttons' words, `{picked}` and `{of}` still to fill.
     confirm: String,
     several: String,
@@ -120,28 +123,7 @@ impl Objects {
     fn targets<L: Layout>(table: &Table<'_, L>, decision: &DecisionView) -> Objects {
         let prompt = &decision.prompt;
         let counted = prompt.part == PartName::Count;
-        let mut eligible = Vec::new();
-        let mut offer = |on: Subject| {
-            if !eligible.contains(&on) {
-                eligible.push(on);
-            }
-        };
-        let mut counts = Vec::new();
-        for candidate in &decision.candidates {
-            match candidate.option {
-                Candidate::Object { slot } => offer(card(slot)),
-                Candidate::Player { player } => offer(Subject::Player { player }),
-                Candidate::Number { n } => counts.push(n),
-                _ => {}
-            }
-            // What a count lets the first target be.
-            for target in &candidate.targets {
-                offer(match *target {
-                    TargetRef::Object { slot } => card(slot),
-                    TargetRef::Player { player } => Subject::Player { player },
-                });
-            }
-        }
+        let (mut eligible, counts) = offered_targets(decision);
         with_stand_ins(table, &mut eligible);
         let all = u8::try_from(eligible.len()).unwrap_or(u8::MAX);
         let (least, most) = if counted {
@@ -152,43 +134,69 @@ impl Objects {
             (most, most)
         };
         let objects = &table.view.objects;
+        let of = |on: Subject| match on {
+            Subject::Object { slot } => object(objects, slot),
+            _ => None,
+        };
         let yours = |on: &Subject| match *on {
-            Subject::Object { slot } => {
-                object(objects, slot).is_some_and(|o| o.controller == Side::You)
-            }
             Subject::Player { player } => player == Side::You,
-            Subject::Ability { .. } => false,
+            on => of(on).is_some_and(|o| o.controller == Side::You),
+        };
+        // What the prompt says of `on` in the words of `wording`, which name it.
+        let says = |on: Subject, wording: &Wording| {
+            let holes = Holes {
+                name: of(on).and_then(|o| o.name.as_deref()),
+                ..Holes::default()
+            };
+            (on, holes.title(wording))
         };
         let friendly: Vec<Subject> = eligible.iter().copied().filter(yours).collect();
         // UI Conventions, exception 7: a removal aimed at the viewer's own permanent is asked
         // about first. The engine says whether the target being chosen is one a removal takes.
         let removes = target_removes_permanent(table.s, table.t);
         let warned = (friendly.iter().copied())
-            .filter_map(|on| {
-                let Subject::Object { slot } = on else {
-                    return None;
-                };
-                let o = object(objects, slot).filter(|o| o.zone == ZoneName::Battlefield)?;
-                let holes = Holes {
-                    name: o.name.as_deref(),
-                    ..Holes::default()
-                };
-                Some((on, holes.title(&OWN_TARGET)))
-            })
-            .filter(|_| removes)
+            .filter(|&on| removes && of(on).is_some_and(|o| o.zone == ZoneName::Battlefield))
+            .map(|on| says(on, &OWN_TARGET))
+            .collect();
+        // Among spells on the stack alone, one of them an opponent's, that one opens picked:
+        // the spell a response is most often for. The pick then waits for the button, so a
+        // click on another changes it and none answers.
+        let spell = |&on: &Subject| of(on).is_some_and(|o| o.zone == ZoneName::Stack);
+        let theirs: Vec<Subject> = (eligible.iter().copied())
+            .filter(|on| !friendly.contains(on))
+            .collect();
+        let preset = match theirs[..] {
+            [one] if !counted && eligible.len() > 1 && eligible.iter().all(spell) => Some(one),
+            _ => None,
+        };
+        let aimed = (eligible.iter().copied())
+            .filter(|_| preset.is_some())
+            .map(|on| says(on, &AIMED))
+            .collect();
+        // A target in a pile is laid out to be picked: the table shows a graveyard's top card
+        // alone, and no card of an exile or a library.
+        let piled = |zone| {
+            !matches!(
+                zone,
+                ZoneName::Battlefield | ZoneName::Stack | ZoneName::Hand
+            )
+        };
+        let tray = (eligible.iter())
+            .filter_map(|&on| of(on).filter(|o| piled(o.zone)).map(|o| o.slot))
             .collect();
         Objects {
             purpose: Purpose::Target,
             title: prompt.title.clone(),
             eligible,
-            tray: Vec::new(),
+            tray,
             least,
             most,
-            picked: Vec::new(),
+            picked: preset.into_iter().collect(),
             counted,
             ends: false,
             friendly: Some(friendly),
             warned,
+            aimed,
             confirm: prompt.words.confirm.clone(),
             several: prompt.words.counted.clone(),
             decline: prompt.words.decline.clone(),
@@ -248,25 +256,32 @@ impl Objects {
             ends,
             friendly: None,
             warned: Vec::new(),
+            aimed: Vec::new(),
             confirm: prompt.words.confirm.clone(),
             several: prompt.words.counted.clone(),
             decline: prompt.words.decline.clone(),
         }
     }
 
-    /// Whether a click on an object answers: one object, picked where it lies, with no end to
-    /// the picks offered.
+    /// Whether a click on an object answers: one object, with no end to the picks offered, in
+    /// a prompt that did not open with one picked. A target answers wherever it is picked;
+    /// another card only where it lies, since a tray's cards are looked over first.
     fn answers_by_click(&self) -> bool {
-        self.most == 1 && self.tray.is_empty() && !self.ends
+        let lies = self.tray.is_empty() || self.friendly.is_some();
+        self.most == 1 && lies && !self.ends && self.aimed.is_empty()
+    }
+
+    /// What `of` says of the one object picked, if it says anything of it.
+    fn says<'a>(&self, of: &'a [(Subject, String)]) -> Option<&'a str> {
+        let picked = self.picked.first()?;
+        let (_, says) = of.iter().find(|(on, _)| on == picked)?;
+        Some(says.as_str())
     }
 
     /// The question the prompt is asking about its pick, if it is: the pick is one it asks
     /// about before a click answers with it.
     fn asking(&self) -> Option<&str> {
-        let picked = self.picked.first().filter(|_| self.answers_by_click())?;
-        (self.warned.iter())
-            .find(|(on, _)| on == picked)
-            .map(|(_, question)| question.as_str())
+        self.says(&self.warned).filter(|_| self.answers_by_click())
     }
 
     /// Whether the prompt may answer with nothing: no target, or no pick where the decision
@@ -346,7 +361,9 @@ impl Objects {
 
     fn show(&self, view: &mut PromptView) {
         let asking = self.asking();
-        asking.unwrap_or(&self.title).clone_into(&mut view.title);
+        (asking.or_else(|| self.says(&self.aimed)))
+            .unwrap_or(&self.title)
+            .clone_into(&mut view.title);
         // Past the most, a click picks nothing more; with one to pick, it picks another.
         let open = self.most == 1 || self.picked.len() < usize::from(self.most);
         view.marks = (self.eligible.iter())
@@ -401,6 +418,32 @@ impl Objects {
         }
         buttons
     }
+}
+
+/// What `decision`, a choice of targets, offers to target, in its order, and the numbers of
+/// targets it offers to announce: at a count, what each count lets the first target be.
+fn offered_targets(decision: &DecisionView) -> (Vec<Subject>, Vec<u8>) {
+    let (mut offered, mut counts) = (Vec::new(), Vec::new());
+    let mut offer = |on: Subject| {
+        if !offered.contains(&on) {
+            offered.push(on);
+        }
+    };
+    for candidate in &decision.candidates {
+        match candidate.option {
+            Candidate::Object { slot } => offer(card(slot)),
+            Candidate::Player { player } => offer(Subject::Player { player }),
+            Candidate::Number { n } => counts.push(n),
+            _ => {}
+        }
+        for target in &candidate.targets {
+            offer(match *target {
+                TargetRef::Object { slot } => card(slot),
+                TargetRef::Player { player } => Subject::Player { player },
+            });
+        }
+    }
+    (offered, counts)
 }
 
 /// Adds to `eligible`, what a decision offers, the cards that stand for one of its objects

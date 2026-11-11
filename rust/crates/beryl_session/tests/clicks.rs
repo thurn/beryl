@@ -9,12 +9,15 @@ mod play;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, OUST, PLAINS, STAFF_OF_THE_STORYTELLER,
-    TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
+    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, SNAPCASTER_MAGE,
+    STAFF_OF_THE_STORYTELLER, STOCK_UP, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER,
+    THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
 };
 use beryl_engine::card::Purpose;
-use beryl_engine::{Seat, TurnStep};
+use beryl_engine::layout::Queue as _;
+use beryl_engine::{Candidates, Choice, Decision, Layout, Observation, Opt, Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_search::{Agent, AgentDecision};
 use beryl_session::prompt::{ButtonId, Click, ClickRequest, ShapeView};
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
@@ -168,6 +171,142 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
             .is_empty()
     );
     assert_eq!(spellbinders(&own), 1);
+}
+
+/// An opponent that casts whatever it can, and otherwise takes each decision's first
+/// candidate.
+struct Casts(u32);
+
+impl<L: Layout> Agent<L> for Casts {
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
+        self.0 += 1;
+        let cast = match &d.candidates {
+            Candidates::Options(options) => {
+                (options.iter()).position(|o| matches!(o, Opt::Cast { .. }))
+            }
+            Candidates::Objects(_) => None,
+        };
+        Choice(cast.unwrap_or(0) as u16)
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(AgentDecision(self.0))
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.0 = to.0;
+    }
+}
+
+/// P0 casts a Mana Crypt, P1 answers it with Mana Tithe, and P0 holds a Counterspell.
+const TITHED: Scenario = Scenario::new("stack targets")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
+    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .hand(P1, &[MANA_TITHE])
+    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// Among spells on the stack alone, the one opponent's spell opens picked, and the pick waits
+/// for the button: a click on another spell changes it, and none answers.
+#[test]
+fn a_target_among_spells_opens_on_the_opponents_and_waits_for_its_button() {
+    let tithed = || Play::against(&TITHED, Some(Box::new(Casts(0))));
+    let mut play = tithed();
+    let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
+    let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
+    assert_eq!(play.on(crypt), None, "the Mana Crypt is cast");
+    let tithe = play.named(MANA_TITHE, ZoneName::Stack, Side::Opponent)[0];
+    assert_eq!(play.on(counterspell), None, "Counterspell is cast");
+    assert!(play.decision().prompt.is(Purpose::Target));
+    let open = format!(
+        "pick target: Target Mana Tithe\n\
+         picked 1 of 1: #{tithe}\n\
+         eligible #{crypt}\n\
+         hostile-target #{tithe}\n\
+         confirm[Confirm]*\n"
+    );
+    assert_eq!(play.prompt(), open);
+    // The viewer's own spell takes the pick's place, and a second click on it leaves none.
+    assert_eq!(
+        play.on(crypt).unwrap(),
+        format!(
+            "pick target: Target Mana Crypt\n\
+             picked 1 of 1: #{crypt}\n\
+             eligible #{tithe}\n\
+             friendly-target #{crypt}\n\
+             confirm[Confirm]*\n"
+        )
+    );
+    assert_eq!(
+        play.on(crypt).unwrap(),
+        format!(
+            "pick target: Choose a target\n\
+             picked 0 of 1\n\
+             eligible {}\n\
+             confirm(Confirm)\n",
+            cards(&[crypt, tithe]),
+        )
+    );
+    assert_eq!(play.on(tithe).as_deref(), Some(open.as_str()));
+    // The button answers, as picking the Mana Tithe does.
+    let mut picked = tithed();
+    picked.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == crypt));
+    picked.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == counterspell));
+    picked.choose(|c| *c == Candidate::Object { slot: tithe });
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    assert_eq!(play.game.state(), picked.game.state());
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
+}
+
+/// P0 casts Snapcaster Mage with an instant and a sorcery in their graveyard.
+const SNAPCASTER: Scenario = Scenario::new("graveyard targets")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[SNAPCASTER_MAGE])
+    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .graveyard(P0, &[COUNTERSPELL, STOCK_UP])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// Targets in a graveyard are laid out in a tray, in the order the decision offers them, and
+/// a click on one answers as a click on a permanent does.
+#[test]
+fn a_target_in_a_graveyard_is_picked_from_a_tray() {
+    let mut play = Play::scenario(&SNAPCASTER);
+    let snapcaster = play.named(SNAPCASTER_MAGE, ZoneName::Hand, Side::You)[0];
+    let counterspell = play.named(COUNTERSPELL, ZoneName::Graveyard, Side::You)[0];
+    let stock_up = play.named(STOCK_UP, ZoneName::Graveyard, Side::You)[0];
+    assert_eq!(play.on(snapcaster), None, "Snapcaster Mage is cast");
+    while !play.decision().prompt.is(Purpose::Target) {
+        play.choose(|_| true);
+    }
+    let offered: Vec<String> = (play.decision().candidates.iter())
+        .map(|c| match c.option {
+            Candidate::Object { slot } => format!("#{slot}"),
+            ref other => panic!("{other:?} is no card"),
+        })
+        .collect();
+    assert_eq!(
+        play.prompt(),
+        format!(
+            "pick target: Choose a target\n\
+             tray {}\n\
+             picked 0 of 1\n\
+             eligible {}\n",
+            offered.join(" "),
+            cards(&[counterspell, stock_up]),
+        )
+    );
+    let mut picked = Play::scenario(&SNAPCASTER);
+    picked.choose(|c| matches!(c, Candidate::Cast { .. }));
+    while !picked.decision().prompt.is(Purpose::Target) {
+        picked.choose(|_| true);
+    }
+    picked.choose(|c| *c == Candidate::Object { slot: stock_up });
+    assert_eq!(play.on(stock_up), None);
+    assert_eq!(play.game.state(), picked.game.state());
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
 }
 
 /// P0's Teferi, Time Raveler, with an artifact and a creature of P1's to return.

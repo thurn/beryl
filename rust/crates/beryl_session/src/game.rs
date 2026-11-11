@@ -1736,8 +1736,9 @@ impl Game {
             if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
             }
-            // Only the decisions that follow the human's answer at once are its prompt's.
-            if !matches!(&step, Some(Step::Decide(_))) {
+            // Only the human's decisions that follow their answer at once are its prompt's.
+            if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human || self.reviewing())
+            {
                 self.run = None;
             }
             self.at = match step {
@@ -2031,6 +2032,7 @@ impl Game {
             .resolving()
             .then(|| self.board.stack().pop())
             .flatten();
+        let reviewing = self.reviewing();
         let mut view = on_board!(&mut self.board, b => {
             // The session's decision, stack entry and events, in the game's layout.
             let decision = match &self.at {
@@ -2086,6 +2088,11 @@ impl Game {
             {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
             }
+            if let Status::Deciding { decision } = &mut view.status
+                && reviewing
+            {
+                decision.pass_on = None;
+            }
             let asked = decision.as_ref().filter(|d| d.player == viewer);
             prompts::hold(&mut self.prompt, &mut view, &b.state, shown, &self.table, asked);
             view
@@ -2098,9 +2105,6 @@ impl Game {
             }
         });
         if let Status::Deciding { decision } = &mut view.status {
-            if self.reviewing() {
-                decision.pass_on = None;
-            }
             decision.cancellable = self.cancellable();
             decision.undo = if self.undoable() {
                 u16::try_from(self.undo.len()).unwrap_or(u16::MAX)

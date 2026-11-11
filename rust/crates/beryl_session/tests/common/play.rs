@@ -9,7 +9,7 @@
 use beryl_cards::CARDS;
 use beryl_engine::Seat;
 use beryl_scenario::Scenario;
-use beryl_search::Budget;
+use beryl_search::{Budget, GameAgent};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
 use beryl_session::protocol::{Candidate, DecisionView, ObjectView, Side, ZoneName};
 use beryl_session::script::Subject;
@@ -43,11 +43,16 @@ impl Play {
     /// to their first decision. The other seat is the random agent, seeded the same each
     /// time, so two plays of one scenario that answer alike go alike.
     pub fn scenario(scenario: &Scenario) -> Play {
+        Play::against(scenario, None)
+    }
+
+    /// [`Play::scenario`] against `opponent`, or the random agent.
+    pub fn against(scenario: &Scenario, opponent: Option<Box<dyn GameAgent + Send>>) -> Play {
         let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
         let random = beryl_search::agent("random").unwrap();
         let game = Game::prepared(
             Prepared {
-                opponent: (random.new)(&table, 1, Budget::DEFAULT),
+                opponent: opponent.unwrap_or_else(|| (random.new)(&table, 1, Budget::DEFAULT)),
                 stand_in: (random.new)(&table, 2, Budget::DEFAULT),
                 hand_over: None,
                 scripted: false,
