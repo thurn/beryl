@@ -19,6 +19,7 @@ import {
 } from "../components/Controls";
 import { LifeOrb } from "../components/Player";
 import { attackPlan, blockPlan } from "../game/combat";
+import { Incoming } from "../game/Life";
 import {
   follow,
   suggestedDamage,
@@ -63,27 +64,44 @@ export function Piles({
   );
 }
 
-/** `side`'s life orb, on the center line of their strip. */
-export function Orb({ side, view }: { side: Side; view: PlayerView }) {
+/** `side`'s life orb, on the center line of their strip, with the combat damage they are
+ * about to take when `incoming` says it. */
+export function Orb({
+  side,
+  view,
+  incoming,
+}: {
+  side: Side;
+  view: PlayerView;
+  incoming?: number;
+}) {
+  const { life } = view.players[side];
   return (
     <div className="phone-orb" data-life={side}>
-      <LifeOrb
-        life={view.players[side].life}
-        active={view.turn.active === side}
-        seat={side}
-      />
+      <LifeOrb life={life} active={view.turn.active === side} seat={side} />
+      {incoming !== undefined && (
+        <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
+      )}
     </div>
   );
 }
 
-/** The menu's button, at the end of the opponent's strip. */
-export function MenuButton({ onLeave }: { onLeave(): void }) {
+/** The menu's button, at the end of the opponent's strip: it leaves the game, until the board
+ * has a menu for it to open (`onOpen`: the stage's has, stage/PhoneChrome.tsx). */
+export function MenuButton({
+  onLeave,
+  onOpen = onLeave,
+}: {
+  onLeave(): void;
+  onOpen?: () => void;
+}) {
   return (
     <button
       type="button"
       className="icon-button phone-menu"
       aria-label="Menu"
-      onClick={onLeave}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onOpen}
     >
       <MenuIcon />
     </button>

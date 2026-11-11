@@ -206,3 +206,188 @@ body.phone {
   width: 10px;
   height: 10px;
 }
+
+/* The stage's phone board (stage/PhoneStageBoard.tsx) composes the rest of the desktop's chrome
+   for a phone from the desktop's own components (stage/PhoneChrome.tsx; UI Conventions, "The
+   phone"). Unspent mana lies left of its player's orb, the combat damage on its way on the
+   orb's rim, and the opponent's spinner right of their orb. */
+.phone-pool {
+  position: absolute;
+  right: calc(50% + 46px);
+  top: 50%;
+  translate: 0 -50%;
+}
+.phone-pool .mana-pool {
+  gap: 2px;
+  font-size: 16px;
+}
+.phone-orb .life-incoming {
+  left: calc(50% + 22px);
+  top: -4px;
+  min-width: 26px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+.phone-thinking {
+  position: absolute;
+  left: calc(50% + 48px);
+  top: 50%;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.phone-thinking .thinking {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+/* A pile that opens takes its touch over the card the stage draws there. */
+.phone-pile-button {
+  position: absolute;
+  z-index: 1000;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* Across the middle band from the phase: full control's mark, and undo. */
+.phone-middle-end {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  pointer-events: none;
+}
+.phone-middle-end > * {
+  pointer-events: auto;
+}
+.phone-middle-end .undo-button.has-tip,
+.phone-middle-end .full-control {
+  position: static;
+}
+.phone-middle-end .undo-button > .tip {
+  display: none;
+}
+.phone-middle-end .full-control svg {
+  width: 22px;
+  height: 22px;
+}
+/* What a touch opens lies over the whole board, and a touch beside it closes it. */
+.phone-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  background: rgb(10 8 6 / 55%);
+}
+.phone-board .phone-menu-sheet {
+  right: 8px;
+  top: 52px;
+  max-width: calc(100% - 16px);
+}
+.phone-menu-row {
+  display: flex;
+  gap: 8px;
+}
+.phone-menu-row > .button {
+  flex: 1;
+}
+.phone-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 52px;
+  max-height: calc(100% - 120px);
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--metal);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 96%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+}
+.phone-sheet-title {
+  margin: 0 0 10px;
+  font: 700 18px/1.2 var(--font-display);
+  color: var(--gold);
+}
+.phone-sheet-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-y: auto;
+}
+.phone-sheet-card {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.phone-sheet .game-log {
+  position: static;
+  width: auto;
+  min-height: 0;
+  display: flex;
+}
+.phone-sheet .game-log-list {
+  flex: 1;
+  max-height: none;
+  mask-image: none;
+}
+/* An announcement: the desktop's banner at about half its size, about a point of the board. */
+.phone-announce {
+  position: absolute;
+  left: 50%;
+  z-index: 800;
+  width: 0;
+  height: 0;
+  scale: 0.45;
+  pointer-events: none;
+}
+.phone-announce .turn-banner {
+  left: -400px;
+  right: auto;
+  top: -120px;
+  width: 800px;
+}
+.phone-announce-step {
+  scale: 0.6;
+}
+.phone-announce .step-banner {
+  left: 0;
+  top: 0;
+}
+.phone-pill {
+  position: absolute;
+  left: 50%;
+  z-index: 800;
+  translate: -50% 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgb(24 21 19 / 88%);
+  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 30%);
+  font: 600 13px/1.4 var(--font-sans);
+  color: var(--type);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Every control in the menu is as large as a finger. */
+.phone-menu-sheet .button {
+  min-height: 40px;
+}
+.phone-menu-sheet input[type="range"] {
+  height: 40px;
+}
+.phone-menu-sheet .settings-toggle {
+  align-items: center;
+}
+.phone-menu-sheet .settings-toggle input {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+}
+.phone-sheet-card {
+  min-width: 40px;
+  min-height: 40px;
+}

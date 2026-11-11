@@ -44,6 +44,39 @@
       "height": 759
     },
     {
+      "name": "phone-stage-main",
+      "route": "/?phone&stage&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stage-attack",
+      "route": "/?phone&stage&fixture=phone-attack#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stage-menu",
+      "route": "/?phone&stage&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "click": ".phone-menu"
+    },
+    {
+      "name": "phone-stage-inspect",
+      "route": "/?phone&stage&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "click": ".card-el[data-zone=battlefield][data-card]"
+    },
+    {
+      "name": "phone-stage-graveyard",
+      "route": "/?phone&stage&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "click": "[data-pile=graveyard][data-side=you]"
+    },
+    {
       "name": "phone-main-max",
       "route": "/?phone&fixture=phone-main#/game",
       "width": 430,

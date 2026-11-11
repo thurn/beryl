@@ -370,6 +370,16 @@ function Playing({ playback }: { playback: Playback }) {
   const over = result.state === "shown";
   const phone = usePhone();
   const leave = () => (window.location.hash = "#/");
+  const onConcede = ended
+    ? undefined
+    : () =>
+        void concede(session).catch((e: unknown) => {
+          // A second concession, or one the game's end overtook.
+          if (!(e instanceof CommandError && e.error.kind === "ended")) {
+            fail(e);
+          }
+        });
+  const takeBack = confirmingRemoval ? undefined : undoAnswer;
   const board = (
     <Board
       view={view}
@@ -381,22 +391,12 @@ function Playing({ playback }: { playback: Playback }) {
       onSkip={behind ? skip : undefined}
       choose={answer}
       cancel={confirmingRemoval ? undefined : cancelCast}
-      undo={confirmingRemoval ? undefined : undoAnswer}
+      undo={takeBack}
       passOn={passOnward}
       stops={stops}
       setStops={chooseStops}
       onLeave={leave}
-      onConcede={
-        ended
-          ? undefined
-          : () =>
-              void concede(session).catch((e: unknown) => {
-                // A second concession, or one the game's end overtook.
-                if (!(e instanceof CommandError && e.error.kind === "ended")) {
-                  fail(e);
-                }
-              })
-      }
+      onConcede={onConcede}
       // A question in the floating prompt leaves the table lit.
       dimmed={
         opening || over || (choice !== undefined && !floats(choice) && !peeking)
@@ -529,6 +529,11 @@ function Playing({ playback }: { playback: Playback }) {
         passOn={passOnward}
         cancel={cancelCast}
         onLeave={leave}
+        log={log}
+        undo={takeBack}
+        stops={stops}
+        setStops={chooseStops}
+        onConcede={onConcede}
       />
       {overlaid && <Stage>{overlays}</Stage>}
     </>

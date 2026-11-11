@@ -6,7 +6,7 @@ import type { ComponentProps } from "react";
 import { Board as CardBoard } from "../game/Board";
 import { usePlayback as useBeats } from "../game/playback";
 import { PhoneBoard as CardPhoneBoard } from "../mobile/PhoneBoard";
-import { PhoneStageBoard } from "./PhoneStageBoard.tsx";
+import { PhoneStageBoard, type PhoneStageProps } from "./PhoneStageBoard.tsx";
 import { useStagePlayback } from "./playback.ts";
 import { StageBoard } from "./StageBoard.tsx";
 
@@ -19,7 +19,13 @@ export function Board(props: ComponentProps<typeof CardBoard>) {
 
 /** The game's screen on a phone. The stage's has the phone's chrome and none of its prompts
  * yet. */
-export const PhoneBoard = staged ? PhoneStageBoard : CardPhoneBoard;
+export function PhoneBoard(props: PhoneStageProps) {
+  return staged ? (
+    <PhoneStageBoard {...props} />
+  ) : (
+    <CardPhoneBoard {...props} />
+  );
+}
 
 /** The game in progress as the player watches it: on the stage, the views' scripts played on
  * its clock; without it, the views cut into beats and held by timers. */

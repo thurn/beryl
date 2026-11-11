@@ -56,33 +56,57 @@ export function Corner({
       )}
       {open && !inert && (
         <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
-          <SoundPanel />
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={stops.fullControl}
-              onChange={(e) =>
-                setStops({ ...stops, fullControl: e.target.checked })
-              }
-            />
-            <span>
-              Full control
-              <small>Stop at every priority</small>
-            </span>
-          </label>
-          {onConcede && (
-            <ConcedeButton
-              onConcede={() => {
+          <Settings
+            stops={stops}
+            setStops={setStops}
+            onLeave={onLeave}
+            onConcede={
+              onConcede &&
+              (() => {
                 setOpen(false);
                 onConcede();
-              }}
-            />
-          )}
-          <Button variant="secondary" size="small" onClick={onLeave}>
-            Leave Game
-          </Button>
+              })
+            }
+          />
         </div>
       )}
+    </>
+  );
+}
+
+/** What the settings hold, in the gear's panel and in the phone's menu: the sound, full
+ * control, conceding and leaving. */
+export function Settings({
+  stops,
+  setStops,
+  onLeave,
+  onConcede,
+}: {
+  stops: StopsSetting;
+  setStops(stops: StopsSetting): void;
+  onLeave(): void;
+  onConcede?: () => void;
+}) {
+  return (
+    <>
+      <SoundPanel />
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={stops.fullControl}
+          onChange={(e) =>
+            setStops({ ...stops, fullControl: e.target.checked })
+          }
+        />
+        <span>
+          Full control
+          <small>Stop at every priority</small>
+        </span>
+      </label>
+      {onConcede && <ConcedeButton onConcede={onConcede} />}
+      <Button variant="secondary" size="small" onClick={onLeave}>
+        Leave Game
+      </Button>
     </>
   );
 }

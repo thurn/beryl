@@ -388,8 +388,21 @@ export function cutText(page) {
             // Text of the table's own (the log, a badge, a banner) that a permanent or a hand
             // card lies over, sampled at each line's ends and middle. Text on the cards and the
             // stack's items, which overlap by design, and on the inspector, drawn over the cards
-            // but letting the pointer through to them, is not checked.
+            // but letting the pointer through to them, is not checked. Nor is text that takes
+            // no pointer and is painted over the card under it (`paintedOver`), as a banner
+            // passing over a phone's rows is.
             if (el.closest(".card-el, .stack-item, .inspect")) continue;
+            // Whether `text`, which lets the pointer through, is what shows at a point a card
+            // was hit at: with the pointer given back to it, the hit is its own.
+            const paintedOver = (text, x, y) => {
+                if (getComputedStyle(text).pointerEvents !== "none")
+                    return false;
+                const before = text.style.pointerEvents;
+                text.style.pointerEvents = "auto";
+                const hit = document.elementFromPoint(x, y);
+                text.style.pointerEvents = before;
+                return hit !== null && text.contains(hit);
+            };
             // Only where the text shows: not scrolled out of a list's view.
             let view = {
                 left: 0,
@@ -428,7 +441,7 @@ export function cutText(page) {
                         y >= b.top &&
                         y <= b.bottom;
                     const over = inside && hit.closest(".card-layer .card-el");
-                    if (over && !over.contains(el)) {
+                    if (over && !over.contains(el) && !paintedOver(el, x, y)) {
                         found.push(
                             `"${text}" lies under ${over.dataset.card ?? "a card"}`,
                         );
@@ -588,7 +601,8 @@ export async function stageFaults(page) {
  * the other; or one of the table's fixtures (a step stop, a life orb, the dock's and the
  * corners' buttons) that a permanent or a spell on the stack lies over or under, as lands
  * crowding a life orb's stops on a narrow stage would. A menu or a screen opened over the
- * table, and a pile's own cards under its button, are meant to overlap them. Cards may overlap
+ * table (a dialog's buttons too), and a pile's own cards under its button, are meant to
+ * overlap them. Cards may overlap
  * one another, as a fan or a pile does. Each is described for a failure message. */
 export async function crowdedControls(page) {
     return page.evaluate(() => {
@@ -620,7 +634,7 @@ export async function crowdedControls(page) {
         /** A card whose frame lies over or under the fixture `e`'s `box` by more than a sliver:
          * either way the two collide. */
         const cardOver = (e, box) =>
-            e.matches(FIXTURES)
+            e.matches(FIXTURES) && !e.closest("[role=dialog]")
                 ? cards.find(({ box: c }) => {
                       const w =
                           Math.min(box.right, c.right) -
