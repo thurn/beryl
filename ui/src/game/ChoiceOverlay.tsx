@@ -109,6 +109,20 @@ const TRAY = { width: 1000, height: 468 };
 const CARD_WIDTH = 220;
 const SPRING = { type: "spring", stiffness: 260, damping: 30 } as const;
 
+/** A motion value springing to `target` (held while `paused`) on the page's frames. An `animate`
+ * prop may run a transform as a Web Animation on the browser's own timeline instead, which
+ * drifts from the tray's other motion wherever the two clocks differ (a paused test clock). */
+function useGlide(target: number, paused = false) {
+  const reduce = useReducedMotion() ?? false;
+  const value = useMotionValue(target);
+  useEffect(() => {
+    if (paused) return;
+    const glide = animate(value, target, reduce ? { duration: 0 } : SPRING);
+    return () => glide.stop();
+  }, [value, target, paused, reduce]);
+  return value;
+}
+
 /** The shell around a tray: title, source card, buttons. */
 function Shell({
   view,
@@ -305,6 +319,7 @@ function ArrangeChoice({
     choice.rightCount === undefined || piles.right.length === choice.rightCount;
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const libraryAt = shown.indexOf(LIBRARY);
+  const libraryX = useGlide(center.get(LIBRARY)!);
   const libraryRef = useRef<HTMLDivElement>(null);
   useBorrowedCard(libraryRef, "library");
   return (
@@ -323,12 +338,7 @@ function ArrangeChoice({
       ]}
     >
       <div className="scry-zone choice-zone" data-choice="arrange">
-        <motion.div
-          className="choice-library"
-          initial={false}
-          animate={{ x: center.get(LIBRARY)! }}
-          transition={SPRING}
-        >
+        <motion.div className="choice-library" style={{ x: libraryX }}>
           <div
             ref={libraryRef}
             style={{
@@ -441,11 +451,10 @@ function DraggableCard({
   onDrop(at: Point): void;
   onClick(): void;
 }) {
-  const reduce = useReducedMotion() ?? false;
   const stageScale = useContext(StageScale);
-  const x = useMotionValue(centerX);
-  const y = useMotionValue(centerY);
   const [dragging, setDragging] = useState(false);
+  const x = useGlide(centerX, dragging);
+  const y = useGlide(centerY, dragging);
   const drag = useRef<{
     start: number;
     startY: number;
@@ -453,16 +462,6 @@ function DraggableCard({
     fromY: number;
     moved: boolean;
   }>(undefined);
-  useEffect(() => {
-    if (dragging) return;
-    const glide = reduce ? { duration: 0 } : SPRING;
-    const a = animate(x, centerX, glide);
-    const b = animate(y, centerY, glide);
-    return () => {
-      a.stop();
-      b.stop();
-    };
-  }, [x, y, centerX, centerY, dragging, reduce]);
   const point = (e: PointerEvent) => ({
     x: e.clientX / stageScale,
     y: e.clientY / stageScale,
