@@ -247,19 +247,25 @@ def agent_environment() -> dict[str, str]:
 
 def agent_plist(main: Path, uv: str) -> dict[str, object]:
     """The launchd agent: `by nightly` from the main checkout's tools at 03:00 and hourly
-    until 08:00."""
+    until 08:00. Its paths are POSIX's, as launchd's are, wherever this runs."""
     log = folder() / "launchd.log"
     return {
         "Label": LABEL,
-        "ProgramArguments": [uv, "run", "--quiet", "--project", str(main / "tools")]
+        "ProgramArguments": [
+            uv,
+            "run",
+            "--quiet",
+            "--project",
+            (main / "tools").as_posix(),
+        ]
         + ["by", "nightly"],
-        "WorkingDirectory": str(main),
+        "WorkingDirectory": main.as_posix(),
         "StartCalendarInterval": [
             {"Hour": hour, "Minute": 0} for hour in range(FIRST_HOUR, LAST_HOUR + 1)
         ],
         "EnvironmentVariables": agent_environment(),
-        "StandardOutPath": str(log),
-        "StandardErrorPath": str(log),
+        "StandardOutPath": log.as_posix(),
+        "StandardErrorPath": log.as_posix(),
     }
 
 

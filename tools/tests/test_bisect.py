@@ -70,7 +70,10 @@ def lane(repo: Path) -> checks.Lane:
     venv = repo / ".venv"
     if not venv.exists():
         venv.mkdir()
-        (venv / "python").symlink_to(sys.executable)
+        # The base interpreter: a Windows venv's python.exe is a launcher that runs only
+        # beside its own pyvenv.cfg.
+        base = getattr(sys, "_base_executable", sys.executable)
+        (venv / "python").symlink_to(base)
     python = str(venv / "python")
     return checks.Lane("ui-test").step(
         "ui-test", [python, "-c", STEP], repo, rerun=checks.failed_titles
