@@ -96,9 +96,11 @@ const MARGIN = 0.3;
 async function walk({ tick, gap, answers, edge, shoot, whole }) {
     /** What a step is about, by the name the stage gives it: its card, or the ability; for a
      * look, the top one of the library cards it lifts (src/stage/table.ts handledAt), or none
-     * where it lifts none, as for a look at a hand the seat does not see. */
+     * where it lifts none, as for a look at a hand the seat does not see, or as it ends: the
+     * lift's motion is its cards coming off (by-w8gv.21.46 reads it). */
     const subjectOf = (act, view) => {
         if (act.verb === "emerge") return `a${act.id}`;
+        if (act.verb === "lift" && act.span !== "begin") return null;
         if (act.verb === "lift") {
             const { zone, side, count } = act.handling;
             const top =
