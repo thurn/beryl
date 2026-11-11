@@ -1117,7 +1117,7 @@ assert.ok(
     "the fixture ends on a halt",
 );
 assert.equal(
-    turnViews[lookAt].status.decision?.ask.kind,
+    turnViews[lookAt].status.decision?.prompt.purpose,
     "look",
     "the human looks at their library before the opponent's turn",
 );
@@ -2254,7 +2254,7 @@ const plainCast = evokeCasts.findIndex(
     (c) => c.option.kind === "cast" && c.option.costs.length === 0,
 );
 const exiling = evokeViews.at(-1).status.decision;
-assert.equal(exiling.ask.kind, "exileCards");
+assert.equal(exiling.prompt.purpose, "exile-cost");
 assert.ok(exiling.cancellable, "the exile is asked while the cast is unpaid");
 const subtlety = `[data-slot="${evokeCasts[evoked].option.slot}"]`;
 const evokeFixture = {
@@ -3316,7 +3316,12 @@ await derive("choice-jace", fatesealFixture, jace.views.length - 1, (v) => ({
         decision: {
             ...v.status.decision,
             kind: "yesNo",
-            ask: { kind: "fateseal", player: "you" },
+            prompt: asking(v.status.decision.prompt, "yesNo", "fateseal", {
+                title: "Top of Library",
+                words: { yes: "Put on Bottom", no: "Keep on Top" },
+                about: [v.players.you.library.at(-1)],
+                from: { player: "you", zone: "library" },
+            }),
             candidates: ["yes", "no"].map((kind) => ({ option: { kind } })),
         },
     },
@@ -5410,7 +5415,17 @@ if (wanted(directPrivateMill)) {
                     kind: "deciding",
                     decision: {
                         ...base.status.decision,
-                        ask: { kind: "explore" },
+                        // A yes or no about the card on top of the library, as an
+                        // explore asks.
+                        prompt: {
+                            ...base.status.decision.prompt,
+                            shape: "yesNo",
+                            purpose: "explore",
+                            part: "pick",
+                            count: 1,
+                            about: [ownTop],
+                            from: { player: "you", zone: "library" },
+                        },
                     },
                 },
             };
@@ -5692,7 +5707,7 @@ const beforeChooser = "mana finishes before the additional-cost chooser opens";
 if (wanted(beforeChooser)) {
     const views = await load("cast-exile-choice");
     const at = views.findIndex(
-        (v) => v.status.decision?.ask.kind === "exileCards",
+        (v) => v.status.decision?.prompt.purpose === "exile-cost",
     );
     const spell = views[at].stack.at(-1).slot;
     await check(
@@ -5712,11 +5727,11 @@ if (wanted(beforeChooser)) {
                 window.berylShown.map((s) => ({
                     at: s.at,
                     events: s.update.view.events.map((e) => e.kind),
-                    ask: s.update.view.status.decision?.ask.kind,
+                    purpose: s.update.view.status.decision?.prompt.purpose,
                 })),
             );
             const mana = shown.find((s) => s.events.includes("mana"));
-            const chooser = shown.find((s) => s.ask === "exileCards");
+            const chooser = shown.find((s) => s.purpose === "exile-cost");
             assert.ok(
                 chooser.at - mana.at >= 800,
                 "payment finishes before selection",
@@ -5754,7 +5769,7 @@ const pendingMana =
 if (wanted(pendingMana)) {
     const views = await load("cast-exile-choice");
     const view = views.find(
-        (v) => v.status.decision?.ask.kind === "exileCards",
+        (v) => v.status.decision?.prompt.purpose === "exile-cost",
     );
     await check(
         pendingMana,
@@ -6366,7 +6381,17 @@ if (wanted("manifest cards")) {
             decision: {
                 ...base.status.decision,
                 kind: "chooseObject",
-                ask: { kind: "manifestDread" },
+                prompt: asking(
+                    base.status.decision.prompt,
+                    "pick",
+                    "manifest-dread",
+                    {
+                        title: "Manifest Dread",
+                        words: { confirm: "Manifest" },
+                        count: 2,
+                        from: { player: "you", zone: "library" },
+                    },
+                ),
                 candidates,
             },
         },
@@ -6432,7 +6457,17 @@ if (wanted("manifest cards")) {
             decision: {
                 ...before.status.decision,
                 kind: "chooseObject",
-                ask: { kind: "exileCards", zone: "graveyard", count: 1 },
+                prompt: asking(
+                    before.status.decision.prompt,
+                    "pick",
+                    "exile-cost",
+                    {
+                        title: "Exile",
+                        words: { confirm: "Exile" },
+                        most: 1,
+                        from: { player: "you", zone: "graveyard" },
+                    },
+                ),
             },
         },
     };
@@ -7689,6 +7724,35 @@ await check(
     },
     crowdedRun(crowdedAt),
 );
+
+/** A prompt of `shape` for `purpose` in place of `prompt`, the record's other fields empty
+ * but for `fields`: what a view edited by hand says its decision asks. */
+function asking(prompt, shape, purpose, fields = {}) {
+    return {
+        ...prompt,
+        shape,
+        purpose,
+        part: "pick",
+        title: "",
+        count: 0,
+        most: 0,
+        places: ["none", "none"],
+        cost: null,
+        about: [],
+        from: null,
+        ...fields,
+        words: {
+            confirm: "",
+            counted: "",
+            decline: "",
+            yes: "",
+            no: "",
+            auto: "",
+            piles: ["", ""],
+            ...fields.words,
+        },
+    };
+}
 
 /** Writes the fixture `as`: fixture `name` up to its view at index `at`, that view changed by
  * `edit`, so that a check can see one state of the table with and without something. */
@@ -9108,7 +9172,7 @@ const tappedLands = landsOf(true);
 const untappedLands = landsOf(false);
 const ownTapped = landsOf(true, "you");
 const theirTapped = landsOf(true, "opponent");
-const untapMax = untapping.decision.ask.max;
+const untapMax = untapping.decision.prompt.most;
 assert.ok(untappedLands.length > 0, "the fixture has untapped lands");
 assert.ok(
     ownTapped.length > 0 && ownTapped.length < untapMax,
@@ -9237,7 +9301,9 @@ await check(
 // basic land and Discard (two gestures), or two cards.
 const thirstViews = await load("choice-thirst");
 const thirstAt = thirstViews.findIndex(
-    (v) => v.status.decision?.ask.kind === "discardBasicLand",
+    (v) =>
+        v.status.decision?.prompt.purpose === "discard" &&
+        v.status.decision.prompt.part === "instead",
 );
 assert.ok(thirstAt >= 0, "the fixture asks Thirst's discard");
 const thirstView = thirstViews[thirstAt];
@@ -9354,7 +9420,7 @@ await check(
 // Trinket Mage's search (`choice-search`) finds up to one of two artifacts: a second click
 // lights the second card in place of the first, never both, and Find sends the one lit.
 const searching = await lastDecision("choice-search");
-assert.equal(searching.decision.ask.max, 1, "the search finds up to one");
+assert.equal(searching.decision.prompt.most, 1, "the search finds up to one");
 assert.ok(
     searching.views.every((v) => v.status.decision?.kind !== "yesNo"),
     "the smart stops search without asking",
@@ -9828,7 +9894,11 @@ if (wanted(ordering)) {
     // The fixture's first attacker stands left of the Human before sorting.
     a.combat = { kind: "attacking", planeswalker: emperor, blocked: false };
     b.combat = { kind: "attacking", planeswalker: null, blocked: false };
-    v.status.decision.ask = { kind: "plain" };
+    v.status.decision.prompt = asking(
+        v.status.decision.prompt,
+        "pick",
+        "priority",
+    );
     v.status.decision.kind = "priority";
     v.status.decision.candidates = [
         { ...v.status.decision.candidates[0], option: { kind: "pass" } },
@@ -9923,7 +9993,11 @@ if (wanted(departingWalker)) {
         before.events = [];
         before.turn.active = attackingSide;
         before.turn.step = "combatDamage";
-        before.status.decision.ask = { kind: "plain" };
+        before.status.decision.prompt = asking(
+            before.status.decision.prompt,
+            "pick",
+            "priority",
+        );
         before.status.decision.kind = "priority";
         before.status.decision.candidates = [
             {
@@ -10097,7 +10171,7 @@ if (wanted("attack destinations use thin lines")) {
 // showing the power tapped against the cost, and what the creature pointed at would add.
 const crewViews = await load("crew");
 const crewAt = crewViews.findIndex(
-    (v) => v.status.decision?.ask.kind === "crew",
+    (v) => v.status.decision?.prompt.purpose === "crew",
 );
 const crewing = crewViews[crewAt].status.decision;
 const crewer = (name) =>
@@ -10142,7 +10216,7 @@ await check(
 // Auto Pay previews on hover, with no selected permanents until the player picks.
 const scryViews = await load("choice-scry");
 const bendAt = scryViews.findIndex(
-    (v) => v.status.decision?.ask.kind === "waterbend",
+    (v) => v.status.decision?.prompt.purpose === "waterbend",
 );
 assert.ok(bendAt >= 0, "waterbend opens a payment review");
 const bending = scryViews[bendAt].status.decision;
@@ -10176,9 +10250,9 @@ if (wanted(bendCost)) {
     for (const fixture of ["choice-scry", "waterbend-tap"]) {
         const views = await load(fixture);
         const at = views.findIndex(
-            (v) => v.status.decision?.ask.kind === "waterbend",
+            (v) => v.status.decision?.prompt.purpose === "waterbend",
         );
-        const cost = views[at].status.decision.ask.cost;
+        const cost = views[at].status.decision.prompt.cost;
         await check(
             `${bendCost} (${fixture})`,
             async (page) => {
@@ -10279,7 +10353,7 @@ await check(
 // both are chosen and confirmed, and then the first goes at once.
 const openingViews = await load("opening-bottom");
 const bottoming = openingViews.at(-1);
-assert.equal(bottoming.status.decision.ask.kind, "putOnBottom");
+assert.equal(bottoming.status.decision.prompt.purpose, "put-on-bottom");
 assert.equal(bottoming.players.you.mulligans, 2, "two cards go on the bottom");
 await check(
     "cards for the bottom toggle in their slots until confirmed",

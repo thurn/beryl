@@ -5,10 +5,12 @@
 //! interpreter will say these things itself (plan K23, by-w8gv.21.5), and the builder, which
 //! takes them as given, stays as it is.
 
+use beryl_engine::card::Purpose;
+
 use super::table::{Entry, Table};
+use crate::prompt::{Lies, PlaceName, ShapeName};
 use crate::protocol::{
-    AskView, CardHandling, Counter, GameEvent, Kind, PlayerView, Side, StackItem, Status, Why,
-    ZoneName,
+    CardHandling, Counter, GameEvent, Kind, PlayerView, Side, StackItem, Status, Why, ZoneName,
 };
 
 /// What a step comes from, before the builder names it.
@@ -185,7 +187,7 @@ pub(super) fn making(view: &PlayerView) -> bool {
         &view.status,
         Status::Deciding { decision }
             if (decision.kind == Kind::ManaPayment
-                && !matches!(decision.ask, AskView::Waterbend { .. }))
+                && !decision.prompt.is(Purpose::Waterbend))
                 || (decision.cancellable && decision.kind != Kind::Priority)
     )
 }
@@ -550,20 +552,17 @@ pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
             .collect()
     };
     if let Status::Deciding { decision } = &view.status {
-        return match decision.ask {
-            AskView::Scry { count } | AskView::Take { count, .. } | AskView::Bottom { count } => {
-                top(Side::You, count)
-            }
-            AskView::Look {
+        let prompt = &decision.prompt;
+        return match prompt.from {
+            // The top of a library, looked at.
+            Some(Lies {
                 player,
                 zone: ZoneName::Library,
-                count,
-                ..
-            } => top(player, count),
-            AskView::ManifestDread => top(Side::You, 2),
-            AskView::Explore => top(Side::You, 1),
-            AskView::Fateseal { player } => top(player, 1),
-            AskView::TopOrBottom { card } | AskView::MayMove { card, .. } => vec![card],
+            }) if prompt.count > 0 => top(player, prompt.count),
+            // A yes or no that sends a card somewhere shows that card.
+            _ if prompt.shape == ShapeName::YesNo && prompt.places[0] != PlaceName::None => {
+                prompt.about.clone()
+            }
             _ => Vec::new(),
         };
     }

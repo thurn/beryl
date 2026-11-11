@@ -5,11 +5,12 @@
 use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_cards::names;
+use beryl_engine::card::Purpose;
 use beryl_engine::event::{Event, Reason};
 use beryl_engine::{
     Choice, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step, apply, next,
 };
-use beryl_session::protocol::{AskView, GameEvent, Side, StackItem, Step as TurnStep, ZoneName};
+use beryl_session::protocol::{GameEvent, Side, StackItem, Step as TurnStep, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting, with_stops,
@@ -172,7 +173,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
     game.set_stand_in("greedy").unwrap();
     let looting = |view: &PlayerView| {
         matches!(&view.status, Status::Deciding { decision }
-            if decision.ask == AskView::Discard
+            if decision.prompt.is(Purpose::Discard)
                 && matches!(&decision.resolving,
                     Some(StackItem::Ability { name, .. }) if name == names::JACE_VRYNS_PRODIGY))
     };

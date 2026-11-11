@@ -83,12 +83,12 @@ import {
   type Point,
 } from "./CardLayer";
 import {
+  aimsAttack,
   follow,
   interactions,
   isCombat,
   isOpening,
   playActs,
-  moveVerb,
   prompt,
   slotOf,
   tapsOnly,
@@ -359,6 +359,7 @@ export function Board({
     view.status.kind === "deciding" && !waiting && !dimmed && !inert;
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
+  const aiming = decision !== undefined && aimsAttack(decision);
   // Emblems are drawn as cards (layout's emblemObjects), shown whole when pointed at.
   const emblems = useMemo(() => emblemObjects(view), [view]);
   const objects = useMemo(
@@ -967,12 +968,7 @@ export function Board({
     states.set(unpaid, { ...states.get(unpaid), draggable: true });
   }
   const marks: [number | null | undefined, Highlight][] = [
-    [
-      top?.kind === "ability" && decision?.ask.kind !== "attackTarget"
-        ? top.source
-        : undefined,
-      "source",
-    ],
+    [top?.kind === "ability" && !aiming ? top.source : undefined, "source"],
   ];
   for (const t of top?.targets ?? []) {
     if (t.kind === "object") marks.push([t.slot, "target"]);
@@ -982,26 +978,23 @@ export function Board({
       continue;
     states.set(slot, { ...states.get(slot), highlight });
   }
-  if (
-    !waterbend.active &&
-    can.source !== undefined &&
-    decision?.ask.kind !== "attackTarget"
-  ) {
+  if (!waterbend.active && can.source !== undefined && !aiming) {
     states.set(can.source, {
       ...states.get(can.source),
       highlight: "source",
     });
   }
-  if (decision?.ask.kind === "attackTarget") {
-    for (const slot of decision.ask.attackers) {
+  if (decision && aiming) {
+    for (const slot of decision.prompt.about) {
       states.set(slot, { ...states.get(slot), highlight: "source" });
     }
   }
   // The card a "you may" move asks about, where the table shows it: risen above its place,
   // as above the graveyard it lies on top of.
   const risen = useMemo(() => {
-    if (!prompting || decision?.ask.kind !== "mayMove") return undefined;
-    const slot = decision.ask.card;
+    if (!prompting || decision?.prompt.purpose !== "move") return undefined;
+    const slot = decision.prompt.about[0];
+    if (slot === undefined) return undefined;
     const p = placements.get(slot);
     if (!p || p.look === "hidden" || p.opacity === 0) return undefined;
     const width = p.width * p.scale;
@@ -2857,8 +2850,7 @@ function Finish({
   onPick(index: CandidateIndex): void;
 }) {
   if (decision.kind === "attackTarget") {
-    const attackers =
-      decision.ask.kind === "attackTarget" ? decision.ask.attackers : [];
+    const attackers = aimsAttack(decision) ? decision.prompt.about : [];
     const attacker =
       attackers.length === 1 ? objects.get(attackers[0]!) : undefined;
     const name = attacker?.token
@@ -2945,17 +2937,13 @@ function Prompt({
   /** The card the question is about, shown risen above its place on the table. */
   risen?: number;
 }) {
-  const { ask } = decision;
-  // A payment plan reads as what it taps, never as a number; a payment asked of a spell's
-  // controller by what it pays.
+  const { purpose, words, about, count, most, cost } = decision.prompt;
+  // A yes and a no read as the prompt words them: a payment asked of a spell's controller by
+  // what it pays, a "you may" move by what it does ("Exile"). A payment plan reads as what it
+  // taps, never as a number.
   const label = (c: DecisionView["candidates"][number]) => {
-    if (ask.kind === "unlessPays") {
-      return c.option.kind === "yes" ? `Pay ${ask.cost}` : "Don't Pay";
-    }
-    // A "you may" move by what it does ("Exile"), or declining.
-    if (ask.kind === "mayMove") {
-      return c.option.kind === "yes" ? moveVerb(ask.to) : "Decline";
-    }
+    if (c.option.kind === "yes" && words.yes) return words.yes;
+    if (c.option.kind === "no" && words.no) return words.no;
     const taps = c.payments[0]?.taps;
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
@@ -2977,7 +2965,7 @@ function Prompt({
   const listed =
     skip === undefined
       ? offered
-      : [{ c: decision.candidates[skip]!, index: skip, label: "No Target" }];
+      : [{ c: decision.candidates[skip]!, index: skip, label: words.decline }];
   const faces: { object: ObjectView; index?: CandidateIndex }[] =
     listed.flatMap(({ c, index }) => {
       const o = c.option.kind === "object" && objects.get(c.option.slot);
@@ -2985,7 +2973,10 @@ function Prompt({
     });
   // The card a "you may" would move, shown as the question's subject: risen above its place
   // on the table (`Risen`), or else here.
-  const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
+  const subject =
+    purpose === "move" && about[0] !== undefined
+      ? objects.get(about[0])
+      : undefined;
   if (subject && subject.slot !== risen) faces.unshift({ object: subject });
   const ordering = decision.kind === "triggerOrder";
   // Its answers in the dock, a "you may" move's first.
@@ -3008,13 +2999,13 @@ function Prompt({
       : prompt(
           skip === undefined ? decision : { ...decision, kind: "target" },
           source,
-          subject?.zone,
         ));
   const body = (
     <>
-      {ask.kind === "crew" && (
+      {purpose === "crew" && (
         <CrewMeter
-          ask={ask}
+          crew={count}
+          left={most}
           adding={
             hovered !== undefined &&
             decision.candidates.some(
@@ -3055,23 +3046,21 @@ function Prompt({
   return (
     <FloatPrompt
       label={title}
-      body={(ask.kind === "crew" || ordering || faces.length > 0) && body}
+      body={(purpose === "crew" || ordering || faces.length > 0) && body}
       title={
         <>
           <RulesText
             text={
               decision.kind === "target" && !targetLabel
                 ? prompt(decision)
-                : ask.kind === "waterbend"
-                  ? "Tap permanents to Waterbend"
-                  : title
+                : title
             }
           />
-          {ask.kind === "waterbend" && (
+          {purpose === "waterbend" && cost !== null && (
             <>
               {" "}
               <span className="prompt-cost">
-                <CostText text={ask.cost} />
+                <CostText text={cost} />
               </span>
             </>
           )}
@@ -3086,12 +3075,12 @@ function Prompt({
               onPreview={onPaymentPreview}
               onPay={autoPay.autoPay}
             >
-              Auto Pay
+              {words.auto}
             </PaymentButton>
           )}
           {buttons.map((b, i) =>
             b.c.option.kind === "plan" ||
-            (ask.kind === "unlessPays" && b.c.option.kind === "yes") ? (
+            (cost !== null && b.c.option.kind === "yes") ? (
               <PaymentButton
                 key={b.index}
                 variant={i === 0 ? "primary" : "secondary"}
@@ -3262,23 +3251,26 @@ function TriggerOrder({
 /** A crew cost as pips, one per point of power: those the creatures tapped so far crew lit,
  * those the creature pointed at would crew half lit. */
 function CrewMeter({
-  ask,
+  crew,
+  left,
   adding,
 }: {
-  ask: { crew: number; left: number };
+  /** The cost's power, and what of it is still to tap. */
+  crew: number;
+  left: number;
   adding: number;
 }) {
-  const crewed = ask.crew - ask.left;
+  const crewed = crew - left;
   return (
     <div
       className="crew-meter"
       role="meter"
       aria-label="Crew"
       aria-valuemin={0}
-      aria-valuemax={ask.crew}
+      aria-valuemax={crew}
       aria-valuenow={crewed}
     >
-      {Array.from({ length: ask.crew }, (_, i) => (
+      {Array.from({ length: crew }, (_, i) => (
         <i
           key={i}
           className={

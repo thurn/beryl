@@ -2,8 +2,9 @@
 // untap's lands, and a choice of cards from the hand (a discard, a card exiled to pay a cost),
 // for which the hand rises whole into view. Pure functions of the view.
 import { faceEntry } from "../cards";
-import type { ObjectView, PlayerView } from "../generated/protocol";
+import type { ObjectView, PlayerView, Words } from "../generated/protocol";
 import {
+  counted,
   slotOf,
   twins,
   untapPlan,
@@ -11,9 +12,6 @@ import {
   type Interactions,
 } from "./decisions";
 import { untapChoice } from "./untapChoice";
-
-/** What a pick of a card from the hand is for: the ask of its `chooseObject` decision. */
-type Ask = NonNullable<Intent["ask"]>;
 
 /** A choice of cards made on the table rather than in an overlay, with the table in view: the
  * cards that can be picked, glowing; how many may be; those picked to begin with; and, for
@@ -39,29 +37,24 @@ export function tablePick(
   if (view.status.kind !== "deciding") return undefined;
   const decision = view.status.decision;
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
-  const { ask } = decision;
-  if (ask.kind === "untap") return untapPick(view, can, objects, ask.max);
-  if (ask.kind === "discardBasicLand" && decision.kind === "yesNo") {
-    return basicLandOrCards(view, objects, ask.count);
+  const { purpose, part, most, about, words } = decision.prompt;
+  switch (purpose) {
+    case "untap":
+      return untapPick(view, can, objects, most, words);
+    case "discard":
+      return part === "instead"
+        ? insteadOrCards(view, objects, most, about, words)
+        : handPick(view, objects, purpose, 1, words);
+    case "cleanup":
+      // Down to the hand size, its picks counted on the button.
+      return handPick(view, objects, purpose, Math.max(1, most), words, true);
+    case "exile-cost":
+      return decision.prompt.from?.zone === "hand"
+        ? handPick(view, objects, purpose, 1, words)
+        : undefined;
+    default:
+      return undefined;
   }
-  if (ask.kind === "discard") {
-    return handPick(view, objects, "discard", 1, "Discard");
-  }
-  if (ask.kind === "cleanup") {
-    // Down to the hand size, its picks counted on the button.
-    return handPick(
-      view,
-      objects,
-      "cleanup",
-      Math.max(1, ask.count),
-      "Discard",
-      true,
-    );
-  }
-  if (ask.kind === "exileCards" && ask.zone === "hand") {
-    return handPick(view, objects, "exileCards", 1, "Exile");
-  }
-  return undefined;
 }
 
 /** The player's hand. */
@@ -73,13 +66,13 @@ const handOf = (view: PlayerView) =>
 /** Picks the card in `slot`, or one the engine offers in its place: an interchangeable one
  * (`twins`), of which it offers one (architecture §7.2). */
 function pickOf(
-  ask: Ask,
+  purpose: string,
   slot: number,
   objects: Map<number, ObjectView>,
 ): Intent {
   return {
     kind: "chooseObject",
-    ask,
+    purpose,
     wants: (o) => o.kind === "object" && o.slot === slot,
     alike: (o) => {
       const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
@@ -98,10 +91,10 @@ function pickOf(
 function handPick(
   view: PlayerView,
   objects: Map<number, ObjectView>,
-  ask: Ask,
+  purpose: string,
   count: number,
-  verb: string,
-  counted = count > 1,
+  words: Words,
+  counts = count > 1,
 ): TablePick | undefined {
   if (view.status.kind !== "deciding") return undefined;
   const offered = view.status.decision.candidates.flatMap((c) => {
@@ -122,8 +115,9 @@ function handPick(
     fromHand: true,
     initial: [],
     ready,
-    label: (picked) => (counted ? `${verb} ${picked.size}/${need}` : verb),
-    plan: (picked) => [...picked].map((slot) => pickOf(ask, slot, objects)),
+    label: (picked) =>
+      counts ? counted(words.counted, picked.size, need) : words.confirm,
+    plan: (picked) => [...picked].map((slot) => pickOf(purpose, slot, objects)),
   };
 }
 
@@ -136,6 +130,7 @@ function untapPick(
   can: Interactions,
   objects: Map<number, ObjectView>,
   max: number,
+  words: Words,
 ): TablePick {
   const eligible = new Set(can.bySlot.keys());
   const initial = untapChoice(view, eligible, max, faceEntry);
@@ -145,32 +140,30 @@ function untapPick(
     initial,
     ready: () => true,
     label: (picked) =>
-      picked.size > 0 ? `Untap ${picked.size}/${max}` : "Untap None",
+      picked.size > 0
+        ? counted(words.counted, picked.size, max)
+        : words.decline,
     plan: (picked) => untapPlan(picked, objects),
   };
 }
 
 /** "Discard two cards unless you discard a basic land card"
  * ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): asked yes or no, then
- * the discards, here picked from the hand at once: one basic land, or `count` cards (as many
- * as the hand holds). */
-function basicLandOrCards(
+ * the discards, here picked from the hand at once: one of the cards the prompt is `about`
+ * (the basic lands), or `count` cards (as many as the hand holds). */
+function insteadOrCards(
   view: PlayerView,
   objects: Map<number, ObjectView>,
   count: number,
+  about: number[],
+  words: Words,
 ): TablePick {
   const hand = handOf(view);
   const need = Math.min(count, hand.length);
-  const basic = (slot: number) => {
-    const name = objects.get(slot)?.name;
-    return /^Basic\b.*\bLand\b/.test(
-      (name && faceEntry(name)?.type_line) || "",
-    );
-  };
-  const landAlone = (picked: ReadonlySet<number>) =>
-    picked.size === 1 && basic([...picked][0]!);
+  const alone = (picked: ReadonlySet<number>) =>
+    picked.size === 1 && about.includes([...picked][0]!);
   const ready = (picked: ReadonlySet<number>) =>
-    landAlone(picked) || picked.size === need;
+    alone(picked) || picked.size === need;
   const discard = (slot: number) => pickOf("discard", slot, objects);
   return {
     eligible: new Set(hand),
@@ -179,11 +172,11 @@ function basicLandOrCards(
     initial: [],
     ready,
     label: (picked) =>
-      ready(picked) ? "Discard" : `Discard ${picked.size}/${need}`,
+      ready(picked) ? words.confirm : counted(words.counted, picked.size, need),
     plan: (picked) => [
       {
         kind: "yesNo",
-        wants: (o) => o.kind === (landAlone(picked) ? "yes" : "no"),
+        wants: (o) => o.kind === (alone(picked) ? "yes" : "no"),
       },
       ...[...picked].map(discard),
     ],

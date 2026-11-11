@@ -8,10 +8,11 @@ use beryl_cards::names::{
     AANGS_ICEBERG, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, MANA_CRYPT,
     MANA_DRAIN, PLAINS, STOCK_UP, THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
+use beryl_engine::card::Purpose;
 use beryl_engine::state::{CounterKind, StackEntry};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::protocol::{AskView, Candidate, Kind, Side, StackItem, ZoneName};
+use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, Seat, SessionId, StartGame, Status, StopsSetting,
@@ -352,7 +353,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<(Kind, bool)> {
         let Status::Deciding { decision } = &view.status else {
             continue;
         };
-        let bending = matches!(decision.ask, AskView::Waterbend { .. });
+        let bending = decision.prompt.is(Purpose::Waterbend);
         if let Some(asked) = &mut asked {
             asked.push((decision.kind, bending));
             if decision.kind == Kind::ChooseUpTo {

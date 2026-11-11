@@ -12,12 +12,12 @@ use crate::ipc::{
 };
 use crate::journal::Level;
 use crate::prompt::{
-    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, Pile, PlaceName, PromptButton,
-    PromptView, ShapeView, Share,
+    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
+    PromptButton, PromptView, ShapeName, ShapeView, Share, Words,
 };
 use crate::protocol::{
-    AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardHandling,
-    CardType, Combat, Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing,
+    AbilityClass, AbilityRef, Candidate, CandidateIndex, CandidateView, CardHandling, CardType,
+    Combat, Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing,
     GameEvent, Keyword, Kind, LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost,
     PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness, RefusalView, Refused,
     SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
@@ -30,9 +30,13 @@ use crate::script::{
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 /// The prompt's types ([`crate::prompt`]).
-fn prompt_decls(cfg: &Config) -> [String; 12] {
+fn prompt_decls(cfg: &Config) -> [String; 16] {
     [
         PromptView::decl(cfg),
+        ShapeName::decl(cfg),
+        PartName::decl(cfg),
+        Lies::decl(cfg),
+        Words::decl(cfg),
         Marked::decl(cfg),
         PromptButton::decl(cfg),
         ButtonId::decl(cfg),
@@ -103,7 +107,6 @@ pub fn typescript() -> String {
         PaidCost::decl(&cfg),
         TargetRef::decl(&cfg),
         DecisionView::decl(&cfg),
-        AskView::decl(&cfg),
         PassTo::decl(&cfg),
         Refused::decl(&cfg),
         RefusalView::decl(&cfg),

@@ -16,11 +16,7 @@ export function summary(fixture) {
             const name = (slot) => names.get(slot) ?? `#${slot}`;
             const status =
                 v.status.kind === "deciding"
-                    ? `asks ${v.status.decision.kind}${
-                          v.status.decision.ask
-                              ? ` (${v.status.decision.ask.kind})`
-                              : ""
-                      }`
+                    ? `asks ${v.status.decision.kind} (${v.status.decision.prompt.purpose})`
                     : v.status.kind;
             const events = (v.events ?? [])
                 .filter((e) => e.kind !== "stepBegins")

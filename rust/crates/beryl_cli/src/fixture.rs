@@ -140,9 +140,9 @@ pub(crate) enum Condition {
     YourTurn(bool),
     /// The human's open decision is of this kind.
     Decision(Kind),
-    /// The human's open decision asks this ([`beryl_session::protocol::AskView`]'s kind, as
-    /// the protocol names it: "mayMove").
-    Ask(String),
+    /// The human's open decision is a pick of a prompt of this purpose and, if it says, this
+    /// part of it ([`beryl_session::prompt::PromptView`]'s, as on the wire: "arrange first").
+    Prompt(String),
     /// The human's open decision has this many candidates.
     Candidates(usize),
     /// A permanent of this name the human controls is tapped.
@@ -294,7 +294,7 @@ impl Condition {
     /// "emblems a side", "game over", "<card> has <n> <counter kind>" (as the protocol names
     /// counters: "loyalty"), "<n> nonland permanents a side", or "<mark> beside a twin" with the
     /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
-    /// Specs add "turn <n>", "your turn", "their turn", "decision <kind>", "ask <kind>",
+    /// Specs add "turn <n>", "your turn", "their turn", "decision <kind>", "prompt <purpose> [<part>]",
     /// "<n> candidates", "tapped <card>", "controls <n> <card>", "they control <n> <card>", "offers <card> ability <n>",
     /// "<n> exiled with <card>" and "not <condition>".
     pub(crate) fn parse(text: &str) -> Result<Condition, String> {
@@ -368,8 +368,8 @@ impl Condition {
                         serde_json::from_value(json!(kind))
                             .map_err(|_| format!("no decision kind is named {kind:?}"))?,
                     )
-                } else if let Some(kind) = text.strip_prefix("ask ") {
-                    Condition::Ask(kind.to_owned())
+                } else if let Some(prompt) = text.strip_prefix("prompt ") {
+                    Condition::Prompt(prompt.to_owned())
                 } else if let Some(card) = text.strip_prefix("tapped ") {
                     Condition::Tapped(card.to_owned())
                 } else if let Some(step) = text.strip_prefix("step ") {
@@ -523,11 +523,9 @@ impl Condition {
             Condition::Turn(n) => view.turn.number == *n,
             Condition::YourTurn(yours) => (view.turn.active == Side::You) == *yours,
             Condition::Decision(kind) => decision.is_some_and(|d| d.kind == *kind && !d.halt),
-            Condition::Ask(kind) => decision.is_some_and(|d| {
-                serde_json::to_value(&d.ask)
-                    .ok()
-                    .and_then(|v| v.get("kind").cloned())
-                    == Some(json!(kind))
+            Condition::Prompt(asked) => decision.is_some_and(|d| {
+                let (purpose, part) = asked.split_once(' ').unwrap_or((asked, ""));
+                d.prompt.purpose == purpose && (part.is_empty() || json!(d.prompt.part) == part)
             }),
             Condition::Candidates(n) => decision.is_some_and(|d| d.candidates.len() == *n),
             Condition::Tapped(card) => mine(view, card).any(|o| o.tapped),

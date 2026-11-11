@@ -361,9 +361,10 @@ id: DecisionId, kind: Kind, candidates: Array<CandidateView>,
  */
 resolving: StackItem | null, 
 /**
- * What the decision asks, where its kind alone does not say.
+ * The prompt the decision's pick belongs to: its shape and purpose, the record's
+ * parameters and its words.
  */
-ask: AskView, 
+prompt: PromptView, 
 /**
  * For a priority decision, where passing takes the viewer, for the pass button.
  */
@@ -410,8 +411,6 @@ undoDepth: number,
  * and why: what the UI says of one a click finds nothing to do with.
  */
 refused: Array<Refused>, };
-
-export type AskView = { "kind": "attackTarget", attackers: Array<number>, } | { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "mayMove", card: number, to: ZoneName, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "maySearch" } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, } | { "kind": "putOnBottom" } | { "kind": "legendRule" } | { "kind": "discard" };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
@@ -626,27 +625,101 @@ export type PromptView = {
  */
 revision: number, 
 /**
- * What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name. The UI
- * reads no meaning from it; it keys sound and motion.
+ * How the prompt is answered.
+ */
+shape: ShapeName, 
+/**
+ * What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name, each of one
+ * shape. A string, so that a new purpose changes no type here.
  */
 purpose: string, 
+/**
+ * Which part of the shape the open decision's pick answers: a prompt is a run of picks.
+ */
+part: PartName, 
 /**
  * What the prompt asks, in words, from the wording table.
  */
 title: string, 
 /**
+ * The words of the buttons a UI that holds the prompt's state itself puts on it.
+ */
+words: Words, 
+/**
+ * What the prompt is about as a whole: the cards looked at on top of a library, a crew
+ * cost's power, the life to pay. Zero where its purpose has no such number.
+ */
+count: number, 
+/**
+ * What this part still takes: the objects still to pick, the power still to tap.
+ */
+most: number, 
+/**
+ * Where the cards go: a split's two destinations, or the one a pick or a yes sends a
+ * card to and none.
+ */
+places: [PlaceName, PlaceName], 
+/**
+ * The mana cost the prompt pays or asks about, as Oracle text writes it.
+ */
+cost: string | null, 
+/**
+ * The objects the question is about, in candidate order: what a yes then picks among,
+ * the creatures being aimed, the cards a yes or no or a mode asks about.
+ */
+about: Array<number>, 
+/**
+ * Whose cards the prompt is among and the zone they lie in: those of the first of
+ * `about`, or else of the first object the decision offers. None where it has neither.
+ */
+from: Lies | null, 
+/**
  * The mark on each card, ability and player that has one, at most one each, in no
- * order. What has none is not part of the prompt as it stands.
+ * order. Empty until the session holds this shape's state.
  */
 marks: Array<Marked>, 
 /**
- * The buttons, in the order they are laid out.
+ * The buttons, in the order they are laid out. Empty until the session holds this
+ * shape's state.
  */
 buttons: Array<PromptButton>, 
 /**
- * How the prompt is answered, with what the player has put together so far.
+ * What the player has put together so far, where the session holds this shape's state;
+ * None where the UI still does.
  */
-shape: ShapeView, };
+state: ShapeView | null, };
+
+export type ShapeName = "pick" | "order" | "split" | "yesNo" | "number" | "mode" | "catalog" | "divide" | "pay" | "declare";
+
+export type PartName = "pick" | "whether" | "instead" | "count" | "first" | "second" | "aim" | "plan";
+
+export type Lies = { player: Side, zone: ZoneName, };
+
+export type Words = { 
+/**
+ * The button that answers with what is picked.
+ */
+confirm: string, 
+/**
+ * That button where the prompt takes several and counts them.
+ */
+counted: string, 
+/**
+ * The button that answers with nothing.
+ */
+decline: string, 
+/**
+ * The button that answers yes, and the one that answers no.
+ */
+yes: string, no: string, 
+/**
+ * The button that pays as the session suggests.
+ */
+auto: string, 
+/**
+ * What each of `places` is called over its pile.
+ */
+piles: [string, string], };
 
 export type Marked = { on: Subject, mark: Mark, };
 

@@ -3,9 +3,9 @@
 //! the browser's motion and gesture checks still judge its presentation.
 
 use super::*;
+use beryl_engine::card::Purpose;
 use beryl_session::protocol::{
-    AskView, Candidate, CandidateIndex, CardHandling, GameEvent, Kind, PlayerView, Side, Status,
-    ZoneName,
+    Candidate, CandidateIndex, CardHandling, GameEvent, Kind, PlayerView, Side, Status, ZoneName,
 };
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -100,7 +100,7 @@ fn subtlety_keeps_opponents_bottom_choice_and_viewers_prompt() {
     });
     exercise("Subtlety", "evoked", true, |v| {
         matches!(&v.status, Status::Deciding { decision }
-            if matches!(decision.ask, AskView::TopOrBottom { .. }) && decision.candidates.len() == 2)
+            if decision.prompt.is(Purpose::TopOrBottom) && decision.candidates.len() == 2)
     });
 }
 
@@ -169,7 +169,7 @@ fn token_departure_is_visible_while_winds_waits_for_a_search() {
         });
         departed
             && matches!(&v.status, Status::Deciding { decision }
-            if matches!(decision.ask, AskView::Search { .. }) && decision.candidates.len() >= 3 && (!v.stack.is_empty() || decision.resolving.is_some()))
+            if decision.prompt.is(Purpose::Search) && decision.candidates.len() >= 3 && (!v.stack.is_empty() || decision.resolving.is_some()))
     });
 }
 
@@ -183,9 +183,9 @@ fn known_top_search_and_three_land_untap_are_interactive() {
             .iter()
             .any(|o| o.zone == ZoneName::Library && o.owner == Side::You && o.name.is_some());
         if let Status::Deciding { decision } = &v.status {
-            assert!(!matches!(decision.ask, AskView::MaySearch));
+            assert!(!decision.prompt.is(Purpose::MaySearch));
             return known_top
-                && matches!(decision.ask, AskView::Search { .. })
+                && decision.prompt.is(Purpose::Search)
                 && decision.candidates.len() >= 3;
         }
         false
@@ -193,7 +193,7 @@ fn known_top_search_and_three_land_untap_are_interactive() {
     // by-svq/by-2ml: two tapped basics alone cannot expose a wrong dual-land suggestion.
     exercise("Teferi, Hero of Dominaria", "dual land", false, |v| {
         matches!(&v.status, Status::Deciding { decision }
-            if matches!(decision.ask, AskView::Untap { .. }) && decision.candidates.len() >= 4 && decision.undo_depth > 0)
+            if decision.prompt.is(Purpose::Untap) && decision.candidates.len() >= 4 && decision.undo_depth > 0)
     });
 }
 
@@ -212,7 +212,7 @@ fn alternate_casts_cycling_and_tax_payment_remain_choices() {
     // by-dzp: the paying seat must answer its own question on the opponent-play board.
     exercise("Mana Tithe", "controller pays", true, |v| {
         matches!(&v.status, Status::Deciding { decision }
-        if matches!(decision.ask, AskView::UnlessPays { .. }) && decision.candidates.len() == 2)
+        if decision.prompt.is(Purpose::UnlessPays) && decision.candidates.len() == 2)
     });
 }
 
@@ -231,7 +231,7 @@ fn costs_tokens_returned_spells_and_coin_flips_are_reachable() {
     // by-0dg: seven graveyard cards expose the additional-cost picker during the cast.
     exercise("Abhorrent Oculus", "six of seven", false, |v| {
         matches!(&v.status, Status::Deciding { decision }
-        if matches!(decision.ask, AskView::ExileCards { .. }) && decision.candidates.len() > 1)
+        if decision.prompt.is(Purpose::ExileCost) && decision.candidates.len() > 1)
     });
     // by-kgc: the source of two tokens is a resolving spell, unlike Staff's permanent.
     exercise("Get Lost", "on a creature", false, |v| {

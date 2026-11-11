@@ -11,12 +11,11 @@ use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names::{
     ISLAND, MANA_CRYPT, PLAINS, STAFF_OF_THE_STORYTELLER, TEFERI_HERO_OF_DOMINARIA,
 };
+use beryl_engine::card::Purpose;
 use beryl_engine::{Choice, Decision, Layout, Observation, Seat, State, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision, Budget};
-use beryl_session::protocol::{
-    AskView, Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName,
-};
+use beryl_session::protocol::{Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, SessionError, SessionId, StartGame, Status,
@@ -466,7 +465,7 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
     }
     let untap = view.clone();
     let d = deciding(&untap).unwrap();
-    assert!(matches!(d.ask, AskView::Untap { max: 2 }));
+    assert!(d.prompt.is(Purpose::Untap) && d.prompt.most == 2);
     assert_eq!((untap.turn.number, untap.turn.step), (3, Step::End));
     let agent_there = log.lock().unwrap().next;
     // The two tapped lands it may untap.

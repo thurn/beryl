@@ -77,7 +77,7 @@ cites a known failure in Arena, MTGO, Forge or XMage.
   the second spell.
 - **Manual payment** (`manaPayment` mana and pool): can the player tap chosen
   sources or spend floating mana, the remaining cost shrinking ("{1}{U} left")?
-- **Life** (`payLife`, `ask: payLife`): "Pay 2 life to have Hallowed Fountain
+- **Life** (`yesNo`, purpose `pay-life`): "Pay 2 life to have Hallowed Fountain
   enter untapped?" with No saying "enters tapped"; Phyrexian mana as "{U} or 2
   life"; current life shown.
 - **Waterbend** (`waterbend`): are artifacts and creatures that can tap toward
@@ -100,7 +100,7 @@ cites a known failure in Arena, MTGO, Forge or XMage.
   source and text, not just the source's name?
 - **Opponent's spells**: when the AI casts, does the client stop with the spell
   readable and its targets shown, nothing resolving during an animation?
-- **Pay or be countered** (`yesNo`, `ask: unlessPays`): "Pay {2} for Mana
+- **Pay or be countered** (`yesNo`, purpose `unless-pays`): "Pay {2} for Mana
   Leak?", untapped mana shown, Pay disabled when unaffordable.
 - **Countered**: is a countered spell seen to leave as Arena shows it
   (crumbling in place, before the spell that countered it), logged with what
@@ -166,15 +166,15 @@ cites a known failure in Arena, MTGO, Forge or XMage.
   visible? Is the hand readable without hover, its order stable, 10 cards fit?
 - **Browsing**: does either graveyard or exile open in one click, in order, and
   close without losing an open decision?
-- **Library looks** (`ask: scry`, `look`, `putBack`, `fateseal`, `explore`):
+- **Library looks** (purposes `scry`, `look`, `put-back`, `fateseal`, `explore`):
   does each say whose library, how many cards and where each goes? Expected:
   scry defaults to all on top; Brainstorm's put-back says which ends on top;
   fateseal says it's the opponent's library; a search shows only matching cards.
-- **Discard** (`discard`, `ask: cleanup`): chosen from the hand in place; the
+- **Discard** (purposes `discard`, `cleanup`): chosen from the hand in place; the
   cleanup prompt says "Discard down to 7: choose 1".
 - **Choose objects** (`chooseObject`, `chooseUpTo`): does the prompt name the
   effect and the count, with "choose none" labelled for "up to"? Do untap
-  prompts ("Untap up to 3 lands", `ask: untap`) preselect tapped lands?
+  prompts ("Untap up to 3 lands", purpose `untap`) preselect tapped lands?
 
 ### Game log
 

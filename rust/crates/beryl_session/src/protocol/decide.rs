@@ -8,11 +8,11 @@ use beryl_engine::{
     SlotId, Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 
-use super::ask::ask_view;
 use super::{
-    AskView, Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView,
-    Refused, StopsSetting, candidate, name, stack_item,
+    Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView, Refused,
+    StackItem, StopsSetting, candidate, name, stack_item,
 };
+use crate::prompt::{halt_prompt, prompt_view};
 
 pub(super) fn decision_view<L: Layout>(
     t: &GameTable,
@@ -35,6 +35,13 @@ pub(super) fn decision_view<L: Layout>(
             .collect(),
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
     };
+    let item = resolving.map(|e| stack_item(t, obs, e));
+    // What asks, by name: the ability resolving, or the spell.
+    let asker = match (&item, resolving) {
+        (Some(StackItem::Ability { name, .. }), _) => Some(name.as_str()),
+        (Some(StackItem::Spell { .. }), Some(e)) => e.object.and_then(|r| name(t, obs, r.slot)),
+        _ => None,
+    };
     DecisionView {
         waterbend: None,
         self_removal_targets: None,
@@ -42,8 +49,8 @@ pub(super) fn decision_view<L: Layout>(
         id,
         kind: d.kind.into(),
         candidates,
-        resolving: resolving.map(|e| stack_item(t, obs, e)),
-        ask: ask_view(obs, d),
+        prompt: Box::new(prompt_view(t, obs, d, asker)),
+        resolving: item,
         pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops).into()),
         pass_on: if d.kind == DecisionKind::Priority {
             pass_on(obs, stops).map(Into::into)
@@ -107,7 +114,7 @@ pub(super) fn halt_view<L: Layout>(
             targets: Vec::new(),
         }],
         resolving: None,
-        ask: AskView::Plain,
+        prompt: Box::new(halt_prompt()),
         pass_to: Some(pass_to(obs, stops).into()),
         pass_on: None,
         source: None,

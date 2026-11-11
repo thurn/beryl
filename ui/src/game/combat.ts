@@ -4,7 +4,7 @@
 // creatures as one candidate (architecture §7.2, §11), so confirming plans the picks that say
 // it, which the game screen sends as each decision arrives. Pure functions of the view.
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
-import { twins, type Intent } from "./decisions";
+import { aimsAttack, twins, type Intent } from "./decisions";
 
 /** A declaration in the making: each attacker and what it attacks (a planeswalker's slot, or
  * null for the defending player); each blocker and the attacker it blocks; and the creature
@@ -50,10 +50,11 @@ export function declared(view: PlayerView, draft: Draft): PlayerView {
 
 /** Older recordings named the attackers only in the attacking player's question. */
 export function pendingAttackers(view: PlayerView): number[] {
-  const ask =
-    view.status.kind === "deciding" ? view.status.decision.ask : undefined;
+  const decision =
+    view.status.kind === "deciding" ? view.status.decision : undefined;
   return (
-    view.pendingAttackers ?? (ask?.kind === "attackTarget" ? ask.attackers : [])
+    view.pendingAttackers ??
+    (decision && aimsAttack(decision) ? decision.prompt.about : [])
   );
 }
 

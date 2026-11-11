@@ -175,7 +175,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
 /// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a
 /// land before putting it onto the battlefield"), as Sink into Stupor plays as Soporific
 /// Springs.
-fn land_face_name<L: Layout>(
+pub(crate) fn land_face_name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     slot: L::Slot,

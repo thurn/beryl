@@ -263,7 +263,7 @@ fn interaction_signature(variant: &Variant) -> Option<String> {
                         ));
                     }
                 } else {
-                    let mut ask = json!(decision.ask);
+                    let mut ask = json!(decision.prompt);
                     strip_slots(&mut ask);
                     let options: Vec<_> = decision
                         .candidates
@@ -312,7 +312,7 @@ fn interaction_signature(variant: &Variant) -> Option<String> {
 fn strip_slots(value: &mut Value) {
     match value {
         Value::Object(fields) => {
-            for key in ["slot", "source", "eligible", "id"] {
+            for key in ["slot", "source", "about", "id"] {
                 fields.remove(key);
             }
             for child in fields.values_mut() {
@@ -754,10 +754,7 @@ mod tests {
             let Status::Deciding { decision } = update.view.status else {
                 continue;
             };
-            if matches!(
-                decision.ask,
-                beryl_session::protocol::AskView::Search { .. }
-            ) {
+            if decision.prompt.is(beryl_engine::card::Purpose::Search) {
                 assert!(decision.candidates.len() > 1, "search needs a real choice");
                 return;
             }

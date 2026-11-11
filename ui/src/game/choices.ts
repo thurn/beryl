@@ -3,9 +3,8 @@
 // asks one pick at a time (a scry is a card for the bottom, then another, then done, then the
 // order of the rest), so the overlay takes the whole choice at once and plans the picks that
 // say it, which the game screen sends as each decision arrives. Pure functions of the view.
-import { cardEntry, faceEntry, landFace } from "../cards";
+import { cardEntry, faceEntry } from "../cards";
 import type {
-  AskView,
   Candidate,
   DecisionView,
   Kind,
@@ -14,7 +13,7 @@ import type {
   Side,
   StackItem,
 } from "../generated/protocol";
-import { optionsMatch, type Intent } from "./decisions";
+import { counted, optionsMatch, type Intent } from "./decisions";
 
 /** The card at the overlay's right: what asks the choice. A card by name alone when the view
  * has no object for it (an ability whose source has left). */
@@ -98,83 +97,77 @@ export const floats = (choice: Choice): choice is Ask =>
   choice.kind === "ask" && choice.cards.length === 0;
 
 /** What the open decision asks, as the overlay shows it; none for a decision made on the board
- * (priority, targets, combat, mana) or on the opening screen. */
+ * (priority, targets, combat, mana) or on the opening screen. The prompt's shape says how it is
+ * answered and its purpose which of that shape's arrangements it takes: a card that asks a
+ * known purpose has its arm here already, and a purpose with no arm of its own is asked as its
+ * shape's plainest choice, in the session's words. */
 export function choiceOf(view: PlayerView): Choice | undefined {
   if (view.status.kind !== "deciding") return undefined;
   const at = new Situation(view, view.status.decision);
-  const ask = at.decision.ask;
-  switch (ask.kind) {
-    case "attackTarget":
-      return undefined;
-    case "plain":
-      return plain(at);
-    case "scry":
-      return scry(at, ask);
-    case "look":
-      return look(at, ask);
-    case "putBack":
-      return putBack(at, ask);
-    case "fateseal":
-      return fateseal(at, ask);
-    case "take":
-      return takeAndBottom(at, ask.count, ask.take);
-    case "bottom":
-      return takeAndBottom(at, ask.count, 0);
-    case "topOrBottom":
-      return topOrBottom(at, ask);
-    case "explore":
-      return explore(at);
-    // Whether to move one card: a small question, asked on the board.
-    case "mayMove":
-      return undefined;
-    case "search":
-      return search(at, ask);
-    case "maySearch":
-      return maySearch(at);
-    // Untaps and choices of cards from the hand (discards, a card exiled for a cost: the hand
-    // rises to pick them, game/tablePick.ts), crews, waterbends and payments (the board
-    // lights what pays) are decided on the board.
-    case "untap":
-    case "discardBasicLand":
-    case "cleanup":
-    case "discard":
-    case "crew":
-    case "waterbend":
-    case "unlessPays":
-    // The opening screen asks for a mulligan's card for the bottom.
-    case "putOnBottom":
-      return undefined;
-    case "legendRule":
-      return small(at) ? undefined : legendRule(at);
-    case "payLife":
-      return payLife(at, ask);
-    case "manifestDread":
-      return manifestDread(at);
-    case "exileCards":
-      return ask.zone === "graveyard"
-        ? graveyardExile(at, ask.count)
-        : undefined;
-    default:
-      return assertNever(ask);
-  }
-}
-
-function assertNever(ask: never): never {
-  throw new Error(`an unknown ask: ${JSON.stringify(ask)}`);
-}
-
-/** A decision that asks no more than its kind says. */
-function plain(at: Situation): Choice | undefined {
-  switch (at.decision.kind) {
-    case "chooseObject":
-      return small(at) ? undefined : chooseObject(at);
+  const { shape, purpose } = at.prompt;
+  switch (shape) {
+    case "split":
+      switch (purpose) {
+        case "scry":
+          return scry(at);
+        case "put-back":
+          return putBack(at);
+        case "arrange":
+          return takeAndBottom(at);
+        default:
+          return undefined;
+      }
     case "yesNo":
-      return yesNo(at);
-    case "castOffer":
-      return castOffer(at);
-    case "x":
+      switch (purpose) {
+        // Whether to move one card, and whether to pay a cost: small questions, asked on the
+        // board.
+        case "move":
+        case "unless-pays":
+          return undefined;
+        case "pay-life":
+          return payLife(at);
+        default:
+          return yesNo(at);
+      }
+    case "pick":
+      switch (purpose) {
+        case "look":
+          return look(at);
+        case "search":
+          return search(at);
+        case "exile-cost":
+          return at.prompt.from?.zone === "graveyard"
+            ? graveyardExile(at)
+            : undefined;
+        case "legend-rule":
+          return small(at) ? undefined : legendRule(at);
+        // Priority, targets and combat damage are decided on the board, as are untaps and
+        // choices of cards from the hand (discards, a card exiled for a cost: the hand rises
+        // to pick them, game/tablePick.ts); the opening screen asks for a mulligan's card for
+        // the bottom.
+        case "priority":
+        case "target":
+        case "combat-damage":
+        case "untap":
+        case "discard":
+        case "cleanup":
+        case "put-on-bottom":
+          return undefined;
+        default:
+          return small(at) ? undefined : chooseObject(at);
+      }
+    case "number":
       return chooseX(at);
-    default:
+    case "mode":
+      // The opening screen asks who plays first and for a mulligan.
+      return purpose === "cast-offer" ? castOffer(at) : undefined;
+    // A trigger order, a payment (the board lights what pays) and combat's declarations are
+    // made on the board. No card asks for an entry of a list or for an amount divided yet.
+    case "order":
+    case "pay":
+    case "declare":
+    case "catalog":
+    case "divide":
       return undefined;
   }
 }
@@ -202,27 +195,6 @@ function small(at: Situation): boolean {
   );
 }
 
-/** One kind of ask's fields. */
-type AskOf<K extends AskView["kind"]> = Extract<AskView, { kind: K }>;
-
-/** Small numbers in words, as rules text writes them. */
-const NUMBERS = [
-  "zero",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-];
-const inWords = (n: number) => NUMBERS[n] ?? String(n);
-const capitalized = (word: string) =>
-  word.charAt(0).toUpperCase() + word.slice(1);
-
 /** The view around a decision, with the lookups the choices share. */
 class Situation {
   readonly objects: Map<number, ObjectView>;
@@ -247,6 +219,11 @@ class Situation {
 
   get key() {
     return this.decision.id.seq;
+  }
+
+  /** The prompt the decision's pick belongs to. */
+  get prompt() {
+    return this.decision.prompt;
   }
 
   name(slot: number) {
@@ -311,12 +288,12 @@ class Situation {
   }
 
   /** Picks the card in `slot`, or one interchangeable with it, at a decision of `kind`
-   * that asks `ask`, if it says. */
-  pickCard(kind: Kind, slot: number, ask?: Intent["ask"]): Intent {
+   * for `purpose`, if it says. */
+  pickCard(kind: Kind, slot: number, purpose?: string): Intent {
     const name = this.name(slot);
     return {
       kind,
-      ask,
+      purpose,
       wants: (o) => o.kind === "object" && o.slot === slot,
       alike: (o) =>
         o.kind === "object" && name !== undefined && this.name(o.slot) === name,
@@ -329,6 +306,12 @@ class Situation {
       label: label(c.option, c.label),
       plan: [answer(this.decision.kind, c.option)],
     }));
+  }
+
+  /** The cards the prompt lays out from the top of a library: the top `count` of the library
+   * its cards lie in, top first. */
+  get shown() {
+    return this.looked(this.prompt.count, this.prompt.from?.player ?? "you");
   }
 }
 
@@ -369,17 +352,17 @@ const done = (kind: Kind): Intent => ({
  * order and the rest on top of your library in any order." The engine takes the cards for the
  * bottom one at a time, each under the one before, then done, then the rest from the top down
  * (`EffectCtx::scry`). Asked for the order alone, the bottom is settled. */
-function scry(at: Situation, { count }: AskOf<"scry">): Arrange {
-  const ordering = at.decision.kind === "chooseObject";
+function scry(at: Situation): Arrange {
+  const ordering = at.prompt.part === "second";
   // Top first; a card the engine collapsed with an identical one still shows.
-  const cards = at.offeredAmong(at.looked(count));
+  const cards = at.offeredAmong(at.shown);
   const shown = cards.length > 0 ? cards : at.offered;
   return {
     kind: "arrange",
     key: at.key,
-    title: "Scry",
+    title: at.prompt.title,
     source: at.source,
-    labels: ["Bottom", "Top"],
+    labels: at.prompt.words.piles,
     left: [],
     right: [...shown].reverse(),
     leftClosed: ordering,
@@ -401,33 +384,35 @@ function scry(at: Situation, { count }: AskOf<"scry">): Arrange {
 }
 
 /** Cards from your hand put on top of your library in any order, each on the one before. */
-function putBack(at: Situation, { count }: AskOf<"putBack">): Stack {
+function putBack(at: Situation): Stack {
   const hand = at.hand("you");
   return {
     kind: "stack",
     key: at.key,
-    title: "Put Back",
+    title: at.prompt.title,
     source: at.source,
     hand,
-    count: Math.min(count, hand.length),
+    count: Math.min(at.prompt.most, hand.length),
     plan: (onto) => onto.map((slot) => at.pickCard("chooseObject", slot)),
   };
 }
 
-/** A look at the top of your library that puts `take` of the cards into your hand and the rest
- * on the bottom in any order. The engine takes the cards for the hand one at a time, then those
- * for the bottom, each under the one before, the last unasked. Asked for the bottom alone
- * (`take` 0), the hand is settled. */
-function takeAndBottom(at: Situation, count: number, take: number): Arrange {
-  const cards = at.offeredAmong(at.looked(count));
+/** A look at the top of your library that puts some of the cards into your hand (the prompt's
+ * `most` of them) and the rest on the bottom in any order. The engine takes the cards for the
+ * hand one at a time, then those for the bottom, each under the one before, the last unasked.
+ * Asked for the bottom alone (the prompt's second part), the hand is settled. */
+function takeAndBottom(at: Situation): Arrange {
+  const cards = at.offeredAmong(at.shown);
   const shown = cards.length > 0 ? cards : at.offered;
+  const take = at.prompt.part === "first" ? at.prompt.most : 0;
   const need = Math.min(take, shown.length);
+  const [hand, bottom] = at.prompt.words.piles;
   return {
     kind: "arrange",
     key: at.key,
-    title: `Top ${capitalized(inWords(count))}`,
+    title: at.prompt.title,
     source: at.source,
-    labels: ["Bottom", "Hand"],
+    labels: [bottom, hand],
     left: [...shown].reverse(),
     right: [],
     rightCount: need,
@@ -443,74 +428,30 @@ function takeAndBottom(at: Situation, count: number, take: number): Arrange {
   };
 }
 
-/** Whether the top card of a player's library goes to the bottom. */
-function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
-  const top = at.library(player)[0];
-  return {
-    kind: "ask",
-    key: at.key,
-    title: "Top of Library",
-    equalAnswers: true,
-    source: at.source,
-    cards: top === undefined ? [] : [top],
-    answers: [
-      { label: "Put on Bottom", plan: [yes("yesNo")] },
-      { label: "Keep on Top", plan: [no("yesNo")] },
-    ],
-  };
-}
-
-/** Whether a spell goes on top of its owner's library or the bottom. */
-function topOrBottom(at: Situation, { card }: AskOf<"topOrBottom">): Ask {
-  return {
-    kind: "ask",
-    key: at.key,
-    title: "Top or Bottom?",
-    equalAnswers: true,
-    source: at.source,
-    cards: [card],
-    answers: [
-      { label: "Top", plan: [yes("yesNo")] },
-      { label: "Bottom", plan: [no("yesNo")] },
-    ],
-  };
-}
-
 /** A look at the top of a library or at a hand that may move one of the cards it lights
  * (the source card at the right says which, and what happens to the rest): asked yes or no
  * first, then which (`may_choose_object`). */
-function look(at: Situation, ask: AskOf<"look">): Pick {
-  const { player, zone, count, to, eligible } = ask;
-  const library = zone === "library";
-  const cards = library ? at.looked(count, player) : at.hand(player);
-  const asking = at.decision.kind === "yesNo";
+function look(at: Situation): Pick {
+  const { from, about, words } = at.prompt;
+  const player = from?.player ?? "you";
+  const cards = from?.zone === "library" ? at.shown : at.hand(player);
+  const asking = at.prompt.part === "whether";
   const pickable = asking
-    ? cards.filter((s) => eligible.includes(s))
+    ? cards.filter((s) => about.includes(s))
     : at.offeredAmong(cards);
-  const title = library
-    ? `Top ${capitalized(inWords(count))}`
-    : player === "you"
-      ? "Your Hand"
-      : "Opponent's Hand";
-  const taking = to === "hand";
-  const verb = taking ? "Put in Hand" : capitalized(to);
   // A card is nearly always worth taking: the one card that can be is picked to begin with,
   // and taking nothing is the second button.
   return {
     kind: "pick",
     key: at.key,
-    title,
+    title: at.prompt.title,
     source: at.source,
     cards,
     pickable,
     min: 1,
     max: 1,
-    confirm: () => verb,
-    decline: asking
-      ? taking
-        ? "Take Nothing"
-        : `${capitalized(to)} Nothing`
-      : undefined,
+    confirm: () => words.confirm,
+    decline: asking ? words.decline : undefined,
     picked: pickable.length === 1 ? pickable : [],
     plan: ([slot]) =>
       slot === undefined
@@ -522,25 +463,6 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
   };
 }
 
-/** An explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "that
- * permanent's controller reveals the top card of their library ... Otherwise, that player
- * puts a +1/+1 counter on the exploring permanent and may put the revealed card into their
- * graveyard." The revealed card is shown, each answer named by where it goes. */
-function explore(at: Situation): Ask {
-  const top = at.library("you")[0];
-  return {
-    kind: "ask",
-    key: at.key,
-    title: "Revealed",
-    source: at.source,
-    cards: top === undefined ? [] : [top],
-    answers: [
-      { label: "Graveyard", plan: [yes("yesNo")] },
-      { label: "Keep on Top", plan: [no("yesNo")] },
-    ],
-  };
-}
-
 /** A library search ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) for
  * up to `max` cards, which the engine asks for one at a time, then done, unless it has as many
  * as it may take or none is left to take. The source card at the right says what the search
@@ -549,7 +471,8 @@ function explore(at: Situation): Ask {
  * on the confirm button. Finding nothing is the second button
  * ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "that player isn't
  * required to find some or all of those cards"); a lone card found is picked to begin with. */
-function search(at: Situation, { max }: AskOf<"search">): Pick {
+function search(at: Situation): Pick {
+  const { most: max, words } = at.prompt;
   const copies = at.offeredAmong(at.library("you"));
   const cards = (copies.length >= at.offered.length ? copies : at.offered)
     .slice()
@@ -560,14 +483,15 @@ function search(at: Situation, { max }: AskOf<"search">): Pick {
   return {
     kind: "pick",
     key: at.key,
-    title: "Search",
+    title: at.prompt.title,
     source: at.source,
     cards,
     pickable: cards,
     min: 1,
     max: most,
-    confirm: (n) => (most > 1 ? `Find ${n}/${most}` : "Find"),
-    decline: "Find Nothing",
+    confirm: (n) =>
+      most > 1 ? counted(words.counted, n, most) : words.confirm,
+    decline: words.decline,
     picked: cards.length === 1 ? cards : [],
     plan: (picked) => [
       ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
@@ -577,54 +501,25 @@ function search(at: Situation, { max }: AskOf<"search">): Pick {
   };
 }
 
-/** Whether to search at all, asked only of a player who knows cards in their library (the
- * session searches for the others): declining keeps them where they are, unshuffled. */
-function maySearch(at: Situation): Ask {
-  return {
-    kind: "ask",
-    key: at.key,
-    title: "Search?",
-    source: at.source,
-    cards: [],
-    answers: [
-      { label: "Search", plan: [yes("yesNo")] },
-      { label: "Don't Search", plan: [no("yesNo")] },
-    ],
-  };
-}
-
+/** A card among those the decision offers, laid out: the top cards of a library the prompt
+ * counts, as the two of a manifest dread
+ * ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a): one goes onto the
+ * battlefield face down, the other to the graveyard), or else the cards offered. */
 function chooseObject(at: Situation): Pick {
+  const { from, count, words, purpose } = at.prompt;
+  const cards = from?.zone === "library" && count > 0 ? at.shown : at.offered;
   return {
     kind: "pick",
     key: at.key,
-    title: "Choose a Card",
-    source: at.source,
-    cards: at.offered,
-    pickable: at.offered,
-    min: 1,
-    max: 1,
-    confirm: () => "Choose",
-    plan: ([slot]) =>
-      slot === undefined ? [] : [at.pickCard("chooseObject", slot)],
-  };
-}
-
-/** Manifest dread ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): one
- * of the top two cards goes onto the battlefield face down, the other to the graveyard. */
-function manifestDread(at: Situation): Pick {
-  const cards = at.looked(2);
-  return {
-    kind: "pick",
-    key: at.key,
-    title: "Manifest Dread",
+    title: at.prompt.title,
     source: at.source,
     cards,
     pickable: at.offeredAmong(cards),
     min: 1,
     max: 1,
-    confirm: () => "Manifest",
+    confirm: () => words.confirm,
     plan: ([slot]) =>
-      slot === undefined ? [] : [at.pickCard("chooseObject", slot)],
+      slot === undefined ? [] : [at.pickCard("chooseObject", slot, purpose)],
   };
 }
 
@@ -633,20 +528,21 @@ function manifestDread(at: Situation): Pick {
  * engine asks for them from the bottom of the graveyard up, each above the one before, of
  * cards with one name the lowest, and takes them unasked once one answer is left: the plan
  * follows it, asking for each card the engine will ask for. */
-function graveyardExile(at: Situation, count: number): Pick {
+function graveyardExile(at: Situation): Pick {
+  const count = at.prompt.most;
   const graveyard = at.view.players.you.graveyard.filter(
     (slot) => !at.view.objects.find((o) => o.slot === slot)?.token,
   );
   return {
     kind: "pick",
     key: at.key,
-    title: "Exile",
+    title: at.prompt.title,
     source: at.source,
     cards: [...graveyard].reverse(),
     pickable: graveyard,
     min: count,
     max: count,
-    confirm: () => "Exile",
+    confirm: () => at.prompt.words.confirm,
     plan(picked) {
       const need = new Map<string, number>();
       for (const slot of picked) {
@@ -666,7 +562,7 @@ function graveyardExile(at: Situation, count: number): Pick {
         // The lowest card of that name is the one the engine offers and exiles.
         const first = window.findIndex((s) => (at.name(s) ?? "") === name);
         if (names.size > 1)
-          picks.push(at.pickCard("chooseObject", window[first]!, "exileCards"));
+          picks.push(at.pickCard("chooseObject", window[first]!, "exile-cost"));
         need.set(name, need.get(name)! - 1);
         left.splice(from + first, 1);
         from += first;
@@ -686,37 +582,30 @@ function legendRule(at: Situation): Pick {
   return {
     kind: "pick",
     key: at.key,
-    title: "Legend Rule",
+    title: at.prompt.title,
     cards,
     pickable: cards,
     min: 1,
     max: 1,
-    confirm: () => "Keep",
+    confirm: () => at.prompt.words.confirm,
     plan: ([slot]) =>
       slot === undefined
         ? []
-        : [at.pickCard("chooseObject", slot, "legendRule")],
+        : [at.pickCard("chooseObject", slot, "legend-rule")],
   };
 }
 
 /** "As this land enters, you may pay N life. If you don't, it enters tapped": asked of the
  * land by name. Paying is the default only when the land's mana would make a card in hand
  * castable this turn that the untapped lands cannot. */
-function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
-  const name = at.source?.name;
-  const land = name ? landFace(name) : undefined;
-  const pay = {
-    label: `Pay ${life} Life`,
-    plan: [{ ...yes("yesNo"), ask: "payLife" as const }],
-  };
-  const tapped = {
-    label: "Tapped",
-    plan: [{ ...no("yesNo"), ask: "payLife" as const }],
-  };
+function payLife(at: Situation): Ask {
+  const { words, purpose } = at.prompt;
+  const pay = { label: words.yes, plan: [{ ...yes("yesNo"), purpose }] };
+  const tapped = { label: words.no, plan: [{ ...no("yesNo"), purpose }] };
   return {
     kind: "ask",
     key: at.key,
-    title: land?.name ?? name ?? `Pay ${life} Life?`,
+    title: at.prompt.title,
     cards: [],
     answers: at.untappedLandWanted(at.source?.slot)
       ? [pay, tapped]
@@ -724,35 +613,47 @@ function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
   };
 }
 
+/** A yes or no in the prompt's own words, over the cards it is about, if any: the top card of
+ * a library that may go to the bottom, a revealed card that may go to the graveyard
+ * ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a): "that player ... may
+ * put the revealed card into their graveyard"), a spell that goes on top of its owner's
+ * library or the bottom, or whether to search at all (asked only of a player who knows cards
+ * in their library: declining keeps them where they are, unshuffled). */
 function yesNo(at: Situation): Ask {
+  const { words, about, purpose } = at.prompt;
   return {
     kind: "ask",
     key: at.key,
-    title: at.resolvingName ?? "Choose",
+    title: at.prompt.title,
+    // Where each answer sends the card, neither is the one to press.
+    equalAnswers: EQUAL_ANSWERS.has(purpose) || undefined,
     source: at.source,
-    cards: [],
-    answers: at.answers((_, label) => label),
+    cards: about,
+    answers: at.answers((o, label) =>
+      o.kind === "yes" ? words.yes : o.kind === "no" ? words.no : label,
+    ),
   };
 }
+
+/** The yes-or-no purposes whose answers are two places for one card. */
+const EQUAL_ANSWERS = new Set(["fateseal", "top-or-bottom"]);
 
 /** A card a resolved ability lets its controller cast now, without paying its mana cost
  * ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). The ability has finished
  * resolving, so the decision names no source. */
 function castOffer(at: Situation): Ask {
   const casts = at.decision.candidates.filter((c) => c.option.kind === "cast");
-  const first = casts[0]?.option;
-  const slot = first?.kind === "cast" ? first.slot : undefined;
-  const name = slot === undefined ? undefined : at.name(slot);
+  const { words } = at.prompt;
   return {
     kind: "ask",
     key: at.key,
-    title: name ? `Cast ${name}?` : "Cast It?",
+    title: at.prompt.title,
     cards: [],
     answers: at.answers((o, label) =>
       o.kind === "pass"
-        ? "Don't Cast"
+        ? words.decline
         : o.kind === "cast" && casts.length === 1
-          ? "Cast"
+          ? words.confirm
           : label,
     ),
   };
@@ -765,7 +666,7 @@ function chooseX(at: Situation): Ask {
   return {
     kind: "ask",
     key: at.key,
-    title: "Choose X",
+    title: at.prompt.title,
     source: at.source,
     cards: [],
     answers: at.decision.candidates.map((c) => {

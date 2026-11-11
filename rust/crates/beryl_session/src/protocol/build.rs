@@ -199,6 +199,20 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
     }
 }
 
+/// The first of the cards `d`'s prompt shows: a card of its object set, or else an object it
+/// offers. The cards shown share an owner and a zone, so the first in candidate order says
+/// whose they are and where they lie.
+pub(crate) fn shown<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<L::Slot> {
+    let about = obs.in_candidate_order(d.about).next();
+    about.or_else(|| match &d.candidates {
+        Candidates::Objects(_) => d.candidates.objects().next(),
+        Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
+            Opt::Object(slot) => Some(slot),
+            _ => None,
+        }),
+    })
+}
+
 /// What the opponent sees of the cards `d`'s prompt has its player look through: the hand or
 /// the library its object set lies in, or else its candidates, and how much of it.
 fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<CardHandling> {
@@ -210,16 +224,7 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
     {
         return None;
     }
-    // The cards shown share an owner and a zone, so the first in candidate order does.
-    let about = obs.in_candidate_order(d.about).next();
-    let shown = about.or_else(|| match &d.candidates {
-        Candidates::Objects(_) => d.candidates.objects().next(),
-        Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
-            Opt::Object(slot) => Some(slot),
-            _ => None,
-        }),
-    })?;
-    let card = obs.object(shown);
+    let card = obs.object(shown(obs, d)?);
     let player = card.owner();
     match card.zone() {
         Zone::Library => {
@@ -241,7 +246,7 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
 }
 
 /// Player `p` as the viewer of `obs` sees them.
-pub(super) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
+pub(crate) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
     if p == obs.viewer() {
         Side::You
     } else {
@@ -250,13 +255,13 @@ pub(super) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
 }
 
 /// Slots as the protocol numbers them. A set of objects is sent in the candidate order.
-pub(super) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
+pub(crate) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
     slots.into_iter().map(SlotId::num).collect()
 }
 
 /// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
 /// permanent, the name of its card, which it turns face up with (CR 712.15a).
-pub(super) fn name<L: Layout>(
+pub(crate) fn name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     slot: L::Slot,

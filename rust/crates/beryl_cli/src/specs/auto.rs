@@ -24,12 +24,14 @@ use beryl_cards::names::{
     COUNTERSPELL, FRACTURED_IDENTITY, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR,
     STOCK_UP, SWAMP, THIEVING_SKYDIVER, TIME_SPIRAL,
 };
-use beryl_engine::card::{AbilityKind, CardDef, Face, Needs, ObjectAbility, Timing, Types};
+use beryl_engine::card::{
+    AbilityKind, CardDef, Face, Needs, ObjectAbility, Purpose, Timing, Types,
+};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 use beryl_session::protocol::{
-    AskView, Candidate as Offer, Kind as Decision, PlayerView, Side, StackItem, Status, ZoneName,
+    Candidate as Offer, Kind as Decision, PlayerView, Side, StackItem, Status, ZoneName,
 };
 use serde_json::json;
 
@@ -92,7 +94,7 @@ fn question_of(recorded: &[String]) -> Vec<&str> {
         .iter()
         .map(String::as_str)
         .filter(|c| {
-            ["decision ", "ask ", "resolving ", "casting "]
+            ["decision ", "prompt ", "resolving ", "casting "]
                 .iter()
                 .any(|p| c.starts_with(p))
         })
@@ -337,7 +339,7 @@ fn review_example(
         Some(StackItem::Ability { controller, .. }) => Some(*controller),
         None => None,
     };
-    let paying = decision.is_some_and(|d| matches!(d.ask, AskView::UnlessPays { .. }));
+    let paying = decision.is_some_and(|d| d.prompt.is(Purpose::UnlessPays));
     let roles = std::array::from_fn(|seat| match (seat == owner, source_side) {
         (true, _) if paying => "Paying player".to_owned(),
         (true, Some(Side::You)) | (false, Some(Side::Opponent)) => {
@@ -353,9 +355,10 @@ fn review_example(
     let actions = decision.map_or_else(Vec::new, |d| {
         d.candidates
             .iter()
-            .map(|c| match (&d.ask, &c.option) {
-                (AskView::UnlessPays { cost }, Offer::Yes) => format!("Pay {cost}"),
-                (AskView::UnlessPays { .. }, Offer::No) => "Don't Pay".to_owned(),
+            .map(|c| match &c.option {
+                // A yes and a no in the prompt's own words.
+                Offer::Yes if !d.prompt.words.yes.is_empty() => d.prompt.words.yes.clone(),
+                Offer::No if !d.prompt.words.no.is_empty() => d.prompt.words.no.clone(),
                 _ => c.label.clone(),
             })
             .collect()
@@ -389,12 +392,9 @@ fn review_choice_key(
     owner: usize,
     source: Option<Side>,
 ) -> serde_json::Value {
-    let mut ask = json!(decision.ask);
-    if let Some(fields) = ask.as_object_mut() {
-        fields.remove("card");
-        if let Some(eligible) = fields.get_mut("eligible") {
-            *eligible = json!(eligible.as_array().map(Vec::len));
-        }
+    let mut ask = json!(decision.prompt);
+    if let Some(about) = ask.get_mut("about") {
+        *about = json!(about.as_array().map(Vec::len));
     }
     let options: Vec<_> = decision
         .candidates
@@ -408,32 +408,19 @@ fn review_choice_key(
 }
 
 fn review_prompt(d: &beryl_session::protocol::DecisionView) -> String {
-    match &d.ask {
-        AskView::UnlessPays { cost } => format!("Pay {cost}?"),
-        AskView::PayLife { life } => format!("Pay {life} life?"),
-        AskView::Scry { count } => format!("Scry {count}"),
-        ask => {
-            let value = json!(ask);
-            let kind = json!(d.kind);
-            let label = value["kind"]
-                .as_str()
-                .filter(|&k| k != "plain")
-                .or_else(|| kind.as_str())
-                .unwrap_or("choice");
-            let mut title = String::new();
-            for (i, ch) in label.chars().enumerate() {
-                if i == 0 {
-                    title.extend(ch.to_uppercase());
-                } else if ch.is_ascii_uppercase() {
-                    title.push(' ');
-                    title.push(ch.to_ascii_lowercase());
-                } else {
-                    title.push(ch);
-                }
-            }
-            title
+    // The prompt's own title, or for one that has none its purpose.
+    if !d.prompt.title.is_empty() {
+        return d.prompt.title.clone();
+    }
+    let mut title = String::new();
+    for (i, ch) in d.prompt.purpose.chars().enumerate() {
+        match ch {
+            _ if i == 0 => title.extend(ch.to_uppercase()),
+            '-' => title.push(' '),
+            _ => title.push(ch),
         }
     }
+    title
 }
 
 type Recorded = Result<[Vec<String>; 2], String>;
@@ -579,11 +566,11 @@ fn follow_ons(c: &Candidate, r: &[Vec<String>; 2]) -> Vec<Candidate> {
     ]
 }
 
-/// A question's label, from what was recorded at it: "Ask: mayMove", or its kind.
+/// A question's label, from what was recorded at it: "Ask: move", or its kind.
 fn question(recorded: &[String]) -> String {
     recorded
         .iter()
-        .find_map(|c| c.strip_prefix("ask "))
+        .find_map(|c| c.strip_prefix("prompt "))
         .or_else(|| recorded.iter().find_map(|c| c.strip_prefix("decision ")))
         .map_or_else(|| "Question".to_owned(), |q| format!("Ask: {q}"))
 }
@@ -1354,12 +1341,14 @@ pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
         if !decision.halt {
             out.push(format!("decision {}", protocol(json!(decision.kind))));
         }
-        if let Some(kind) = serde_json::to_value(&decision.ask)
-            .ok()
-            .and_then(|v| v.get("kind").and_then(|k| k.as_str().map(str::to_owned)))
-            .filter(|k| k != "plain")
-        {
-            out.push(format!("ask {kind}"));
+        // A priority's kind says it all.
+        let prompt = &decision.prompt;
+        if !prompt.is(Purpose::Priority) {
+            let part = match protocol(json!(prompt.part)).as_str() {
+                "pick" => String::new(),
+                part => format!(" {part}"),
+            };
+            out.push(format!("prompt {}{part}", prompt.purpose));
         }
         if json!(decision.kind) != json!("priority") {
             out.push(format!("{} candidates", decision.candidates.len()));

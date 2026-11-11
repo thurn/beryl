@@ -9,7 +9,9 @@
 //!
 //! # State
 //!
-//! A [`PromptView`] is a prompt's whole state as its seat sees it:
+//! A [`PromptView`] is a prompt as its seat sees it. It says what the decision's pick belongs
+//! to: the shape, the purpose, the part of the shape the pick answers and the record's
+//! parameters, by public slot and relative to the viewer. And it is the prompt's whole state:
 //!
 //! - its title and its buttons, each with its label and whether it can be clicked, worded by
 //!   one table keyed by purpose;
@@ -20,6 +22,16 @@
 //!
 //! The view that opens a decision carries the prompt's first state. It rides the view, so a
 //! reloaded page takes up a prompt as it stood.
+//!
+//! Until the session holds a shape's state, a prompt of that shape arrives with no marks, no
+//! buttons and no state, and the UI that holds the state words its own buttons from the
+//! prompt's [`Words`] and plans the picks itself.
+//!
+//! # Words
+//!
+//! Every title and label comes from one table keyed by purpose (`wording.rs`), filled from
+//! the record and the view. A new purpose is one entry of the purposes' list and one of the
+//! table; nothing on the wire names it but its string.
 //!
 //! # Clicks
 //!
@@ -38,10 +50,13 @@
 //! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
 //! expectations of tests (plan K24).
 
+mod open;
 mod text;
 mod view;
+mod wording;
 
+pub(crate) use open::{halt_prompt, prompt_view};
 pub use view::{
-    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, Pile, PlaceName, PromptButton,
-    PromptView, ShapeView, Share,
+    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
+    PromptButton, PromptView, ShapeName, ShapeView, Share, Words,
 };

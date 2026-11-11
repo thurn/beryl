@@ -78,15 +78,18 @@ fn rank(subject: Subject) -> (u8, u32) {
 impl Display for PromptView {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let PromptView {
-            revision: _,
+            shape,
             purpose,
             title,
             marks,
             buttons,
-            shape,
+            state,
+            ..
         } = self;
-        writeln!(f, "{} {purpose}: {title}", tag(shape))?;
-        write!(f, "{shape}")?;
+        writeln!(f, "{} {purpose}: {title}", wire(*shape))?;
+        if let Some(state) = state {
+            write!(f, "{state}")?;
+        }
         for &mark in Mark::ALL {
             let mut on: Vec<Subject> = marks
                 .iter()
@@ -124,17 +127,6 @@ impl Display for PromptButton {
             f.write_str("*")?;
         }
         Ok(())
-    }
-}
-
-/// A shape's name on the wire: its state's tag.
-fn tag(shape: &ShapeView) -> String {
-    match serde_json::to_value(shape) {
-        Ok(serde_json::Value::Object(fields)) => match fields.get("shape") {
-            Some(serde_json::Value::String(name)) => name.clone(),
-            _ => unreachable!("a shape's state is tagged with its shape"),
-        },
-        _ => unreachable!("a shape's state is an object"),
     }
 }
 

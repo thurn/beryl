@@ -137,7 +137,7 @@ export function manaMotes(
   const making = (v: PlayerView | undefined) =>
     v?.status.kind === "deciding" &&
     ((v.status.decision.kind === "manaPayment" &&
-      v.status.decision.ask.kind !== "waterbend") ||
+      v.status.decision.prompt.purpose !== "waterbend") ||
       (v.status.decision.cancellable && v.status.decision.kind !== "priority"));
   // A cost chooser can follow payment before a Cast event exists. Bind the motes to that
   // pending item, never to a different spell that becomes topmost after it resolves.

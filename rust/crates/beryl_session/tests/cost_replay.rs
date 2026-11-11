@@ -1,9 +1,10 @@
 //! Saved cast costs retain their choices when mana payment moves before exile selection.
 use beryl_cards::{CARDS, names};
+use beryl_engine::card::Purpose;
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::checkpoint::Checkpoint;
-use beryl_session::protocol::{AskView, Candidate, Kind};
+use beryl_session::protocol::{Candidate, Kind};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, ReplayFile, SessionId, Status, StopsSetting,
 };
@@ -108,8 +109,8 @@ fn old_cost_order_replays_complete_and_partial_casts() {
     v = answer(&mut g, &v, cast);
     assert_eq!(decision(&v).kind, Kind::PaymentPlan);
     v = answer(&mut g, &v, 0);
-    assert!(matches!(decision(&v).ask, AskView::ExileCards { .. }));
-    while matches!(decision(&v).ask, AskView::ExileCards { .. }) {
+    assert!(decision(&v).prompt.is(Purpose::ExileCost));
+    while decision(&v).prompt.is(Purpose::ExileCost) {
         v = answer(&mut g, &v, 0);
     }
     let file = g.replay().clone();
@@ -204,7 +205,7 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
         })
         .unwrap();
     view = answer(&mut game, &view, activate);
-    assert!(matches!(decision(&view).ask, AskView::Waterbend { .. }));
+    assert!(decision(&view).prompt.is(Purpose::Waterbend));
     assert!(!decision(&view).waterbend.as_ref().unwrap().ready);
     let after = answer(&mut game, &view, 0);
     let mut old = serde_json::to_value(game.replay()).unwrap();
@@ -259,7 +260,7 @@ fn old_waterbend_saves_restore_an_automatic_mana_rock() {
         })
         .unwrap();
     view = answer(&mut game, &view, activate);
-    assert!(matches!(decision(&view).ask, AskView::Waterbend { .. }));
+    assert!(decision(&view).prompt.is(Purpose::Waterbend));
     let suggested = decision(&view).waterbend.as_ref().unwrap();
     assert!(!suggested.ready, "the rock needs to be picked manually");
     let rock = decision(&view)

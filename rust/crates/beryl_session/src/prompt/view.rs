@@ -1,32 +1,159 @@
 //! The wire types: a prompt as its seat is sent it, and the click command.
 
-use beryl_engine::card::{Place, Shape};
+use beryl_engine::card::{Part, Place, Purpose, Shape};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::protocol::DecisionId;
+use crate::protocol::{DecisionId, Side, ZoneName};
 use crate::script::{Arrow, Mark, Subject};
 
-/// The open prompt as its seat sees it: everything the screen shows for it. The session makes
-/// one when a decision opens a prompt and a new one after each click; the UI draws the latest
-/// and keeps nothing between them.
+/// The open prompt as its seat sees it: what the decision's pick belongs to, and everything
+/// the screen shows for it. The session makes one when a decision opens a prompt and a new one
+/// after each click.
+///
+/// It is the decision's [`Prompt`](beryl_engine::card::Prompt) by public slot and relative to
+/// the viewer, in words, with the prompt's state where the session holds it. No field is for
+/// one card's question: a card that asks a known purpose changes nothing here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptView {
     /// Counts this prompt's states from 0. A click names the state it was made on.
     pub revision: u32,
-    /// What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name. The UI
-    /// reads no meaning from it; it keys sound and motion.
+    /// How the prompt is answered.
+    pub shape: ShapeName,
+    /// What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name, each of one
+    /// shape. A string, so that a new purpose changes no type here.
     pub purpose: String,
+    /// Which part of the shape the open decision's pick answers: a prompt is a run of picks.
+    pub part: PartName,
     /// What the prompt asks, in words, from the wording table.
     pub title: String,
+    /// The words of the buttons a UI that holds the prompt's state itself puts on it.
+    pub words: Words,
+    /// What the prompt is about as a whole: the cards looked at on top of a library, a crew
+    /// cost's power, the life to pay. Zero where its purpose has no such number.
+    pub count: u8,
+    /// What this part still takes: the objects still to pick, the power still to tap.
+    pub most: u8,
+    /// Where the cards go: a split's two destinations, or the one a pick or a yes sends a
+    /// card to and none.
+    pub places: [PlaceName; 2],
+    /// The mana cost the prompt pays or asks about, as Oracle text writes it.
+    pub cost: Option<String>,
+    /// The objects the question is about, in candidate order: what a yes then picks among,
+    /// the creatures being aimed, the cards a yes or no or a mode asks about.
+    pub about: Vec<u16>,
+    /// Whose cards the prompt is among and the zone they lie in: those of the first of
+    /// `about`, or else of the first object the decision offers. None where it has neither.
+    pub from: Option<Lies>,
     /// The mark on each card, ability and player that has one, at most one each, in no
-    /// order. What has none is not part of the prompt as it stands.
+    /// order. Empty until the session holds this shape's state.
     pub marks: Vec<Marked>,
-    /// The buttons, in the order they are laid out.
+    /// The buttons, in the order they are laid out. Empty until the session holds this
+    /// shape's state.
     pub buttons: Vec<PromptButton>,
-    /// How the prompt is answered, with what the player has put together so far.
-    pub shape: ShapeView,
+    /// What the player has put together so far, where the session holds this shape's state;
+    /// None where the UI still does.
+    pub state: Option<ShapeView>,
+}
+
+impl PromptView {
+    /// Whether the prompt is for `purpose`.
+    pub fn is(&self, purpose: Purpose) -> bool {
+        self.purpose == purpose.name()
+    }
+}
+
+/// A prompt's shape ([`Shape`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ShapeName {
+    Pick,
+    Order,
+    Split,
+    YesNo,
+    Number,
+    Mode,
+    Catalog,
+    Divide,
+    Pay,
+    Declare,
+}
+
+impl From<Shape> for ShapeName {
+    fn from(shape: Shape) -> Self {
+        match shape {
+            Shape::Pick => ShapeName::Pick,
+            Shape::Order => ShapeName::Order,
+            Shape::Split => ShapeName::Split,
+            Shape::YesNo => ShapeName::YesNo,
+            Shape::Number => ShapeName::Number,
+            Shape::Mode => ShapeName::Mode,
+            Shape::Catalog => ShapeName::Catalog,
+            Shape::Divide => ShapeName::Divide,
+            Shape::Pay => ShapeName::Pay,
+            Shape::Declare => ShapeName::Declare,
+        }
+    }
+}
+
+/// Which part of a prompt a pick answers ([`Part`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PartName {
+    Pick,
+    Whether,
+    Instead,
+    Count,
+    First,
+    Second,
+    Aim,
+    Plan,
+}
+
+impl From<Part> for PartName {
+    fn from(part: Part) -> Self {
+        match part {
+            Part::Pick => PartName::Pick,
+            Part::Whether => PartName::Whether,
+            Part::Instead => PartName::Instead,
+            Part::Count => PartName::Count,
+            Part::First => PartName::First,
+            Part::Second => PartName::Second,
+            Part::Aim => PartName::Aim,
+            Part::Plan => PartName::Plan,
+        }
+    }
+}
+
+/// Whose cards and where they lie.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Lies {
+    pub player: Side,
+    pub zone: ZoneName,
+}
+
+/// The words of a prompt's buttons, from the wording table, for a UI that holds the prompt's
+/// state itself: the session's own [`PromptButton`]s say theirs. A button the purpose does not
+/// have is empty. `{picked}` stands for how many are picked and `{of}` for how many the prompt
+/// takes, which only the holder of the state knows.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Words {
+    /// The button that answers with what is picked.
+    pub confirm: String,
+    /// That button where the prompt takes several and counts them.
+    pub counted: String,
+    /// The button that answers with nothing.
+    pub decline: String,
+    /// The button that answers yes, and the one that answers no.
+    pub yes: String,
+    pub no: String,
+    /// The button that pays as the session suggests.
+    pub auto: String,
+    /// What each of `places` is called over its pile.
+    pub piles: [String; 2],
 }
 
 /// A mark on one thing.
@@ -66,7 +193,7 @@ pub enum ButtonId {
     Option { index: u16 },
 }
 
-/// A prompt's shape ([`Shape`]) and that shape's own state.
+/// A shape's own state, tagged by its [`Shape`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "shape", rename_all = "camelCase")]
 pub enum ShapeView {
@@ -248,7 +375,7 @@ pub struct ClickRequest {
 pub enum ClickReply {
     /// The prompt goes on, in this state. A click that does nothing returns the state it was
     /// made on.
-    Open { prompt: PromptView },
+    Open { prompt: Box<PromptView> },
     /// The click answered the prompt: the session has sent the engine its picks, and the
     /// game's next views arrive as updates, as after any answer.
     Answered,

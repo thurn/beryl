@@ -437,7 +437,7 @@ function Playing({ playback }: { playback: Playback }) {
     if (then.length > 0) {
       if (decision.kind === "attacker" || decision.kind === "blocker")
         gather("combat");
-      else if (decision.ask.kind === "waterbend") gather();
+      else if (decision.prompt.purpose === "waterbend") gather();
     }
     send(index, then);
   };
@@ -817,7 +817,7 @@ function Opening({
   const choosingFirst =
     !spinning && starting === null && flipWinner === "opponent";
   const considering = view.handling?.zone === "hand";
-  const picking = decision?.ask.kind === "putOnBottom";
+  const picking = decision?.prompt.purpose === "put-on-bottom";
   // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
   const [bottom, setBottom] = useState<ObjectView[]>([]);
   const inHand = view.objects.filter(
@@ -847,7 +847,7 @@ function Opening({
     onPlan(
       unsent.map((o) => ({
         kind: "chooseObject",
-        ask: "putOnBottom",
+        purpose: "put-on-bottom",
         wants: (c) => c.kind === "object" && c.slot === o.slot,
         // The engine offers one of interchangeable cards (architecture §7.2): its slot fills
         // with the card that went.

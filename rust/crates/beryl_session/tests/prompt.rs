@@ -3,8 +3,8 @@
 
 use beryl_engine::card::{Place, Purpose, Shape};
 use beryl_session::prompt::{
-    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, Pile, PromptButton, PromptView,
-    ShapeView, Share,
+    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, PartName, Pile, PlaceName,
+    PromptButton, PromptView, ShapeName, ShapeView, Share, Words,
 };
 use beryl_session::protocol::Side;
 use beryl_session::script::{Arrow, Mark, Subject};
@@ -59,11 +59,20 @@ fn prompt(
     );
     PromptView {
         revision: 0,
+        shape: purpose.shape().into(),
         purpose: purpose.name().to_owned(),
+        part: PartName::Pick,
         title: title.to_owned(),
+        words: Words::default(),
+        count: 0,
+        most: 0,
+        places: [PlaceName::None; 2],
+        cost: None,
+        about: Vec::new(),
+        from: None,
         marks,
         buttons,
-        shape,
+        state: Some(shape),
     }
 }
 
@@ -394,7 +403,9 @@ fn a_state_of_each_shape_prints_as_its_text() {
     }
     for &shape in Shape::ALL {
         assert!(
-            worked.iter().any(|(view, _)| view.shape.shape() == shape),
+            worked
+                .iter()
+                .any(|(view, _)| view.shape == ShapeName::from(shape)),
             "no worked state of shape {shape:?}"
         );
     }
@@ -474,9 +485,13 @@ fn a_click_and_its_reply_on_the_wire() {
         serde_json::json!({ "kind": "answered" })
     );
     let (view, _) = worked().swap_remove(0);
-    let reply = serde_json::to_value(ClickReply::Open { prompt: view }).unwrap();
+    let reply = serde_json::to_value(ClickReply::Open {
+        prompt: Box::new(view),
+    })
+    .unwrap();
     assert_eq!(reply["kind"], "open");
-    assert_eq!(reply["prompt"]["shape"]["shape"], "pick");
+    assert_eq!(reply["prompt"]["shape"], "pick");
+    assert_eq!(reply["prompt"]["state"]["shape"], "pick");
     assert_eq!(reply["prompt"]["purpose"], "search");
     assert_eq!(
         reply["prompt"]["marks"][0],

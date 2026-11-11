@@ -325,8 +325,8 @@ class Walk {
     private readonly update: GameUpdate,
   ) {
     const choice = choiceOf(before);
-    const ask = before.status.kind === "deciding" && before.status.decision.ask;
-    this.localScry = !!ask && ask.kind === "scry";
+    const asked = before.status.kind === "deciding" && before.status.decision;
+    this.localScry = !!asked && asked.prompt.purpose === "scry";
     this.seenInChoice = new Set(choice ? choiceSlots(choice) : []);
     const handling = before.handling;
     if (handling?.zone === "library" && handling.count) {

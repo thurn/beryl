@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{CandidateIndex, DecisionId, Kind, Mana, Side, StackItem, Step, TargetRef, ZoneName};
+use super::{CandidateIndex, DecisionId, Kind, Mana, Side, StackItem, Step, TargetRef};
+use crate::prompt::PromptView;
 
 /// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -31,8 +32,9 @@ pub struct DecisionView {
     /// resolving is an instant spell, a sorcery spell, or an ability, its resolution may involve
     /// several steps." A resolving spell's card is still among the objects, on the stack.
     pub resolving: Option<StackItem>,
-    /// What the decision asks, where its kind alone does not say.
-    pub ask: AskView,
+    /// The prompt the decision's pick belongs to: its shape and purpose, the record's
+    /// parameters and its words.
+    pub prompt: Box<PromptView>,
     /// For a priority decision, where passing takes the viewer, for the pass button.
     pub pass_to: Option<PassTo>,
     /// For a priority where passing stops the viewer again in this step (the top of the stack
@@ -90,84 +92,6 @@ pub enum RefusalView {
     Cost,
     /// A target it requires can't be chosen.
     Target,
-}
-
-/// What a decision asks, from its [`Prompt`](beryl_engine::card::Prompt), by public slot and
-/// relative to the viewer.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum AskView {
-    /// Creatures whose attack destination the player must choose.
-    AttackTarget { attackers: Vec<u16> },
-    /// Nothing more than the decision's kind says.
-    Plain,
-    /// Scry `count`: a `chooseUpTo` picks a card for the bottom, a `chooseObject` the next
-    /// card for the top.
-    Scry { count: u8 },
-    /// A look at the cards in `player`'s `zone` (the top `count` of a library, or a whole
-    /// hand) that may move one of the `eligible` cards to `to`: a `yesNo` whether to, then a
-    /// `chooseObject` for which.
-    Look {
-        player: Side,
-        zone: ZoneName,
-        count: u8,
-        to: ZoneName,
-        eligible: Vec<u16>,
-    },
-    /// A card from the hand to put on top of the library, `count` of them still to put, each
-    /// on the one before.
-    PutBack { count: u8 },
-    /// Whether to put the top card of `player`'s library on the bottom.
-    Fateseal { player: Side },
-    /// A `chooseObject` for a card to put into the hand from the top `count` of the
-    /// viewer's library, which they have looked at, `take` of them still to put.
-    Take { count: u8, take: u8 },
-    /// A `chooseObject` for the next of the top `count` cards of the viewer's library, which
-    /// they have looked at, to put on the bottom, under the ones before.
-    Bottom { count: u8 },
-    /// Whether to discard a basic land card rather than `count` cards.
-    DiscardBasicLand { count: u8 },
-    /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
-    /// (no).
-    TopOrBottom { card: u16 },
-    /// Whether to move the card in `card` to `to`, as "you may exile that card".
-    MayMove { card: u16, to: ZoneName },
-    /// Whether the card an explore revealed goes to the graveyard.
-    Explore,
-    /// A `chooseObject` for which of the top two cards of the viewer's library, which they
-    /// have looked at, to manifest as they manifest dread, the other going to the graveyard.
-    ManifestDread,
-    /// A card from the viewer's `zone`, their hand or graveyard, to exile to pay a cost,
-    /// `count` of them still to exile. From the graveyard they are asked for from the bottom
-    /// up, each above the one before, the lowest of interchangeable ones offered.
-    ExileCards { zone: ZoneName, count: u8 },
-    /// A `chooseUpTo` for a card a library search finds, up to `max` of them.
-    Search { max: u8 },
-    /// A `yesNo` whether to search the viewer's library at all.
-    MaySearch,
-    /// Permanents to untap, up to `max`.
-    Untap { max: u8 },
-    /// A `crew` decision's creature to tap for a crew cost of `crew` power, `left` of it
-    /// still to tap.
-    Crew { crew: u8, left: u8 },
-    /// A `waterbend` decision's artifact or creature to tap for one generic mana of the cost,
-    /// `cost` still to pay, as Oracle text writes it.
-    Waterbend { cost: String },
-    /// Whether to pay `cost`, as Oracle text writes it, so that the effect does not happen.
-    UnlessPays { cost: String },
-    /// Whether to pay `life` so that a land doesn't enter tapped.
-    PayLife { life: u8 },
-    /// A card to discard in the cleanup step, `count` of them still to discard to reach the
-    /// maximum hand size.
-    Cleanup { count: u8 },
-    /// A `chooseObject` for a card from the viewer's hand to put on the bottom of their
-    /// library after a mulligan. Like the two below, here until the prompt itself is on the
-    /// wire: the decision's kind said this before it became `chooseObject`.
-    PutOnBottom,
-    /// A `chooseObject` for the legendary permanent to keep.
-    LegendRule,
-    /// A `chooseObject` for a card to discard as a spell or ability says.
-    Discard,
 }
 
 /// Where passing priority takes the viewer if the other player passes too ([`NextStop`](beryl_engine::NextStop)).

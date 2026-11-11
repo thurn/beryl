@@ -333,7 +333,7 @@ mod tests {
     fn review_shares_the_payment_choice_and_its_result() {
         use beryl_cards::names::{MANA_TITHE, OVERLORD_OF_THE_MISTMOORS};
         use beryl_session::CandidateIndex;
-        use beryl_session::protocol::{AskView, Candidate, ZoneName};
+        use beryl_session::protocol::{Candidate, ZoneName};
 
         let def = CARDS
             .cards()
@@ -370,7 +370,7 @@ mod tests {
             let Status::Deciding { decision } = payer.view.status else {
                 panic!("payer has no prompt")
             };
-            assert!(matches!(decision.ask, AskView::UnlessPays { .. }));
+            assert!(decision.prompt.is(beryl_engine::card::Purpose::UnlessPays));
             let index = decision
                 .candidates
                 .iter()
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn counter_review_starts_before_the_target_spell_is_cast() {
         use beryl_cards::names::{MANA_CRYPT, MANA_TITHE};
-        use beryl_session::protocol::{AskView, ZoneName};
+        use beryl_session::protocol::ZoneName;
 
         let def = CARDS
             .cards()
@@ -446,7 +446,7 @@ mod tests {
         assert!(steps.iter().all(Option::is_none));
         for update in views {
             assert!(!matches!(update.view.status, Status::Deciding { decision }
-                if matches!(decision.ask, AskView::UnlessPays { .. })));
+                if decision.prompt.is(beryl_engine::card::Purpose::UnlessPays)));
             assert!(update.view.objects.iter().any(|o| {
                 o.name.as_deref() == Some(MANA_CRYPT) && o.zone == ZoneName::Graveyard
             }));

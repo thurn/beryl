@@ -7,7 +7,7 @@
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
       "until": "first chooseObject decision for seat 0",
-      "where": ["ask putOnBottom"]
+      "where": ["prompt put-on-bottom"]
     },
     {
       "name": "opening-opponent-play",
@@ -164,7 +164,7 @@
       "name": "cast-exile-choice",
       "board": "cast-exile-choice",
       "until": "first chooseObject decision for seat 0",
-      "where": ["ask exileCards"],
+      "where": ["prompt exile-cost"],
       "after": 1
     },
     {
@@ -177,7 +177,7 @@
       "name": "cast-evoke",
       "board": "cast-evoke",
       "until": "first chooseObject decision for seat 0",
-      "where": ["casting Subtlety", "ask exileCards"]
+      "where": ["casting Subtlety", "prompt exile-cost"]
     },
     {
       "name": "teferi-timing",
@@ -391,7 +391,7 @@
       "name": "pay-life",
       "board": "pay-life",
       "until": "first yesNo decision for seat 0",
-      "where": ["ask payLife"]
+      "where": ["prompt pay-life"]
     },
     {
       "name": "namesake-target",
@@ -433,7 +433,7 @@
       "name": "choice-loot",
       "board": "choice-loot",
       "until": "first chooseObject decision for seat 0",
-      "where": ["resolving Jace, Vryn's Prodigy", "ask discard"]
+      "where": ["resolving Jace, Vryn's Prodigy", "prompt discard pick"]
     },
     {
       "name": "choice-untap",
@@ -468,13 +468,13 @@
       "name": "choice-thirst",
       "board": "choice-thirst",
       "until": "first chooseObject decision for seat 0",
-      "where": ["resolving Thirst for Discovery", "ask discard"]
+      "where": ["resolving Thirst for Discovery", "prompt discard pick"]
     },
     {
       "name": "choice-cleanup",
       "board": "choice-cleanup",
       "until": "first chooseObject decision for seat 0",
-      "where": ["step cleanup", "ask cleanup"]
+      "where": ["step cleanup", "prompt cleanup"]
     },
     {
       "name": "attack-token",
@@ -486,7 +486,7 @@
       "name": "crew",
       "board": "crew",
       "until": "first chooseObject decision for seat 0",
-      "where": ["ask crew"],
+      "where": ["prompt crew"],
       "after": 1
     },
     {
@@ -498,7 +498,7 @@
       "name": "waterbend-tap",
       "board": "waterbend-tap",
       "until": "first manaPayment decision for seat 0",
-      "where": ["ask waterbend"]
+      "where": ["prompt waterbend"]
     }
   ]
 }

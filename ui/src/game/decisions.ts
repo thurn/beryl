@@ -1,7 +1,6 @@
 // What the human can do on the board at their open decision: which cards they can act on and
 // how, which they can pick, and what the prompt asks. Pure functions of the decision.
 import type {
-  AskView,
   Candidate,
   CandidateIndex,
   DecisionView,
@@ -11,7 +10,6 @@ import type {
   PlayerView,
   Side,
   StackItem,
-  ZoneName,
 } from "../generated/protocol";
 
 /** One thing a card or a player offers: the candidate's index and its label; for a cast or an
@@ -56,11 +54,10 @@ export interface Interactions {
  * when it may block only one). */
 export interface Intent {
   kind: Kind;
-  /** The question the decision must ask (`AskView`'s kind), for a pick whose kind other
-   * prompts are asked in too: a cost's or a rule's pick is a `chooseObject`, a `yesNo` or a
-   * `manaPayment` like an effect's, and until the prompt itself is on the wire its ask
-   * tells them apart. */
-  ask?: AskView["kind"];
+  /** The purpose of the prompt the decision's pick must belong to (`PromptView`'s), for a
+   * pick whose kind other prompts are asked in too: a cost's or a rule's pick is a
+   * `chooseObject`, a `yesNo` or a `manaPayment` like an effect's. */
+  purpose?: string;
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
   picked?(option: Candidate): void;
@@ -71,10 +68,19 @@ export interface Intent {
   continuation?: boolean;
 }
 
-/** Whether `intent` is for `decision`: of its kind and, where it says, its ask. */
+/** Whether `intent` is for `decision`: of its kind and, where it says, its purpose. */
 const answers = (decision: DecisionView, intent: Intent) =>
   decision.kind === intent.kind &&
-  (intent.ask === undefined || decision.ask.kind === intent.ask);
+  (intent.purpose === undefined || decision.prompt.purpose === intent.purpose);
+
+/** Whether `decision` aims attackers: asks what the creatures its prompt is about attack. */
+export const aimsAttack = ({ prompt }: DecisionView) =>
+  prompt.purpose === "attack" && prompt.part === "aim";
+
+/** A counted button's label from the session's words: `{picked}` and `{of}` are the UI's to
+ * fill while it holds the prompt's state, how many are picked and how many the prompt takes. */
+export const counted = (template: string, picked: number, of: number) =>
+  template.replace("{picked}", String(picked)).replace("{of}", String(of));
 
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
 export function intended(
@@ -292,92 +298,23 @@ export const isCombat = (kind: Kind) =>
   kind === "damageDivision";
 
 /** The decisions before the first turn, which the opening screen asks over the table. */
-export const isOpening = ({ kind, ask }: DecisionView) =>
+export const isOpening = ({ kind, prompt }: DecisionView) =>
   kind === "playOrDraw" ||
   kind === "keepOrMulligan" ||
-  ask.kind === "putOnBottom";
+  prompt.purpose === "put-on-bottom";
 
 /** Whether a hand card's candidates include playing or casting it: what dropping it on the
  * battlefield does. */
 export const playActs = (acts: Act[]) =>
   acts.filter((a) => a.option.kind === "cast" || a.option.kind === "playLand");
 
-const PROMPTS: Partial<Record<Kind, string>> = {
-  playOrDraw: "Play or draw?",
-  keepOrMulligan: "Keep or mulligan?",
-  triggerOrder: "Put a trigger on the stack",
-  attacker: "Declare attackers",
-  attackTarget: "Choose attack target",
-  blocker: "Declare blockers",
-  blockTarget: "Choose what to block",
-  damageDivision: "Assign combat damage",
-  x: "Choose X",
-  targetCount: "How many targets?",
-  target: "Choose a target",
-  paymentPlan: "Choose how to pay",
-  manaPayment: "Pay the mana",
-  castOffer: "Cast it?",
-  yesNo: "Choose",
-  chooseObject: "Choose a card",
-  chooseUpTo: "Choose cards",
-};
-
-/** The prompts of the questions a general kind asks for one rule or one cost, by their ask. */
-const ASKED: Partial<Record<AskView["kind"], string>> = {
-  putOnBottom: "Put a card on the bottom of your library",
-  discard: "Discard a card",
-  cleanup: "Discard a card",
-  legendRule: "Choose the legend to keep",
-  payLife: "Pay life?",
-  crew: "Crew",
-  waterbend: "Waterbend",
-  exileCards: "Exile a card",
-};
-
-/** A move to a zone, as a "you may" asks it. */
-const MOVES: Partial<Record<ZoneName, string>> = {
-  exile: "Exile",
-  graveyard: "Put into graveyard",
-  hand: "Put into hand",
-  library: "Put into library",
-  battlefield: "Put onto battlefield",
-};
-
-/** The button that makes a "you may" move to `to`: "Exile". */
-export const moveVerb = (to: ZoneName) => MOVES[to] ?? "Move";
-
-/** A "you may" move's question, of a card in your `from` zone: "Exile that card from your
- * graveyard?" */
-function mayMoveQuestion(to: ZoneName, from?: ZoneName): string {
-  const where = from && from !== "battlefield" ? ` from your ${from}` : "";
-  if (to === "exile") return `Exile that card${where}?`;
-  const into =
-    to === "battlefield" ? "onto the battlefield" : `into your ${to}`;
-  return `Put that card ${into}${where}?`;
-}
-
-/** The prompt's title: what the decision asks, and for whom when there is a source. */
-export function prompt(
-  decision: DecisionView,
-  source?: string,
-  /** The zone the card a "you may" move would move lies in. */
-  from?: ZoneName,
-): string {
-  const { ask } = decision;
-  switch (ask.kind) {
-    case "untap":
-      return "Untap";
-    case "unlessPays":
-      return `Pay ${ask.cost}?`;
-    case "discardBasicLand":
-      return `Discard a basic land or ${ask.count} cards`;
-    case "mayMove":
-      return mayMoveQuestion(ask.to, from);
-  }
-  const asked = ASKED[ask.kind] ?? PROMPTS[decision.kind] ?? "Choose";
+/** The prompt's title, in the session's words: what the decision asks, and for whom when a
+ * target has a source. */
+export function prompt(decision: DecisionView, source?: string): string {
+  const { title } = decision.prompt;
   return source && decision.kind === "target"
-    ? `${asked} for ${source}`
-    : asked;
+    ? `${title} for ${source}`
+    : title;
 }
 
 /** The picks that put simultaneous triggers on the stack to resolve in `order`, the indexes of
