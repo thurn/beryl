@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -32,9 +31,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import cast
 
 from . import card_store, cards, paths, scryfall, system, warm
+from . import nearest as nearest_cards
 from .shots import (
     UiError,
     free_port,
@@ -82,49 +81,12 @@ def build_ui() -> bool:
     return built.returncode == 0
 
 
-def slug(name: str) -> str:
-    """A card name in a URL, as `beryl_cli`'s `specs::slug` makes it: `currency-converter`."""
-    out = ""
-    for c in name:
-        if c.isascii() and c.isalnum():
-            out += c.lower()
-        elif c in " -" and out and not out.endswith("-"):
-            out += "-"
-    return out.rstrip("-")
-
-
-CARD_SOURCES: Path = paths.RUST / "crates" / "beryl_cards" / "src"
+slug = nearest_cards.slug
 
 
 def implemented() -> set[str]:
     """The slugs of the implemented cards: each card's file under beryl_cards, by its name."""
-    return {
-        f.stem.replace("_", "-")
-        for f in CARD_SOURCES.glob("*/*.rs")
-        if f.stem not in ("mod", "beryl_scenario")
-    }
-
-
-WORD: re.Pattern[str] = re.compile(r"[a-z+\-/{}0-9]+")
-COMMON: frozenset[str] = frozenset(
-    "a an the of to and or it its this that you your each target card cards from".split()
-)
-
-
-def words(text: str, name: str) -> set[str]:
-    """A rules text's words and word pairs, less its card's name and the commonest words:
-    what two cards' mechanics share."""
-    text = text.lower().replace(name.lower(), "~")
-    found = [w for w in WORD.findall(text) if w not in COMMON]
-    return set(found) | {f"{a} {b}" for a, b in zip(found, found[1:])}
-
-
-def rules_text(record: card_store.Json) -> str:
-    """The rules text of each face of a card's record."""
-    return "\n".join(
-        str(f.get("oracle_text", ""))
-        for f in cast(list[card_store.Json], record["faces"])
-    )
+    return set(nearest_cards.card_files())
 
 
 def oracle(name: str) -> str | None:
@@ -134,7 +96,7 @@ def oracle(name: str) -> str | None:
         deck = {slug(n): n for n in cards.m1_names()}
         record = store.card(deck.get(slug(name), name))
     if record is not None:
-        return rules_text(record)
+        return nearest_cards.rules_text(record)
     url = "https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(name)
     try:
         found = scryfall.http_get(url)
@@ -151,20 +113,9 @@ def nearest(name: str, specced: set[str], most: int = 5) -> list[str]:
     text = oracle(name)
     if text is None:
         return []
-    mine = words(text, name)
-    scored: list[tuple[float, str]] = []
+    among = [n for n in nearest_cards.implemented() if slug(n) in specced]
     with card_store.Store() as store:
-        # The decks' cards, asked of the store one by one: never the whole pool.
-        for card in store.cards(cards.m1_names()):
-            if slug(str(card["name"])) not in specced or slug(
-                str(card["name"])
-            ) == slug(name):
-                continue
-            theirs = words(rules_text(card), str(card["name"]))
-            shared = len(mine & theirs) / max(1, len(mine | theirs))
-            if shared > 0:
-                scored.append((shared, str(card["name"])))
-    return [n for _, n in sorted(scored, reverse=True)[:most]]
+        return nearest_cards.nearest(text, name, store, among, most)
 
 
 def resolve(names: list[str]) -> list[str] | None:
