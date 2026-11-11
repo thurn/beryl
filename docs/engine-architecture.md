@@ -1092,6 +1092,14 @@ exercises, and `just fuzz` reports those random play never reaches.
   proptest generates (`beryl_search/tests/shrink.rs`). A failing game shrinks to
   the fewest choices that still fail and prints as a scenario, its setup at the
   first priority, to paste into a card's file.
+- **Exhaustive search:** from each card scenario's end position, every sequence
+  of decisions to a fixed depth, each branch on its own copy of the state, with
+  the invariants and references at every position and no panic allowed
+  (`beryl_scenario::exhaust`, `beryl_cards/tests/exhaust.rs`). Chance is not
+  enumerated, positions seen with as much depth left are skipped by state hash,
+  and a cap on decisions per scenario names the scenarios it cuts short. The
+  fast check searches to depth 3; `just exhaust [card] --depth N` goes deeper. A
+  failure prints as the scenario with the failing sequence after its actions.
 - **References:** slow reference implementations of the fast paths, checked at
   every fuzz decision and scenario position: the layer results, listeners and
   knowledge against a recompute from scratch, and the prefilter, funds and

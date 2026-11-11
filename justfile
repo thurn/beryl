@@ -172,6 +172,17 @@ test-rust *args:
 fuzz games="10000":
     cd rust && BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_search --test games --test shrink -- --nocapture
 
+# Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
+[group('test')]
+exhaust *args:
+    card=""; depth=6; nodes=20000; \
+    while [ $# -gt 0 ]; do case "$1" in \
+        --depth) depth="$2"; shift 2 ;; \
+        --nodes) nodes="$2"; shift 2 ;; \
+        *) card="$1"; shift ;; \
+    esac; done; \
+    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
+
 # Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
 [group('test')]
 [no-cd]

@@ -9,6 +9,7 @@
 //!
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
+mod exhaust;
 mod run;
 mod script;
 #[cfg(test)]
@@ -19,8 +20,9 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
+pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
 pub use run::{Failure, Live, answer, describe, position, run, trace, visit};
-pub use script::{script, source};
+pub use script::{script, setup_source, source};
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;

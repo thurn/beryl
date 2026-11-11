@@ -36,7 +36,7 @@ impl std::error::Error for Failure {}
 
 /// The exact profile, except that a question with one answer stops too: the runner answers it
 /// as the engine would have silently, and the trace records the answer.
-const TRACED: Profile = Profile {
+pub(crate) const TRACED: Profile = Profile {
     stops: Stops::Forced,
     ..Profile::EXACT
 };

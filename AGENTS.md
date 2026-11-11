@@ -125,8 +125,9 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 
 1. Logic: `just test-rust` runs the workspace's tests. Engine and AI behavior is
    tested here, not through the app. A card's scenarios live in its file;
-   `just oracle <card names>` checks them against XMage and Forge, and
-   `just fuzz` plays random games at length.
+   `just oracle <card names>` checks them against XMage and Forge, `just fuzz`
+   plays random games at length, and `just exhaust` plays every decision
+   sequence near the scenarios' end positions.
 2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
    states headless and prints their paths; `just ui-test` plays the game screen
    through a fixture. Every card has a spec (`/specs/<card>`), generated from

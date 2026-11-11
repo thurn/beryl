@@ -21,7 +21,7 @@ use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Outcome, Profile, Replay, Scratch, Seat,
     StallReason, State, Step, Stops, Zone, apply, next,
 };
-use beryl_scenario::{Live, Scenario, answer, describe, script, source};
+use beryl_scenario::{Live, Scenario, answer, describe, script, setup_source, source};
 use common::games;
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -165,24 +165,7 @@ impl Game {
             ..scenario.actions(actions.leak())
         };
         let mut text = opening;
-        let _ = writeln!(text, "Scenario::new({why:?})");
-        let setup = &scenario.setup;
-        let _ = writeln!(
-            text,
-            "    .seed({})\n    .at({}, P{}, TurnStep::{:?})",
-            setup.seed,
-            setup.turn,
-            setup.active.get(),
-            setup.step
-        );
-        for p in Seat::BOTH {
-            let player = &setup.players[p.index()];
-            if player.life != 20 {
-                let _ = writeln!(text, "    .life(P{}, {})", p.get(), player.life);
-            }
-            let _ = writeln!(text, "    .hand(P{}, &{:?})", p.get(), player.hand);
-            let _ = writeln!(text, "    .library(P{}, &{:?})", p.get(), player.library);
-        }
+        text.push_str(&setup_source(&scenario));
         let _ = writeln!(text, "    .actions(&[\n{}\n    ])", lines.join("\n"));
         (text, Some(scenario))
     }
