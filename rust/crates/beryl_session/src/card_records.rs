@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use beryl_card_store::{Record, STORE, Store};
+use beryl_cards::CARDS;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -18,6 +19,10 @@ const BACKS: &str = "https://backs.scryfall.io/large";
 /// Magic's card back, which Scryfall gives every card with a back of its own
 /// (a record's `card_back_id`).
 pub const CARD_BACK_ID: &str = "0aeebaf5-8c7d-4636-9e82-8c27447861f7";
+/// The token whose art the UI gives a token with no name (a copy of a face-down permanent,
+/// [CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a): "a 2/2 face-down creature
+/// with no text, no name, no subtypes, and no mana cost"): Double Masters' Copy token.
+pub const NAMELESS_TOKEN_ID: &str = "6870a2af-80e1-4813-a332-2b1bd789f1c1";
 
 /// The [`crate::ipc::CARD_RECORDS`] command's request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -33,9 +38,11 @@ pub struct CardRecordsRequest {
 pub struct CardRecords {
     /// The image of Magic's card back.
     pub card_back: String,
+    /// The art a token with no name is drawn with ([`NAMELESS_TOKEN_ID`]).
+    pub nameless_token: String,
     /// The cards named so, or with a face so named.
     pub cards: BTreeMap<String, CardEntry>,
-    /// The tokens and emblems named so: the first printing the store has of each.
+    /// The tokens and emblems named so: of each, the printing the card that makes it links.
     pub tokens: BTreeMap<String, CardEntry>,
 }
 
@@ -118,6 +125,7 @@ pub fn fixture_message(messages: &[FixtureMessage]) -> FixtureMessage {
 fn records_in(store: &Store, names: &[String]) -> CardRecords {
     let mut out = CardRecords {
         card_back: back(CARD_BACK_ID),
+        nameless_token: image("art_crop", "front", NAMELESS_TOKEN_ID),
         cards: BTreeMap::new(),
         tokens: BTreeMap::new(),
     };
@@ -125,11 +133,37 @@ fn records_in(store: &Store, names: &[String]) -> CardRecords {
         if let Some(card) = store.card(name) {
             out.cards.insert(name.clone(), entry(card));
         }
-        if let Some(token) = store.tokens(name).into_iter().next() {
+        if let Some(token) = token(store, name) {
             out.tokens.insert(name.clone(), entry(token));
         }
     }
     out
+}
+
+/// The store's printing of the token or emblem named `name`. Different tokens share a name (one
+/// card's Insect is a white 2/1, another's a green 3/3), and each card's record links the one
+/// it makes: so this is the one linked by the first card the engine implements that makes a
+/// token of that name, else the first printing the store has.
+fn token(store: &Store, name: &str) -> Option<Record> {
+    let mut printings = store.tokens(name);
+    let linked = CARDS
+        .cards()
+        .iter()
+        .filter(|card| {
+            let mut made = card.tokens.iter();
+            printings.len() > 1 && made.any(|t| t.face_ixs().any(|f| t.face_name(f) == name))
+        })
+        .filter_map(|card| store.card(card.face_name(card.face_ixs().next()?)))
+        .flat_map(|maker| maker.tokens)
+        .find(|link| link.name == name);
+    let at = linked
+        .and_then(|link| {
+            printings
+                .iter()
+                .position(|p| p.scryfall_id == link.scryfall_id)
+        })
+        .unwrap_or(0);
+    (at < printings.len()).then(|| printings.swap_remove(at))
 }
 
 fn entry(record: Record) -> CardEntry {
@@ -138,14 +172,7 @@ fn entry(record: Record) -> CardEntry {
         .faces
         .into_iter()
         .map(|face| {
-            let image = |version: &str| {
-                format!(
-                    "{IMAGES}/{version}/{}/{}/{}/{id}.jpg",
-                    face.side.as_str(),
-                    &id[0..1],
-                    &id[1..2]
-                )
-            };
+            let image = |version: &str| image(version, face.side.as_str(), &id);
             CardFace {
                 images: CardImages {
                     art_crop: image("art_crop"),
@@ -172,6 +199,15 @@ fn entry(record: Record) -> CardEntry {
         artist: record.artist,
         faces,
     }
+}
+
+/// Scryfall's image of the `side` of printing `id`, in `version`.
+fn image(version: &str, side: &str, id: &str) -> String {
+    format!(
+        "{IMAGES}/{version}/{side}/{}/{}/{id}.jpg",
+        &id[0..1],
+        &id[1..2]
+    )
 }
 
 fn back(id: &str) -> String {

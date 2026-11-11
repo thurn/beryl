@@ -117,11 +117,15 @@ export type CardRecords = {
  */
 card_back: string, 
 /**
+ * The art a token with no name is drawn with ([`NAMELESS_TOKEN_ID`]).
+ */
+nameless_token: string, 
+/**
  * The cards named so, or with a face so named.
  */
 cards: { [key in string]: CardEntry }, 
 /**
- * The tokens and emblems named so: the first printing the store has of each.
+ * The tokens and emblems named so: of each, the printing the card that makes it links.
  */
 tokens: { [key in string]: CardEntry }, };
 
@@ -254,9 +258,9 @@ export type ManaPool = { white: number, blue: number, black: number, red: number
 
 export type ObjectView = { slot: number, zone: ZoneName, owner: Side, controller: Side, 
 /**
- * The name of the face up, which keys the card data in `data/cards.json`; none for a card
- * the viewer has not seen. A face-down permanent's controller may look at it (CR 708.5):
- * its card's name, for them.
+ * The name of the face up, which keys its record in the card store
+ * ([`crate::card_records`]); none for a card the viewer has not seen. A face-down
+ * permanent's controller may look at it (CR 708.5): its card's name, for them.
  */
 name: string | null, 
 /**

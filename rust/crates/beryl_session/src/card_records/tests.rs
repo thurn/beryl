@@ -1,10 +1,9 @@
-use std::path::Path;
-
 use beryl_card_store::STORE;
 use beryl_cards::CARDS;
-use serde_json::Value;
 
-use super::{CARD_BACK_ID, CardRecordsRequest, card_records, card_records_among};
+use super::{
+    CARD_BACK_ID, CardRecordsRequest, NAMELESS_TOKEN_ID, card_records, card_records_among,
+};
 
 /// Every name the engine gives a face, token or emblem: the names the UI asks for.
 fn engine_names() -> Vec<&'static str> {
@@ -45,56 +44,62 @@ fn every_face_token_and_emblem_name_is_in_the_card_store() {
     );
 }
 
-fn cards_json() -> Value {
-    let crate_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo runs the tests");
-    let path = Path::new(&crate_dir).join("../../../data/cards.json");
-    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
-}
-
-/// Strips Scryfall's `?<timestamp>` from an image URL: the store keeps nothing volatile.
-fn without_timestamps(value: &mut Value) {
-    match value {
-        Value::String(s) => {
-            if let Some((url, _)) = s.split_once(".jpg?") {
-                *s = format!("{url}.jpg");
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(without_timestamps),
-        Value::Object(map) => {
-            map.remove("made_by");
-            map.values_mut().for_each(without_timestamps);
-        }
-        _ => {}
-    }
-}
-
-/// A record is served as data/cards.json holds the card, so the UI's types need not change.
-/// (This goes when the UI stops bundling data/cards.json.)
+/// The card back served is the one the store's cards have.
 #[test]
-fn records_are_served_as_the_bundled_card_data_holds_them() {
-    let mut bundled = cards_json();
-    without_timestamps(&mut bundled);
-    let cards = bundled["cards"].as_array().unwrap();
-    let names: Vec<String> = cards
-        .iter()
-        .map(|c| c["name"].as_str().unwrap().to_owned())
-        .collect();
-    let found = card_records(&CardRecordsRequest { names });
-    assert_eq!(found.card_back, bundled["card_back"]);
-    for card in cards {
-        let served = serde_json::to_value(&found.cards[card["name"].as_str().unwrap()]).unwrap();
-        assert_eq!(&served, card);
-    }
-    for token in bundled["tokens"].as_array().unwrap() {
-        let name = token["name"].as_str().unwrap();
-        let printings = STORE.tokens(name);
-        let id = token["scryfall_id"].as_str().unwrap();
-        assert!(printings.iter().any(|t| t.scryfall_id == id), "{name}");
-    }
+fn the_card_back_is_the_one_cards_in_the_store_have() {
     assert_eq!(
         STORE.card("Island").unwrap().card_back_id.as_deref(),
         Some(CARD_BACK_ID)
     );
+}
+
+/// The art of a token with no name is a Copy token's.
+#[test]
+fn the_nameless_token_is_a_copy_token_in_the_store() {
+    let copies = STORE.tokens("Copy");
+    assert!(copies.iter().any(|t| t.scryfall_id == NAMELESS_TOKEN_ID));
+    let found = card_records(&CardRecordsRequest { names: Vec::new() });
+    assert!(
+        found
+            .nameless_token
+            .contains("/art_crop/front/6/8/6870a2af-")
+    );
+}
+
+/// Many tokens share a name: a card's is the one its record links, whichever the store lists
+/// first.
+#[test]
+fn a_token_is_the_printing_its_card_makes() {
+    let names = ["Insect Token", "Human Token", "Spirit Token", "Map Token"];
+    let found = card_records(&CardRecordsRequest {
+        names: names.map(str::to_owned).into(),
+    });
+    let shown = |name: &str| {
+        let face = &found.tokens[name].faces[0];
+        (
+            face.power.clone(),
+            face.toughness.clone(),
+            face.colors.join(""),
+        )
+    };
+    let stats = |power: &str, toughness: &str, colors: &str| {
+        (
+            Some(power.to_owned()),
+            Some(toughness.to_owned()),
+            colors.to_owned(),
+        )
+    };
+    // Overlord of the Mistmoors' Insects, Adeline's Humans, Staff of the Storyteller's Spirit.
+    assert_eq!(shown("Insect Token"), stats("2", "1", "W"));
+    assert_eq!(shown("Human Token"), stats("1", "1", "W"));
+    assert_eq!(shown("Spirit Token"), stats("1", "1", "W"));
+    for (name, maker) in [
+        ("Insect Token", "Overlord of the Mistmoors"),
+        ("Map Token", "Get Lost"),
+    ] {
+        let linked = STORE.card(maker).unwrap().tokens;
+        assert_eq!(found.tokens[name].scryfall_id, linked[0].scryfall_id);
+    }
 }
 
 #[test]
