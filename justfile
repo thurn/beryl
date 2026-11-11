@@ -122,6 +122,11 @@ warm *args:
 bench *args:
     {{ by }} bench "$@"
 
+# Build cloned cards at scale in a scratch workspace and time the compiler (--cards N --crates K)
+[group('bench')]
+scale *args:
+    {{ by }} scale "$@"
+
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
 [group('bench')]
 bench-count *args:
