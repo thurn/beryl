@@ -319,6 +319,70 @@ def test_a_steps_results_say_why_each_check_ran_and_log_the_cut(tmp_path: Path) 
     ]
 
 
+VERBS = {
+    "verbs": ["fly", "emerge"],
+    "layouts": ["desktop"],
+    "moment": {
+        "yours": {"whole": "combat-declare", "cut": "verbs-cast-stops"},
+        "theirs": {"whole": "verbs-cast-theirs", "cut": "verbs-cast-stops"},
+    },
+}
+VERB_CHECKS = [
+    "verb:fly/yours/desktop",
+    "verb:fly/theirs/desktop",
+    "verb:emerge/yours/desktop",
+    "verb:emerge/theirs/desktop",
+]
+
+
+def test_the_verb_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
+    assert selection.verb_checks() == []
+    assert selection.verb_fixtures() == []
+    (repo / "ui" / "verbs.json").write_text(json.dumps(VERBS))
+    assert selection.verb_checks() == VERB_CHECKS
+    assert selection.verb_fixtures() == [
+        "combat-declare",
+        "verbs-cast-stops",
+        "verbs-cast-theirs",
+    ]
+    # They are the lane's checks beside those interactions.mjs gives.
+    found = selection.lane_checks("ui-test", [], None)
+    assert found[-4:] == VERB_CHECKS
+    assert "ui-test:dragging a creature forward joins the attack" in found
+
+
+def test_a_change_to_the_verb_suite_chooses_its_checks(repo: Path) -> None:
+    universe = [*UNIVERSE, *VERB_CHECKS]
+    script = "ui/scripts/verbs.mjs"
+    # A new file, which git gives no hunks for.
+    choice = selection.choose("ui-test", [script], {}, universe, None, "")
+    assert choice.reasons == dict.fromkeys(VERB_CHECKS, "body")
+    code = {script: [hunk(script, 9, 9, ["a"], ["b"])]}
+    choice = selection.choose("ui-test", [script], code, universe, None, "")
+    assert choice.reasons == dict.fromkeys(VERB_CHECKS, "body")
+    comment = {script: [hunk(script, 9, 9, ["// a"], ["// b"])]}
+    choice = selection.choose("ui-test", [script], comment, universe, None, "")
+    assert choice.reasons == {}
+    choice = selection.choose("ui-test", ["ui/verbs.json"], {}, universe, None, "")
+    assert choice.reasons == dict.fromkeys(VERB_CHECKS, "body")
+    # The shots have none of them.
+    choice = selection.choose("shots", [script], {}, ["shots:attack"], None, "")
+    assert choice.reasons == {}
+
+
+def test_each_name_goes_to_the_script_whose_check_it_is() -> None:
+    both = {selection.INTERACTIONS: [], selection.VERB_SCRIPT: []}
+    assert selection.scripts([]) == both
+    assert selection.scripts(["joins", "verb:fly/yours/desktop", "drag"]) == {
+        selection.INTERACTIONS: ["joins", "drag"],
+        selection.VERB_SCRIPT: ["verb:fly/yours/desktop"],
+    }
+    assert selection.scripts(["verb:emerge"]) == {
+        selection.VERB_SCRIPT: ["verb:emerge"]
+    }
+    assert selection.scripts(["drag"]) == {selection.INTERACTIONS: ["drag"]}
+
+
 def test_checks_the_prune_moved_to_slow_ci_are_never_chosen(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -263,6 +263,8 @@ def test_narrowing_arguments_name_their_checks() -> None:
     assert bisect.names(
         "beryl_rules::t combat::blocks", "rust:beryl_rules::t::combat::blocks"
     )
+    assert bisect.names("verb:fly/yours/desktop", "verb:fly/yours/desktop")
+    assert not bisect.names("verb:fly/yours/desktop", "verb:fly/theirs/desktop")
     assert bisect.names("Brainstorm", "oracle:Brainstorm/draws three/xmage")
     assert not bisect.names("Brainstorm", "oracle:Brainstorms/x/xmage")
 

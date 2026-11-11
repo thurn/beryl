@@ -5,9 +5,10 @@ paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromiu
 Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
-as a player would (ui/scripts/interactions.mjs). It records its fixtures into the cache instead,
-where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and `ui-test`
-lanes).
+as a player would (ui/scripts/interactions.mjs), and then the stage's verbs on the stage's own
+clock (ui/scripts/verbs.mjs, the checks named `verb:...`). It records its fixtures into the cache
+instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and
+`ui-test` lanes).
 
 `ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
 the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless page
@@ -283,7 +284,7 @@ def ui_test(args: argparse.Namespace) -> int:
         return 0
     try:
         env = browser_env()
-        if record_fixtures(recorded, INTERACTION_FIXTURES):
+        if record_fixtures(recorded, ui_test_fixtures()):
             code = checks.CANNOT_RUN
         else:
             code = interactions(env, recorded, list(args.only), chooser)
@@ -298,31 +299,44 @@ def ui_test(args: argparse.Namespace) -> int:
     return code
 
 
+def ui_test_fixtures() -> list[str]:
+    """The fixtures `ui-test` records: interactions.mjs' and the verb suite's."""
+    return list(dict.fromkeys(INTERACTION_FIXTURES + selection.verb_fixtures()))
+
+
 def interactions(
     env: dict[str, str],
     recorded: Path,
     only: list[str],
     chooser: selection.Chooser | None,
 ) -> int:
-    """Plays interactions.mjs' checks: those `only` names, or with `chooser`, those it chose,
-    which the script matches exactly so that a rerun's filters narrow them."""
+    """Plays the checks of interactions.mjs and then verbs.mjs: those `only` names, or with
+    `chooser`, those it chose, which the scripts match exactly so that a rerun's filters narrow
+    them. A script none of the names is for does not run (selection.scripts). Fails if either
+    script does."""
     with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
+        names = only
         if chooser:
-            titles = chooser.run([recorded], only)
-            if not titles:
+            names = chooser.run([recorded], only)
+            if not names:
                 return 0
             if not only:
                 chosen = Path(tmp) / "chosen.txt"
-                chosen.write_text("".join(f"{t}\n" for t in titles))
+                chosen.write_text("".join(f"{t}\n" for t in names))
                 env = {**env, selection.CHOSEN_ENV: str(chosen)}
+        code = 0
         with served_ui(env) as url:
-            return subprocess.run(
-                ["node", "scripts/interactions.mjs", url, str(recorded)] + only,
-                cwd=paths.UI,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                check=False,
-            ).returncode
+            for script, own in selection.scripts(names).items():
+                ran = subprocess.run(
+                    ["node", str(paths.REPO / script), url, str(recorded)]
+                    + (own if only else []),
+                    cwd=paths.UI,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                )
+                code = code or ran.returncode
+        return code
 
 
 def ui_live(args: argparse.Namespace) -> int:
@@ -415,7 +429,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "only",
         nargs="*",
-        help="run only the checks whose titles contain one of these (any case)",
+        help="run only the checks whose titles contain one of these (any case); a verb "
+        "check by its name, verb:<verb>/<seat>/<layout>, or the start of it",
     )
     p.add_argument(
         "--select",

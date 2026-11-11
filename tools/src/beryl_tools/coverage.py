@@ -12,9 +12,9 @@ changes to the Rust that records them (selection.py).
 By default it measures origin/staging in a detached worktree of its own, which it removes after;
 `--commit` names another commit, and `--here` measures this checkout as it is. The result goes to
 `$BERYL_CACHE/ci/coverage/<commit>.json`, keyed by the run log's check ids (`ui-test:<title>`,
-`shots:<name>`, runlog.py), with `latest.json` naming the newest clean one. A coverage run is
-not a check: it logs no results and fails on no check's failure, but lists the checks that
-failed.
+`verb:<verb>/<seat>/<layout>`, `shots:<name>`, runlog.py), with `latest.json` naming the newest
+clean one. A coverage run is not a check: it logs no results and fails on no check's failure,
+but lists the checks that failed.
 """
 
 from __future__ import annotations
@@ -303,7 +303,7 @@ def measure_here() -> int:
         env.pop(runlog.RESULTS_ENV, None)
         # ui-test's fixtures, and those of shots.json, which its pages fetch from ui/public.
         if (
-            shots.record_fixtures(recorded, shots.INTERACTION_FIXTURES)
+            shots.record_fixtures(recorded, shots.ui_test_fixtures())
             or shots.record_fixtures()
         ):
             print("coverage: recording the fixtures failed", file=sys.stderr)
@@ -312,13 +312,14 @@ def measure_here() -> int:
         lanes: dict[str, int] = {}
         try:
             with shots.served_ui(env) as url:
-                scripts = {
-                    "ui-test": ["scripts/interactions.mjs", url, str(recorded)],
-                    "shots": ["scripts/shots.mjs", url, str(out), "shots.json"],
-                }
-                for lane, script in scripts.items():
-                    print(f"coverage: {lane}", file=sys.stderr, flush=True)
-                    lanes[lane] = subprocess.run(
+                scripts = [
+                    ("ui-test", ["scripts/interactions.mjs", url, str(recorded)]),
+                    ("ui-test", ["scripts/verbs.mjs", url, str(recorded)]),
+                    ("shots", ["scripts/shots.mjs", url, str(out), "shots.json"]),
+                ]
+                for lane, script in scripts:
+                    print(f"coverage: {lane} {script[0]}", file=sys.stderr, flush=True)
+                    code = subprocess.run(
                         ["node", *script],
                         cwd=paths.UI,
                         env=env,
@@ -326,6 +327,7 @@ def measure_here() -> int:
                         stdout=subprocess.DEVNULL,
                         check=False,
                     ).returncode
+                    lanes[lane] = lanes.get(lane, 0) or code
         except shots.UiError as e:
             print(f"coverage: {e}", file=sys.stderr)
             return 1

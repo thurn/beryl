@@ -73,6 +73,24 @@
       "after": 5
     },
     {
+      "name": "verbs-cast-theirs",
+      "board": "combat-declare",
+      "until": "first priority decision for seat 1 from turn 6"
+    },
+    {
+      "name": "verbs-cast-stops",
+      "board": "combat-declare",
+      "stops": { "fullControl": true },
+      "until": "first attacker decision for seat 0 from turn 5",
+      "after": 5
+    },
+    {
+      "name": "verbs-cast-theirs-stops",
+      "board": "combat-declare",
+      "stops": { "fullControl": true },
+      "until": "first priority decision for seat 1 from turn 6"
+    },
+    {
       "name": "combat-double-block",
       "board": "combat-double-block",
       "until": "first blocker decision for seat 0",

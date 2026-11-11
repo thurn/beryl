@@ -8,7 +8,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
 - `coverage:<file>:<line>`: a changed line of ui/src (JavaScript or CSS) is one it ran, by the
   nightly coverage file (coverage.py), mapped across the commits between it and the branch;
 - `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs, or a
-  top-level block of them, or its entry in ui/shots.json;
+  top-level block of them, or its entry in ui/shots.json; for a verb check
+  (`verb:<verb>/<seat>/<layout>`, ui/scripts/verbs.mjs), that script or its list, ui/verbs.json;
 - `import:<file>`: code changed in a ui/src file interactions.mjs imports into Node, which no
   coverage sees: as if each line of interactions.mjs that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
@@ -69,6 +70,11 @@ HARNESS: dict[str, tuple[str, ...]] = {
     "shots": (*COMMON_HARNESS, "ui/scripts/shots.mjs"),
 }
 INTERACTIONS = "ui/scripts/interactions.mjs"
+# The verb suite, which `ui-test` runs beside interactions.mjs: its script, the list of its
+# checks, and the prefix of their ids in the run log (the lane's others are `ui-test:<title>`).
+VERB_SCRIPT = "ui/scripts/verbs.mjs"
+VERBS = "ui/verbs.json"
+VERB_PREFIX = "verb:"
 SHOTS = "ui/shots.json"
 FIXTURES = "ui/fixtures.json"
 COMMENT = ("//", "/*", "*")
@@ -384,6 +390,53 @@ def interaction_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
     return [f"ui-test:{r.literal}" for r in found if r.literal is not None], patterns
 
 
+def verb_suite() -> dict[str, object]:
+    """ui/verbs.json: the verb suite's verbs, layouts and the fixtures of its moment by seat.
+    Empty where a checkout has none."""
+    try:
+        found = json.loads((paths.REPO / VERBS).read_text())
+    except (OSError, ValueError):
+        return {}
+    return found if isinstance(found, dict) else {}
+
+
+def verb_checks() -> list[str]:
+    """The verb suite's checks, by their run-log ids."""
+    suite = verb_suite()
+    verbs, layouts, moment = (suite.get(k) for k in ("verbs", "layouts", "moment"))
+    if not (
+        isinstance(verbs, list)
+        and isinstance(layouts, list)
+        and isinstance(moment, dict)
+    ):
+        return []
+    return [
+        f"{VERB_PREFIX}{verb}/{seat}/{layout}"
+        for verb in verbs
+        for seat in moment
+        for layout in layouts
+    ]
+
+
+def verb_fixtures() -> list[str]:
+    """The fixtures the verb suite plays."""
+    moment = verb_suite().get("moment")
+    seats = moment.values() if isinstance(moment, dict) else []
+    return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
+
+
+def scripts(names: list[str]) -> dict[str, list[str]]:
+    """Which of `ui-test`'s scripts run, each with the checks of `names` that are its own: a
+    verb check's name goes to verbs.mjs and any other to interactions.mjs, and a script with
+    none does not run. With no names both run every check."""
+    if not names:
+        return {INTERACTIONS: [], VERB_SCRIPT: []}
+    verbs = [n for n in names if n.startswith(VERB_PREFIX)]
+    rest = [n for n in names if not n.startswith(VERB_PREFIX)]
+    found = {INTERACTIONS: rest, VERB_SCRIPT: verbs}
+    return {script: own for script, own in found.items() if own}
+
+
 def shot_entries(text: str) -> dict[str, object]:
     try:
         return {s["name"]: s for s in json.loads(text)["shots"]}
@@ -479,6 +532,14 @@ def matches(path: str, globs: Iterable[str]) -> bool:
     return any(fnmatch.fnmatchcase(path, g) for g in globs)
 
 
+def rewritten(path: str, changed: list[str], hunks_now: dict[str, list[Hunk]]) -> bool:
+    """Whether `path` changed in more than its comments; a file git does not track yet did."""
+    found = hunks_now.get(path)
+    return path in changed and (
+        found is None or not all(h.comment_only() for h in found)
+    )
+
+
 def choose(
     lane: str,
     changed: list[str],
@@ -502,6 +563,10 @@ def choose(
         choice.add(sorted(bodies), "body")
         if harness:
             choice.add(universe, "harness")
+    if lane == "ui-test" and any(
+        rewritten(p, changed, hunks_now) for p in (VERB_SCRIPT, VERBS)
+    ):
+        choice.add((c for c in universe if c.startswith(VERB_PREFIX)), "body")
     if lane == "shots" and SHOTS in changed:
         old = shot_entries(checks.git("show", f"{base}:{SHOTS}")) if base else {}
         new = shot_entries((paths.REPO / SHOTS).read_text())
@@ -575,7 +640,7 @@ def lane_checks(
 ) -> list[str]:
     """The lane's checks as they are now, but those the prune moved to slow CI alone
     (verdicts.SLOW_ONLY): shots.json's names, or the checks interactions.mjs spells out with
-    those the log and coverage name that it can still give."""
+    those the log and coverage name that it can still give, and the verb suite's."""
     slow = {s.check for s in verdicts.SLOW_ONLY}
     return [c for c in every_check(lane, log, found) if c not in slow]
 
@@ -600,7 +665,7 @@ def every_check(
             or json.dumps(c.removeprefix(prefix)) in source
         )
     }
-    return sorted(current | set(literal))
+    return sorted(current | set(literal)) + verb_checks()
 
 
 class Chooser:

@@ -4,7 +4,8 @@ slow CI write at once. It is this machine's record, never committed. `by ci-repo
 with the verdicts on each check's failures that verdicts.py records in beads.
 
 A check is the finest thing a step can report: one Rust test (`rust:<binary>::<test path>`), one
-browser check (`ui-test:<title>`), one screenshot (`shots:<name>`), one oracle scenario
+browser check (`ui-test:<title>`, or `verb:<verb>/<seat>/<layout>` for one of the stage's
+verbs), one screenshot (`shots:<name>`), one oracle scenario
 (`oracle:<card>/<scenario>/<engine>`). A step reports them by appending lines to the file
 `$BERYL_CHECK_RESULTS` names ([`result`] here, `recordResult` in ui/scripts/capture.mjs); a step
 that reports none, such as fmt or clippy, is one check, `<lane>:<step>`, as is a step that failed
