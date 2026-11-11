@@ -52,6 +52,7 @@ from . import (
     paths,
     runlog,
     system,
+    two_player,
     verdicts,
     warm,
 )
@@ -590,9 +591,12 @@ def ui_lane() -> Lane:
 
 
 def names_lane() -> Lane:
-    """No card name in generic code, held to the burn-down list (card_names.py)."""
-    return Lane("names").step(
-        "card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"]
+    """No card name in generic code, held to the burn-down list (card_names.py), and no
+    other player of two in rules code (two_player.py)."""
+    return (
+        Lane("names")
+        .step("card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"])
+        .step("two-player", [sys.executable, "-m", "beryl_tools.checks", "two-player"])
     )
 
 
@@ -774,6 +778,7 @@ if __name__ == "__main__":
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
         "file-length": file_length.step,
+        "two-player": two_player.step,
         "conventions": conventions.step,
         "build-paths": build_paths.step,
     }

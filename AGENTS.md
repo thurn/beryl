@@ -115,6 +115,9 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   `data/file-length-allowlist.json`).
 - No card name in generic code (`card-names`, held to its allowlist); a one-card
   mechanic is a sign the abstraction is missing.
+- Rules code and card bodies never name the other player of two (`two-player`):
+  they ask the state for a player's opponents, the defending players or the next
+  player in turn order (`beryl_kernel`'s contract, "Players").
 - State a card creates lives in a store, not in a new field on Player, Object or
   State (plan K4).
 - Helpers shared by two cards live in the shared library, not in a card file.
@@ -181,7 +184,8 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   scale harness's tests), `rust` (rustfmt, clippy, tests), `ui` (prettier, tsc,
   `npm test`), `names` (`card-names`: no card name in generic code, held to the
   burn-down list `data/card-names-allowlist.json`, whose counts only fall;
-  `python -m beryl_tools.checks card-names --shrink` lowers them) and `oracle`
+  `python -m beryl_tools.checks card-names --shrink` lowers them; `two-player`:
+  no rules module or card file names `beryl_kernel::two_player`) and `oracle`
   (each changed card file's scenarios in XMage and Forge, skipped when another
   oracle run holds the oracles past 10 s). For a change to `ui/` or `rust/` it
   also runs `ui-test` and `shots` on the browser checks the change can break, by
