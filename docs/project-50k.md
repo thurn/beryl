@@ -3,8 +3,9 @@
 *A plan to rebuild Beryl's engine, card and UI structure so it could hold every
 known Magic card. Decided 2026-11-10 in a design interview, on an audit of the
 code and on measurements taken that day, and revised the same day after an audit
-of the plan itself. The work is tracked as an Enact epic in beads; this document
-is the plan the epic's beads are written against.*
+of the plan itself and a second interview on the checks (K18 to K21). The work
+is tracked as an Enact epic in beads; this document is the plan the epic's beads
+are written against.*
 
 Beryl supports 47 cards. Its structure was built for that pool: one cards crate,
 hand-kept registries, one Rust function per ability, and an enum variant or
@@ -14,7 +15,8 @@ structure with one that would still work with the full Comprehensive Rules and
 
 - **In scope:** architecture. Crates, state ownership, the card format, the
   shared rules library, the prompt protocol, the card data pipeline,
-  verification, and the tools a fleet of cheap models needs to write cards.
+  verification, the checks every push runs, and the tools a fleet of cheap
+  models needs to write cards.
 - **Not in scope:** new rules features. Expanding what the engine can do is the
   next project, [rules-coverage.md](rules-coverage.md). The only new cards are
   the ten of the closing authoring pilot.
@@ -66,31 +68,47 @@ engine and session.
 `beryl_engine` any module can read or write any field. `object_mut` is called
 from 13 files.
 
+**Checks.** See [Measurements](#measurements). Slow CI failed 60 of 414 runs,
+and 57 of those were the two browser lanes, which the fast check never runs.
+
+- A UI change's author never sees the browser check it broke. A Steward with no
+  context repairs it after it lands: 34 Steward beads in five days.
+- About a third of those beads were a real bug, a third a test made stale by an
+  intended change, and a quarter a test racing the wall clock.
+- Generic detectors run over many screens found most of the real bugs. Scripted
+  checks of one behavior caused nearly all the stale and racy failures.
+- Nothing records what a check has caught or cost, so nothing can be removed on
+  evidence.
+
 **Compile time.** See [Measurements](#measurements). One crate of 50,000 real
 card files would need about 53 GiB of compiler memory. Split into crates, the
 same cards build in about 90 seconds.
 
 ## Decisions
 
-| ID  | Decision                                                                                                                                                                                                         | Why                                                                                                                                                                                                                              |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump; if it cannot hold, the run stops for a human decision.                  | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data, so there is no substitute to fall back to.                    |
-| K2  | Printed characteristics are generated from Scryfall for the whole pool into the card store. A card gets a Rust file, under a generated header, when it gets written abilities.                                   | Nobody types a cost or type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh.                                       |
-| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                                                                                | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                                                                 |
-| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers.                                                             | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                                                                                                              |
-| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                                                                                 | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                                                    |
-| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                                                                                 | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                                                                                                                   |
-| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.                                                                    | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                                                                                                                |
-| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                                                                                           | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                                                                                                                      |
-| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                                                                               | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.                                                                                                        |
-| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                                                                                 | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                                                                                                                   |
-| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                                                                                | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                                                                                                                          |
-| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                                                                              | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.                                                                                                       |
-| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                                                                               | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find.                                                                                               |
-| K14 | The project ends at parity, a scale rehearsal and a ten-card authoring pilot.                                                                                                                                    | Foundations first. The pilot is the only test that a cheap model can write a card from the brief; its cards are Legacy cards the project needs anyway.                                                                           |
-| K15 | Four parallel tracks. One Warden per milestone. A Mason audit gates each step of the engine chain (after milestones 2, 3, 4 and 5) and one closes the run. No Sage, one Archivist.                               | Parity is machine-checked. Architecture drift is what the checks cannot see, and it is expensive in the vocabulary, kernel, stores and library.                                                                                  |
-| K16 | Beryl stays Apache-2.0 and takes no card data from Forge. Forge is a test oracle and a census of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                            | A translator from Forge's scripts would be a second vocabulary: about 1,600 hand-mapped script entries for 83% of its cards ([Measurements](#measurements)), built from the idioms Beryl avoids, at the cost of a permanent GPL. |
-| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink. Tests, test drivers, generated files, the expert system and the retired long-think code are exempt. | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                                                                                                                  |
+| ID  | Decision                                                                                                                                                                                                                | Why                                                                                                                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump; if it cannot hold, the run stops for a human decision.                         | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data, so there is no substitute to fall back to.                    |
+| K2  | Printed characteristics are generated from Scryfall for the whole pool into the card store. A card gets a Rust file, under a generated header, when it gets written abilities.                                          | Nobody types a cost or type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh.                                       |
+| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                                                                                       | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                                                                 |
+| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers.                                                                    | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                                                                                                              |
+| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                                                                                        | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                                                    |
+| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                                                                                        | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                                                                                                                   |
+| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.                                                                           | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                                                                                                                |
+| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                                                                                                  | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                                                                                                                      |
+| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                                                                                      | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.                                                                                                        |
+| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                                                                                        | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                                                                                                                   |
+| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                                                                                       | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                                                                                                                          |
+| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                                                                                     | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.                                                                                                       |
+| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                                                                                      | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find.                                                                                               |
+| K14 | The project ends at parity, a scale rehearsal and a ten-card authoring pilot.                                                                                                                                           | Foundations first. The pilot is the only test that a cheap model can write a card from the brief; its cards are Legacy cards the project needs anyway.                                                                           |
+| K15 | Five parallel tracks. One Warden per milestone. A Mason audit gates each step of the engine chain (after milestones 2, 3, 4 and 5) and one closes the run. No Sage, one Archivist.                                      | Parity is machine-checked. Architecture drift is what the checks cannot see, and it is expensive in the vocabulary, kernel, stores and library.                                                                                  |
+| K16 | Beryl stays Apache-2.0 and takes no card data from Forge. Forge is a test oracle and a census of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                                   | A translator from Forge's scripts would be a second vocabulary: about 1,600 hand-mapped script entries for 83% of its cards ([Measurements](#measurements)), built from the idioms Beryl avoids, at the cost of a permanent GPL. |
+| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink. Tests, test drivers, generated files, the expert system and the retired long-think code are exempt.        | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                                                                                                                  |
+| K18 | Every check's every run is logged, and each failure gets a verdict the tool infers: flaky, stale test or caught a bug. A weekly agent applies a fixed pruning rule to the records, with no approval step.               | Nobody can say which checks earn their time. A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                              |
+| K19 | The fast check runs the browser checks a change affects, chosen by measured coverage and capped by time. Slow CI stays the full sweep on every staging tip until the miss rate is measured.                             | The author knows whether the test or the code is wrong; a Steward has to find out. `Board.tsx` changes in a quarter of all commits, so choosing by file would choose everything.                                                 |
+| K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                | Audits found about six of eight real UI bugs; scripted checks caused about 21 stale or racy failures. Only audits scale to generated specs for 50,000 cards.                                                                     |
+| K21 | A failed check reruns once. One that flakes twice in seven days is quarantined: it runs and is logged but cannot fail a run. A failure that survives the rerun on staging is bisected before its Steward bead is filed. | A racy test should not charge an unrelated change. A Steward told the check, the commit and the check's record starts from the answer.                                                                                           |
 
 ## Target architecture
 
@@ -221,6 +239,55 @@ shape.
 - Scenarios use basic lands and a small set of designated prop cards, so one
   card's change cannot break another card's tests.
 
+### Checks
+
+A check is one test: a Rust test, a browser check, a screenshot or an oracle
+scenario. All four are logged and judged the same way.
+
+- **Run log.** Every run of every check appends a record to `$BERYL_CACHE`: the
+  commit, fast or slow, the outcome, the seconds, the load, and why the check
+  was chosen. Nothing is committed.
+
+- **Verdicts.** The tool infers one for each failure and asks the agent only
+  when it cannot tell.
+
+  - *Flaky:* it passed on rerun with the tree unchanged.
+  - *Stale test:* the fix touched only the check or its fixture.
+  - *Caught a bug:* the fix touched product code.
+  - *Selection miss:* slow CI failed a check the fast check did not choose.
+
+- **Selection.** A nightly Chromium run records the functions and CSS rules each
+  browser check executes. The fast check runs the checks whose recorded lines
+  meet the diff. When those exceed the budget, the ones with the worst failure
+  records run first and slow CI covers the rest. A changed card's scenarios run
+  against the oracles before the push.
+
+- **Flakes.** The browser harness pauses its clock unless a check asks
+  otherwise. A failed check reruns once; a second flake in seven days
+  quarantines it, with no bead.
+
+- **After a merge.** `by ci` reruns the failed checks over the commits since
+  `master` and ends its log with the checks, the culprit commit and each check's
+  record. Enact files that as the Steward bead. A run over budget on a loaded
+  machine or a cold cache reruns and files nothing.
+
+- **Pruning.** `just ci-report` prints each check's record over 30 days. A
+  weekly agent applies this rule in one commit that lists what it removed:
+
+  | Record                                        | Action              |
+  | --------------------------------------------- | ------------------- |
+  | Three stale updates and no catch              | Delete              |
+  | Quarantined, never caught anything            | Delete              |
+  | Quarantined, has caught a bug                 | Fix                 |
+  | Never failed, in the costliest tenth          | Run in slow CI only |
+  | A `keep` comment in its source, with a reason | Keep                |
+
+- **New browser checks.** Under K20, a fix adds a fixture or spec moment for the
+  audits (overlap, off-screen, reachability, duplicate objects, page errors,
+  motion). A new class of bug extends an audit.
+
+The budgets stay at 60 and 300 seconds.
+
 ### Authoring tools
 
 1. **No model.** Vanilla and keyword-only creatures are complete from generated
@@ -254,7 +321,7 @@ These go into AGENTS.md in the first milestone.
 
 ## Milestones
 
-Each lands in place under K11. They run as four tracks (K15).
+Each lands in place under K11. They run as five tracks (K15).
 
 | Track   | Milestones                    | Starts after                |
 | ------- | ----------------------------- | --------------------------- |
@@ -263,6 +330,7 @@ Each lands in place under K11. They run as four tracks (K15).
 | Data    | 7a                            | milestone 1                 |
 | Hygiene | file splits no milestone owns | milestone 1                 |
 | Tail    | 7b, then 8                    | milestone 5                 |
+| CI      | two steps, no milestone       | nothing; blocks nothing     |
 
 1. **Guardrails.** The scale-rehearsal harness; the card-names test, seeded with
    the audit's inventory as a shrinking allowlist; the file-length check;
@@ -295,6 +363,16 @@ Each lands in place under K11. They run as four tracks (K15).
    ten Legacy cards that today's mechanics can express, each from its brief.
    Cards that pass are kept.
 
+The CI track (K18 to K21) has two steps.
+
+1. **Measure and stop the bleeding.** The run log and `just ci-report`; inferred
+   verdicts; the paused clock; rerun and quarantine. Then each existing check's
+   record is filled in from the slow-CI log and from how often commits rewrote
+   it, and the pruning rule is applied once.
+2. **Select and bisect.** Coverage recording, selection in the fast check,
+   oracles per changed card, bisection in `by ci`, and the weekly prune.
+   Decomposed against the log as built.
+
 New cards and engine mechanics wait until milestone 5 lands. UI, mobile and AI
 ladder work continue.
 
@@ -323,11 +401,18 @@ ladder work continue.
   cannot be met after three attempts is recorded with its measured value and
   cause, and a follow-up bead is filed.
 
-- **Reported, with no bar:** the paper test's four-way split; the render-match
-  rate on the 47 cards; the pilot's pass count, cards blocked by missing
-  vocabulary and tokens per card; the Forge census, with the missing mechanics
-  ordered by cards blocked; the derived-only agent's results against the tuned
-  one.
+- **Checks.** Over the two weeks after the CI track lands, at most 2 Steward
+  beads per 100 landed commits (12 today), with the fast check within 60 seconds
+  for a UI change. Missed after three attempts, it is recorded with its cause
+  and a follow-up bead is filed. Then, if selection misses are under 1 per 100
+  commits, a follow-up moves the browser lanes' full run to nightly.
+
+- **Reported, with no bar:** the share of failures by verdict; flakes and
+  quarantined checks; checks deleted; seconds per lane; the paper test's
+  four-way split; the render-match rate on the 47 cards; the pilot's pass count,
+  cards blocked by missing vocabulary and tokens per card; the Forge census,
+  with the missing mechanics ordered by cards blocked; the derived-only agent's
+  results against the tuned one.
 
 ## Risks
 
@@ -342,6 +427,12 @@ ladder work continue.
   later push fixes the conflict.
 - **The save corpus constrains prompt changes.** Milestone 6 ships a format
   migration; the old vocabulary is closed and small.
+- **Selection misses.** Coverage is recorded nightly, so a check can depend on
+  code written since. Slow CI still runs everything on every tip, and each miss
+  is logged.
+- **A verdict is inferred wrongly.** A fix that deletes an assertion to hide a
+  bug reads as a stale test. The rule needs three such updates and no catch
+  before it deletes, and a `keep` comment overrides it.
 - **Dual APIs linger.** Old bodies and effect data coexist from milestone 2 to
   milestone 5. The card-names and file-length allowlists make the remainder
   visible.
@@ -387,3 +478,29 @@ Share of scripts fully covered by the most common entries:
 
 36% of scripts compute a value through a script variable, 28% chain
 sub-abilities and 12% keep remembered state.
+
+**Slow CI.** From the runner's log and the Steward beads of 2026-11-06 to
+2026-11-10, over 280 landed commits.
+
+| Lane failed in slow CI | Runs of 414 |
+| ---------------------- | ----------- |
+| `ui-test`              | 35          |
+| `shots`                | 14          |
+| Both                   | 8           |
+| `oracle`               | 2           |
+| `rust`                 | 1           |
+| Any other              | 0           |
+
+The 34 Steward beads, by the cause their close reasons give. Each took a median
+of 12 minutes.
+
+| Cause                                      | Beads |
+| ------------------------------------------ | ----- |
+| Test made stale by an intended change      | 12    |
+| Test racing the wall clock or font loading | 9     |
+| Real bug, mostly overlapping layout        | 8     |
+| Host load or a cold cache                  | 2     |
+| Unclear or still open                      | 3     |
+
+`ui-test` is 212 checks in one 12,725-line file and takes 136 to 181 seconds,
+the longest lane. All of its checks install a fake clock; 23 pause it.

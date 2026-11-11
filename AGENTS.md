@@ -154,6 +154,11 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   rise) and `mobile` (`cargo check` of the app for the iOS Simulator and
   Android, which needs `just mobile-setup`). A run over budget fails: speed up,
   move or delete the slowest step rather than raise it.
+- A UI fix adds the broken state as a fixture or spec moment for the generic
+  audits (overlap, off-screen, reachability, duplicate objects, page errors,
+  motion), extending an audit for a new class of bug. Write a scripted check in
+  `ui/scripts/interactions.mjs` only when no audit can express the property, and
+  say why in a comment (`docs/project-50k.md`, K20).
 - Budgets and deadlines count load-adjusted seconds: while the load average is
   over the core count, the clock runs slower in proportion, up to 8x. A check
   passes on a busy machine if it would on a quiet one.
