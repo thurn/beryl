@@ -73,11 +73,20 @@ def test_a_steps_poses_are_told_along_its_path_with_its_bow() -> None:
     step = {
         "from": 0,
         "to": 100,
-        "poses": [{"at": -17}, pose(0, 0, 100), pose(50, 150, 80), pose(100, 200, 100)],
+        "poses": [
+            {"at": -17},
+            pose(0, 0, 100),
+            pose(25, 90, 90),
+            pose(50, 150, 80),
+            pose(75, 180, 90),
+            pose(100, 200, 100),
+        ],
     }
     lines = motion_film.pose_lines(step, 17)
     assert lines[0] == "  the path's bow 0.1 of its chord (bows up)"
     assert "along" in lines[1]
+    # Thirty a second: every other tick it plays, and its last.
+    assert [line.split()[0] for line in lines[2:]] == ["+0", "+50", "+100"]
     assert lines[3].split()[:4] == ["+50", "0.750", "0.100", "1.00x"]
     # A card that changes where it lies is told where, and one the stage has no pose of is not.
     still = {"from": 0, "to": 33, "poses": [pose(0, -21.5, -24, 126), pose(33, 10, 20)]}

@@ -185,12 +185,11 @@ def center(pose: dict[str, Any]) -> tuple[float, float]:
 
 
 def pose_lines(step: dict[str, Any], tick: float) -> list[str]:
-    """The stage's own pose of a step's subject at each tick it plays, a tick either side:
-    how far along the line between its ends it is and how far off it to the left of its way
-    (shares of that line),
-    its size over its size as the step ends, its turn and lean in degrees, its opacity, its
-    depth and its face; and the bow of the whole path. In place, where it lies instead.
-    """
+    """The stage's own pose of a step's subject thirty times a second as it plays, from a
+    tick before to a tick after: how far along the line between its ends it is and how far
+    off it to the left of its way (shares of that line), its size over its size as the step
+    ends, its turn and lean in degrees, its opacity, its depth and its face; and the bow of
+    the whole path. In place, where it lies instead."""
     shown = [
         p
         for p in step["poses"]
@@ -213,7 +212,11 @@ def pose_lines(step: dict[str, Any], tick: float) -> list[str]:
         if length >= 1
         else "  ms      x       y       size   turn   lean  opacity  depth  face"
     )
-    for pose in shown:
+    # Thirty a second, as the strip: every other tick from the step's first, and its last.
+    first = shown.index(playing[0])
+    for n, pose in enumerate(shown):
+        if (n - first) % 2 and pose is not playing[-1]:
+            continue
         x, y = center(pose)
         if length >= 1:
             along = ((x - ax) * dx + (y - ay) * dy) / (length * length)
