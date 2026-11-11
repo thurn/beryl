@@ -1202,7 +1202,7 @@
         "countered": {
           "duration": 910,
           "delay": 260,
-          "stagger": null,
+          "stagger": 640,
           "curve": "none"
         },
         "resolved instant or sorcery": {

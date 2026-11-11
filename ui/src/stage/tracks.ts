@@ -177,27 +177,28 @@ export const lunge =
 
 /** How a card that turns over where it lies is shared out and how large it grows (UI
  * Conventions, "A card turning face up": it "enlarges in place and flips"): it has grown by
- * `grown` of the step, shows its new face from the middle, and begins to settle at `settle`. */
-export const FLIP = { size: 1.3, grown: 0.3, turn: 0.5, settle: 0.7 };
+ * `grown` of the step, shows its new face from the middle, and begins to settle at `settle`.
+ * The veil that hides the change is the `cover` effect's (stage.css). */
+export const FLIP = { size: 1.2, grown: 0.3, turn: 0.5, settle: 0.7 };
 
-/** A card turning over in place: it grows about `middle` of itself, shows the side it showed
- * as the step began until `FLIP.turn`, and settles back to where it rests. `about` gives a
- * pose `size` times as large about that middle. */
+const inOut = (progress: number) =>
+  progress < 0.5 ? 2 * into(progress) : 1 - 2 * into(1 - progress);
+
+/** A card turning over in place: it grows about `middle` of itself, quickly and then slowing
+ * into its largest, shows the side it showed as the step began until `FLIP.turn`, and settles
+ * back to where it rests, slowing onto the table. `about` gives a pose `size` times as large
+ * about that middle. */
 export const turnedOver =
-  (
-    start: Pose,
-    ease: Timing["ease"],
-    about: (pose: Pose, size: number) => Pose,
-  ): Path =>
+  (start: Pose, about: (pose: Pose, size: number) => Pose): Path =>
   (progress, rest) => {
     const { size, grown, turn, settle } = FLIP;
     const share =
       progress < grown
-        ? progress / grown
+        ? out(progress / grown)
         : progress < settle
           ? 1
-          : 1 - (progress - settle) / (1 - settle);
-    const pose = about(rest, 1 + (size - 1) * ease(Math.max(0, share)));
+          : 1 - inOut((progress - settle) / (1 - settle));
+    const pose = about(rest, 1 + (size - 1) * share);
     return {
       ...pose,
       depth: ALOFT + rest.depth,

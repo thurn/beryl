@@ -87,8 +87,8 @@
     rgb(var(--light) / 85%);
   opacity: min(1, var(--blanch) * 2.5);
 }
-/* A veil of light that has closed by the time the card is at its largest, hides it as its
-   face changes half way (stage/tracks.ts FLIP) and has cleared before it settles. */
+/* A veil of light that closes as the card comes to its largest, hides it as its face changes
+   half way (stage/tracks.ts FLIP) and no longer, and has cleared before it settles. */
 .stage-effect-cover {
   background: radial-gradient(
     ellipse at 50% 40%,
@@ -98,5 +98,9 @@
   );
   box-shadow: 0 0 calc(var(--frame) * 0.2) calc(var(--frame) * 0.05)
     rgb(255 226 170 / 80%);
-  opacity: clamp(0, min(var(--cover) / 0.3, (0.85 - var(--cover)) / 0.3), 1);
+  opacity: clamp(
+    0,
+    min((var(--cover) - 0.1) / 0.3, (0.85 - var(--cover)) / 0.3),
+    1
+  );
 }

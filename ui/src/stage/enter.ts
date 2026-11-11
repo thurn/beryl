@@ -146,7 +146,7 @@ export function entering(
       };
       return {
         name: act.object.slot,
-        track: { ...own(turnedOver(was.pose, ease, about)), turn: FLIP.turn },
+        track: { ...own(turnedOver(was.pose, about)), turn: FLIP.turn },
         cover: { ...was.resting, pose: card.resting.pose },
       };
     }
