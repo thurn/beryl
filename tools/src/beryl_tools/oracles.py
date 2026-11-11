@@ -17,7 +17,9 @@ exporter and harness of `forge.py`, and prints a JSON summary per oracle: each s
 fails, is on the divergence allowlist (data/oracle-divergences.json: where the oracle is wrong,
 with the Comprehensive Rules citation that says so) or is unsupported (outside the exporter's
 vocabulary, with the reason). It fails on any failure the allowlist does not explain. Logs and
-the full results go to oracles/logs.
+the full results go to oracles/logs. Forge's AI also plays a few games of the deck, unless
+`--no-sim`. With `--lock-wait`, a run that finds another holding the oracles that long skips
+every scenario and passes: the fast check's oracle lane for changed cards does that.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator, Sequence
@@ -100,9 +103,11 @@ def stamp(oracle: Oracle) -> str:
 
 
 @contextmanager
-def locked() -> Iterator[None]:
-    """One setup or smoke at a time: concurrent Maven builds would share one repository."""
-    with system.file_lock(root() / "oracles.lock"):
+def locked(timeout: float | None = None) -> Iterator[None]:
+    """One setup, smoke or oracle run at a time: concurrent Maven builds would share one
+    repository, and a run writes its XMage tests and their reports into the shared checkout.
+    Waits forever, or at most `timeout` seconds, then raises system.LockHeld."""
+    with system.file_lock(root() / "oracles.lock", timeout):
         yield
 
 
@@ -632,34 +637,56 @@ def log_results(
             )
 
 
+def skip_all(entries: list[dict[str, object]], why: str) -> None:
+    """Reports every scenario of `entries` as skipped in each oracle, saying why."""
+    print(f"oracle: skipped: {why}")
+    for e in entries:
+        for engine in ("xmage", "forge"):
+            runlog.result(f"oracle:{e['card']}/{e['name']}/{engine}", "skip", 0.0)
+
+
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
     # Whether the oracles and the scenarios built, so that a failure is the scenarios'.
     built = False
     try:
-        with locked():
-            require_built()
-            entries = dump_scenarios(work / "scenarios.json", log_dir() / "dump.log")
-            built = True
-            if args.cards:
-                entries = [e for e in entries if e["card"] in args.cards]
-            xmage_log = log_dir() / "xmage-oracle.log"
-            xmage_log.write_text("")
-            started = time.perf_counter()
-            results: dict[str, dict[str, object]] = {
-                "xmage": check_xmage(entries, xmage_log)
-            }
-            seconds = {"xmage": time.perf_counter() - started}
-            started = time.perf_counter()
-            results["forge"] = check_forge(entries, work)
-            seconds["forge"] = time.perf_counter() - started
-            # A few AI-versus-AI games of the deck: Forge knows every card of it.
-            sim_log = log_dir() / "forge-sim.log"
-            sim_log.write_text("")
-            results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
-            stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
-            log_results(results, seconds)
+        require_built()
+        # The dump needs no oracle, so it runs before the wait for the lock, into a file of its
+        # own: two runs may dump at once.
+        with tempfile.TemporaryDirectory(prefix="beryl-oracle-") as dump:
+            entries = dump_scenarios(
+                Path(dump) / "scenarios.json", log_dir() / "dump.log"
+            )
+        if args.cards:
+            entries = [e for e in entries if e["card"] in args.cards]
+        try:
+            with locked(args.lock_wait):
+                require_built()  # Again: a setup may have held the lock to rebuild one.
+                built = True
+                xmage_log = log_dir() / "xmage-oracle.log"
+                xmage_log.write_text("")
+                started = time.perf_counter()
+                results: dict[str, dict[str, object]] = {
+                    "xmage": check_xmage(entries, xmage_log)
+                }
+                seconds = {"xmage": time.perf_counter() - started}
+                started = time.perf_counter()
+                results["forge"] = check_forge(entries, work)
+                seconds["forge"] = time.perf_counter() - started
+                if not args.no_sim:
+                    # A few AI-versus-AI games of the deck: Forge knows every card of it.
+                    sim_log = log_dir() / "forge-sim.log"
+                    sim_log.write_text("")
+                    results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
+                stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
+                log_results(results, seconds)
+        except system.LockHeld:
+            # Another run holds the oracles, as slow CI's oracle lane does for a minute or more.
+            skip_all(
+                entries, f"another oracle run held the lock for {args.lock_wait:g} s"
+            )
+            return 0
     except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
         print(f"oracle: {e}", file=sys.stderr)
         return 1 if built else checks.CANNOT_RUN
@@ -690,4 +717,13 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help="check every card scenario against the oracles, with a JSON summary",
     )
     p.add_argument("cards", nargs="*", help="only these cards' scenarios")
+    p.add_argument(
+        "--no-sim", action="store_true", help="skip Forge's AI games of the deck"
+    )
+    p.add_argument(
+        "--lock-wait",
+        type=float,
+        metavar="SECONDS",
+        help="skip every scenario, passing, when another run holds the oracles this long",
+    )
     p.set_defaults(func=oracle)

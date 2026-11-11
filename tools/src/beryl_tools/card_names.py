@@ -268,6 +268,35 @@ def name_constants() -> set[str]:
     return set(re.findall(r"^pub const ([A-Z0-9_]+):", NAMES_RS.read_text(), re.M))
 
 
+# A card's file, under its color's directory, and the line of its definition naming it.
+CARD_FILE: re.Pattern[str] = re.compile(
+    r"^rust/crates/beryl_cards/src/[a-z]+/(\w+)\.rs$"
+)
+DEFINITION_NAME: re.Pattern[str] = re.compile(r"^    name: names::([A-Z0-9_]+),", re.M)
+
+
+def cards_in(files: Iterable[str], root: Path = paths.REPO) -> list[str]:
+    """The cards whose files are among `files` (paths from `root`), by the name of each file's
+    definition, in order and once each. A deleted file, a module file and the binaries name no
+    card."""
+    values = dict(
+        re.findall(
+            r'^pub const ([A-Z0-9_]+): &str = "(.*)";',
+            (root / NAMES_RS.relative_to(paths.REPO)).read_text(),
+            re.M,
+        )
+    )
+    found: list[str] = []
+    for rel in files:
+        path = root / rel
+        if not CARD_FILE.match(rel) or not path.is_file():
+            continue
+        match = DEFINITION_NAME.search(path.read_text())
+        if match and match[1] in values:
+            found.append(values[match[1]])
+    return list(dict.fromkeys(found))
+
+
 def scan(root: Path, index: NameIndex) -> dict[str, list[tuple[int, str]]]:
     """Each in-scope file under `root` that names a card, by its path from `root`, with the
     line and name of each hit."""

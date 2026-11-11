@@ -124,3 +124,45 @@ def test_the_check_over_a_tree(tmp_path: Path) -> None:
     assert json.loads(allowlist.read_text()) == {"names": {}, "mechanics": []}
     write(tmp_path, f"{ENGINE}/names.rs", 'const A: &str = "Ponder";\n')
     assert len(card_names.check(tmp_path, allowlist, INDEX, shrink=True)) == 1
+
+
+def test_a_card_file_names_its_card_through_its_definition(tmp_path: Path) -> None:
+    src = "rust/crates/beryl_cards/src"
+    write(
+        tmp_path,
+        f"{src}/names.rs",
+        'pub const COUNTERSPELL: &str = "Counterspell";\n'
+        'pub const JACE_THE_MIND_SCULPTOR: &str = "Jace, the Mind Sculptor";\n',
+    )
+    definition = "pub static DEFINITION: Card = Card {{\n    name: names::{},\n}};\n"
+    write(tmp_path, f"{src}/blue/counterspell.rs", definition.format("COUNTERSPELL"))
+    write(
+        tmp_path,
+        f"{src}/blue/jace_the_mind_sculptor.rs",
+        definition.format("JACE_THE_MIND_SCULPTOR")
+        + "const X: &[&str] = &[names::COUNTERSPELL];\n",
+    )
+    write(tmp_path, f"{src}/blue/mod.rs", "pub mod counterspell;\n")
+    write(tmp_path, f"{src}/lib.rs", definition.format("COUNTERSPELL"))
+    changed = [
+        f"{src}/blue/jace_the_mind_sculptor.rs",
+        f"{src}/blue/counterspell.rs",
+        f"{src}/blue/mod.rs",
+        f"{src}/lib.rs",
+        f"{src}/blue/deleted.rs",
+        "rust/crates/beryl_engine/src/blue/counterspell.rs",
+        f"{src}/blue/counterspell.rs",
+    ]
+    assert card_names.cards_in(changed, tmp_path) == [
+        "Jace, the Mind Sculptor",
+        "Counterspell",
+    ]
+
+
+def test_every_card_file_names_its_card() -> None:
+    files = [
+        p.relative_to(card_names.paths.REPO).as_posix()
+        for p in (card_names.NAMES_RS.parent).glob("*/*.rs")
+        if p.name != "mod.rs" and p.parent.name not in ("bin", "tests")
+    ]
+    assert len(card_names.cards_in(files)) == len(files)

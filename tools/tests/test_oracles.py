@@ -95,3 +95,65 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
     gap = result["scenarios"][0]  # pyre-ignore[16]
     assert gap["status"] == "unsupported" and gap["reason"] == "exporter gap: a gap"
     assert "failure" not in gap
+
+
+SCENARIOS: list[dict[str, object]] = [
+    {"card": "Counterspell", "name": "counters a spell"},
+    {"card": "Ponder", "name": "looks at three"},
+]
+
+
+def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Replaces the dump and both oracles with stand-ins that pass every scenario; returns the
+    cards each oracle played, then "sim" for each round of Forge's AI games."""
+    played: list[list[str]] = []
+
+    def check(entries: list[dict[str, object]], _work: Path) -> dict[str, object]:
+        played.append([str(e["card"]) for e in entries])
+        scenarios = [{**e, "status": "pass"} for e in entries]
+        return {"pass": len(scenarios), "fail": 0, "scenarios": scenarios}
+
+    monkeypatch.setattr(oracles, "dump_scenarios", lambda path, log: SCENARIOS)
+    monkeypatch.setattr(oracles, "require_built", lambda: None)
+    monkeypatch.setattr(oracles, "check_xmage", check)
+    monkeypatch.setattr(oracles, "check_forge", check)
+
+    def sim(_log: Path, _games: int) -> list[str]:
+        played.append(["sim"])
+        return []
+
+    monkeypatch.setattr(oracles, "sim_forge", sim)
+    return played
+
+
+def oracle_args(
+    *cards: str, no_sim: bool = False, lock_wait: float | None = None
+) -> argparse.Namespace:
+    return argparse.Namespace(cards=list(cards), no_sim=no_sim, lock_wait=lock_wait)
+
+
+def test_no_sim_skips_forge_s_games_and_cards_narrow_the_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    played = fake_oracles(monkeypatch)
+    assert oracles.oracle(oracle_args("Ponder", no_sim=True)) == 0
+    assert played == [["Ponder"], ["Ponder"]]
+    played.clear()
+    assert oracles.oracle(oracle_args()) == 0
+    assert played == [["Counterspell", "Ponder"]] * 2 + [["sim"]]
+
+
+def test_a_run_waiting_past_the_lock_wait_skips_and_passes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    played = fake_oracles(monkeypatch)
+    results = tmp_path / "results.jsonl"
+    monkeypatch.setenv("BERYL_CHECK_RESULTS", str(results))
+    with oracles.locked():
+        assert oracles.oracle(oracle_args("Ponder", lock_wait=0.2)) == 0
+    assert played == []
+    logged = [json.loads(line) for line in results.read_text().splitlines()]
+    assert [(r["check"], r["outcome"]) for r in logged] == [
+        ("oracle:Ponder/looks at three/xmage", "skip"),
+        ("oracle:Ponder/looks at three/forge", "skip"),
+    ]

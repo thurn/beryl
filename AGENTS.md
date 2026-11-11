@@ -172,10 +172,12 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the
   branch left `origin/staging`: `repo` (justfile and Markdown formatting),
   `python` (black, pyre, pytest), `rust` (rustfmt, clippy, tests), `ui`
-  (prettier, tsc) and `names` (`card-names`: no card name in generic code, held
-  to the burn-down list `data/card-names-allowlist.json`, whose counts only
-  fall; `python -m beryl_tools.checks card-names --shrink` lowers them). It also
-  refuses conflict markers and bad commit subjects.
+  (prettier, tsc), `names` (`card-names`: no card name in generic code, held to
+  the burn-down list `data/card-names-allowlist.json`, whose counts only fall;
+  `python -m beryl_tools.checks card-names --shrink` lowers them) and `oracle`
+  (each changed card file's scenarios in XMage and Forge, skipped when another
+  oracle run holds the oracles past 10 s). It also refuses conflict markers and
+  bad commit subjects.
 - `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
   `shots` (`just ui-shots`, which fails on any page error), `ui-test`
   (`just ui-test`, which plays the game screen through a fixture), `oracle`

@@ -153,21 +153,29 @@ def terminate(proc: subprocess.Popen[bytes]) -> None:
         proc.terminate()
 
 
+class LockHeld(Exception):
+    """Another process held a lock past the wait for it."""
+
+
 @contextmanager
-def file_lock(path: Path) -> Iterator[None]:
-    """Holds an exclusive lock on the file at `path`, waiting for it, for the duration."""
+def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
+    """Holds an exclusive lock on the file at `path` for the duration, waiting for it: forever,
+    or at most `timeout` seconds, then raising LockHeld."""
+    deadline = None if timeout is None else time.monotonic() + timeout
     with open(path, "w") as handle:
         if WINDOWS:
             import msvcrt
 
-            # LK_LOCK gives up after ten tries a second apart: keep trying.
+            # LK_NBLCK tries once; LK_LOCK gives up after ten tries a second apart.
             while True:
                 try:
                     # pyre-ignore[16]: Windows only
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                     break
                 except OSError:
-                    continue
+                    if deadline is not None and time.monotonic() >= deadline:
+                        raise LockHeld(f"{path} held for {timeout:g} s")
+                    time.sleep(0.2)
             try:
                 yield
             finally:
@@ -177,7 +185,17 @@ def file_lock(path: Path) -> Iterator[None]:
             return
         import fcntl
 
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        if deadline is None:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        else:
+            while True:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise LockHeld(f"{path} held for {timeout:g} s")
+                    time.sleep(0.2)
         try:
             yield
         finally:

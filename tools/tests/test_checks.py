@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks
+from beryl_tools import checks, oracles
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -271,3 +271,15 @@ def test_a_rerun_that_misses_a_failed_check_is_no_flake(
     out = capsys.readouterr().out
     assert "the rerun did not pass ui-test:casts a spell: the failure stands" in out
     assert "flaky:" not in out
+
+
+def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    changed = ["rust/crates/beryl_cards/src/blue/counterspell.rs", "tools/x.py"]
+    assert checks.changed_cards(changed) == []
+    monkeypatch.setattr(oracles, "built", lambda oracle: True)
+    assert checks.changed_cards(changed) == ["Counterspell"]
+    assert checks.changed_cards(None) == []
+    lane = checks.card_oracle_lane(["Counterspell"])
+    assert lane.steps[0].cmd[-4:] == ["--no-sim", "--lock-wait", "10", "Counterspell"]

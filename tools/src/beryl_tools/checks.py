@@ -8,7 +8,8 @@ Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work 
 the machine (other sessions' checks, a game, `just longthink`), the clock runs slower, so a run
 is held to what it would take on a machine to itself, and a hung step still dies.
 
-The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
+The fast check runs the lanes whose files changed since the branch left origin/staging, and
+`oracle` on the scenarios of each card whose file changed, without Forge's AI games. Slow
 CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
 `shots` (the screens rendered headless), `ui-test` (the game screen played headless),
 `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the rollout
@@ -511,6 +512,18 @@ def oracle_lane() -> Lane:
     return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"], rerun=failed_cards)
 
 
+# How long the fast check's oracle lane waits for another oracle run, such as slow CI's, before
+# it skips: that run holds the oracles for up to a minute and a half.
+ORACLE_LOCK_WAIT = 10
+
+
+def card_oracle_lane(cards: list[str]) -> Lane:
+    """Plays the scenarios of `cards` in XMage and Forge without Forge's AI games, skipping
+    them, and passing, when another oracle run holds the oracles past the wait."""
+    cmd = [*BY, "oracle", "--no-sim", "--lock-wait", str(ORACLE_LOCK_WAIT), *cards]
+    return Lane("oracle", warm=True).step("oracle", cmd, rerun=failed_cards)
+
+
 def mobile_lane() -> Lane:
     """Type-checks the app crate for the iOS Simulator and Android (`by mobile-check`); the
     phone builds themselves take minutes, too long for the budget."""
@@ -549,7 +562,20 @@ def fast(args: argparse.Namespace) -> int:
         lanes.append(ui_lane())
     if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
         lanes.append(names_lane())
+    if cards := changed_cards(changed):
+        lanes.append(card_oracle_lane(cards))
     return run_lanes(lanes, "check", FAST_BUDGET, strict=False)
+
+
+def changed_cards(changed: list[str] | None) -> list[str]:
+    """The cards whose files changed, for the oracle lane: none with no base, when every card
+    would count (slow CI checks them all), or on a machine without the oracles built
+    (`just oracle-setup`)."""
+    from . import oracles  # It imports this module.
+
+    if not changed or not all(oracles.built(o) for o in oracles.ORACLES):
+        return []
+    return card_names.cards_in(changed)
 
 
 def slow(args: argparse.Namespace) -> int:
