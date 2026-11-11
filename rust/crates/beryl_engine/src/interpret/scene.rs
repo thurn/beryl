@@ -303,6 +303,9 @@ impl<L: Layout> Scene<'_, L> {
     /// the number chosen for it while the object is on the stack."
     fn mana_value(&self, slot: L::Slot) -> u8 {
         let s = self.s;
+        if s.object(slot).zone != Zone::Stack {
+            return filter::mana_value(s, self.t, slot);
+        }
         let spell = s
             .stack()
             .iter()

@@ -46,7 +46,9 @@ pub(crate) fn resolve<L: Layout>(
         Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge)),
         _ => (Default::default(), None),
     };
-    if !ability.is_some_and(Ability::asks) || a.inline() {
+    // The source is asked first: whether an ability written as data asks is read from its
+    // effect, which a rollout's inline source never needs.
+    if a.inline() || !ability.is_some_and(Ability::asks) {
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.
