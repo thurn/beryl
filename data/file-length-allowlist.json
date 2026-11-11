@@ -1,6 +1,5 @@
 {
   "rust/crates/beryl_cli/src/blunders.rs": 844,
-  "rust/crates/beryl_cli/src/boards.rs": 1842,
   "rust/crates/beryl_cli/src/fixture.rs": 1208,
   "rust/crates/beryl_cli/src/ladder.rs": 1118,
   "rust/crates/beryl_cli/src/specs/auto.rs": 1525,
