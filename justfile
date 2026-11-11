@@ -137,6 +137,11 @@ bench-count *args:
 count-gate:
     {{ by }} count-gate
 
+# The tools a card is written with: brief <name> prints the packet it is written from
+[group('data')]
+card command *args:
+    {{ by }} card "$@"
+
 # Build the card store and data/cards.json from Scryfall's bulk data (--refresh)
 [group('data')]
 cards *args:

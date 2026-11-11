@@ -537,9 +537,16 @@ def python_lane() -> Lane:
 
 # The Python tests that read card and vocabulary files, which `scale_lane` runs alone for a Rust
 # change (tests/test_scale.py reads the cards and beryl_cards/Cargo.toml; tests/test_card_names.py
-# reads every card file). Others read files outside tools/ too (test_forge: data/card-store.tsv and
-# oracle-divergences.json; test_runlog: git), but never what a card or vocabulary change touches.
-CARD_READERS = ["tests/test_scale.py", "tests/test_card_names.py"]
+# reads every card file; tests/test_card.py reads beryl_card's source as card brief does, and
+# tests/test_specs.py beryl_cards' names.rs). Others read files outside tools/ too (test_forge:
+# data/card-store.tsv and oracle-divergences.json; test_runlog: git), but never what a card or
+# vocabulary change touches.
+CARD_READERS = [
+    "tests/test_scale.py",
+    "tests/test_card_names.py",
+    "tests/test_card.py",
+    "tests/test_specs.py",
+]
 CARD_FILES = r"^rust/crates/beryl_cards?/"
 
 

@@ -165,6 +165,17 @@ class Store:
             raise LookupError(f"no card in the store named {missing}")
         return [cast(Json, found[n]) for n in names]
 
+    def names(self, kind: Kind) -> list[str]:
+        """Every name a lookup of `kind` answers: each record's and alias's key, once."""
+        prefix = f"{kind}:".encode()
+        self.file.seek(0)
+        found = (raw.split(b"\t", 1)[0] for raw in self.file)
+        return list(
+            dict.fromkeys(
+                k[len(prefix) :].decode() for k in found if k.startswith(prefix)
+            )
+        )
+
     def __iter__(self) -> Iterator[tuple[Kind, Json]]:
         """Every record, cards before tokens, each once (aliases skipped)."""
         self.file.seek(0)

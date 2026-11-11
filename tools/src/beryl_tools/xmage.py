@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from . import xmage_classes
 from .cards import listed
 
 Json = dict[str, object]
@@ -266,8 +267,7 @@ def java_string(text: str) -> str:
 
 
 def class_name(card: str) -> str:
-    words = re.sub(r"[^A-Za-z0-9 ]", "", card.split(" // ")[0]).split()
-    return "".join(w[0].upper() + w[1:] for w in words) + "BerylTest"
+    return xmage_classes.card_class(card.split(" // ")[0]) + "BerylTest"
 
 
 def method_name(index: int, scenario: str) -> str:
