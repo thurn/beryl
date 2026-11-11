@@ -66,8 +66,9 @@ export async function settle(page) {
 /** Waits until every card holds still: Motion writes a card's place to its transform from its
  * own frame loop (CardLayer's useGlide), a frame or two after the render that moved it, even
  * when motion is reduced, and `settle` cannot see that. Done once the cards' transforms are the
- * same three frames running, or after `timeout` ms. */
-export async function still(page, timeout = 2000) {
+ * same three frames running. `timeout` only guards against a hang: a loaded machine stretches
+ * the glide well past its half second. */
+export async function still(page, timeout = 20000) {
     await page.evaluate(async (timeout) => {
         const frame = () => new Promise((r) => requestAnimationFrame(r));
         const sample = () =>

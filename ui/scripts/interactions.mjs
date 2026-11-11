@@ -8811,53 +8811,66 @@ for (const fixture of recorded) {
         `${fixture}: what the decision offers and what is exiled can be seen`,
         async (page) => {
             await page.clock.runFor(5000);
-            const unseen = await page.evaluate(
-                ({ wanted, owners }) => {
-                    const seen = (el, point) => {
-                        for (let e = el; e; e = e.parentElement) {
-                            const style = getComputedStyle(e);
-                            if (Number(style.opacity) < 0.5) return false;
-                            if (style.visibility === "hidden") return false;
-                        }
-                        const r = el.getBoundingClientRect();
-                        if (r.width < 1 || r.height < 1) return false;
-                        // Some part of it lies on the screen, and, to be pointed at, is the
-                        // topmost thing there.
-                        for (let i = 1; i < 10; i++) {
-                            for (let j = 1; j < 10; j++) {
-                                const x = r.left + (r.width * i) / 10;
-                                const y = r.top + (r.height * j) / 10;
-                                if (x < 0 || y < 0) continue;
-                                if (x >= innerWidth || y >= innerHeight)
-                                    continue;
-                                if (!point) return true;
-                                const hit = document.elementFromPoint(x, y);
-                                if (hit && el.contains(hit)) return true;
+            const look = () =>
+                page.evaluate(
+                    ({ wanted, owners }) => {
+                        const seen = (el, point) => {
+                            for (let e = el; e; e = e.parentElement) {
+                                const style = getComputedStyle(e);
+                                if (Number(style.opacity) < 0.5) return false;
+                                if (style.visibility === "hidden") return false;
                             }
-                        }
-                        return false;
-                    };
-                    const shown = (slot, point) =>
-                        [
-                            ...document.querySelectorAll(
-                                `[data-slot="${slot}"]`,
-                            ),
-                        ].some((el) => {
-                            if (!el.classList.contains("card-el-pile")) {
-                                return seen(el, point);
+                            const r = el.getBoundingClientRect();
+                            if (r.width < 1 || r.height < 1) return false;
+                            // Some part of it lies on the screen, and, to be pointed at, is the
+                            // topmost thing there.
+                            for (let i = 1; i < 10; i++) {
+                                for (let j = 1; j < 10; j++) {
+                                    const x = r.left + (r.width * i) / 10;
+                                    const y = r.top + (r.height * j) / 10;
+                                    if (x < 0 || y < 0) continue;
+                                    if (x >= innerWidth || y >= innerHeight)
+                                        continue;
+                                    if (!point) return true;
+                                    const hit = document.elementFromPoint(x, y);
+                                    if (hit && el.contains(hit)) return true;
+                                }
                             }
-                            const pile = document.querySelector(
-                                `[data-pile="${el.dataset.zone}"]` +
-                                    `[data-side="${owners[slot]}"]`,
-                            );
-                            return !!pile && seen(pile, point);
-                        });
-                    return wanted
-                        .filter((w) => !w.slots.some((s) => shown(s, w.point)))
-                        .map((w) => w.what);
-                },
-                { wanted, owners },
-            );
+                            return false;
+                        };
+                        const shown = (slot, point) =>
+                            [
+                                ...document.querySelectorAll(
+                                    `[data-slot="${slot}"]`,
+                                ),
+                            ].some((el) => {
+                                if (!el.classList.contains("card-el-pile")) {
+                                    return seen(el, point);
+                                }
+                                const pile = document.querySelector(
+                                    `[data-pile="${el.dataset.zone}"]` +
+                                        `[data-side="${owners[slot]}"]`,
+                                );
+                                return !!pile && seen(pile, point);
+                            });
+                        return wanted
+                            .filter(
+                                (w) => !w.slots.some((s) => shown(s, w.point)),
+                            )
+                            .map((w) => w.what);
+                    },
+                    { wanted, owners },
+                );
+            // Fades run on the compositor's clock, not the page's fake one, and a loaded
+            // machine slows them: look until all show, the deadline only a hang guard.
+            let unseen = await look();
+            for (
+                const end = Date.now() + 20_000;
+                unseen.length && Date.now() < end;
+            ) {
+                await page.waitForTimeout(100);
+                unseen = await look();
+            }
             assert.deepEqual(unseen, [], "every one can be seen");
         },
         // The board draws its first view, the whole fixture's, once the fixture has loaded.

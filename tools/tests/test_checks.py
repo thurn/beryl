@@ -119,9 +119,9 @@ def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
     lane = checks.Lane("busy").step(
         "sleep", [sys.executable, "-c", "import time; time.sleep(1.5)"]
     )
-    # Twice the cores' worth of load halves the clock's pace: 1.5 s of wall time is under a
-    # second of the deadline, and of the budget.
-    monkeypatch.setattr(checks.system, "loadavg", lambda: (36.0, 36.0, 36.0))
+    # The most load slows the clock to an eighth: 1.5 s of sleep is under a second of the
+    # deadline and the budget, with room for a busy machine to start Python.
+    monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
     assert checks.run_lanes([lane], "ci", 1, strict=True) == 0
     assert "on the clock, the machine loaded" in capsys.readouterr().out
     # On a machine to itself the same step runs out of time.
