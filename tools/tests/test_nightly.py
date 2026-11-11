@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
@@ -151,3 +152,37 @@ def test_the_fuzz_runs_at_low_priority_and_logs_its_outcome(
     assert record["outcome"] == "fail"
     assert record["script"] == "nightly"
     assert record["commit"] == "abc123"
+
+
+def test_the_motion_capture_runs_at_low_priority_and_logs_each_verb(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def in_tree(
+        commit: str,
+        command: list[str],
+        out: IO[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> int:
+        assert (
+            command[-2:] == ["beryl_tools.cli", "motion"]
+            and command[0] != sys.executable
+        )
+        results = Path((env or {})[runlog.RESULTS_ENV])
+        with open(results, "a") as f:
+            f.write(
+                '{"check": "motion:fly/desktop", "outcome": "pass", "seconds": 1}\n'
+            )
+            f.write(
+                '{"check": "motion:emerge/desktop", "outcome": "fail", "seconds": 1}\n'
+            )
+        return 1
+
+    monkeypatch.setattr(nightly.coverage, "in_tree", in_tree)
+    with open(nightly.folder() / "out.txt", "w") as out:
+        assert nightly.motion_step("abc123", out) == 1
+    records = runlog.read_log(NOW - timedelta(days=3650))
+    assert {(r["check"], r["outcome"]) for r in records} == {
+        ("motion:fly/desktop", "pass"),
+        ("motion:emerge/desktop", "fail"),
+    }
+    assert all(r["script"] == "nightly" for r in records)

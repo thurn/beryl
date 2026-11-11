@@ -2,11 +2,12 @@
 agent (`just nightly-install`): today, removing the cache folders of checkouts that are gone
 (`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
 check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
-sample) and the fuzz (`just fuzz`: engine and session games at length, the script checks on
-throughout). It costs no agent tokens and needs no session open. Its record is this machine's,
+sample), the fuzz (`just fuzz`: engine and session games at length, the script checks on
+throughout) and the stage's verbs held to Arena's in a stepped capture (`by motion`). It costs no
+agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
-`last-output.txt` (the last run's output). More nightly work, such as the presentation track's
-motion captures, joins as another [`Step`] in [`STEPS`].
+`last-output.txt` (the last run's output). More nightly work joins as another [`Step`] in
+[`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
 over [`FRESH_HOURS`] old and the machine is not busy, so the hourly retries cost nothing once a
@@ -113,12 +114,28 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
     return code
 
 
+def motion_step(commit: str, out: IO[str]) -> int:
+    """The stepped capture of the stage's verbs held to Arena's (`by motion`, motion.py) on
+    `commit` at low priority, one run-log record a verb and layout, `motion:<verb>/<layout>`.
+    """
+    from . import runlog  # It imports this module.
+
+    run = runlog.Run("nightly", commit, place="nightly")
+    began = time.monotonic()
+    with run.step(dict(os.environ)) as (env, results):
+        command = [sys.executable, "-m", "beryl_tools.cli", "motion"]
+        code = coverage.in_tree(commit, system.utility(command), out, env)
+        run.log("motion", "motion", code == 0, time.monotonic() - began, results)
+    return code
+
+
 STEPS: list[Step] = [
     Step("prune", caches.prune_step),
     Step("coverage", coverage_step),
     Step("history", history_step),
     Step("specs", specs_step),
     Step("fuzz", fuzz_step),
+    Step("motion", motion_step),
 ]
 
 

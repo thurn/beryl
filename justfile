@@ -184,6 +184,11 @@ fuzz games="10000":
     cargo test --release -p beryl_search --test games --test shrink -- --nocapture && \
     cargo test --release -p beryl_session --lib fuzz:: -- --nocapture
 
+# The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
+[group('test')]
+motion *args:
+    {{ by }} motion "$@"
+
 # Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
 [group('test')]
 exhaust *args:

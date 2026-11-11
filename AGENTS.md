@@ -50,10 +50,11 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   each with its CR citation; `card-names-allowlist.json`, the generic files that
   still name cards and the one-card mechanics still in the engine;
   `save-breaks.json`, the corpus saves no migration carries past a change;
-  `ui-conventions.json`, the design language that `just conventions` renders
-  into `docs/ui-conventions.md` (edit the data, never the page). The app
-  downloads images on demand into its cache (`beryl_app`'s `art.rs`); none are
-  committed.
+  `arena-motion.json`, Arena's motion per verb as measured in the recordings,
+  which the verbs' values and `just motion` are held to; `ui-conventions.json`,
+  the design language that `just conventions` renders into
+  `docs/ui-conventions.md` (edit the data, never the page). The app downloads
+  images on demand into its cache (`beryl_app`'s `art.rs`); none are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
@@ -197,13 +198,17 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   `names` (`card-names`: no card name in generic code, held to the burn-down
   list `data/card-names-allowlist.json`, whose counts only fall;
   `python -m beryl_tools.checks card-names --shrink` lowers them; `two-player`:
-  no rules module or card file names `beryl_kernel::two_player`) and `oracle`
-  (each changed card file's scenarios in XMage and Forge, skipped when another
-  oracle run holds the oracles past 10 s). For a change to `ui/` or `rust/` it
-  also runs `ui-test` and `shots` on the browser checks the change can break, by
-  the nightly coverage (`just coverage`), worst failure record first, as many as
-  fit; the run log's `chosen` says why each ran, and `cut` marks those left to
-  slow CI. It also refuses conflict markers and bad commit subjects.
+  no rules module or card file names `beryl_kernel::two_player`), `oracle` (each
+  changed card file's scenarios in XMage and Forge, skipped when another oracle
+  run holds the oracles past 10 s) and `motion` (`just motion`, for a change to
+  the stage, its capture or the verbs' data: the stage's verbs captured in
+  stepped stage time and measured as Arena's clips were, each held to Arena's
+  path and size in `data/arena-motion.json`, one run-log check
+  `motion:<verb>/<layout>` each; also nightly). For a change to `ui/` or `rust/`
+  it also runs `ui-test` and `shots` on the browser checks the change can break,
+  by the nightly coverage (`just coverage`), worst failure record first, as many
+  as fit; the run log's `chosen` says why each ran, and `cut` marks those left
+  to slow CI. It also refuses conflict markers and bad commit subjects.
 - `just ci` (slow, budget 300 s; 450 s on Windows) runs every lane plus `app`
   (`just smoke`), `shots` (`just ui-shots`, which fails on any page error),
   `ui-test` (`just ui-test`, which plays the game screen through a fixture),

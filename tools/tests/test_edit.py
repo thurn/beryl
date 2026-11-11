@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from beryl_tools import checks, edit
+from beryl_tools import edit, hygiene
 
 
 def test_the_subject_names_the_file_and_passes_the_commit_check() -> None:
@@ -11,7 +11,7 @@ def test_the_subject_names_the_file_and_passes_the_commit_check() -> None:
     )
     assert edit.subject("rust/crates/x/src/lib.rs", new=True) == "chore: add lib.rs"
     long = edit.subject("a" * 80 + ".md", new=False)
-    assert len(long) == checks.COMMIT_MAX and checks.COMMIT.match(long)
+    assert len(long) == hygiene.COMMIT_MAX and hygiene.COMMIT.match(long)
 
 
 def test_the_worktree_is_named_after_the_path() -> None:

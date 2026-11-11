@@ -52,6 +52,9 @@ METHODS = ("tracker", "filmstrip")
 CURVES = ("linear", "ease-in", "ease-out", "ease-in-out", "none")
 # An instance's timings, in whole ms, and the verb's value each one's median gives.
 TIMINGS = {"duration_ms": "duration", "delay_ms": "delay", "stagger_ms": "stagger"}
+# An instance's sizes, as multiples of its size at rest: the largest in its motion, and where
+# the motion begins.
+SIZES = ("peak", "start")
 # Thin evidence is no evidence (docs/project-50k.md, Risks): instances, over recordings.
 FEWEST = (3, 2)
 
@@ -131,7 +134,8 @@ def summarize(instances: list[dict[str, Any]]) -> dict[str, Any]:
         return [i[field] for i in instances if i.get(field) is not None]
 
     summary: dict[str, Any] = {field: spread(taken(field), 0) for field in TIMINGS}
-    summary["peak"] = spread(taken("peak"), 2)
+    for field in SIZES:
+        summary[field] = spread(taken(field), 2)
     curves = taken("curve")
     # The commonest curve; a tie goes to the first in CURVES.
     summary["curve"] = (
@@ -180,8 +184,9 @@ def instance_problems(where: str, instance: dict[str, Any]) -> list[str]:
             found.append(f"{where}: {field} is whole ms or null")
     if instance.get("delay_ms") is not None and not instance.get("since"):
         found.append(f"{where}: a delay needs what it counts from")
-    if not isinstance(instance.get("peak"), (int, float, type(None))):
-        found.append(f"{where}: peak is a ratio or null")
+    for field in SIZES:
+        if not isinstance(instance.get(field), (int, float, type(None))):
+            found.append(f"{where}: {field} is a ratio or null")
     if instance.get("curve") not in (*CURVES, None):
         found.append(f"{where}: curve is one of {CURVES} or null")
     return found

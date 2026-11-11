@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import build_paths, checks, oracles, reruns
+from beryl_tools import build_paths, checks, hygiene, oracles, reruns
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -391,14 +391,28 @@ def test_a_symlink_checked_out_or_committed_as_a_file_is_refused(
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feat: link")
     monkeypatch.setattr(checks.paths, "REPO", tmp_path)
     base = checks.git("rev-parse", "HEAD")
-    assert checks.symlink_problems(base) == []
+    assert hygiene.symlink_problems(base) == []
     (tmp_path / "link").unlink()
     (tmp_path / "link").write_text("target")
-    assert [p.split(":")[0] for p in checks.symlink_problems(base)] == ["link"]
+    assert [p.split(":")[0] for p in hygiene.symlink_problems(base)] == ["link"]
     git("add", "link")
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fix: oops")
-    assert "committed a symlink as a file" in " ".join(checks.symlink_problems(base))
+    assert "committed a symlink as a file" in " ".join(hygiene.symlink_problems(base))
 
 
 def test_the_checkout_keeps_its_symlinks() -> None:
-    assert checks.symlink_problems("") == []
+    assert hygiene.symlink_problems("") == []
+
+
+def test_the_motion_capture_runs_when_the_stage_or_its_data_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for path in [
+        "ui/src/stage/desktop.ts",
+        "data/ui-conventions.json",
+        "data/arena-motion.json",
+        "tools/src/beryl_tools/video_measure.py",
+    ]:
+        assert "motion" in lanes_for(monkeypatch, [path]), path
+    for path in ["ui/src/game/Board.tsx", "data/card-store.tsv", "tools/x.py"]:
+        assert "motion" not in lanes_for(monkeypatch, [path]), path

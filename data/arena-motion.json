@@ -3,9 +3,19 @@
     "Arena's motion per verb, measured in the gameplay recordings in ~/Movies/arena (indexed in ~/arena) for docs/project-50k.md, K27. The verbs are data/ui-conventions.json's; `just conventions` derives each verb's summary here and its values there from these instances.",
     "Each instance names its recording, the clip's start and span, its crop in the recording's pixels (1920x1080; SN9QFe2kM4Y is 2560x1440), and how it was taken: `tracker` is `just video measure`, which follows one moving card; `filmstrip` counts frames of `just video film` at the recording's frame rate (30 fps, 60 for UrGalw_f35w and SN9QFe2kM4Y), with `why` the tracker was not used. Its `command` retakes it.",
     "duration_ms runs from the first frame of change to the first frame at rest; delay_ms from the instant `since` names; stagger_ms between like motions of one batch, start to start; peak is the largest size over the size at rest; curve is one of linear, ease-in, ease-out, ease-in-out, or none where nothing travels. A number not taken is null. Filmstrip numbers are good to a frame at the rate filmed, and the coarser strips' to about 100 ms.",
+    "start is the size where the motion begins over the size at rest, null where not taken; emerge's are read by eye from the first frame its copy shows (about +-30%, as each note says). A capture of Beryl's stage (`by motion`, tools/src/beryl_tools/motion.py) is held to these: a measure within the range of a verb's instances (its case's, where it has several), widened by `tolerance`: `frames` of the coarsest recording behind it (`fps`, or `fps_of` for a recording) or `share` of the median, whichever is larger. A verb may set its own `tolerance` with a reason, and `waivers` a measure that could not be brought in after three attempts, naming the bead that follows it up.",
     "A summary is the median and range of each number over all the verb's instances, the commonest curve, and the same per case when there are several. A verb's values in ui-conventions are the overall medians; where its cases differ (fly's draw, vanish's finished ability), the case's own summary is the reference.",
     "To retake an instance, run its command, edit its numbers here and run `just conventions`. Instances were taken by agents with the arena-video skill; one of each verb was checked by eye (by-w8gv.21.18)."
   ],
+  "tolerance": {
+    "frames": 1,
+    "share": 0.15,
+    "fps": 30,
+    "fps_of": {
+      "UrGalw_f35w": 60,
+      "SN9QFe2kM4Y": 60
+    }
+  },
   "verbs": [
     {
       "verb": "fly",
@@ -15,6 +25,14 @@
         "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
         "Draw: SswBO8aOOgc 21:30.4 and 24:22.9 were tracked only inside a crop that misses the library leg (fly-in 330 to 360 ms, hold 200 ms, drop 200 to 330 ms), so they are left out.",
         "Peak size of the spells was not taken."
+      ],
+      "waivers": [
+        {
+          "measure": "peak",
+          "case": "permanent resolves",
+          "bead": "by-w8gv.21.37",
+          "reason": "The desktop stage's resolving permanent leaves the stack at 3.43 (your seat) and 3.31 (theirs) times its size at rest, where Arena's are 1.5 to 2.0: its stack card is about 3.4 times a battlefield card and Arena's about 1.9 times its slot. Layout, not the flight, so no value of the verb's brings it in (by-w8gv.21.19)."
+        }
       ],
       "instances": [
         {
@@ -426,6 +444,7 @@
           "min": 1.2,
           "max": 2.0
         },
+        "start": null,
         "curve": "ease-out",
         "cases": {
           "land played": {
@@ -441,6 +460,7 @@
               "min": 1.9,
               "max": 1.9
             },
+            "start": null,
             "curve": "ease-in"
           },
           "permanent resolves": {
@@ -456,6 +476,7 @@
               "min": 1.5,
               "max": 2.0
             },
+            "start": null,
             "curve": "ease-out"
           },
           "discard": {
@@ -475,6 +496,7 @@
               "min": 1.2,
               "max": 1.2
             },
+            "start": null,
             "curve": null
           },
           "own spell cast": {
@@ -486,6 +508,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           },
           "opponent spell cast": {
@@ -497,6 +520,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           },
           "draw": {
@@ -516,6 +540,7 @@
               "min": 1.55,
               "max": 1.59
             },
+            "start": null,
             "curve": "ease-out"
           }
         }
@@ -679,6 +704,7 @@
           "max": 33
         },
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "token": {
@@ -698,6 +724,7 @@
               "max": 33
             },
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "opening hand": {
@@ -713,6 +740,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -1065,6 +1093,7 @@
           "min": 1.0,
           "max": 1.0
         },
+        "start": null,
         "curve": "none",
         "cases": {
           "destroyed": {
@@ -1080,6 +1109,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "countered": {
@@ -1095,6 +1125,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "resolved instant or sorcery": {
@@ -1110,6 +1141,7 @@
               "min": 1.0,
               "max": 1.0
             },
+            "start": null,
             "curve": "ease-out"
           },
           "exiled": {
@@ -1125,6 +1157,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "bounced": {
@@ -1136,6 +1169,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "sacrificed": {
@@ -1147,6 +1181,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "ability finished": {
@@ -1158,6 +1193,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -1189,6 +1225,7 @@
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
+          "start": 0.2,
           "path": "a small card appears on Flametongue Kavu (just landed, 20:39.38), curves right and up to the stack slot at the right edge, growing, resting 20:39.68",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Copy first visible 20:39.38 (absent 20:39.35), at rest 20:39.68 (30 fps). Starts about 0.2x rest width. Delay not taken: the creature's own landing was only seen at 6 fps (about 20:38.9-39.1), too coarse. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/5.0 of its size at rest on the stack and grows to it."
@@ -1212,6 +1249,7 @@
           "delay_ms": 250,
           "stagger_ms": null,
           "peak": null,
+          "start": 0.22,
           "path": "small copy on the creature, then a rising arc to the right to the stack slot, growing",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. First visible 19:48.55, at rest 19:48.88. Starts about 0.22x rest width. The thin source line begins 19:48.72 (see point/source line). step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/4.5 of its size at rest on the stack and grows to it."
@@ -1235,6 +1273,7 @@
           "delay_ms": null,
           "stagger_ms": 300,
           "peak": null,
+          "start": 0.3,
           "path": "Mole Man's copy rises from Mole Man (a land had just entered) in a short rising arc to the right edge stack slot",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Trigger 1 (Mole Man, landfall): first visible 49:07.98, at rest 49:08.22. Trigger 2 (Icetill Explorer, same land) first visible 49:08.28, reaches its slot under the first card by 49:08.53 (250 ms), so the two leave 300 ms apart start to start. The second card sits offset behind the first. The land's own arrival not timed, so no delay. Starts at about 1/3.3 of its size at rest on the stack and grows to it."
@@ -1258,6 +1297,7 @@
           "delay_ms": null,
           "stagger_ms": 300,
           "peak": null,
+          "start": 0.29,
           "path": "Icetill Explorer's copy leaves the creature two to the left of Mole Man, arcs right and tucks behind the first stack card",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Second of two triggers of one landfall: start 49:08.28, rest 49:08.53. Stagger 300 ms from the first trigger's start (49:07.98), matching the claimed third of a second. Starts at about 1/3.5 of its size at rest on the stack and grows to it."
@@ -1281,6 +1321,7 @@
           "delay_ms": 130,
           "stagger_ms": null,
           "peak": null,
+          "start": 0.24,
           "path": "small copy appears on Teferi (right edge, mid height) and grows up and to the left of the source into the stack slot just above it",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Teferi, Time Raveler -3. First visible 19:58.23, at rest 19:58.53. Starts about 0.24x rest width. Short distance (the stack slot is about one card above the source). step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/4.2 of its size at rest on the stack and grows to it."
@@ -1304,6 +1345,7 @@
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
+          "start": 0.27,
           "path": "copy appears on Lightning Greaves (centre, back row), moves slowly right then sweeps to the right edge stack slot, growing",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Equip. First visible 46:07.25 (absent at 46:07.22 in an 8 fps strip), at rest about 46:07.55. Starts about 0.27x rest width. Sparks trail the card at arrival. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/3.8 of its size at rest on the stack and grows to it."
@@ -1327,6 +1369,7 @@
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
+          "start": 0.19,
           "path": "copy appears on Skullclamp (lower right), rises in a gentle curve up and right to the stack slot at the right edge, growing",
           "curve": "ease-in",
           "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Equip. First visible 23:12.50 (absent in the 8 fps frame at 23:12.45), at rest 23:12.83. Starts about 0.19x rest width. The thin source line begins at 23:12.67 while the copy is mid-flight. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/5.0 of its size at rest on the stack and grows to it."
@@ -1349,6 +1392,11 @@
           "max": 300
         },
         "peak": null,
+        "start": {
+          "median": 0.24,
+          "min": 0.19,
+          "max": 0.3
+        },
         "curve": "ease-in",
         "cases": {
           "triggered ability": {
@@ -1368,6 +1416,11 @@
               "max": 300
             },
             "peak": null,
+            "start": {
+              "median": 0.26,
+              "min": 0.2,
+              "max": 0.3
+            },
             "curve": "ease-in"
           },
           "activated ability": {
@@ -1383,6 +1436,11 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": {
+              "median": 0.24,
+              "min": 0.19,
+              "max": 0.27
+            },
             "curve": "ease-in"
           }
         }
@@ -1478,6 +1536,7 @@
           "min": 1.0,
           "max": 1.0
         },
+        "start": null,
         "curve": "none"
       }
     },
@@ -1567,6 +1626,7 @@
         "delay_ms": null,
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "ease-out",
         "cases": {
           "untap": {
@@ -1578,6 +1638,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           },
           "tap": {
@@ -1589,6 +1650,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           }
         }
@@ -1730,6 +1792,7 @@
           "max": 350
         },
         "peak": null,
+        "start": null,
         "curve": null,
         "cases": {
           "blocked attacker": {
@@ -1745,6 +1808,7 @@
               "max": 220
             },
             "peak": null,
+            "start": null,
             "curve": null
           },
           "unblocked attacker": {
@@ -1760,6 +1824,7 @@
               "max": 350
             },
             "peak": null,
+            "start": null,
             "curve": null
           }
         }
@@ -1932,6 +1997,7 @@
         },
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": null,
         "cases": {
           "mana": {
@@ -1947,6 +2013,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": null
           },
           "damage": {
@@ -1962,6 +2029,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": null
           }
         }
@@ -2195,6 +2263,7 @@
         },
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "life loss": {
@@ -2210,6 +2279,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "life gain": {
@@ -2225,6 +2295,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": null
           },
           "counter": {
@@ -2236,6 +2307,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "loyalty": {
@@ -2247,6 +2319,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -2358,6 +2431,7 @@
         "delay_ms": null,
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "step begins": {
@@ -2369,6 +2443,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "library shuffled": {
@@ -2380,6 +2455,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -2471,6 +2547,7 @@
         "delay_ms": null,
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "ease-out"
       }
     },
@@ -2557,6 +2634,7 @@
         "delay_ms": null,
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "none"
       }
     },
@@ -2788,6 +2866,7 @@
         },
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "turn banner": {
@@ -2799,6 +2878,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "scry pill": {
@@ -2814,6 +2894,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "coin": {
@@ -2825,6 +2906,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": null
           }
         }
@@ -3035,6 +3117,7 @@
         },
         "stagger_ms": null,
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "source line": {
@@ -3050,6 +3133,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           },
           "target arrow": {
@@ -3065,6 +3149,7 @@
             },
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "block line": {
@@ -3076,6 +3161,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -3198,6 +3284,7 @@
           "max": 0
         },
         "peak": null,
+        "start": null,
         "curve": "none",
         "cases": {
           "eligible": {
@@ -3217,6 +3304,7 @@
               "max": 0
             },
             "peak": null,
+            "start": null,
             "curve": "ease-out"
           },
           "selected": {
@@ -3228,6 +3316,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           },
           "target": {
@@ -3239,6 +3328,7 @@
             "delay_ms": null,
             "stagger_ms": null,
             "peak": null,
+            "start": null,
             "curve": "none"
           }
         }
@@ -3334,6 +3424,7 @@
           "max": 500
         },
         "peak": null,
+        "start": null,
         "curve": "ease-out"
       }
     }

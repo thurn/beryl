@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import checks, paths, system, warm
+from . import hygiene, paths, system, warm
 
 ENACT: list[str] = ["python3", str(Path.home() / "enact" / "scripts" / "enact.py")]
 
@@ -62,7 +62,9 @@ def worktree_name(rel: str) -> str:
 
 def subject(rel: str, new: bool) -> str:
     kind = "docs" if rel.endswith(".md") else "chore"
-    return f"{kind}: {'add' if new else 'update'} {Path(rel).name}"[: checks.COMMIT_MAX]
+    return f"{kind}: {'add' if new else 'update'} {Path(rel).name}"[
+        : hygiene.COMMIT_MAX
+    ]
 
 
 def existing_worktree(main: Path, branch: str) -> Path | None:

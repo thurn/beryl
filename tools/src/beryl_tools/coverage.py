@@ -351,10 +351,15 @@ def measure(commit: str) -> int:
     )
 
 
-def in_tree(commit: str, command: list[str], out: IO[str] | None = None) -> int:
+def in_tree(
+    commit: str,
+    command: list[str],
+    out: IO[str] | None = None,
+    env: dict[str, str] | None = None,
+) -> int:
     """Runs `command` in a detached worktree of `commit`, removed after, with that commit's own
-    tools on the Python path (`by` is `python -m beryl_tools.cli`), its output to `out` (this
-    process's if None)."""
+    tools on the Python path (`by` is `python -m beryl_tools.cli`), in `env` (this process's if
+    None), its output to `out` (this process's if None)."""
     with system.file_lock(folder() / ".lock"):
         if commit.startswith("origin/"):
             subprocess.run(
@@ -368,7 +373,7 @@ def in_tree(commit: str, command: list[str], out: IO[str] | None = None) -> int:
         git("worktree", "add", "--detach", "--quiet", str(tree), sha)
         try:
             warm.ensure(tree)
-            env = {**os.environ, "PYTHONPATH": str(tree / "tools" / "src")}
+            env = {**(env or os.environ), "PYTHONPATH": str(tree / "tools" / "src")}
             return subprocess.run(
                 command,
                 cwd=tree,

@@ -49,6 +49,7 @@ from . import (
     card_names,
     conventions,
     file_length,
+    hygiene,
     paths,
     runlog,
     script_checks,
@@ -80,12 +81,6 @@ SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
 # times its deadline, however loaded the machine.
 MAX_STRETCH = 8.0
-COMMIT: re.Pattern[str] = re.compile(
-    r"^(feat|fix|perf|refactor|test|docs|build|ci|chore|style|revert)"
-    r"(\([a-z0-9-]+\))?!?: \S"
-)
-COMMIT_MAX = 60
-TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", ".html")
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 
@@ -444,56 +439,6 @@ def changed_paths(base: str) -> list[str] | None:
     return sorted(set(diff + untracked))
 
 
-def conflict_markers(files: list[str]) -> list[str]:
-    hits = []
-    for rel in files:
-        f = paths.REPO / rel
-        if not f.is_file() or not rel.endswith(TEXT_SUFFIXES):
-            continue
-        for i, line in enumerate(f.read_text(errors="replace").splitlines(), 1):
-            if re.match(r"^(<{7}|>{7}|={7})( |$)", line):
-                hits.append(f"{rel}:{i}: conflict marker")
-    return hits
-
-
-def commit_problems(base: str) -> list[str]:
-    log = (
-        git("log", "--no-merges", "--format=%h%x09%s", f"{base}..HEAD") if base else ""
-    )
-    problems = []
-    for row in log.splitlines():
-        sha, _, subject = row.partition("\t")
-        if not COMMIT.match(subject):
-            problems.append(
-                f"{sha} {subject!r}: not a Conventional Commit (`fix: ...`)"
-            )
-        elif len(subject) > COMMIT_MAX:
-            problems.append(f"{sha} {subject!r}: over {COMMIT_MAX} characters")
-    return problems
-
-
-def symlink_problems(base: str) -> list[str]:
-    """Tracked symlinks checked out, or committed since `base`, as plain files. Git for Windows
-    writes a link's target into a file when `core.symlinks` is false, its system default.
-    """
-    fix = "git config --global core.symlinks true"
-    problems = []
-    for row in git("ls-files", "-s").splitlines():
-        mode, _, rest = row.partition(" ")
-        rel = rest.partition("\t")[2]
-        if mode == "120000" and not (paths.REPO / rel).is_symlink():
-            problems.append(
-                f"{rel}: a symlink checked out as a file; `{fix}`, then `git checkout -- {rel}`"
-            )
-    raw = git("diff", "--raw", "--no-renames", base, "HEAD") if base else ""
-    for row in raw.splitlines():
-        old, new = row[1:].split()[:2]
-        if old == "120000" and new not in ("120000", "000000"):
-            rel = row.partition("\t")[2]
-            problems.append(f"{rel}: committed a symlink as a file; `{fix}`")
-    return problems
-
-
 def markdown_files() -> list[str]:
     """Every Markdown file but the beads' and the agent skills' (whose YAML front matter
     mdformat would rewrite)."""
@@ -665,9 +610,7 @@ def counts_lane() -> Lane:
 def fast(args: argparse.Namespace) -> int:
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
-    problems = (
-        conflict_markers(changed or []) + commit_problems(base) + symlink_problems(base)
-    )
+    problems = hygiene.problems(base, changed or [])
     for p in problems:
         print(f"check: {p}")
     if problems:
@@ -701,6 +644,10 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     # The browser checks the change can break, as many as fit the budget (plan K19).
     if not every and touched(r"^(rust|ui)/"):
         lanes += [ui_test_lane(select=True), shots_lane(select=True)]
+    from . import motion  # It imports this module, by way of shots.py.
+
+    if not every and touched(motion.INPUTS):
+        lanes.append(motion.lane())
     if cards := changed_cards(changed):
         lanes.append(card_oracle_lane(cards))
     return lanes
