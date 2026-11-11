@@ -2648,6 +2648,45 @@ await check(
     },
 );
 
+// A payment plan asked outside the cast step reads as Arena's "Pay {cost}.": one Auto Pay,
+// previewing the plan the session ranks first, and permanents picked on the table, which
+// settle the plan that taps them. Its plans once were buttons naming their lands, cut at
+// every size (by-w8gv.22); no audit can say which plan a pick on the table makes Auto Pay pay.
+const otherViews = await load("pay-other");
+const otherAt = otherViews.findIndex(
+    (v) => v.status.decision?.kind === "paymentPlan",
+);
+const [firstPlan, otherPlan] = otherViews[otherAt].status.decision.candidates
+    .map((c, index) => ({ c, index }))
+    .filter(({ c }) => c.option.kind === "plan")
+    .map(({ c, index }) => ({ index, taps: c.payments[0].taps }));
+const otherOnly = otherPlan.taps.find((s) => !firstPlan.taps.includes(s));
+await check(
+    "a payment plan is picked on the table and paid by Auto Pay",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const autoPay = page.getByRole("button", {
+            name: "Auto Pay",
+            exact: true,
+        });
+        assert.equal(await page.getByText(/^Tap /).count(), 0, "no plan list");
+        assert.deepEqual(await lit(page), [], "nothing lit before a preview");
+        await autoPay.hover();
+        await committed(page);
+        assert.deepEqual(await lit(page), ascending(firstPlan.taps));
+        await page.mouse.move(0, 0);
+        await page.click(slotOf(otherOnly));
+        await committed(page);
+        assert.deepEqual(await lit(page), [otherOnly], "the pick lit");
+        await autoPay.hover();
+        await committed(page);
+        assert.deepEqual(await lit(page), ascending(otherPlan.taps));
+        await autoPay.click();
+        assert.deepEqual(await settled(page, 1), [otherPlan.index]);
+    },
+    { fixture: "pay-other", at: otherAt + 1, ready: slotOf(otherOnly) },
+);
+
 const oculusViews = await load("cast-oculus");
 const oculusSlot = oculusViews[0].objects.find(
     (o) => o.name === "Abhorrent Oculus" && o.zone === "hand",

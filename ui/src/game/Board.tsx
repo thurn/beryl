@@ -20,6 +20,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { useWaterbend } from "./waterbend";
+import { usePlanPicks } from "./planPicks";
 import { PaymentButton } from "./PaymentButton";
 import { cardEntry, faceEntry, landFace } from "../cards";
 import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
@@ -116,7 +117,6 @@ import {
   castPlan,
   firstChoice,
   plansOf,
-  tapList,
   tapsOf,
   type CastChoice,
 } from "./casting";
@@ -364,6 +364,7 @@ export function Board({
       : handlingSlots(view, standIns.order);
   heldGroup.current = { view, slots: handledSlots };
   const waterbend = useWaterbend(deciding ? decision : undefined);
+  const planPicks = usePlanPicks(deciding ? decision : undefined);
   const [paymentPreview, setPaymentPreview] = useState<{
     view: PlayerView;
     slots?: number[];
@@ -998,8 +999,8 @@ export function Board({
       ? previewingPayment
         ? [...waterbend.manual, ...waterbend.proposed]
         : waterbend.manual
-      : castingNow
-        ? (previewedSlots ?? castingNow.selected)
+      : castingNow || planPicks.active
+        ? (previewedSlots ?? castingNow?.selected ?? planPicks.selected)
         : paying
           ? tapsOf(paying)
           : (previewedSlots ??
@@ -1105,6 +1106,7 @@ export function Board({
           : (pile.find((s) => !waterbend.manual.includes(s)) ?? slot),
       );
     }
+    if (planPicks.toggle(slot)) return true;
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
       const { choice, selected } = castingNow;
@@ -1829,7 +1831,7 @@ export function Board({
                     onClick: confirmPicks,
                   }
             }
-            autoPay={waterbend.active ? waterbend : undefined}
+            autoPay={waterbend.active ? waterbend : planPicks.offer(pick)}
             onPaymentPreview={previewPayment}
             hovered={hovered}
             risen={risen?.slot}
@@ -2544,7 +2546,8 @@ function Prompt({
   targetLabel?: string;
   /** Confirms the cards picked on the table, which leaves the prompt no candidate to offer. */
   confirm?: { label: string; disabled: boolean; onClick(): void } | false;
-  autoPay?: { ready: boolean; autoPay(): void };
+  /** Pays as the session suggests, previewing `taps` or else what its marks propose. */
+  autoPay?: { ready: boolean; taps?: number[]; autoPay(): void };
   onPaymentPreview(on: boolean, slots?: number[]): void;
   /** The card the pointer is on, which a crew meter previews. */
   hovered?: number;
@@ -2553,15 +2556,11 @@ function Prompt({
 }) {
   const { purpose, words, about, count, most, cost } = decision.prompt;
   // A yes and a no read as the prompt words them: a payment asked of a spell's controller by
-  // what it pays, a "you may" move by what it does ("Exile"). A payment plan reads as what it
-  // taps, never as a number.
-  const label = (c: DecisionView["candidates"][number]) => {
-    if (c.option.kind === "yes" && words.yes) return words.yes;
-    if (c.option.kind === "no" && words.no) return words.no;
-    const taps = c.payments[0]?.taps;
-    if (c.option.kind !== "plan" || !taps) return c.label;
-    return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
-  };
+  // what it pays, a "you may" move by what it does ("Exile").
+  const label = (c: DecisionView["candidates"][number]) =>
+    (c.option.kind === "yes" && words.yes) ||
+    (c.option.kind === "no" && words.no) ||
+    c.label;
   // Cards picked on the table are not offered again; those off it show their faces.
   const offered =
     confirm || autoPay
@@ -2686,15 +2685,14 @@ function Prompt({
           {autoPay && (
             <PaymentButton
               disabled={!autoPay.ready}
-              onPreview={onPaymentPreview}
+              onPreview={(on) => onPaymentPreview(on, autoPay.taps)}
               onPay={autoPay.autoPay}
             >
               {words.auto}
             </PaymentButton>
           )}
           {buttons.map((b, i) =>
-            b.c.option.kind === "plan" ||
-            (cost !== null && b.c.option.kind === "yes") ? (
+            cost !== null && b.c.option.kind === "yes" ? (
               <PaymentButton
                 key={b.index}
                 variant={i === 0 ? "primary" : "secondary"}

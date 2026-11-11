@@ -626,16 +626,7 @@
       "name": "game-pay-other",
       "route": "/?fixture=pay-other&at=-1#/game",
       "width": 1600,
-      "height": 900,
-      "known": [
-        "text cut: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
-        "text cut: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box",
-        "text cut at 1180×820: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
-        "text cut at 1180×820: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box",
-        "text cut at 2560×1080: \"Tap Seachrome Coast, Plains, Spara's Headquarters, Island\" overflows its box",
-        "text cut at 2560×1080: \"Tap Seachrome Coast, Mana Crypt, Spara's Headquarters, Island\" overflows its box"
-      ],
-      "knownWhy": "by-w8gv.22: payment-plan buttons cut their land lists"
+      "height": 900
     },
     {
       "name": "game-choice-search",

@@ -4,7 +4,7 @@
   "rust/crates/beryl_engine/src/engine.rs": 830,
   "rust/crates/beryl_engine/src/mana.rs": 1586,
   "tools/src/beryl_tools/xmage.py": 1080,
-  "ui/src/game/Board.tsx": 3096,
+  "ui/src/game/Board.tsx": 3094,
   "ui/src/game/CardLayer.tsx": 1145,
   "ui/src/game/ChoiceOverlay.tsx": 895,
   "ui/src/game/beats.ts": 1194
