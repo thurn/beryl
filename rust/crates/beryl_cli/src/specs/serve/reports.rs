@@ -59,43 +59,6 @@ pub(super) fn export(stream: &mut TcpStream) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn report_routes_only_accept_local_requests() {
-        let headers = |host: &str, origin: &str, site: &str| {
-            [
-                ("host".to_owned(), host.to_owned()),
-                ("origin".to_owned(), origin.to_owned()),
-                ("sec-fetch-site".to_owned(), site.to_owned()),
-            ]
-            .into_iter()
-            .collect()
-        };
-        assert!(local_request(&headers(
-            "localhost:1430",
-            "http://localhost:1430",
-            "same-origin"
-        )));
-        assert!(!local_request(&headers(
-            "localhost:1430",
-            "http://localhost:9999",
-            "same-site"
-        )));
-        assert!(!local_request(&headers(
-            "example.org:1430",
-            "http://example.org:1430",
-            "same-origin"
-        )));
-        let mut navigation = HashMap::from([("host".to_owned(), "127.0.0.1:1430".to_owned())]);
-        assert!(local_request(&navigation));
-        navigation.insert("sec-fetch-site".to_owned(), "cross-site".to_owned());
-        assert!(!local_request(&navigation));
-    }
-}
-
 /// `POST /report`: a note from the spec page about the moment an instance plays, written as a
 /// bug report with what its game knows, if it still runs.
 pub(super) fn report(instances: &Instances, body: &[u8]) -> Value {
@@ -199,5 +162,42 @@ pub(super) fn write_report(
             json!({ "ok": saved })
         }
         Err(e) => json!({ "err": e }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_routes_only_accept_local_requests() {
+        let headers = |host: &str, origin: &str, site: &str| {
+            [
+                ("host".to_owned(), host.to_owned()),
+                ("origin".to_owned(), origin.to_owned()),
+                ("sec-fetch-site".to_owned(), site.to_owned()),
+            ]
+            .into_iter()
+            .collect()
+        };
+        assert!(local_request(&headers(
+            "localhost:1430",
+            "http://localhost:1430",
+            "same-origin"
+        )));
+        assert!(!local_request(&headers(
+            "localhost:1430",
+            "http://localhost:9999",
+            "same-site"
+        )));
+        assert!(!local_request(&headers(
+            "example.org:1430",
+            "http://example.org:1430",
+            "same-origin"
+        )));
+        let mut navigation = HashMap::from([("host".to_owned(), "127.0.0.1:1430".to_owned())]);
+        assert!(local_request(&navigation));
+        navigation.insert("sec-fetch-site".to_owned(), "cross-site".to_owned());
+        assert!(!local_request(&navigation));
     }
 }
