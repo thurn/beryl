@@ -324,7 +324,7 @@ also holds each case's own (K27).
   size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w
   16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3,
   UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI
-  1:01:50.3). Measured: 450 ms, 326 ms apart, ease-out.
+  1:01:50.3). Measured: 475 ms, 326 ms apart, ease-out.
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. A token appears whole with a
   short glow, a batch as one group. The opening hand and a mulligan's new hand

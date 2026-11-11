@@ -7,15 +7,18 @@ import { STAGE, fromRight } from "./perspective";
  * docs/ui_mockups/trigger_on_stack_with_target.png: the top item in front where the mockup
  * draws its trigger, each item beneath it peeking out above by its name bar, closer together
  * the taller the stack. It stands between the two back rows, whose other permanents reach under
- * its column (`ROWS`), so neither side's are covered by it. `x` and `width` bound it; `y` is
- * the top item's top at full size. */
+ * its column (`ROWS`), so neither side's are covered by it. `x` and `width` bound it; `foot` is
+ * the top item's foot. As wide as keeps a resolving permanent's flight to its slot within
+ * Arena's shrink (data/arena-motion.json, fly's "permanent resolves": the card on the stack is
+ * 2.3 to 2.8 times its size at rest), the smaller of a non-creature in the back row of a
+ * crowded table included. */
 export const STACK = {
   // Held to the stage's right edge.
   get x() {
-    return fromRight(1252);
+    return fromRight(1284);
   },
-  y: 236,
-  width: 236,
+  foot: 566,
+  width: 204,
   step: 40,
   reach: 170,
 };
@@ -30,7 +33,7 @@ const STACK_TOP = 234;
 export function stackPlace(index: number, count: number) {
   const step = count > 1 ? Math.min(STACK.step, STACK.reach / (count - 1)) : 0;
   const height = STACK.width / CARD_ASPECT;
-  const foot = STACK.y + height;
+  const foot = STACK.foot;
   const scale = Math.min(1, (foot - STACK_TOP) / (height + (count - 1) * step));
   const width = STACK.width * scale;
   return {

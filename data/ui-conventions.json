@@ -1007,7 +1007,7 @@
         ]
       },
       "values": {
-        "duration": 450,
+        "duration": 475,
         "delay": null,
         "stagger": 326,
         "curve": "ease-out"

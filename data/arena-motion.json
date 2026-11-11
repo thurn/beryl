@@ -24,15 +24,7 @@
         "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows.",
         "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
         "Draw: SswBO8aOOgc 21:30.4 and 24:22.9 were tracked only inside a crop that misses the library leg (fly-in 330 to 360 ms, hold 200 ms, drop 200 to 330 ms), so they are left out.",
-        "Peak size of the spells was not taken."
-      ],
-      "waivers": [
-        {
-          "measure": "peak",
-          "case": "permanent resolves",
-          "bead": "by-w8gv.21.37",
-          "reason": "The desktop stage's resolving permanent leaves the stack at 3.43 (your seat) and 3.31 (theirs) times its size at rest, where Arena's are 1.5 to 2.0: its stack card is about 3.4 times a battlefield card and Arena's about 1.9 times its slot. Layout, not the flight, so no value of the verb's brings it in (by-w8gv.21.19)."
-        }
+        "Peak size of the spells was not taken. The land played and discard peaks are widths read by eye, not retaken as the tracker takes size (the resolves' were, by-w8gv.21.37)."
       ],
       "instances": [
         {
@@ -99,10 +91,10 @@
           "duration_ms": 600,
           "delay_ms": null,
           "stagger_ms": null,
-          "peak": 2.0,
+          "peak": 2.37,
           "path": "Monastery Mentor (own spell) sits large at the stack position top right, leaves at 17:01.10, shrinks and flies left and down to its slot, at rest 17:01.70. Crop x centres 405,341,287,243,218,196,177,158,140,126,107,103,100 at 20 fps: fast start, slow arrival.",
           "curve": "ease-out",
-          "note": "Slot flash starts 17:01.75 and fades out by about 17:02.15, so the flash lasts about 400 ms and begins as the card stops. The stack card had been at rest from 17:00.95. Delay left null: nothing visible precedes it."
+          "note": "Slot flash starts 17:01.75 and fades out by about 17:02.15, so the flash lasts about 400 ms and begins as the card stops. The stack card had been at rest from 17:00.95. Delay left null: nothing visible precedes it. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film UrGalw_f35w 17:01.0 --span 0.1 --fps 10 --cols 1 --width 1920`): 335x468 on the stack, 182x153 (17:01.9) at rest. The earlier figure, 2.0, was the widths' ratio by eye, a portrait card over a landscape art crop."
         },
         {
           "case": "permanent resolves",
@@ -122,10 +114,10 @@
           "duration_ms": 550,
           "delay_ms": null,
           "stagger_ms": null,
-          "peak": 1.5,
+          "peak": 2.29,
           "path": "Emeritus of Ideation (own creature) at rest on the stack at right at 23:02.50, leaves at 23:02.55, shrinks and sweeps left and down in an arc to its slot, at rest about 23:03.10, flash from 23:03.15.",
           "curve": "ease-out",
-          "note": "Peak is approximate (card width about 140 px at the stack vs about 95 px at rest in the crop). Flash begins 23:03.15 and was still bright at the end of the 5 fps sheet around 23:03.4, so about 300 to 400 ms; not timed closely."
+          "note": "Peak is approximate (card width about 140 px at the stack vs about 95 px at rest in the crop). Flash begins 23:03.15 and was still bright at the end of the 5 fps sheet around 23:03.4, so about 300 to 400 ms; not timed closely. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film pE4XSNi-nZc 23:02.5 --span 0.1 --fps 10 --cols 1 --width 1920`): 330x470 on the stack, 188x158 (23:04.0) at rest. The earlier figure, 1.5, was the widths' ratio by eye, a portrait card over a landscape art crop."
         },
         {
           "case": "permanent resolves",
@@ -168,10 +160,33 @@
           "duration_ms": 600,
           "delay_ms": null,
           "stagger_ms": null,
-          "peak": 1.9,
+          "peak": 2.32,
           "path": "Opponent's Mole Man, Moloid Master rests large at the stack position at right until 21:20.00, shrinks and flies left to its slot beside the other creature, at rest about 21:20.60.",
           "curve": "ease-out",
-          "note": "No flash was visible at the slot in the 20 fps frames to 21:21.15, so the slot flash is absent here or too faint to see. Started a second film at 21:20.4 to catch the arrival."
+          "note": "No flash was visible at the slot in the 20 fps frames to 21:21.15, so the slot flash is absent here or too faint to see. Started a second film at 21:20.4 to catch the arrival. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film pE4XSNi-nZc 21:19.8 --span 0.1 --fps 10 --cols 1 --width 1920`): 330x467 on the stack, 184x155 (21:20.8) at rest. The earlier figure, 1.9, was the widths' ratio by eye, a portrait card over a landscape art crop."
+        },
+        {
+          "case": "permanent resolves",
+          "recording": "SswBO8aOOgc",
+          "time": "20:18.5",
+          "span": 0.9,
+          "crop": [
+            1000,
+            200,
+            920,
+            700
+          ],
+          "method": "filmstrip",
+          "why": "the tracker refuses these clips (more than one mover: smoke from the resolving card and the stack's next card), see the other resolves.",
+          "command": "just video film SswBO8aOOgc 20:18.5 --span 0.9 --fps 30 --cols 9 --width 213 --crop 1000,200,920,700",
+          "since": "",
+          "duration_ms": 500,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 2.81,
+          "path": "Currency Converter (own artifact) rests large on the stack at right until 20:18.67, leaves at 20:18.70 already turned to its art crop, shrinking as it rises up and left, then sweeps down and right in an arc to its slot in the back row beside the hand, at rest 20:19.20.",
+          "curve": "ease-out",
+          "note": "The one non-creature here: it lands in the back row, smaller than a creature in the front row, as Beryl's verb suite's Overlord (cast for its impending cost, an enchantment) does. Peak taken as the tracker takes size, from full-frame stills (`just video film SswBO8aOOgc 20:18.6 --span 0.1 --fps 10 --cols 1 --width 1920` and 20:19.4): 330x465 on the stack, 154x126 at rest. Steps large at the start and small at the end: ease-out."
         },
         {
           "case": "discard",
@@ -429,7 +444,7 @@
       ],
       "summary": {
         "duration_ms": {
-          "median": 450,
+          "median": 475,
           "min": 130,
           "max": 1117
         },
@@ -440,9 +455,9 @@
           "max": 420
         },
         "peak": {
-          "median": 1.75,
+          "median": 1.9,
           "min": 1.2,
-          "max": 2.0
+          "max": 2.81
         },
         "start": null,
         "curve": "ease-out",
@@ -466,15 +481,15 @@
           "permanent resolves": {
             "duration_ms": {
               "median": 600,
-              "min": 550,
+              "min": 500,
               "max": 650
             },
             "delay_ms": null,
             "stagger_ms": null,
             "peak": {
-              "median": 1.9,
-              "min": 1.5,
-              "max": 2.0
+              "median": 2.34,
+              "min": 2.29,
+              "max": 2.81
             },
             "start": null,
             "curve": "ease-out"
