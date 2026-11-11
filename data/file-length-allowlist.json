@@ -4,7 +4,7 @@
   "rust/crates/beryl_cli/src/fixture.rs": 1208,
   "rust/crates/beryl_cli/src/ladder.rs": 1118,
   "rust/crates/beryl_cli/src/specs/auto.rs": 1525,
-  "rust/crates/beryl_cli/src/specs/serve.rs": 870,
+  "rust/crates/beryl_cli/src/specs/serve.rs": 803,
   "rust/crates/beryl_engine/src/cast.rs": 1805,
   "rust/crates/beryl_engine/src/effect.rs": 1216,
   "rust/crates/beryl_engine/src/engine.rs": 830,

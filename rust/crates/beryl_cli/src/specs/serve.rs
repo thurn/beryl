@@ -7,7 +7,9 @@
 //!   not, [`super::reviews`]) and how many open bug `reports` are about it; `GET /specs/<card>`
 //!   generates that card's spec and lists its moments ([`super::listing`]).
 //! - `POST /review/<card>` with `{"reviewed": bool}` marks the card reviewed, or not.
-//! - `GET /bug-reports.zip` downloads the active local reports.
+//! - `GET /bug-reports.zip` downloads the active local reports ([`reports`]).
+//! - `POST /invoke/card_records` answers the card store's records for the names asked, as the
+//!   app's command does: for the page's list of cards, which is no moment's.
 //! - `POST /report` with `{"key": instance key, "description": ...}` writes a bug report about
 //!   that instance's moment ([`beryl_session::bugs`]), with its game's replay and latest view if
 //!   the instance still runs. A report from a moment's full-size page (the game screen's bug
@@ -31,7 +33,7 @@
 //! button) plays them again. Full-size and headless views hold their replay the same way.
 
 use std::collections::HashMap;
-use std::io::{self, Seek, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
@@ -46,6 +48,8 @@ use serde_json::{Value, json};
 
 use super::{Phase, View, cards, find, listing, reviews, spec};
 use crate::serve::{CORS, HttpRequest, card_records, invoke, read_request, respond};
+
+mod reports;
 
 /// How many instances live at once; the least recently used goes first. A page keeps each
 /// moment it has shown.
@@ -136,7 +140,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
             .rsplit_once("/invoke/")
             .is_some_and(|(_, command)| command == ipc::REPORT_BUG);
     if (path == "/report" || path == "/bug-reports.zip" || moment_report)
-        && !local_reports_request(&headers)
+        && !reports::local_request(&headers)
     {
         return respond(&mut stream, "403 Forbidden", "{}");
     }
@@ -144,7 +148,12 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         return respond(&mut stream, "204 No Content", "");
     }
     if method == "GET" && path == "/bug-reports.zip" {
-        return export_reports(&mut stream);
+        return reports::export(&mut stream);
+    }
+    if method == "POST" && path == "/invoke/card_records" {
+        // The list of cards asks for their records, which no moment's game is needed for.
+        let args = serde_json::from_slice(&body).unwrap_or(Value::Null);
+        return respond(&mut stream, "200 OK", &card_records(args).to_string());
     }
     if method == "GET" && path == "/specs" {
         let body = listing::cards().to_string();
@@ -314,50 +323,6 @@ fn handle_moment(
         }
         _ => respond(&mut stream, "404 Not Found", "{}"),
     }
-}
-
-/// Report writes can create local beads, and bundles contain private diagnostics.
-/// Accept the loopback Vite proxy's same-origin requests and local command-line clients.
-fn local_reports_request(headers: &HashMap<String, String>) -> bool {
-    let Some(host) = headers.get("host") else {
-        return false;
-    };
-    let (name, port) = host.split_once(':').unwrap_or((host, "80"));
-    matches!(name, "localhost" | "127.0.0.1")
-        && port.parse::<u16>().is_ok()
-        && headers
-            .get("origin")
-            .is_none_or(|origin| origin.strip_prefix("http://") == Some(host))
-        && headers
-            .get("sec-fetch-site")
-            .is_none_or(|site| matches!(site.as_str(), "same-origin" | "none"))
-}
-
-fn export_reports(stream: &mut TcpStream) -> Result<(), String> {
-    let bundle = (|| -> io::Result<_> {
-        let mut bundle = tempfile::tempfile()?;
-        let folders = bugs::archive::active(&bugs::dir())?;
-        bugs::archive::write(&folders, &mut bundle)?;
-        bundle.rewind()?;
-        Ok((bundle.metadata()?.len(), bundle))
-    })();
-    let (length, mut bundle) = match bundle {
-        Ok(bundle) => bundle,
-        Err(error) => {
-            eprintln!("specs: could not export bug reports: {error}");
-            return respond(stream, "500 Internal Server Error", "{}");
-        }
-    };
-    // Keep the ZIP off the spec API's cross-origin JSON response path.
-    write!(
-        stream,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\n\
-         Content-Disposition: attachment; filename=beryl-bug-reports.zip\r\n\
-         Cache-Control: no-store\r\nCross-Origin-Resource-Policy: same-origin\r\n\
-         Content-Length: {length}\r\nConnection: close\r\n\r\n"
-    )
-    .and_then(|()| io::copy(&mut bundle, stream).map(|_| ()))
-    .map_err(|e| e.to_string())
 }
 
 /// `POST /review/<card>`: sets the review mark and, when marking, finds the next unreviewed card.
@@ -834,37 +799,5 @@ mod tests {
             !holds(&lock(&feed.0)),
             "a human decision is already playable"
         );
-    }
-
-    #[test]
-    fn report_routes_only_accept_local_requests() {
-        let headers = |host: &str, origin: &str, site: &str| {
-            [
-                ("host".to_owned(), host.to_owned()),
-                ("origin".to_owned(), origin.to_owned()),
-                ("sec-fetch-site".to_owned(), site.to_owned()),
-            ]
-            .into_iter()
-            .collect()
-        };
-        assert!(local_reports_request(&headers(
-            "localhost:1430",
-            "http://localhost:1430",
-            "same-origin"
-        )));
-        assert!(!local_reports_request(&headers(
-            "localhost:1430",
-            "http://localhost:9999",
-            "same-site"
-        )));
-        assert!(!local_reports_request(&headers(
-            "example.org:1430",
-            "http://example.org:1430",
-            "same-origin"
-        )));
-        let mut navigation = HashMap::from([("host".to_owned(), "127.0.0.1:1430".to_owned())]);
-        assert!(local_reports_request(&navigation));
-        navigation.insert("sec-fetch-site".to_owned(), "cross-site".to_owned());
-        assert!(!local_reports_request(&navigation));
     }
 }
