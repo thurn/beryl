@@ -285,6 +285,25 @@ fn a_counter_counts() {
     assert_eq!(second, text(&lines));
 }
 
+/// `count`: a +1/+1 counter and the power and toughness it gives its creature are one step.
+/// A step of its own for the numbers would follow the counter's if its record lacked them.
+#[test]
+fn a_plus_one_counter_counts_with_the_stats_it_changes() {
+    let [first, second] = script(
+        names::THE_WANDERING_EMPEROR,
+        "+1 grows a creature and gives it first strike",
+        3,
+    );
+    let lines = [
+        "count #256 (Jace, Vryn's Prodigy) plusOne 1 <- a1",
+        "-point source a1 > #0",
+        "& -point hostile-target a1 > #256",
+        "vanish a1 stack>gone resolve",
+    ];
+    assert_eq!(first, text(&lines));
+    assert_eq!(second, text(&lines));
+}
+
 /// `fly` within the battlefield: a permanent changes sides, the arrow at it ended first and
 /// not drawn again by the ability that moved it.
 #[test]

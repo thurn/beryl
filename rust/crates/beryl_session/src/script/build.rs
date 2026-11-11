@@ -262,7 +262,7 @@ impl<'a> Builder<'a> {
 
     /// `making`: the viewer is in the middle of a cast or activation no event announces yet.
     fn walk(&mut self, told: &[Told], making: bool) {
-        for i in 0..told.len() {
+        for i in infer::order(self.events) {
             if !told[i].together {
                 self.open = false;
                 self.lift_ahead(i, told);
@@ -636,9 +636,23 @@ impl<'a> Builder<'a> {
         let Some(mut object) = self.table.objects.get(&slot).cloned() else {
             return;
         };
-        let count = i16::from(counted(&object.counters, counter)) + by;
+        let had = counted(&object.counters, counter);
+        let count = i16::from(had) + by;
         let count = u8::try_from(count.max(0)).unwrap_or(u8::MAX);
         set_counters(&mut object.counters, counter, count);
+        // The counter's own change to its creature shows with it
+        // ([CR 122.1a](https://yawgatog.com/resources/magic-rules/#R1221a): "A +X/+Y counter
+        // on a creature ... adds X to that object's power and Y to that object's toughness.
+        // Similarly, -X/-Y counters subtract from power and toughness").
+        let each = match counter {
+            Counter::PlusOne => i16::from(count) - i16::from(had),
+            Counter::MinusOne => i16::from(had) - i16::from(count),
+            _ => 0,
+        };
+        if let (Some(pt), Ok(each)) = (&mut object.pt, i8::try_from(each)) {
+            pt.power = pt.power.saturating_add(each);
+            pt.toughness = pt.toughness.saturating_add(each);
+        }
         let tally = Tally::Counters { counter, object };
         self.emit(Act::Count { tally }, cause);
     }

@@ -10,7 +10,8 @@ use beryl_engine::card::Purpose;
 use super::table::{Entry, Table};
 use crate::prompt::{Lies, PlaceName, ShapeName};
 use crate::protocol::{
-    CardHandling, Counter, GameEvent, Kind, PlayerView, Side, StackItem, Status, Why, ZoneName,
+    CardHandling, Counter, GameEvent, Kind, PlayerView, Side, StackItem, Status, TargetRef, Why,
+    ZoneName,
 };
 
 /// What a step comes from, before the builder names it.
@@ -422,6 +423,46 @@ fn loose(events: &[GameEvent], i: usize, before: &Table, after: &Table) -> Origi
     }
 }
 
+/// The order a view's events are scripted in: the order they came in, but that the combat
+/// damage a creature deals back to the creature that strikes it follows that strike at once.
+/// Combat damage is dealt at one time whatever order its events come in
+/// ([CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "all combat damage that's
+/// been assigned is dealt simultaneously"), and the two blows of one fight are shown as one
+/// (`ui/src/stage/tracks.ts`, `meets`).
+pub(super) fn order(events: &[GameEvent]) -> Vec<usize> {
+    let blow = |i: usize| match events[i] {
+        GameEvent::Damage {
+            source,
+            to: TargetRef::Object { slot },
+            combat: true,
+            ..
+        } => Some((source, slot)),
+        _ => None,
+    };
+    let fighting = |i: usize| matches!(events[i], GameEvent::Damage { combat: true, .. });
+    let mut order: Vec<usize> = Vec::with_capacity(events.len());
+    for i in 0..events.len() {
+        // The strike it answers: the last before it in this combat damage, unanswered yet.
+        let answered = blow(i).and_then(|(source, to)| {
+            let dealt = order
+                .iter()
+                .rposition(|&j| !fighting(j) && !quiet(&events[j]));
+            let from = dealt.map_or(0, |at| at + 1);
+            (from..order.len()).rev().find(|&at| {
+                blow(order[at]) == Some((to, source))
+                    && order
+                        .get(at + 1)
+                        .is_none_or(|&next| blow(next) != Some((source, to)))
+            })
+        });
+        match answered {
+            Some(at) => order.insert(at + 1, i),
+            None => order.push(i),
+        }
+    }
+    order
+}
+
 /// Whether `event` happens with `previous`, the event before it that shows anything.
 fn together(before: &Table, previous: &GameEvent, event: &GameEvent) -> bool {
     use GameEvent::{
@@ -573,5 +614,54 @@ pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
             ..
         }) => top(side, count),
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GameEvent, Side, TargetRef, order};
+
+    fn blow(source: u16, slot: u16) -> GameEvent {
+        let to = TargetRef::Object { slot };
+        GameEvent::Damage {
+            source,
+            to,
+            amount: 1,
+            combat: true,
+        }
+    }
+
+    /// The blow a blocker deals back follows the strike it answers, whatever was dealt
+    /// between them: an attacker's at a player, or the same attacker's at a second blocker.
+    #[test]
+    fn a_fights_two_blows_are_scripted_together() {
+        let player = TargetRef::Player {
+            player: Side::Opponent,
+        };
+        let at_player = GameEvent::Damage {
+            source: 2,
+            to: player,
+            amount: 1,
+            combat: true,
+        };
+        let events = [blow(1, 9), at_player, blow(3, 8), blow(9, 1), blow(8, 3)];
+        assert_eq!(order(&events), [0, 3, 1, 2, 4]);
+        // One attacker, two blockers: each blocker answers the strike at itself.
+        let events = [blow(1, 8), blow(1, 9), blow(8, 1), blow(9, 1)];
+        assert_eq!(order(&events), [0, 2, 1, 3]);
+    }
+
+    /// Damage that is not combat's is no fight, and a later combat's blows answer none of an
+    /// earlier one's.
+    #[test]
+    fn only_one_combat_damages_blows_are_paired() {
+        let burn = GameEvent::Damage {
+            source: 9,
+            to: TargetRef::Object { slot: 1 },
+            amount: 1,
+            combat: false,
+        };
+        let events = [blow(1, 9), blow(2, 8), burn.clone(), blow(9, 1)];
+        assert_eq!(order(&events), [0, 1, 2, 3]);
     }
 }
