@@ -4,11 +4,12 @@
 mod common;
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::ObjectAbility;
+use beryl_engine::card::{ObjectAbility, Purpose};
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
     Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next,
 };
+use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, GreedyAgent, Inline, RandomAgent, RolloutPolicy};
 use common::{fingerprint, mirror, play};
 
@@ -182,4 +183,70 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         .map(|&slot| s.definition_name(&t, slot))
         .collect();
     assert_eq!(top_first, [JACE_THE_MIND_SCULPTOR, ISLAND, PLAINS]);
+}
+
+/// The policy's answer at the decision `scenario`'s actions lead to, which must be for
+/// `purpose`: the card it picks, by name, or else the option.
+fn answer_for(scenario: &Scenario, purpose: Purpose) -> (Option<&'static str>, Option<Opt>) {
+    let mut live = Live::new(&CARDS, scenario).unwrap();
+    for &action in scenario.actions {
+        live.act(action).unwrap();
+    }
+    let Step::Decide(d) = live.position(Action::pass(P0)).unwrap() else {
+        panic!("the game ended");
+    };
+    assert_eq!(d.prompt.purpose, purpose, "{d:?}");
+    let policy = RolloutPolicy::new(live.table());
+    let c = policy.choose(live.table(), Observation::new(live.state(), d.player), &d);
+    (live.name_of(&d, c), d.candidates.option(c))
+}
+
+/// A crew cost is paid with the creature least worth keeping untapped, where any other
+/// choice of a permanent takes the one worth most: of a Snapcaster Mage, a Trinket Mage and
+/// an Elite Spellbinder, the policy values the Trinket Mage least and the Spellbinder most.
+#[test]
+fn a_crew_cost_taps_the_least_valuable_creature() {
+    use names::{
+        ELITE_SPELLBINDER, JACE_VRYNS_PRODIGY, PLAINS, SNAPCASTER_MAGE, SWIFT_RECONFIGURATION,
+        TRINKET_MAGE,
+    };
+    const CREW: Scenario = Scenario::new("crew")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(PLAINS),
+            ],
+        )
+        .hand(P0, &[SWIFT_RECONFIGURATION])
+        .library(P0, &[PLAINS; 4])
+        .library(P1, &[PLAINS; 4])
+        .actions(&[
+            Action::cast(P0, SWIFT_RECONFIGURATION),
+            Action::choose(P0, DecisionKind::Target, JACE_VRYNS_PRODIGY),
+            Action::Resolve,
+            Action::activate_granted(P0, JACE_VRYNS_PRODIGY, 0),
+        ]);
+    let (card, _) = answer_for(&CREW, Purpose::Crew);
+    assert_eq!(card, Some(TRINKET_MAGE));
+}
+
+/// The life a land asks so as to enter untapped is paid only from above 10 life, where any
+/// other "may" is taken.
+#[test]
+fn life_for_an_untapped_land_is_paid_only_from_above_ten() {
+    const SPRINGS: Scenario = Scenario::new("pay life")
+        .hand(P0, &[names::SINK_INTO_STUPOR])
+        .library(P1, &[names::PLAINS])
+        .actions(&[Action::PlayLand {
+            player: P0,
+            card: names::SINK_INTO_STUPOR,
+        }]);
+    let pays = |life| answer_for(&SPRINGS.life(P0, life), Purpose::PayLife).1;
+    assert_eq!(pays(11), Some(Opt::Yes));
+    assert_eq!(pays(10), Some(Opt::No));
 }
