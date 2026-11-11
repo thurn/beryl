@@ -21,7 +21,7 @@ use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeView};
 use beryl_session::protocol::{Candidate, DecisionView, Kind, Side, ZoneName};
-use beryl_session::replay::Entry;
+use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::save::Kind as SavedKind;
 use beryl_session::{
     CandidateIndex, Game, Prepared, SessionError, Sessions, StartGame, Status, StopsSetting,
@@ -803,7 +803,14 @@ fn a_save_made_through_clicks_replays() {
         assert_eq!(answered, None);
     }
     assert!(untapped > 0, "no Time Spiral resolved");
-    let (replayed, view) = Game::from_replay(&CARDS, play.game.replay(), SESSION).unwrap();
+    // Through the file as it is written: the log names what each pick did, never a click.
+    let dir = std::env::temp_dir().join(format!("beryl-clicks-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("clicks.json");
+    play.game.replay().save(&path).unwrap();
+    let loaded = ReplayFile::load(&path);
+    std::fs::remove_dir_all(&dir).unwrap();
+    let (replayed, view) = Game::from_replay(&CARDS, &loaded.unwrap(), SESSION).unwrap();
     assert_eq!(replayed.state(), play.game.state());
     assert_eq!(replayed.replay().log, play.game.replay().log);
     assert_eq!(view.status, play.view.status);
