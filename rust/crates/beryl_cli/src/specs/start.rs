@@ -22,12 +22,27 @@ pub enum Phase {
     Live,
 }
 
+/// The scenarios whose moments' games panic on their session's thread once their first view
+/// is out: a test's stand-in for a script that breaks its checks (plan K24).
+#[cfg(test)]
+pub(crate) static FAULTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+
 /// Starts `moment` in its own [`Sessions`], seen from `view`, each view sent to `emit` with the
 /// phase it was emitted in. Scripts that fail report to the view's phase as `Live` with the
 /// failure.
 pub fn start(
     moment: &'static Moment,
     view: View,
+    emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
+) -> Result<(Sessions, Shared), String> {
+    start_guarded(moment, view, None, emit)
+}
+
+/// [`start`], the session's thread owning `guard`, if given, which tells of its panic.
+pub(super) fn start_guarded(
+    moment: &'static Moment,
+    view: View,
+    guard: Option<crate::panics::Guard>,
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<(Sessions, Shared), String> {
     let progress = Shared::default();
@@ -45,7 +60,15 @@ pub fn start(
         boards::lock(&progress).until = Some(*turn);
     }
     let watched = Arc::clone(&progress);
+    #[cfg(test)]
+    let first = std::sync::atomic::AtomicBool::new(true);
     let sessions = Sessions::new(None, move |update| {
+        #[cfg(test)]
+        if !first.swap(false, std::sync::atomic::Ordering::Relaxed)
+            && FAULTS.lock().unwrap().contains(&moment.board.name)
+        {
+            panic!("a fault injected into {:?}", moment.board.name);
+        }
         // The emitting thread is the one the scripts answer on, so this is the phase the view
         // was made in. Views are published before the stand-in answers, so the hand-over sees
         // the turn this one shows.
@@ -72,15 +95,19 @@ pub fn start(
     let (table, state) =
         beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
     let actions = || moment.board.actions.iter().chain(moment.play);
-    let agent = |seat: Seat| {
-        Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))
-            .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
+    let agent = |seat: Seat, guard: Option<crate::panics::Guard>| {
+        let agent = Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))?;
+        let agent = match guard {
+            Some(guard) => agent.guarded(guard),
+            None => agent,
+        };
+        Ok::<_, String>(Box::new(agent) as Box<dyn GameAgent + Send>)
     };
     let handed = Arc::clone(&progress);
     sessions
         .start_prepared(Prepared {
-            opponent: agent(view.other())?,
-            stand_in: agent(view.seat())?,
+            opponent: agent(view.other(), guard)?,
+            stand_in: agent(view.seat(), None)?,
             scripted: true,
             hand_over: Some(Box::new(move || boards::lock(&handed).done())),
             table,

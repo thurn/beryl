@@ -32,10 +32,12 @@ use beryl_engine::card::CardDef;
 use beryl_scenario::{Action, Scenario};
 use beryl_session::Seat;
 
-pub use describe::describe;
 use describe::reach;
+pub use describe::{Unreached, describe};
+#[cfg(test)]
+pub(crate) use start::FAULTS;
 pub use start::{Phase, start};
-use start::{at_checkpoint, review_position, start_review};
+use start::{at_checkpoint, review_position, start_guarded, start_review};
 
 /// The specs, one per implemented card, each generated on its first request: asking for one
 /// card's moments plays no other card's.
@@ -70,6 +72,16 @@ pub fn spec(card: &str) -> Option<&'static Spec> {
     library().find(card)
 }
 
+/// New specs of `cards`, by name, apart from the library's: a test that changes how their games
+/// play leaves the library's specs alone.
+#[cfg(test)]
+pub(crate) fn fresh(cards: &[&str]) -> Vec<Spec> {
+    cards
+        .iter()
+        .map(|&card| Spec::new(CARDS.cards().iter().find(|d| d.name == card).unwrap()))
+        .collect()
+}
+
 /// The specs `cards` name (by name or slug; every one if none), each generated, failing on an
 /// unknown card. Generating every card is a sweep someone asked for (`specs-check` with no
 /// card), so it runs on a pool the size of the machine, not a thread per card.
@@ -87,7 +99,7 @@ fn chosen(cards: &[String]) -> Result<Vec<&'static Spec>, String> {
 }
 
 /// Generates each of `specs` not yet generated, on as many threads as the machine has cores.
-fn generate(specs: &[&Spec]) {
+pub fn generate(specs: &[&Spec]) {
     let next = AtomicUsize::new(0);
     let threads = std::thread::available_parallelism()
         .map_or(1, std::num::NonZero::get)
@@ -143,6 +155,11 @@ impl Spec {
     /// The candidates its generation dropped, each with why.
     fn dropped(&self) -> &[(String, String)] {
         &self.generated().dropped
+    }
+
+    /// Every candidate its generation played, from each seat.
+    pub fn played(&self) -> &[auto::Played] {
+        &self.generated().played
     }
 
     fn generated(&self) -> &auto::Generated {
@@ -221,7 +238,7 @@ impl View {
         View::ALL.into_iter().find(|v| v.name() == name)
     }
 
-    const fn seat(self) -> Seat {
+    pub(crate) const fn seat(self) -> Seat {
         match self {
             View::Yours => Seat::P0,
             View::Theirs => Seat::P1,
@@ -470,7 +487,9 @@ mod tests {
                 .at(2, beryl_scenario::P1, beryl_engine::TurnStep::PrecombatMain),
         )
         .play(&[Action::cast(P0, COUNTERSPELL)]);
-        let error = reach(&MOMENT, View::Yours).expect_err("Counterspell has no target");
+        let error = reach(&MOMENT, View::Yours)
+            .expect_err("Counterspell has no target")
+            .to_string();
         assert!(error.contains("Counterspell"), "{error}");
         assert!(error.contains("fit no candidate"), "{error}");
     }

@@ -3,14 +3,38 @@
 
 use beryl_session::Status;
 
-use super::{Moment, Phase, View, auto, chosen, start};
+use super::{Moment, Phase, View, auto, chosen, start_guarded};
 use crate::boards;
 
 /// Plays `moment` headless, seen from `view`, to the viewer's first live decision (or the
 /// game's end, once every action is taken), and returns what the viewer sees there: an error
 /// says what failed on the way.
-pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::PlayerView, String> {
+pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::PlayerView, Unreached> {
     trace(moment, view).map(|(view, _)| view)
+}
+
+/// Why a moment's game did not reach the viewer's live decision.
+#[derive(Clone, Debug)]
+pub enum Unreached {
+    /// The session's thread panicked: a debug build's script checks (plan K24) or anything
+    /// else that broke. The message says where ([`crate::panics`]).
+    Panicked(String),
+    /// The game went another way: the moment's actions did not fit, or it ended first.
+    Failed(String),
+}
+
+impl std::fmt::Display for Unreached {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Unreached::Panicked(why) | Unreached::Failed(why) => f.write_str(why),
+        }
+    }
+}
+
+impl From<Unreached> for String {
+    fn from(unreached: Unreached) -> String {
+        unreached.to_string()
+    }
 }
 
 /// [`reach`], with the views the viewer was shown on the way once the setup was done, each
@@ -18,19 +42,24 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
 fn trace(
     moment: &'static Moment,
     view: View,
-) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), String> {
+) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), Unreached> {
     let (sent, received) = std::sync::mpsc::channel();
-    let (_sessions, progress) = start(moment, view, move |update, phase| {
-        let _ = sent.send((update, phase));
-    })?;
+    let told = sent.clone();
+    // The session's thread owns the guard, which tells of a panic there, however early.
+    let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
+    let (_sessions, progress) = start_guarded(moment, view, Some(guard), move |update, phase| {
+        let _ = sent.send(Ok((update, phase)));
+    })
+    .map_err(Unreached::Failed)?;
     let mut shown = false;
     let mut events = Vec::new();
     loop {
         let (update, phase) = received
             .recv_timeout(std::time::Duration::from_secs(30))
-            .map_err(|_| "no live decision within 30 s".to_owned())?;
+            .map_err(|_| Unreached::Failed("no live decision within 30 s".to_owned()))?
+            .map_err(Unreached::Panicked)?;
         if let Some(failure) = boards::lock(&progress).failure.take() {
-            return Err(failure);
+            return Err(Unreached::Failed(failure));
         }
         // The first view shown animates nothing (`specs-serve` clears its events).
         if shown {
@@ -43,14 +72,14 @@ fn trace(
                 return Ok((update.view, events));
             }
             Status::Over { .. } | Status::Stopped => {
-                return Err(match boards::lock(&progress).stalled() {
+                return Err(Unreached::Failed(match boards::lock(&progress).stalled() {
                     None => "the game ended before a live decision".to_owned(),
                     Some(why) => format!("the game ended with {why}"),
-                });
+                }));
             }
             Status::Deciding { .. } if phase == Phase::Live => {
                 if !shown {
-                    return Err("nothing was shown".to_owned());
+                    return Err(Unreached::Failed("nothing was shown".to_owned()));
                 }
                 return Ok((update.view, events));
             }

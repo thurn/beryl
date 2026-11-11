@@ -8,7 +8,8 @@ mod until;
 mod view_predicates;
 
 use std::path::Path;
-use std::sync::{Arc, mpsc::channel};
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, channel};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
@@ -16,7 +17,8 @@ use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_search::GameAgent;
 use beryl_session::ipc::{Fixture, FixtureMessage};
 use beryl_session::{
-    Prepared, Seat, SessionError, SessionId, Sessions, StartGame, Status, StopsSetting, agents, ipc,
+    GameUpdate, Prepared, Seat, SessionError, SessionId, Sessions, StartGame, Status, StopsSetting,
+    agents, ipc,
 };
 use serde::Deserialize;
 
@@ -34,7 +36,7 @@ struct Definitions {
 /// One fixture: the game to play and where to stop.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Definition {
+pub(crate) struct Definition {
     name: String,
     /// A seeded game's seed, with `decks`; or none, with `board`.
     seed: Option<u64>,
@@ -57,20 +59,37 @@ struct Definition {
     after: usize,
 }
 
-/// Records the fixtures in `definitions` named in `only`, or all of them, into `out`.
-pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(), String> {
+impl Definition {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The seat its recording is seen from: its human's.
+    pub(crate) fn seat(&self) -> Result<Seat, String> {
+        Ok(Until::parse(&self.until)?.seat())
+    }
+}
+
+/// The fixtures the file `definitions` defines.
+pub(crate) fn definitions(definitions: &Path) -> Result<Vec<Definition>, String> {
     let text = std::fs::read_to_string(definitions)
         .map_err(|e| format!("{}: {e}", definitions.display()))?;
     let defs: Definitions =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", definitions.display()))?;
+    Ok(defs.fixtures)
+}
+
+/// Records the fixtures in `definitions` named in `only`, or all of them, into `out`.
+pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(), String> {
+    let fixtures = self::definitions(definitions)?;
     if let Some(name) = only
         .iter()
-        .find(|n| !defs.fixtures.iter().any(|f| &f.name == *n))
+        .find(|n| !fixtures.iter().any(|f| &f.name == *n))
     {
         return Err(format!("no fixture is named {name:?}"));
     }
     std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
-    for def in &defs.fixtures {
+    for def in &fixtures {
         if !only.is_empty() && !only.contains(&def.name) {
             continue;
         }
@@ -84,7 +103,9 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
     Ok(())
 }
 
-fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
+/// The messages of `def`'s recording, or why it could not be made: a session whose thread
+/// panicked (in a debug build, a script that breaks its checks, plan K24) says where.
+pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let until = Until::parse(&def.until)?;
     let conditions = def
         .conditions
@@ -93,12 +114,21 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         .collect::<Result<Vec<_>, _>>()?;
     let human = until.seat();
     let (sent, updates) = channel();
+    let told = sent.clone();
+    let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
     let sessions = Sessions::new(None, move |update| {
+        crate::panics::watch(|| {
+            let told = sent.clone();
+            move |panic| drop(told.send(Err(panic)))
+        });
         // The recording stops listening once it has what it came for.
-        let _ = sent.send(update);
+        let _ = sent.send(Ok(update));
     });
     let progress = Shared::default();
-    let session = start(def, &sessions, human, &progress)?;
+    let before = crate::panics::mark();
+    let (session, unused) = start(def, &sessions, human, &progress, guard)?;
+    // A seeded game owns no guard, so nothing tells of a panic before its first view.
+    let mut unguarded = unused.is_some();
     let mut messages = vec![
         FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
         FixtureMessage::response(ipc::START_GAME, &session),
@@ -108,11 +138,18 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     // The human's decisions still to record once the stop is reached.
     let mut left = None;
     loop {
-        let update = updates.recv();
+        let update = if unguarded {
+            first_view(&updates, before)
+        } else {
+            updates.recv()
+        };
+        unguarded = false;
         if let Some(failure) = boards::lock(&progress).failure.take() {
             return Err(failure);
         }
-        let update = update.map_err(|_| "the session ended without a view".to_owned())?;
+        let update = update
+            .map_err(|_| "the session ended without a view".to_owned())?
+            .map_err(|panic| format!("the session {panic}"))?;
         let reached = left.is_none()
             && until.reached(&update.view)
             && conditions.iter().all(|c| c.holds(&update.view));
@@ -148,14 +185,40 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     }
 }
 
+/// The first message of a session that owns no guard: its first view, or a panic nothing watched
+/// since `before` that no guard has told of a second later. A guard tells of its own as its thread
+/// unwinds, and a seeded game's first view comes at once, so the panic is taken for this game's
+/// (in a run that fails all the same).
+fn first_view(
+    updates: &Receiver<Result<GameUpdate, String>>,
+    before: u64,
+) -> Result<Result<GameUpdate, String>, RecvError> {
+    let mut seen = None;
+    loop {
+        match updates.recv_timeout(std::time::Duration::from_secs(1)) {
+            Ok(update) => return Ok(update),
+            Err(RecvTimeoutError::Disconnected) => return Err(RecvError),
+            Err(RecvTimeoutError::Timeout) => match crate::panics::unwatched_since(before) {
+                Some((number, panic)) if seen == Some(number) => {
+                    crate::panics::claim(number);
+                    return Ok(Err(format!("{panic} (before its first view)")));
+                }
+                untold => seen = untold.map(|(number, _)| number),
+            },
+        }
+    }
+}
+
 /// Starts the fixture's game in `sessions`: its seeded deal, or its board, whose scripts
-/// report to `progress`.
+/// report to `progress` and whose thread owns `guard`; the guard back if nothing owns it.
 fn start(
     def: &Definition,
     sessions: &Sessions,
     human: Seat,
     progress: &Shared,
-) -> Result<SessionId, String> {
+    guard: crate::panics::Guard,
+) -> Result<(SessionId, Option<crate::panics::Guard>), String> {
+    let mut guard = Some(guard);
     let stops = def.stops.unwrap_or(StopsSetting::SMART);
     let started: Result<SessionId, SessionError> =
         match (&def.board, def.seed, &def.decks, &def.agents) {
@@ -177,8 +240,11 @@ fn start(
                     Scripted::new(board, seat, &table, Arc::clone(progress))
                         .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
                 };
+                let opponent =
+                    Scripted::new(board, human.opponent(), &table, Arc::clone(progress))?;
+                let guard = guard.take().expect("the guard is given once");
                 sessions.start_prepared(Prepared {
-                    opponent: agent(human.opponent())?,
+                    opponent: Box::new(opponent.guarded(guard)),
                     stand_in: agent(human)?,
                     scripted: true,
                     hand_over: None,
@@ -192,7 +258,7 @@ fn start(
                 return Err("a fixture has a seed, decks and agents, or a board".to_owned());
             }
         };
-    started.map_err(|e| e.to_string())
+    Ok((started.map_err(|e| e.to_string())?, guard))
 }
 
 fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {

@@ -79,6 +79,8 @@ pub struct Scripted {
     /// step it waits for, if any.
     script: VecDeque<(usize, Action, Gate)>,
     progress: Shared,
+    /// Dropped with the agent, on its session's thread ([`Scripted::guarded`]).
+    guard: Option<crate::panics::Guard>,
 }
 
 impl Scripted {
@@ -127,7 +129,15 @@ impl Scripted {
             seat,
             script,
             progress,
+            guard: None,
         })
+    }
+
+    /// The agent holding `guard`, which tells of a panic on the session's thread that owns it.
+    #[must_use]
+    pub fn guarded(mut self, guard: crate::panics::Guard) -> Scripted {
+        self.guard = Some(guard);
+        self
     }
 }
 

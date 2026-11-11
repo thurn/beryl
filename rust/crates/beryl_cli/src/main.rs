@@ -58,9 +58,11 @@ mod game;
 mod hunt;
 mod ladder;
 mod longthink;
+mod panics;
 mod positions;
 mod review;
 mod screen;
+mod script_check;
 mod serve;
 mod specs;
 mod tournament;
@@ -90,6 +92,7 @@ const USAGE: &str = "usage:
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
+  beryl_cli script-check <definitions.json> [check...]
   beryl_cli specs-describe [--views] <card> [moment]
   beryl_cli blunder-hunt [--hours 6] [--out DIR] [--seed N] [--inspect CASE.json]
   beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]
@@ -133,6 +136,9 @@ fn main() -> ExitCode {
             number(flag, port).and_then(specs::serve::serve)
         }
         [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
+        [command, definitions, checks @ ..] if command == "script-check" => {
+            script_check::main(Path::new(definitions), checks)
+        }
         [command, flag, card] if command == "specs-describe" && flag == "--views" => {
             specs::describe(std::slice::from_ref(card), None, true)
         }

@@ -51,6 +51,7 @@ from . import (
     file_length,
     paths,
     runlog,
+    script_checks,
     system,
     two_player,
     verdicts,
@@ -691,6 +692,8 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/") or touched(CARD_STORE):
         lanes.append(rust_lane(fast=True))
+    if touched(script_checks.inputs()) or touched(CARD_STORE):
+        lanes.append(script_checks.lane())
     if touched(r"^ui/"):
         lanes.append(ui_lane())
     if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
@@ -720,6 +723,7 @@ def slow(args: argparse.Namespace) -> int:
         "repo": repo_lane(),
         "python": python_lane(),
         "rust": rust_lane(),
+        "script": script_checks.lane(),
         "ui": ui_lane(),
         "names": names_lane(),
         "app": app_lane(),

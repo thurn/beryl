@@ -73,6 +73,16 @@ def failed_titles(output: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r"^FAILED: (.+)$", output, re.MULTILINE)))
 
 
+def failed_scripts(output: str) -> list[str]:
+    """The checks `script-check` names on its `FAILED: script:<id>` lines (script_checks.py);
+    none when a session panicked before its first view, which no check's rerun would show again.
+    """
+    found = re.findall(r"^FAILED: (script:\S+)$", output, re.MULTILINE)
+    if "script:unwatched" in found:
+        return []
+    return list(dict.fromkeys(found))
+
+
 def failed_cards(output: str) -> list[str]:
     """The cards whose scenarios failed in the JSON summary `oracle` ends with."""
     start = re.search(r"^\{$", output, re.MULTILINE)

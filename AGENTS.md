@@ -189,9 +189,13 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the
   branch left `origin/staging`: `repo` (justfile and Markdown formatting),
   `python` (black, pyre, pytest; a card or vocabulary change alone runs just the
-  scale harness's tests), `rust` (rustfmt, clippy, tests), `ui` (prettier, tsc,
-  `npm test`), `names` (`card-names`: no card name in generic code, held to the
-  burn-down list `data/card-names-allowlist.json`, whose counts only fall;
+  scale harness's tests), `rust` (rustfmt, clippy, tests), `script`
+  (`beryl_cli script-check`, for a change to a crate it builds on: every card's
+  spec moments from both seats and every UI fixture's recording in a debug
+  build, which holds each script to its checks, one run-log check
+  `script:<card>/<moment>/<seat>` each), `ui` (prettier, tsc, `npm test`),
+  `names` (`card-names`: no card name in generic code, held to the burn-down
+  list `data/card-names-allowlist.json`, whose counts only fall;
   `python -m beryl_tools.checks card-names --shrink` lowers them; `two-player`:
   no rules module or card file names `beryl_kernel::two_player`) and `oracle`
   (each changed card file's scenarios in XMage and Forge, skipped when another

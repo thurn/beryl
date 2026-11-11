@@ -23,7 +23,7 @@ use beryl_engine::TurnStep;
 use beryl_engine::card::CardDef;
 use beryl_scenario::{Action, P0, Permanent, Scenario};
 
-use super::{Moment, View, reach};
+use super::{Moment, Unreached, View, reach};
 use definition::{activated, from_definition};
 use scenarios::from_scenario;
 
@@ -38,10 +38,20 @@ pub(super) use scenarios::{heading, label_of, playground_action, with_libraries}
 pub use snapshot::snapshot;
 
 /// One card's generated moments, and the candidates dropped because their scripts could not
-/// be played, each with why.
+/// be played, each with why; and every candidate as played from each seat.
 pub struct Generated {
     pub moments: Vec<Moment>,
     pub dropped: Vec<(String, String)>,
+    pub played: Vec<Played>,
+}
+
+/// One candidate played from one seat to its first live decision: how long that took, and the
+/// panic that stopped it, if one did (`script-check` reports each as a check).
+pub struct Played {
+    pub name: String,
+    pub view: View,
+    pub seconds: f64,
+    pub panic: Option<String>,
 }
 
 /// What made a candidate, which decides whether it is kept once recorded.
@@ -115,7 +125,8 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
     for scenario in scenarios {
         from_scenario(def, scenario, &mut candidates);
     }
-    let mut recorded = record(def, &candidates);
+    let mut played = Vec::new();
+    let mut recorded = record(def, &candidates, &mut played);
     let mut kept = select(def, &candidates, &recorded, &mut Vec::new());
     // What follows the card's moments, for a card whose abilities decide its stops.
     if !activated(def.front()).is_empty() {
@@ -124,7 +135,7 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
             .filter_map(|i| Some((&candidates[i], recorded[i].as_ref().ok()?)))
             .flat_map(|(c, r)| follow_ons(c, r))
             .collect();
-        recorded.extend(record(def, &follow));
+        recorded.extend(record(def, &follow, &mut played));
         candidates.extend(follow);
     }
     let mut dropped = Vec::new();
@@ -146,19 +157,40 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
             Some(moment(c, title, Some(r)))
         })
         .collect();
-    Generated { moments, dropped }
+    Generated {
+        moments,
+        dropped,
+        played,
+    }
 }
 
 type Recorded = Result<[Vec<String>; 2], String>;
 
-/// Each candidate played from both seats to its first live decision, and what held there.
-fn record(def: &'static CardDef, candidates: &[Candidate]) -> Vec<Recorded> {
+/// Each candidate played from both seats to its first live decision, and what held there; each
+/// seat's play goes to `played`.
+fn record(
+    def: &'static CardDef,
+    candidates: &[Candidate],
+    played: &mut Vec<Played>,
+) -> Vec<Recorded> {
     candidates
         .iter()
         .map(|c| {
             let m: &'static Moment = Box::leak(Box::new(moment(c, c.title.clone(), None)));
-            let yours = reach(m, View::Yours).map(|v| snapshot(&v, def));
-            let theirs = reach(m, View::Theirs).map(|v| snapshot(&v, def));
+            let [yours, theirs] = View::ALL.map(|view| {
+                let started = std::time::Instant::now();
+                let reached = reach(m, view);
+                played.push(Played {
+                    name: c.name.clone(),
+                    view,
+                    seconds: started.elapsed().as_secs_f64(),
+                    panic: match &reached {
+                        Err(Unreached::Panicked(why)) => Some(why.clone()),
+                        _ => None,
+                    },
+                });
+                reached.map(|v| snapshot(&v, def)).map_err(String::from)
+            });
             Ok([yours?, theirs?])
         })
         .collect()

@@ -462,10 +462,16 @@ fn recover(dir: &Path) -> Result<Vec<GameRecord>, String> {
     Ok(games)
 }
 
-/// Records where the runner was when it panics, before the panic ends it.
+/// Records where the runner was when it panics, before the panic ends it. A panic on an app
+/// session's thread is not the runner's: a run starts none, and `crate::panics` tells its
+/// waiter of it (the specs and fixtures of tests running in the same process).
 fn record_panics() {
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if std::thread::current().name() == Some(beryl_session::SESSION_THREAD) {
+            default(info);
+            return;
+        }
         PANICKED.store(true, Ordering::Relaxed);
         let playing = PLAYING
             .try_with(|p| p.try_borrow().ok().and_then(|p| p.clone()))

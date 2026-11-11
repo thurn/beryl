@@ -45,6 +45,9 @@ enum Command {
     Concede,
 }
 
+/// The name of the thread each game plays on.
+pub const THREAD: &str = "game session";
+
 impl GameSession {
     /// Starts `game`. `emit` receives every view of the human's as the game plays
     /// ([`Game::next_view`]), beginning with `first`, the view where the game already stands,
@@ -67,7 +70,7 @@ impl GameSession {
             latest,
         };
         std::thread::Builder::new()
-            .name("game session".to_owned())
+            .name(THREAD.to_owned())
             .spawn(move || {
                 let session = game.session();
                 let end = run(game, first, &received, &thread, replay.as_deref(), emit);

@@ -240,6 +240,21 @@ def test_failed_shots_and_oracle_cards_are_named() -> None:
     assert checks.failed_titles("FAILED: a\npage errors:\n  b: boom\n") == []
 
 
+def test_failed_script_checks_are_named_by_their_ids() -> None:
+    output = (
+        "FAILED: script:mana-drain/start/yours\n"
+        "    panicked at crates/beryl_session/src/script/build.rs:131: a script breaks a rule\n"
+        "FAILED: script:fixtures/stack-two/theirs\n"
+        "script-check: 748 checks, 2 failed, in 2.1 s\n"
+    )
+    assert reruns.failed_scripts(output) == [
+        "script:mana-drain/start/yours",
+        "script:fixtures/stack-two/theirs",
+    ]
+    # A panic no check owns would not show again on a rerun of those named alone.
+    assert reruns.failed_scripts(output + "FAILED: script:unwatched\n") == []
+
+
 # A step that fails two checks, then on the rerun runs only the first of them and passes, as a
 # title filter that misses a check's block would.
 NARROWED = """
@@ -330,6 +345,25 @@ def test_a_change_under_tools_runs_the_python_lane_and_the_scale_tests_once(
     # The python lane's pytest names no files, so it runs every test, test_scale's once.
     assert lanes["python"][-1][-2:] == ["beryl_tools.checks", "pytest"]
     assert scale_tests_run(lanes) == 0
+
+
+def test_the_script_checks_run_for_a_change_to_a_crate_a_script_comes_from(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for path in [
+        "rust/crates/beryl_session/src/script/build.rs",
+        "rust/crates/beryl_kernel/src/lib.rs",
+        "rust/crates/beryl_cards/src/blue/counterspell.rs",
+        "ui/fixtures.json",
+        "data/card-store.tsv",
+    ]:
+        assert "script" in lanes_for(monkeypatch, [path]), path
+    # The app shell and the benchmarks build no script beryl_cli plays.
+    for path in [
+        "rust/crates/beryl_app/src/lib.rs",
+        "rust/crates/beryl_bench/src/a.rs",
+    ]:
+        assert "script" not in lanes_for(monkeypatch, [path]), path
 
 
 def test_a_refreshed_card_store_runs_the_lanes_that_read_it(

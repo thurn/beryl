@@ -38,6 +38,7 @@ pub use game::{Answer, Game, OpenDecision, UNDO_POINTS, with_stops};
 pub use prompt::trigger_to_stack;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
+pub use session::THREAD as SESSION_THREAD;
 pub use sessions::{Sessions, StartRequest};
 
 /// How to start a game.
