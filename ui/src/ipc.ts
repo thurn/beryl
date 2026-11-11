@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import type {
   BugReport,
   CandidateIndex,
+  CardRecords,
   Commands,
   DecisionId,
   Events,
@@ -15,6 +16,7 @@ import type {
   SessionId,
   StopsSetting,
 } from "./generated/protocol";
+import { cardRecords, strings } from "./cardRecords";
 import { brief, forwardTo, note, noteUpdate } from "./diagnostics";
 import { whenThawed } from "./freeze";
 
@@ -71,6 +73,8 @@ export interface FixtureCall {
  * the next `choose` plays the recording on from there; an `undo` goes back to the decision before
  * the latest, shown again as undone; a `pass_on` plays on as a `choose` does. The events a listener gets as it
  * starts listening are past; those released by `choose` and `cancel` happen live.
+ * `card_records` alone is answered by what it asks: the records the fixture recorded for those
+ * names (`cards`), which the recording holds for every name its events show.
  * Every command is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
  * commands' types. */
 export function fixtureTransport(
@@ -79,6 +83,7 @@ export function fixtureTransport(
 ): Transport & {
   calls: FixtureCall[];
   view(): Events["game-update"]["view"] | undefined;
+  cards(names: string[]): CardRecords;
 } {
   const responses = new Map<Command, unknown[]>();
   const events: { event: keyof Events; payload: unknown }[] = [];
@@ -172,8 +177,26 @@ export function fixtureTransport(
     }
     return showAgain(at, false);
   };
+  const cards = (names: string[]): CardRecords => {
+    const recorded = responses.get("card_records")?.[0] as
+      CardRecords | undefined;
+    const among = (records?: CardRecords["cards"]) =>
+      Object.fromEntries(
+        names.flatMap((name) => {
+          const record = records?.[name];
+          return record ? [[name, record]] : [];
+        }),
+      );
+    return {
+      card_back: recorded?.card_back ?? "",
+      nameless_token: recorded?.nameless_token ?? "",
+      cards: among(recorded?.cards),
+      tokens: among(recorded?.tokens),
+    };
+  };
   return {
     calls,
+    cards,
     /** The latest view released, which the screen should show once it settles: what
      * `just ui-shots` checks the screen against. */
     view() {
@@ -187,6 +210,10 @@ export function fixtureTransport(
       calls.push({ command, args });
       if (command === "cancel") return cancel() as Promise<Result<C>>;
       if (command === "undo") return undo() as Promise<Result<C>>;
+      if (command === "card_records") {
+        const { names } = (args as Args<"card_records">).request;
+        return Promise.resolve(cards(names) as Result<C>);
+      }
       // A recording holds one line of play: passing on plays it on as its next answer did.
       const queue = responses.get(command === "pass_on" ? "choose" : command);
       if (!queue || queue.length === 0) {
@@ -354,14 +381,36 @@ const browserFixture: Fixture = {
   ],
 };
 
-/** A value for the log: a report cut to what says what it was. */
-const logged = (command: Command, value: unknown): unknown =>
-  command === "report_bug"
-    ? { description: (value as { request?: BugReport }).request?.description }
-    : brief(value);
+/** A value for the log: a report cut to what says what it was, and card records to how many
+ * names were asked about and which had one. */
+const logged = (command: Command, value: unknown): unknown => {
+  if (command === "report_bug") {
+    return {
+      description: (value as { request?: BugReport }).request?.description,
+    };
+  }
+  if (command === "card_records") {
+    const { request, cards, tokens } = value as Partial<
+      Args<"card_records"> & CardRecords
+    >;
+    return request
+      ? { names: request.names.length }
+      : { cards: Object.keys(cards ?? {}), tokens: Object.keys(tokens ?? {}) };
+  }
+  return brief(value);
+};
 
-/** `inner`, every message logged for bug reports (diagnostics.ts), and its events held while
- * the page is frozen (freeze.ts). */
+/** A fixture page's card records, which its transport has in hand. */
+let fixtureCards: ((names: string[]) => CardRecords) | undefined;
+
+/** The card store's records for `names`: a fixture's in the same tick, so that a replay's
+ * timing is what it was recorded with, else the app's or the server's answer. */
+const askCards = (names: string[]) =>
+  fixtureCards?.(names) ?? call("card_records", { request: { names } });
+
+/** `inner`, every message logged for bug reports (diagnostics.ts), and its events held until
+ * the records of the cards they show are cached (cardRecords.ts) and while the page is frozen
+ * (freeze.ts). */
 function instrumented(inner: Transport): Transport {
   return {
     async invoke<C extends Command>(command: C, args: Args<C>) {
@@ -388,7 +437,9 @@ function instrumented(inner: Transport): Transport {
     ) {
       return inner.listen(event, (payload, past) => {
         if (event === "game-update") noteUpdate(payload as GameUpdate, past);
-        whenThawed(() => handler(payload, past));
+        cardRecords.whenCached(payload, askCards, () =>
+          whenThawed(() => handler(payload, past)),
+        );
       });
     },
   };
@@ -432,7 +483,9 @@ async function rawTransport(): Promise<Transport> {
   const params = new URLSearchParams(window.location.search);
   const name = params.get("fixture");
   if (!name) {
-    return fixtureTransport(browserFixture);
+    const plain = fixtureTransport(browserFixture);
+    fixtureCards = plain.cards;
+    return plain;
   }
   const response = await fetch(`/fixtures/${encodeURIComponent(name)}.json`);
   if (!response.ok) {
@@ -451,6 +504,7 @@ async function rawTransport(): Promise<Transport> {
     at === null ? undefined : Number(at),
   );
   (window as { berylFixture?: unknown }).berylFixture = replay;
+  fixtureCards = replay.cards;
   return replay;
 }
 
@@ -511,8 +565,13 @@ export const passOn = (decision: DecisionId) =>
 export const concede = (session: SessionId) =>
   call("concede", { request: { session } });
 
-/** The latest view of the game in progress, if any: where a reloaded page takes it up. */
-export const currentGame = () => call("current_game", {});
+/** The latest view of the game in progress, if any, with its cards' records cached: where a
+ * reloaded page takes it up. */
+export const currentGame = async () => {
+  const update = await call("current_game", {});
+  await cardRecords.load(strings(update), askCards);
+  return update;
+};
 
 /** Resumes the newest unfinished game saved, unless one is in progress; resolves to the
  * session in progress, if any. Its views arrive as a started game's do. */
@@ -567,7 +626,7 @@ const SCRYFALL_HOSTS: Record<string, string> = {
   "https://backs.scryfall.io": "/backs",
 };
 
-/** The app URL for an image URL from data/cards.json: the URL itself in a live browser. */
+/** The app URL for a card record's image URL: the URL itself in a live browser. */
 export const cardImageUrl = (scryfallUrl: string) => {
   const url = new URL(scryfallUrl);
   const prefix = SCRYFALL_HOSTS[url.origin];

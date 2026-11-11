@@ -21,6 +21,7 @@ import {
     twins,
 } from "../src/game/decisions.ts";
 import { logLines } from "../src/game/log.ts";
+import { strings } from "../src/cardRecords.ts";
 import { untapChoice } from "../src/game/untapChoice.ts";
 import {
     coverage,
@@ -75,10 +76,57 @@ async function load(name) {
         .map((m) => m.payload.view);
 }
 
+/** The card records a fixture recorded (its `card_records` response): what its page draws
+ * its cards from. */
+async function cardRecords(name) {
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, `${name}.json`), "utf8"),
+    );
+    return fixture.messages.find(
+        (m) => m.kind === "response" && m.command === "card_records",
+    ).value;
+}
+
 // Every fixture recorded for this run, before this script writes one of its own.
 const recorded = (await readdir(fixtures))
     .filter((f) => f.endsWith(".json"))
     .map((f) => f.slice(0, -".json".length));
+
+/** The records of every card the run's recordings show, by the name asked. */
+const recordedCards = { cards: {}, tokens: {} };
+for (const name of recorded) {
+    const { cards, tokens, ...art } = await cardRecords(name);
+    Object.assign(recordedCards, art);
+    Object.assign(recordedCards.cards, cards);
+    Object.assign(recordedCards.tokens, tokens);
+}
+
+/** Writes the fixture `name` with the records of the cards it shows, as `beryl_cli
+ * record-fixture` gives a recording its own: here from those the run's recordings hold,
+ * whichever game showed the card, so a view cut, edited or renamed draws the cards it names. */
+async function writeFixture(name, fixture) {
+    const messages = fixture.messages.filter(
+        (m) => m.command !== "card_records",
+    );
+    const shown = strings(messages);
+    const among = (records) =>
+        Object.fromEntries(
+            Object.entries(records).filter(([asked]) => shown.has(asked)),
+        );
+    const cards = {
+        kind: "response",
+        command: "card_records",
+        value: {
+            ...recordedCards,
+            cards: among(recordedCards.cards),
+            tokens: among(recordedCards.tokens),
+        },
+    };
+    await writeFile(
+        join(fixtures, `${name}.json`),
+        JSON.stringify({ ...fixture, messages: [cards, ...messages] }),
+    );
+}
 
 const FIXTURE = "greedy-turn-9";
 /** A card's width over its height (Card.tsx's CARD_ASPECT). */
@@ -385,6 +433,8 @@ await check(
                 });
             else if (path.endsWith("/held"))
                 body = { ok: path.includes("/theirs/") };
+            else if (path.endsWith("/invoke/card_records"))
+                body = { ok: recordedCards };
             else if (path.endsWith("/report")) {
                 reports++;
                 body = { ok: { id: "test", path: "test" } };
@@ -658,13 +708,7 @@ await check(
 await check("hovering a card shows it whole, with its artist", async (page) => {
     await page.clock.runFor(2000);
     await page.hover(card);
-    const cards = JSON.parse(
-        await readFile(
-            new URL("../../data/cards.json", import.meta.url),
-            "utf8",
-        ),
-    );
-    const artist = cards.cards.find((c) => c.name === name).artist;
+    const { artist } = (await cardRecords(FIXTURE)).cards[name];
     await page
         .locator(".inspect")
         .getByText(`Illustrated by ${artist}`)
@@ -1912,10 +1956,7 @@ await check(
             exiledBy: swap(o.exiledBy),
         })),
     };
-    await writeFile(
-        join(fixtures, "exiled-beneath-first.json"),
-        JSON.stringify(fixture),
-    );
+    await writeFixture("exiled-beneath-first", fixture);
 }
 
 await check(
@@ -2327,7 +2368,7 @@ for (const [libraryTop, alone] of [
             },
         ],
     };
-    await writeFile(join(fixtures, `${name}.json`), JSON.stringify(fixture));
+    await writeFixture(name, fixture);
     await check(
         `the opponent picks the ${libraryTop ? "top" : "bottom"} of ${alone ? "an empty" : "their"} library`,
         async (page) => {
@@ -3649,11 +3690,13 @@ await check(
 const payLife = await lastDecision("pay-life");
 const answerOf = (kind) =>
     payLife.decision.candidates.findIndex((c) => c.option.kind === kind);
-await writeFile(
-    join(fixtures, "pay-life-unwanted.json"),
-    (await readFile(join(fixtures, "pay-life.json"), "utf8")).replaceAll(
-        "Jace, the Mind Sculptor",
-        "Counterspell",
+await writeFixture(
+    "pay-life-unwanted",
+    JSON.parse(
+        (await readFile(join(fixtures, "pay-life.json"), "utf8")).replaceAll(
+            "Jace, the Mind Sculptor",
+            "Counterspell",
+        ),
     ),
 );
 for (const [fixture, primary, kind] of [
@@ -3802,7 +3845,7 @@ let renamed = await readFile(
 for (const [i, name] of sources.entries()) {
     renamed = renamed.replaceAll(JSON.stringify(name).slice(1, -1), longest[i]);
 }
-await writeFile(join(fixtures, "choice-trigger-order-long.json"), renamed);
+await writeFixture("choice-trigger-order-long", JSON.parse(renamed));
 await check(
     "the trigger-order prompt shows the longest names in full",
     async (page) => {
@@ -3933,22 +3976,18 @@ if (wanted("a live card target keeps its arrow while stationary")) {
     const target = item.targets[0].slot;
     const fixture = "arrow-live";
     const untargeted = { ...item, targets: [] };
-    await writeFile(
-        join(fixtures, `${fixture}.json`),
-        JSON.stringify({
-            messages: [
-                { kind: "response", command: "choose", value: null },
-                ...[
-                    { ...current, stack: [untargeted], events: [] },
-                    current,
-                ].map((view) => ({
+    await writeFixture(fixture, {
+        messages: [
+            { kind: "response", command: "choose", value: null },
+            ...[{ ...current, stack: [untargeted], events: [] }, current].map(
+                (view) => ({
                     kind: "event",
                     event: "game-update",
                     payload: { session: 1, view },
-                })),
-            ],
-        }),
-    );
+                }),
+            ),
+        ],
+    });
     await check(
         "a live card target keeps its arrow while stationary",
         async (page) => {
@@ -3971,19 +4010,16 @@ if (wanted("a live card target keeps its arrow while stationary")) {
 
 /** A cut from a fixture, played from its first view into the rest on the next answer. */
 async function motionFixture(name, views) {
-    await writeFile(
-        join(fixtures, `${name}.json`),
-        JSON.stringify({
-            messages: [
-                { kind: "response", command: "choose", value: null },
-                ...views.map((view) => ({
-                    kind: "event",
-                    event: "game-update",
-                    payload: { session: 1, view },
-                })),
-            ],
-        }),
-    );
+    await writeFixture(name, {
+        messages: [
+            { kind: "response", command: "choose", value: null },
+            ...views.map((view) => ({
+                kind: "event",
+                event: "game-update",
+                payload: { session: 1, view },
+            })),
+        ],
+    });
     return { fixture: name, at: 1 };
 }
 
@@ -7769,10 +7805,7 @@ async function derive(name, as, at, edit) {
         }
         messages.push(m);
     }
-    await writeFile(
-        join(fixtures, `${as}.json`),
-        JSON.stringify({ ...fixture, messages }),
-    );
+    await writeFixture(as, { ...fixture, messages });
 }
 
 // The crowded table with a spell on the stack, and the same table with the stack empty, as it
@@ -7966,41 +7999,38 @@ const seventhLand = Object.fromEntries(
         },
     ]),
 );
-await writeFile(
-    join(fixtures, "land-threshold.json"),
-    JSON.stringify({
-        messages: [
-            ...landThreshold.messages.filter((m) => m.kind === "response"),
-            { kind: "response", command: "choose", value: null },
-            ...[undefined, "you", "opponent", undefined].map((side, i) => {
-                const land = seventhLand[side];
-                return {
-                    ...landUpdate,
-                    payload: {
-                        ...landUpdate.payload,
-                        view: {
-                            ...sixLands,
-                            events: [],
-                            battlefield: land
-                                ? [...sixLands.battlefield, land.slot]
-                                : sixLands.battlefield,
-                            objects: land
-                                ? [...sixLands.objects, land]
-                                : sixLands.objects,
-                            status: {
-                                ...sixLands.status,
-                                decision: {
-                                    ...sixLands.status.decision,
-                                    id: sixLands.status.decision.id + i,
-                                },
+await writeFixture("land-threshold", {
+    messages: [
+        ...landThreshold.messages.filter((m) => m.kind === "response"),
+        { kind: "response", command: "choose", value: null },
+        ...[undefined, "you", "opponent", undefined].map((side, i) => {
+            const land = seventhLand[side];
+            return {
+                ...landUpdate,
+                payload: {
+                    ...landUpdate.payload,
+                    view: {
+                        ...sixLands,
+                        events: [],
+                        battlefield: land
+                            ? [...sixLands.battlefield, land.slot]
+                            : sixLands.battlefield,
+                        objects: land
+                            ? [...sixLands.objects, land]
+                            : sixLands.objects,
+                        status: {
+                            ...sixLands.status,
+                            decision: {
+                                ...sixLands.status.decision,
+                                id: sixLands.status.decision.id + i,
                             },
                         },
                     },
-                };
-            }),
-        ],
-    }),
-);
+                },
+            };
+        }),
+    ],
+});
 await check(
     "lands pile only from seven on each side and separate again at six",
     async (page) => {
@@ -9095,17 +9125,13 @@ await check(
         const started = performance.now();
         let outcome = "fail";
         try {
-            const data = JSON.parse(
-                await readFile(
-                    new URL("../../data/cards.json", import.meta.url),
-                ),
-            );
-            const faces = new Map();
-            for (const c of [...data.tokens, ...data.cards]) {
-                faces.set(c.name, c.faces[0]);
-                for (const f of c.faces) faces.set(f.name, f);
-            }
-            const faceOf = (name) => faces.get(name);
+            // Each card's face from whichever recorded game showed the card.
+            const faceOf = (name) => {
+                const card = recordedCards.cards[name];
+                return (
+                    card?.faces.find((f) => f.name === name) ?? card?.faces[0]
+                );
+            };
             const object = (slot, name, zone, tapped = true) => ({
                 slot,
                 name,
@@ -10291,10 +10317,7 @@ if (wanted(mixedBend)) {
             value,
         })),
     );
-    await writeFile(
-        join(fixtures, "waterbend-mixed.json"),
-        JSON.stringify(fixture),
-    );
+    await writeFixture("waterbend-mixed", fixture);
     await check(
         mixedBend,
         async (page) => {
@@ -10632,20 +10655,17 @@ await check(
 
 // A launched app with no game in progress resumes the newest unfinished one saved
 // (`resume_game`): here the views of `game-over` up to its last pass.
-await writeFile(
-    join(fixtures, "game-over-launched.json"),
-    JSON.stringify({
-        messages: [
-            { kind: "response", command: "current_game", value: null },
-            {
-                kind: "response",
-                command: "resume_game",
-                value: overEvents[0].payload.session,
-            },
-            ...overFixture.messages,
-        ],
-    }),
-);
+await writeFixture("game-over-launched", {
+    messages: [
+        { kind: "response", command: "current_game", value: null },
+        {
+            kind: "response",
+            command: "resume_game",
+            value: overEvents[0].payload.session,
+        },
+        ...overFixture.messages,
+    ],
+});
 await check(
     "a game resumed at launch gives way to a new game at one click",
     async (page) => {
@@ -10676,19 +10696,16 @@ await check(
 
 // A reloaded page asks for the game in progress (`current_game`) and takes it up: here the
 // fixture records no views, only that answer, the human's last pass in `game-over`.
-await writeFile(
-    join(fixtures, "game-over-resumed.json"),
-    JSON.stringify({
-        messages: [
-            ...overFixture.messages.filter((m) => m.kind === "response"),
-            {
-                kind: "response",
-                command: "current_game",
-                value: overEvents[lastPass].payload,
-            },
-        ],
-    }),
-);
+await writeFixture("game-over-resumed", {
+    messages: [
+        ...overFixture.messages.filter((m) => m.kind === "response"),
+        {
+            kind: "response",
+            command: "current_game",
+            value: overEvents[lastPass].payload,
+        },
+    ],
+});
 await check(
     "a reloaded page takes up the game in progress",
     async (page) => {

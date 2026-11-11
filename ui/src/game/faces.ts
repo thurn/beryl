@@ -1,4 +1,4 @@
-// What a card in a PlayerView looks like: its frame data from data/cards.json, with the
+// What a card in a PlayerView looks like: its frame data from its card's record, with the
 // battlefield's current power, toughness and loyalty, and its marks.
 import type {
   CardFace as FrameFace,
@@ -8,7 +8,13 @@ import type {
   StatTone,
 } from "../components/Card";
 import type { AbilityIcon, AbilityMark } from "../components/Mana";
-import { tokenFace, useCardArt, type CardArt, type CardFace } from "../cards";
+import {
+  tokenFace,
+  useCardArt,
+  useNamelessTokenArt,
+  type CardArt,
+  type CardFace,
+} from "../cards";
 import type {
   AbilityRef,
   CounterView,
@@ -154,12 +160,9 @@ export const SCAN = "large";
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
   const namelessCopy = o.token && o.name === "";
-  const art = useCardArt(
-    namelessCopy ? "Copy" : (o.name ?? ""),
-    undefined,
-    namelessCopy ? "art_crop" : SCAN,
-  );
-  if (namelessCopy) return { ...namelessFace(o), art: art?.src };
+  const art = useCardArt(o.name ?? "", undefined, SCAN);
+  const copyArt = useNamelessTokenArt(namelessCopy);
+  if (namelessCopy) return { ...namelessFace(o), art: copyArt };
   if (art) return frameFace(o, art);
   return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");
 }

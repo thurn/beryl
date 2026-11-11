@@ -1,52 +1,16 @@
-// Card display data from data/cards.json (written by `by cards`) and the art for it.
+// Card display data and the art for it: the card store's records (data/card-store.tsv), which
+// the page asks for by name and caches (cardRecords.ts). A game's views arrive with their
+// cards' records cached already (ipc.ts), so these lookups answer at once.
 import { useEffect, useState } from "react";
-import cardData from "../../data/cards.json";
+import { cardRecords, type Ask } from "./cardRecords";
+import type { CardEntry, CardFace, CardImages } from "./generated/protocol";
 import { artAvailable, cardImageUrl } from "./ipc";
 
-export type ImageVersion = "art_crop" | "normal" | "large";
+export type { CardEntry, CardFace };
+export type ImageVersion = keyof CardImages;
 
-export interface CardFace {
-  name: string;
-  mana_cost?: string;
-  type_line: string;
-  oracle_text?: string;
-  power?: string;
-  toughness?: string;
-  loyalty?: string;
-  colors: string[];
-  images: Record<ImageVersion, string>;
-}
-
-export interface CardEntry {
-  name: string;
-  scryfall_id: string;
-  set: string;
-  collector_number: string;
-  layout: string;
-  artist: string;
-  /** Tokens and emblems only: the cards that make it. */
-  made_by?: string[];
-  faces: CardFace[];
-}
-
-const data = cardData as {
-  /** The image of Magic's card back. */
-  card_back: string;
-  cards: CardEntry[];
-  tokens: CardEntry[];
-};
-
-// By card name and by each face's name, with the face it names: the names the engine gives
-// faces, tokens and emblems (`by cards` writes tokens under them, and a beryl_cards test checks
-// every one is here). Tokens come first so a card wins over a token of the same name
-// (Thundertrap Trainer's offspring).
-const byName = new Map<string, { card: CardEntry; face: number }>();
-for (const card of [...data.tokens, ...data.cards]) {
-  byName.set(card.name, { card, face: 0 });
-  card.faces.forEach((f, face) => byName.set(f.name, { card, face }));
-}
-
-export const cardEntry = (name: string) => byName.get(name)?.card;
+/** The card a card or face name names; a token's where no card has the name. */
+export const cardEntry = (name: string) => cardRecords.find(name)?.card;
 
 /** The face a card named `name` is played with as a land: its first land face
  * ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)), as Sink into Stupor is
@@ -56,15 +20,29 @@ export const landFace = (name: string) =>
 
 /** The face a card or face name names: a card's first, or the face of that name. */
 export function faceEntry(name: string): CardFace | undefined {
-  const found = byName.get(name);
+  const found = cardRecords.find(name);
   return found?.card.faces[found.face];
 }
 
-const tokens = new Map(data.tokens.map((t) => [t.name, t]));
-
 /** The printed face of a token named `name` where it has its own, as Thundertrap Trainer's
  * offspring, a 1/1 copy, has beside the card it shares a name with. */
-export const tokenFace = (name: string) => tokens.get(name)?.faces[0];
+export const tokenFace = (name: string) => cardRecords.token(name)?.faces[0];
+
+/** Caches the records of `names`, asking `ask` for those it lacks, and draws its caller again
+ * once it has them: for a screen that shows cards outside a game, whose views bring theirs. */
+export function useCardRecords(names: string[], ask: Ask) {
+  const [, setLoaded] = useState<string>();
+  const key = JSON.stringify(names);
+  useEffect(() => {
+    let mounted = true;
+    void Promise.resolve(
+      cardRecords.load(JSON.parse(key) as string[], ask),
+    ).then(() => mounted && setLoaded(key));
+    return () => {
+      mounted = false;
+    };
+  }, [key, ask]);
+}
 
 export interface CardArt {
   card: CardEntry;
@@ -76,14 +54,14 @@ export interface CardArt {
 
 /**
  * The display text and art of a card face, by card or face name. `face` picks a face by index
- * (a name of one face picks that face). Undefined for a name not in data/cards.json.
+ * (a name of one face picks that face). Undefined for a name the card store has no record of.
  */
 export function useCardArt(
   name: string,
   face?: number,
   version: ImageVersion = "art_crop",
 ): CardArt | undefined {
-  const found = byName.get(name);
+  const found = cardRecords.find(name);
   const entry = found?.card.faces[face ?? found.face];
   const url =
     entry && artAvailable() ? cardImageUrl(entry.images[version]) : undefined;
@@ -102,7 +80,17 @@ export function useCardArt(
 /** The card back's image once it has loaded: undefined until then, if it fails, and where
  * images do not load (`artAvailable`). */
 export function useCardBack(): string | undefined {
-  const url = artAvailable() ? cardImageUrl(data.card_back) : undefined;
+  return useLoaded(cardRecords.cardBack());
+}
+
+/** The art of a token with no name, if `wanted`, once it has loaded, as `useCardBack`. */
+export function useNamelessTokenArt(wanted: boolean): string | undefined {
+  return useLoaded(wanted ? cardRecords.namelessToken() : undefined);
+}
+
+function useLoaded(scryfallUrl: string | undefined): string | undefined {
+  const url =
+    scryfallUrl && artAvailable() ? cardImageUrl(scryfallUrl) : undefined;
   return useImage(url) === "loaded" ? url : undefined;
 }
 

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SoundPanel } from "../audio/SoundControls";
-import { cardEntry } from "../cards";
+import { cardEntry, useCardRecords } from "../cards";
 import { Button } from "../components/Controls";
-import type { DecisionId, GameUpdate, RelayedEvent } from "../ipc";
+import type { CardRecords, DecisionId, GameUpdate, RelayedEvent } from "../ipc";
 import "./testing.css";
 
 /** Where Vite proxies the spec server (vite.config.ts). */
@@ -56,7 +56,11 @@ function useSpecs(): SpecListing[] | string | undefined {
   return specs;
 }
 
-/** A card's image from data/cards.json, straight from Scryfall. */
+/** The card store's records for `names`, which the spec server answers as the app does. */
+const specCards = (names: string[]) =>
+  post<CardRecords>("/invoke/card_records", { request: { names } });
+
+/** A card's image, straight from Scryfall, once its record is cached (`useCardRecords`). */
 function CardImage({ name, className }: { name: string; className?: string }) {
   const url = cardEntry(name)?.faces[0]?.images.normal;
   return url ? (
@@ -161,6 +165,11 @@ export function Testing({ path }: { path: string }) {
   const [data, setData] = useState<PlaygroundListing>();
   const [moments, setMoments] = useState<MomentsListing>();
   const [error, setError] = useState<string>();
+  // The list of cards shows each one's image.
+  useCardRecords(
+    !slug && Array.isArray(specs) ? specs.map((s) => s.card) : [],
+    specCards,
+  );
   useEffect(() => {
     document.title = playground ? "Beryl Playground" : "Beryl Scenarios";
     if (!slug) return;

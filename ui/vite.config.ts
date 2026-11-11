@@ -13,7 +13,7 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    // The UI imports data/cards.json from the repository root.
+    // The stage imports data/ui-conventions.json from the repository root.
     fs: { allow: [".."] },
     // The spec pages' live games (`just specs`): beryl_cli specs-serve.
     proxy: {
