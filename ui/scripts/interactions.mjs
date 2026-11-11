@@ -26,10 +26,15 @@ import { cutText, launch, recordResult, workers } from "./capture.mjs";
 import { audit, collect, record } from "./audit.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
-/** Whether the check `title` runs: every check, or those a filter names. */
+/** Whether the check `title` runs: every check, or those a filter names. A filter longer than
+ * `title` that contains it opens a block of checks named after it (`${title} (variant)`), so the
+ * K21 rerun, which passes the failed checks' full titles, reaches each one. */
 const wanted = (title) =>
     filters.length === 0 ||
-    filters.some((f) => title.toLowerCase().includes(f.toLowerCase()));
+    filters.some((f) => {
+        const [t, g] = [title.toLowerCase(), f.toLowerCase()];
+        return t.includes(g) || g.includes(t);
+    });
 let ran = 0;
 if (!base || !fixtures) {
     console.error(
@@ -4124,7 +4129,8 @@ if (wanted(parkedHand)) {
 
 const opponentScry =
     "opponent scry fans out, returns to both ends and clears its result";
-if (wanted(opponentScry)) {
+// Opens for every check below: "opponent scry plays consecutive results..." too.
+if (wanted("opponent scry")) {
     const before = { ...turnViews[mainHalt], events: [] };
     const library = before.players.opponent.library;
     const held = library.slice(-2);
@@ -6284,7 +6290,8 @@ if (wanted(sweepTogether)) {
 
 const manifestFlight =
     "manifest cards travel directly from their chooser to their zones";
-if (wanted(manifestFlight)) {
+// Opens for every check below, whose titles all start so.
+if (wanted("manifest cards")) {
     const base = (await load("arrow-spell")).at(-1);
     const model = base.objects.find((o) => o.zone === "battlefield");
     const cards = [800, 801].map((slot, i) => ({
@@ -10132,7 +10139,7 @@ if (wanted(bendCost)) {
         );
         const cost = views[at].status.decision.ask.cost;
         await check(
-            bendCost,
+            `${bendCost} (${fixture})`,
             async (page) => {
                 const symbol = page.locator(".prompt-cost").getByRole("img", {
                     name: cost,

@@ -255,6 +255,17 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
             ended += f"; rerunning {', '.join(checks) if checks else 'it'} once"
             log.append(ended)
             again, rerun = attempt(Step(step.name, step.cmd, step.cwd), cmd + checks)
+            # A narrowed rerun is a flake only if it ran each check that failed and it passed:
+            # a filter that reaches none of them passes having proved nothing.
+            missed = (
+                unproven(records, rerun, f"{lane.name}:{step.name}") if checks else []
+            )
+            if again == 0 and missed:
+                log.append(
+                    f"{ended.split(';')[0]}; the rerun did not pass {', '.join(missed)}:"
+                    " the failure stands"
+                )
+                return code, records
             if again == 0:
                 flaky.extend(checks or [step.name])
                 for r in records:
@@ -289,6 +300,20 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
     return Outcome(
         lane.name, True, clock.now() - started, "\n".join(log), timings, flaky, excused
     )
+
+
+def unproven(
+    first: list[dict[str, object]], rerun: list[dict[str, object]], step: str
+) -> list[str]:
+    """The checks that failed in `first` but did not pass in `rerun`, the step's own record
+    (`step`, logged when it named no check) aside."""
+    passed = {r["check"] for r in rerun if r["outcome"] in ("pass", "pending-pass")}
+    failed = (
+        str(r["check"])
+        for r in first
+        if r["outcome"] in ("fail", "pending-fail") and r["check"] != step
+    )
+    return [c for c in dict.fromkeys(failed) if c not in passed]
 
 
 # What each rerunnable step names as failed (`Failed`).

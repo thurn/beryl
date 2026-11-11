@@ -238,3 +238,36 @@ def test_failed_shots_and_oracle_cards_are_named() -> None:
     assert checks.failed_cards(oracle) == ["Ponder", "Daze"]
     # Page errors are no check's, so the checks named alone would not show them again.
     assert checks.failed_titles("FAILED: a\npage errors:\n  b: boom\n") == []
+
+
+# A step that fails two checks, then on the rerun runs only the first of them and passes, as a
+# title filter that misses a check's block would.
+NARROWED = """
+import json, os, pathlib
+runs = pathlib.Path("runs")
+first = not runs.exists()
+runs.write_text("ran")
+with open(os.environ["BERYL_CHECK_RESULTS"], "a") as f:
+    for title in ["plays a land", "casts a spell"] if first else ["plays a land"]:
+        outcome = "fail" if first else "pass"
+        f.write(json.dumps({"check": "ui-test:" + title, "outcome": outcome, "seconds": 1}))
+        f.write("\\n")
+        if first:
+            print("FAILED: " + title)
+raise SystemExit(1 if first else 0)
+"""
+
+
+def test_a_rerun_that_misses_a_failed_check_is_no_flake(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lane = checks.Lane("ui-test").step(
+        "ui-test",
+        [sys.executable, "-c", NARROWED],
+        tmp_path,
+        rerun=checks.failed_titles,
+    )
+    assert checks.run_lanes([lane], "ci", 60, strict=True) == 1
+    out = capsys.readouterr().out
+    assert "the rerun did not pass ui-test:casts a spell: the failure stands" in out
+    assert "flaky:" not in out
