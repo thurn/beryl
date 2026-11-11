@@ -20,7 +20,8 @@ should attempt to write modular, dramatically scalable code.
 
 All rules engine code must contain comments referencing the relevant portion of
 the Comprehensive Rules which they are implementing, linking to
-https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
+https://yawgatog.com/resources/magic-rules/ URLs with selected quotations from
+the release pinned in `data/rules-version.json`.
 
 ## Layout
 
@@ -140,13 +141,14 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 1. Logic: `just test-rust` runs the workspace's tests. Engine and AI behavior is
    tested here, not through the app. A card's scenarios live in its file;
    `just oracle <card names>` checks them against XMage and Forge,
-   `just citations` holds every Comprehensive Rules link and quotation in the
-   tree to the rules page (it needs the network, so no check runs it: run it
-   after a rules release and after writing a citation), `just fuzz` plays random
-   games at length, and `just exhaust` plays every decision sequence near the
-   scenarios' end positions. A new card starts from `just card brief <name>`:
-   its Oracle text, rulings, matching vocabulary entries, nearest implemented
-   cards and XMage class.
+   `just citations` holds every Comprehensive Rules citation and quotation in
+   the tree to the release pinned in `data/rules-version.json` (run it after
+   writing a citation; `just citations migrate <date>` moves the tree to a new
+   release, renumbering what it can place and listing what needs judgment),
+   `just fuzz` plays random games at length, and `just exhaust` plays every
+   decision sequence near the scenarios' end positions. A new card starts from
+   `just card brief <name>`: its Oracle text, rulings, matching vocabulary
+   entries, nearest implemented cards and XMage class.
 2. UI: `cd ui && npm run typecheck`. `npm test` runs what needs no browser
    (`ui/scripts/*.test.mjs`: the stage's clock and sequencing).
    `just ui-shots [names]` screenshots UI states headless and prints their

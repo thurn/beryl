@@ -294,7 +294,7 @@ impl Ability {
     }
 
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
-    /// was paid and it has a time counter on it, it's not a creature." The face lists
+    /// was paid and it has a time counter on it, it's not a creature". The face lists
     /// [`CastingOption::Impending`], whose counters the permanent enters with, and
     /// [`Ability::impending_countdown`].
     pub const fn impending() -> Ability {

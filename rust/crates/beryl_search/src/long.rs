@@ -409,7 +409,7 @@ impl<L: Layout> LongSearch<L> {
         d: &Decision<L>,
     ) -> Option<Vec<Tree<L>>> {
         // CR 400.7: "An object that moves from one zone to another becomes a new object
-        // with no memory of or relation to its previous existence", so a new incarnation is
+        // with no memory of, or relation to, its previous existence", so a new incarnation is
         // a zone change.
         for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
             let o = obs.object(slot);

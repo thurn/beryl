@@ -663,7 +663,7 @@ fn floating_mana_empties_as_the_step_ends() {
         color: ManaColor::White,
     });
     assert_eq!(g.s.player(g.me).mana().amounts(), [1, 0, 0, 0, 0, 0]);
-    // CR 500.4: "When a step or phase ends, any unused mana left in a player's mana pool
+    // CR 500.5: "As a step or phase ends ... any unspent mana left in a player's mana pool
     // empties."
     while g.s.turn().step() == step {
         g.choose(crate::Choice(0));

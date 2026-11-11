@@ -10,7 +10,7 @@ card and its offspring token can share one):
 
 - `card:<name>`: a card, by its name as the engine knows it, the faces joined by " // "
   ("Fire // Ice"). Card keys are unique.
-- `token:<name>`: a token or emblem, by its name as the engine and the rules have it (CR 111.4:
+- `token:<name>`: a token or emblem, by its name as the engine and the rules have it (by CR 111.4,
   "Samurai Token"). Several tokens can share a name (two printings of Treasure Token with their
   own art), so a key may span consecutive lines, each a record; a reader takes them all.
 

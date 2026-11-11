@@ -1240,7 +1240,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
 
 #[test]
 fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
-    // CR 603.3a: "the player who controlled its source when it triggered"; the last-known
+    // CR 603.3a: "the player who controlled its source at the time it triggered"; the last-known
     // information of a permanent that left is how it last existed on the battlefield.
     let (t, mut s, p) = game();
     let mut x = Scratch::new();

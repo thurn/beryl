@@ -1,90 +1,178 @@
-"""The citations check: every Comprehensive Rules link in the tree names a rule that exists, and
-the text quoted after it is that rule's text.
+"""The citations check: every Comprehensive Rules citation in the tree names a rule that exists in
+the release the tree cites, and the text quoted after it is that rule's text.
 
 AGENTS.md has rules code cite the rules with yawgatog links and quotations. Each release
-renumbers and rewords rules, which turns a citation into a dead anchor or a quotation the rule no
-longer contains. This check fetches the rules page, then holds each link in a comment under
-`rust/crates`, `ui/src`, `tools/src`, `data` and `docs` to it:
+renumbers and rewords rules, which turns a citation into a dead anchor, a quotation the rule no
+longer contains, or a bare rule number that silently names another rule. So the tree cites one
+release, pinned in `data/rules-version.json`, and this check holds each citation in a file under
+`rust/crates`, `ui/src`, `tools/src`, `data` and `docs` to that release's text:
 
-- the anchor is the rule number without its dots, with an `R` before it;
-- the rule exists on the page;
-- a quotation that directly follows the link (`: "..."` or ` "..."`, after an optional closing
-  parenthesis, joined across comment lines and split at `...` or `. . .`) is text of that rule,
-  compared with whitespace collapsed, curly quotes straightened and an inner single quote
+- a link's anchor is the rule number without its dots, with an `R` before it;
+- the rule exists in the pinned release (for a bare "CR n" too);
+- a quotation that directly follows the citation (`: "..."` or ` "..."`, after an optional
+  closing parenthesis, joined across comment lines and split at `...` or `. . .`) is text of that
+  rule, compared with whitespace collapsed, curly quotes straightened and an inner single quote
   matching the rule's double quote.
 
-It needs the network, so it is no lane of `just check` or `just ci`; run it after a rules
-release and after writing a citation. The page is cached under `$BERYL_CACHE` for a day;
-`--refresh` fetches it again. A number-only "CR 712.x" with no link is beyond it: after a release
-renumbers a rule, grep for those by hand.
+The release's text is Wizards' dated `.txt` file, which Wizards keeps hosted after later
+releases. It is fetched once per machine into `$BERYL_CACHE/rules` and never changes, so only
+the first run needs the network. `just citations migrate <date>` moves the tree to a new
+release (`citation_migrate`).
 """
 
 from __future__ import annotations
 
 import argparse
-import html
+import json
 import re
 import sys
-import time
+import unicodedata
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import paths
 
-RULES_URL = "https://yawgatog.com/resources/magic-rules/"
-# The page is reused this long before it is fetched again.
-MAX_AGE_SECONDS = 24 * 60 * 60
+VERSION_FILE = "data/rules-version.json"
 ROOTS = ("rust/crates", "ui/src", "tools/src", "data", "docs")
 EXTENSIONS = {".rs", ".ts", ".tsx", ".py", ".md", ".json"}
 # Directories under the roots that hold no source of ours.
 SKIPPED_DIRECTORIES = {"node_modules", "target", "generated"}
+# Files under the roots that cite no rules.
+SKIPPED_FILES: set[str] = {VERSION_FILE}
 # How many comment lines a quotation may run over.
 QUOTATION_LINES = 20
 
-HEADING: re.Pattern[str] = re.compile(
-    r"<h[1-6][^>]*\bid=(R[0-9a-z]+)[^>]*>(.*?)</h[1-6]>", re.DOTALL
-)
-TAG: re.Pattern[str] = re.compile(r"<[^>]*>")
-LEADING_NUMBER: re.Pattern[str] = re.compile(r"^\d+(?:\.\d+[a-z]?)?\.?\s*")
-LINK: re.Pattern[str] = re.compile(
-    r"\[CR (\d+(?:\.\d+[a-z]?)?)\]\(https://yawgatog\.com/resources/magic-rules/#(\w+)\)"
+NUMBER = r"\d{1,3}(?:\.\d+[a-z]*)?"
+RULE_LINE: re.Pattern[str] = re.compile(rf"^({NUMBER})\.?\s+(\S.*)$")
+# A linked citation (groups 1 and 2: number and anchor) or a bare one (group 3: number). A bare
+# number needs three digits, so "CR 7" is no citation.
+CITATION: re.Pattern[str] = re.compile(
+    rf"\[CR ({NUMBER})\]\(https://yawgatog\.com/resources/magic-rules/#(\w+)\)"
+    r"|(?<!\[)\bCR (\d{3}(?:\.\d+[a-z]*)?)\b"
 )
 COMMENT_PREFIX: re.Pattern[str] = re.compile(r"^\s*(?:///|//!|//|#|/\*\*?|\*(?!\w))\s?")
 QUOTATION_START: re.Pattern[str] = re.compile(r'^\)?:?\s*"')
+# A bare number is often itself in quotes (a test's message that is only the citation), so its quotation
+# needs a colon or a space before it.
+BARE_QUOTATION_START: re.Pattern[str] = re.compile(r'^\)?(?::\s*|\s+)"')
 ELLIPSIS: re.Pattern[str] = re.compile(r"\.\.\.|\. \. \.|…")
-STRAIGHTENED: dict[int, str] = str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"})
+# Wizards' text against the ASCII a comment (and yawgatog's page) spells it in.
+TRANSLATED: dict[int, str] = str.maketrans(
+    {
+        "“": '"',
+        "”": '"',
+        "‘": "'",
+        "’": "'",
+        "–": "-",
+        "−": "-",
+        "—": "--",
+        "™": " (tm)",
+        "®": " (r)",
+    }
+)
+
+
+@dataclass(frozen=True)
+class Version:
+    """A rules release: the date it takes effect and the URL of its text."""
+
+    effective: str
+    url: str
+
+    @staticmethod
+    def for_date(effective: str) -> Version:
+        """The release effective on `effective` (YYYY-MM-DD), at Wizards' usual URL."""
+        compact = effective.replace("-", "")
+        return Version(
+            effective,
+            f"https://media.wizards.com/{effective[:4]}/downloads/"
+            f"MagicCompRules%20{compact}.txt",
+        )
+
+
+@dataclass(frozen=True)
+class Citation:
+    """One citation in a file: where its number (and a link's anchor) sit on its line, and the
+    quotation after it."""
+
+    line: int
+    number: str
+    number_span: tuple[int, int]
+    anchor: str | None
+    anchor_span: tuple[int, int] | None
+    quotation: str | None
+
+
+def anchor_of(number: str) -> str:
+    """The yawgatog anchor and rules key of rule `number`: `712.6a` is `R7126a`."""
+    return "R" + number.replace(".", "")
 
 
 def normalize(text: str) -> str:
-    """`text` with curly quotes straightened and whitespace collapsed."""
-    return " ".join(text.translate(STRAIGHTENED).split())
+    """`text` in ASCII punctuation, without accents, with whitespace collapsed."""
+    decomposed = unicodedata.normalize("NFKD", text.translate(TRANSLATED))
+    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return " ".join(stripped.split())
 
 
-def parse_rules(page: str) -> dict[str, str]:
-    """Each rule's anchor (`R7126a`) to its normalized text, without its number, with the
-    rule's double quotes as single ones, as a comment quotes them."""
-    rules = {}
-    for anchor, body in HEADING.findall(page):
-        text = html.unescape(TAG.sub("", body))
-        rules[anchor] = normalize(LEADING_NUMBER.sub("", text.strip())).replace(
-            '"', "'"
-        )
-    return rules
+def parse_rules(text: str) -> dict[str, str]:
+    """Each rule's anchor (`R7126a`) to its normalized text (with its examples and further
+    paragraphs, without its number, and with the rule's double quotes as single ones, as a
+    comment quotes them), from a release's `.txt`."""
+    lines = text.lstrip("﻿").splitlines()
+    # The glossary's numbered senses would read as rules; it opens at its last heading (the
+    # first is the contents').
+    headings = [i for i, line in enumerate(lines) if line.strip() == "Glossary"]
+    end = headings[-1] if headings else len(lines)
+    raw: dict[str, list[str]] = {}
+    current: list[str] | None = None
+    for line in lines[:end]:
+        match = RULE_LINE.match(line)
+        if match:
+            # The contents name each section once before its rules: the later line wins.
+            current = [match.group(2)]
+            raw[anchor_of(match.group(1))] = current
+        elif current is not None and line.strip():
+            current.append(line)
+    return {
+        anchor: normalize(" ".join(parts)).replace('"', "'")
+        for anchor, parts in raw.items()
+    }
 
 
-def rules_page(refresh: bool) -> str:
-    """The rules page, from the cache unless it is a day old or `refresh`."""
-    cached = paths.cache_root() / "rules" / "magic-rules.html"
-    fresh = cached.is_file() and time.time() - cached.stat().st_mtime < MAX_AGE_SECONDS
-    if not fresh or refresh:
+def pinned(root: Path) -> Version:
+    """The release the tree at `root` cites."""
+    data = json.loads((root / VERSION_FILE).read_text(encoding="utf-8"))
+    return Version(str(data["effective"]), str(data["url"]))
+
+
+def pin(root: Path, version: Version) -> None:
+    """Make `version` the release the tree at `root` cites."""
+    text = json.dumps({"effective": version.effective, "url": version.url}, indent=2)
+    (root / VERSION_FILE).write_text(text + "\n", encoding="utf-8")
+
+
+def rules_text(version: Version) -> str:
+    """The text of `version`, from the cache once it has been fetched."""
+    cached = paths.cache_root() / "rules" / f"{version.effective}.txt"
+    if not cached.is_file():
         request = urllib.request.Request(
-            RULES_URL, headers={"User-Agent": "beryl-tools"}
+            version.url, headers={"User-Agent": "beryl-tools"}
         )
         with urllib.request.urlopen(request, timeout=60) as response:
             body: bytes = response.read()
         cached.parent.mkdir(parents=True, exist_ok=True)
         cached.write_bytes(body)
     return cached.read_text(encoding="utf-8")
+
+
+def load_rules(version: Version) -> dict[str, str]:
+    """The rules of `version`, or exit when its text holds none."""
+    rules = parse_rules(rules_text(version))
+    if not rules:
+        sys.exit(f"citations: no rules found in {version.url}")
+    return rules
 
 
 def comment_text(line: str) -> str | None:
@@ -105,44 +193,66 @@ def following_text(lines: list[str], index: int, end: int, commented: bool) -> s
     return normalize(" ".join(parts))
 
 
-def quotation(text: str) -> str | None:
-    """The quotation that opens `text` (what follows a link), if one does."""
-    if not QUOTATION_START.match(text):
+def quotation(text: str, linked: bool = True) -> str | None:
+    """The quotation that opens `text` (what follows a citation), if one does."""
+    start = QUOTATION_START if linked else BARE_QUOTATION_START
+    if not start.match(text):
         return None
     body = text[text.index('"') + 1 :]
     close = body.find('"')
     return body if close < 0 else body[:close]
 
 
-def problems_in(rel: str, lines: list[str], rules: dict[str, str]) -> list[str]:
-    """Each `file:line: CR n: problem` for the links in one file's `lines`."""
+def segments(quoted: str) -> list[str]:
+    """The pieces of a quotation between its ellipses."""
+    return [s.strip() for s in ELLIPSIS.split(quoted) if s.strip()]
+
+
+def citations_in(lines: list[str]) -> list[Citation]:
+    """Every citation in one file's `lines`."""
     found = []
     for index, line in enumerate(lines):
-        for link in LINK.finditer(line):
-            number, anchor = link.group(1), link.group(2)
-            where = f"{rel}:{index + 1}: CR {number}"
-            expected = "R" + number.replace(".", "")
-            if anchor != expected:
-                found.append(f"{where}: the anchor is #{anchor}, not #{expected}")
-                continue
-            if anchor not in rules:
-                found.append(f"{where}: no such rule on the page")
-                continue
-            commented = comment_text(line) is not None
-            text = following_text(lines, index, link.end(), commented)
-            quoted = quotation(text)
-            if quoted is None:
-                continue
-            rule = rules[anchor]
-            for segment in ELLIPSIS.split(quoted):
-                segment = segment.strip()
-                if segment and segment not in rule:
-                    found.append(f'{where}: the rule does not say "{segment}"')
+        commented = comment_text(line) is not None
+        for match in CITATION.finditer(line):
+            linked = match.group(1) is not None
+            group = 1 if linked else 3
+            text = following_text(lines, index, match.end(), commented)
+            found.append(
+                Citation(
+                    line=index,
+                    number=match.group(group),
+                    number_span=match.span(group),
+                    anchor=match.group(2) if linked else None,
+                    anchor_span=match.span(2) if linked else None,
+                    quotation=quotation(text, linked),
+                )
+            )
     return found
 
 
-def check(root: Path, rules: dict[str, str]) -> list[str]:
-    """Each problem with a citation in the files under `root`'s roots."""
+def problems_in(rel: str, lines: list[str], rules: dict[str, str]) -> list[str]:
+    """Each `file:line: CR n: problem` for the citations in one file's `lines`."""
+    found = []
+    for citation in citations_in(lines):
+        number = citation.number
+        where = f"{rel}:{citation.line + 1}: CR {number}"
+        expected = anchor_of(number)
+        if citation.anchor is not None and citation.anchor != expected:
+            found.append(f"{where}: the anchor is #{citation.anchor}, not #{expected}")
+            continue
+        if expected not in rules:
+            found.append(f"{where}: no such rule")
+            continue
+        if citation.quotation is None:
+            continue
+        for segment in segments(citation.quotation):
+            if segment not in rules[expected]:
+                found.append(f'{where}: the rule does not say "{segment}"')
+    return found
+
+
+def source_files(root: Path) -> list[tuple[str, Path]]:
+    """Each file under `root`'s roots that may cite the rules, with its relative path."""
     found = []
     for directory in ROOTS:
         base = root / directory
@@ -150,31 +260,46 @@ def check(root: Path, rules: dict[str, str]) -> list[str]:
         for path in files:
             rel = path.relative_to(root).as_posix()
             skipped = SKIPPED_DIRECTORIES.intersection(rel.split("/")[:-1])
-            if path.suffix not in EXTENSIONS or skipped or not path.is_file():
+            if (
+                path.suffix not in EXTENSIONS
+                or skipped
+                or rel in SKIPPED_FILES
+                or not path.is_file()
+            ):
                 continue
-            lines = path.read_text(encoding="utf-8").splitlines()
-            found.extend(problems_in(rel, lines, rules))
+            found.append((rel, path))
+    return found
+
+
+def check(root: Path, rules: dict[str, str]) -> list[str]:
+    """Each problem with a citation in the files under `root`'s roots."""
+    found = []
+    for rel, path in source_files(root):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        found.extend(problems_in(rel, lines, rules))
     return found
 
 
 def run(args: argparse.Namespace) -> int:
-    rules = parse_rules(rules_page(args.refresh))
-    if not rules:
-        print(f"citations: no rules found on {RULES_URL}", file=sys.stderr)
-        return 1
+    version = pinned(paths.REPO)
+    rules = load_rules(version)
     found = check(paths.REPO, rules)
     for line in found:
         print(line)
     print(
-        f"citations: {len(found)} problems against {len(rules)} rules", file=sys.stderr
+        f"citations: {len(found)} problems against the {version.effective} rules",
+        file=sys.stderr,
     )
     return 1 if found else 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from . import citation_migrate
+
     p = sub.add_parser(
         "citations",
-        help="hold every Comprehensive Rules link and quotation to the rules page (network)",
+        help="hold every Comprehensive Rules citation to the pinned rules release",
     )
-    p.add_argument("--refresh", action="store_true", help="fetch the rules page again")
     p.set_defaults(func=run)
+    actions = p.add_subparsers(dest="action")
+    citation_migrate.register(actions)
