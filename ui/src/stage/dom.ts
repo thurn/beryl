@@ -4,13 +4,21 @@
 // (Faces.tsx) and never touches those. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
-import type { Name, Resting } from "./layout.ts";
+import type { Name, Point, Resting } from "./layout.ts";
+import type { Pointer, Under } from "./pointer.ts";
 import { transformOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
+
+/** The name a node's `data-stage` says. */
+const named = (said: string): Name =>
+  said.startsWith("a") ? (said as Name) : Number(said);
 
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;
   readonly #nodes = new Map<Name, HTMLElement>();
+  /** Where the browser's pointer was last, in the window. */
+  #pointer: { x: number; y: number } | undefined;
+  #repoint: (() => void) | undefined;
 
   constructor(layer: HTMLElement) {
     this.#layer = layer;
@@ -54,6 +62,101 @@ export class DomSurface implements Surface {
       .join(" ");
     if (object.name && !dress.back) node.dataset.card = object.name;
     else delete node.dataset.card;
+  }
+
+  /** Tells `pointer` what the browser's pointer does on the nodes, by their names and in stage
+   * pixels, until the returned function is called: the one place the page's pointer events
+   * become the stage's (pointer.ts). A touch has no hover: it presses, and is let go. */
+  point(pointer: Pointer) {
+    const layer = this.#layer;
+    const nodeOf = (target: EventTarget | null) => {
+      const node =
+        target instanceof Element
+          ? target.closest<HTMLElement>("[data-stage]")
+          : null;
+      return node && layer.contains(node) ? node : undefined;
+    };
+    const nameOf = (target: EventTarget | null) => {
+      const said = nodeOf(target)?.dataset.stage;
+      return said === undefined ? undefined : named(said);
+    };
+    // The layer is as large as the stage and scaled with it (game/Stage.tsx).
+    const at = (e: PointerEvent): Point => {
+      const box = layer.getBoundingClientRect();
+      const scale = box.width / layer.offsetWidth || 1;
+      return {
+        x: (e.clientX - box.left) / scale,
+        y: (e.clientY - box.top) / scale,
+      };
+    };
+    const under = (
+      e: PointerEvent,
+      held: Element | undefined,
+    ): Under | undefined => {
+      for (const hit of document.elementsFromPoint(e.clientX, e.clientY)) {
+        if (held?.contains(hit)) continue;
+        const said = nodeOf(hit)?.dataset.stage;
+        if (said !== undefined) return { name: named(said) };
+        const life = hit.closest<HTMLElement>("[data-life]")?.dataset.life;
+        if (life === "you" || life === "opponent") return { player: life };
+      }
+      return undefined;
+    };
+    const on = <
+      K extends
+        | "pointerover"
+        | "pointerout"
+        | "pointerdown"
+        | "pointermove"
+        | "pointerup"
+        | "pointercancel",
+    >(
+      kind: K,
+      heard: (e: PointerEvent) => void,
+    ) => {
+      layer.addEventListener(kind, heard);
+      return () => layer.removeEventListener(kind, heard);
+    };
+    const where = (e: PointerEvent) => {
+      this.#pointer = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener("pointermove", where, { passive: true });
+    this.#repoint = () => {
+      const here = this.#pointer;
+      if (here && !pointer.held)
+        pointer.over(nameOf(document.elementFromPoint(here.x, here.y)));
+    };
+    const stops = [
+      () => window.removeEventListener("pointermove", where),
+      on("pointerover", (e) => {
+        if (e.pointerType !== "touch") pointer.over(nameOf(e.target));
+      }),
+      on("pointerout", (e) => {
+        if (e.pointerType !== "touch") pointer.over(nameOf(e.relatedTarget));
+      }),
+      on("pointerdown", (e) => {
+        const node = nodeOf(e.target);
+        if (!node || e.button !== 0) return;
+        // The press keeps its node however far the pointer goes.
+        node.setPointerCapture(e.pointerId);
+        pointer.press(named(node.dataset.stage!), at(e));
+      }),
+      on("pointermove", (e) => pointer.move(at(e))),
+      on("pointerup", (e) =>
+        pointer.release(at(e), under(e, nodeOf(e.target))),
+      ),
+      on("pointercancel", () => pointer.cancel()),
+    ];
+    return () => {
+      this.#repoint = undefined;
+      for (const stop of stops) stop();
+    };
+  }
+
+  /** Tells the pointer afresh what it is on: a node that moved from under a still pointer, or
+   * came under it, sends no event of its own. */
+  repoint() {
+    this.#repoint?.();
   }
 
   draw(name: Name, pose: Pose, frame: number) {

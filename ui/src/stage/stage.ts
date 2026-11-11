@@ -26,6 +26,11 @@
 //
 // What follows a step besides motion (a sound) is told its beginning and its end the same way
 // (`follow`): inside the tick, in the order of their stage times, each with its own time.
+//
+// One pose is not the clock's: a card the pointer holds (pointer.ts). What the pointer does
+// enters the model as data, and the held card's pose is computed from it here like any other,
+// so `pose` returns it, a step that moves the card starts from where it is held, and a card
+// let go glides home on the stage's clock.
 import type {
   Act,
   PlayerView,
@@ -41,6 +46,7 @@ import {
   type Resting,
   type StageLayout,
 } from "./layout.ts";
+import { heldPose, Pointer } from "./pointer.ts";
 import { between, samePose, type Pose } from "./pose.ts";
 import { apply, tableOf, type Table } from "./table.ts";
 
@@ -85,6 +91,10 @@ export interface Shown {
   view: PlayerView | undefined;
   /** Something given to `play` has not played out. */
   busy: boolean;
+  /** The announcements passing over the table: the `announce` steps under way, in the order
+   * they began. The banners around the table show for as long as their step is here, on the
+   * stage's time. */
+  notices: readonly ScriptStep[];
 }
 
 /** The step playing now: its place in its script counting every step, its verb, its start
@@ -115,6 +125,10 @@ interface Track {
   from: number;
   to: number;
   pose(progress: number, rest: Pose): Pose;
+  /** A card let go where its drop was taken, kept there with no end of its own until what the
+   * drop did has played: a step that moves it starts from there, and otherwise it glides home
+   * when the script is over. */
+  stays?: boolean;
 }
 
 /** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
@@ -183,6 +197,12 @@ export class ScriptStage {
   readonly clock: StageClock;
   /** How each step is played. */
   timings: (act: Act) => Timing;
+  /** How a held card let go travels back to where it rests. */
+  release: Timing = SNAP;
+  /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
+  readonly pointer: Pointer;
+  /** The held card's pose as it was picked up. */
+  #lifted: { name: Name; from: Pose } | undefined;
   #layout: StageLayout;
   #surface: Surface | undefined;
   #table: Table | undefined;
@@ -202,6 +222,7 @@ export class ScriptStage {
     resting: new Map(),
     view: undefined,
     busy: false,
+    notices: [],
   };
   #stale = false;
 
@@ -218,6 +239,35 @@ export class ScriptStage {
     this.timings = options.timings;
     this.clock = new Clock((_, to) => this.#tick(to), options.frames);
     this.clock.release();
+    this.pointer = new Pointer({
+      pose: (name) => this.pose(name),
+      lifted: (name) => {
+        const entry = this.#entries.get(name)!;
+        this.#lifted = { name, from: poseAt(entry, this.clock.now) };
+        entry.track = undefined;
+        this.#draw(name, entry);
+      },
+      moved: (name) => {
+        const entry = this.#entries.get(name);
+        if (entry) this.#draw(name, entry);
+      },
+      dropped: (name, pose, taken) => {
+        this.#lifted = undefined;
+        const entry = this.#entries.get(name);
+        if (!entry) return;
+        if (pose && taken) {
+          entry.track = {
+            from: this.clock.now,
+            to: Infinity,
+            pose: () => pose,
+            stays: true,
+          };
+        } else if (pose) {
+          entry.track = this.#home(pose, this.clock.now);
+        }
+        this.#draw(name, entry);
+      },
+    });
   }
 
   /** Draws on `surface` from now on: a node for everything the model holds, where it is. */
@@ -319,7 +369,7 @@ export class ScriptStage {
    * it names (`abilityName`), from the model: no layout is read. */
   pose(name: Name): Pose | null {
     const entry = this.#entries.get(name);
-    return entry ? poseAt(entry, this.clock.now) : null;
+    return entry ? this.#poseOf(name, entry, this.clock.now) : null;
   }
 
   /** What the stage shows now (`Shown`). */
@@ -399,6 +449,7 @@ export class ScriptStage {
         );
       if (over && over.to <= to && (!next || over.to <= next.from)) {
         over.ended = true;
+        this.#stale ||= over.verb === "announce";
         this.#tell(over, "end");
         continue;
       }
@@ -413,8 +464,17 @@ export class ScriptStage {
       if (playback.beat + 1 < playback.beats.length) {
         this.#beat(playback);
       } else {
-        // The script has played: the view's prompt and chrome replace the last one's whole.
+        // The script has played: the view's prompt and chrome replace the last one's whole,
+        // and a card kept where it was let go, which no step moved, goes home.
         this.#playback = undefined;
+        for (const entry of this.#entries.values()) {
+          if (!entry.track?.stays) continue;
+          entry.track = this.#home(
+            entry.track.pose(0, entry.resting.pose),
+            this.#at,
+          );
+          entry.moved = true;
+        }
         this.#set({ ...this.#table!, view: playback.view });
         this.#view = playback.view;
         this.#lay(this.#at);
@@ -480,7 +540,7 @@ export class ScriptStage {
         const from = source && this.#entries.get(source.slot);
         if (!entry || !from) return;
         const start = this.#layout.emerging(
-          poseAt(from, run.from),
+          this.#poseOf(source.slot, from, run.from),
           entry.resting.pose,
         );
         entry.track = track(glide(start, run.ease, true));
@@ -527,6 +587,7 @@ export class ScriptStage {
       if (rest.has(name)) continue;
       this.#surface?.remove(name);
       this.#entries.delete(name);
+      this.pointer.gone(name);
       this.#stale = true;
     }
     for (const [name, resting] of rest) {
@@ -545,7 +606,7 @@ export class ScriptStage {
       if (still && face && dress) continue;
       if (!still) {
         if (run && run.to > at) {
-          const start = poseAt(entry, at);
+          const start = this.#poseOf(name, entry, at);
           const aloft = subjectOf(run.step.act) === name;
           entry.track = {
             from: at,
@@ -575,7 +636,7 @@ export class ScriptStage {
   #write(now: number) {
     for (const [name, entry] of this.#entries) {
       if (!entry.moved && !entry.track) continue;
-      this.#surface?.draw(name, poseAt(entry, now), entry.resting.dress.frame);
+      this.#draw(name, entry, now);
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
@@ -589,8 +650,43 @@ export class ScriptStage {
       ),
       view: this.#view,
       busy,
+      notices: this.#notices(),
     };
     for (const listener of [...this.#listeners]) listener();
+  }
+
+  /** Where an entry is at stage time `at`: where the pointer holds it, if it does. */
+  #poseOf(name: Name, entry: Entry, at: number): Pose {
+    const held = this.pointer.held;
+    return held?.name === name && this.#lifted
+      ? heldPose(this.#lifted.from, held.start, held.at)
+      : poseAt(entry, at);
+  }
+
+  /** Writes one entry's pose, as the pointer moves it between ticks. */
+  #draw(name: Name, entry: Entry, now = this.clock.now) {
+    const pose = this.#poseOf(name, entry, now);
+    this.#surface?.draw(name, pose, entry.resting.dress.frame);
+  }
+
+  /** The way home from `from`, begun at stage time `at`, of a card let go: none if that takes
+   * no time. */
+  #home(from: Pose, at: number): Track | undefined {
+    const { duration, ease } = this.release;
+    if (duration <= 0) return undefined;
+    return { from: at, to: at + duration, pose: glide(from, ease, true) };
+  }
+
+  /** The announcements under way, the same list as shown while none begins or ends. */
+  #notices(): readonly ScriptStep[] {
+    const before = this.#shown.notices;
+    const now = (this.#playback?.steps ?? [])
+      .filter((run) => run.verb === "announce" && run.begun && !run.ended)
+      .map((run) => run.step);
+    return now.length === before.length &&
+      now.every((step, i) => step === before[i])
+      ? before
+      : now;
   }
 
   #release() {

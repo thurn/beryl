@@ -39,3 +39,6 @@ export function timingOf(act: Act): Timing {
 
 /** Every step at once: reduced motion. */
 export const snap = (): Timing => SNAP;
+
+/** How a held card let go travels back to where it rests: as a card flies. */
+export const RELEASE: Timing = verbs.get("fly") ?? SNAP;
