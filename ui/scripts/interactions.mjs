@@ -1242,6 +1242,21 @@ async function untilGone(page, selector, limit, step = 16) {
     throw new Error(`${selector} outlasted ${limit} ms`);
 }
 
+/** Lets React commit what the clock's last step, or the pointer, set off. Its scheduler posts
+ * each render as a MessageChannel message, which Playwright's clock does not drive, so under
+ * load a poll made right after could see the page a step behind; a message posted now lands
+ * after it. */
+function committed(page) {
+    return page.evaluate(
+        () =>
+            new Promise((resolve) => {
+                const channel = new MessageChannel();
+                channel.port1.onmessage = () => resolve();
+                channel.port2.postMessage(null);
+            }),
+    );
+}
+
 /** Starts audit.mjs' frame recorder, stepping the paused clock a frame at a time until it has
  * the few frames it takes before anything is set going. */
 async function startRecording(page) {
@@ -11983,9 +11998,11 @@ await check(
         assert.deepEqual(await lit(page), []);
         assert.deepEqual(await glowing(page, "target"), []);
         await autoPay.hover();
+        await committed(page);
         assert.deepEqual(await lit(page), ascending(suggested.taps));
         assert.deepEqual(await chosen(page), []);
         await page.mouse.move(0, 0);
+        await committed(page);
         assert.deepEqual(await lit(page), []);
         await autoPay.click();
         await settled(page, 1);
@@ -12261,18 +12278,6 @@ const overViews = await load("game-over");
 const overEvents = overFixture.messages.filter((m) => m.kind === "event");
 const lastPass = overViews.findLastIndex((v) => v.status.kind === "deciding");
 const overAt = { fixture: "game-over", at: lastPass + 1, ready: "[data-life]" };
-/** Lets React commit what the clock's last step set off. Its scheduler posts each render as a
- * MessageChannel message, which Playwright's clock does not drive, so under load a poll made
- * right after a step could see the page a step behind; a message posted now lands after it. */
-const committed = (page) =>
-    page.evaluate(
-        () =>
-            new Promise((resolve) => {
-                const channel = new MessageChannel();
-                channel.port1.onmessage = () => resolve();
-                channel.port2.postMessage(null);
-            }),
-    );
 const lifeShown = async (page) =>
     Number(
         (
