@@ -4,11 +4,13 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Iterable
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import bisect, checks
+from beryl_tools import bisect, checks, runlog, verdicts
 
 # A browser lane's step over a repository whose `version` file counts its commits: "plays a
 # land" and "casts a spell" fail from version 3, "draws a card" from version 5, and "untaps"
@@ -102,7 +104,9 @@ def test_bisection_names_each_culprit_flake_and_record_last(
     commits = git(repo, "rev-list", "--reverse", "origin/master..HEAD").split()
     third, fifth = commits[2][:10], commits[4][:10]
     answer = [
-        line for line in lines if line.startswith(("bisect: ui-test:", "record: "))
+        line
+        for line in lines
+        if line.startswith(("bisect: ui-test:", "miss: ", "record: "))
     ]
     assert lines[-len(answer) :] == answer
     since = "(5 commits since master)"
@@ -113,9 +117,11 @@ def test_bisection_names_each_culprit_flake_and_record_last(
     ):
         said = f"bisect: ui-test:{title}  culprit {culprit} feat: version {version}  {since}"
         at = lines.index(said)
-        assert lines[at + 1] == (
-            f"record: ui-test:{title}  runs 2, failures 2, flaky 0, stale 0, catch 0"
-            " (30 days)"
+        # No fast check of the culprit is in this run log.
+        assert lines[at + 1].startswith(f"miss: ui-test:{title} unknown (no fast check")
+        assert lines[at + 2] == (
+            f"record: ui-test:{title}  runs 2, failures 2, flaky 0, stale 0, catch 0,"
+            " miss 0 (30 days)"
         )
     assert (
         "bisect: ui-test:untaps  flaky: passed at the tip on its bisection rerun"
@@ -259,3 +265,114 @@ def test_narrowing_arguments_name_their_checks() -> None:
     )
     assert bisect.names("Brainstorm", "oracle:Brainstorm/draws three/xmage")
     assert not bisect.names("Brainstorm", "oracle:Brainstorms/x/xmage")
+
+
+class Store(verdicts.Beads):
+    """The ci-check beads and the Enact beads' delivered commits, in memory."""
+
+    def __init__(self, delivered: dict[str, list[str]]) -> None:
+        self.delivered_by = delivered
+        self.recorded: list[tuple[str, str, verdicts.Entry]] = []
+
+    def history(self, checks: Iterable[str]) -> dict[str, list[verdicts.Entry]]:
+        found: dict[str, list[verdicts.Entry]] = {}
+        for check, _, entry in self.recorded:
+            if check in checks:
+                found.setdefault(check, []).append(dict(entry))
+        return found
+
+    def record(self, check: str, lane: str, entry: verdicts.Entry) -> bool:
+        self.recorded.append((check, lane, dict(entry)))
+        return True
+
+    def delivering(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
+        for bead, delivered in self.delivered_by.items():
+            if commits & set(delivered):
+                return bead, delivered
+        return "", []
+
+
+def fast_check(commit: str, *results: tuple[str, str, str]) -> None:
+    """A fast check's records at `commit` in the run log: (check, outcome, chosen) each."""
+    when = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    records: list[dict[str, object]] = []
+    for check, outcome, chosen in results:
+        record: dict[str, object] = {
+            "time": when,
+            "commit": commit,
+            "tree": "",
+            "script": "check",
+            "lane": check.split(":")[0],
+            "check": check,
+            "outcome": outcome,
+            "seconds": 1.0,
+            "chosen": chosen,
+        }
+        records.append(record)
+    runlog.append(records)
+
+
+def test_a_culprit_whose_fast_check_left_a_check_out_records_a_miss(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commits = git(repo, "rev-list", "--reverse", "origin/master..HEAD").split()
+    # Versions 2 to 4 were one push, so its fast check ran at version 4 and saw version 3's
+    # change; version 5 was pushed from another host, whose run log this is not.
+    store = Store({"by-push": commits[1:4]})
+    monkeypatch.setattr(verdicts, "STORE", store)
+    fast_check(
+        commits[3],
+        ("ui-test:plays a land", "pass", "coverage:ui/src/game/Board.tsx:12"),
+        ("ui-test:casts a spell", "skip", "cut"),
+    )
+    lines = run(repo, capsys)
+    tip = commits[3][:10]
+    assert (
+        f"miss: ui-test:casts a spell (fast check at {tip} did not choose it: cut)"
+        in (lines)
+    )
+    assert not any(line.startswith("miss: ui-test:plays a land") for line in lines)
+    assert (
+        f"miss: ui-test:draws a card unknown (no fast check of {commits[4][:10]} in this"
+        " host's run log)" in lines
+    )
+    # The miss sits under its check's bisect line, before its record, which counts it.
+    at = lines.index(
+        f"miss: ui-test:casts a spell (fast check at {tip} did not choose it: cut)"
+    )
+    assert lines[at - 1].startswith("bisect: ui-test:casts a spell  culprit")
+    assert lines[at + 1].endswith("catch 0, miss 1 (30 days)")
+    [(check, lane, entry)] = store.recorded
+    assert (check, lane) == ("ui-test:casts a spell", "ui-test")
+    assert entry["verdict"] == "miss" and entry["commit"] == commits[2]
+    assert (entry["fast"], entry["chosen"], entry["bead"]) == (
+        commits[3],
+        "cut",
+        "by-push",
+    )
+    # The next slow CI blames the same culprit: the miss is not recorded twice.
+    run(repo, capsys)
+    assert len(store.recorded) == 1
+
+
+def test_a_culprit_s_fast_check_is_found_only_within_its_own_push(repo: Path) -> None:
+    commits = git(repo, "rev-list", "--reverse", "origin/master..HEAD").split()
+    fast_check(commits[2], ("ui-test:untaps", "pass", "record"))
+    log = runlog.read_log(datetime.fromtimestamp(0, timezone.utc))
+    # A later push's fast check did not see the culprit's change.
+    assert bisect.fast_run(commits[1], commits, [commits[1]], log, repo) == ("", [])
+    fast, records = bisect.fast_run(commits[1], commits, commits[1:3], log, repo)
+    assert fast == commits[2] and len(records) == 1
+    assert bisect.unchosen("ui-test:untaps", "ui-test", records) == ""
+    assert bisect.unchosen("ui-test:plays a land", "ui-test", records) == "not chosen"
+    assert (
+        bisect.unchosen("shots:board", "shots", records) == "its shots lane did not run"
+    )
+    # A step that failed though none of its checks did is run whenever its lane is.
+    assert bisect.unchosen("ui-test:ui-test", "ui-test", records, whole=True) == ""
+    assert bisect.unchosen("shots:shots", "shots", records, whole=True) != ""
+    # A fast check run before the commit was made is matched by its tree.
+    tree = git(repo, "rev-parse", f"{commits[0]}^{{tree}}")
+    runlog.append([{**log[0], "commit": "", "tree": tree}])
+    log = runlog.read_log(datetime.fromtimestamp(0, timezone.utc))
+    assert bisect.fast_run(commits[0], commits, [], log, repo)[0] == commits[0]

@@ -300,7 +300,7 @@ nightly-install:
 nightly-uninstall:
     {{ by }} nightly-uninstall
 
-# Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky
+# Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky|miss
 [group('checks')]
 verdict check verdict:
     {{ by }} verdict "$1" "$2"

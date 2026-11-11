@@ -14,6 +14,13 @@ bead with the log's tail: per check a `bisect:` line with its culprit and a `rec
 its record over 30 days (runlog.py's Tally, with the verdicts in its ci-check bead). Each probe's
 checks go to the run log with script `bisect` and the probe's commit.
 
+A culprit's fast check says whether the failure was a selection miss (K18; verdicts.py): `enact
+push` runs it at the tip it pushes, so it is the first fast check in this host's run log at the
+culprit or a later commit its bead delivered. A check that fast check did not run (not chosen, or
+`cut` by its time box) is a miss, recorded on the check's bead once per culprit and printed in a
+`miss:` line; with no fast check of the culprit here (it ran on another host, say) the line says
+the miss is unknown and records nothing.
+
 Only a step a rerun can narrow is bisected (`checks.Failure`): not a static check such as clippy,
 nor one that timed out or could not build or start. A bisection that fails reports why and leaves
 the run's verdict alone.
@@ -23,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import platform
 import shutil
 import subprocess
 import time
@@ -49,6 +57,8 @@ LINES = 25
 RECORDS_EACH = 3
 DAYS = 30
 BASE = "origin/master"
+# The fast check's script in the run log (checks.fast).
+FAST = "check"
 
 
 def enact_timeout(repo: Path) -> float:
@@ -295,20 +305,126 @@ def search(
     return found
 
 
-def records(checks: list[str]) -> dict[str, runlog.Tally]:
-    """Each check's record over the last `DAYS` days: runs and failures from the run log, and
-    verdicts from its ci-check bead."""
-    since = datetime.now(timezone.utc) - timedelta(days=DAYS)
-    history = verdicts.STORE.history(checks)
-    tallies, _ = runlog.tally(runlog.read_log(since), history, since)
-    return tallies
+def delivering(
+    found: list[Found], commits: list[str]
+) -> dict[str, tuple[str, list[str]]]:
+    """Each culprit's bead, with every commit it delivered (verdicts.Beads.delivering)."""
+    beads: dict[str, tuple[str, list[str]]] = {}
+    for f in found:
+        sha = commits[f.low] if f.verdict == "culprit" else ""
+        if sha and sha not in beads:
+            beads[sha] = verdicts.STORE.delivering({sha})
+    return beads
+
+
+def fast_run(
+    culprit: str,
+    commits: list[str],
+    delivered: list[str],
+    log: list[dict[str, object]],
+    repo: Path,
+) -> tuple[str, list[dict[str, object]]]:
+    """The fast check that saw `culprit`, with its records: the first in `log` at the culprit or
+    a later commit among `commits` that its bead `delivered`, matched by commit or by tree; none
+    when no such commit has one."""
+    at = commits.index(culprit)
+    mine = set(delivered)
+    last = max((i for i in range(at, len(commits)) if commits[i] in mine), default=at)
+    fast = [r for r in log if r.get("script") == FAST]
+    for commit in commits[at : last + 1]:
+        tree = out(repo, "rev-parse", f"{commit}^{{tree}}")
+        found = [
+            r
+            for r in fast
+            if r.get("commit") == commit or (tree and r.get("tree") == tree)
+        ]
+        if found:
+            return commit, found
+    return "", []
+
+
+def unchosen(
+    check: str, lane: str, records: list[dict[str, object]], whole: bool = False
+) -> str:
+    """Why the fast check whose records these are did not run `check`, a check of `lane` or
+    with `whole` the lane's step itself (`<lane>:<step>`, logged only when it failed or named
+    no checks); empty when it did."""
+    ran = [r for r in records if r.get("lane") == lane and r.get("outcome") != "skip"]
+    if whole and ran:
+        return ""
+    mine = [r for r in records if r.get("check") == check]
+    if any(r.get("outcome") != "skip" for r in mine):
+        return ""
+    if any(r.get("chosen") == "cut" for r in mine):
+        return "cut"
+    if mine:
+        return "skipped"
+    if any(r.get("lane") == lane for r in records):
+        return "not chosen"
+    return f"its {lane} lane did not run"
+
+
+def misses(
+    found: list[Found],
+    commits: list[str],
+    beads: dict[str, tuple[str, list[str]]],
+    log: list[dict[str, object]],
+    history: dict[str, list[verdicts.Entry]],
+    repo: Path,
+) -> dict[str, str]:
+    """A `miss:` line for each culprit's check that its fast check did not run, recording the
+    miss on the check's bead (and in `history`) unless one names the culprit already, and an
+    unknown one for each check whose culprit has no fast check in `log`."""
+    lines: dict[str, str] = {}
+    for f in found:
+        if f.verdict != "culprit":
+            continue
+        sha = commits[f.low]
+        bead, delivered = beads.get(sha, ("", []))
+        fast, records = fast_run(sha, commits, delivered, log, repo)
+        for s in f.suspects:
+            for check in s.checks():
+                if not fast:
+                    lines[check] = (
+                        f"miss: {check} unknown (no fast check of {sha[:10]} in this"
+                        " host's run log)"
+                    )
+                    continue
+                whole = check == f"{s.lane}:{s.failure.step.name}"
+                why = unchosen(check, s.lane, records, whole)
+                if not why:
+                    continue
+                lines[check] = (
+                    f"miss: {check} (fast check at {fast[:10]} did not choose it: {why})"
+                )
+                known = history.setdefault(check, [])
+                if any(
+                    e.get("verdict") == "miss" and e.get("commit") == sha for e in known
+                ):
+                    continue
+                entry: verdicts.Entry = {
+                    "time": verdicts.stamp(verdicts.now()),
+                    "host": platform.node(),
+                    "commit": sha,
+                    "script": "ci",
+                    "lane": s.lane,
+                    "verdict": "miss",
+                    "fast": fast,
+                    "chosen": why,
+                }
+                if bead:
+                    entry["bead"] = bead
+                if verdicts.STORE.record(check, s.lane, entry):
+                    known.append(entry)
+    return lines
 
 
 def record_line(check: str, t: runlog.Tally) -> str:
     v = t.verdicts
     return (
         f"record: {check}  runs {t.runs}, failures {t.failures}, flaky {v.get('flaky', 0)},"
-        f" stale {v.get('stale', 0)}, catch {v.get('catch', 0)} ({DAYS} days)"
+        f" stale {v.get('stale', 0)}, catch {v.get('catch', 0)}, miss {v.get('miss', 0)}"
+        f" ({DAYS} days)"
     )
 
 
@@ -318,19 +434,20 @@ def answer(
     base: str,
     repo: Path,
     tallies: dict[str, runlog.Tally],
+    beads: dict[str, tuple[str, list[str]]],
+    missed: dict[str, str],
 ) -> list[list[str]]:
-    """A `bisect:` line per suspect, then a `record:` line per check it names."""
+    """A `bisect:` line per suspect, then per check it names any `miss:` line and a `record:`
+    line."""
     n = len(commits)
     since = f"({n} commit{'' if n == 1 else 's'} since master)"
     blocks: list[list[str]] = []
-    beads: dict[str, str] = {}
     for f in found:
         if f.verdict == "culprit":
             sha = commits[f.low]
             subject = out(repo, "log", "-1", "--format=%s", sha)
-            if sha not in beads:
-                beads[sha] = verdicts.STORE.delivered({sha})[0]
-            bead = f"  bead {beads[sha]}" if beads[sha] else ""
+            name = beads.get(sha, ("", []))[0]
+            bead = f"  bead {name}" if name else ""
             said = f"culprit {sha[:10]} {subject}  {since}{bead}"
         elif f.verdict == "flaky":
             said = "flaky: passed at the tip on its bisection rerun"
@@ -344,10 +461,9 @@ def answer(
         for s in f.suspects:
             checks = s.checks() or [s.name()]
             lines = [f"bisect: {s.name()}  {said}"]
-            lines += [
-                record_line(c, tallies.get(c, runlog.Tally()))
-                for c in checks[:RECORDS_EACH]
-            ]
+            for c in checks[:RECORDS_EACH]:
+                lines += [missed[c]] if c in missed else []
+                lines.append(record_line(c, tallies.get(c, runlog.Tally())))
             if len(checks) > RECORDS_EACH:
                 lines.append(f"record: and {len(checks) - RECORDS_EACH} more checks")
             blocks.append(lines)
@@ -386,8 +502,15 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
         except system.LockHeld:
             print(f"bisect: another bisection holds {tree.path}")
             found = [Found("range", group, 0, len(commits) - 1)]
-    tallies = records([c for s in group for c in s.checks() or [s.name()]])
-    blocks = answer(found, commits, base, repo, tallies)
+    since = datetime.now(timezone.utc) - timedelta(days=DAYS)
+    history = verdicts.STORE.history(
+        [c for s in group for c in s.checks() or [s.name()]]
+    )
+    log = runlog.read_log(since)
+    beads = delivering(found, commits)
+    missed = misses(found, commits, beads, log, history, repo)
+    tallies, _ = runlog.tally(log, history, since)
+    blocks = answer(found, commits, base, repo, tallies, beads, missed)
     lines = [
         f"bisect: {lane}  not bisected: a static check, a timeout or a build that failed"
         for lane in unnamed

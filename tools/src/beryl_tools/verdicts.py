@@ -9,6 +9,9 @@ a verdict the tool infers, and a check that flakes twice in seven days is quaran
   only the check's own side ([`CHECK_SIDE`]) is a stale test; only product code is a caught
   bug; both is **mixed**, which prints a line asking for `by verdict <check> stale|catch` and
   blocks nothing. The same command corrects any verdict.
+- **miss**: slow CI failed a check that the fast check did not choose (selection.py), at the
+  commit bisection blamed (bisect.py). It is recorded beside the stale or catch verdict that the
+  fix later brings, not instead of it.
 
 Each verdict is a comment on the check's bead (one closed bead per check that has ever failed,
 labeled `ci-check`), so the record is in git, shared by every machine and survives a cache wipe;
@@ -47,7 +50,7 @@ UNRESOLVED_DAYS = 14
 # Set to "off" to keep verdicts out of the beads (the tests do).
 BEADS_ENV = "BERYL_CI_BEADS"
 # The verdicts `by verdict` sets; `mixed` is only ever inferred, as a question.
-VERDICTS = ("flaky", "stale", "catch")
+VERDICTS = ("flaky", "stale", "catch", "miss")
 
 
 def warn(e: BaseException | str) -> None:
@@ -411,6 +414,11 @@ class Beads:
         """The bead whose Enact metadata lists one of `commits` as delivered, of those `bd list`
         selects with `only`, with those of its commits among them; empty when none does.
         """
+        bead, theirs = self.delivering(commits, *only)
+        return bead, [c for c in theirs if c in commits]
+
+    def delivering(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
+        """As `delivered`, but with every commit the bead delivered."""
         if not commits:
             return "", []
         _, out = self.bd("list", *only, "--all", "-n", "0", "--json")
@@ -419,10 +427,9 @@ class Beads:
             meta = b.get("metadata") if isinstance(b, dict) else None
             delivered = (
                 str(meta.get("enact_commits", "")) if isinstance(meta, dict) else ""
-            )
-            mine = [c for c in delivered.split() if c in commits]
-            if mine:
-                return str(b.get("id", "")), mine
+            ).split()
+            if any(c in commits for c in delivered):
+                return str(b.get("id", "")), delivered
         return "", []
 
 

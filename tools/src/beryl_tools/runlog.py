@@ -348,6 +348,28 @@ def tally(
     return costliest(checks), costliest(lanes)
 
 
+def landed(since: datetime) -> int:
+    """The commits that reached master from `since` on, merges aside."""
+    count = git(
+        "rev-list",
+        "--count",
+        "--no-merges",
+        f"--since={since.isoformat()}",
+        "origin/master",
+    )
+    return int(count) if count.isdigit() else 0
+
+
+def misses(lanes: dict[str, Tally], since: datetime) -> dict[str, object]:
+    """The selection misses (verdicts.py) since `since`, with the commits that landed meanwhile
+    and the misses per 100 of them: the epic's measure for moving the browser lanes to nightly.
+    """
+    count = sum(t.verdicts.get("miss", 0) for t in lanes.values())
+    commits = landed(since)
+    rate = round(100 * count / commits, 2) if commits else None
+    return {"misses": count, "landed": commits, "per_100": rate}
+
+
 def report(args: argparse.Namespace) -> int:
     since = datetime.now(timezone.utc) - timedelta(days=args.days)
     records = read_log(since)
@@ -361,6 +383,7 @@ def report(args: argparse.Namespace) -> int:
     if args.prune:
         return prune.report(records, history, since, args.days, args.json)
     checks, lanes = tally(records, history, since)
+    missed = misses(lanes, since)
     if args.json:
         print(
             json.dumps(
@@ -370,6 +393,7 @@ def report(args: argparse.Namespace) -> int:
                     "log": str(log_path()),
                     "checks": {k: t.json() for k, t in checks.items()},
                     "lanes": {k: t.json() for k, t in lanes.items()},
+                    "misses": missed,
                 },
                 indent=2,
             )
@@ -381,6 +405,11 @@ def report(args: argparse.Namespace) -> int:
         f" ({log_path()})"
     )
     print(nightly.coverage_age_line())
+    rate = missed["per_100"]
+    print(
+        f"ci-report: {missed['misses']} selection misses in {missed['landed']} landed commits"
+        + (f", {rate:.2f} per 100" if rate is not None else "")
+    )
     for title, rows in (("check", checks), ("lane", lanes)):
         print(f"\n{'seconds':>9} {'runs':>6} {'fails':>6}  {title}  verdicts")
         for name, t in rows.items():

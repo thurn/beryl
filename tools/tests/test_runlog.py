@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import subprocess
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
@@ -288,3 +289,67 @@ def test_oracle_scenarios_share_their_engines_seconds(
         ("oracle:Ponder/odd/xmage", "skip", 0.0),
         ("oracle:Ponder/draws/forge", "fail", 3.0),
     ]
+
+
+def test_the_report_counts_selection_misses_per_100_landed_commits(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(timezone.utc)
+
+    class Verdicts(verdicts.Beads):
+        """Two misses in the window and one before it, beside a catch."""
+
+        def checks(self) -> list[str]:
+            return ["ui-test:drag", "shots:board"]
+
+        def history(self, checks: Iterable[str]) -> dict[str, list[verdicts.Entry]]:
+            old = (now - timedelta(days=40)).isoformat()
+            return {
+                "ui-test:drag": [
+                    {"time": now.isoformat(), "verdict": "miss"},
+                    {"time": now.isoformat(), "verdict": "catch"},
+                    {"time": old, "verdict": "miss"},
+                ],
+                "shots:board": [{"time": now.isoformat(), "verdict": "miss"}],
+            }
+
+    monkeypatch.setattr(verdicts, "STORE", Verdicts())
+    monkeypatch.setattr(runlog, "landed", lambda since: 150)
+    args = argparse.Namespace(
+        days=30, json=True, quarantined=False, pending=False, prune=False
+    )
+    assert runlog.report(args) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["misses"] == {"misses": 2, "landed": 150, "per_100": 1.33}
+    assert out["checks"]["ui-test:drag"]["verdicts"] == {"miss": 1, "catch": 1}
+    args.json = False
+    assert runlog.report(args) == 0
+    assert (
+        "ci-report: 2 selection misses in 150 landed commits, 1.33 per 100"
+        in capsys.readouterr().out
+    )
+
+
+def test_landed_commits_are_master_s_since_the_window_began(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo: Path = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str, date: str = "") -> None:
+        env = {"GIT_COMMITTER_DATE": date, "GIT_AUTHOR_DATE": date} if date else {}
+        subprocess.run(
+            ["git", "-c", "user.name=CI", "-c", "user.email=ci@example.com", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            env={**os.environ, **env},
+        )
+
+    git("init", "-q", "-b", "master")
+    git("commit", "-q", "--allow-empty", "-m", "old", date="2020-01-01T00:00:00Z")
+    for n in range(3):
+        git("commit", "-q", "--allow-empty", "-m", f"new {n}")
+    git("update-ref", "refs/remotes/origin/master", "HEAD")
+    monkeypatch.setattr(paths, "REPO", repo)
+    assert runlog.landed(datetime.now(timezone.utc) - timedelta(days=1)) == 3
