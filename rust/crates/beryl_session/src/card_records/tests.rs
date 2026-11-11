@@ -1,4 +1,6 @@
-use beryl_card_store::STORE;
+use std::collections::{BTreeMap, BTreeSet};
+
+use beryl_card_store::{Face, STORE};
 use beryl_cards::CARDS;
 
 use super::{
@@ -99,6 +101,48 @@ fn a_token_is_the_printing_its_card_makes() {
     ] {
         let linked = STORE.card(maker).unwrap().tokens;
         assert_eq!(found.tokens[name].scryfall_id, linked[0].scryfall_id);
+    }
+}
+
+/// A view names a token and not the card that made it, so one name can show only one token.
+/// Two printings of one token differ in art alone (two cards' Treasures) and either serves.
+/// When this fails, two implemented cards make different tokens of one name: the view must
+/// then say which card made a token, and the UI ask by maker, before the second card lands.
+#[test]
+fn implemented_cards_make_one_token_of_each_name() {
+    let mut made: BTreeMap<String, Vec<(&str, Vec<Face>)>> = BTreeMap::new();
+    for card in CARDS.cards() {
+        let Some(maker) = card.face_ixs().next().map(|f| card.face_name(f)) else {
+            continue;
+        };
+        let names: BTreeSet<&str> = card
+            .tokens
+            .iter()
+            .flat_map(|t| t.face_ixs().map(|f| t.face_name(f)))
+            .collect();
+        for link in STORE.card(maker).map(|r| r.tokens).unwrap_or_default() {
+            if !names.contains(link.name.as_str()) {
+                continue;
+            }
+            let token = STORE
+                .tokens(&link.name)
+                .into_iter()
+                .find(|t| t.scryfall_id == link.scryfall_id)
+                .unwrap_or_else(|| panic!("{maker} links a {} the store lacks", link.name));
+            made.entry(link.name)
+                .or_default()
+                .push((maker, token.faces));
+        }
+    }
+    assert!(made.len() > 5, "few token names found: {:?}", made.keys());
+    for (name, makers) in made {
+        let (first, faces) = &makers[0];
+        for (other, theirs) in &makers[1..] {
+            assert_eq!(
+                faces, theirs,
+                "{first} and {other} make different tokens named {name}"
+            );
+        }
     }
 }
 

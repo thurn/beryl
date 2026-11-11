@@ -548,6 +548,10 @@ CARD_READERS = [
     "tests/test_specs.py",
 ]
 CARD_FILES = r"^rust/crates/beryl_cards?/"
+# The card store is source to both: beryl_card_store embeds it, so a refresh (`just cards`)
+# rebuilds every crate that reads a record, and the tools' tests read it and hold it to their
+# sample.
+CARD_STORE = r"^data/card-store\.tsv$"
 
 
 def scale_lane() -> Lane:
@@ -681,11 +685,11 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         return every or any(re.match(pattern, p) for p in changed or [])
 
     lanes = [repo_lane()]
-    if touched(r"^tools/"):
+    if touched(r"^tools/") or touched(CARD_STORE):
         lanes.append(python_lane())
     elif touched(CARD_FILES):
         lanes.append(scale_lane())  # The python lane runs these tests whole.
-    if touched(r"^rust/"):
+    if touched(r"^rust/") or touched(CARD_STORE):
         lanes.append(rust_lane(fast=True))
     if touched(r"^ui/"):
         lanes.append(ui_lane())

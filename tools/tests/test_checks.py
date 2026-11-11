@@ -332,6 +332,13 @@ def test_a_change_under_tools_runs_the_python_lane_and_the_scale_tests_once(
     assert scale_tests_run(lanes) == 0
 
 
+def test_a_refreshed_card_store_runs_the_lanes_that_read_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lanes = lanes_for(monkeypatch, ["data/card-store.tsv"])
+    assert {"python", "rust"} <= set(lanes)
+
+
 def test_a_symlink_checked_out_or_committed_as_a_file_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

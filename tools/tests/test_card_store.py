@@ -4,6 +4,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -59,6 +60,38 @@ def test_an_alias_answers_with_its_record(tmp_path: Path) -> None:
         assert [t["scryfall_id"] for t in store.tokens("X")] == ["2"]
         # Iteration skips aliases.
         assert [r["scryfall_id"] for _, r in store] == ["f", "1", "2"]
+
+
+def test_the_committed_store_is_sorted_and_its_links_resolve() -> None:
+    """What every reader's seek relies on, of data/card-store.tsv itself: a hand edit or a merge
+    of two refreshes can break it where no lookup of an implemented card would notice.
+    """
+    keys: list[bytes] = []
+    values: dict[bytes, list[card_store.Json]] = {}
+    with card_store.STORE.open("rb") as lines:
+        for raw in lines:
+            key, tab, value = raw.partition(b"\t")
+            assert tab and raw.endswith(b"\n"), raw[:80]
+            keys.append(key)
+            values.setdefault(key, []).append(json.loads(value))
+    assert keys == sorted(keys)
+
+    def records(kind: bytes, name: object) -> list[card_store.Json]:
+        found = values.get(kind + b":" + str(name).encode(), [])
+        return [v for v in found if "alias" not in v]
+
+    for key, found in values.items():
+        kind, _, name = key.partition(b":")
+        if kind == b"card" and records(kind, name.decode()):
+            # A card's key is its alone: no second card, and no alias beside it.
+            assert len(found) == 1, key
+        for value in found:
+            if "alias" in value:
+                targets = records(kind, value["alias"])
+                assert [t for t in targets if t["scryfall_id"] == value["scryfall_id"]]
+            for link in cast(list[card_store.Json], value.get("tokens", [])):
+                made = records(b"token", link["name"])
+                assert [t for t in made if t["scryfall_id"] == link["scryfall_id"]], key
 
 
 def test_a_fresh_bulk_file_is_reused_without_asking_scryfall(
