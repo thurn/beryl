@@ -7934,11 +7934,13 @@ if (wanted(manifestFlight)) {
             // The flight's first frame, recorded in the page: a position read after the
             // card has reached the battlefield may come frames into its flight on a busy
             // machine.
-            await page.evaluate(record);
+            await startRecording(page);
             await page
                 .getByRole("button", { name: "Manifest", exact: true })
                 .click();
             await until(page, `${slotOf(800)}[data-zone="battlefield"]`, 20);
+            // A few frames of the flight: the paused clock draws none until it is stepped.
+            await page.clock.runFor(48);
             const start = posesOf(await page.evaluate(collect, 0), 800).find(
                 (c) => c.zone,
             );
