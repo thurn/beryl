@@ -89,6 +89,58 @@ pub struct GameTable {
     /// Whether a card of the game has an activated ability that may do nothing
     /// ([`beryl_card::Needs`]), so that no other game pays to check.
     needy: bool,
+    /// A bit per [`Capability`] a card of the game has.
+    capabilities: u8,
+}
+
+/// Something a game's cards may make the stores keep (architecture §6.4, the crate's
+/// contract, "Stores"), found once per game from every face of every card it can contain.
+/// What no card of a game can need is not kept in it and costs it one AND.
+///
+/// The kinds of continuous effect have no bit here: the Effects store knows exactly which
+/// are live ([`crate::effects`]), which a table could only bound, since a Rust body is
+/// opaque to it. These are what no live entry can say: whether to keep a count nothing has
+/// yet read, and whether a static ability that is not on the battlefield yet could ever
+/// change a rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Capability {
+    /// A card has a static ability that changes a rule of the game ([`Rule`]), so the
+    /// rules in force are found with the layers (by-w8gv.7.3).
+    RuleChanges,
+    /// A card reads whether a permanent entered the battlefield this turn, so that is
+    /// tracked (by-w8gv.7.8).
+    EnteredThisTurn,
+    /// A card has a loyalty ability, so whether one of a permanent's was activated this
+    /// turn is tracked (by-w8gv.7.8)
+    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)): "A player may
+    /// activate a loyalty ability of a permanent they control any time they have priority
+    /// and the stack is empty during a main phase of their turn, but only if no player has
+    /// previously activated a loyalty ability of that permanent that turn."
+    LoyaltyActivated,
+}
+
+impl Capability {
+    /// The capabilities a face gives a game that can contain it.
+    fn of(face: &Face) -> u8 {
+        let mut found = 0;
+        for a in face.abilities {
+            if a.kind == AbilityKind::Static && a.rule != Rule::None {
+                found |= Capability::RuleChanges.bit();
+            }
+            if a.rule == Rule::InstantLoyaltyTheTurnItEntered {
+                found |= Capability::EnteredThisTurn.bit();
+            }
+            if a.cost.loyalty.is_some() {
+                found |= Capability::LoyaltyActivated.bit();
+            }
+        }
+        found
+    }
+
+    #[inline]
+    const fn bit(self) -> u8 {
+        1 << (self as u8)
+    }
 }
 
 impl GameTable {
@@ -150,6 +202,10 @@ impl GameTable {
             .iter()
             .map(|d| d.faces.iter().fold(down, |r, f| r | FaceFacts::of(f).rules))
             .collect();
+        let capabilities = defs
+            .iter()
+            .flat_map(|d| d.faces)
+            .fold(Capability::of(&FACE_DOWN), |c, f| c | Capability::of(f));
         Ok(Self {
             cards,
             defs,
@@ -160,6 +216,7 @@ impl GameTable {
             rules,
             face_down_copy,
             needy,
+            capabilities,
         })
     }
 
@@ -226,6 +283,12 @@ impl GameTable {
     #[inline]
     pub fn needy(&self) -> bool {
         self.needy
+    }
+
+    /// Whether a card of the game has `capability`.
+    #[inline]
+    pub fn can(&self, capability: Capability) -> bool {
+        self.capabilities & capability.bit() != 0
     }
 
     #[inline]
@@ -464,6 +527,42 @@ mod tests {
         tokens: &[],
     };
     static TABLE: CardTable = CardTable::new(&[&ALPHA, &BETA, &ALPHA_AGAIN]);
+
+    /// A planeswalker whose static ability reads the turn it entered.
+    static WALKER: CardDef = CardDef {
+        name: "Walker",
+        faces: &[Face {
+            abilities: &[
+                Ability {
+                    kind: AbilityKind::Static,
+                    rule: Rule::InstantLoyaltyTheTurnItEntered,
+                    ..Ability::NONE
+                },
+                Ability {
+                    kind: AbilityKind::Activated,
+                    cost: Cost::loyalty(1),
+                    ..Ability::NONE
+                },
+            ],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static WALKERS: CardTable = CardTable::new(&[&ALPHA, &WALKER]);
+
+    #[test]
+    fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
+        let all = [
+            Capability::RuleChanges,
+            Capability::EnteredThisTurn,
+            Capability::LoyaltyActivated,
+        ];
+        let plain = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(4, "Alpha")]]).unwrap();
+        assert!(all.iter().all(|&c| !plain.can(c)));
+        // One deck's card is enough: both players' games read the same table.
+        let walker = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
+        assert!(all.iter().all(|&c| walker.can(c)));
+    }
 
     #[test]
     fn get_finds_each_name_and_misses_unknown() {
