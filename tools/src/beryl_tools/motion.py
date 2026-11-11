@@ -1,25 +1,25 @@
-"""`by motion`: every verb held to Arena's numbers within a tolerance (docs/project-50k.md, K27,
-Motion oracle). The reference is `data/arena-motion.json`, Arena's instances of each verb and
-their summaries (conventions.py).
+"""`by motion`: the stage held to each verb's own values in `data/ui-conventions.json`, with
+Arena's numbers beside them as reference and no verdict (docs/project-50k.md, K27; UI
+Conventions, "Motion is Beryl's own"). How a motion looks on Beryl's cards is designed for them
+and judged by the independent motion review, never by how near it comes to Arena's numbers
+(`data/arena-motion.json`). This is a regression guard: it fails when the stage stops playing a
+verb as its values say.
 
-- The values check needs no browser: each verb's duration, delay and stagger in
-  `data/ui-conventions.json` against Arena's range for them. tests/test_motion.py holds the tree
-  to it in the python lane; `by motion --values` prints it.
+- `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
+  summary of its instances.
 - The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moment (ui/verbs.json) on
   the stage in stepped stage time and screenshots every tick of each step of the suite's verbs.
-  `by video measure` (video_measure.py) reads each step's frames as it read Arena's clips, and
-  what it finds is held to Arena's: whether the step's subject travels, how its progress is
-  eased, and its size where it begins and at its peak, as multiples of its size at rest. Stage
-  time, never wall time, so machine load cannot change a result. `by motion` runs it: the fast
-  check when the stage or these data change (checks.py) and nightly (nightly.py), with one
-  run-log record a verb and layout, `motion:<verb>/<layout>`.
+  Each step is held to its verb's values (its case's, where the case has its own): how long it
+  played and, in a batch of like steps, how far apart they began, by the step's own start and
+  end in stage time; whether its subject travels and how its progress is eased, by what
+  `by video measure` (video_measure.py) reads of its frames as it read Arena's clips. Its size
+  where it begins and at its peak, as multiples of its size at rest, are printed beside Arena's;
+  no value declares them. Stage time, never wall time, so machine load cannot change a result.
+  `by motion` runs it: the fast check when the stage or these data change (checks.py) and
+  nightly (nightly.py), with one run-log record a verb and layout, `motion:<verb>/<layout>`.
 
-The tolerance is Arena's range over a verb's instances (or its case's, where its cases differ),
-widened by one frame of the coarsest recording behind it or a share of the median, whichever is
-larger: the data's `tolerance`, which a verb may override with a reason. A verb that a numbered
-exception covers (`exempt` in ui-conventions) is skipped and listed. A measure that cannot be
-brought in after three attempts is waived in the data, naming the bead that follows it up;
-never tune a verb to one clip.
+A number is held within one tick of the capture or SHARE of its value, whichever is larger. A
+step's delay counts from its cause, which a step's record does not name, so it is not held.
 """
 
 from __future__ import annotations
@@ -39,11 +39,13 @@ from . import conventions, paths, runlog, selection, shots, video_measure
 if TYPE_CHECKING:
     from .checks import Lane
 
-# The measures a value or a capture is held to, and a waiver may name; `capture` is the
-# capture itself, for a verb of the suite the stepped capture's moment does not play.
 TIMED: tuple[str, ...] = ("duration", "delay", "stagger")
 SIZED: tuple[str, ...] = ("peak", "start")
-MEASURES: tuple[str, ...] = (*TIMED, *SIZED, "curve", "travel", "tracked", "capture")
+# How far a step's timing may be from its value, as a share of it, when that is more than a
+# tick: the stage plays a step on whole ticks of the capture.
+SHARE = 0.15
+# The capture's tick in stage ms, where its record names none (ui/scripts/stepped.mjs TICK).
+TICK = 1000 / 60
 # How far from half way a motion must be at half its time to ease out (past it) or in (short
 # of it). A tracked flight that does not ease reads within 0.02 of half way, and one easing as
 # CSS's ease-in or ease-out does reads 0.1 or more from it, growing or shrinking as it goes:
@@ -53,6 +55,11 @@ EASED = 0.05
 # A layout the capture plays (ui/scripts/stepped.mjs LAYOUTS).
 LAYOUTS = ("desktop",)
 CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
+# The suite's verbs the capture's moment plays no step of, and why: logged as skipped.
+NOT_CAPTURED: dict[str, str] = {
+    "lift": "the capture plays only the suite's first moment, where nothing lifts;"
+    " by-w8gv.21.38 plays the rest",
+}
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
 INPUTS = (
@@ -71,168 +78,162 @@ def entries(reference: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {e["verb"]: e for e in reference.get("verbs", [])}
 
 
-def data_problems(reference: dict[str, Any], verbs: list[str]) -> list[str]:
-    """Why the tolerance or a waiver in Arena's data does not say what it must."""
-    found: list[str] = []
-    default = reference.get("tolerance", {})
-    for key in ("frames", "share", "fps"):
-        if not isinstance(default.get(key), (int, float)) or default[key] <= 0:
-            found.append(f"arena-motion tolerance: needs {key} above 0")
-    if not all(isinstance(v, (int, float)) for v in default.get("fps_of", {}).values()):
-        found.append(
-            "arena-motion tolerance: fps_of gives a recording's frames a second"
-        )
-    for name, entry in entries(reference).items():
-        own = entry.get("tolerance")
-        if own is not None and (
-            not own.get("reason") or set(own) - {"frames", "share", "reason"}
-        ):
-            found.append(
-                f"arena-motion {name}: a tolerance sets frames or share, with a reason"
-            )
-        cases = entry.get("summary", {}).get("cases", {})
-        for waiver in entry.get("waivers", []):
-            where = f"arena-motion {name} waiver"
-            if waiver.get("measure") not in MEASURES:
-                found.append(f"{where}: measure is one of {MEASURES}")
-            if not conventions.REPORT.match(str(waiver.get("bead", ""))):
-                found.append(f"{where}: names the bead that follows it up")
-            if not waiver.get("reason"):
-                found.append(f"{where}: says why, with the value measured")
-            if "case" in waiver and waiver["case"] not in cases:
-                found.append(f"{where}: {waiver['case']!r} is none of its cases")
-        if name not in verbs:
-            found.append(f"arena-motion {name}: no such verb")
-    return found
+def values_of(verb: dict[str, Any], case: str | None) -> dict[str, Any]:
+    """What the stage plays a step of `verb`'s `case` with: the case's own values, each it
+    leaves null being the verb's (ui/src/stage/timing.ts)."""
+    whole: dict[str, Any] = verb.get("values", {})
+    own = verb.get("cases", {}).get(case) if case is not None else None
+    if own is None:
+        return dict(whole)
+    return {
+        v: own.get(v) if own.get(v) is not None else whole.get(v)
+        for v in conventions.VALUES
+    }
 
 
-def frame_ms(reference: dict[str, Any], instances: list[dict[str, Any]]) -> float:
-    """One frame of the coarsest recording among `instances`, in ms."""
-    rates = reference["tolerance"]
-    fps = [rates.get("fps_of", {}).get(i["recording"], rates["fps"]) for i in instances]
-    return 1000 / min(fps, default=rates["fps"])
-
-
-def bounds(
-    reference: dict[str, Any],
-    entry: dict[str, Any],
-    measure: str,
-    case: str | None = None,
-) -> tuple[float, float] | None:
-    """What `measure` of the verb `entry` (of its `case`, if Arena has it) may be: Arena's range
-    widened by the tolerance; None where Arena took none."""
-    summary = entry.get("summary", {})
+def arena_of(
+    reference: dict[str, Any], verb: str, measure: str, case: str | None
+) -> str | None:
+    """Arena's summary of `measure` for `verb` (its `case`'s, where Arena's instances have
+    it), in words: a curve, or a median and range; None where Arena took none."""
+    summary = entries(reference).get(verb, {}).get("summary", {})
     if case is not None and case in summary.get("cases", {}):
         summary = summary["cases"][case]
-    else:
-        case = None
-    field = f"{measure}_ms" if measure in TIMED else measure
-    spread = summary.get(field)
+    if measure == "curve":
+        return summary.get("curve")
+    spread = summary.get(f"{measure}_ms" if measure in TIMED else measure)
     if not spread:
         return None
-    tolerance = {**reference["tolerance"], **entry.get("tolerance", {})}
-    widen = tolerance["share"] * spread["median"]
-    if measure in TIMED:
-        behind = [
-            i
-            for i in entry.get("instances", [])
-            if i.get(field) is not None and (case is None or i.get("case") == case)
-        ]
-        widen = max(widen, tolerance["frames"] * frame_ms(reference, behind))
-    return max(0.0, spread["min"] - widen), spread["max"] + widen
+    unit = " ms" if measure in TIMED else ""
+    return f"{spread['median']:g}{unit} ({spread['min']:g} to {spread['max']:g})"
 
 
-def waiver(entry: dict[str, Any], measure: str, case: str | None) -> str | None:
-    """The bead a waiver of `measure` (for `case`, or for the whole verb) names, if any."""
-    for w in entry.get("waivers", []):
-        if w["measure"] == measure and w.get("case") in (None, case):
-            return str(w["bead"])
-    return None
+def values_report(data: dict[str, Any], reference: dict[str, Any]) -> list[str]:
+    """Each verb's values and each case's, beside Arena's summary of them: no verdict."""
+    out: list[str] = []
+    for verb in data.get("verbs", []):
+        if "exempt" in verb:
+            out.append(f"{verb['name']}. Exempt: exception {verb['exempt']}.")
+            continue
+        for case in [None, *verb.get("cases", {})]:
+            said = conventions.timing({"values": values_of(verb, case)}).strip()
+            arena = [
+                f"{measure} {found}"
+                for measure in (*TIMED, "curve")
+                if (found := arena_of(reference, verb["name"], measure, case))
+            ]
+            name = f"{verb['name']} ({case})" if case else verb["name"]
+            out.append(
+                f"{name}. {said or 'None.'} Arena: {', '.join(arena) or 'none'}."
+            )
+    return out
 
 
 @dataclass(frozen=True)
 class Verdict:
-    """One measure held to Arena's: `fault` says why it is out, `waived` names the bead that
-    follows it up, and `seen` and `want` are what was found and what Arena allows."""
+    """One measure of a step: `seen` is what the capture found, `want` the verb's value it is
+    held to (None for a measure only shown beside Arena's), `failed` whether it is out, and
+    `arena` Arena's summary of the measure, as reference."""
 
     verb: str
     measure: str
     seen: str
-    want: str
-    fault: bool
-    waived: str | None = None
+    want: str | None
+    failed: bool
     case: str | None = None
-
-    @property
-    def failed(self) -> bool:
-        return self.fault and self.waived is None
+    arena: str | None = None
 
     def line(self) -> str:
-        mark = (
-            "ok"
-            if not self.fault
-            else f"waived ({self.waived})" if self.waived else "OUT"
-        )
+        mark = "OUT" if self.failed else "ok" if self.want is not None else "seen"
         case = f" ({self.case})" if self.case else ""
-        return f"{mark:>18}  {self.verb}{case} {self.measure}: {self.seen}, Arena {self.want}"
+        want = f", Beryl {self.want}" if self.want is not None else ""
+        arena = f"; Arena {self.arena}" if self.arena else ""
+        return f"{mark:>4}  {self.verb}{case} {self.measure}: {self.seen}{want}{arena}"
 
 
 def held(
     reference: dict[str, Any],
-    entry: dict[str, Any],
+    verb: str,
     measure: str,
-    value: float | None,
-    case: str | None = None,
-) -> Verdict | None:
-    """`value` of `measure` held to Arena's bounds; None where either is missing."""
-    span = bounds(reference, entry, measure, case)
-    if value is None or span is None:
-        return None
-    low, high = span
-    fault = not low <= value <= high
+    seen: float,
+    value: float,
+    case: str | None,
+    tick: float,
+) -> Verdict:
+    """A step's `measure`, `seen` in stage ms, held to its verb's `value` within a `tick` or
+    SHARE of it, whichever is larger."""
+    widen = max(tick, SHARE * value)
     return Verdict(
-        entry["verb"],
+        verb,
         measure,
-        f"{value:g}",
-        f"{low:.4g} to {high:.4g}",
-        fault,
-        waiver(entry, measure, case) if fault else None,
+        f"{seen:g} ms",
+        f"{value:g} ms (±{widen:.3g})",
+        abs(seen - value) > widen,
         case,
+        arena_of(reference, verb, measure, case),
     )
 
 
-def values_check(
-    data: dict[str, Any], reference: dict[str, Any]
-) -> tuple[list[Verdict], list[str]]:
-    """Each verb's values held to Arena's ranges, and the verbs a numbered exception exempts,
-    each as `<verb> (exception <n>)`."""
-    arena = entries(reference)
-    verdicts: list[Verdict] = []
-    exempt: list[str] = []
-    for verb in data.get("verbs", []):
-        if "exempt" in verb:
-            exempt.append(f"{verb['name']} (exception {verb['exempt']})")
+def timing_verdicts(
+    data: dict[str, Any],
+    reference: dict[str, Any],
+    captured: dict[str, Any],
+) -> list[list[Verdict]]:
+    """For each step a capture recorded (stepped.mjs's steps.json), how long it played held to
+    its verb's duration and, where the next step is the same verb and case right after it in
+    the script, how long after it that one began held to its stagger. A value the data leaves
+    null is played as 0 (timing.ts), and held so."""
+    verbs = {v["name"]: v for v in data.get("verbs", [])}
+    tick = float(captured.get("tick") or TICK)
+    seat = captured["seat"]
+    steps: list[dict[str, Any]] = captured["steps"]
+    out: list[list[Verdict]] = []
+    for step, after in zip(steps, [*steps[1:], None]):
+        verb = verbs.get(step["verb"], {})
+        if "exempt" in verb or not verb:
+            out.append([])
             continue
-        entry = arena.get(verb["name"])
-        if entry is None or "unseen" in entry:
-            continue
-        for measure in TIMED:
-            value = verb.get("values", {}).get(measure)
-            if value is None and bounds(reference, entry, measure) is not None:
-                verdicts.append(
-                    Verdict(verb["name"], measure, "none", "a value", True, None)
+        case = case_of(step["act"], seat)
+        values = values_of(verb, case)
+        found = [
+            held(
+                reference,
+                step["verb"],
+                "duration",
+                step["to"] - step["from"],
+                values["duration"] or 0,
+                case,
+                tick,
+            )
+        ]
+        if (
+            after is not None
+            and after["n"] == step["n"] + 1
+            and after["verb"] == step["verb"]
+            and case_of(after["act"], seat) == case
+        ):
+            found.append(
+                held(
+                    reference,
+                    step["verb"],
+                    "stagger",
+                    after["from"] - step["from"],
+                    values["stagger"] or 0,
+                    case,
+                    tick,
                 )
-            elif (found := held(reference, entry, measure, value)) is not None:
-                verdicts.append(found)
-    return verdicts, exempt
+            )
+        out.append(found)
+    return out
 
 
-# The capture: what the tracker found of a step, and Arena's case of it.
+# The capture: what the tracker found of a step, and the case its verb's values are of.
 
 
 def case_of(act: dict[str, Any], seat: str) -> str | None:
-    """Arena's name for the case of the step `act`, as `seat` saw it; None for a case Arena's
-    instances do not have, which is held to the verb's whole summary."""
+    """The case of the step `act`, as `seat` saw it, by the name its values and Arena's
+    instances have (ui/src/stage/timing.ts `caseOf` reads it the same); None for a case of
+    neither, which is held to its verb's values."""
     verb = act.get("verb")
     origin = act.get("from")
     zone = (act.get("object") or {}).get("zone")
@@ -345,67 +346,64 @@ def seen(clip: video_measure.Clip, landing: tuple[float, float] | None = None) -
 
 
 def capture_verdicts(
-    reference: dict[str, Any], verb: str, case: str | None, found: Seen
+    data: dict[str, Any],
+    reference: dict[str, Any],
+    verb: str,
+    case: str | None,
+    found: Seen,
 ) -> list[Verdict]:
-    """What the tracker found of one step of `verb`, held to Arena's case of it: whether it
-    travels and how it eases by Arena's curve (nothing travels for `none`, and neither is held
-    where Arena took no curve), and its sizes by Arena's."""
-    entry: dict[str, Any] = entries(reference)[verb]
-    summary = entry.get("summary", {})
-    # The case's curve, or where Arena took none for it, the verb's commonest.
-    curve = summary.get("curve")
-    if case is not None and case in summary.get("cases", {}):
-        curve = summary["cases"][case].get("curve") or curve
-    else:
-        case = None
-    if curve is None:
-        return [
-            v
-            for measure in SIZED
-            if (v := held(reference, entry, measure, getattr(found, measure), case))
-        ]
-    want = curve_class(curve)
-    travels = want is not None
-
-    def verdict(measure: str, seen: str, wanted: str, fault: bool) -> Verdict:
-        bead = waiver(entry, measure, case) if fault else None
-        return Verdict(verb, measure, seen, wanted, fault, bead, case)
-
-    out = [
-        verdict(
-            "travel",
-            "travels" if found.travels else "in place",
-            "travels" if travels else "in place",
-            found.travels != travels,
-        )
-    ]
-    if found.failure and travels:
-        out.append(verdict("tracked", found.failure, "one mover", True))
-    if travels and found.curve is not None:
+    """What the tracker found of one step of `verb`, held to its curve (its `case`'s): nothing
+    travels for `none`, and neither is held where the verb has no curve. Its sizes are shown
+    beside Arena's, held to nothing."""
+    declared = next(v for v in data.get("verbs", []) if v["name"] == verb)
+    curve = values_of(declared, case)["curve"]
+    arena_curve = arena_of(reference, verb, "curve", case)
+    out: list[Verdict] = []
+    if curve is not None:
+        want = curve_class(curve)
+        travels = want is not None
         out.append(
-            verdict(
-                "curve",
-                f"{found.curve} (half way at {found.half:g})",
-                want or "",
-                found.curve != want,
+            Verdict(
+                verb,
+                "travel",
+                "travels" if found.travels else "in place",
+                "travels" if travels else "in place",
+                found.travels != travels,
+                case,
             )
         )
+        if found.failure and travels:
+            out.append(Verdict(verb, "tracked", found.failure, "one mover", True, case))
+        if travels and found.curve is not None:
+            out.append(
+                Verdict(
+                    verb,
+                    "curve",
+                    f"{found.curve} (half way at {found.half:g})",
+                    want or "",
+                    found.curve != want,
+                    case,
+                    arena_curve,
+                )
+            )
     for measure in SIZED:
         value = getattr(found, measure)
-        if (v := held(reference, entry, measure, value, case)) is not None:
-            out.append(v)
+        if value is not None:
+            arena = arena_of(reference, verb, measure, case)
+            out.append(Verdict(verb, measure, f"{value:g}", None, False, case, arena))
     return out
 
 
 def measure_capture(
-    reference: dict[str, Any], folder: Path
+    data: dict[str, Any], reference: dict[str, Any], folder: Path
 ) -> list[tuple[str, str, list[Verdict]]]:
     """Each captured step under `folder` (stepped.mjs's output): its verb, its folder's name and
     its verdicts."""
     out: list[tuple[str, str, list[Verdict]]] = []
     for steps_file in sorted(folder.glob("*/*/steps.json")):
         captured = json.loads(steps_file.read_text())
-        for step in captured["steps"]:
+        timings = timing_verdicts(data, reference, captured)
+        for step, timed in zip(captured["steps"], timings):
             frames = steps_file.parent / step["folder"]
             name = f"{captured['layout']}/{captured['seat']}/{step['folder']}"
             clip = video_measure.read_folder(
@@ -414,13 +412,8 @@ def measure_capture(
             case = case_of(step["act"], captured["seat"])
             x, y = step["rest"]
             found = seen(clip, (x * clip.width, y * clip.height))
-            out.append(
-                (
-                    step["verb"],
-                    name,
-                    capture_verdicts(reference, step["verb"], case, found),
-                )
-            )
+            verdicts = capture_verdicts(data, reference, step["verb"], case, found)
+            out.append((step["verb"], name, timed + verdicts))
     return out
 
 
@@ -451,18 +444,15 @@ def capture(out: Path, tick: float | None = None) -> int:
 
 
 def command(args: argparse.Namespace) -> int:
-    data = conventions.load()
-    reference = motion()
-    problems = data_problems(reference, [v["name"] for v in data["verbs"]])
-    if problems:
-        print("\n".join(problems), file=sys.stderr)
+    try:
+        data = conventions.load()
+    except ValueError as e:
+        print(e, file=sys.stderr)
         return 1
+    reference = motion()
     if args.values:
-        verdicts, exempt = values_check(data, reference)
-        for v in verdicts:
-            print(v.line())
-        print(f"exempt: {', '.join(exempt) or 'none'}")
-        return 1 if any(v.failed for v in verdicts) else 0
+        print("\n".join(values_report(data, reference)))
+        return 0
     out = paths.cache_root() / "motion" / paths.REPO.name
     began = time.monotonic()
     try:
@@ -473,7 +463,7 @@ def command(args: argparse.Namespace) -> int:
     if code:
         print("motion: the capture failed", file=sys.stderr)
         return code
-    measured = measure_capture(reference, out / "frames")
+    measured = measure_capture(data, reference, out / "frames")
     verbs = selection.verb_suite().get("verbs")
     verbs = [str(v) for v in verbs] if isinstance(verbs, list) else []
     took = (time.monotonic() - began) / max(1, len(verbs) * len(LAYOUTS))
@@ -485,15 +475,18 @@ def command(args: argparse.Namespace) -> int:
                 for v, name, vs in measured
                 if v == verb and name.startswith(f"{layout}/")
             ]
-            waived = None if mine else waiver(entries(reference)[verb], "capture", None)
-            bad = (not mine and waived is None) or any(
-                v.failed for _, vs in mine for v in vs
-            )
-            failed = failed or bad
-            runlog.result(f"motion:{verb}/{layout}", "fail" if bad else "pass", took)
             if not mine:
                 said = f"{layout}: the stage played no {verb} to capture"
-                print(f"{said} (waived: {waived})" if waived else said)
+                why = NOT_CAPTURED.get(verb)
+                runlog.result(
+                    f"motion:{verb}/{layout}", "skip" if why else "fail", took
+                )
+                print(f"{said}, skipped: {why}" if why else said)
+                failed = failed or why is None
+                continue
+            bad = any(v.failed for _, vs in mine for v in vs)
+            failed = failed or bad
+            runlog.result(f"motion:{verb}/{layout}", "fail" if bad else "pass", took)
             for name, vs in mine:
                 print(f"{name}:")
                 for v in vs:
@@ -513,12 +506,13 @@ def lane() -> Lane:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "motion",
-        help="hold each verb to Arena's numbers: the stepped capture, or --values",
+        help="hold the stage to each verb's own values, Arena's beside: the stepped capture,"
+        " or --values",
     )
     p.add_argument(
         "--values",
         action="store_true",
-        help="only the verbs' durations, delays and staggers, with no browser",
+        help="only the verbs' values beside Arena's, with no browser",
     )
     p.add_argument(
         "--tick",

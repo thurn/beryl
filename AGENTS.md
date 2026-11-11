@@ -51,10 +51,10 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   still name cards and the one-card mechanics still in the engine;
   `save-breaks.json`, the corpus saves no migration carries past a change;
   `arena-motion.json`, Arena's motion per verb as measured in the recordings,
-  which the verbs' values and `just motion` are held to; `ui-conventions.json`,
-  the design language that `just conventions` renders into
-  `docs/ui-conventions.md` (edit the data, never the page). The app downloads
-  images on demand into its cache (`beryl_app`'s `art.rs`); none are committed.
+  the reference the verbs' own values started from; `ui-conventions.json`, the
+  design language that `just conventions` renders into `docs/ui-conventions.md`
+  (edit the data, never the page). The app downloads images on demand into its
+  cache (`beryl_app`'s `art.rs`); none are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
@@ -202,8 +202,8 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   changed card file's scenarios in XMage and Forge, skipped when another oracle
   run holds the oracles past 10 s) and `motion` (`just motion`, for a change to
   the stage, its capture or the verbs' data: the stage's verbs captured in
-  stepped stage time and measured as Arena's clips were, each held to Arena's
-  path and size in `data/arena-motion.json`, one run-log check
+  stepped stage time and measured as Arena's clips were, each held to its own
+  values in `data/ui-conventions.json` with Arena's beside, one run-log check
   `motion:<verb>/<layout>` each; also nightly). For a change to `ui/` or `rust/`
   it also runs `ui-test` and `shots` on the browser checks the change can break,
   by the nightly coverage (`just coverage`), worst failure record first, as many
@@ -231,11 +231,17 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 
 ## UI
 
-MTG Arena is the reference for Beryl's flow, motion, timing, table layout and
-wording (`docs/project-50k.md`, K22). Before you design or change a prompt, an
-animation, an arrow or a label, find how Arena does it with the `arena-video`
-skill and match it. A still or a filmstrip settles what prose cannot.
+MTG Arena is the reference for Beryl's flow, the order and timing of events,
+table layout and wording (`docs/project-50k.md`, K22). Before you design or
+change a prompt, an animation, an arrow or a label, find how Arena does it with
+the `arena-video` skill. A still or a filmstrip settles what prose cannot.
 
+- Motion follows Arena in what it shows and when: what changed, who did it,
+  where it went, in what order, what holds still. How it looks on Beryl's cards
+  (path, easing, duration, depth, effects, how a batch moves) is designed for
+  them, starting from Arena's clip and numbers but never copying them, and a
+  verb is done when the independent motion review passes it (UI Conventions,
+  exception 8).
 - Beryl keeps its own skin: colors, type, icon drawings and frames, and full
   cards that tap.
 - Beryl differs from Arena only where [UI Conventions](docs/ui-conventions.md)

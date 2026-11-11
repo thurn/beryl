@@ -4,95 +4,61 @@ from typing import Any
 
 import pytest
 
-from beryl_tools import conventions, motion
+from beryl_tools import conventions, motion, selection
 from beryl_tools.video_measure import Clip
 
-# The values check, on the tree: every verb's duration, delay and stagger within Arena's.
+# The values report: Beryl's own values beside Arena's, with no verdict.
 
 
-def test_every_verb_holds_to_arenas_numbers() -> None:
+def test_the_values_report_shows_beryls_values_beside_arenas_and_holds_none() -> None:
     data, reference = conventions.load(), motion.motion()
-    assert motion.data_problems(reference, [v["name"] for v in data["verbs"]]) == []
-    verdicts, exempt = motion.values_check(data, reference)
-    assert [v.line() for v in verdicts if v.failed] == []
-    assert {v.verb for v in verdicts} >= {"fly", "emerge", "appear", "vanish"}
-    # A verb a numbered exception covers is skipped, and listed.
-    assert "tap (exception 2)" in exempt
-    assert all(v.verb != "tap" for v in verdicts)
+    emerge = next(v for v in data["verbs"] if v["name"] == "emerge")
+    # A value far from Arena's is Beryl's to choose.
+    emerge["values"]["duration"] = 5000
+    report = motion.values_report(data, reference)
+    [line] = [l for l in report if l.startswith("emerge. ")]
+    assert "Beryl: 5000 ms" in line and "Arena: duration 300 ms (240 to 350)" in line
+    assert any(
+        l.startswith("emerge (triggered ability). Beryl: 275 ms") for l in report
+    )
+    assert "tap. Exempt: exception 2." in report
 
 
-@pytest.mark.parametrize("measure", motion.TIMED)
-def test_a_value_moved_out_of_tolerance_fails(measure: str) -> None:
-    data, reference = conventions.load(), motion.motion()
-    verb = next(v for v in data["verbs"] if v["name"] == "emerge")
-    low, high = motion.bounds(
-        reference, motion.entries(reference)["emerge"], measure
-    ) or (0, 0)
-    verb["values"][measure] = round(high) + 1
-    failed = [v for v in motion.values_check(data, reference)[0] if v.failed]
-    assert [(v.verb, v.measure) for v in failed] == [("emerge", measure)]
-    verb["values"][measure] = round(high)
-    assert not any(v.failed for v in motion.values_check(data, reference)[0])
-
-
-def test_a_verb_widens_its_tolerance_or_waives_a_measure_only_with_a_reason() -> None:
-    data, reference = conventions.load(), motion.motion()
-    names = [v["name"] for v in data["verbs"]]
-    verb = next(v for v in data["verbs"] if v["name"] == "emerge")
-    verb["values"]["duration"] = 500
-    entry = motion.entries(reference)["emerge"]
-    entry["tolerance"] = {"share": 1.0}
-    assert motion.data_problems(reference, names) != []
-    entry["tolerance"]["reason"] = "a test"
-    assert not any(v.failed for v in motion.values_check(data, reference)[0])
-    del entry["tolerance"]
-    entry["waivers"] = [
-        {"measure": "duration", "bead": "by-w8gv.21.19", "reason": "a test"}
-    ]
-    assert motion.data_problems(reference, names) == []
-    [waived] = [v for v in motion.values_check(data, reference)[0] if v.fault]
-    assert waived.waived == "by-w8gv.21.19" and not waived.failed
-    entry["waivers"] = [{"measure": "duration", "reason": "no bead"}]
-    assert motion.data_problems(reference, names) != []
-
-
-def reference_of(numbers: list[int | None], recordings: list[str]) -> dict[str, Any]:
-    instances = [
-        {"recording": r, "case": "one", "duration_ms": n, "peak": None}
-        for n, r in zip(numbers, recordings)
-    ]
-    summary = conventions.summarize(instances)
-    return {
-        "tolerance": {"frames": 1, "share": 0.15, "fps": 30, "fps_of": {"sixty": 60}},
-        "verbs": [{"verb": "v", "instances": instances, "summary": summary}],
+def test_a_case_plays_its_own_values_and_its_verbs_where_it_has_none() -> None:
+    verb = {
+        "values": {"duration": 400, "delay": 100, "stagger": 50, "curve": "ease-out"},
+        "cases": {
+            "draw": {"duration": 900, "delay": None, "stagger": 0, "curve": None}
+        },
     }
-
-
-def test_the_tolerance_is_a_frame_of_the_coarsest_recording_or_a_share_of_the_median() -> (
-    None
-):
-    # A share of a long median is more than a frame.
-    long = reference_of([1000, 1100, 1200], ["a", "b", "c"])
-    assert motion.bounds(long, long["verbs"][0], "duration") == (835.0, 1365.0)
-    # A frame at 30 fps is more than a share of a short one, and 60 fps recordings alone
-    # give a frame of their own.
-    short = reference_of([40, 50, 60], ["a", "sixty", "sixty"])
-    low, high = motion.bounds(short, short["verbs"][0], "duration") or (0, 0)
-    assert (low, high) == pytest.approx((40 - 1000 / 30, 60 + 1000 / 30))
-    sixty = reference_of([40, 50, 60], ["sixty"] * 3)
-    low, high = motion.bounds(sixty, sixty["verbs"][0], "duration") or (0, 0)
-    assert (low, high) == pytest.approx((40 - 1000 / 60, 60 + 1000 / 60))
-    assert motion.bounds(sixty, sixty["verbs"][0], "delay") is None
-
-
-# The capture: what the tracker finds of a step, held to Arena's case of it.
-
-
-def test_each_step_of_the_slice_is_held_to_a_case_arena_measured() -> None:
-    cases = {
-        verb: set(entry["summary"].get("cases", {}))
-        for verb, entry in motion.entries(motion.motion()).items()
+    assert motion.values_of(verb, "draw") == {
+        "duration": 900,
+        "delay": 100,
+        "stagger": 0,
+        "curve": "ease-out",
     }
+    assert motion.values_of(verb, "discard") == verb["values"]
+    assert motion.values_of(verb, None) == verb["values"]
+
+
+def test_a_number_is_held_within_a_tick_or_a_share_of_its_value() -> None:
+    reference = motion.motion()
+    tick = 1000 / 60
+    assert not motion.held(reference, "fly", "duration", 1140, 1000, None, tick).failed
+    assert motion.held(reference, "fly", "duration", 1160, 1000, None, tick).failed
+    # A short value is held to a tick, as the stage plays a step on whole ticks.
+    assert not motion.held(reference, "fly", "duration", 49, 33, None, tick).failed
+    assert motion.held(reference, "fly", "duration", 50, 33, None, tick).failed
+    # Arena's numbers are shown beside it, as reference.
+    line = motion.held(reference, "fly", "duration", 600, 600, "draw", tick).line()
+    assert "Beryl 600 ms" in line and "Arena 1050 ms (700 to 1117)" in line
+
+
+# The capture: a step held to its verb's values.
+
+
+def test_each_step_of_the_slice_has_values_of_its_case() -> None:
+    cases = {v["name"]: set(v.get("cases", {})) for v in conventions.load()["verbs"]}
     item = {"kind": "ability", "triggered": True}
     steps: list[tuple[dict[str, Any], str]] = [
         ({"verb": "fly", "from": "hand", "object": {"zone": "stack"}}, "yours"),
@@ -141,52 +107,79 @@ def test_a_card_that_leaves_is_held_to_the_case_of_where_it_goes_or_why() -> Non
     assert motion.case_of(drawn, "theirs") == "draw"
 
 
-def test_a_verb_the_capture_does_not_play_is_waived_only_by_name() -> None:
-    reference = motion.motion()
-    verbs = list(motion.entries(reference))
-    entry = motion.entries(reference)["lift"]
-    entry["waivers"] = [{"measure": "capture", "bead": "by-w8gv.21.20", "reason": "x"}]
-    assert not motion.data_problems(reference, verbs)
-    assert motion.waiver(entry, "capture", None) == "by-w8gv.21.20"
-    assert motion.waiver(entry, "peak", None) is None
-
-
-def test_a_step_out_of_arenas_case_fails_unless_waived() -> None:
-    reference = motion.motion()
-    resolves = "permanent resolves"
-    bounds = motion.bounds(
-        reference, motion.entries(reference)["fly"], "peak", resolves
-    )
-    assert bounds is not None
-    big = motion.Seen(travels=True, half=0.65, start=bounds[1] + 1, peak=bounds[1] + 1)
-    entry = motion.entries(reference)["fly"]
-    entry["waivers"] = []
-    out = motion.capture_verdicts(reference, "fly", resolves, big)
-    assert [(v.measure, v.failed) for v in out if v.fault] == [("peak", True)]
-    entry["waivers"] = [
-        {
-            "measure": "peak",
-            "case": resolves,
-            "bead": "by-w8gv.21.19",
-            "reason": "a test",
-        }
+def token_steps(second_from: int, second_to: int) -> dict[str, Any]:
+    """The capture's record of two tokens made by one effect, the second played over
+    `second_from` to `second_to`."""
+    act = {"verb": "appear", "from": "nowhere", "object": {"zone": "battlefield"}}
+    steps = [
+        {"n": 12, "verb": "appear", "act": act, "from": 2035, "to": 2068},
+        {"n": 13, "verb": "appear", "act": act, "from": second_from, "to": second_to},
     ]
-    out = motion.capture_verdicts(reference, "fly", resolves, big)
+    return {"seat": "yours", "tick": 1000 / 60, "steps": steps}
+
+
+def test_a_step_is_held_to_its_duration_and_a_batch_to_its_stagger() -> None:
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+
+    def failed(captured: dict[str, Any]) -> list[tuple[int, str]]:
+        verdicts = motion.timing_verdicts(data, reference, captured)
+        return [(n, v.measure) for n, vs in enumerate(verdicts) for v in vs if v.failed]
+
+    # Tokens appear 33 ms apart, each in 33 ms.
+    assert failed(token_steps(2068, 2101)) == []
+    assert failed(token_steps(2135, 2168)) == [(0, "stagger")]
+    assert failed(token_steps(2068, 2268)) == [(1, "duration")]
+    # Held to Beryl's values, whatever Arena's are.
+    token = next(v for v in data["verbs"] if v["name"] == "appear")["cases"]["token"]
+    token["duration"], token["stagger"] = 200, 100
+    assert failed(token_steps(2135, 2335)) == [(0, "duration")]
+    # Steps of the batch that are not next to each other in the script are no batch.
+    apart = token_steps(2500, 2700)
+    apart["steps"][1]["n"] = 20
+    assert failed(apart) == [(0, "duration")]
+
+
+def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown() -> (
+    None
+):
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+    resolves = "permanent resolves"
+
+    def failed(verb: str, case: str | None, found: motion.Seen) -> list[str]:
+        out = motion.capture_verdicts(data, reference, verb, case, found)
+        return [v.measure for v in out if v.failed]
+
+    # Its sizes are Beryl's, shown beside Arena's however far from them.
+    big = motion.Seen(travels=True, half=0.65, start=9.0, peak=9.0)
+    out = motion.capture_verdicts(data, reference, "fly", resolves, big)
     assert not any(v.failed for v in out)
+    [peak] = [v for v in out if v.measure == "peak"]
+    assert peak.want is None and peak.arena and "Arena" in peak.line()
     # A flight that does not ease, or a token that flies in, is out.
     even = motion.Seen(travels=True, half=0.5)
-    out = motion.capture_verdicts(reference, "fly", "own spell cast", even)
-    assert [v.measure for v in out if v.failed] == ["curve"]
-    flown = motion.Seen(travels=True, half=0.6)
-    out = motion.capture_verdicts(reference, "appear", "token", flown)
-    assert [v.measure for v in out if v.failed] == ["travel"]
-    # A case with no curve taken is held to the verb's; a verb with none, to its sizes alone.
-    out = motion.capture_verdicts(reference, "fly", "discard", even)
-    assert [v.measure for v in out if v.failed] == ["curve"]
-    assert motion.capture_verdicts(reference, "strike", None, even) == []
+    assert failed("fly", "own spell cast", even) == ["curve"]
+    assert failed("appear", "token", motion.Seen(travels=True, half=0.6)) == ["travel"]
+    # A case with no curve of its own is held to its verb's, and one with its own to that.
+    assert failed("fly", "discard", even) == ["curve"]
+    assert failed("fly", "land played", motion.Seen(travels=True, half=0.6)) == [
+        "curve"
+    ]
+    for verb in data["verbs"]:
+        if verb["name"] == "fly":
+            verb["cases"]["land played"]["curve"] = "linear"
+    assert failed("fly", "land played", even) == []
+    # A verb with no curve is held to nothing it travels.
+    assert failed("strike", None, even) == []
     lost = motion.Seen(travels=True, failure="2 things moved")
-    out = motion.capture_verdicts(reference, "emerge", "triggered ability", lost)
-    assert [v.measure for v in out if v.failed] == ["tracked"]
+    assert failed("emerge", "triggered ability", lost) == ["tracked"]
+
+
+def test_a_verb_the_capture_does_not_play_is_one_of_the_suites() -> None:
+    suite = selection.verb_suite()["verbs"]
+    assert isinstance(suite, list)
+    assert set(motion.NOT_CAPTURED) <= {str(v) for v in suite}
 
 
 WIDTH, HEIGHT, FPS = 240, 135, 60

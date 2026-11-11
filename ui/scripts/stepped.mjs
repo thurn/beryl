@@ -2,7 +2,7 @@
 // on the stage under `?stage`, its clock held and stepped in ticks of a sixtieth of a second (on
 // whole milliseconds), screenshotting each tick of every step of the suite's verbs. `by motion`
 // measures the frames with `by video measure`, the tool Arena's numbers were taken with, and
-// holds each verb's path and size to Arena's (tools/src/beryl_tools/motion.py). Usage:
+// holds each step to its verb's own values (tools/src/beryl_tools/motion.py). Usage:
 //   node scripts/stepped.mjs <base-url> <fixtures-dir> <out-dir> [--tick <ms>]
 // Each seat of the moment is played twice on a page of its own: once to learn when each step
 // begins and ends and where its subject (the card or ability it is about) goes, and once to

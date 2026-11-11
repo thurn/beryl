@@ -1,8 +1,8 @@
 // How each step is played, from the design language's data (data/ui-conventions.json, `verbs`):
-// a verb's duration, delay and stagger in stage milliseconds and its curve, the medians of
-// Arena's own (data/arena-motion.json, plan K27). Where Arena's instances are of several cases
-// (a draw, a discard), a step of a case is played with that case's own (`cases`), and with the
-// verb's where the case has none. A verb with a number not taken has none, and one with no
+// a verb's duration, delay and stagger in stage milliseconds and its curve, Beryl's own (UI
+// Conventions, "Motion is Beryl's own"), first set from Arena's medians (data/arena-motion.json,
+// plan K27). Where a verb has several cases (a draw, a discard), a step of a case is played with
+// that case's own (`cases`), and with the verb's where the case has none. A verb with a number not taken has none, and one with no
 // duration snaps.
 import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json";

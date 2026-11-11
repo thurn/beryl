@@ -11,12 +11,13 @@ does and the values the stage plays it with, and the `marks` a card can carry, e
 means and its one look. Their names are the session's (`beryl_session`'s `script::Verb` and
 `script::Mark`), and a test there fails when the two disagree.
 
-A verb's values are Arena's, measured (K27): `data/arena-motion.json` holds each verb's
-instances in the recordings, how each was taken and their summary, or why the recordings cannot
-show the verb. `by conventions` derives the summaries and the values from the instances; the
-check fails when they disagree. A verb a numbered exception covers is `exempt` and keeps its own.
-Where the instances are of several cases (a draw, a discard), the verb's `cases` hold each
-case's own values, derived the same way, and the stage plays a step of that case with them.
+A verb's values are Beryl's own (the exception "Motion is Beryl's own"): the stage plays it with
+them and `by motion` holds the stage to them. Where a verb has several cases (a draw, a
+discard), its `cases` hold each case's own, and a value a case leaves null is the verb's.
+`data/arena-motion.json` is the reference they started from (K27): each verb's instances in the
+recordings, how each was taken and their summary, or why the recordings cannot show the verb.
+`by conventions` derives the summaries from the instances, and the check fails when they
+disagree. A verb another numbered exception covers is `exempt`.
 """
 
 from __future__ import annotations
@@ -45,7 +46,8 @@ TIME: re.Pattern[str] = re.compile(r"^(\d+:)?\d{1,2}:\d{2}(\.\d+)?$")
 # The closed lists, and what each of their members must say besides its name.
 LISTS: dict[str, tuple[str, ...]] = {"verbs": ("shows",), "marks": ("means", "look")}
 NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
-# What the stage plays a verb with: Arena's medians, or null where none was measured (K27).
+# What the stage plays a verb with, Beryl's own; null where the verb (or a case, its verb) has
+# none.
 VALUES = ("duration", "delay", "stagger", "curve")
 
 MOTION: Path = paths.REPO / "data" / "arena-motion.json"
@@ -103,15 +105,19 @@ def exceptions(data: dict[str, Any]) -> list[int]:
 
 
 def value_problems(where: str, verb: dict[str, Any], numbered: list[int]) -> list[str]:
-    """Why a verb's values are not ms, a curve and the exception that exempts it."""
+    """Why a verb's values, or a case's, are not ms and a curve, or the exception that exempts
+    it is none."""
     found: list[str] = []
-    values = verb.get("values", {})
-    if tuple(values) != VALUES or any(
-        not isinstance(values[v], (int, type(None))) for v in VALUES[:3]
-    ):
-        found.append(f"{where}: values are {list(VALUES)}, each ms or null")
-    elif values["curve"] not in (*CURVES, None):
-        found.append(f"{where}: curve {values['curve']!r} is not one of {CURVES}")
+    named = [("values", verb.get("values", {}))] + [
+        (f"case {case!r}", own) for case, own in verb.get("cases", {}).items()
+    ]
+    for name, values in named:
+        if tuple(values) != VALUES or any(
+            not isinstance(values[v], (int, type(None))) for v in VALUES[:3]
+        ):
+            found.append(f"{where}: {name} are {list(VALUES)}, each ms or null")
+        elif values["curve"] not in (*CURVES, None):
+            found.append(f"{where}: curve {values['curve']!r} is not one of {CURVES}")
     if "exempt" in verb and verb["exempt"] not in numbered:
         found.append(f"{where}: exempt by {verb['exempt']!r}, not an exception")
     return found
@@ -154,28 +160,6 @@ def summarize(instances: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
-def measured(summary: dict[str, Any]) -> dict[str, Any]:
-    """A verb's values from the summary of its instances."""
-    values: dict[str, Any] = {
-        value: (summary[field] or {}).get("median") for field, value in TIMINGS.items()
-    }
-    return {**values, "curve": summary["curve"]}
-
-
-def cases(summary: dict[str, Any]) -> dict[str, Any]:
-    """Each case's own values where Arena's instances are of several cases, which the stage
-    plays that case with: a draw is not a discard. A value a case has none of is the verb's.
-    """
-    return {case: measured(own) for case, own in summary.get("cases", {}).items()}
-
-
-def derived(verb: dict[str, Any], summary: dict[str, Any]) -> bool:
-    """Whether `verb`'s values and its cases' are those of `summary`."""
-    return verb.get("values") == measured(summary) and verb.get("cases", {}) == cases(
-        summary
-    )
-
-
 def instance_problems(where: str, instance: dict[str, Any]) -> list[str]:
     """Why one instance does not say where it is, how it was taken and what it gave."""
     found = evidence_problems(where, {"arena": {"evidence": [instance]}})
@@ -209,7 +193,7 @@ def instance_problems(where: str, instance: dict[str, Any]) -> list[str]:
 
 
 def motion_problems(motion: dict[str, Any], data: dict[str, Any]) -> list[str]:
-    """Why Arena's measurements do not cover every verb, or the verbs' values are not theirs."""
+    """Why Arena's measurements do not cover every verb, or their summaries are stale."""
     found: list[str] = [] if motion.get("about") else ["arena-motion: needs about"]
     verbs = {v["name"]: v for v in data.get("verbs", [])}
     names = [m.get("verb") for m in motion.get("verbs", [])]
@@ -242,27 +226,14 @@ def motion_problems(motion: dict[str, Any], data: dict[str, Any]) -> list[str]:
         summary = summarize(instances)
         if entry.get("summary") != summary:
             found.append(f"{where}: summary is stale: run `just conventions`")
-        verb = verbs.get(name, {})
-        if verb and "exempt" not in verb and not derived(verb, summary):
-            found.append(
-                f"{where}: ui-conventions values are stale: run `just conventions`"
-            )
     return found
 
 
-def derive(motion: dict[str, Any], data: dict[str, Any]) -> None:
-    """Write each verb's summary from its instances, and its values from the summary."""
-    verbs = {v["name"]: v for v in data.get("verbs", [])}
+def derive(motion: dict[str, Any]) -> None:
+    """Write each verb's summary of Arena's instances; its values are Beryl's own, untouched."""
     for entry in motion.get("verbs", []):
-        if "unseen" in entry:
-            continue
-        entry["summary"] = summarize(entry.get("instances", []))
-        verb = verbs.get(entry.get("verb"))
-        if verb is not None and "exempt" not in verb:
-            verb["values"] = measured(entry["summary"])
-            verb.pop("cases", None)
-            if own := cases(entry["summary"]):
-                verb["cases"] = own
+        if "unseen" not in entry:
+            entry["summary"] = summarize(entry.get("instances", []))
 
 
 def problems(data: dict[str, Any]) -> list[str]:
@@ -339,7 +310,7 @@ def timing(verb: dict[str, Any]) -> str:
     if values.get("curve"):
         # A curve of none: nothing travels (a fade, a pop, a hold).
         said.append("in place" if values["curve"] == "none" else values["curve"])
-    return f" Measured: {', '.join(said)}." if said else ""
+    return f" Beryl: {', '.join(said)}." if said else ""
 
 
 def render(data: dict[str, Any]) -> str:
@@ -404,10 +375,9 @@ def step() -> int:
 def run(args: argparse.Namespace) -> int:
     if args.check:
         return step()
-    data, motion = json.loads(DATA.read_text()), json.loads(MOTION.read_text())
-    derive(motion, data)
+    motion = json.loads(MOTION.read_text())
+    derive(motion)
     write(MOTION, motion)
-    write(DATA, data)
     try:
         PAGE.write_text(render(load()))
     except ValueError as e:
@@ -420,7 +390,7 @@ def run(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "conventions",
-        help="derive Arena's values and write docs/ui-conventions.md (--check)",
+        help="summarize Arena's motion and write docs/ui-conventions.md (--check)",
     )
     p.add_argument("--check", action="store_true", help="fail when the page is stale")
     p.set_defaults(func=run)

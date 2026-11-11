@@ -1,9 +1,10 @@
 # UI Conventions
 
-MTG Arena is the reference for Beryl's flow, motion, timing, table layout and
-wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22). This page lists
-only what Arena does not settle: where Beryl differs on purpose, what Arena has
-no equivalent for, and what the recordings do not show.
+MTG Arena is the reference for Beryl's flow, the order and timing of events,
+table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22);
+how a motion looks is Beryl's own (exception 8). This page lists only what Arena
+does not settle: where Beryl differs on purpose, what Arena has no equivalent
+for, and what the recordings do not show.
 
 The rulings were made on 2026-11-10 from an audit of 180 bug reports against the
 recordings in `~/arena`. Each Arena finding cites the recording moments that
@@ -42,6 +43,17 @@ removes an entry; nothing else does.
    shows no link on the table.
 7. **Own-target warning.** Confirm before a counter or removal spell targets the
    player's own spell or permanent (by-cp2y, by-jmx9).
+8. **Motion is Beryl's own.** Arena settles what a motion shows and when: what
+   changed, who did it, where it went, what happens in what order, what holds
+   still while it plays, where the eye is led. How it looks on Beryl's cards
+   (path, easing, duration, depth, rotation, effects, how a batch and its
+   neighbours move) is designed for them, starting from Arena's clip and numbers
+   but never copying them: "animations are not only about duration", and
+   "independent aesthetic judgement is needed here, our cards do not work the
+   same way". A verb is done when the independent motion review passes it;
+   `just motion` holds the stage to the verb's own values below (by-w8gv.21.42).
+   Arena's motion is made for its art crops, frames and distances, and copying
+   its numbers onto Beryl's full cards does not carry over what makes it work.
 
 ## Settled as Arena
 
@@ -308,8 +320,9 @@ Every change on the table is shown by one of these, applied to a card, an
 ability or a player by a step of the script the session sends
 (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena
 does not show is composed from these. A verb's duration, delay, stagger and
-curve are Arena's medians over the instances in `data/arena-motion.json`, which
-also holds each case's own (K27).
+curve, and each case's, are Beryl's own (exception 8): first set from Arena's
+medians, whose instances `data/arena-motion.json` keeps as reference (K27), and
+held to by `just motion`.
 
 - **fly.** A card travels from where it is to its new place, turning over on the
   way if its face changes, and flashes as it lands on the battlefield: a land
@@ -324,13 +337,13 @@ also holds each case's own (K27).
   size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w
   16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3,
   UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI
-  1:01:50.3). Measured: 475 ms, 326 ms apart, ease-out.
+  1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out.
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. A token appears whole with a
   short glow, a batch as one group. The opening hand and a mulligan's new hand
   are there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w
-  15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Measured: 66 ms, 135 ms
-  after its cause, 33 ms apart, in place.
+  15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after
+  its cause, 33 ms apart, in place.
 - **vanish.** A card or an ability goes from where it is with no flight, and a
   card is then at its new place: destroyed, exiled, sacrificed, countered,
   returned to a hand, or done resolving. A destroyed permanent falls to ash in
@@ -340,7 +353,7 @@ also holds each case's own (K27).
   or shrinks into its graveyard. A finished ability is gone between two frames
   (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w
   19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67,
-  pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Measured: 565 ms, 260 ms after its
+  pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Beryl: 565 ms, 260 ms after its
   cause, in place.
 - **emerge.** An ability lifts out of its source and goes on the stack. The
   source stays as it is. A small copy of the card appears on the source and
@@ -348,14 +361,14 @@ also holds each case's own (K27).
   ability does the same. Two triggers of one event leave 0.3 s apart. A dies
   trigger leaves before its source breaks up (IEXcjBn3BXk 20:39.3, 5UHzpVvUkfI
   19:48.5, 5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw 49:08.0,
-  I3Te0m1bBFw 26:56.75). Measured: 300 ms, 190 ms after its cause, 300 ms apart,
+  I3Te0m1bBFw 26:56.75). Beryl: 300 ms, 190 ms after its cause, 300 ms apart,
   ease-in.
 - **flip.** A card turns over where it lies: a double-faced card transforms, a
   face-down permanent turns face up (not seen: built as "A card turning face up"
   says). A transforming card is covered by an effect (a lava slab, a cocoon) for
   about 1.1 s and shows its new face as the effect clears; it neither turns nor
   grows (WCknTZNbraE 35:49.2, WCknTZNbraE 1:23:36.8, UrGalw_f35w 49:06.5).
-  Measured: 1130 ms, in place.
+  Beryl: 1130 ms, in place.
 - **tap.** A permanent turns as it taps or untaps. Arena tilts a tapped
   permanent's art crop 7 to 8 degrees in about 0.2 s and dims it; an untap
   restores it in about 0.1 s (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1,
@@ -366,7 +379,7 @@ also holds each case's own (K27).
   A blocked attacker strikes about 0.4 s before an unblocked one. First strike
   is a strike of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk
   25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
-  Measured: 850 ms, 285 ms apart.
+  Beryl: 850 ms, 285 ms apart.
 - **streak.** A streak leaves one thing and lands on another, which flashes:
   mana from its source into the spell or ability it pays for, and damage from a
   spell or ability to what it hits. Each tapped land sends one streak of its
@@ -374,7 +387,7 @@ also holds each case's own (K27).
   and a streak of fire crosses to its target in about 0.25 s, with a burst where
   it lands; the spell leaves after (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85,
   pE4XSNi-nZc 22:00.6, IEXcjBn3BXk 20:40.88, IEXcjBn3BXk 38:36.7, I3Te0m1bBFw
-  31:37.8). Measured: 250 ms, 100 ms after its cause.
+  31:37.8). Beryl: 250 ms, 100 ms after its cause.
 - **count.** A number changes and shows that it did: a life total, a kind of
   counter, a power and toughness, a mana pool. A life total jumps to its new
   value in a burst of about 0.4 s; a loss's red number drifts down from the
@@ -382,27 +395,26 @@ also holds each case's own (K27).
   badge settles onto its permanent after a flash. A planeswalker's loyalty
   changes about a second after its ability reaches the stack (IEXcjBn3BXk
   22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5, 0VsYGs88NXA 31:13.25,
-  5UHzpVvUkfI 19:59.25). Measured: 400 ms, 125 ms after its cause, in place.
+  5UHzpVvUkfI 19:59.25). Beryl: 400 ms, 125 ms after its cause, in place.
 - **set.** The table changes and nothing moves: a step of the turn begins, a
   library is shuffled, a permanent's characteristics change. Nothing animates as
   a step begins, and nothing shows on a library when it is shuffled (IEXcjBn3BXk
-  19:36.5, IEXcjBn3BXk 28:10.5). Measured: 25 ms, in place.
+  19:36.5, IEXcjBn3BXk 28:10.5). Beryl: 25 ms, in place.
 - **showcase.** A card is held up for both players to read: it joins the
   "Revealed Cards" pile at the top left. Revealed cards gather under a "Revealed
   Cards" pill at the top left, which opens into a browser of them and stays
-  afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9). Measured: 200 ms,
-  ease-out.
+  afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9). Beryl: 200 ms, ease-out.
 - **dwell.** Nothing moves while a spell or ability is read: the opponent's,
   before it resolves unanswered. The opponent's spell sits on the stack for 0.7
-  to 1.9 s before it resolves (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5).
-  Measured: 800 ms, in place.
+  to 1.9 s before it resolves (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5). Beryl:
+  800 ms, in place.
 - **announce.** A notice passes over the table while play goes on under it: the
   turn banner, the pill that says what a scry did, a coin tossed. "Your Turn" or
   "Opponent's Turn" glows at the centre for about a second while cards move
   under it. A pill above an avatar reads "Scry: 1 top, 1 bottom." for about 3 s.
   A coin a card flips is tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk
   19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6,
-  SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Measured: 1200 ms, 116 ms after its
+  SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Beryl: 1200 ms, 116 ms after its
   cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
@@ -412,14 +424,14 @@ also holds each case's own (K27).
   blocker to its attacker until combat damage is done. An attacker has no line
   to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5,
   IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk
-  25:52.5). Measured: 33 ms, 170 ms after its cause, in place.
+  25:52.5). Beryl: 33 ms, 170 ms after its cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
-  the step that begins it to the step that ends it. Measured: 50 ms, 125 ms
-  after its cause, 0 ms apart, in place.
+  the step that begins it to the step that ends it. Beryl: 50 ms, 125 ms after
+  its cause, 0 ms apart, in place.
 - **lift.** Cards the opponent is handling come away from their pile, face down,
   from the step that begins the look to the step that ends it. Cards the
   opponent scries come off their library face down at its size and lie beside it
-  (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9). Measured: 433 ms, 500 ms apart,
+  (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9). Beryl: 433 ms, 500 ms apart,
   ease-out.
 
 ## Marks

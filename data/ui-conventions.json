@@ -1,7 +1,7 @@
 {
   "title": "UI Conventions",
   "intro": [
-    "MTG Arena is the reference for Beryl's flow, motion, timing, table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22). This page lists only what Arena does not settle: where Beryl differs on purpose, what Arena has no equivalent for, and what the recordings do not show.",
+    "MTG Arena is the reference for Beryl's flow, the order and timing of events, table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22); how a motion looks is Beryl's own (exception 8). This page lists only what Arena does not settle: where Beryl differs on purpose, what Arena has no equivalent for, and what the recordings do not show.",
     "The rulings were made on 2026-11-10 from an audit of 180 bug reports against the recordings in `~/arena`. Each Arena finding cites the recording moments that show it, as `<recording id> <time>`, for `just video film`.",
     "This page is generated from `data/ui-conventions.json` (K28) by `just conventions`: edit the data, not the page. The repo lane fails when the page is stale."
   ],
@@ -44,7 +44,7 @@
       "key": "verbs",
       "heading": "Verbs",
       "intro": [
-        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve are Arena's medians over the instances in `data/arena-motion.json`, which also holds each case's own (K27)."
+        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve, and each case's, are Beryl's own (exception 8): first set from Arena's medians, whose instances `data/arena-motion.json` keeps as reference (K27), and held to by `just motion`."
       ]
     },
     {
@@ -172,6 +172,18 @@
         "by-cp2y",
         "by-jmx9"
       ]
+    },
+    {
+      "kind": "exception",
+      "number": 8,
+      "name": "Motion is Beryl's own",
+      "rule": "Arena settles what a motion shows and when: what changed, who did it, where it went, what happens in what order, what holds still while it plays, where the eye is led. How it looks on Beryl's cards (path, easing, duration, depth, rotation, effects, how a batch and its neighbours move) is designed for them, starting from Arena's clip and numbers but never copying them: \"animations are not only about duration\", and \"independent aesthetic judgement is needed here, our cards do not work the same way\". A verb is done when the independent motion review passes it; `just motion` holds the stage to the verb's own values below.",
+      "reports": [
+        "by-w8gv.21.42"
+      ],
+      "arena": {
+        "does": "Arena's motion is made for its art crops, frames and distances, and copying its numbers onto Beryl's full cards does not carry over what makes it work."
+      }
     },
     {
       "kind": "settled",
@@ -1188,8 +1200,8 @@
           "curve": "none"
         },
         "ability finished": {
-          "duration": 33,
-          "delay": null,
+          "duration": 0,
+          "delay": 0,
           "stagger": null,
           "curve": "none"
         }

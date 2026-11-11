@@ -3,7 +3,7 @@ agent (`just nightly-install`): today, removing the cache folders of checkouts t
 (`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
 check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
 sample), the fuzz (`just fuzz`: engine and session games at length, the script checks on
-throughout) and the stage's verbs held to Arena's in a stepped capture (`by motion`). It costs no
+throughout) and the stage's verbs held to their own values in a stepped capture (`by motion`). It costs no
 agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
 `last-output.txt` (the last run's output). More nightly work joins as another [`Step`] in
@@ -115,7 +115,7 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
 
 
 def motion_step(commit: str, out: IO[str]) -> int:
-    """The stepped capture of the stage's verbs held to Arena's (`by motion`, motion.py) on
+    """The stepped capture of the stage's verbs held to their values (`by motion`, motion.py) on
     `commit` at low priority, one run-log record a verb and layout, `motion:<verb>/<layout>`.
     """
     from . import runlog  # It imports this module.
