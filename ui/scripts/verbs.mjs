@@ -431,17 +431,20 @@ const CASES = {
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
             assert.equal(lift.at.to.zones[ability], "stack");
             const after = lift.at.to.poses[source];
+            const next = run.steps[run.steps.indexOf(lift) + 1];
             if (reflows) {
                 assert.equal(lift.at.to.zones[source], "battlefield");
-                assert.ok(after.depth < ALOFT, "its source is at rest again");
-                assert.equal(after.opacity, 1);
+                assert.deepEqual(
+                    next.before.poses[source],
+                    after,
+                    "its source has come to rest as the lift ends",
+                );
             } else {
                 assert.deepEqual(after, from, "its source stays as it is");
             }
             sounded(run, "ability", lift.from, "the ability as it lifts");
             onlyMoved(run, lift, ["stack"], [ability]);
             // It is on the stack until its ability is done.
-            const next = run.steps[run.steps.indexOf(lift) + 1];
             assert.deepEqual(next.before.poses[ability], end);
             return {
                 start,
