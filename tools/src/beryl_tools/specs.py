@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import cards, paths, system, warm
+from . import cards, paths, scryfall, system, warm
 from .shots import (
     UiError,
     free_port,
@@ -127,7 +127,7 @@ def oracle(name: str) -> str | None:
             return "\n".join(f.get("oracle_text", "") for f in card["faces"])
     url = "https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(name)
     try:
-        found = cards.http_get(url)
+        found = scryfall.http_get(url)
     except (urllib.error.URLError, OSError, ValueError):
         return None
     faces = found.get("card_faces")

@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from . import cards as scryfall
+from . import scryfall
+from .cards import OUTPUT as CARDS_JSON
 from . import paths, video
 from .video import Event, Frame, Line
 
@@ -200,7 +201,7 @@ def find(recordings: list[Recording], names: Names) -> dict[str, Card]:
 
 def pool() -> list[str]:
     """The names of Beryl's cards, a name per face."""
-    data = json.loads(scryfall.OUTPUT.read_text())
+    data = json.loads(CARDS_JSON.read_text())
     return sorted(
         {str(face["name"]) for card in data["cards"] for face in card["faces"]}
     )

@@ -3,3 +3,4 @@
 *.icns binary
 *.ico binary
 *.gz binary
+data/card-store.tsv linguist-generated=true

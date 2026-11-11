@@ -137,7 +137,7 @@ bench-count *args:
 count-gate:
     {{ by }} count-gate
 
-# Look up card data on Scryfall into data/cards.json
+# Build the card store and data/cards.json from Scryfall's bulk data (--refresh)
 [group('data')]
 cards *args:
     {{ by }} cards "$@"

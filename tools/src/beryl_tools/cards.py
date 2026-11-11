@@ -1,23 +1,31 @@
-"""`by cards`: card data from Scryfall. Looks up a card list on Scryfall's /cards/collection
-endpoint, plus the tokens and emblems the cards make (each card's `all_parts`), and writes
-data/cards.json: per card its printing, artist and per face the display text and image URLs,
-and the image of Magic's card back. The app downloads the images themselves on demand
-(rust/crates/beryl_app/src/art.rs).
+"""`by cards`: the card pool from Scryfall's bulk data. Reads `default_cards`, every printing
+of every card (scryfall.py downloads it into the cache and reuses it for a week, or until
+`--refresh`), in one pass with no per-card request, and writes:
 
-The default list is the main decks of the mirror and of the Vintage deck before it, and the
-basic lands. data/card-printings.csv pins each card's
-printing (name, set, collector_number), which a run looks up for any card without a pin and
-adds to the file (`printing`); to apply a new rule to a card, delete its pin. A card shows its
-original art, the illustration of its first printing, in the newest printing of that art that
-looks like an ordinary card of it: a reprint's scan or render is cleaner than the early scans,
-and its text closer to the oracle's (Alpha's Counterspell, an "Interrupt" dark with age, takes
-Dominaria Remastered's retro-frame reprint). The basic lands are John Avon's full-art lands
-from Unstable. A printing with a name of its own, such as a Through the Omenpaths card that
-Arena names differently from Scryfall's oracle, takes its printed name and text, so it is keyed
-by the name the engine knows. `--record FILE` saves the requests and responses, which the tests
-replay; a replay looks up no printings.
+- data/card-store.tsv, the card store (card_store.py specifies it): a record for every card in
+  the pool and every token or emblem a pool card makes (its `all_parts`).
+- data/cards.json, which the UI still bundles: for the main decks of the mirror and of the
+  Vintage deck before it, and the basic lands, each card's printing, artist and per face the
+  display text and image URLs, the tokens they make, and the image of Magic's card back. The
+  app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
 
-Scryfall's API guidelines, followed here: https://scryfall.com/docs/api
+The pool is every card in Scryfall's Oracle data except un-set, dexterity and Alchemy cards: a
+card whose Vintage legality is anything but not_legal (which drops un-cards, Alchemy and other
+digital-only cards, tokens, art cards and oversized cards in one test), less the cards
+data/card-pool-exclusions.json names with its reason. A run prints how many it kept and how
+many it dropped for each reason.
+
+Each card shows one printing. data/card-printings.csv pins some (name, set, collector_number).
+Any other card shows its original art, the illustration of its first printing, in the newest
+printing of that art that looks like an ordinary card of it: a reprint's scan or render is
+cleaner than the early scans, and its text closer to the oracle's (Alpha's Counterspell, an
+"Interrupt" dark with age, takes Dominaria Remastered's retro-frame reprint). The basic lands
+are John Avon's full-art lands from Unstable. An English printing with a name of its own, such
+as a Through the Omenpaths card that Arena names differently from Scryfall's oracle, takes its
+printed name and text, so it is keyed by the name the engine knows.
+
+`--sample FILE NAME...` writes the printings data/cards.json reads, and every printing of each
+NAME, in the bulk file's shape: the tests' fixture.
 """
 
 from __future__ import annotations
@@ -26,29 +34,16 @@ import argparse
 import csv
 import json
 import sys
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
-from collections import Counter
-from collections.abc import Callable, Iterable
-from importlib import metadata
+from collections import Counter, defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from . import paths
+from . import card_store, paths, scryfall
 
-API = "https://api.scryfall.com/cards/collection"
 # Scryfall's card back images: /<size>/<id[0]>/<id[1]>/<card_back_id>.jpg.
 BACKS = "https://backs.scryfall.io/large"
-SEARCH = "https://api.scryfall.com/cards/search"
-# /cards/collection takes at most 75 identifiers per request.
-BATCH = 75
-# Scryfall asks for 50 to 100 ms between requests; take the top of that range.
-INTERVAL = 0.1
-# Its searches are limited more tightly, and a run asking too often waits and tries again.
-SEARCH_INTERVAL = 0.6
-RETRIES = 5
 DATA: Path = paths.REPO / "data"
 # The Milestone 1 mirror deck.
 DECK: Path = (
@@ -96,21 +91,23 @@ TREATMENTS: frozenset[str] = frozenset(
     {"showcase", "extendedart", "etched", "inverted", "shatteredglass", "fullart"}
 )
 PRINTINGS: Path = DATA / "card-printings.csv"
+EXCLUSIONS: Path = DATA / "card-pool-exclusions.json"
 OUTPUT: Path = DATA / "cards.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
 FACE_FIELDS = ("mana_cost", "type_line", "oracle_text", "power", "toughness", "loyalty")
+# The characteristics a store record's face keeps (CR 109.3), less name, colors and color
+# indicator, which follow.
+STORE_FACE_FIELDS: tuple[str, ...] = (*FACE_FIELDS, "defense")
+NOT_LEGAL = "not legal in Vintage"
+
+# Prefer the Double Masters Copy illustration over the generic token Scryfall links.
+TOKEN_PRINTINGS = {
+    "2115c141-f2fb-4bfd-a8b5-2943bad9f418": "6870a2af-80e1-4813-a332-2b1bd789f1c1",
+}
 
 Json = dict[str, object]
-# Posts a JSON body to a URL and returns the decoded JSON response.
-Post = Callable[[str, Json], Json]
-# Fetches a URL and returns the decoded JSON response.
-Get = Callable[[str], Json]
-# A /cards/collection card identifier: a name, an id, or a set and collector number.
-Identifier = dict[str, str]
-
-
-def user_agent() -> str:
-    return f"ProjectBeryl/{metadata.version('beryl-tools')}"
+# A pinned printing: set code and collector number.
+Printing = tuple[str, str]
 
 
 def deck_names(path: Path) -> list[str]:
@@ -125,95 +122,25 @@ def deck_names(path: Path) -> list[str]:
 
 
 def m1_names() -> list[str]:
-    """The cards of the Vintage and mirror decks and the basic lands, each once, in the order
-    tests/fixtures/scryfall-m1.json recorded them."""
+    """The cards of the Vintage and mirror decks and the basic lands, each once."""
     return list(
         dict.fromkeys(deck_names(VINTAGE_DECK) + deck_names(DECK) + list(BASICS))
     )
 
 
-def printings(path: Path) -> dict[str, Identifier]:
-    """Pinned printings, as collection identifiers keyed by card name."""
-    if not path.exists():
-        return {}
-    with path.open(newline="") as f:
-        return {
-            row["name"]: {
-                "set": row["set"],
-                "collector_number": row["collector_number"],
-            }
-            for row in csv.DictReader(f)
-        }
+def printings(path: Path) -> dict[str, Printing]:
+    """Pinned printings by card name, the basics' among them."""
+    pins = dict(BASIC_PRINTINGS)
+    if path.exists():
+        with path.open(newline="") as f:
+            for row in csv.DictReader(f):
+                pins[row["name"]] = (row["set"], row["collector_number"])
+    return pins
 
 
-def write_printings(path: Path, pins: dict[str, Identifier]) -> None:
-    """Writes pinned printings, by card name."""
-    with path.open("w", newline="") as f:
-        out = csv.writer(f, lineterminator="\n")
-        out.writerow(["name", "set", "collector_number"])
-        for name in sorted(pins):
-            out.writerow([name, pins[name]["set"], pins[name]["collector_number"]])
-
-
-def http_get(url: str) -> Json:
-    """Fetches `url`, waiting and trying again while Scryfall says it is asked too often."""
-    request = urllib.request.Request(
-        url, headers={"User-Agent": user_agent(), "Accept": "application/json"}
-    )
-    for attempt in range(RETRIES):
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                return cast(Json, json.load(response))
-        except urllib.error.HTTPError as e:
-            if e.code != 429 or attempt == RETRIES - 1:
-                raise
-            time.sleep(2.0 * (attempt + 1))
-    raise AssertionError("unreachable")
-
-
-def throttled_get(get: Get) -> Get:
-    last = 0.0
-
-    def wrapped(url: str) -> Json:
-        nonlocal last
-        wait = last + SEARCH_INTERVAL - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            return get(url)
-        finally:
-            last = time.monotonic()
-
-    return wrapped
-
-
-def printing(get: Get, name: str) -> Identifier:
-    """The printing a card shows: the newest that `shows_original_art`, else its first
-    (`first_of`). A basic land's is `BASIC_PRINTINGS`'."""
-    if name in BASIC_PRINTINGS:
-        set_code, number = BASIC_PRINTINGS[name]
-        return {"set": set_code, "collector_number": number}
-    query = urllib.parse.urlencode(
-        {
-            "q": f'!"{name.split(" // ")[0]}"',
-            "unique": "prints",
-            "order": "released",
-            "dir": "asc",
-        }
-    )
-    found: list[Json] = []
-    url: str | None = f"{SEARCH}?{query}"
-    while url:
-        page = get(url)
-        found.extend(cast(list[Json], page["data"]))
-        url = cast(str | None, page.get("next_page"))
-    first = first_of(found)
-    # Oldest first, so the last is the newest.
-    chosen = [p for p in found if shows_original_art(p, first)][-1:] or [first]
-    return {
-        "set": str(chosen[0]["set"]),
-        "collector_number": str(chosen[0]["collector_number"]),
-    }
+def exclusions(path: Path) -> dict[str, str]:
+    """Cards out of the pool though legal in Vintage, by name, with the reason."""
+    return cast(dict[str, str], json.loads(path.read_text()))
 
 
 def first_of(found: list[Json]) -> Json:
@@ -263,130 +190,172 @@ def shows_original_art(p: Json, first: Json) -> bool:
     )
 
 
-def pin_printings(
-    names: Iterable[str], pins: dict[str, Identifier], get: Get
-) -> dict[str, Identifier]:
-    """`pins`, with the printing of each of `names` it has none for."""
-    out = dict(pins)
-    for name in names:
-        if name not in out:
-            out[name] = printing(get, name)
-            print(
-                f"cards: pinned {name} to {out[name]['set']} "
-                f"{out[name]['collector_number']}",
-                file=sys.stderr,
-            )
-    return out
+def released(p: Json) -> tuple[str, str, int, str]:
+    """Orders printings oldest first, as Scryfall's searches by release date do."""
+    number = str(p["collector_number"])
+    digits = "".join(c for c in number if c.isdigit())
+    return (str(p.get("released_at", "")), str(p["set"]), int(digits or 0), number)
 
 
-def http_post(url: str, body: Json) -> Json:
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode(),
-        headers={
-            "User-Agent": user_agent(),
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return cast(Json, json.load(response))
+def choose(found: list[Json]) -> Json:
+    """The printing a card shows, of its printings oldest first: the newest that
+    `shows_original_art`, else its first (`first_of`)."""
+    first = first_of(found)
+    matching = [p for p in found if shows_original_art(p, first)]
+    return matching[-1] if matching else first
 
 
-def throttled(post: Post) -> Post:
-    last = 0.0
-
-    def wrapped(url: str, body: Json) -> Json:
-        nonlocal last
-        wait = last + INTERVAL - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            return post(url, body)
-        finally:
-            last = time.monotonic()
-
-    return wrapped
+def oracle_id(card: Json) -> str:
+    """A card's oracle id; a reversible card's faces each carry their own, and the first
+    names the card."""
+    faces = cast(list[Json], card.get("card_faces", [{}]))
+    return str(card.get("oracle_id") or faces[0].get("oracle_id"))
 
 
-# The fields `build` reads, so recordings keep only these.
-CARD_FIELDS: tuple[str, ...] = (
+def drop_reason(card: Json, excluded: dict[str, str]) -> str | None:
+    """Why a card is out of the pool, or None for a card in it."""
+    legalities = cast(Json, card.get("legalities", {}))
+    if legalities.get("vintage", "not_legal") == "not_legal":
+        return NOT_LEGAL
+    return excluded.get(str(card["name"]))
+
+
+# The fields the pool, the printing rule, the records and data/cards.json read, so a run keeps
+# only these of each printing, and so does the tests' sample.
+BULK_FIELDS: tuple[str, ...] = (
     "id",
+    "oracle_id",
     "name",
+    "lang",
+    "released_at",
     "set",
+    "set_type",
     "collector_number",
     "layout",
     "artist",
-    "colors",
+    "digital",
+    "promo",
+    "promo_types",
+    "oversized",
+    "full_art",
+    "textless",
+    "frame",
+    "frame_effects",
+    "border_color",
+    "illustration_id",
+    "games",
+    "image_status",
     "image_uris",
-    "card_faces",
+    "card_back_id",
+    "colors",
+    "color_indicator",
+    "keywords",
+    "legalities",
     "all_parts",
+    "card_faces",
     "printed_name",
     "printed_text",
-    "card_back_id",
-    *FACE_FIELDS,
+    *STORE_FACE_FIELDS,
+)
+FACE_KEYS: tuple[str, ...] = (
+    "name",
+    "oracle_id",
+    "printed_name",
+    "printed_text",
+    "colors",
+    "color_indicator",
+    "image_uris",
+    *STORE_FACE_FIELDS,
 )
 PART_FIELDS = ("id", "component", "type_line")
 
 
-def pruned(response: Json) -> Json:
-    def card(c: Json) -> Json:
-        out = {k: c[k] for k in CARD_FIELDS if k in c}
-        if "card_faces" in out:
-            out["card_faces"] = [card(f) for f in cast(list[Json], c["card_faces"])]
-        if "all_parts" in out:
-            out["all_parts"] = [
-                {k: p[k] for k in PART_FIELDS} for p in cast(list[Json], c["all_parts"])
-            ]
-        if "image_uris" in out:
-            images = cast(Json, c["image_uris"])
-            out["image_uris"] = {v: images[v] for v in IMAGE_VERSIONS}
-        return out
+def pruned(card: Json) -> Json:
+    out = {k: card[k] for k in BULK_FIELDS if k in card}
+    if "legalities" in out:
+        out["legalities"] = {"vintage": cast(Json, card["legalities"]).get("vintage")}
+    if "image_uris" in out:
+        images = cast(Json, card["image_uris"])
+        out["image_uris"] = {v: images[v] for v in IMAGE_VERSIONS}
+    if "card_faces" in out:
+        out["card_faces"] = [
+            pruned_face(f) for f in cast(list[Json], card["card_faces"])
+        ]
+    if "all_parts" in out:
+        # A token lists every card making it; only the parts naming tokens are read.
+        parts = [p for p in cast(list[Json], card["all_parts"]) if makes(p)]
+        out["all_parts"] = [{k: p[k] for k in PART_FIELDS if k in p} for p in parts]
+    return out
 
-    return {
-        "not_found": response.get("not_found", []),
-        "data": [card(c) for c in cast(list[Json], response["data"])],
+
+def pruned_face(face: Json) -> Json:
+    out = {k: face[k] for k in FACE_KEYS if k in face}
+    if "image_uris" in out:
+        images = cast(Json, face["image_uris"])
+        out["image_uris"] = {v: images[v] for v in IMAGE_VERSIONS}
+    return out
+
+
+@dataclass
+class Pool:
+    """The pool read from a bulk file: each card's printing, by oracle id, and every printing
+    by Scryfall id (tokens are found there)."""
+
+    shown: dict[str, Json] = field(default_factory=dict)
+    by_id: dict[str, Json] = field(default_factory=dict)
+    # Cards (oracle ids) out of the pool, per reason.
+    dropped: Counter[str] = field(default_factory=Counter)
+    # Cards out of the pool for not being legal in Vintage, per set type.
+    not_legal: Counter[str] = field(default_factory=Counter)
+
+
+def read_pool(
+    printings: Iterable[Json], pins: dict[str, Printing], excluded: dict[str, str]
+) -> Pool:
+    pool = Pool()
+    groups: defaultdict[str, list[Json]] = defaultdict(list)
+    out: dict[str, tuple[str, str]] = {}
+    pinned = {printing: name for name, printing in pins.items()}
+    chosen: dict[str, Json] = {}
+    for raw in printings:
+        card = pruned(raw)
+        pool.by_id[str(card["id"])] = card
+        oracle = oracle_id(card)
+        reason = drop_reason(card, excluded)
+        if reason is not None:
+            out.setdefault(oracle, (reason, str(card.get("set_type"))))
+            continue
+        groups[oracle].append(card)
+        if (str(card["set"]), str(card["collector_number"])) in pinned:
+            if oracle in chosen:
+                raise LookupError(f"two pinned printings of {card['name']}")
+            chosen[oracle] = card
+    for oracle, (reason, set_type) in out.items():
+        if oracle not in groups:
+            pool.dropped[reason] += 1
+            if reason == NOT_LEGAL:
+                pool.not_legal[set_type] += 1
+    for oracle, found in sorted(groups.items()):
+        pool.shown[oracle] = chosen.get(oracle) or choose(sorted(found, key=released))
+    missing = set(pinned) - {
+        (str(c["set"]), str(c["collector_number"])) for c in chosen.values()
     }
-
-
-def recording(post: Post, log: list[Json]) -> Post:
-    def wrapped(url: str, body: Json) -> Json:
-        response = post(url, body)
-        log.append({"url": url, "body": body, "response": pruned(response)})
-        return response
-
-    return wrapped
-
-
-def replaying(path: Path) -> Post:
-    """Answers each request from a recording made with `--record`."""
-    log = cast(list[Json], json.loads(path.read_text()))
-    answers: dict[tuple[str, str], Json] = {
-        (str(e["url"]), json.dumps(e["body"], sort_keys=True)): cast(
-            Json, e["response"]
+    if missing:
+        raise LookupError(
+            f"no pool card has the pinned printings of {[pinned[m] for m in missing]}"
         )
-        for e in log
-    }
-
-    def post(url: str, body: Json) -> Json:
-        key = (url, json.dumps(body, sort_keys=True))
-        if key not in answers:
-            raise LookupError(f"no recorded response for {url} {key[1]}")
-        return answers[key]
-
-    return post
+    return pool
 
 
-def collection(post: Post, identifiers: list[Identifier]) -> list[Json]:
-    cards: list[Json] = []
-    for start in range(0, len(identifiers), BATCH):
-        response = post(API, {"identifiers": identifiers[start : start + BATCH]})
-        missing = cast(list[Json], response.get("not_found", []))
-        if missing:
-            raise LookupError(f"Scryfall found no card for {missing}")
-        cards.extend(cast(list[Json], response["data"]))
-    return cards
+def is_printed(card: Json) -> bool:
+    """Whether a printing's own name and text, where Scryfall gives them, replace the
+    oracle's: an English printing named otherwise (a non-English printing's are a
+    translation)."""
+    return card.get("lang", "en") == "en"
+
+
+def raw_faces(card: Json) -> list[Json]:
+    return cast(list[Json], card.get("card_faces") or [card])
 
 
 def faces(card: Json) -> list[Json]:
@@ -394,15 +363,15 @@ def faces(card: Json) -> list[Json]:
     split and adventure faces share the card's single image and, sometimes, its colors.
     A printing's own name and text, where Scryfall gives them, replace the oracle's.
     """
-    raw = cast(list[Json], card.get("card_faces") or [card])
+    printed = is_printed(card)
     out: list[Json] = []
-    for face in raw:
+    for face in raw_faces(card):
         images = cast(Json, face.get("image_uris") or card["image_uris"])
-        entry: Json = {"name": face.get("printed_name", face["name"])}
+        entry: Json = {"name": face_name(face, printed)}
         for name in FACE_FIELDS:
             if name in face:
                 entry[name] = face[name]
-        if "printed_text" in face:
+        if printed and "printed_text" in face:
             entry["oracle_text"] = face["printed_text"]
         entry["colors"] = face.get("colors", card.get("colors", []))
         entry["images"] = {v: images[v] for v in IMAGE_VERSIONS}
@@ -410,47 +379,60 @@ def faces(card: Json) -> list[Json]:
     return out
 
 
+def face_name(face: Json, printed: bool) -> str:
+    return str(face.get("printed_name", face["name"]) if printed else face["name"])
+
+
+def has_own_name(card: Json) -> bool:
+    return is_printed(card) and any("printed_name" in f for f in raw_faces(card))
+
+
+def display_name(card: Json) -> str:
+    """The card's name as the engine knows it: its printed name where it has one, else
+    Scryfall's."""
+    if has_own_name(card):
+        return " // ".join(face_name(f, True) for f in raw_faces(card))
+    return str(card["name"])
+
+
 def entry(card: Json, **extra: object) -> Json:
-    out = faces(card)
-    printed = "printed_name" in card or any(
-        "printed_name" in f for f in cast(list[Json], card.get("card_faces", []))
-    )
-    name = " // ".join(str(f["name"]) for f in out) if printed else card["name"]
     return {
-        "name": name,
+        "name": display_name(card),
         "scryfall_id": card["id"],
         "set": card["set"],
         "collector_number": card["collector_number"],
         "layout": card["layout"],
         "artist": card.get("artist", ""),
         **extra,
-        "faces": out,
+        "faces": faces(card),
     }
 
 
-# Prefer the Double Masters Copy illustration over the generic token Scryfall links.
-TOKEN_PRINTINGS = {
-    "2115c141-f2fb-4bfd-a8b5-2943bad9f418": "6870a2af-80e1-4813-a332-2b1bd789f1c1",
-}
+def makes(part: Json) -> bool:
+    """Whether a related card is a token or emblem. Scryfall lists a token as a "token" part,
+    and an emblem as a "combo_piece" whose type is Emblem."""
+    return part["component"] == "token" or str(part["type_line"]).startswith("Emblem")
+
+
+def made(card: Json) -> list[str]:
+    """The Scryfall ids of the tokens and emblems a card makes."""
+    out: list[str] = []
+    for part in cast(list[Json], card.get("all_parts", [])):
+        if makes(part) and part["id"] != card["id"]:
+            linked = str(part["id"])
+            out.append(TOKEN_PRINTINGS.get(linked, linked))
+    return list(dict.fromkeys(out))
 
 
 def token_parts(cards: Iterable[Json]) -> dict[str, list[str]]:
-    """The tokens and emblems these cards make, by Scryfall id, with the cards making each.
-    Scryfall lists a token as a "token" part, and an emblem as a "combo_piece" whose type is
-    Emblem."""
-    made: dict[str, list[str]] = {}
+    """The tokens and emblems these cards make, by Scryfall id, with the cards making each."""
+    makers: dict[str, list[str]] = {}
     for card in cards:
-        for part in cast(list[Json], card.get("all_parts", [])):
-            makes = part["component"] == "token" or str(part["type_line"]).startswith(
-                "Emblem"
-            )
-            if makes and part["id"] != card["id"]:
-                linked = str(part["id"])
-                printing = TOKEN_PRINTINGS.get(linked, linked)
-                makers = made.setdefault(printing, [])
-                if card["name"] not in makers:
-                    makers.append(str(card["name"]))
-    return made
+        for token in made(card):
+            names = makers.setdefault(token, [])
+            if card["name"] not in names:
+                names.append(str(card["name"]))
+    return makers
 
 
 def engine_name(name: str, type_line: str) -> str:
@@ -472,24 +454,6 @@ def token_entry(token: Json, made_by: list[str]) -> Json:
     return out
 
 
-def build(names: list[str], pinned: dict[str, Identifier], post: Post) -> Json:
-    unique = list(dict.fromkeys(names))
-    # The collection endpoint finds a split card ("Fire // Ice") by its first half only.
-    cards = collection(
-        post, [pinned.get(n, {"name": n.split(" // ")[0]}) for n in unique]
-    )
-    made = token_parts(cards)
-    tokens = collection(post, [{"id": i} for i in sorted(made)])
-    return {
-        "card_back": card_back(cards),
-        "cards": sorted((entry(c) for c in cards), key=by_name),
-        "tokens": sorted(
-            (token_entry(t, sorted(made[str(t["id"])])) for t in tokens),
-            key=by_name,
-        ),
-    }
-
-
 def card_back(cards: Iterable[Json]) -> str:
     """The image of the back most of these cards have: Magic's own, which a few cards replace
     (a double-faced card's back is its other face)."""
@@ -500,6 +464,132 @@ def card_back(cards: Iterable[Json]) -> str:
     return f"{BACKS}/{back[0]}/{back[1]}/{back}.jpg"
 
 
+def store_faces(card: Json, token: bool) -> list[Json]:
+    """A record's faces: each one's characteristics (CR 109.3) and the side its image is on."""
+    printed = is_printed(card)
+    out: list[Json] = []
+    for index, face in enumerate(raw_faces(card)):
+        name = face_name(face, printed)
+        record: Json = {
+            "name": engine_name(name, str(face.get("type_line", ""))) if token else name
+        }
+        for key in STORE_FACE_FIELDS:
+            if key in face:
+                record[key] = face[key]
+        if printed and "printed_text" in face:
+            record["oracle_text"] = face["printed_text"]
+        record["colors"] = face.get("colors", card.get("colors", []))
+        if "color_indicator" in face:
+            record["color_indicator"] = face["color_indicator"]
+        # A double-faced card's back face has an image of its own; other faces share the
+        # card's.
+        own = index > 0 and "image_uris" in face
+        record["side"] = "back" if own else "front"
+        out.append(record)
+    return out
+
+
+def store_record(card: Json, token: bool, tokens: list[Json] | None = None) -> Json:
+    faces = store_faces(card, token)
+    name = display_name(card)
+    if token and len(faces) == 1:
+        name = str(faces[0]["name"])
+    record: Json = {
+        "name": name,
+        "oracle_id": oracle_id(card),
+        "scryfall_id": card["id"],
+        "set": card["set"],
+        "collector_number": card["collector_number"],
+        "layout": card["layout"],
+        "artist": card.get("artist", ""),
+    }
+    if "card_back_id" in card:
+        record["card_back_id"] = card["card_back_id"]
+    record["keywords"] = card.get("keywords", [])
+    if tokens:
+        record["tokens"] = tokens
+    record["faces"] = faces
+    return record
+
+
+def aliases(card: Json, record: Json) -> list[str]:
+    """The other names a record answers to: each face's, and the oracle's where the printing
+    has a name of its own."""
+    names = [str(f["name"]) for f in cast(list[Json], record["faces"])]
+    if has_own_name(card):
+        names += [str(card["name"]), *(str(f["name"]) for f in raw_faces(card))]
+    return [n for n in dict.fromkeys(names) if n != record["name"]]
+
+
+@dataclass
+class Built:
+    """The store's lines, each card's printing by every name it answers to, and counts."""
+
+    lines: list[bytes] = field(default_factory=list)
+    by_name: dict[str, Json] = field(default_factory=dict)
+    counts: Counter[str] = field(default_factory=Counter)
+
+
+def build_store(pool: Pool) -> Built:
+    built = Built()
+    tokens: dict[str, Json] = {}
+    named: dict[str, list[tuple[Json, Json]]] = {}
+    for card in pool.shown.values():
+        links: list[Json] = []
+        for linked in made(card):
+            if linked not in pool.by_id:
+                built.counts["token links to no printing"] += 1
+                continue
+            token = tokens.setdefault(
+                linked, store_record(pool.by_id[linked], token=True)
+            )
+            links.append({"name": token["name"], "scryfall_id": linked})
+        record = store_record(card, token=False, tokens=links)
+        named.setdefault(str(record["name"]), []).append((card, record))
+    for name, found in named.items():
+        if len(found) > 1:
+            raise LookupError(f"two cards named {name}")
+        card, record = found[0]
+        built.lines.append(card_store.line("card", name, record))
+        built.by_name[name] = card
+    for name, found in named.items():
+        card, record = found[0]
+        for alias in aliases(card, record):
+            if alias in named:
+                built.counts["aliases shadowing a card"] += 1
+                continue
+            value: Json = {"alias": name, "scryfall_id": record["scryfall_id"]}
+            built.lines.append(card_store.line("card", alias, value))
+            built.by_name.setdefault(alias, card)
+    for linked, record in tokens.items():
+        name = str(record["name"])
+        built.lines.append(card_store.line("token", name, record))
+        for alias in aliases(pool.by_id[linked], record):
+            token_alias: Json = {"alias": name, "scryfall_id": linked}
+            built.lines.append(card_store.line("token", alias, token_alias))
+    built.counts["cards"] = len(named)
+    built.counts["tokens"] = len(tokens)
+    return built
+
+
+def build_cards_json(names: list[str], built: Built, pool: Pool) -> Json:
+    """data/cards.json for `names`: each card's printing, as a deck names it (its own name
+    or its front face's), and the tokens and emblems they make."""
+    missing = [n for n in names if n not in built.by_name]
+    if missing:
+        raise LookupError(f"no card in the pool named {missing}")
+    cards = list({id(c): c for c in (built.by_name[n] for n in names)}.values())
+    makers = token_parts(cards)
+    return {
+        "card_back": card_back(cards),
+        "cards": sorted((entry(c) for c in cards), key=by_name),
+        "tokens": sorted(
+            (token_entry(pool.by_id[t], sorted(makers[t])) for t in makers),
+            key=by_name,
+        ),
+    }
+
+
 def by_name(card: Json) -> tuple[str, str]:
     return (str(card["name"]), str(card["scryfall_id"]))
 
@@ -508,39 +598,71 @@ def render(data: Json) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
+def sample(path: Path, bulk: Path, built: Built, pool: Pool, names: list[str]) -> None:
+    """Writes the tests' fixture: the printings data/cards.json reads, the pinned ones, and
+    every printing of each of `names`, pruned, one per line."""
+    pinned = [n for n in printings(PRINTINGS) if n in built.by_name]
+    shown = [built.by_name[n] for n in dict.fromkeys(m1_names() + pinned)]
+    ids = {str(c["id"]) for c in shown} | set(token_parts(shown))
+    wanted = set(names)
+    with path.open("w", encoding="utf-8", newline="\n") as out:
+        for raw in scryfall.objects(bulk):
+            if raw["id"] in ids or raw["name"] in wanted:
+                out.write(json.dumps(pruned(raw), ensure_ascii=False) + "\n")
+
+
+def report(pool: Pool, built: Built) -> None:
+    def say(text: str) -> None:
+        print(f"cards: {text}", file=sys.stderr)
+
+    say(f"kept {built.counts['cards']} cards and {built.counts['tokens']} tokens")
+    for reason, count in sorted(pool.dropped.items()):
+        say(f"dropped {count} cards: {reason}")
+    detail = ", ".join(f"{t} {n}" for t, n in pool.not_legal.most_common())
+    say(f"  {NOT_LEGAL}, by set type: {detail}")
+    for what in ("aliases shadowing a card", "token links to no printing"):
+        if built.counts[what]:
+            say(f"{what}: {built.counts[what]}")
+
+
 def cards(args: argparse.Namespace) -> int:
-    names = m1_names()
-    log: list[Json] = []
-    pins = printings(PRINTINGS)
-    if args.replay:
-        post = replaying(Path(args.replay))
-    else:
-        post = recording(throttled(http_post), log)
-        pinned = pin_printings(names, pins, throttled_get(http_get))
-        if pinned != pins:
-            write_printings(PRINTINGS, pinned)
-        pins = pinned
+    bulk = (
+        Path(args.bulk)
+        if args.bulk
+        else scryfall.bulk_file("default_cards", args.refresh)
+    )
+    pool = read_pool(
+        scryfall.objects(bulk), printings(PRINTINGS), exclusions(EXCLUSIONS)
+    )
+    built = build_store(pool)
+    report(pool, built)
+    if args.sample:
+        sample(Path(args.sample), bulk, built, pool, args.names)
+        print(f"cards: wrote {args.sample}", file=sys.stderr)
+        return 0
+    card_store.write(Path(args.store), built.lines)
     output = Path(args.output)
-    output.write_text(render(build(names, pins, post)), newline="\n")
-    if args.record:
-        Path(args.record).write_text(
-            json.dumps(log, indent=1, ensure_ascii=False) + "\n", newline="\n"
-        )
-    print(f"cards: wrote {output}", file=sys.stderr)
+    output.write_text(render(build_cards_json(m1_names(), built, pool)), newline="\n")
+    print(f"cards: wrote {args.store} and {output}", file=sys.stderr)
     return 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
-        "cards", help="look up card data on Scryfall into data/cards.json"
+        "cards",
+        help="build the card store and data/cards.json from Scryfall's bulk data",
     )
     p.add_argument("--output", default=str(OUTPUT))
-    # A replay records nothing, so --record with it would overwrite FILE with an empty log.
+    p.add_argument("--store", default=str(card_store.STORE))
     source = p.add_mutually_exclusive_group()
     source.add_argument(
-        "--record", metavar="FILE", help="save requests and responses here"
+        "--refresh", action="store_true", help="download a new bulk file"
     )
-    source.add_argument(
-        "--replay", metavar="FILE", help="answer requests from a recording"
+    source.add_argument("--bulk", metavar="FILE", help="read this bulk file instead")
+    p.add_argument(
+        "--sample",
+        metavar="FILE",
+        help="write the tests' fixture instead: data/cards.json's printings and NAMES'",
     )
+    p.add_argument("names", nargs="*", metavar="NAME")
     p.set_defaults(func=cards)

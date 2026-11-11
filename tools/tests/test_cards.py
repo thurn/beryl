@@ -1,21 +1,39 @@
+"""`by cards` on tests/fixtures/scryfall-sample.jsonl, a pruned sample of Scryfall's bulk file:
+the printings data/cards.json reads, the pinned ones, and every printing of a few cards the
+pool rule drops or keeps. After `just cards` changes data/cards.json, regenerate it with
+`just cards --sample tools/tests/fixtures/scryfall-sample.jsonl "Falling Star" Shahrazad
+"Fire // Ice" "Kemba's Outfitter" "Goblin Bowling Team"`."""
+
 import json
-import urllib.parse
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from beryl_tools import cards
+from beryl_tools import card_store, cards, scryfall
 from beryl_tools.cli import main
 
 FIXTURES: Path = Path(__file__).parent / "fixtures"
+SAMPLE: Path = FIXTURES / "scryfall-sample.jsonl"
 
 
-def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
-    out = tmp_path / "cards.json"
-    replay = str(FIXTURES / "scryfall-m1.json")
-    argv = ["cards", "--replay", replay, "--output", str(out)]
+def sample_pool() -> cards.Pool:
+    return cards.read_pool(
+        scryfall.objects(SAMPLE),
+        cards.printings(cards.PRINTINGS),
+        cards.exclusions(cards.EXCLUSIONS),
+    )
+
+
+def run(tmp_path: Path) -> tuple[Path, Path]:
+    out, store = tmp_path / "cards.json", tmp_path / "store.tsv"
+    argv = ["cards", "--bulk", str(SAMPLE), "--output", str(out), "--store", str(store)]
     assert main(argv) == 0
+    return out, store
+
+
+def test_the_sample_regenerates_the_data_file(tmp_path: Path) -> None:
+    out, _ = run(tmp_path)
     assert out.read_bytes() == cards.OUTPUT.read_bytes()
 
     data = json.loads(out.read_text())
@@ -23,6 +41,9 @@ def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
     assert len(deck) == 49
     assert {"Swamp", "Mountain", "Forest"} <= deck
     assert {c["faces"][0]["name"] for c in data["cards"]} == deck
+    # Pinned printings are honored: the basics are John Avon's Unstable full arts.
+    island = next(c for c in data["cards"] if c["name"] == "Island")
+    assert (island["set"], island["collector_number"]) == ("ust", "213")
     copy = next(t for t in data["tokens"] if t["name"] == "Copy")
     assert (copy["set"], copy["collector_number"]) == ("t2xm", "31")
     tokens = {
@@ -40,93 +61,118 @@ def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
     } <= tokens
 
 
-def test_tokens_take_the_engine_s_names() -> None:
-    assert cards.engine_name("Samurai", "Token Creature — Samurai") == "Samurai Token"
-    assert cards.engine_name("Map", "Token Artifact — Map") == "Map Token"
-    # A named token keeps its name, as does an emblem.
-    named = cards.engine_name("Thundertrap Trainer", "Token Creature — Otter Wizard")
-    assert named == "Thundertrap Trainer"
-    emblem = "Jace, Telepath Unbound Emblem"
-    assert cards.engine_name(emblem, "Emblem — Jace") == emblem
+def test_the_store_answers_every_name_a_card_goes_by(tmp_path: Path) -> None:
+    _, path = run(tmp_path)
+    with card_store.Store(path) as store:
+        jace = store.card("Jace, Vryn's Prodigy")
+        assert jace is not None
+        assert jace["name"] == "Jace, Vryn's Prodigy // Jace, Telepath Unbound"
+        assert store.card("Jace, Telepath Unbound") == jace
+        assert jace["keywords"] == ["Transform", "Mill"]
+        front, back = cast(list[card_store.Json], jace["faces"])
+        assert (front["side"], back["side"]) == ("front", "back")
+        assert back["loyalty"] == "5" and back["color_indicator"] == ["U"]
+        (emblem,) = cast(list[card_store.Json], jace["tokens"])
+        assert (
+            store.tokens(str(emblem["name"]))[0]["scryfall_id"] == emblem["scryfall_id"]
+        )
+
+        fire = store.card("Fire")
+        assert fire is not None and fire["name"] == "Fire // Ice"
+        # A printing with a name of its own is keyed by it, and found by the oracle's.
+        ademi = store.card("Ademi of the Silkchutes")
+        assert ademi is not None and ademi["set"] == "om1"
+        assert store.card("Spectacular Spider-Man") == ademi
+
+        # A card and the token it makes share a name, and stay apart.
+        trainer = store.card("Thundertrap Trainer")
+        (offspring,) = store.tokens("Thundertrap Trainer")
+        assert trainer is not None
+        assert "Token" not in trainer["faces"][0]["type_line"]  # type: ignore[index]
+        assert offspring["set"] == "tblb"
+        # Two printings of a token answer its name.
+        treasures = store.tokens("Treasure Token")
+        assert {t["set"] for t in treasures} == {"tfra", "tblb"}
+
+        assert store.card("Nonexistent Card") is None
+        assert store.tokens("Nonexistent Token") == []
+        found = store.cards(["Island", "Fire", "Island"])
+        assert [c["name"] for c in found] == ["Island", "Fire // Ice", "Island"]
+        with pytest.raises(LookupError, match="Nonexistent Card"):
+            store.cards(["Island", "Nonexistent Card"])
+
+        records = list(store)
+    kinds = [kind for kind, _ in records]
+    assert kinds == sorted(kinds)
+    # The tokens are exactly those the cards make.
+    made = {
+        str(t["scryfall_id"])
+        for _, r in records
+        for t in cast(list[card_store.Json], r.get("tokens", []))
+    }
+    assert {str(r["scryfall_id"]) for k, r in records if k == "token"} == made
+    ids = [r["scryfall_id"] for _, r in records]
+    assert len(ids) == len(set(ids))
 
 
-def test_lookups_go_in_batches_and_honor_pinned_printings() -> None:
-    requests: list[list[cards.Identifier]] = []
-
-    def post(url: str, body: cards.Json) -> cards.Json:
-        ids = cast(list[cards.Identifier], body["identifiers"])
-        requests.append(ids)
-        return {"data": [card(i) for i in ids]}
-
-    def card(identifier: cards.Identifier) -> cards.Json:
-        name = str(identifier.get("name", identifier.get("set", identifier.get("id"))))
-        image = "https://cards.scryfall.io/large/front/0/0/0.jpg"
-        return {
-            "id": name,
-            "name": name,
-            "set": "set",
-            "collector_number": "1",
-            "layout": "normal",
-            "card_back_id": "back",
-            "image_uris": {v: image for v in cards.IMAGE_VERSIONS},
-        }
-
-    names = [f"Card {i}" for i in range(160)] + ["Fire // Ice"]
-    pinned = {"Card 3": {"set": "lea", "collector_number": "7"}}
-    data = cards.build(names, pinned, post)
-
-    assert [len(r) for r in requests] == [75, 75, 11]
-    assert {"set": "lea", "collector_number": "7"} in requests[0]
-    assert {"name": "Fire"} in requests[2]
-    assert len(cast(list[cards.Json], data["cards"])) == 161
+def test_the_store_keeps_no_volatile_fields(tmp_path: Path) -> None:
+    _, path = run(tmp_path)
+    text = path.read_text()
+    for field in ("prices", "legalities", "edhrec_rank", "image_uris", "images"):
+        assert f'"{field}"' not in text
+    assert "scryfall.io" not in text
+    first = path.read_bytes()
+    run(tmp_path)
+    assert path.read_bytes() == first
 
 
-def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
-    images: dict[str, str] = {
-        v: "https://cards.scryfall.io/x.jpg" for v in cards.IMAGE_VERSIONS
+def test_the_pool_is_vintage_legality_less_the_exclusions() -> None:
+    pool = sample_pool()
+    names = {str(c["name"]) for c in pool.shown.values()}
+    # Banned in Vintage is still in the pool, but a dexterity card is not.
+    assert "Shahrazad" in names
+    assert "Falling Star" not in names
+    # Neither is an Alchemy card, an un-card, a token or an emblem.
+    assert not {"Kemba's Outfitter", "Goblin Bowling Team", "Treasure"} & names
+    assert pool.dropped[cards.exclusions(cards.EXCLUSIONS)["Falling Star"]] == 1
+    assert pool.dropped[cards.NOT_LEGAL] > 2
+    assert pool.not_legal["alchemy"] == 1 and pool.not_legal["funny"] == 1
+
+
+def printing(set_code: str, number: str, released: str, **extra: object) -> cards.Json:
+    return {
+        "id": f"{set_code}-{number}",
+        "oracle_id": "oracle",
+        "name": "Card",
+        "set": set_code,
+        "collector_number": number,
+        "released_at": released,
+        "lang": "en",
+        "layout": "normal",
+        "legalities": {"vintage": "legal"},
+        "illustration_id": "art",
+        "border_color": "black",
+        "frame": "2015",
+        "set_type": "expansion",
+        "games": ["paper"],
+        "image_status": "highres_scan",
+        **extra,
     }
 
-    def face(name: str, printed: str) -> cards.Json:
-        return {
-            "name": name,
-            "printed_name": printed,
-            "oracle_text": f"{name} can't be blocked.",
-            "printed_text": f"{printed} can't be blocked.",
-            "image_uris": images,
-        }
 
-    def post(url: str, body: cards.Json) -> cards.Json:
-        ids = cast(list[cards.Identifier], body["identifiers"])
-        if ids != [{"set": "om1", "collector_number": "30"}]:
-            return {"data": []}
-        card = {
-            "id": "osborn",
-            "name": "Norman Osborn // Green Goblin",
-            "set": "om1",
-            "collector_number": "30",
-            "layout": "modal_dfc",
-            "card_back_id": "back",
-            "card_faces": [
-                face("Norman Osborn", "Goben"),
-                face("Green Goblin", "Fleem"),
-            ],
-        }
-        return {"data": [card]}
-
-    pinned = {"Goben": {"set": "om1", "collector_number": "30"}}
-    (card,) = cast(list[cards.Json], cards.build(["Goben"], pinned, post)["cards"])
-    assert card["name"] == "Goben // Fleem"
-    faces = cast(list[cards.Json], card["faces"])
-    assert [f["name"] for f in faces] == ["Goben", "Fleem"]
-    assert faces[0]["oracle_text"] == "Goben can't be blocked."
-
-
-def test_a_card_scryfall_cannot_find_fails_the_run() -> None:
-    def post(url: str, body: cards.Json) -> cards.Json:
-        return {"data": [], "not_found": body["identifiers"]}
-
-    with pytest.raises(LookupError, match="Nonexistent Card"):
-        cards.build(["Nonexistent Card"], {}, post)
+def test_printings_go_oldest_first_and_pins_win() -> None:
+    newest = printing("fdn", "9", "2024-11-15")
+    found = [
+        newest,
+        printing("m11", "10", "2010-07-16"),
+        printing("m11", "9", "2010-07-16"),
+    ]
+    pool = cards.read_pool(found, {}, {})
+    assert pool.shown["oracle"]["id"] == newest["id"]
+    pool = cards.read_pool(found, {"Card": ("m11", "10")}, {})
+    assert pool.shown["oracle"]["collector_number"] == "10"
+    with pytest.raises(LookupError, match="Lost Card"):
+        cards.read_pool(found, {"Lost Card": ("lea", "1")}, {})
 
 
 def test_a_card_takes_its_first_real_printing() -> None:
@@ -147,22 +193,8 @@ def test_a_card_takes_its_first_real_printing() -> None:
         ],
         "Arena Only": [printing("ymid", digital=True, set_type="alchemy")],
     }
-    asked: list[str] = []
-
-    def get(url: str) -> cards.Json:
-        asked.append(url)
-        name = next(n for n in found if urllib.parse.quote_plus(f'!"{n}"') in url)
-        return {"data": found[name]}
-
-    first = {n: cards.printing(get, n)["set"] for n in found}
+    first = {n: cards.choose(f)["set"] for n, f in found.items()}
     assert first == {"Damn": "mh2", "Booster Tutor": "unh", "Arena Only": "ymid"}
-    assert all("order=released" in u and "dir=asc" in u for u in asked)
-    # The basics are John Avon's Unstable full arts, with no search.
-    assert cards.printing(get, "Island") == {
-        "set": "ust",
-        "collector_number": "213",
-    }
-    assert len(asked) == 3
 
 
 def test_a_card_takes_the_newest_ordinary_printing_of_its_first_art() -> None:
@@ -208,39 +240,70 @@ def test_a_card_takes_the_newest_ordinary_printing_of_its_first_art() -> None:
         printing("mh2", frame="2015"),
         printing("h2r", frame="1997", promo_types=["boosterfun"]),
     ]
-    pages: dict[str, list[cards.Json]] = {
-        "Counterspell": found,
-        "Tundra": reserved,
-        "Ragavan": modern,
+    chosen = [cards.choose(f)["set"] for f in (found, reserved, modern)]
+    assert chosen == ["dmr", "me4", "mh2"]
+
+
+def test_tokens_take_the_engine_s_names() -> None:
+    assert cards.engine_name("Samurai", "Token Creature — Samurai") == "Samurai Token"
+    assert cards.engine_name("Map", "Token Artifact — Map") == "Map Token"
+    # A named token keeps its name, as does an emblem.
+    named = cards.engine_name("Thundertrap Trainer", "Token Creature — Otter Wizard")
+    assert named == "Thundertrap Trainer"
+    emblem = "Jace, Telepath Unbound Emblem"
+    assert cards.engine_name(emblem, "Emblem — Jace") == emblem
+
+
+def omenpaths(lang: str) -> cards.Json:
+    images: dict[str, str] = {
+        v: "https://cards.scryfall.io/x.jpg" for v in cards.IMAGE_VERSIONS
     }
 
-    def get(url: str) -> cards.Json:
-        name = next(n for n in pages if urllib.parse.quote_plus(f'!"{n}"') in url)
-        return {"data": pages[name]}
-
-    chosen = {n: cards.printing(get, n)["set"] for n in pages}
-    assert chosen == {"Counterspell": "dmr", "Tundra": "me4", "Ragavan": "mh2"}
-
-
-def test_a_search_reads_every_page() -> None:
-    def printing(set_code: str) -> cards.Json:
+    def face(name: str, printed: str) -> cards.Json:
         return {
-            "set": set_code,
-            "collector_number": "1",
-            "lang": "en",
-            "illustration_id": "art",
-            "border_color": "black",
-            "frame": "2015",
-            "games": ["paper"],
-            "image_status": "highres_scan",
+            "name": name,
+            "printed_name": printed,
+            "oracle_text": f"{name} can't be blocked.",
+            "printed_text": f"{printed} can't be blocked.",
+            "image_uris": images,
         }
 
-    def get(url: str) -> cards.Json:
-        if url == "next":
-            return {"data": [printing("fdc")]}
-        return {"data": [printing("m11")], "next_page": "next"}
+    return {
+        "id": "osborn",
+        "oracle_id": "oracle",
+        "name": "Norman Osborn // Green Goblin",
+        "lang": lang,
+        "set": "om1",
+        "collector_number": "30",
+        "layout": "modal_dfc",
+        "card_faces": [face("Norman Osborn", "Goben"), face("Green Goblin", "Fleem")],
+    }
 
-    assert cards.printing(get, "Grave Titan")["set"] == "fdc"
+
+def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
+    card = cards.entry(omenpaths("en"))
+    assert card["name"] == "Goben // Fleem"
+    faces = cast(list[cards.Json], card["faces"])
+    assert [f["name"] for f in faces] == ["Goben", "Fleem"]
+    assert faces[0]["oracle_text"] == "Goben can't be blocked."
+    record = cards.store_record(omenpaths("en"), token=False)
+    assert record["name"] == "Goben // Fleem"
+    assert cards.aliases(omenpaths("en"), record) == [
+        "Goben",
+        "Fleem",
+        "Norman Osborn // Green Goblin",
+        "Norman Osborn",
+        "Green Goblin",
+    ]
+    # A translation's printed name is not the card's.
+    assert cards.entry(omenpaths("ja"))["name"] == "Norman Osborn // Green Goblin"
+
+
+def test_a_name_outside_the_pool_fails_the_run() -> None:
+    pool = sample_pool()
+    built = cards.build_store(pool)
+    with pytest.raises(LookupError, match="Nonexistent Card"):
+        cards.build_cards_json(["Island", "Nonexistent Card"], built, pool)
 
 
 def test_the_back_is_the_one_most_cards_have() -> None:
@@ -258,16 +321,13 @@ def test_the_back_is_the_one_most_cards_have() -> None:
         cards.card_back([{"layout": "transform"}])
 
 
-def test_pins_keep_what_is_pinned_and_write_back_sorted(tmp_path: Path) -> None:
-    pins = {"Goben": {"set": "om1", "collector_number": "30"}}
-
-    def get(url: str) -> cards.Json:
-        return {"data": [{"set": "lea", "collector_number": "7", "lang": "en"}]}
-
-    pinned = cards.pin_printings(["Goben", "Black Lotus", "Forest"], pins, get)
-    assert pinned["Goben"] == pins["Goben"]
-    assert pinned["Black Lotus"] == {"set": "lea", "collector_number": "7"}
-    path = tmp_path / "printings.csv"
-    cards.write_printings(path, pinned)
-    assert cards.printings(path) == pinned
-    assert path.read_text().splitlines()[1].startswith("Black Lotus,lea,7")
+def test_the_committed_store_holds_the_sample_s_records(tmp_path: Path) -> None:
+    """data/card-store.tsv and data/cards.json come from the same bulk file."""
+    _, path = run(tmp_path)
+    with card_store.Store(path) as sample, card_store.Store() as committed:
+        for kind, record in sample:
+            name = str(record["name"])
+            if kind == "card":
+                assert committed.card(name) == record
+            else:
+                assert record in committed.tokens(name)
