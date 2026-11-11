@@ -17,7 +17,7 @@
       "kind": "settled",
       "heading": "Settled as Arena",
       "intro": [
-        "Earlier reports asked for something else in some of these. Arena's way stands, so do not restore the old behavior."
+        "Arena's way stands where an earlier report asked for something else, so do not restore the old behavior."
       ]
     },
     {
@@ -45,178 +45,734 @@
       "number": 1,
       "name": "Phase icons",
       "rule": "Twelve icons, two rows of three on each side of the life total, filled where a stop is set, the same rows for both seats.",
-      "reports": ["by-2o5", "by-42v", "by-sjp", "by-cio"],
-      "arena": { "does": "Arena shows one row above the action button." }
+      "reports": [
+        "by-2o5",
+        "by-42v",
+        "by-sjp",
+        "by-cio"
+      ],
+      "arena": {
+        "does": "Arena shows one row above the action button."
+      }
     },
     {
       "kind": "exception",
       "number": 2,
       "name": "Full cards that tap",
       "rule": "A permanent is its whole card and turns when it taps.",
-      "arena": { "does": "Arena shows a crop of the art." }
+      "arena": {
+        "does": "Arena shows a crop of the art."
+      }
     },
     {
       "kind": "exception",
       "number": 3,
       "name": "No question before a choice",
       "rule": "Never ask a yes or no whose answer the next screen could take: open the search, chooser or payment with a way to decline.",
-      "reports": ["by-kac"],
-      "arena": { "does": "Arena asks \"Search your library…?\" first." }
+      "reports": [
+        "by-kac"
+      ],
+      "arena": {
+        "does": "Arena asks \"Search your library…?\" first."
+      }
     },
     {
       "kind": "exception",
       "number": 4,
       "name": "Target arrows by relationship",
       "rule": "Red at something an opponent controls, green at your own. This is skin, listed so nobody removes it.",
-      "reports": ["by-pnm", "by-sm5", "by-vrv"],
-      "arena": { "does": "Arena uses one color." }
+      "reports": [
+        "by-pnm",
+        "by-sm5",
+        "by-vrv"
+      ],
+      "arena": {
+        "does": "Arena draws every target arrow cyan, whoever controls either end; its one red line is an opponent's declared attack, with a red chevron under the attacker.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "40:58"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "48:57"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "34:04"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "48:33.5"
+          }
+        ]
+      }
     },
     {
       "kind": "exception",
       "number": 5,
       "name": "Lands unstacked until seven",
       "rule": "Each land is separate until its controller has seven or more; then same-named lands stack.",
-      "reports": ["by-p9e", "by-goui"],
-      "arena": { "does": "Arena's threshold has not been measured." }
+      "reports": [
+        "by-p9e",
+        "by-goui"
+      ],
+      "arena": {
+        "does": "Arena piles same-named lands from the second copy, a tapped pile apart from an untapped one, and a pile of four shows \"x4\".",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "17:00"
+          },
+          {
+            "recording": "UrGalw_f35w",
+            "time": "48:44"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "49:10"
+          }
+        ]
+      }
     },
     {
       "kind": "exception",
       "number": 6,
       "name": "Linked exile under its host",
       "rule": "A card exiled \"until this leaves the battlefield\" sits tucked under the permanent that exiled it.",
-      "reports": ["by-8g5"],
-      "arena": { "does": "Arena shows no link on the table." }
+      "reports": [
+        "by-8g5"
+      ],
+      "arena": {
+        "does": "Arena shows no link on the table."
+      }
     },
     {
       "kind": "exception",
       "number": 7,
       "name": "Own-target warning",
       "rule": "Confirm before a counter or removal spell targets the player's own spell or permanent.",
-      "reports": ["by-cp2y", "by-jmx9"]
+      "reports": [
+        "by-cp2y",
+        "by-jmx9"
+      ]
     },
     {
       "kind": "settled",
       "name": "Tokens",
-      "rule": "Tokens appear at their slot; they do not fly out of their source.",
-      "reports": ["by-kgc", "by-81h"]
+      "rule": "They appear at their slot; they do not fly out of their source.",
+      "reports": [
+        "by-kgc",
+        "by-81h"
+      ],
+      "arena": {
+        "does": "Arena's appears whole with a short glow, about 0.1 s after its ability leaves the stack; a batch appears as one group.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "17:38.4"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "23:57.0"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:58.3"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "Permanents that leave",
-      "rule": "They dissolve where they are, tokens included.",
-      "reports": ["by-1ug"]
+      "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile.",
+      "reports": [
+        "by-1ug"
+      ],
+      "arena": {
+        "does": "A destroyed creature glows and falls to ash over about 0.7 s; the spell then goes to its graveyard.",
+        "evidence": [
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "27:36.4"
+          },
+          {
+            "recording": "bJQDi6NIrZA",
+            "time": "51:46"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "30:37"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "58:17.0"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "Choosing how to cast",
-      "rule": "Evoke, cycling and the like open a modal showing the card once per option.",
-      "reports": ["by-lzl", "by-9fb"]
+      "rule": "A card or permanent with more than one way to cast or use it opens a modal, \"Choose One\", showing the card once per option, with Cancel: an adventure, an alternative cost, a land's abilities.",
+      "reports": [
+        "by-lzl",
+        "by-9fb"
+      ],
+      "arena": {
+        "does": "Brazen Borrower, Bonecrusher Giant and Force of Will open it from hand, Wasteland on the battlefield.",
+        "evidence": [
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "42:44.2"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "50:44.3"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "46:50.2"
+          },
+          {
+            "recording": "MnhyzykajXw",
+            "time": "35:43"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "A finished ability",
       "rule": "It is removed at once, with no fade.",
-      "reports": ["by-c8b"]
+      "reports": [
+        "by-c8b"
+      ]
     },
     {
       "kind": "settled",
       "name": "Wording",
       "rule": "Arena's exactly: \"All Attack\", \"Choose attackers.\"",
-      "reports": ["by-u4g", "by-a09o"]
+      "reports": [
+        "by-u4g",
+        "by-a09o"
+      ]
     },
     {
       "kind": "settled",
       "name": "Button order",
       "rule": "It follows Arena prompt by prompt; there is no blanket \"default on the right\".",
-      "reports": ["by-ceo3"]
+      "reports": [
+        "by-ceo3"
+      ]
     },
     {
       "kind": "settled",
       "name": "The opponent's turn",
       "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place, and no spinner.",
-      "reports": ["by-58n", "by-7ih", "by-oyx"]
+      "reports": [
+        "by-58n",
+        "by-7ih",
+        "by-oyx"
+      ]
     },
     {
       "kind": "settled",
       "name": "Attacking a planeswalker",
       "rule": "No prompt: an attacker defaults to the player, and the player pulls an arrow to the planeswalker.",
-      "reports": ["by-p00u"],
+      "reports": [
+        "by-p00u"
+      ],
       "arena": {
         "does": "Attackers that can attack get a cyan outline; a clicked attacker turns gold, the opponent's life total and the planeswalker glow, and an arrow follows the cursor to the planeswalker.",
-        "evidence": [{ "recording": "SswBO8aOOgc", "time": "33:30.5" }]
+        "evidence": [
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "33:30.5"
+          }
+        ]
       }
     },
     {
       "kind": "settled",
       "name": "Two items on the stack",
       "rule": "The top one still gets its target arrow.",
-      "reports": ["by-i88"]
+      "reports": [
+        "by-i88"
+      ],
+      "arena": {
+        "does": "A cyan arc runs from the top item to its target, even when that is the one card under it; the top card sits a little right of and below the one beneath.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "39:49.4"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:34.5"
+          },
+          {
+            "recording": "MnhyzykajXw",
+            "time": "36:19.5"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "58:15"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
-      "name": "An additional-cost chooser",
-      "rule": "It opens before mana taps.",
-      "reports": ["by-jqd"]
+      "name": "Additional costs",
+      "rule": "A chooser that lowers the mana to pay (Delve) opens before mana taps; a sacrifice cost is chosen after the lands tap.",
+      "reports": [
+        "by-jqd"
+      ],
+      "arena": {
+        "does": "Treasure Cruise's Delve chooser opens before any land taps; Natural Order's lands send their mana, then \"Sacrifice a green creature.\" opens.",
+        "evidence": [
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "47:31.0"
+          },
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "39:26.0"
+          },
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "1:07:02.25"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "A countered spell",
       "rule": "It leaves before the spell that countered it.",
-      "reports": ["by-kxyq"]
+      "reports": [
+        "by-kxyq"
+      ],
+      "arena": {
+        "does": "The countered spell crumbles in place under the counterspell, which stays until the debris is gone and then fades, 0.5 to 0.9 s later.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "39:50.0"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:35.0"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "Cards the opponent looks at",
-      "rule": "They stay library-size beside their library, face down, and visibly go to the top or bottom.",
-      "reports": ["by-pv6p", "by-yfb2"]
+      "rule": "They come off the top of their library face down at library size and lie beside it; a top-bound card slides back onto the library and a bottom-bound one slides away from it, to either side. A pill above their avatar reads \"Scry: 1 top, 1 bottom.\" for about 2.5 s.",
+      "reports": [
+        "by-pv6p",
+        "by-yfb2",
+        "by-nva"
+      ],
+      "arena": {
+        "does": "No card is enlarged.",
+        "evidence": [
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "52:54.6"
+          },
+          {
+            "recording": "IHPV6yRaFlk",
+            "time": "53:31.2"
+          },
+          {
+            "recording": "qF4GF-vfc8Y",
+            "time": "52:59.9"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "33:32.3"
+          }
+        ]
+      }
     },
     {
       "kind": "settled",
       "name": "A line from an ability to its source",
       "rule": "It is always shown while the ability is on the stack, thin and faint as Arena draws it, and hidden during a prompt. A heavy arrow is not that line.",
-      "reports": ["by-wkr", "by-afh", "by-110h"]
+      "reports": [
+        "by-wkr",
+        "by-afh",
+        "by-110h"
+      ]
+    },
+    {
+      "kind": "settled",
+      "name": "Passing to the end step",
+      "rule": "\"End Turn\" passes until the end step, but stops when the opponent puts a spell or ability on the stack: the button reads \"Resolve\", then \"Pass\" once it resolves.",
+      "reports": [
+        "by-sqo"
+      ],
+      "arena": {
+        "does": "The button reads \"End Turn\" over \"To End\", and goes blank while it passes.",
+        "evidence": [
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "21:00"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "37:52"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "45:29"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Targeting a spell",
+      "rule": "With one spell on the stack, a spell that targets a spell takes it with no prompt and no Confirm. With more, a \"Choose One\" browser of the stack, \"Target a spell.\", opens with nothing preselected, Submit and Cancel.",
+      "reports": [
+        "by-2lwc",
+        "by-69ps"
+      ],
+      "arena": {
+        "does": "Counterspell and Mana Leak at a lone spell go straight onto the stack; Spell Pierce over two spells opens the browser at \"Submit 0\".",
+        "evidence": [
+          {
+            "recording": "vPdoSA5H5xU",
+            "time": "21:36.5"
+          },
+          {
+            "recording": "qF4GF-vfc8Y",
+            "time": "23:58.5"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "17:54.5"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "26:54.0"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "40:55.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Mana into what it pays for",
+      "rule": "Each tapped land glows and sends one streak of its color straight to the spell on the stack, which flashes as they land, in about 0.3 s. Mana does not stop at a pool.",
+      "reports": [
+        "by-p1j"
+      ],
+      "arena": {
+        "does": "Seen for casts paid with lands.",
+        "evidence": [
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "33:32.45"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:30.85"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "The local player's scry",
+      "rule": "A full-screen overlay, \"Scry\", shows the cards face up in one fan before a card back, BOTTOM on the left and TOP on the right, and Done; surveil's has Graveyard and Library boxes instead. On Done the overlay closes at once and nothing flies out of it: the cards show at the library at its size for a moment, and a pill reads \"Scry: 1 top, 1 bottom.\"",
+      "reports": [
+        "by-8qq",
+        "by-2wn7",
+        "by-kyig",
+        "by-1mrh"
+      ],
+      "arena": {
+        "does": "Seen for a scry of two and for surveil; no card changes face.",
+        "evidence": [
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "14:50.5"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "14:52.7"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "13:08.5"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:16.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "A card a look puts in the graveyard",
+      "rule": "It appears on the graveyard at pile size once the chooser closes; it is not shown large first.",
+      "reports": [
+        "by-2ma"
+      ],
+      "arena": {
+        "does": "A surveilled card lands on the graveyard as the overlay closes; kept cards close with the overlay.",
+        "evidence": [
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:23.9"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "13:10"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "A batch exile",
+      "rule": "Cards exiled together leave one at a time, about 0.3 s apart.",
+      "reports": [
+        "by-5pj"
+      ],
+      "arena": {
+        "does": "Delve's cards gather on the graveyard, then peel off its top one by one into a vortex. Delve is the only batch exile in the recordings, all in one recording.",
+        "evidence": [
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "26:06.7"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "47:36.2"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "An opponent's spell returned to hand",
+      "rule": "It breaks up in place on the stack over 0.5 to 1 s; it does not fly or flip toward their hand.",
+      "reports": [
+        "by-e0l"
+      ],
+      "arena": {
+        "does": "Seen for Remand on the opponent's spells.",
+        "evidence": [
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:32.0"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "56:19.5"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "36:04.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Hover inspection",
+      "rule": "A hovered card in hand rises and grows in place to about twice its size. A hovered permanent gets a separate copy about three times its size, away from the cursor, with its keywords explained. A card on the stack gets none.",
+      "arena": {
+        "does": "Estimated from stills, not measured.",
+        "evidence": [
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "45:27.5"
+          },
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "21:02.0"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "34:21.0"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "17:34.0"
+          }
+        ]
+      }
     },
     {
       "kind": "no-equivalent",
       "name": "Undo",
       "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",
-      "reports": ["by-2ml", "by-96t", "by-pwe"]
+      "reports": [
+        "by-2ml",
+        "by-96t",
+        "by-pwe"
+      ]
     },
     {
       "kind": "no-equivalent",
       "name": "Chrome",
       "rule": "Round icon buttons; the log toggle top left; the bug button above undo with no gap kept for a missing button.",
-      "reports": ["by-kib", "by-8g4"]
+      "reports": [
+        "by-kib",
+        "by-8g4"
+      ]
     },
     {
       "kind": "no-equivalent",
       "name": "Why a click is refused",
       "rule": "An illegal click shows its reason at the permanent that forbids it.",
-      "reports": ["by-l2ez"]
+      "reports": [
+        "by-l2ez"
+      ]
     },
     {
       "kind": "no-equivalent",
       "name": "Suggestions are sensible",
       "rule": "The suggested untap targets and the auto-pay sources are the ones a player would pick.",
-      "reports": ["by-svq", "by-ufmq"]
+      "reports": [
+        "by-svq",
+        "by-ufmq"
+      ]
     },
     {
       "kind": "no-equivalent",
       "name": "Nothing overlaps",
       "rule": "The hand, the stack and their indicators never cover a control or each other. No layer of a library, graveyard or exile pile covers a card in play, for either seat, however long a row grows. The opponent's piles keep the band above their back row to themselves.",
-      "reports": ["by-biv", "by-krxg"]
+      "reports": [
+        "by-biv",
+        "by-krxg"
+      ]
     },
     {
       "kind": "not-seen",
       "name": "Paying with permanents",
       "rule": "Waterbend, convoke, crew. Start with no payment highlights. Hover over Auto Pay on desktop or long-press it on mobile to see which permanents Beryl would use. Click or tap the button to accept. To pay manually, click or tap each permanent you want to contribute. For a three-creature Convoke, pick A, B and D directly even if Auto Pay would use A, B and C. After each manual pick, recalculate the proposal for the remaining cost and keep the player's picks. Let the player finish manually or accept Auto Pay for the remainder, and stop taking picks once the cost is covered. Arena documents the preview and acceptance gestures in its [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes). A selected permanent turns and carries a tap mark, and an outline means one thing at a time.",
-      "reports": ["by-1y4", "by-uld", "by-4hjm", "by-z973"]
+      "reports": [
+        "by-1y4",
+        "by-uld",
+        "by-4hjm",
+        "by-z973"
+      ]
     },
     {
       "kind": "not-seen",
       "name": "A creature that enters attacking",
       "rule": "It gets an explicit choice of what it attacks, and its line stays drawn throughout.",
-      "reports": ["by-l26", "by-y3sp"]
+      "reports": [
+        "by-l26",
+        "by-y3sp"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A token that leaves",
+      "rule": "It dissolves in place like any permanent. No token leaving the battlefield is seen.",
+      "reports": [
+        "by-1ug"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "Evoke and cycling",
+      "rule": "A card with evoke, or a land with cycling, opens the same \"Choose One\" modal. No evoke is seen; Triomes cycle straight to the stack, but whether a land could still be played is not shown.",
+      "reports": [
+        "by-lzl",
+        "by-9fb"
+      ],
+      "arena": {
+        "does": "Arena shows no chooser before these cycles.",
+        "evidence": [
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "19:23.5"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "45:29.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Known cards in a library",
+      "rule": "A known top card shows face up on its library, and clicking a library lists its known cards. No known card in the opponent's library is seen.",
+      "reports": [
+        "by-nva",
+        "by-9es"
+      ],
+      "arena": {
+        "does": "The player's own library stays a card back after their tutor puts a card on top, and after a look.",
+        "evidence": [
+          {
+            "recording": "gIhJjyoJ0_M",
+            "time": "29:48"
+          },
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "20:15"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "A card turning face up",
+      "rule": "A face-down permanent turning face up enlarges in place and flips; one leaving reveals its face during its flight. Nothing turns face up in the recordings, and one face-down card is seen leaving.",
+      "reports": [
+        "by-5hcb",
+        "by-thod"
+      ],
+      "arena": {
+        "does": "Killed, Arena's face-down card dissolves as a card back and a \"Revealed Cards\" panel then shows its face at the top left.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "29:42.9"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Cards a look returns",
+      "rule": "Cards a look puts back into a library fly straight to it. No look at several cards with the rest returned is filmed.",
+      "reports": [
+        "by-ubgt"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A linked exile returning",
+      "rule": "The exiled card returns as its source departs, moving with it. No exiling permanent is seen leaving with its card returning.",
+      "reports": [
+        "by-esr2"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "Your own spell returned to hand",
+      "rule": "It glides from the stack to the hand, turning as it goes. Only the opponent's spells are seen returned.",
+      "reports": [
+        "by-e0l"
+      ]
     },
     {
       "kind": "not-seen",
