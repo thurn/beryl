@@ -109,6 +109,38 @@ pub fn log<T: DeserializeOwned>(dir: &Path, g: &GameLine) -> Result<Vec<T>, Stri
         .collect()
 }
 
+/// The next decision of game `g` in `s`, which its log line by `seat` answering `choice` must
+/// fit: an error when the game ended before its log, or when another seat is to move or the
+/// decision offers no such choice, as after a rules change the log predates.
+pub fn logged_decision(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    g: &GameLine,
+    seat: u8,
+    choice: u16,
+) -> Result<Decision, String> {
+    let Step::Decide(d) = next(s, t, x, &mut Replay) else {
+        return Err(format!("{}: the game ended before its log", g.game));
+    };
+    if d.player.index() != usize::from(seat) || usize::from(choice) >= d.len() {
+        return Err(format!("{}: the log no longer fits the game", g.game));
+    }
+    Ok(d)
+}
+
+/// Whether game `g`'s log in `dir` still replays, its logged choices applied and no agent
+/// asked: milliseconds, where a search over a stale log fails only hours in.
+pub fn fits(dir: &Path, t: &GameTable, g: &GameLine) -> Result<(), String> {
+    let mut s = start(dir, t, g)?;
+    let mut x = Scratch::new();
+    for line in log::<LogLine>(dir, g)? {
+        logged_decision(&mut s, t, &mut x, g, line.seat, line.choice)?;
+        apply(&mut s, t, &mut x, &mut Replay, Choice(line.choice));
+    }
+    Ok(())
+}
+
 /// A fresh duel of candidates `a` and `b` at decision `d` of `s`, the whole budget of
 /// `settings` split between them (`LongSearch::duel`), from `seed`: `a`'s lead over `b`, tree
 /// by tree, without the bias of a lead the search chose.
@@ -274,12 +306,7 @@ pub fn walk(
         let mut s = start(dir, &t, &g)?;
         let mut x = Scratch::new();
         for line in lines {
-            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
-                return Err(format!("{}: the game ended before its log", g.game));
-            };
-            if d.player.index() != usize::from(line.seat) || usize::from(line.choice) >= d.len() {
-                return Err(format!("{}: the log no longer fits the game", g.game));
-            }
+            let d = logged_decision(&mut s, &t, &mut x, &g, line.seat, line.choice)?;
             if let Some(search) = line.search.as_ref().filter(|_| line.seat == seat) {
                 visit(&g.game, &s, &d, line.choice, search, names);
             }

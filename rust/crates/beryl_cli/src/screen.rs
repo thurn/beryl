@@ -6,7 +6,14 @@
 //!   (`anchor_replay`'s [`games`], [`start`] and [`log`]). The challenger, built from the
 //!   champion's own seed in that game, is asked every one of the champion's decisions and the
 //!   logged answer is applied, so it plays the champion's game as the champion did. A
-//!   challenger identical to the champion answers every decision as the log does.
+//!   challenger identical to the champion answers every decision as the log does. Every log
+//!   is first replayed alone, so a directory a rules change has left behind is refused before
+//!   any search, and the first game to fail stops the rest.
+//! - **The champion's games.** Any match the champion played will do. Without a recent one,
+//!   `just ladder <champion> --vs <champion> --cap 20 --out $BERYL_CACHE/ladder/champion-<date>`
+//!   plays one; each pair's two games are then the same game, so the screen, asking the
+//!   champion's seat in the first and the other seat in the second, covers both seats of ten
+//!   deals.
 //! - **Differences.** At each of the champion's searched decisions the two answers are
 //!   compared. Where they differ, the challenger is rebuilt fresh at its next decision: its
 //!   trees had grown under its own answer, not the one applied. Until the champion next plants
@@ -25,15 +32,17 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Replay, Scratch, State, Step, apply, next, observe,
+    Choice, Decision, DecisionKind, GameTable, Replay, Scratch, State, apply, observe,
 };
 use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, LongSearch, Settings};
 
-use crate::anchor_replay::{GameLine, duel, games, log, mean_and_error, start};
+use crate::anchor_replay::{
+    GameLine, duel, fits, games, log, logged_decision, mean_and_error, start,
+};
 use crate::game::{mirror, parse_work, seat_seeds};
 use crate::ladder::{games_at_once, resolve};
 use crate::longthink::game::Line;
@@ -75,13 +84,14 @@ struct GameScreen {
 }
 
 /// Replays game `g` of the match in `dir`, asking the challenger `build` makes each of
-/// `champion`'s decisions.
+/// `champion`'s decisions, until the game ends or `stop` is set.
 fn screen_game(
     dir: &Path,
     t: &GameTable,
     g: &GameLine,
     champion: &str,
     build: &Build<'_>,
+    stop: &AtomicBool,
 ) -> Result<GameScreen, String> {
     let seat = g
         .seat_of(champion)
@@ -98,12 +108,10 @@ fn screen_game(
         differs: Vec::new(),
     };
     for line in log::<Line>(dir, g)? {
-        let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
-            return Err(format!("{}: the game ended before its log", g.game));
-        };
-        if d.player.get() != line.seat || usize::from(line.choice) >= d.len() {
-            return Err(format!("{}: the log no longer fits the game", g.game));
+        if stop.load(Ordering::Relaxed) {
+            break;
         }
+        let d = logged_decision(&mut s, t, &mut x, g, line.seat, line.choice)?;
         let logged = Choice(line.choice);
         if line.seat == seat {
             // The champion's search kept no trees here: the rebuilt challenger stands as it does.
@@ -143,6 +151,10 @@ fn screen_game(
 
 /// Replays the first `limit` games of the match in `dir` (all without one), the challenger
 /// `build` makes asked each of `champion`'s decisions, [`games_at_once`] games at a time.
+///
+/// Every game's log is first replayed alone ([`fits`]), so a directory a rules change has
+/// left behind is refused in seconds, naming its first game that no longer fits, before any
+/// search. The first game to fail during the screen stops the rest.
 pub fn screen(
     dir: &Path,
     champion: &str,
@@ -155,6 +167,10 @@ pub fn screen(
     if let Some(n) = limit {
         all.truncate(n);
     }
+    for g in &all {
+        fits(dir, &t, g).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let stop = AtomicBool::new(false);
     let next_game = AtomicUsize::new(0);
     let found: Mutex<Vec<(usize, Result<GameScreen, String>)>> = Mutex::new(Vec::new());
     thread::scope(|scope| {
@@ -163,7 +179,13 @@ pub fn screen(
                 loop {
                     let i = next_game.fetch_add(1, Ordering::Relaxed);
                     let Some(g) = all.get(i) else { break };
-                    let done = screen_game(dir, &t, g, champion, build);
+                    if stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let done = screen_game(dir, &t, g, champion, build, &stop);
+                    if done.is_err() {
+                        stop.store(true, Ordering::Relaxed);
+                    }
                     found.lock().unwrap().push((i, done));
                 }
             });
@@ -403,6 +425,44 @@ mod tests {
         assert!(s.differs.is_empty());
         let text = report("same", CHAMPION, &s, &[]);
         assert!(text.contains("0 differ"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A directory with a log that no longer fits its game, or one cut short mid-line, is
+    /// refused before any challenger is built, naming the game.
+    #[test]
+    fn a_log_that_no_longer_fits_is_refused_before_any_search() {
+        let dir = match_dir("stale");
+        let agents = AtomicUsize::new(0);
+        let build = |t: &GameTable, seed, from| -> Result<Box<dyn Agent>, String> {
+            agents.fetch_add(1, Ordering::Relaxed);
+            builder(CHAMPION)?(t, seed, from)
+        };
+        let last = games(&dir).unwrap().pop().unwrap();
+        let path = dir.join("logs").join(format!("{}.jsonl", last.game));
+        let text = std::fs::read_to_string(&path).unwrap();
+        // A choice past every candidate: the log of a game whose rules have since changed.
+        let mut lines: Vec<serde_json::Value> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        lines[5]["choice"] = 999.into();
+        let stale = lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&path, stale).unwrap();
+        let e = screen(&dir, CHAMPION, &build, None).err().unwrap();
+        assert!(
+            e.contains(&last.game) && e.contains("no longer fits"),
+            "{e}"
+        );
+        // A log cut short inside its last line, as by a crash mid-write.
+        std::fs::write(&path, &text[..text.trim_end().len() - 3]).unwrap();
+        let e = screen(&dir, CHAMPION, &build, None).err().unwrap();
+        assert!(e.contains(&format!("{}.jsonl", last.game)), "{e}");
+        assert_eq!(agents.load(Ordering::Relaxed), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
