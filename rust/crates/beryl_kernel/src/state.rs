@@ -3,7 +3,10 @@
 
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
-pub use crate::floating::{CastPermission, Continuous, Duration, FloatingEffect};
+pub use crate::effects::{
+    Affects, ContinuousEffect, EFFECTS, Effects, LayerChange, MoveReplacement, Payload,
+};
+pub use crate::floating::CastPermission;
 pub use crate::object::{Counters, Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
@@ -11,6 +14,7 @@ pub use crate::stack::{
     Lki, PendingTrigger, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces, TriggerInfo,
     placed,
 };
+pub use crate::store::Duration;
 pub use crate::turn::Turn;
 
 use beryl_card::FaceIx;
@@ -117,9 +121,12 @@ pub struct State<L: Layout = Small> {
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
     /// ability's [`beryl_card::Trigger::Delayed`] names.
     pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
-    /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
-    /// store.
-    pub(crate) effects: L::Queue<FloatingEffect<L>, 64>,
+    /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
+    /// [`State::expire`] write it.
+    pub(crate) effects: Effects<L>,
+    /// The slots a store has an entry about as an object, so that an object with nothing
+    /// stored about it ends at the cost of one bit test ([`crate::store`]).
+    pub(crate) keyed: Bitboard<L::Slot>,
     /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
     /// store.
     pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
@@ -399,12 +406,6 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn permissions(&self) -> &[CastPermission<L>] {
         self.permissions.as_slice()
-    }
-
-    /// The floating continuous effects.
-    #[inline]
-    pub fn effects(&self) -> &[FloatingEffect<L>] {
-        self.effects.as_slice()
     }
 
     /// The one way to an object to write, which never leaves the crate.

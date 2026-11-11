@@ -32,8 +32,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves from
     /// one zone to another becomes a new object with no memory of, or relation to, its previous
-    /// existence." The slot's incarnation is bumped and everything but its identity and owner is
-    /// reset.
+    /// existence." The slot's incarnation is bumped, everything but its identity and owner is
+    /// reset, and what the stores hold about it ends ([`crate::store`]).
     ///
     /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
     /// any library, graveyard, or hand other than its owner's, it goes to its owner's
@@ -62,6 +62,7 @@ impl<L: Layout> State<L> {
         }
         let from = o.zone;
         leave(self, slot);
+        self.forget_stored(slot);
         let timestamp = self.zones.next_timestamp;
         let o = self.object_mut(slot);
         o.incarnation = o.incarnation.wrapping_add(1);
@@ -219,6 +220,7 @@ impl<L: Layout> State<L> {
             o.incarnation = o.incarnation.wrapping_add(1);
         }
         let rebound: Bitboard<L::Slot> = slots.iter().copied().collect();
+        self.forget_all_stored(rebound);
         for k in self.knowledge.as_mut_slice() {
             *k &= !rebound;
         }
@@ -231,6 +233,7 @@ impl<L: Layout> State<L> {
     /// with it are exiled with nothing any more.
     pub fn cease_to_exist(&mut self, slot: L::Slot) {
         leave(self, slot);
+        self.forget_stored(slot);
         let incarnation = self.object(slot).incarnation.wrapping_add(1);
         *self.object_mut(slot) = Object {
             incarnation,

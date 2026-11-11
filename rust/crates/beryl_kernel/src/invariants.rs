@@ -24,7 +24,7 @@ pub enum At {
     Player(Seat),
 }
 
-fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
+pub(crate) fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
     if ok {
         Ok(())
     } else {
@@ -42,6 +42,7 @@ impl<L: Layout> State<L> {
         self.check_objects(t)?;
         self.check_zones()?;
         self.check_players()?;
+        self.check_stores(t)?;
         check(
             self.outcome.is_some() || !self.flags.derived_dirty,
             "derived characteristics are stale",

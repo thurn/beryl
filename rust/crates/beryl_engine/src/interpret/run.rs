@@ -18,8 +18,8 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::state::{
-    self, Continuous, CounterKind, ObjectRef, PendingTrigger, StackEntry, TargetPlaces, Zone,
-    ZoneKey, placed,
+    self, CounterKind, LayerChange, ObjectRef, Payload, PendingTrigger, StackEntry, TargetPlaces,
+    Zone, ZoneKey, placed,
 };
 use crate::zone::Place;
 
@@ -583,9 +583,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Duration::Indefinite => state::Duration::Indefinite,
         };
+        // "You" in what it says is the ability's controller as it resolves.
+        let change = LayerChange::resolve(modification, self.ctx.controller());
         let permanents = self.permanents(objects);
         self.each_permanent(permanents, |ctx, object| {
-            ctx.add_effect(object, Continuous::Layer(modification), duration);
+            ctx.add_effect(object, Payload::Layer(change), duration);
         });
         Outcome::acted_on(permanents)
     }

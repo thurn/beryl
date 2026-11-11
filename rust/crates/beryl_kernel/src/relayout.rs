@@ -9,8 +9,8 @@ use crate::event::{Event, LossCause, Recipient};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
-    CastPermission, Derived, FloatingEffect, GrantRef, Lki, Object, ObjectRef, Pending,
-    PendingTrigger, Player, Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
+    CastPermission, Derived, GrantRef, Lki, Object, ObjectRef, Pending, PendingTrigger, Player,
+    Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -30,12 +30,12 @@ pub trait Relayout {
 }
 
 /// `s` as the slot at the same place.
-fn slot<S: SlotId, T: SlotId>(s: S) -> T {
+pub(crate) fn slot<S: SlotId, T: SlotId>(s: S) -> T {
     s.to().expect("a slot past the layout's")
 }
 
 /// `c` as the same game index.
-fn card<C: CardId, D: CardId>(c: C) -> D {
+pub(crate) fn card<C: CardId, D: CardId>(c: C) -> D {
     c.to().expect("a game index past the layout's")
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn bits<S: SlotId, T: SlotId>(b: Bitboard<S>) -> Bitboard<T> {
 }
 
 /// The items of `from`, each converted by `f`, in order.
-fn queue<T, U: Item + Default, Q: Queue<U>>(from: &[T], f: impl Fn(&T) -> U) -> Q {
+pub(crate) fn queue<T, U: Item + Default, Q: Queue<U>>(from: &[T], f: impl Fn(&T) -> U) -> Q {
     let mut q = Q::default();
     for x in from {
         q.push(f(x)).expect("a queue past the layout's capacity");
@@ -228,20 +228,6 @@ impl<L: Layout> Relayout for CastPermission<L> {
             this_turn: self.this_turn,
             exile: self.exile,
             flashback: self.flashback,
-        }
-    }
-}
-
-impl<L: Layout> Relayout for FloatingEffect<L> {
-    type In<M: Layout> = FloatingEffect<M>;
-
-    fn relayout<M: Layout>(&self) -> FloatingEffect<M> {
-        FloatingEffect {
-            source: card(self.source),
-            timestamp: self.timestamp,
-            duration: self.duration,
-            affected: self.affected.relayout(),
-            effect: self.effect,
         }
     }
 }
@@ -687,6 +673,7 @@ impl<L: Layout> Relayout for State<L> {
             triggers,
             delayed,
             effects,
+            keyed,
             permissions,
             entered_x,
             pending,
@@ -715,7 +702,8 @@ impl<L: Layout> Relayout for State<L> {
             stack: queue(stack.as_slice(), StackEntry::relayout),
             triggers: queue(triggers.as_slice(), PendingTrigger::relayout),
             delayed: queue(delayed.as_slice(), PendingTrigger::relayout),
-            effects: queue(effects.as_slice(), FloatingEffect::relayout),
+            effects: effects.relayout(),
+            keyed: bits(*keyed),
             permissions: queue(permissions.as_slice(), CastPermission::relayout),
             entered_x: queue(entered_x.as_slice(), |&(r, x)| (r.relayout(), x)),
             pending: pending.relayout(),

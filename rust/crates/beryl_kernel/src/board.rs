@@ -14,8 +14,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, Counters, Duration, ManaPool, MulliganStatus, ObjectFlags, Pending, State,
-    TurnStep, Zone,
+    CounterKind, Counters, ManaPool, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -71,17 +70,8 @@ impl<L: Layout> State<L> {
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.card).name));
         }
-        if let Some(e) = self.effects.as_slice().first() {
-            let until = match e.duration {
-                Duration::EndOfTurn => "until end of turn".to_owned(),
-                Duration::UntilYourNextTurn(p) => format!("until player {}'s next turn", p.get()),
-                Duration::Indefinite => "indefinitely".to_owned(),
-            };
-            return Some(format!(
-                "an effect of {} on {} lasting {until}",
-                t.def(e.source).name,
-                name(e.affected.slot)
-            ));
+        if let Some(stored) = self.stores_lingering(t) {
+            return Some(stored);
         }
         if let Some(p) = self.permissions.as_slice().first() {
             return Some(format!(

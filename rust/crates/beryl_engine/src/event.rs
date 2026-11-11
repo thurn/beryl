@@ -17,7 +17,7 @@ use crate::ids::{Seat, SlotId};
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
-use crate::state::{Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone};
+use crate::state::{CounterKind, Counters, MoveReplacement, ObjectFlags, ObjectRef, State, Zone};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -229,11 +229,9 @@ pub(crate) fn move_batch_to<L: Layout>(
 /// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
 /// never becomes a choice.
 fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
-    let r = s.object_ref(slot);
     let exiled = to == Zone::Graveyard
-        && s.effects()
-            .iter()
-            .any(|e| e.affected == r && e.effect == Continuous::ExileInsteadOfGraveyard);
+        && s.move_replacements(s.object_ref(slot))
+            .any(|r| r == MoveReplacement::ExileInsteadOfGraveyard);
     if exiled { Zone::Exile } else { to }
 }
 

@@ -21,15 +21,12 @@ pub struct Rederive<'a, L: Layout>(&'a mut State<L>);
 
 impl<L: Layout> State<L> {
     /// Lends the derived cache to be filled, if a change since it was last stored may have
-    /// changed a layer result; otherwise nothing, and the cache is current. The floating
-    /// effects on objects that have left their zone end first: such an object no longer
-    /// exists ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    /// changed a layer result; otherwise nothing, and the cache is current.
     #[inline]
     pub fn rederive(&mut self) -> Option<Rederive<'_, L>> {
         if !self.flags.derived_dirty {
             return None;
         }
-        self.drop_stale_effects();
         Some(Rederive(self))
     }
 

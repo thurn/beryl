@@ -5,7 +5,7 @@ use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Typ
 use crate::event::Sink;
 use crate::ids::CardId;
 use crate::layout::{Layout, Queue};
-use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
+use crate::state::{CounterKind, Derived, GrantRef, LayerChange, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -21,7 +21,7 @@ struct Apply<C: CardId> {
     target: u8,
     /// The game index of the effect's source card, which a granted ability is printed on.
     source: C,
-    modification: Option<Modification>,
+    change: Option<LayerChange>,
 }
 
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
@@ -86,8 +86,8 @@ pub(crate) fn counters_matter<L: Layout>(
 /// cards' effects in one layer depend on each other
 /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
 ///
-/// The kernel lends the cache with the effects on objects that left their zone already ended,
-/// and stores the results, with what each face-down permanent's controller now sees, as the
+/// The kernel has ended the effects on objects that left their zone as they left, and stores
+/// the results, with what each face-down permanent's controller now sees, as the
 /// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]).
 fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     let Some(mut s) = s.rederive() else {
@@ -133,32 +133,36 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
                 crate::coverage::hit(ability);
                 // A list longer than its capacity would need more effects than the cards
                 // can create at once.
+                // No static ability of the cards changes control. One that did would name
+                // its source's controller as layer 2 has it, not as the permanent entered.
+                debug_assert_ne!(spec.modification, Modification::Control);
+                let change = LayerChange::resolve(spec.modification, s.base_controller(slot));
                 let _ = list.get_or_insert_with(Default::default).push(Apply {
-                    layer: spec.modification.layer() as u8,
+                    layer: change.layer() as u8,
                     timestamp: o.timestamp(),
                     order: n as u8,
                     target: target as u8,
                     source: what.record(t).0,
-                    modification: Some(spec.modification),
+                    change: Some(change),
                 });
             }
         }
     }
-    for e in s.effects() {
-        let Continuous::Layer(m) = e.effect else {
+    for (e, change) in s.layer_effects() {
+        let Some(affected) = e.affected.as_object() else {
             continue;
         };
-        if s.object(e.affected.slot).zone() != Zone::Battlefield {
+        if s.object(affected.slot).zone() != Zone::Battlefield {
             continue;
         }
-        if let Some(target) = s.battlefield_position(e.affected.slot) {
+        if let Some(target) = s.battlefield_position(affected.slot) {
             let _ = list.get_or_insert_with(Default::default).push(Apply {
-                layer: m.layer() as u8,
+                layer: change.layer() as u8,
                 timestamp: e.timestamp,
                 order: 0,
                 target: target as u8,
                 source: e.source,
-                modification: Some(m),
+                change: Some(change),
             });
         }
     }
@@ -167,9 +171,9 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         list.as_mut_slice()
             .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
         for a in list.iter() {
-            let Some(m) = a.modification else { continue };
+            let Some(change) = a.change else { continue };
             let i = usize::from(a.target);
-            apply(s.results(), i, a.source, m);
+            apply(s.results(), i, a.source, change);
         }
     }
     // Layer 7c: counters modify power and toughness
@@ -192,20 +196,20 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
 /// nothing, and inlined into [`recompute`] it costs the rollout benchmark 0.07% of its
 /// instructions.
 #[inline(never)]
-fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, m: Modification) {
-    match m {
+fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, change: LayerChange) {
+    match change {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
-        Modification::Control(player) => derived[i].controller = player,
+        LayerChange::Control(player) => derived[i].controller = player,
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
-        Modification::AddTypes(types) => derived[i].types = derived[i].types.union(types),
-        Modification::RemoveTypes(types) => derived[i].types = derived[i].types.minus(types),
+        LayerChange::AddTypes(types) => derived[i].types = derived[i].types.union(types),
+        LayerChange::RemoveTypes(types) => derived[i].types = derived[i].types.minus(types),
         // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
         // card type(s) replaces any existing card types. ... If an object's card type is
         // removed, the subtypes correlated with that card type will remain if they are also
         // the subtypes of a card type the object currently has; otherwise, they are also
         // removed".
-        Modification::SetTypes(types) => {
+        LayerChange::SetTypes(types) => {
             derived[i].types = types;
             let mut kept = Subtypes::NONE;
             for subtype in derived[i].subtypes.iter() {
@@ -215,13 +219,13 @@ fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, m: Mo
             }
             derived[i].subtypes = kept;
         }
-        Modification::AddSubtype(subtype) => {
+        LayerChange::AddSubtype(subtype) => {
             derived[i].subtypes = derived[i].subtypes.with(subtype);
         }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
-        Modification::AddKeywords(k) => derived[i].keywords = derived[i].keywords.union(k),
-        Modification::Grant(grant) => {
+        LayerChange::AddKeywords(k) => derived[i].keywords = derived[i].keywords.union(k),
+        LayerChange::Grant(grant) => {
             if let Some(free) = derived[i].granted.iter_mut().find(|g| g.is_none()) {
                 *free = Some(GrantRef {
                     card: source,
@@ -232,7 +236,7 @@ fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, m: Mo
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
         // power and/or toughness are applied." Layers 2 to 6 are done for every permanent by
         // now, so the count sees each one's final types and controller.
-        Modification::PowerIsCreaturesYouControl => {
+        LayerChange::PowerIsCreaturesYouControl => {
             let you = derived[i].controller;
             let creatures = derived
                 .iter()
@@ -240,7 +244,7 @@ fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, m: Mo
                 .count();
             derived[i].power = i8::try_from(creatures).unwrap_or(i8::MAX);
         }
-        Modification::ModifyPt(p, t) => {
+        LayerChange::ModifyPt(p, t) => {
             derived[i].power = derived[i].power.saturating_add(p);
             derived[i].toughness = derived[i].toughness.saturating_add(t);
         }

@@ -18,8 +18,8 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::query::Copiable;
 use crate::state::{
-    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TargetPlace,
-    TurnStep, Zone, ZoneKey,
+    CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags, Payload,
+    PendingTrigger, TargetPlace, TurnStep, Zone, ZoneKey,
 };
 use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
@@ -756,7 +756,7 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
         ctx.deal_damage(Recipient::Permanent(ctx.source()), 2);
         ctx.add_effect(
             shrunk_ref,
-            Continuous::Layer(Modification::ModifyPt(0, -2)),
+            Payload::Layer(LayerChange::ModifyPt(0, -2)),
             Duration::EndOfTurn,
         );
         ctx.deal_damage(Recipient::Permanent(walker_ref), 3);
@@ -1129,7 +1129,7 @@ fn exile_instead_of_the_graveyard_replaces_the_move() {
     with_ctx(&t, &mut s, &mut x, b, |ctx| {
         ctx.add_effect(
             a_ref,
-            Continuous::ExileInsteadOfGraveyard,
+            Payload::Move(MoveReplacement::ExileInsteadOfGraveyard),
             Duration::EndOfTurn,
         );
         ctx.destroy(a_ref);
@@ -1190,7 +1190,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         ctx.add_effect(
             r,
-            Continuous::Layer(Modification::AddTypes(Types::CREATURE)),
+            Payload::Layer(LayerChange::AddTypes(Types::CREATURE)),
             Duration::EndOfTurn,
         );
     });
@@ -1366,12 +1366,12 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         ctx.add_effect(
             r,
-            Continuous::Layer(Modification::AddKeywords(Keywords::FIRST_STRIKE)),
+            Payload::Layer(LayerChange::AddKeywords(Keywords::FIRST_STRIKE)),
             Duration::EndOfTurn,
         );
         ctx.add_effect(
             r,
-            Continuous::Layer(Modification::ModifyPt(-2, 0)),
+            Payload::Layer(LayerChange::ModifyPt(-2, 0)),
             Duration::UntilYourNextTurn(p),
         );
         ctx.add_counters(r, CounterKind::PlusOne, 1);

@@ -86,7 +86,7 @@ fn capacity<V, T: Item, Q: Queue<T>>(_field: impl Fn(&V) -> &Q) -> usize {
 }
 
 /// Whether a list of `len` fits `capacity`.
-fn room(list: &'static str, len: usize, capacity: usize) -> Result<(), Misfit> {
+pub(crate) fn room(list: &'static str, len: usize, capacity: usize) -> Result<(), Misfit> {
     if len <= capacity {
         Ok(())
     } else {
@@ -164,11 +164,7 @@ impl<L: Layout> State<L> {
             self.delayed.len(),
             capacity(|s: &State<M>| &s.delayed),
         )?;
-        room(
-            "the continuous effects",
-            self.effects.len(),
-            capacity(|s: &State<M>| &s.effects),
-        )?;
+        self.stores_fit::<M>()?;
         room(
             "the cast permissions",
             self.permissions.len(),

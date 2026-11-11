@@ -2,7 +2,7 @@
 //! and layered modifications cards create.
 
 use crate::characteristics::{Keywords, Subtype, Types};
-use crate::ids::{CounterKind, Seat};
+use crate::ids::CounterKind;
 use crate::index::GrantIx;
 
 /// A static ability that changes a rule of the game rather than an object's characteristics
@@ -73,12 +73,13 @@ pub enum StaticCondition {
     Impending,
 }
 
-/// What a continuous effect does to a permanent. The layer it applies in follows from the
-/// modification ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)).
+/// What a continuous effect does to a permanent, as a card says it. The engine applies its
+/// resolved form (`beryl_kernel`'s `LayerChange`), which names the layer it applies in
+/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Modification {
-    /// Layer 2: "gain control of".
-    Control(Seat),
+    /// Layer 2: "gain control of": the controller of the ability that says it does.
+    Control,
     /// Layer 4: "becomes [types] in addition to its other types".
     AddTypes(Types),
     /// Layer 4: "isn't a [type]".
@@ -120,19 +121,6 @@ impl Modification {
     /// from 0: [`Modification::Grant`], as a card file writes it.
     pub const fn grant(index: u8) -> Modification {
         Modification::Grant(GrantIx::new(index))
-    }
-
-    pub fn layer(self) -> Layer {
-        match self {
-            Modification::Control(_) => Layer::Control,
-            Modification::AddTypes(_)
-            | Modification::RemoveTypes(_)
-            | Modification::SetTypes(_)
-            | Modification::AddSubtype(_) => Layer::Type,
-            Modification::AddKeywords(_) | Modification::Grant(_) => Layer::Ability,
-            Modification::PowerIsCreaturesYouControl => Layer::PtDefining,
-            Modification::ModifyPt(..) => Layer::PtModifying,
-        }
     }
 }
 

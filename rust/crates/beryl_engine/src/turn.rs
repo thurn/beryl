@@ -36,8 +36,7 @@ pub(crate) fn begin_turn<L: Layout>(
     let active = s.begin_turn();
     // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
-    s.legacy_mut()
-        .end_effects(Duration::UntilYourNextTurn(active));
+    s.expire(Duration::UntilYourNextTurn(active));
     layers::refresh(s, t, sink);
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began. Nothing has entered, and no loyalty ability has been
@@ -198,7 +197,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
 /// instead when nothing happens.
 fn finish_cleanup<L: Layout>(s: &mut State<L>) {
     s.clear_damage();
-    s.legacy_mut().end_effects(Duration::EndOfTurn);
+    s.expire(Duration::EndOfTurn);
     // Permissions that last this turn end, and those whose card has left its zone are gone.
     s.legacy_mut().end_permissions_of_turn();
     s.set_cleanup_check(true);

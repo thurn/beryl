@@ -10,7 +10,7 @@
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::event::{Event, Recipient};
-use crate::ids::{Seat, SlotId};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::query::Copiable;
@@ -418,16 +418,5 @@ impl<L: Layout> State<L> {
             o.flags.set(ObjectFlags::COMBAT, false);
             o.combat = None;
         }
-    }
-
-    /// Ends the floating effects on objects that have left their zone: such an object no
-    /// longer exists ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The
-    /// queue is milestone 4's to replace (by-w8gv.7.1); [`State::rederive`] does this before
-    /// it lends the cache.
-    #[inline]
-    pub(crate) fn drop_stale_effects(&mut self) {
-        let objects = &self.objects;
-        self.effects
-            .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
     }
 }
