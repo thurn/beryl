@@ -8,8 +8,8 @@
 //! a definition is a `static` with no startup cost.
 //!
 //! This crate knows nothing of the game state. It depends on no other crate (plan K12), and
-//! holds the few identifiers definitions share with the state ([`ids`]) until the kernel
-//! crate takes them.
+//! holds the identifiers definitions share with the state ([`ids`]); the kernel crate depends
+//! on this one.
 //!
 //! Each entry cites the Comprehensive Rules it says, at
 //! <https://yawgatog.com/resources/magic-rules/>.

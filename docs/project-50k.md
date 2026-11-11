@@ -138,15 +138,18 @@ same cards build in about 90 seconds.
 
 ### Crates
 
-| Crate                  | Holds                                                                                                  | Depends on                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| `beryl_kernel`         | Ids, bitboards, fixed queues, `State` and its layouts, mutators, queries, the three stores, invariants | nothing                                |
-| `beryl_card`           | The card vocabulary: definition types, effect data, filters, costs, prompt shapes, English templates   | `beryl_kernel`'s id types              |
-| `beryl_rules`          | Turns, priority, casting, mana, combat, layers, triggers, the interpreter, the rules library           | `beryl_kernel`, `beryl_card`           |
-| `cards/<set group>`    | One file per card, grouped by first-printing set                                                       | `beryl_card`; `beryl_rules` for bodies |
-| `beryl_cards`          | The generated registry over every set crate, and the decklists                                         | the set crates                         |
-| `beryl_search`, others | As today ([engine-architecture.md](engine-architecture.md) §16)                                        | as today                               |
+| Crate                  | Holds                                                                                                                                                                                                                                                            | Depends on                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `beryl_card`           | The card vocabulary: definition types, effect data, filters, costs, prompt shapes, English templates, and the ids and index types a definition shares with the state (seats, zones, steps, counter kinds; face, ability, target-spec and casting-option indices) | nothing                                |
+| `beryl_kernel`         | Slots and object references, bitboards, fixed queues, `State` and its layouts, mutators, queries, the three stores, invariants                                                                                                                                   | `beryl_card`                           |
+| `beryl_rules`          | Turns, priority, casting, mana, combat, layers, triggers, the interpreter, the rules library                                                                                                                                                                     | `beryl_kernel`, `beryl_card`           |
+| `cards/<set group>`    | One file per card, grouped by first-printing set                                                                                                                                                                                                                 | `beryl_card`; `beryl_rules` for bodies |
+| `beryl_cards`          | The generated registry over every set crate, and the decklists                                                                                                                                                                                                   | the set crates                         |
+| `beryl_search`, others | As today ([engine-architecture.md](engine-architecture.md) §16)                                                                                                                                                                                                  | as today                               |
 
+- The kernel stores vocabulary values and answers queries that read a
+  definition, so it depends on `beryl_card`. Data-only card crates depend on
+  `beryl_card` alone, so they rebuild only when the vocabulary changes.
 - `beryl_engine` stays as the facade other crates import until the last caller
   has moved.
 - A full rebuild of every card crate is cheap once definitions are data: 10,000
@@ -211,7 +214,8 @@ pub static CARD: Card = card(names::TEFERI_TIME_RAVELER)
   token; `mana_value(object)` accounts for copies and faces.
 - A bitboard outside the kernel offers only order-free operations. Getting a
   sequence means naming an order the rules can see, such as battlefield order.
-- Ability, target, mode and option indices are distinct types.
+- Ability, target, mode and option indices are distinct types. Those a
+  definition names are defined in `beryl_card`.
 - Players are reached through sets and orders: opponents of a player, players in
   turn order, defending players. The two-player shortcut is not exposed.
 
