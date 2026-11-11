@@ -41,7 +41,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cards, paths, runlog, system, verdicts, warm
+from . import card_names, paths, runlog, system, verdicts, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -56,9 +56,6 @@ COMMIT_MAX = 60
 TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", ".html")
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
-# The game screen's code: it reads what a decision asks from the protocol
-# (`DecisionView.ask`), never from the card asking, so a new card needs no change here.
-GAME_UI: Path = paths.UI / "src" / "game"
 # A step's exit code when it failed to build or start (a compile error, a UiError, an oracle not
 # built at its pin): its checks never ran, so a failure on rerun would only cost the time.
 CANNOT_RUN = 125
@@ -506,7 +503,13 @@ def ui_lane() -> Lane:
         Lane("ui", warm=True)
         .step("prettier", [system.npm_bin("prettier"), "--check", "."], paths.UI)
         .step("tsc", [system.npm_bin("tsc"), "-b"], paths.UI)
-        .step("card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"])
+    )
+
+
+def names_lane() -> Lane:
+    """No card name in generic code, held to the burn-down list (card_names.py)."""
+    return Lane("names").step(
+        "card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"]
     )
 
 
@@ -571,6 +574,8 @@ def fast(args: argparse.Namespace) -> int:
         lanes.append(rust_lane())
     if touched(r"^ui/"):
         lanes.append(ui_lane())
+    if touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
+        lanes.append(names_lane())
     return run_lanes(lanes, "check", FAST_BUDGET, strict=False)
 
 
@@ -580,6 +585,7 @@ def slow(args: argparse.Namespace) -> int:
         "python": python_lane(),
         "rust": rust_lane(),
         "ui": ui_lane(),
+        "names": names_lane(),
         "app": app_lane(),
         "shots": shots_lane(),
         "ui-test": ui_test_lane(),
@@ -598,36 +604,6 @@ def slow(args: argparse.Namespace) -> int:
         raise SystemExit(f"unknown lanes {sorted(unknown)}; lanes: {' '.join(lanes)}")
     budget = int(os.environ.get("CI_BUDGET_S", SLOW_BUDGET))
     return run_lanes([lanes[n] for n in chosen], "ci", budget, strict=True)
-
-
-def card_names_in(directory: Path, names: Iterable[str]) -> list[str]:
-    """Each place a file under `directory` names one of `names`, as `path:line: name`."""
-    alternatives = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
-    pattern = re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)")
-    found: list[str] = []
-    for path in sorted(p for p in directory.rglob("*") if p.is_file()):
-        for number, line in enumerate(path.read_text().splitlines(), 1):
-            found += [f"{path}:{number}: {m.group(0)}" for m in pattern.finditer(line)]
-    return found
-
-
-def all_card_names() -> set[str]:
-    """The cards and tokens of the card data, but a token named by one word, such as Copy,
-    which is no name in prose."""
-    names: set[str] = set()
-    data = json.loads(cards.OUTPUT.read_text())
-    tokens = {t["name"] for t in data["tokens"]}
-    for entry in [*data["cards"], *data["tokens"]]:
-        names.add(entry["name"])
-        names.update(face["name"] for face in entry.get("faces", []))
-    return {n for n in names if " " in n or n not in tokens}
-
-
-def card_names_step() -> int:
-    found = card_names_in(GAME_UI, all_card_names())
-    for place in found:
-        print(f"card-names: {place}: the game screen names a card")
-    return 1 if found else 0
 
 
 # `env!` of a build path fixes the compiling worktree's absolute path into the binary. The warm
@@ -786,7 +762,7 @@ if __name__ == "__main__":
     steps: dict[str, Callable[..., int]] = {
         "pytest": pytest_step,
         "rust-tests": rust_tests_step,
-        "card-names": card_names_step,
+        "card-names": card_names.step,
         "build-paths": build_paths_step,
     }
     sys.exit(steps[sys.argv[1]](*sys.argv[2:]))

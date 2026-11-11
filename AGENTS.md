@@ -38,9 +38,11 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - `data/`: `cards.json`, the card data `just cards` writes from Scryfall
   (printing, artist, per-face text and image URLs); `card-printings.csv`, the
   printings it pins; `oracle-divergences.json`, the scenarios where an oracle is
-  wrong, each with its CR citation; `save-breaks.json`, the corpus saves no
-  migration carries past a change. The app downloads images on demand into its
-  cache (`beryl_app`'s `art.rs`); none are committed.
+  wrong, each with its CR citation; `card-names-allowlist.json`, the generic
+  files that still name cards and the one-card mechanics still in the engine;
+  `save-breaks.json`, the corpus saves no migration carries past a change. The
+  app downloads images on demand into its cache (`beryl_app`'s `art.rs`); none
+  are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
@@ -143,8 +145,11 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the
   branch left `origin/staging`: `repo` (justfile and Markdown formatting),
-  `python` (black, pyre, pytest), `rust` (rustfmt, clippy, tests) and `ui`
-  (prettier, tsc). It also refuses conflict markers and bad commit subjects.
+  `python` (black, pyre, pytest), `rust` (rustfmt, clippy, tests), `ui`
+  (prettier, tsc) and `names` (`card-names`: no card name in generic code, held
+  to the burn-down list `data/card-names-allowlist.json`, whose counts only
+  fall; `python -m beryl_tools.checks card-names --shrink` lowers them). It also
+  refuses conflict markers and bad commit subjects.
 - `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
   `shots` (`just ui-shots`, which fails on any page error), `ui-test`
   (`just ui-test`, which plays the game screen through a fixture), `oracle`

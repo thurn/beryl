@@ -23,17 +23,6 @@ def test_only_lanes_that_build_warm_the_caches(
     assert warmed == [True]
 
 
-def test_card_names_are_found_as_whole_words(tmp_path: Path) -> None:
-    (tmp_path / "a.ts").write_text(
-        'const PONDER = "Ponder";\n// Pondering, and Jace, the Mind Sculptor\'s +2\n'
-    )
-    names = ["Ponder", "Jace, the Mind Sculptor", "Jace"]
-    assert checks.card_names_in(tmp_path, names) == [
-        f"{tmp_path / 'a.ts'}:1: Ponder",
-        f"{tmp_path / 'a.ts'}:2: Jace, the Mind Sculptor",
-    ]
-
-
 def test_a_hung_step_is_killed_at_the_deadline_with_its_descendants(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

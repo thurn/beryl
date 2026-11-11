@@ -74,6 +74,7 @@ CHECK_SIDE: dict[str, Side] = {
     "shots": Side(("ui/scripts/*", "ui/shots.json", "ui/fixtures.json")),
     "oracle": Side(("data/oracle-divergences.json",), rust="scenarios"),
     "python": Side(("tools/tests/*",)),
+    "names": Side(("data/card-names-allowlist.json",)),
 }
 # Neither side of any check: prose and the beads.
 NEUTRAL = ("docs/*", ".beads/*", "*.md")
