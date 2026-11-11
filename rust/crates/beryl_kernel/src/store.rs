@@ -3,7 +3,7 @@
 //! as a duration ends, and as an object does.
 //!
 //! A store is a private field of [`State`] with its own file, which holds its entry type,
-//! its mutators and queries (methods of `State`), and its [`Store`] implementation. The
+//! its mutators and queries (methods of `State`), and its `Store` implementation. The
 //! per-field lists of the state name the store once: [`State::empty`],
 //! [`crate::Large::clone_state`] and [`Relayout`] for `State`. Everything else reaches the
 //! stores through the functions below, so a new kind of entry adds a variant to its store's

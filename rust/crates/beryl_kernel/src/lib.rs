@@ -46,7 +46,7 @@
 //!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`] | a face with its timestamp and who knows it; `derived_dirty` where the kernel can tell the layers read the field |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::link`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
@@ -57,6 +57,7 @@
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
 //! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
+//! | start and end what a card creates | [`State::start_effect`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; `derived_dirty` where the entry is a layer input |
 //!
 //! ## Events
 //!
@@ -127,15 +128,215 @@
 //! ## The legacy accessor
 //!
 //! [`State::legacy_mut`] lends a [`legacy::Legacy`], which writes, raw, what milestone 4
-//! (by-w8gv.7.1) deletes, which therefore gets no typed mutator: the `effects` and
-//! `permissions` queues, which become stores whose payload is a resolved form of
-//! `Modification`; `entered_x`; `Player::sorceries_as_flash`; [`state::CastPermission`]'s
-//! `extra`, `exile` and `flashback`; the [`state::ObjectFlags`] `KICKED`, `OFFSPRING`,
-//! `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and `LOYALTY_ACTIVATED`; and
-//! [`state::Counters`]' long-tail kind (`other_kind`, `other`). [`legacy::Legacy`]'s rustdoc
-//! lists each with the store that replaces it. Reads use the getters. Milestone 4 deletes
-//! the accessor with the last of them. The zone move and the turn's resets clear those flags
-//! inside the kernel, with everything else an object forgets.
+//! (by-w8gv.7.1) deletes and has not yet moved to a store ("Stores"), which therefore gets
+//! no typed mutator: the `permissions` queue; `entered_x`; `Player::sorceries_as_flash`;
+//! [`state::CastPermission`]'s `extra`, `exile` and `flashback`; the [`state::ObjectFlags`]
+//! `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED`, `EXILED_UNTIL`, `EXILED_WITH` and
+//! `LOYALTY_ACTIVATED`; and [`state::Counters`]' long-tail kind (`other_kind`, `other`).
+//! [`legacy::Legacy`]'s rustdoc lists each with the store that replaces it. Reads use the
+//! getters. Milestone 4 deletes the accessor with the last of them (by-w8gv.7.10). The zone
+//! move and the turn's resets clear those flags inside the kernel, with everything else an
+//! object forgets.
+//!
+//! ## Stores
+//!
+//! A struct field holds what the Comprehensive Rules give a player, an object or the turn.
+//! What a card creates lives in a store (plan K4): **Effects**, the continuous effects of
+//! resolved spells and abilities; **Memos**, what an object remembers of how it was cast or
+//! entered; **Trackers**, what happened this turn that a card of the game reads. This is the
+//! design every bead of milestone 4 (epic by-w8gv.7) builds on, written as it will stand
+//! when they land; a bead that builds a part amends its text. Built so far (by-w8gv.7.2):
+//! the shared core ([`store`]), the Effects store for objects with its layer and zone-change
+//! payloads ([`effects`]), and the capability bits ([`table::Capability`]).
+//!
+//! ### Where everything goes
+//!
+//! | What milestone 3 left | Where it goes | Bead |
+//! | --- | --- | --- |
+//! | the `effects` queue, `Continuous::Layer` | Effects: an entry on an object, payload [`effects::Payload::Layer`] of a [`effects::LayerChange`] | by-w8gv.7.2, built |
+//! | `Continuous::ExileInsteadOfGraveyard` | Effects: an entry on an object, payload [`effects::Payload::Move`] | by-w8gv.7.2, built |
+//! | `Player::sorceries_as_flash` | Effects: an entry on a player, payload a rule change, lasting until that player's next turn | by-w8gv.7.3 |
+//! | the `Rule` mask (`rule_bit`, a `u8`) | a set sized from the list of rules; a static ability's rule changes are found with the layers ("Static rule changes") | by-w8gv.7.3 |
+//! | the `permissions` queue, [`state::CastPermission`]; its `this_turn` | Effects: an entry on the card, payload a permission naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object | by-w8gv.7.4 |
+//! | `CastPermission::extra`, `Casting::extra` | Effects: a cost change on the spell, started as it is cast from the permission's terms; the cost is a read of the cost changes on the spell | by-w8gv.7.4 |
+//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts a zone-change replacement on the spell: exile instead of a graveyard, or flashback's exile instead of anywhere else (CR 702.34a). `cast::exiled_instead` then asks [`State::move_replacements`] alone | by-w8gv.7.4 |
+//! | `State::entered_x` | Memos: the permanent's `X` | by-w8gv.7.6 |
+//! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast, one kind for each casting option of the vocabulary's list | by-w8gv.7.6 |
+//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, [`State::link`], [`State::exiled_with`], `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ("Duration and expiry" says how it outlives that object) | by-w8gv.7.7 |
+//! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent | by-w8gv.7.8 |
+//! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table, keyed (object, kind), beside the three kinds every game reads, which stay in the object | by-w8gv.7.9 |
+//! | `ObjectFlags::ONE_ONE` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
+//!
+//! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
+//! entered this turn) is a tracker keyed by object, not a memo with an expiry. A memo is
+//! written once, as the object is cast or enters, and read by that object's own abilities;
+//! a tracker is reset whole by the turn and exists only in a game with a card that reads
+//! it. Kept as memos, each turn's reset would walk a keyed list and each read search it;
+//! as a tracker the fact is one bit of a set of slots.
+//!
+//! ### Shapes, capacities and bytes
+//!
+//! | Store | In [`Small`] | Entry | Capacity | Bytes | In [`Large`] |
+//! | --- | --- | --- | --- | --- | --- |
+//! | Effects | a queue in the order the effects began, and a mask of the kinds live in it | 24 | 64 ([`effects::EFFECTS`]) | 1,552 | a `Vec` of 32-byte entries |
+//! | the keyed slots, shared by every store | one set of slots | | | 32 | 128 |
+//! | Effects' locked-in sets | a table of sets of slots, which an entry names by index | 32 | 4 | 136 | a `Vec` |
+//! | Effects' rules in force | a set of rules for each player | 8 | 2 | 16 | the same |
+//! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 4 | 32 | 136 | a `Vec` |
+//! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
+//! | Counters | a queue of (slot, kind, count) | 3 | 32 | 104 | a `Vec` |
+//!
+//! A store that fills returns [`fixed::Full`] and the game stalls into `Large`
+//! (`docs/rules-coverage.md`, principle 3). A locked-in set is 32 bytes, so the sets are a
+//! table of their own and never part of an entry. Counter kinds cannot be fields of each of
+//! 255 objects, so all but the three hot kinds are a keyed table.
+//!
+//! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after
+//! by-w8gv.7.2: 40 for the store's mask and the keyed slots, 8 of padding for the field
+//! order ([`State`]'s rustdoc). The limit is 20,480. Each bead may change the size at its
+//! own push by at most its allotment, whatever landed before it, and reports the size as it
+//! reports the count:
+//!
+//! | Bead | Allotment | Why |
+//! | --- | --- | --- |
+//! | by-w8gv.7.3 | +16 | the rules in force; `sorceries_as_flash` frees no whole byte of `Player` |
+//! | by-w8gv.7.4 | -200 or lower | the `permissions` queue (82) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
+//! | by-w8gv.7.5 | +136 | the locked-in sets |
+//! | by-w8gv.7.6 | +88 | the Memos store less `entered_x` (50) |
+//! | by-w8gv.7.7 | 0 | its memos are entries of by-w8gv.7.6's store |
+//! | by-w8gv.7.8 | +64 | two sets of slots |
+//! | by-w8gv.7.9 | +104 | the counters table |
+//! | by-w8gv.7.10 | 0 or lower | deletes only |
+//!
+//! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
+//! the limit; the target with all landed is at most 20,256. The plan does not count on
+//! [`state::Object`] shrinking: it stays 24 bytes while its flags are a `u32`, since
+//! `linked` and the long-tail pair free three bytes and alignment gives none back. Once
+//! by-w8gv.7.6 to by-w8gv.7.9 have landed the flags left fit a `u16` and the object 20
+//! bytes, 1,020 fewer in all; by-w8gv.7.10 takes that if the count holds, as a bonus.
+//!
+//! ### Affected sides and payloads
+//!
+//! An effect affects one of four sides ([`effects::Affects`]): an object, named by slot and
+//! incarnation (built); a player and the game (by-w8gv.7.3); a locked-in set, by its index
+//! in the store's table (by-w8gv.7.5:
+//! [CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c), "the set of objects it
+//! affects is determined when that continuous effect begins. After that point, the set
+//! won't change."). The fields are the variant's own, so every side fits four bytes.
+//!
+//! Its payload ([`effects::Payload`]) is a layer change or a zone-change replacement
+//! (built), a rule change (by-w8gv.7.3), a cost change or a permission (by-w8gv.7.4). A
+//! payload is a resolved kernel type: every word of the card that needed the resolving
+//! ability to settle it is settled, as [`store::Duration`] names the player "your next
+//! turn" means. [`effects::LayerChange`] is the resolved form of `beryl_card`'s
+//! `Modification`, whose `Control` names no seat: [`effects::LayerChange::resolve`] gives
+//! it the ability's controller. A payload is at most 15 bytes and names no slot, so an
+//! entry stays 24 bytes, which the store's file asserts, and converts to another layout
+//! with no code of its own.
+//!
+//! ### Duration and expiry
+//!
+//! Two things end what is stored, each written once ([`store`]):
+//!
+//! - **A duration ends.** [`State::expire`] ends everything, in every store, that lasts for
+//!   the [`store::Duration`] it is given. The rules call it as that moment comes, since the
+//!   kernel moves the turn and holds none of its rules: with `UntilYourNextTurn` of the
+//!   active player as a turn begins and `EndOfTurn` in the cleanup step.
+//! - **An object ends.** "While the card stays in its zone" is no duration: whatever is
+//!   stored about an object ends with it
+//!   ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), inside the three
+//!   chokepoints that bump an incarnation ([`State::move_object`],
+//!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
+//!   store has an entry about, so the move tests one bit and calls nothing else. This
+//!   replaces three sweeps: `State::drop_stale_effects` (gone), and the ones in
+//!   `Legacy::end_permissions_of_turn` and `Legacy::remember_x`, which go with their queues.
+//!
+//! Memos clear the same way, as their object ends. A memo that names another object (the
+//! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
+//! exiled with that object after it has left its zone, for an ability of it still on the
+//! stack, until a new object arrives in the slot (CR 607.2a, as `zone::forget_exiled_with`
+//! holds today). So the move also ends the memos naming the slot an object arrives in, on
+//! the battlefield or back in the pool, behind one AND of the Memos store's kinds.
+//!
+//! Trackers of this turn are cleared whole as the turn begins, inside
+//! [`State::begin_turn`] with the lands played, and a permanent's bits as it leaves the
+//! battlefield, in the arm of the move that already unlists it.
+//!
+//! ### Indexing and what an absent kind costs
+//!
+//! Each store keeps a mask of the kinds live in it, kept by the mutators that add and end
+//! entries, so a reader of a kind with nothing live stops at one AND of a byte the state
+//! already has in cache. That is exact where a [`GameTable`] bit could only bound it (a
+//! Rust body is opaque to the table), so the kinds of effect and memo have no capability
+//! bit. [`table::Capability`] holds what no live entry can say, found once in
+//! [`GameTable::new`]: whether a card of the game reads a tracker, so the rules' write is
+//! behind [`GameTable::can`]; and whether a static ability of the game could ever change a
+//! rule, so the layers find the rules in force only then.
+//!
+//! | Hot read | With the kind absent | With it live |
+//! | --- | --- | --- |
+//! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds |
+//! | `event::destination` ([`State::move_replacements`]) | the zone compared, then one AND | one pass comparing each entry's affected object |
+//! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
+//! | the turn's reset | Effects: the store's length read twice a turn. Trackers: nothing in a game no card of which reads them | Effects: one pass. Trackers: eight words cleared in place of two flags on every permanent |
+//! | [`State::signature`] | one bit test of the keyed slots | the object's memos compared too; its layer changes already show in its layer results |
+//! | "does this rule apply" | for a player, one AND of their rules in force; for a permanent, one AND of the table's rules of its card | a second AND of the face's rules, as `Copiable::has_rule` today |
+//! | a tracker (by-w8gv.7.8) | one AND of the table's capabilities where the rules would write it | a bit set or tested |
+//!
+//! Measured for by-w8gv.7.2 on the rollout benchmark (404,858,188 instructions before):
+//! the bit test in the zone move and the turn's two expiries cost about 0.03%; the store
+//! in the field order the compiler chose counted 406,151,164, nearly all of it loops that
+//! read fields whose offsets had moved; in [`State`]'s order now, 402,475,964.
+//!
+//! ### Static rule changes
+//!
+//! One question, [`State`]'s `rule_applies(table, rule, side)`, answers "does this rule
+//! change apply to this player or permanent now", whether a static ability or a resolved
+//! effect makes it (by-w8gv.7.3):
+//!
+//! - `Rule` becomes a list with a count, and a set of rules is a bitset sized from the
+//!   count, as `Keywords` is from its list. The table's rules of each card, a face's facts
+//!   and the state's rules in force are that set, so the list grows without a mask widened
+//!   by hand, and `table::rule_bit` goes.
+//! - A static ability's change that affects players is kept current with the layers,
+//!   never found by walking the battlefield as `cast::sorcery_speed_limiter` does: the
+//!   layers' pass over the permanents already loads each face's facts, ORs its rules into
+//!   the set of each player they apply to once control is settled, and stores the sets as
+//!   it finishes ([`derive::Rederive::finish`], with `listening`). In a game without
+//!   [`table::Capability::RuleChanges`] the pass does none of it.
+//! - A resolved effect's change is a `Rule` entry of the Effects store on a player or the
+//!   game, ORed in as it starts and as the layers finish.
+//! - A change that applies to the permanent with the ability asks its copiable values, as
+//!   today, and the Effects store for entries on it.
+//! - Which permanent makes it, to tell a player why, is asked only once the bit is set.
+//!
+//! ### What a store implements once
+//!
+//! `store::Store`, in the store's own file, with `Clone`, equality and hashing, which it
+//! derives, and [`relayout::Relayout`]. Nothing below grows with a new kind of entry, which
+//! is a variant of the store's payload:
+//!
+//! | Once | Where |
+//! | --- | --- |
+//! | the store of a new game | `Store::empty`, named once in [`State::empty`] |
+//! | the copy | `Clone`, named once in [`Large::clone_state`]'s destructure, so the compiler finds a new store; `Small` copies the state whole |
+//! | another layout, and what does not fit one | [`relayout::Relayout`] and `Store::fits`, from [`State::fits`] |
+//! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, and the keyed slots are exactly the stores' keys |
+//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records |
+//! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`]): an effect is public, a memo as public as its object |
+//! | an object ending, a duration ending | `Store::forget` and `Store::expire`, from the two moments above |
+//! | [`State::signature`] | compares what the stores hold about the object, behind the keyed bit, for what its layer results do not already show (by-w8gv.7.6 builds it with the first memo) |
+//!
+//! ### The API
+//!
+//! A write is a [`State`] mutator, `#[inline]` and generic over the layout:
+//! [`State::start_effect`] and [`State::expire`] so far. One whose change a player sees
+//! returns its [`event::Event`] and pushes nothing; starting or ending an effect is no
+//! event of its own, since the rules announce what it is part of, as they do a change of
+//! control. The mutator that changes a layer input sets `derived_dirty` itself. A store
+//! that is full returns [`fixed::Full`]. Reads are queries by kind
+//! ([`State::layer_effects`], [`State::move_replacements`]), with [`State::effects`] for
+//! tools, tests and views. No `&mut` to a store leaves the crate.
 //!
 //! ## Sets and orders
 //!
