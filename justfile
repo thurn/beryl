@@ -280,6 +280,11 @@ ci *lanes:
 ci-report *args:
     {{ by }} ci-report "$@"
 
+# The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/staging; --here)
+[group('checks')]
+coverage *args:
+    {{ low }} {{ by }} coverage "$@"
+
 # Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky
 [group('checks')]
 verdict check verdict:

@@ -1,6 +1,8 @@
 // What the headless capture scripts share: opening a page at a fixed size and waiting until it has
 // settled.
-import { appendFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium, webkit } from "playwright";
 
 /** The engine of the app's webview on this platform, as `by` names it (`BERYL_BROWSER`):
@@ -9,17 +11,126 @@ export const launch = () =>
     (process.env.BERYL_BROWSER === "chromium" ? chromium : webkit).launch();
 
 /** Reports one check's result to the run log (tools/src/beryl_tools/runlog.py) when `by check`
- * or `by ci` asked for results (`BERYL_CHECK_RESULTS`); otherwise does nothing. A log that cannot
- * be written fails no check. */
-export function recordResult(check, outcome, seconds) {
+ * or `by ci` asked for results (`BERYL_CHECK_RESULTS`), and what its page ran (`covered`, from
+ * `coverage`) when `by coverage` asked for that; otherwise does nothing. A log that cannot be
+ * written fails no check. */
+export function recordResult(check, outcome, seconds, covered = null) {
     const path = process.env.BERYL_CHECK_RESULTS;
-    if (!path) return;
     const line = { check, outcome, seconds: Math.round(seconds * 1000) / 1000 };
     try {
-        appendFileSync(path, `${JSON.stringify(line)}\n`);
+        if (path) appendFileSync(path, `${JSON.stringify(line)}\n`);
+        const folder = process.env.BERYL_COVERAGE;
+        if (folder) {
+            appendFileSync(
+                join(folder, `checks-${process.pid}.jsonl`),
+                `${JSON.stringify({ ...line, ...covered })}\n`,
+            );
+        }
     } catch (e) {
         console.error(`run log: not written: ${e.message}`);
     }
+}
+
+/** The sources `coverage` has saved in this process, by their file names. */
+const saved = new Set();
+
+/** Saves a script's or a stylesheet's text, as the page ran it, into `by coverage`'s folder once
+ * per process: under `url` (a module's path on the dev server) or `file` (a stylesheet's path on
+ * disk). Returns the file name the coverage records refer to it by. */
+function saveSource(folder, where, text) {
+    const name = `${createHash("sha1").update(JSON.stringify(where)).digest("hex")}.json`;
+    if (!saved.has(name)) {
+        mkdirSync(join(folder, "sources"), { recursive: true });
+        writeFileSync(
+            join(folder, "sources", name),
+            JSON.stringify({ ...where, text }),
+        );
+        saved.add(name);
+    }
+    return name;
+}
+
+/** When `by coverage` asks (`BERYL_COVERAGE`, a folder; Chromium only), records what `page`
+ * runs of the app's own code: the byte ranges of each module under src/ that ran (V8's block
+ * coverage, nested, each with whether it ran), the rules of each stylesheet that matched, and
+ * the fixtures the page fetched. Returns a function, to call before the page closes, that stops
+ * recording and returns what ran, for `recordResult`; null when nobody asked, or when the page
+ * could not tell. tools/src/beryl_tools/coverage.py maps the ranges to source lines. */
+export async function coverage(page) {
+    const folder = process.env.BERYL_COVERAGE;
+    if (!folder) return async () => null;
+    const fixtures = new Set();
+    page.on("request", (r) => {
+        const m = /\/fixtures\/([^/]+)\.json$/.exec(new URL(r.url()).pathname);
+        if (m) fixtures.add(decodeURIComponent(m[1]));
+    });
+    // Modules import their CSS as <style> elements with no URL, which Playwright's CSS coverage
+    // leaves out; the DevTools protocol reports their rules, and Vite names each element's file.
+    const cdp = await page.context().newCDPSession(page);
+    const sheets = new Map();
+    cdp.on("CSS.styleSheetAdded", ({ header }) =>
+        sheets.set(header.styleSheetId, header),
+    );
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    await cdp.send("CSS.startRuleUsageTracking");
+    await page.coverage.startJSCoverage({ resetOnNavigation: false });
+    return async () => {
+        try {
+            const js = [];
+            for (const entry of await page.coverage.stopJSCoverage()) {
+                const url = URL.canParse(entry.url) ? new URL(entry.url) : null;
+                // A stylesheet's or a JSON file's module only hands its text to the page.
+                if (!url?.pathname.startsWith("/src/")) continue;
+                if (/\.(css|json)$/.test(url.pathname)) continue;
+                js.push({
+                    source: saveSource(
+                        folder,
+                        { url: url.pathname },
+                        entry.source,
+                    ),
+                    ranges: entry.functions.flatMap((f) =>
+                        f.ranges.map((r) => [
+                            r.startOffset,
+                            r.endOffset,
+                            r.count > 0 ? 1 : 0,
+                        ]),
+                    ),
+                });
+            }
+            const { ruleUsage } = await cdp.send("CSS.stopRuleUsageTracking");
+            const used = Map.groupBy(
+                ruleUsage.filter((r) => r.used),
+                (r) => r.styleSheetId,
+            );
+            const css = [];
+            for (const [id, rules] of used) {
+                const owner = sheets.get(id)?.ownerNode;
+                if (!owner) continue;
+                const { node } = await cdp.send("DOM.describeNode", {
+                    backendNodeId: owner,
+                });
+                const attributes = node.attributes ?? [];
+                const at = attributes.indexOf("data-vite-dev-id");
+                if (at < 0) continue;
+                const { text } = await cdp.send("CSS.getStyleSheetText", {
+                    styleSheetId: id,
+                });
+                css.push({
+                    source: saveSource(
+                        folder,
+                        { file: attributes[at + 1] },
+                        text,
+                    ),
+                    ranges: rules.map((r) => [r.startOffset, r.endOffset, 1]),
+                });
+            }
+            return { fixtures: [...fixtures].sort(), js, css };
+        } catch (e) {
+            console.error(`coverage: not taken: ${e.message}`);
+            return null;
+        }
+    };
 }
 
 /** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default `limit`) at a time, each on

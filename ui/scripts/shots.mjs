@@ -13,6 +13,7 @@ import { join } from "node:path";
 import {
     clippedText,
     compareSheet,
+    coverage,
     crowdedControls,
     launch,
     openPage,
@@ -49,9 +50,12 @@ if (unknown.length) {
     process.exit(2);
 }
 
-/** Captures `shot` into `out`, logging its errors; whether it had none. */
+/** Captures `shot` into `out`, logging its errors: whether it had none, and what its page ran
+ * when `by coverage` asked (capture.mjs' coverage). */
 async function capture(browser, shot) {
     const { context, page, errors } = await openPage(browser, shot);
+    const finish = await coverage(page);
+    let covered = null;
     try {
         await page.goto(new URL(shot.route, base).href, { waitUntil: "load" });
         // A large fixture is still being fetched when the page first renders.
@@ -117,6 +121,7 @@ async function capture(browser, shot) {
     } catch (e) {
         errors.push(e.stack ?? String(e));
     } finally {
+        covered = await finish();
         await context.close();
     }
     // Faults the shot is known to show, until the screen is fixed: each must still be seen.
@@ -131,7 +136,7 @@ async function capture(browser, shot) {
     if (errors.length) {
         console.error(`ui-shots: ${shot.name}: ${errors.join("\n  ")}`);
     }
-    return !errors.length;
+    return { ok: !errors.length, covered };
 }
 
 const browser = await launch();
@@ -141,12 +146,13 @@ try {
     for (const shot of chosen) {
         await run(async () => {
             const started = performance.now();
-            const ok = await capture(browser, shot);
+            const { ok, covered } = await capture(browser, shot);
             if (!ok) failed = true;
             recordResult(
                 `shots:${shot.name}`,
                 ok ? "pass" : "fail",
                 (performance.now() - started) / 1000,
+                covered,
             );
         });
     }

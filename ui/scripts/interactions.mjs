@@ -22,7 +22,13 @@ import {
 } from "../src/game/decisions.ts";
 import { logLines } from "../src/game/log.ts";
 import { untapChoice } from "../src/game/untapChoice.ts";
-import { cutText, launch, recordResult, workers } from "./capture.mjs";
+import {
+    coverage,
+    cutText,
+    launch,
+    recordResult,
+    workers,
+} from "./capture.mjs";
 import { audit, collect, record } from "./audit.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
@@ -211,6 +217,8 @@ async function check(
                 }),
             );
             const page = await context.newPage();
+            const finish = await coverage(page);
+            let covered = null;
             const seen = [];
             page.on("pageerror", (e) => seen.push(`${title}: ${e.message}`));
             page.on(
@@ -242,6 +250,7 @@ async function check(
                 threw = true;
                 console.error(`FAILED: ${title}\n${e.stack ?? e}`);
             } finally {
+                covered = await finish();
                 await context.close();
             }
             errors.push(...seen);
@@ -250,6 +259,7 @@ async function check(
                 `ui-test:${title}`,
                 threw || seen.length ? "fail" : "pass",
                 (performance.now() - started) / 1000,
+                covered,
             );
             break;
         }

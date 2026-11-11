@@ -85,18 +85,18 @@ def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
 BROWSER = "chromium" if system.WINDOWS else "webkit"
 
 
-def browser_env() -> dict[str, str]:
-    """The environment for the capture scripts, with the app webview's engine installed in the
-    cache for Playwright."""
+def browser_env(browser: str = BROWSER) -> dict[str, str]:
+    """The environment for the capture scripts, with `browser` (by default the app webview's
+    engine) installed in the cache for Playwright."""
     warm.ensure()
     env = {
         **os.environ,
         "PLAYWRIGHT_BROWSERS_PATH": str(paths.cache_root() / "playwright"),
-        "BERYL_BROWSER": BROWSER,
+        "BERYL_BROWSER": browser,
     }
     # A no-op once it is there.
     install = subprocess.run(
-        [system.npm_bin("playwright"), "install", BROWSER],
+        [system.npm_bin("playwright"), "install", browser],
         cwd=paths.UI,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -108,7 +108,7 @@ def browser_env() -> dict[str, str]:
         raise UiError(
             install.stdout
             + install.stderr
-            + f"installing Playwright's {BROWSER} failed"
+            + f"installing Playwright's {browser} failed"
         )
     return env
 

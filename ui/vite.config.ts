@@ -23,6 +23,9 @@ export default defineConfig({
       },
     },
   },
+  // CSS imported by modules reaches the page as <style> elements with an inline source map, by
+  // which `by coverage` names the lines of each stylesheet a check used.
+  css: { devSourcemap: true },
   build: {
     target: "safari16",
   },
