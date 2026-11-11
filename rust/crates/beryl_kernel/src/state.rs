@@ -97,23 +97,44 @@ pub struct Flags {
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
 /// (architecture §4.1).
 ///
-/// Every field is private to the crate (its contract: only the kernel writes a field). The
-/// fields keep their order: a state's hash feeds them in it.
+/// Every field is private to the crate (its contract: only the kernel writes a field).
+///
+/// The fields are laid out in the order written (`repr(C)`), which is chosen for the
+/// rollout's instruction count: the small fields every decision reads come first, then the
+/// zones, the objects and the layer results, then the queues, and last what milestone 4
+/// (by-w8gv.7) changes, the stores and the queues they replace. A field's offset is part of
+/// most loads of it, so a store that grows moves nothing before it. The whole order costs
+/// [`Small`] 8 bytes of padding; in the order the compiler chose, the same fields counted
+/// 0.9% more instructions (by-w8gv.7.2). A new field joins the group of its alignment, the
+/// stores at the end.
 #[derive(Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
 pub struct State<L: Layout = Small> {
-    /// Written through [`State::object_mut`] alone, which stays in the crate.
-    pub(crate) objects: L::Table<Object<L>, SLOTS>,
-    /// Slots on the battlefield, in the order they entered.
-    pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
-    /// Layer results, by battlefield index.
-    pub(crate) derived: L::Table<Derived<L>, BATTLEFIELD>,
+    pub(crate) turn: Turn,
+    pub(crate) players: L::PerPlayer<Player<L>>,
+    pub(crate) budgets: Budgets,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
     /// current while they are.
     pub(crate) listening: u16,
+    pub(crate) outcome: Option<Outcome>,
+    pub(crate) profile: Profile,
+    pub(crate) flags: Flags,
+    /// Slots on the battlefield, in the order they entered.
+    pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
+    pub(crate) rng: Rng,
+    /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
+    pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
+    /// The slots a store has an entry about as an object, so that an object with nothing
+    /// stored about it ends at the cost of one bit test ([`crate::store`]).
+    pub(crate) keyed: Bitboard<L::Slot>,
     pub(crate) zones: Zones<L>,
-    pub(crate) players: L::PerPlayer<Player<L>>,
-    pub(crate) turn: Turn,
+    /// The open question of a machine step: [`State::ask`] and its kin write it.
+    pub(crate) pending: Pending<L>,
+    /// Written through [`State::object_mut`] alone, which stays in the crate.
+    pub(crate) objects: L::Table<Object<L>, SLOTS>,
+    /// Layer results, by battlefield index.
+    pub(crate) derived: L::Table<Derived<L>, BATTLEFIELD>,
     /// The stack's entries, bottom first: [`State::put_on_stack`] and its kin write it.
     pub(crate) stack: L::Queue<StackEntry<L>, 64>,
     /// The abilities that have triggered and wait to be put on the stack.
@@ -124,9 +145,6 @@ pub struct State<L: Layout = Small> {
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.
     pub(crate) effects: Effects<L>,
-    /// The slots a store has an entry about as an object, so that an object with nothing
-    /// stored about it ends at the cost of one bit test ([`crate::store`]).
-    pub(crate) keyed: Bitboard<L::Slot>,
     /// Written through [`State::legacy_mut`]; milestone 4 (by-w8gv.7.1) replaces it with a
     /// store.
     pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
@@ -136,15 +154,6 @@ pub struct State<L: Layout = Small> {
     /// a nonzero X is kept, and only while the permanent stays. Milestone 4 (by-w8gv.7.1)
     /// deletes it; written through [`State::legacy_mut`].
     pub(crate) entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
-    /// The open question of a machine step: [`State::ask`] and its kin write it.
-    pub(crate) pending: Pending<L>,
-    /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
-    pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
-    pub(crate) rng: Rng,
-    pub(crate) profile: Profile,
-    pub(crate) budgets: Budgets,
-    pub(crate) flags: Flags,
-    pub(crate) outcome: Option<Outcome>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
