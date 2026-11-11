@@ -41,7 +41,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import card_names, paths, runlog, system, verdicts, warm
+from . import card_names, file_length, paths, runlog, system, verdicts, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -463,6 +463,9 @@ def repo_lane() -> Lane:
             "markdown",
             [sys.executable, "-m", "mdformat", "--check", *markdown_files()],
         )
+        .step(
+            "file-length", [sys.executable, "-m", "beryl_tools.checks", "file-length"]
+        )
     )
 
 
@@ -763,6 +766,7 @@ if __name__ == "__main__":
         "pytest": pytest_step,
         "rust-tests": rust_tests_step,
         "card-names": card_names.step,
+        "file-length": file_length.step,
         "build-paths": build_paths_step,
     }
     sys.exit(steps[sys.argv[1]](*sys.argv[2:]))
