@@ -8,7 +8,6 @@ use crate::layout::{Layout, Queue};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
-use beryl_kernel::derive::Rederive;
 
 /// One continuous effect to apply in this recompute.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -29,9 +28,9 @@ struct Apply {
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
 pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) {
-    if let Some(cache) = s.rederive() {
+    if s.is_derived_stale() {
         sink.work.layer_recomputes += 1;
-        recompute(cache, t);
+        recompute(s, t);
     }
 }
 
@@ -90,8 +89,11 @@ pub(crate) fn counters_matter<L: Layout>(
 ///
 /// The kernel lends the cache with the effects on objects that left their zone already ended,
 /// and stores the results, with what each face-down permanent's controller now sees, as the
-/// recompute finishes ([`Rederive::finish`]).
-fn recompute<L: Layout>(mut s: Rederive<'_, L>, t: &GameTable) {
+/// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]).
+fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
+    let Some(mut s) = s.rederive() else {
+        return;
+    };
     let listening = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
