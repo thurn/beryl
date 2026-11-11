@@ -132,6 +132,99 @@ SLOW_ONLY: tuple[SlowOnly, ...] = (
         2.2,
         0,
     ),
+    # The retired long-think arena's slow tests (AGENTS.md: `just longthink` is retired), about
+    # 400 test-seconds a fast check and never a failure or a catch (by-w8gv.20.17): slow CI
+    # alone runs them while the runner stays in the tree.
+    SlowOnly(
+        "rust:beryl_cli::longthink::full_power_plays_the_same_games",
+        "2026-11-11",
+        61.9,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::stops_cost_nothing_but_time",
+        "2026-11-11",
+        46.2,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink_tty::two_ctrl_cs_stop_at_once",
+        "2026-11-11",
+        45.5,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::an_upgrade_moves_the_runner_playing",
+        "2026-11-11",
+        31.6,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink_tty::piped_output_is_plain",
+        "2026-11-11",
+        29.5,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink_tty::one_ctrl_c_stops_after_the_game",
+        "2026-11-11",
+        24.8,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::a_family_the_runs_binary_cannot_play_is_refused",
+        "2026-11-11",
+        24.0,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::a_game_that_crashes_twice_is_skipped",
+        "2026-11-11",
+        23.9,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::no_arguments_start_or_resume_the_latest_run",
+        "2026-11-11",
+        23.4,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::bin/beryl_cli::longthink::upgrade::tests::only_code_that_plays_identically_is_adopted",
+        "2026-11-11",
+        21.3,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink_tty::a_crash_after_one_ctrl_c_still_stops",
+        "2026-11-11",
+        15.9,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::one_runner_per_run",
+        "2026-11-11",
+        13.4,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::a_family_added_to_a_run_being_played",
+        "2026-11-11",
+        13.1,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::longthink::a_moved_target_runs_its_own_binary",
+        "2026-11-11",
+        5.2,
+        90,
+    ),
+    SlowOnly(
+        "rust:beryl_cli::bin/beryl_cli::longthink::schedule::tests::a_family_grows_while_it_climbs",
+        "2026-11-11",
+        2.4,
+        90,
+    ),
 )
 
 
