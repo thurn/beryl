@@ -10,7 +10,7 @@
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::event::{Event, Recipient};
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::query::Copiable;
@@ -264,7 +264,7 @@ impl<L: Layout> State<L> {
         t: &GameTable,
         slot: L::Slot,
         owner: Seat,
-        what: Copiable,
+        what: Copiable<L>,
     ) -> FaceIx {
         let (card, face) = what.record(t);
         self.ready_token(slot, owner, card, what.is_one_one());
@@ -274,7 +274,7 @@ impl<L: Layout> State<L> {
     /// [`State::make_token`] of the definition at `card`, `one_one` for a copy that is 1/1 by
     /// exception ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
     #[inline]
-    pub(crate) fn ready_token(&mut self, slot: L::Slot, owner: Seat, card: CardIx, one_one: bool) {
+    pub(crate) fn ready_token(&mut self, slot: L::Slot, owner: Seat, card: L::Card, one_one: bool) {
         debug_assert_eq!(self.object(slot).zone, Zone::Nowhere);
         let o = self.object_mut(slot);
         o.card = card;

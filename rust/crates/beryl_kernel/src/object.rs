@@ -9,7 +9,7 @@ use beryl_card::{
     Colors, CounterKind, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone,
 };
 
-use crate::ids::{CardIx, Seat, Slot};
+use crate::ids::{CardId, CardIx, Seat, Slot};
 use crate::layout::{Layout, Small};
 
 /// The [`Object::battlefield_index`] of a slot not on the battlefield.
@@ -168,7 +168,7 @@ impl Counters {
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: the definition its values are read from. The kernel's
     /// own: others ask a query ([`crate::query`]) or [`crate::Observation::card`].
-    pub(crate) card: CardIx,
+    pub(crate) card: L::Card,
     /// Bumped on every zone change (CR 400.7), so stale references are detectable.
     pub(crate) incarnation: u16,
     pub(crate) zone: Zone,
@@ -202,7 +202,7 @@ pub struct Object<L: Layout = Small> {
 
 impl<L: Layout> Object<L> {
     pub const EMPTY: Object<L> = Object {
-        card: CardIx::new(0),
+        card: L::Card::FIRST,
         incarnation: 0,
         zone: Zone::Nowhere,
         owner: Seat::P0,
@@ -432,7 +432,7 @@ pub struct ObjectRef<L: Layout = Small> {
 /// The result of applying continuous effects to a permanent (architecture §9), by
 /// battlefield index. The layers work fills it in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Derived {
+pub struct Derived<L: Layout = Small> {
     pub power: i8,
     pub toughness: i8,
     pub types: Types,
@@ -444,13 +444,13 @@ pub struct Derived {
     pub keywords: Keywords,
     pub subtypes: Subtypes,
     /// The abilities other objects grant this permanent (§9), in the order granted.
-    pub granted: [Option<GrantRef>; 4],
+    pub granted: [Option<GrantRef<L>>; 4],
 }
 
 /// An ability one card grants to other objects: the card's game index and the index into its
 /// front face's [`beryl_card::Face::grants`] (§9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GrantRef {
-    pub card: CardIx,
+pub struct GrantRef<L: Layout = Small> {
+    pub card: L::Card,
     pub grant: GrantIx,
 }

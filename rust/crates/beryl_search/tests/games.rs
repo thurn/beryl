@@ -10,13 +10,13 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
-use beryl_engine::card::FaceIx;
+use beryl_engine::card::{CardDef, FaceIx};
 use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Misfit, Observation, Outcome,
-    Profile, Relayout, Replay, Scratch, Seat, Slot, Small, StallReason, State, Step, Zone, ZoneKey,
-    apply, next,
+    CardId, CardIx, CardTable, Choice, Counts, Decision, GameTable, Large, LargeCardIx, LargeSlot,
+    Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat, Slot, SlotId,
+    Small, StallReason, State, Step, Zone, ZoneKey, apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};
@@ -137,7 +137,7 @@ fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
         assert_eq!(State::new(&t, seed, Profile::SMART).err(), Some(too_large));
         let mut s: State<Large> = State::deal(&t, seed, Profile::SMART).unwrap();
         assert!(Seat::BOTH.iter().all(|&p| s.library(p).len() == 80));
-        assert_eq!(s.fits::<Small>(), Err(too_large));
+        assert_eq!(s.fits::<Small>(&t), Err(too_large));
         let check = |s: &State<Large>| {
             s.check_invariants(&t)
                 .unwrap_or_else(|v| panic!("seed {seed}: {v:?}"));
@@ -171,6 +171,116 @@ fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
     }
 }
 
+/// A table over clones of every implemented card, each a card of its own under its own name
+/// (as the scale harness clones the card files: `tools/src/beryl_tools/scale.py`), and two
+/// decks that share none: six fuzz decks one after another for each player, every one over a
+/// different set of clones.
+fn table_of_clones(seed: u64) -> GameTable {
+    const DECKS: u64 = 6;
+    let clone = |copy: u64, name: &str| -> &'static str {
+        Box::leak(format!("{name} #{copy}").into_boxed_str())
+    };
+    let clones: Vec<&'static CardDef> = (0..2 * DECKS)
+        .flat_map(|copy| CARDS.cards().iter().map(move |def| (copy, def)))
+        .map(|(copy, def)| {
+            &*Box::leak(Box::new(CardDef {
+                name: clone(copy, def.name),
+                faces: def.faces,
+                tokens: def.tokens,
+            }))
+        })
+        .collect();
+    let cards: &'static CardTable = Box::leak(Box::new(CardTable::new(Box::leak(
+        clones.into_boxed_slice(),
+    ))));
+    let deck = |player: u64| -> Vec<(u8, &'static str)> {
+        (0..DECKS)
+            .map(|i| player * DECKS + i)
+            .flat_map(|copy| {
+                fuzz_deck(seed.wrapping_add(copy << 32))
+                    .into_iter()
+                    .map(move |(count, name)| (count, clone(copy, name)))
+            })
+            .collect()
+    };
+    let decks = [deck(0), deck(1)];
+    GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).unwrap()
+}
+
+/// A game of more distinct cards than the one byte of [`Small`]'s game index numbers is
+/// refused there, where its state is made, and dealt in [`Large`], whose index is two bytes:
+/// it plays to its end with the invariants holding at every step, cards past index 254 among
+/// its objects, under agents that read their own tables by game index.
+#[test]
+fn a_table_past_255_cards_is_refused_by_small_and_plays_in_large() {
+    for seed in 0..3 {
+        let t = table_of_clones(seed);
+        assert!(t.len() > CardIx::COUNT, "seed {seed}: {} cards", t.len());
+        let too_many = Misfit::TooManyCards {
+            cards: t.len(),
+            indices: 255,
+        };
+        assert_eq!(State::new(&t, seed, Profile::SMART).err(), Some(too_many));
+        // The table's last card, which every table has, is one only the wide index names.
+        assert_eq!(t.face_down_copy::<Large>().index(), t.len() - 1);
+        let mut s: State<Large> = State::deal(&t, seed, Profile::SMART).unwrap();
+        assert_eq!(s.fits::<Small>(&t), Err(too_many));
+        let wide = |s: &State<Large>| {
+            LargeSlot::all()
+                .filter_map(|slot| s.card_behind(slot))
+                .filter(|card| card.to::<CardIx>().is_none())
+                .count()
+        };
+        assert!(wide(&s) > 50, "seed {seed}: {} wide cards", wide(&s));
+        let check = |s: &State<Large>| {
+            s.check_invariants(&t)
+                .unwrap_or_else(|v| panic!("seed {seed}: {v:?}"));
+        };
+        let (mut decisions, mut seen_wide) = (0, false);
+        let mut x = Scratch::new();
+        let watch = |s: &State<Large>, d: &Decision<Large>| {
+            check(s);
+            decisions += 1;
+            // A determinization deals the hidden cards again by their wide indices.
+            if decisions % 64 == 0 {
+                let det = Observation::new(s, d.player).determinize(&t, &mut SplitMix64::new(seed));
+                check(&det);
+            }
+            // A wide card where every rule reads it: the battlefield, the stack.
+            seen_wide |= s
+                .battlefield()
+                .iter()
+                .chain(
+                    s.stack()
+                        .iter()
+                        .filter_map(|e| e.object.as_ref().map(|r| &r.slot)),
+                )
+                .any(|&slot| {
+                    s.card_behind(slot)
+                        .is_some_and(|c| c.to::<CardIx>().is_none())
+                });
+        };
+        // The greedy agent's policy reads its card values by game index; the random one
+        // reaches the plays a policy never makes.
+        let outcome = if seed == 0 {
+            let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
+            play(&t, &mut s, &mut x, &mut agents, watch)
+        } else {
+            play(&t, &mut s, &mut x, &mut agents(seed), watch)
+        };
+        check(&s);
+        assert!(
+            matches!(outcome, Outcome::Win(_) | Outcome::Draw),
+            "seed {seed}: {outcome:?}"
+        );
+        assert!(decisions > 40, "seed {seed}: a short game");
+        assert!(
+            seen_wide,
+            "seed {seed}: no card past Small's index was played"
+        );
+    }
+}
+
 /// A game between 60-card decks, the most [`Small`] holds, is the same game in either
 /// layout: the same seed deals it the same, and at every decision the `Small` game widened
 /// and narrowed again is itself, slot for slot, as is each decision it is asked.
@@ -185,8 +295,8 @@ fn a_sixty_card_game_round_trips_between_the_layouts() {
         let mut decisions = 0;
         loop {
             let wide = small.widen();
-            assert!(wide.try_relayout::<Small>() == Ok(small), "seed {seed}");
-            assert!(wide.try_relayout::<Large>() == Ok(wide), "seed {seed}");
+            assert!(wide.try_relayout::<Small>(&t) == Ok(small), "seed {seed}");
+            assert!(wide.try_relayout::<Large>(&t) == Ok(wide), "seed {seed}");
             let Step::Decide(d) = next(&mut small, &t, &mut x, &mut Replay) else {
                 break;
             };
@@ -203,12 +313,15 @@ fn a_sixty_card_game_round_trips_between_the_layouts() {
 /// more than its battlefield lists, then one more than its pool has slots for.
 #[test]
 fn a_game_past_small_does_not_narrow() {
-    let (_, small) = game(0);
+    let (t, small) = game(0);
     let mut s = small.widen();
-    assert!(s.try_relayout::<Small>() == Ok(small), "a Small game fits");
+    assert!(
+        s.try_relayout::<Small>(&t) == Ok(small),
+        "a Small game fits"
+    );
     let token = |s: &mut State<Large>| {
         s.board()
-            .place_token(Seat::P0, CardIx::new(0), FaceIx::FRONT, false)
+            .place_token(Seat::P0, LargeCardIx::FIRST, FaceIx::FRONT, false)
             .unwrap();
     };
     for _ in 0..129 {
@@ -219,12 +332,12 @@ fn a_game_past_small_does_not_narrow() {
         len: 129,
         capacity: 128,
     };
-    assert_eq!(s.try_relayout::<Small>().err(), Some(battlefield));
+    assert_eq!(s.try_relayout::<Small>(&t).err(), Some(battlefield));
     for _ in 129..136 {
         token(&mut s);
     }
     assert_eq!(
-        s.try_relayout::<Small>().err(),
+        s.try_relayout::<Small>(&t).err(),
         Some(Misfit::PoolTooSmall { slots: 135 })
     );
 }

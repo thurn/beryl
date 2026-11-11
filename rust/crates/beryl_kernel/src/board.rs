@@ -229,7 +229,7 @@ impl<L: Layout> Board<'_, L> {
     pub fn place_token(
         &mut self,
         owner: Seat,
-        card: CardIx,
+        card: L::Card,
         face: FaceIx,
         one_one: bool,
     ) -> Result<L::Slot, Full> {
@@ -292,7 +292,7 @@ impl<L: Layout> Board<'_, L> {
 
     /// Gives `player` the emblem of the game-table card `card`
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)).
-    pub fn add_emblem(&mut self, player: Seat, card: CardIx) -> Result<(), Full> {
+    pub fn add_emblem(&mut self, player: Seat, card: L::Card) -> Result<(), Full> {
         self.0.add_emblem(player, card)
     }
 

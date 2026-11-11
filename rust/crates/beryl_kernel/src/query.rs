@@ -12,8 +12,8 @@
 
 use beryl_card::{CardDef, Face, FaceIx, Rule, Zone};
 
-use crate::ids::{CardIx, Seat};
-use crate::layout::Layout;
+use crate::ids::{CardId, CardIx, Seat};
+use crate::layout::{Layout, Small};
 use crate::object::Object;
 use crate::state::State;
 use crate::table::{FaceFacts, GameTable};
@@ -37,8 +37,8 @@ use crate::table::{FaceFacts, GameTable};
 /// gives its hidden card away: [`Copiable::face`] reads [`beryl_card::FACE_DOWN`], and
 /// [`Copiable::record`] names [`beryl_card::FACE_DOWN_COPY`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Copiable {
-    card: CardIx,
+pub struct Copiable<L: Layout = Small> {
+    card: L::Card,
     /// [`FaceIx::DOWN`] for a face-down permanent's.
     face: FaceIx,
     one_one: bool,
@@ -48,24 +48,24 @@ pub struct Copiable {
 /// another and to put them in an order no slot number decides. It compares and orders, and
 /// names no card: read the values through [`Copiable`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DefinitionKey(CardIx);
+pub struct DefinitionKey<C: CardId = CardIx>(C);
 
-impl DefinitionKey {
+impl<C: CardId> DefinitionKey<C> {
     /// Its row in a table kept beside the game's definitions, one row for each
     /// ([`GameTable::len`]), such as an agent's values.
     #[inline]
-    pub const fn index(self) -> usize {
+    pub fn index(self) -> usize {
         self.0.index()
     }
 }
 
-impl Copiable {
+impl<L: Layout> Copiable<L> {
     /// The copiable values of the card or token at a game index, its front face up: what a
     /// card has wherever it is not a permanent or a spell with another face up
     /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), and what a record
     /// names that kept only the index, such as last-known information.
     #[inline]
-    pub const fn of_card(card: CardIx) -> Copiable {
+    pub const fn of_card(card: L::Card) -> Copiable<L> {
         Copiable {
             card,
             face: FaceIx::FRONT,
@@ -74,7 +74,7 @@ impl Copiable {
     }
 
     #[inline]
-    pub(crate) fn of_object<L: Layout>(o: &Object<L>) -> Copiable {
+    pub(crate) fn of_object(o: &Object<L>) -> Copiable<L> {
         Copiable {
             card: o.card,
             face: o.face,
@@ -88,7 +88,7 @@ impl Copiable {
     /// that characteristic becomes part of the copiable values of the copy."
     #[inline]
     #[must_use]
-    pub const fn except_one_one(self) -> Copiable {
+    pub const fn except_one_one(self) -> Copiable<L> {
         Copiable {
             one_one: true,
             ..self
@@ -101,7 +101,7 @@ impl Copiable {
     /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a), CR 708.2).
     #[inline]
     #[must_use]
-    pub const fn turned(self, face: FaceIx) -> Copiable {
+    pub const fn turned(self, face: FaceIx) -> Copiable<L> {
         Copiable { face, ..self }
     }
 
@@ -183,9 +183,9 @@ impl Copiable {
     /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105), CR 707.2), and the
     /// blank values are what it copies (CR 708.2).
     #[inline]
-    pub fn record(self, t: &GameTable) -> (CardIx, FaceIx) {
+    pub fn record(self, t: &GameTable) -> (L::Card, FaceIx) {
         if self.face == FaceIx::DOWN {
-            (t.face_down_copy(), FaceIx::FRONT)
+            (t.face_down_copy::<L>(), FaceIx::FRONT)
         } else {
             (self.card, self.face)
         }
@@ -193,7 +193,7 @@ impl Copiable {
 
     /// Which definition these are read from, to compare and to order by.
     #[inline]
-    pub const fn key(self) -> DefinitionKey {
+    pub const fn key(self) -> DefinitionKey<L::Card> {
         DefinitionKey(self.card)
     }
 }
@@ -210,7 +210,7 @@ impl<L: Layout> State<L> {
     /// It is the rules' answer, with nothing masked: a face-down permanent's is its hidden
     /// card. A player's view asks [`crate::Observation::card`].
     #[inline]
-    pub fn card_behind(&self, slot: L::Slot) -> Option<CardIx> {
+    pub fn card_behind(&self, slot: L::Slot) -> Option<L::Card> {
         let o = self.object(slot);
         (!o.is_token()).then_some(o.card)
     }
@@ -237,7 +237,7 @@ impl<L: Layout> State<L> {
     /// The copiable values of the object in `slot` (CR 707.2): what it is before any other
     /// effect, and what a copy of it would be.
     #[inline]
-    pub fn copiable(&self, slot: L::Slot) -> Copiable {
+    pub fn copiable(&self, slot: L::Slot) -> Copiable<L> {
         Copiable::of_object(self.object(slot))
     }
 

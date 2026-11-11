@@ -5,7 +5,7 @@ use crate::card::{Ability, AbilityIx, Delayed, Face, FaceAbility, FaceIx, Trigge
 use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter;
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::ids::{CardId, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::state::{
@@ -22,7 +22,7 @@ pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'s
 /// The ability a pending trigger or stack entry names.
 pub(crate) fn ability(
     t: &GameTable,
-    card: CardIx,
+    card: impl CardId,
     face: FaceIx,
     ability: AbilityIx,
 ) -> &'static Ability {
@@ -112,7 +112,7 @@ fn times<L: Layout>(trigger: Trigger, e: &Event<L>) -> u8 {
 
 fn face_abilities(
     t: &GameTable,
-    card: CardIx,
+    card: impl CardId,
     face: FaceIx,
 ) -> impl Iterator<Item = (AbilityIx, &'static Ability)> {
     t.def(card)
@@ -237,7 +237,7 @@ pub(crate) fn match_leaving<L: Layout>(
 }
 
 /// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki {
+pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki<L> {
     let d = s.derived(slot);
     let o = s.object(slot);
     Lki {
@@ -259,7 +259,7 @@ fn enqueue<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     source: Option<ObjectRef<L>>,
-    card: CardIx,
+    card: L::Card,
     face: FaceIx,
     ability: AbilityIx,
     controller: Seat,

@@ -6,7 +6,7 @@ use beryl_card::ManaColor;
 
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::state::State;
@@ -73,7 +73,7 @@ pub struct Player<L: Layout = Small> {
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An emblem is a
     /// marker used to represent an object that has one or more abilities, but usually no
     /// other characteristics."
-    pub(crate) emblems: L::Queue<CardIx, 4>,
+    pub(crate) emblems: L::Queue<L::Card, 4>,
     /// "Until your next turn, you may cast sorcery spells as though they had flash." (Teferi,
     /// Time Raveler) Milestone 4 (by-w8gv.7.1) deletes it: written only through
     /// [`State::legacy_mut`].
@@ -135,7 +135,7 @@ impl<L: Layout> Player<L> {
     /// The emblems the player has, as game indices, oldest first
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)).
     #[inline]
-    pub fn emblems(&self) -> &[CardIx] {
+    pub fn emblems(&self) -> &[L::Card] {
         self.emblems.as_slice()
     }
 
@@ -287,7 +287,7 @@ impl<L: Layout> State<L> {
     /// emblem with [ability]. This means that [player] puts an emblem with [ability] into
     /// the command zone. The emblem is both owned and controlled by that player."
     #[inline]
-    pub fn add_emblem(&mut self, player: Seat, card: CardIx) -> Result<(), Full> {
+    pub fn add_emblem(&mut self, player: Seat, card: L::Card) -> Result<(), Full> {
         self.player_mut(player).emblems.push(card)
     }
 }

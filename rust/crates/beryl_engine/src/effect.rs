@@ -15,7 +15,7 @@ use crate::decision::{Answers, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, index};
 use crate::mana;
 use crate::profile::Payment;
@@ -182,7 +182,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// If the table lacks it: a card's tokens must be listed in its `tokens`.
-    pub fn game_index(&self, def: &'static CardDef) -> CardIx {
+    pub fn game_index(&self, def: &'static CardDef) -> L::Card {
         self.table
             .index_of(def)
             .expect("a token missing from its card's tokens")
@@ -946,7 +946,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// record names ([`Copiable::of_card`]). CR 707.2.
     pub fn create_tokens_of(
         &mut self,
-        what: Copiable,
+        what: Copiable<L>,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
@@ -959,7 +959,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn create_tokens_of_for(
         &mut self,
         player: Seat,
-        what: Copiable,
+        what: Copiable<L>,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {
@@ -969,7 +969,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     fn tokens(
         &mut self,
         player: Seat,
-        what: Copiable,
+        what: Copiable<L>,
         count: u8,
         how: TokenEntry,
     ) -> Bitboard<L::Slot> {

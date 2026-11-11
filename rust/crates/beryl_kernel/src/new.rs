@@ -4,7 +4,7 @@ use beryl_card::{TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Derived, Object};
 use crate::pending::Pending;
@@ -43,7 +43,9 @@ impl<L: Layout> State<L> {
     /// A new game between the decks of `t`, determined entirely by `seed` and the choices
     /// that follow. The first decision is the coin flip winner's choice to play or draw. A
     /// deck with more cards than the layout has slots for one is refused
-    /// ([`Misfit::DeckTooLarge`]): the game is dealt in a layout that has them.
+    /// ([`Misfit::DeckTooLarge`]), and so is a table of more distinct cards than the layout's
+    /// game index numbers ([`Misfit::TooManyCards`]): the game is dealt in a layout that has
+    /// them.
     ///
     /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden
     /// shuffle stream (architecture §4.2), so a slot number says nothing about the card in
@@ -52,8 +54,9 @@ impl<L: Layout> State<L> {
     /// their deck so that the cards are in a random order." A card's place does not depend
     /// on the layout, so the same seed deals the same game in each.
     pub fn deal(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
+        t.fits::<L>()?;
         for player in Seat::BOTH {
-            let cards = t.deck(player).len();
+            let cards = t.deck_len(player);
             if cards > L::Slot::DECK_SLOTS {
                 return Err(Misfit::DeckTooLarge {
                     player,
@@ -65,8 +68,8 @@ impl<L: Layout> State<L> {
         let mut s: State<L> = State::empty(profile);
         s.rng = Rng::new(seed);
         for player in Seat::BOTH {
-            let mut cards: L::Deck<CardIx> = Default::default();
-            for &card in t.deck(player) {
+            let mut cards: L::Deck<L::Card> = Default::default();
+            for card in t.deck(player) {
                 // The deck was just found to fit.
                 let _ = cards.push(card);
             }

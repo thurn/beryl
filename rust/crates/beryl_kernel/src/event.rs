@@ -7,7 +7,7 @@ use beryl_card::{Castings, CounterKind, FaceAbility, FaceIx, ManaColor, TurnStep
 
 use crate::bitboard::Bitboard;
 use crate::chance::Chance;
-use crate::ids::{CardIx, Seat};
+use crate::ids::Seat;
 use crate::layout::{Layout, Small};
 use crate::object::ObjectRef;
 use crate::relayout::Relayout;
@@ -73,7 +73,7 @@ pub enum LossCause<L: Layout = Small> {
     /// when `ability` is none, and the object that had it, if any.
     Effect {
         source: Option<ObjectRef<L>>,
-        card: CardIx,
+        card: L::Card,
         face: FaceIx,
         ability: Option<FaceAbility>,
     },
@@ -195,7 +195,7 @@ pub enum Event<L: Layout = Small> {
     Ability {
         source: Option<ObjectRef<L>>,
         controller: Seat,
-        card: CardIx,
+        card: L::Card,
         face: FaceIx,
         ability: FaceAbility,
         targets: L::Queue<Target<L>, TARGETS>,

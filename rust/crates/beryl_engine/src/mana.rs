@@ -55,7 +55,7 @@ struct Class<L: Layout = Small> {
     /// permanents it consumes (§10).
     consumed: bool,
     /// The least card among the members, which orders classes of one rank.
-    least: crate::query::DefinitionKey,
+    least: crate::query::DefinitionKey<L::Card>,
 }
 
 impl<L: Layout> Class<L> {
@@ -97,7 +97,7 @@ const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
 fn controlled<L: Layout>(
     s: &State<L>,
     player: Seat,
-) -> impl Iterator<Item = (L::Slot, &Derived)> + '_ {
+) -> impl Iterator<Item = (L::Slot, &Derived<L>)> + '_ {
     s.permanents().filter(move |(_, d)| d.controller == player)
 }
 
@@ -110,7 +110,7 @@ fn source<L: Layout>(
     t: &GameTable,
     player: Seat,
     slot: L::Slot,
-    d: &Derived,
+    d: &Derived<L>,
 ) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     // Looked up only past the table's facts, which most permanents stop at.

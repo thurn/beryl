@@ -237,9 +237,9 @@
 //! ## Layouts
 //!
 //! How many players a game has, how many cards a deck, a library and a graveyard may hold,
-//! how many tokens and spell copies exist at once and how many objects there are in all are
-//! parameters of the [`Layout`], and nothing outside the layouts assumes them (by-w8gv.5.14;
-//! the card-index width is by-w8gv.5.15's):
+//! how many tokens and spell copies exist at once, how many objects there are in all and
+//! how many distinct cards a game contains are parameters of the [`Layout`], and nothing
+//! outside the layouts assumes them (by-w8gv.5.14, by-w8gv.5.15):
 //!
 //! | parameter | where a layout sets it |
 //! |---|---|
@@ -247,14 +247,16 @@
 //! | deck, library and graveyard size | [`SlotId::DECK_SLOTS`]; [`Layout::Deck`], the queue that long |
 //! | tokens and spell copies | the pool, [`SlotId::POOL`] to [`SlotId::COUNT`]: [`SlotId::pool`], [`Layout::TOKEN_POOL`] |
 //! | objects in all | [`SlotId::COUNT`] |
+//! | distinct cards, tokens and emblems among them | [`CardId::COUNT`] of [`Layout::Card`], the game index a state stores |
 //!
-//! [`Small`] is two players, 60-card decks and 255 slots, and stays within 20 KiB;
-//! [`Large`] is two players, 256-card decks and 1,024 slots. Code generic over the layout
-//! asks `L::Slot` and builds `L::PerPlayer` and `L::Deck` values; a value that is the same
-//! in every layout (a [`profile::Profile`]'s stops, a [`GameTable`]'s decks) is a
+//! [`Small`] is two players, 60-card decks, 255 slots and 255 distinct cards (a one-byte
+//! [`CardIx`]), and stays within 20 KiB; [`Large`] is two players, 256-card decks, 1,024 slots
+//! and 65,535 distinct cards (a two-byte [`LargeCardIx`]). Code generic over the layout asks
+//! `L::Slot` and `L::Card` and builds `L::PerPlayer` and `L::Deck` values; a value that is the
+//! same in every layout (a [`profile::Profile`]'s stops, a [`GameTable`]'s decks) is a
 //! [`layout::PerSeat`], one entry for each seat `beryl_card` names. `Seat` stays the
-//! two-variant enum it is, so `Seat::BOTH` still walks the players inside the kernel: a
-//! third player needs a third seat first.
+//! two-variant enum it is, so `Seat::BOTH` still walks the players inside the kernel: a third
+//! player needs a third seat first.
 //!
 //! The numbering of slots belongs to the slot type, not to the layout beside it, so a
 //! conversion between two numberings needs only their types and a slot number of one cannot
@@ -265,11 +267,20 @@
 //! by its number among [`LargeSlot`]s whatever layout its game is in ([`SlotId::num`]). A
 //! layout with other deck sizes is a new slot type and a new `impl Layout`.
 //!
+//! A game index means the same card in every layout, and only its width differs
+//! ([`CardId::to`]). Every record of a state that names a card stores `L::Card`, so those
+//! records are generic over the layout ([`Copiable`], `Derived`, `Lki`, `GrantRef`). What is
+//! kept outside any state names a card by the widest index ([`CardId::wide`]): a
+//! [`chance::Random`] reveal. [`GameTable`] is not generic over the layout: it takes a game
+//! index of any width and gives one of the width its caller stores, which is sound because
+//! a state of a layout exists only for a table that layout's index numbers.
+//!
 //! A game that does not fit a layout is refused where a state of that layout is made, with
 //! a [`Misfit`] and never a panic: [`State::deal`] refuses a deck with more cards than the
-//! layout's `DECK_SLOTS`, and [`State::try_relayout`] a game with a deck, a token or a list
-//! past what the target holds. [`GameTable`] is not generic over the layout and refuses no
-//! deck for its size.
+//! layout's `DECK_SLOTS` and a table of more distinct cards than its game index numbers, and
+//! [`State::try_relayout`] a game with a deck, a token, a list or a table past what the
+//! target holds. [`GameTable`] refuses no deck for its size and no decks for how many
+//! distinct cards they name.
 
 pub mod bitboard;
 pub mod board;
@@ -308,7 +319,7 @@ pub mod zone;
 
 pub use bitboard::Bitboard;
 pub use fit::Misfit;
-pub use ids::{CardIx, LargeSlot, Place, Seat, Slot, SlotId};
+pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use player_set::PlayerSet;

@@ -502,7 +502,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     ) -> Outcome<L> {
         // CR 707.9b: "The final set of values for that characteristic becomes part of the
         // copiable values of the copy."
-        let excepted = |what: Copiable| match except {
+        let excepted = |what: Copiable<L>| match except {
             CopyException::None => what,
             CopyException::PowerToughness(1, 1) => what.except_one_one(),
             CopyException::PowerToughness(..) => no_primitive(&except),
@@ -512,7 +512,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         }
         let who = self.scene().players(players);
         let mut tokens = Bitboard::EMPTY;
-        let mut copy = |ctx: &mut EffectCtx<'a, L>, what: Copiable| {
+        let mut copy = |ctx: &mut EffectCtx<'a, L>, what: Copiable<L>| {
             for player in ctx.state.players_in_turn_order(who) {
                 let how = TokenEntry::default();
                 tokens |= ctx.create_tokens_of_for(player, excepted(what), count, how);

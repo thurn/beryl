@@ -205,7 +205,10 @@ fn copiable_values_are_the_face_up_or_the_blank_face_down_ones() {
     assert_eq!(down.name(&t), "");
     assert_eq!((down.power(&t), down.toughness(&t)), (2, 2));
     assert_eq!(down.may_listen(&t), 0);
-    assert_eq!(down.record(&t), (t.face_down_copy(), FaceIx::FRONT));
+    assert_eq!(
+        down.record(&t),
+        (t.face_down_copy::<beryl_kernel::Small>(), FaceIx::FRONT)
+    );
 }
 
 #[test]
@@ -242,7 +245,7 @@ fn a_copy_has_the_copiable_values_and_never_a_hidden_card() {
     assert_eq!(s.object(blank).face(), FaceIx::FRONT);
     assert_eq!(
         s.copiable(blank).record(&t),
-        (t.face_down_copy(), FaceIx::FRONT)
+        (t.face_down_copy::<beryl_kernel::Small>(), FaceIx::FRONT)
     );
     assert_ne!(s.copiable(blank).key(), s.copiable(bear).key());
     assert_eq!(s.definition_name(&t, blank), "");

@@ -11,7 +11,7 @@ use std::path::Path;
 
 use beryl_cards::CARDS;
 use beryl_engine::chance::Random;
-use beryl_engine::{CardTable, GameTable, Seat, State, TableError};
+use beryl_engine::{CardTable, GameTable, LargeCardIx, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::Checkpoint;
@@ -123,9 +123,7 @@ impl Entry {
                 let owner = seat(*player)?;
                 let card = t
                     .deck(owner)
-                    .iter()
-                    .copied()
-                    .find(|&c| t.def(c).name == card)
+                    .find(|&c: &LargeCardIx| t.def(c).name == card)
                     .ok_or_else(|| SessionError::BadReplay {
                         reason: format!("player {player}'s deck has no {card} to reveal"),
                     })?;
@@ -173,13 +171,8 @@ impl ReplayFile {
         let [a, b] = decks;
         let decks = [a?, b?];
         let table = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(
-            |e| match e {
-                TableError::UnknownCard(name) => SessionError::UnknownCard {
-                    name: name.to_owned(),
-                },
-                e @ TableError::TooManyCards => SessionError::Deck {
-                    reason: format!("{e:?}"),
-                },
+            |TableError::UnknownCard(name)| SessionError::UnknownCard {
+                name: name.to_owned(),
             },
         )?;
         let profile = with_stops(

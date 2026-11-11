@@ -74,7 +74,7 @@ fn setup(scenario: &Scenario) -> (Game, PlayerView) {
     let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let decks = Seat::BOTH.map(|p| {
         let mut cards = std::collections::BTreeMap::new();
-        for &c in table.deck(p) {
+        for c in table.deck::<beryl_engine::CardIx>(p) {
             *cards.entry(table.def(c).name.to_owned()).or_insert(0u8) += 1;
         }
         cards.into_iter().map(|(n, c)| (c, n)).collect()

@@ -6,11 +6,11 @@
 use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::event::{Event, LossCause, Recipient};
-use crate::ids::SlotId;
+use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
-    CastPermission, Derived, FloatingEffect, Object, ObjectRef, Pending, PendingTrigger, Player,
-    Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
+    CastPermission, Derived, FloatingEffect, GrantRef, Lki, Object, ObjectRef, Pending,
+    PendingTrigger, Player, Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -22,7 +22,8 @@ pub trait Relayout {
     ///
     /// # Panics
     ///
-    /// If `M` cannot hold it: a slot or index past `M`'s, or a queue past a capacity of `M`.
+    /// If `M` cannot hold it: a slot, game index or index past `M`'s, or a queue past a
+    /// capacity of `M`.
     /// A value that came from an `M` game always fits, and so does a game
     /// [`State::fits`] accepts.
     fn relayout<M: Layout>(&self) -> Self::In<M>;
@@ -31,6 +32,11 @@ pub trait Relayout {
 /// `s` as the slot at the same place.
 fn slot<S: SlotId, T: SlotId>(s: S) -> T {
     s.to().expect("a slot past the layout's")
+}
+
+/// `c` as the same game index.
+fn card<C: CardId, D: CardId>(c: C) -> D {
+    c.to().expect("a game index past the layout's")
 }
 
 /// `b` over the slots at the same places.
@@ -132,7 +138,46 @@ impl<L: Layout> Relayout for TriggerInfo<L> {
             object: self.object.map(|r| r.relayout()),
             player: self.player,
             amount: self.amount,
-            lki: self.lki,
+            lki: self.lki.relayout(),
+        }
+    }
+}
+
+impl<L: Layout> Relayout for Lki<L> {
+    type In<M: Layout> = Lki<M>;
+
+    fn relayout<M: Layout>(&self) -> Lki<M> {
+        Lki {
+            card: card(self.card),
+            power: self.power,
+            toughness: self.toughness,
+            types: self.types,
+            controller: self.controller,
+            token: self.token,
+        }
+    }
+}
+
+impl<L: Layout> Relayout for Derived<L> {
+    type In<M: Layout> = Derived<M>;
+
+    fn relayout<M: Layout>(&self) -> Derived<M> {
+        Derived {
+            power: self.power,
+            toughness: self.toughness,
+            types: self.types,
+            supertypes: self.supertypes,
+            colors: self.colors,
+            controller: self.controller,
+            protection: self.protection,
+            keywords: self.keywords,
+            subtypes: self.subtypes,
+            granted: self.granted.map(|g| {
+                g.map(|g| GrantRef {
+                    card: card(g.card),
+                    grant: g.grant,
+                })
+            }),
         }
     }
 }
@@ -145,7 +190,7 @@ impl<L: Layout> Relayout for StackEntry<L> {
             object: self.object.map(|r| r.relayout()),
             controller: self.controller,
             ability: self.ability,
-            card: self.card,
+            card: card(self.card),
             face: self.face,
             info: self.info.relayout(),
             targets: queue(self.targets.as_slice(), Target::relayout),
@@ -163,7 +208,7 @@ impl<L: Layout> Relayout for PendingTrigger<L> {
     fn relayout<M: Layout>(&self) -> PendingTrigger<M> {
         PendingTrigger {
             source: self.source.map(|r| r.relayout()),
-            card: self.card,
+            card: card(self.card),
             face: self.face,
             ability: self.ability,
             controller: self.controller,
@@ -192,7 +237,7 @@ impl<L: Layout> Relayout for FloatingEffect<L> {
 
     fn relayout<M: Layout>(&self) -> FloatingEffect<M> {
         FloatingEffect {
-            source: self.source,
+            source: card(self.source),
             timestamp: self.timestamp,
             duration: self.duration,
             affected: self.affected.relayout(),
@@ -206,7 +251,7 @@ impl<L: Layout> Relayout for Object<L> {
 
     fn relayout<M: Layout>(&self) -> Object<M> {
         Object {
-            card: self.card,
+            card: card(self.card),
             incarnation: self.incarnation,
             zone: self.zone,
             owner: self.owner,
@@ -236,7 +281,7 @@ impl<L: Layout> Relayout for Player<L> {
             mulligans: self.mulligans,
             mulligan: self.mulligan,
             to_bottom: self.to_bottom,
-            emblems: queue(self.emblems.as_slice(), |&c| c),
+            emblems: queue(self.emblems.as_slice(), |&c| card(c)),
             sorceries_as_flash: self.sorceries_as_flash,
         }
     }
@@ -464,7 +509,7 @@ fn ability<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     Event::Ability {
         source: source.map(|r| r.relayout()),
         controller: *controller,
-        card: *card,
+        card: self::card(*card),
         face: *face,
         ability: *ability,
         targets: queue(targets.as_slice(), Target::relayout),
@@ -486,7 +531,7 @@ impl<L: Layout> Relayout for LossCause<L> {
                 ability,
             } => LossCause::Effect {
                 source: source.map(|r| r.relayout()),
-                card,
+                card: self::card(card),
                 face,
                 ability,
             },
@@ -661,7 +706,7 @@ impl<L: Layout> Relayout for State<L> {
                 derived.as_slice(),
                 &Derived::default(),
                 Some(battlefield.len()),
-                |&d| d,
+                Derived::relayout,
             ),
             listening: *listening,
             zones: zones.relayout(),

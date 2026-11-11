@@ -7,8 +7,8 @@ use beryl_card::{
 };
 
 use crate::event::kind;
-use crate::ids::{CardIx, Seat};
-use crate::layout::PerSeat;
+use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
+use crate::layout::{Layout, PerLayout, PerSeat};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
 #[derive(Debug)]
@@ -56,18 +56,24 @@ pub type Decklist = [(u8, &'static str)];
 pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
-    /// The decks and their tokens need more game indices than [`CardIx`] has.
-    TooManyCards,
 }
 
-/// The cards one game can contain, under dense game-local indices: the [`CardIx`] that
-/// `State` stores for an object's card. Built once per game and shared, read-only, by every thread
-/// searching it, or cloned into an agent that outlives the borrow.
+/// The cards one game can contain, under dense game-local indices: what `State` stores for
+/// an object's card, in the width its layout gives one ([`CardId`]). Built once per game and
+/// shared, read-only, by every thread searching it, or cloned into an agent that outlives the
+/// borrow.
+///
+/// The table is the same for every layout and holds any number of cards, so it takes a game
+/// index of any width and gives one of whichever width its caller stores. Whether a layout's
+/// index numbers all of them is asked where a state of that layout is made
+/// ([`crate::State::deal`], [`crate::State::try_relayout`]): past there, every index of the
+/// table is one of the layout's.
 #[derive(Clone, Debug)]
 pub struct GameTable {
     cards: &'static CardTable,
     defs: Vec<&'static CardDef>,
-    decks: PerSeat<Vec<CardIx>>,
+    /// Each deck as game indices, in decklist order.
+    decks: PerSeat<Vec<usize>>,
     /// Per game index, the event kinds its triggered abilities listen to.
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
@@ -76,8 +82,10 @@ pub struct GameTable {
     faces: Vec<[FaceFacts; 2]>,
     /// Per game index, the [`Rule`]s any of its faces, or face down, has.
     rules: Vec<u8>,
-    /// The game index of [`FACE_DOWN_COPY`].
-    face_down_copy: CardIx,
+    /// The game index of [`FACE_DOWN_COPY`], in the width of each layout's
+    /// ([`GameTable::face_down_copy`]); index 0, never read, in a width that does not number
+    /// it.
+    face_down_copy: (CardIx, LargeCardIx),
     /// Whether a card of the game has an activated ability that may do nothing
     /// ([`beryl_card::Needs`]), so that no other game pays to check.
     needy: bool,
@@ -88,11 +96,11 @@ impl GameTable {
     /// then the tokens and emblems those cards can create, then [`FACE_DOWN_COPY`], so the
     /// same decklists always give the same table.
     ///
-    /// A deck of any size makes a table: whether a game between them fits a layout is asked
-    /// where its state is made ([`crate::State::deal`]).
+    /// Decks of any size and any number of distinct cards make a table: whether a game
+    /// between them fits a layout is asked where its state is made ([`crate::State::deal`]).
     pub fn new(cards: &'static CardTable, decks: PerSeat<&Decklist>) -> Result<Self, TableError> {
         let mut defs: Vec<&'static CardDef> = Vec::new();
-        let mut indices: PerSeat<Vec<CardIx>> = Default::default();
+        let mut indices: PerSeat<Vec<usize>> = Default::default();
         for (player, list) in Seat::BOTH.into_iter().zip(decks) {
             for &(count, name) in list {
                 let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
@@ -102,10 +110,6 @@ impl GameTable {
                     defs.push(def);
                     defs.len() - 1
                 };
-                let index = u8::try_from(index)
-                    .ok()
-                    .and_then(CardIx::try_new)
-                    .ok_or(TableError::TooManyCards)?;
                 for _ in 0..count {
                     indices[player.index()].push(index);
                 }
@@ -121,10 +125,11 @@ impl GameTable {
             i += 1;
         }
         defs.push(&FACE_DOWN_COPY);
-        if defs.len() > CardIx::COUNT {
-            return Err(TableError::TooManyCards);
-        }
-        let face_down_copy = CardIx::new((defs.len() - 1) as u8);
+        let last = defs.len() - 1;
+        let face_down_copy = (
+            CardIx::try_from_index(last).unwrap_or_default(),
+            LargeCardIx::try_from_index(last).unwrap_or_default(),
+        );
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
@@ -158,30 +163,44 @@ impl GameTable {
         })
     }
 
-    /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies.
+    /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies,
+    /// as a state of layout `L` stores it.
+    ///
+    /// It is kept in each layout's width and read with one load, not converted: it is asked
+    /// on the rare path of [`crate::Copiable::record`], which is inlined into the layers'
+    /// scan of every permanent, where a conversion and its check cost the rollout benchmark
+    /// 0.1% of its instructions.
     #[inline]
-    pub fn face_down_copy(&self) -> CardIx {
-        self.face_down_copy
+    pub fn face_down_copy<L: Layout>(&self) -> L::Card {
+        L::of::<GameIndex>(self.face_down_copy.0, self.face_down_copy.1)
     }
 
     /// The game index of a card or token, if the game can contain it.
-    pub fn index_of(&self, def: &CardDef) -> Option<CardIx> {
+    pub fn index_of<C: CardId>(&self, def: &CardDef) -> Option<C> {
         self.defs
             .iter()
             .position(|d| std::ptr::eq(*d, def))
-            .map(|i| CardIx::new(i as u8))
+            .map(C::from_index)
+    }
+
+    /// The game index of the card or token called `name`, if the game can contain it.
+    pub fn index_named<C: CardId>(&self, name: &str) -> Option<C> {
+        self.defs
+            .iter()
+            .position(|d| d.name == name)
+            .map(C::from_index)
     }
 
     /// The event kinds the triggered abilities of the card at `card` listen to.
     #[inline]
-    pub fn listens(&self, card: CardIx) -> u16 {
+    pub fn listens(&self, card: impl CardId) -> u16 {
         self.listens[card.index()]
     }
 
     /// The facts of the face `face` of the card at `card`: found once per game for its first
     /// two faces, and read from the face itself for any other, or face down.
     #[inline]
-    pub fn facts(&self, card: CardIx, face: FaceIx) -> FaceFacts {
+    pub fn facts(&self, card: impl CardId, face: FaceIx) -> FaceFacts {
         match self.faces[card.index()].get(usize::from(face.get())) {
             Some(&facts) => facts,
             None => FaceFacts::of(self.def(card).face(face)),
@@ -191,7 +210,7 @@ impl GameTable {
     /// Whether some face of the card at `card` has a static ability with `rule`: so whether it
     /// can, whichever face is up.
     #[inline]
-    pub fn may_have_rule(&self, card: CardIx, rule: Rule) -> bool {
+    pub fn may_have_rule(&self, card: impl CardId, rule: Rule) -> bool {
         self.rules[card.index()] & rule_bit(rule) != 0
     }
 
@@ -214,7 +233,7 @@ impl GameTable {
 
     /// The definition behind a game index.
     #[inline]
-    pub fn def(&self, card: CardIx) -> &'static CardDef {
+    pub fn def(&self, card: impl CardId) -> &'static CardDef {
         self.defs[card.index()]
     }
 
@@ -229,11 +248,30 @@ impl GameTable {
         self.defs.is_empty()
     }
 
+    /// Every game index, in order: the cards of the first deck by first appearance, then
+    /// the second's, then their tokens and emblems.
+    pub fn indices<C: CardId>(&self) -> impl ExactSizeIterator<Item = C> + use<C> {
+        (0..self.defs.len()).map(C::from_index)
+    }
+
     /// A player's deck as game indices, in decklist order.
     #[inline]
-    pub fn deck(&self, player: Seat) -> &[CardIx] {
-        &self.decks[player.index()]
+    pub fn deck<C: CardId>(&self, player: Seat) -> impl ExactSizeIterator<Item = C> + '_ {
+        self.decks[player.index()].iter().map(|&i| C::from_index(i))
     }
+
+    /// How many cards a player's deck has.
+    #[inline]
+    pub fn deck_len(&self, player: Seat) -> usize {
+        self.decks[player.index()].len()
+    }
+}
+
+/// Each layout's game index ([`Layout::Card`]), as a family [`Layout::of`] chooses from.
+struct GameIndex;
+
+impl PerLayout for GameIndex {
+    type Of<L: Layout> = L::Card;
 }
 
 /// What the engine's scans over every permanent read of a face, found once per game rather

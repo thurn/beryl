@@ -610,7 +610,10 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .expect("the copy");
     assert_eq!(s.controller(copy), Seat::P1);
     assert_eq!(s.object(copy).face(), FaceIx::FRONT);
-    assert_eq!(s.copiable(copy).record(&t).0, t.face_down_copy());
+    assert_eq!(
+        s.copiable(copy).record(&t).0,
+        t.face_down_copy::<beryl_engine::Small>()
+    );
     assert_eq!(s.card_behind(copy), None);
     assert!(s.knows(Seat::P0, copy) && s.knows(Seat::P1, copy));
     let derived = s.derived(copy);

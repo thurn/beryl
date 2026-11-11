@@ -7,7 +7,7 @@ use beryl_card::CounterKind;
 use crate::event::Event;
 use crate::fixed::Full;
 use crate::floating::{CastPermission, Continuous, Duration, FloatingEffect};
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::state::State;
@@ -92,7 +92,7 @@ impl<L: Layout> Legacy<'_, L> {
     #[inline]
     pub fn start_effect(
         &mut self,
-        source: CardIx,
+        source: L::Card,
         affected: ObjectRef<L>,
         effect: Continuous,
         duration: Duration,

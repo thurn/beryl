@@ -1,6 +1,7 @@
 //! The engine's identifiers: object slots, players and game-table indices. Each is its own
 //! type, so one cannot pass for another, and "no object" is `Option`, never a reserved value.
-//! `Option<Slot>` and `Option<CardIx>` are one byte, like the `u8`s they replace.
+//! `Option<Slot>` and `Option<CardIx>` are one byte, like the `u8`s they replace. A layout
+//! names its own slot and game-index types ([`SlotId`], [`CardId`]).
 
 use std::fmt;
 use std::hash::Hash;
@@ -278,9 +279,52 @@ impl fmt::Display for Slot {
     }
 }
 
-/// A card's index in the game table (architecture §6.4): what `State` stores for a card. It
-/// stores the index plus one, so `Option<CardIx>` is one byte; a table holds at most 255
-/// cards.
+/// A game-table index type, as a [`crate::Layout`] stores a card: [`CardIx`] for
+/// [`crate::Small`], [`LargeCardIx`] for [`crate::Large`]. Its width is how many distinct
+/// cards, tokens and emblems a game of that layout may contain ([`crate::GameTable::len`]).
+///
+/// An index means the same card in every numbering: only how many there are differs. The
+/// game table is not generic over the layout, so it takes an index of any numbering and
+/// gives one of whichever its caller stores.
+pub trait CardId: Copy + fmt::Debug + Default + Eq + Ord + Hash + Send + Sync + 'static {
+    /// How many indices there are: 0 to `COUNT - 1`.
+    const COUNT: usize;
+    /// Index 0: filler for fixed-capacity arrays and unused slots, never a meaning of its own.
+    const FIRST: Self;
+
+    /// The game index `index`.
+    ///
+    /// # Panics
+    ///
+    /// If `index` is not below `COUNT`. An index of a game table is, whenever a state of this
+    /// numbering's layout was made for that table ([`crate::State::deal`]).
+    fn from_index(index: usize) -> Self;
+
+    /// The game index `index`, if there is one.
+    #[inline]
+    fn try_from_index(index: usize) -> Option<Self> {
+        (index < Self::COUNT).then(|| Self::from_index(index))
+    }
+
+    fn index(self) -> usize;
+
+    /// The same index in the numbering `T`, if `T` has it.
+    #[inline]
+    fn to<T: CardId>(self) -> Option<T> {
+        T::try_from_index(self.index())
+    }
+
+    /// The same index among [`LargeCardIx`]s, the widest numbering: how a record kept outside
+    /// any layout names a card, as [`crate::chance::Random`] does.
+    #[inline]
+    fn wide(self) -> LargeCardIx {
+        self.to().expect("every game index is one of the widest")
+    }
+}
+
+/// A card's index in the game table (architecture §6.4): what a [`crate::Small`] `State`
+/// stores for a card. It stores the index plus one, so `Option<CardIx>` is one byte; a game
+/// in `Small` has at most 255 distinct cards.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CardIx(NonZeroU8);
 
@@ -321,11 +365,29 @@ impl CardIx {
     }
 }
 
-/// Index 0: filler for fixed-capacity arrays and unused slots, never a meaning of its own.
+impl CardId for CardIx {
+    const COUNT: usize = CardIx::COUNT;
+    const FIRST: CardIx = CardIx::new(0);
+
+    #[inline]
+    fn from_index(index: usize) -> CardIx {
+        // One comparison, as `CardIx::new` makes of a byte, and no wider index is cut down
+        // to pass for a card of its own.
+        assert!(index < Self::COUNT, "a game index past the 255 of a byte");
+        CardIx::new(index as u8)
+    }
+
+    #[inline]
+    fn index(self) -> usize {
+        CardIx::index(self)
+    }
+}
+
+/// Index 0 ([`CardId::FIRST`]).
 impl Default for CardIx {
     #[inline]
     fn default() -> CardIx {
-        CardIx::new(0)
+        CardIx::FIRST
     }
 }
 
@@ -335,14 +397,59 @@ impl fmt::Debug for CardIx {
     }
 }
 
+/// A card's index in the game table as [`crate::Large`] stores it: 65,535 of them, so a game
+/// there may contain that many distinct cards. It stores the index plus one, so
+/// `Option<LargeCardIx>` is two bytes.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LargeCardIx(NonZeroU16);
+
+impl CardId for LargeCardIx {
+    const COUNT: usize = 65_535;
+    const FIRST: LargeCardIx = LargeCardIx(NonZeroU16::MIN);
+
+    #[inline]
+    fn from_index(index: usize) -> LargeCardIx {
+        assert!(index < Self::COUNT, "game index {index} does not exist");
+        LargeCardIx(NonZeroU16::new(index as u16 + 1).expect("one more than an index"))
+    }
+
+    #[inline]
+    fn index(self) -> usize {
+        usize::from(self.0.get() - 1)
+    }
+}
+
+/// Index 0 ([`CardId::FIRST`]).
+impl Default for LargeCardIx {
+    #[inline]
+    fn default() -> LargeCardIx {
+        LargeCardIx::FIRST
+    }
+}
+
+impl From<CardIx> for LargeCardIx {
+    /// The same index ([`CardId::wide`]).
+    #[inline]
+    fn from(card: CardIx) -> LargeCardIx {
+        card.wide()
+    }
+}
+
+impl fmt::Debug for LargeCardIx {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CardIx({})", self.index())
+    }
+}
+
 const _: () = assert!(size_of::<Option<Slot>>() == 1);
 const _: () = assert!(size_of::<Option<LargeSlot>>() == 2);
 const _: () = assert!(size_of::<Option<CardIx>>() == 1);
+const _: () = assert!(size_of::<Option<LargeCardIx>>() == 2);
 const _: () = assert!(size_of::<Seat>() == 1);
 
 #[cfg(test)]
 mod tests {
-    use super::{CardIx, LargeSlot, Place, Seat, Slot, SlotId};
+    use super::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};
 
     #[test]
     fn slots_round_trip_and_255_is_none() {
@@ -392,6 +499,24 @@ mod tests {
         assert_eq!(Slot::from_num(token_136.num()), None);
         assert_eq!(LargeSlot::at(Place::Pool(512)), None);
         assert_eq!(LargeSlot::pool().count(), 512);
+    }
+
+    #[test]
+    fn a_game_index_is_the_same_card_in_every_numbering() {
+        let last = CardIx::new(254);
+        assert_eq!(last.wide().index(), 254);
+        assert_eq!(last.wide().to::<CardIx>(), Some(last));
+        assert_eq!(CardIx::try_from_index(255), None);
+        // The first index Small cannot name, and the last Large can.
+        let past = LargeCardIx::from_index(255);
+        assert_eq!(past.to::<CardIx>(), None);
+        assert_eq!(
+            LargeCardIx::try_from_index(65_534).map(CardId::index),
+            Some(65_534)
+        );
+        assert_eq!(LargeCardIx::try_from_index(65_535), None);
+        assert_eq!(LargeCardIx::FIRST.index(), 0);
+        assert_eq!(<CardIx as CardId>::FIRST, CardIx::default());
     }
 
     #[test]

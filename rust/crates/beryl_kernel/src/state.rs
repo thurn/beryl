@@ -18,7 +18,7 @@ use beryl_card::FaceIx;
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat, Slot, SlotId};
+use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::profile::{Limits, Profile};
@@ -102,7 +102,7 @@ pub struct State<L: Layout = Small> {
     /// Slots on the battlefield, in the order they entered.
     pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
     /// Layer results, by battlefield index.
-    pub(crate) derived: L::Table<Derived, BATTLEFIELD>,
+    pub(crate) derived: L::Table<Derived<L>, BATTLEFIELD>,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
     /// current while they are.
@@ -160,7 +160,7 @@ impl<L: Layout> State<L> {
 
     /// The game index of the definition behind a slot: the kernel's own. Others ask a query
     /// ([`crate::query`]) or [`crate::Observation::card`].
-    pub(crate) fn card(&self, slot: L::Slot) -> CardIx {
+    pub(crate) fn card(&self, slot: L::Slot) -> L::Card {
         self.object(slot).card
     }
 
@@ -299,7 +299,7 @@ impl<L: Layout> State<L> {
     ///
     /// In debug builds, if the layer results are stale.
     #[inline]
-    pub fn permanents(&self) -> impl Iterator<Item = (L::Slot, &Derived)> + '_ {
+    pub fn permanents(&self) -> impl Iterator<Item = (L::Slot, &Derived<L>)> + '_ {
         debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
         self.battlefield
             .iter()
@@ -320,7 +320,7 @@ impl<L: Layout> State<L> {
     /// # Panics
     ///
     /// If `slot` is not on the battlefield, or, in debug builds, if `derived` is stale.
-    pub fn derived(&self, slot: L::Slot) -> &Derived {
+    pub fn derived(&self, slot: L::Slot) -> &Derived<L> {
         debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
         let i = self
             .battlefield_position(slot)

@@ -97,13 +97,20 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         .unwrap();
     assert_eq!(
         s.copiable(copy).record(&t),
-        (t.face_down_copy(), beryl_engine::card::FaceIx::FRONT)
+        (
+            t.face_down_copy::<beryl_engine::Small>(),
+            beryl_engine::card::FaceIx::FRONT
+        )
     );
     assert_ne!(s.copiable(copy).record(&t).0, snapcaster);
     assert_eq!(s.card_behind(copy), None);
     for viewer in Seat::BOTH {
         let obs = Observation::new(&s, viewer);
-        assert_eq!(obs.card(copy), Some(t.face_down_copy()), "{viewer:?}");
+        assert_eq!(
+            obs.card(copy),
+            Some(t.face_down_copy::<beryl_engine::Small>()),
+            "{viewer:?}"
+        );
         let view = player_view(
             &t,
             obs,

@@ -11,7 +11,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{LargeSlot, Seat, Slot, SlotId};
+use crate::ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId};
 use crate::relayout::Relayout;
 use crate::state::State;
 
@@ -119,7 +119,9 @@ pub type PerPlayer<L, T> = <L as Layout>::PerPlayer<T>;
 /// - how many cards a deck may have, and so a library and a graveyard
 ///   ([`SlotId::DECK_SLOTS`], the capacity of its [`Layout::Deck`]);
 /// - how many tokens and spell copies exist at once (its [`Layout::TOKEN_POOL`]);
-/// - how many objects a game holds ([`SlotId::COUNT`]) and how long each queue grows.
+/// - how many objects a game holds ([`SlotId::COUNT`]) and how long each queue grows;
+/// - how many distinct cards a game contains, tokens and emblems among them
+///   ([`CardId::COUNT`] of its [`Layout::Card`]).
 ///
 /// A game too large for a layout is refused where a state of it is made, with a [`Misfit`]
 /// ([`State::deal`], [`State::try_relayout`]).
@@ -129,6 +131,10 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// The object slots: how many objects a game holds, and how they are dealt among the
     /// players' decks and the pool ([`SlotId`]).
     type Slot: SlotId;
+    /// A card's index in the game table, as the state stores it for an object, a spell or
+    /// ability, an effect or an emblem: how many distinct cards a game contains
+    /// ([`CardId`]).
+    type Card: CardId;
     /// An index into a queue or a decision's options, as the state stores it: in a choice
     /// record or an [`Opt::Trigger`](crate::decision::Opt::Trigger).
     type Index: Item + Copy + Default + Ord + Into<usize> + Into<u16> + TryFrom<usize>;
@@ -159,12 +165,14 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
 /// It is two players with 60 slots a deck, which is the least a constructed deck may have
 /// ([CR 100.2a](https://yawgatog.com/resources/magic-rules/#R1002a): "each deck has a minimum
 /// deck size of 60 cards"), and 135 slots for tokens and spell copies. A game between larger
-/// decks is refused here and dealt in [`Large`] ([`State::deal`]).
+/// decks is refused here and dealt in [`Large`] ([`State::deal`]), and so is one whose table
+/// has more than the 255 distinct cards a one-byte [`CardIx`] numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Small;
 
 impl Layout for Small {
     type Slot = Slot;
+    type Card = CardIx;
     type Index = u8;
     type Queue<T: Item + Default, const N: usize> = Fixed<T, N>;
     type Table<T: Item, const N: usize> = [T; N];
@@ -196,12 +204,15 @@ impl Layout for Small {
 /// ([CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
 /// size for non-Commander decks."); it is the share of the 1,024 slots each deck is given,
 /// which leaves 512 for the pool of tokens and spell copies, nearly four times `Small`'s
-/// 135. A deck may also name no more distinct cards than a [`crate::ids::CardIx`] numbers.
+/// 135. Its game table may hold 65,535 distinct cards, tokens and emblems: what the two
+/// bytes of a [`LargeCardIx`] number, which is room for a table over a whole card pool and
+/// not only two decks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Large;
 
 impl Layout for Large {
     type Slot = LargeSlot;
+    type Card = LargeCardIx;
     type Index = u16;
     type Queue<T: Item + Default, const N: usize> = Vec<T>;
     type Table<T: Item, const N: usize> = PerSlot<T>;

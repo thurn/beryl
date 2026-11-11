@@ -149,9 +149,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
 
 /// The game index of the token named `name`: one a card of the decks creates.
 fn token_index(t: &GameTable, name: &str) -> Result<CardIx, String> {
-    (0..t.len())
-        .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
-        .find(|&card| t.def(card).name == name)
+    t.index_named(name)
         .ok_or_else(|| format!("no card of the setup creates a {name}"))
 }
 

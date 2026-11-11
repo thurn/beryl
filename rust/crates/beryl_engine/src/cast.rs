@@ -60,7 +60,7 @@ fn activated<L: Layout>(
     s: &State<L>,
     slot: L::Slot,
     ability: ObjectAbility,
-) -> Option<(crate::query::Copiable, FaceAbility)> {
+) -> Option<(crate::query::Copiable<L>, FaceAbility)> {
     match ability {
         ObjectAbility::Own(i) => Some((s.copiable(slot), FaceAbility::Own(i))),
         ObjectAbility::Granted(k) => {

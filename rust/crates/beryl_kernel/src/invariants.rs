@@ -2,7 +2,7 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
-use crate::ids::{Place, Seat, SlotId};
+use crate::ids::{CardId, Place, Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{Object, ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
@@ -54,7 +54,7 @@ impl<L: Layout> State<L> {
             let at = Some(At::Slot(slot.index()));
             let o = self.object(slot);
             let (deck_owner, in_deck) = match slot.place() {
-                Place::Deck(player, card) => (Some(player), card < t.deck(player).len()),
+                Place::Deck(player, card) => (Some(player), card < t.deck_len(player)),
                 Place::Pool(_) => (None, false),
             };
             if o.zone == Zone::Nowhere {

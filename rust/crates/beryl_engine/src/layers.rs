@@ -3,7 +3,7 @@
 
 use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
-use crate::ids::CardIx;
+use crate::ids::CardId;
 use crate::layout::{Layout, Queue};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
@@ -11,7 +11,7 @@ use crate::trigger::face;
 
 /// One continuous effect to apply in this recompute.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-struct Apply {
+struct Apply<C: CardId> {
     layer: u8,
     timestamp: u16,
     /// Static abilities on one object share its timestamp; their order on the card breaks
@@ -20,7 +20,7 @@ struct Apply {
     /// The battlefield index of the permanent it affects.
     target: u8,
     /// The game index of the effect's source card, which a granted ability is printed on.
-    source: CardIx,
+    source: C,
     modification: Option<Modification>,
 }
 
@@ -96,7 +96,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     let listening = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
-    let mut list: Option<L::Queue<Apply, 192>> = None;
+    let mut list: Option<L::Queue<Apply<L::Card>, 192>> = None;
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
@@ -187,7 +187,12 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
 }
 
 /// Applies one modification to the permanent at battlefield index `i`.
-fn apply(derived: &mut [Derived], i: usize, source: CardIx, m: Modification) {
+///
+/// Out of line, as it was before it was generic over the layout: most recomputes apply
+/// nothing, and inlined into [`recompute`] it costs the rollout benchmark 0.07% of its
+/// instructions.
+#[inline(never)]
+fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, m: Modification) {
     match m {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
         Modification::Control(player) => derived[i].controller = player,

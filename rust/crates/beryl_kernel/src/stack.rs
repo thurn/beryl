@@ -10,7 +10,7 @@
 use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx, Types};
 
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::state::State;
@@ -171,7 +171,7 @@ pub struct StackEntry<L: Layout = Small> {
     /// which outlast the source ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)):
     /// "Once activated or triggered, an ability exists on the stack independently of its
     /// source."
-    pub card: CardIx,
+    pub card: L::Card,
     pub face: FaceIx,
     /// For a triggered ability: what it triggered on.
     pub info: TriggerInfo<L>,
@@ -207,9 +207,9 @@ impl<L: Layout> StackEntry<L> {
 /// ([CR 603.10](https://yawgatog.com/resources/magic-rules/#R60310)): the game "looks back in
 /// time" for leaves-the-battlefield abilities.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Lki {
+pub struct Lki<L: Layout = Small> {
     /// The game index of the card, the copiable values of a token copy.
-    pub card: CardIx,
+    pub card: L::Card,
     pub power: i8,
     pub toughness: i8,
     pub types: Types,
@@ -224,7 +224,7 @@ pub struct TriggerInfo<L: Layout = Small> {
     pub object: Option<ObjectRef<L>>,
     pub player: Seat,
     pub amount: u8,
-    pub lki: Lki,
+    pub lki: Lki<L>,
 }
 
 /// An ability that has triggered and waits to be put on the stack.
@@ -232,7 +232,7 @@ pub struct TriggerInfo<L: Layout = Small> {
 pub struct PendingTrigger<L: Layout = Small> {
     /// The object with the ability; an emblem's trigger has none.
     pub source: Option<ObjectRef<L>>,
-    pub card: CardIx,
+    pub card: L::Card,
     pub face: FaceIx,
     /// The ability, among the face's own.
     pub ability: AbilityIx,

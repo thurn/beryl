@@ -458,10 +458,14 @@ Both decklists are public (§13), so the cards a game can contain are known when
 it starts: the two decks plus every token they can create. `GameTable` is built
 from them once per game:
 
-- **Dense game-local indices**, at most 255, which is what `State` stores. The
-  hot static data for those cards sits contiguously, a few KiB that stay in L1:
-  types, costs, timing class, keywords, listener masks and mana production, with
-  each mana source's flexibility rank (§10).
+- **Dense game-local indices**, which is what `State` stores, in the width its
+  layout gives one (`Layout::Card`): a byte in `Small`, so at most 255 distinct
+  cards there, and two in `Large`, 65,535. The table itself holds any number,
+  and a game with more than a layout numbers is refused where its state is made
+  (`Misfit::TooManyCards`). The hot static data for those cards sits
+  contiguously, a few KiB that stay in L1: types, costs, timing class, keywords,
+  listener masks and mana production, with each mana source's flexibility rank
+  (§10).
 - **Capability masks** per game and per player: whether any card can create a
   replacement effect, a layer effect or an instant-speed action. A mechanic that
   is absent costs one AND.

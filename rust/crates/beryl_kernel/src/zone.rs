@@ -9,7 +9,7 @@ use crate::bitboard::Bitboard;
 use crate::chance;
 use crate::event::Sink;
 use crate::fixed::Full;
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::rng::SplitMix64;
 use crate::state::{Counters, Derived, Object, ObjectFlags, State, Zone, ZoneKey};
@@ -206,7 +206,7 @@ impl<L: Layout> State<L> {
     /// player's library are shuffled or otherwise reordered, any revealed cards that are
     /// reordered stop being revealed and become new objects."
     pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) {
-        let mut cards: L::Deck<CardIx> = Default::default();
+        let mut cards: L::Deck<L::Card> = Default::default();
         for &slot in slots {
             // A library never holds more than its owner's deck slots.
             let _ = cards.push(self.object(slot).card);
@@ -245,7 +245,7 @@ impl<L: Layout> State<L> {
     /// timestamp and the battlefield index, and for a permanent its characteristics after continuous effects, so two
     /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
     /// creature that got -2/-0 one that didn't.
-    pub fn signature(&self, slot: L::Slot) -> (Object<L>, Option<Derived>) {
+    pub fn signature(&self, slot: L::Slot) -> (Object<L>, Option<Derived<L>>) {
         let o = self.object(slot);
         let derived = (o.zone == Zone::Battlefield).then(|| *self.derived(slot));
         (

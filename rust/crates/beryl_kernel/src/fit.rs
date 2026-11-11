@@ -6,7 +6,7 @@
 use std::fmt;
 
 use crate::decision::{Candidates, Opt};
-use crate::ids::{Place, Seat, SlotId};
+use crate::ids::{CardId, Place, Seat, SlotId};
 use crate::layout::{Item, Layout, Queue, Table};
 use crate::object::Object;
 use crate::pending::{Pending, Resolving};
@@ -14,6 +14,7 @@ use crate::player::Player;
 use crate::relayout::Relayout;
 use crate::stack::StackEntry;
 use crate::state::State;
+use crate::table::GameTable;
 
 /// Why a game does not fit a layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +35,9 @@ pub enum Misfit {
         len: usize,
         capacity: usize,
     },
+    /// The game's table holds more distinct cards, tokens and emblems than the layout's game
+    /// index numbers ([`CardId::COUNT`] of its [`Layout::Card`]).
+    TooManyCards { cards: usize, indices: usize },
     /// A recorded answer or an option names a place in a list past what the layout's
     /// [`Layout::Index`] can name.
     IndexTooWide { index: usize },
@@ -62,6 +66,10 @@ impl fmt::Display for Misfit {
             } => write!(
                 f,
                 "{list} holds {len}, more than the {capacity} this layout lets it"
+            ),
+            Misfit::TooManyCards { cards, indices } => write!(
+                f,
+                "the game has {cards} distinct cards, more than the {indices} this layout numbers"
             ),
             Misfit::IndexTooWide { index } => {
                 write!(f, "option {index} is past what this layout can name")
@@ -99,17 +107,35 @@ fn named<L: Layout, M: Layout>(index: L::Index) -> Result<(), Misfit> {
     }
 }
 
+impl GameTable {
+    /// Whether layout `M`'s game index numbers every card of the table, so that a state of
+    /// `M` may store any of them: asked wherever one is made.
+    pub(crate) fn fits<M: Layout>(&self) -> Result<(), Misfit> {
+        if self.len() <= M::Card::COUNT {
+            Ok(())
+        } else {
+            Err(Misfit::TooManyCards {
+                cards: self.len(),
+                indices: M::Card::COUNT,
+            })
+        }
+    }
+}
+
 impl<L: Layout> State<L> {
-    /// This game in layout `M` ([`Relayout`]), if `M` holds it ([`State::fits`]).
-    pub fn try_relayout<M: Layout>(&self) -> Result<State<M>, Misfit> {
-        self.fits::<M>()?;
+    /// This game, whose table is `t`, in layout `M` ([`Relayout`]), if `M` holds it
+    /// ([`State::fits`]).
+    pub fn try_relayout<M: Layout>(&self, t: &GameTable) -> Result<State<M>, Misfit> {
+        self.fits::<M>(t)?;
         Ok(self.relayout())
     }
 
-    /// Whether layout `M` holds this game: every object has a slot there at its place
-    /// ([`SlotId::to`]), every list fits the room `M` gives it, and every recorded index is
-    /// one `M` can name. A game that came from an `M` game always fits.
-    pub fn fits<M: Layout>(&self) -> Result<(), Misfit> {
+    /// Whether layout `M` holds this game, whose table is `t`: its game index numbers every
+    /// card of the table, those no object is yet among them; every object has a slot
+    /// there at its place ([`SlotId::to`]); every list fits the room `M` gives it; and every
+    /// recorded index is one `M` can name. A game that came from an `M` game always fits.
+    pub fn fits<M: Layout>(&self, t: &GameTable) -> Result<(), Misfit> {
+        t.fits::<M>()?;
         self.fits_slots::<M>()?;
         room(
             "the battlefield",

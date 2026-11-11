@@ -476,9 +476,8 @@ impl<L: Layout> Expert<'_, L> {
     fn in_their_deck(&self, name: &str) -> bool {
         self.p
             .t
-            .deck(self.opp())
-            .iter()
-            .any(|&c| self.p.t.def(c).name == name)
+            .deck::<L::Card>(self.opp())
+            .any(|c| self.p.t.def(c).name == name)
     }
 
     /// Whether the opponent could win by drawing from an empty library: they control a Jace,
@@ -1389,7 +1388,7 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether casting `card` would tap us out into a Mana Tithe we have not seen: the
     /// opponent holds a card and has white mana up, and no Mana Tithe is anywhere we can see.
-    fn tithe_risk(&self, card: beryl_engine::CardIx) -> bool {
+    fn tithe_risk(&self, card: L::Card) -> bool {
         let cost = i32::from(self.p.t.def(card).front().cost.mana_value());
         let opp = self.opp();
         let white = |s: L::Slot| self.makes(s).0;
@@ -1913,7 +1912,7 @@ impl<L: Layout> Expert<'_, L> {
 
     /// The first targeted ability of a card's front face, such as Aang's Iceberg's "When
     /// this enchantment enters, exile up to one other target nonland permanent".
-    fn etb_targets(&self, card: beryl_engine::CardIx) -> Option<&'static Ability> {
+    fn etb_targets(&self, card: L::Card) -> Option<&'static Ability> {
         self.p
             .t
             .def(card)

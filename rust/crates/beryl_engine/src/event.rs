@@ -320,7 +320,7 @@ fn pay_life_to_enter<L: Layout>(
 }
 
 /// The life an entering replacement of the face asks for, if any.
-pub(crate) fn life_to_enter(t: &GameTable, entering: Copiable) -> Option<u8> {
+pub(crate) fn life_to_enter<L: Layout>(t: &GameTable, entering: Copiable<L>) -> Option<u8> {
     entering
         .face(t)
         .abilities
@@ -566,7 +566,7 @@ pub(crate) fn create_tokens<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     controller: Seat,
-    what: Copiable,
+    what: Copiable<L>,
     count: u8,
     how: TokenEntry,
 ) -> Result<Bitboard<L::Slot>, Full> {

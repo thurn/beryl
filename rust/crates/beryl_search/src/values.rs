@@ -5,9 +5,9 @@
 //! decision reads it with one load.
 
 use beryl_cards::names;
-use beryl_engine::card::{Face, Keywords, Replacement, Types};
+use beryl_engine::card::{CardDef, Face, Keywords, Replacement, Types};
 use beryl_engine::query::DefinitionKey;
-use beryl_engine::{CardIx, GameTable};
+use beryl_engine::{CardId, CardIx, GameTable, LargeCardIx};
 
 /// Hand-tuned values: roughly how much a strong player would rather have the card than not,
 /// on a scale where a game-winning planeswalker is about 90 and a basic land 10.
@@ -140,7 +140,11 @@ impl CardInfo {
 /// Every card's entry, by game index.
 #[derive(Clone, Debug)]
 pub struct CardValues {
+    /// The first 255, flat: every index of a [`beryl_engine::Small`] game, which reads its
+    /// row with no bounds check.
     cards: [CardInfo; CardIx::COUNT],
+    /// The rows past them, of a table only a wider layout numbers.
+    more: Vec<CardInfo>,
 }
 
 /// Where card values come from, from the most general to the most hand-made. The flags of
@@ -162,15 +166,13 @@ impl CardValues {
 
     /// The values of the tier `knowledge`.
     pub fn with(t: &GameTable, knowledge: Knowledge) -> CardValues {
-        let mut cards = [CardInfo::default(); CardIx::COUNT];
-        for (i, info) in cards.iter_mut().enumerate().take(t.len()) {
-            let def = t.def(CardIx::new(i as u8));
+        let info = |def: &CardDef| {
             let bits = |list: &[(&str, u8)]| {
                 list.iter()
                     .filter(|(name, _)| *name == def.name)
                     .fold(0, |bits, &(_, a)| bits | 1 << a)
             };
-            *info = CardInfo {
+            CardInfo {
                 value: match knowledge {
                     Knowledge::Tuned => VALUES
                         .iter()
@@ -189,21 +191,39 @@ impl CardValues {
                         .iter()
                         .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
                 }),
-            };
+            }
+        };
+        let mut cards = [CardInfo::default(); CardIx::COUNT];
+        let mut more = Vec::new();
+        for card in t.indices::<LargeCardIx>() {
+            let row = info(t.def(card));
+            match cards.get_mut(card.index()) {
+                Some(flat) => *flat = row,
+                None => more.push(row),
+            }
         }
-        CardValues { cards }
+        CardValues { cards, more }
+    }
+
+    /// The row at a game index.
+    #[inline]
+    fn row(&self, index: usize) -> CardInfo {
+        match self.cards.get(index) {
+            Some(&info) => info,
+            None => self.more[index - CardIx::COUNT],
+        }
     }
 
     #[inline]
-    pub fn get(&self, card: CardIx) -> CardInfo {
-        self.cards[card.index()]
+    pub fn get(&self, card: impl CardId) -> CardInfo {
+        self.row(card.index())
     }
 
     /// What is known of the definition an object's values are read from
     /// ([`beryl_engine::State::copiable`]).
     #[inline]
-    pub fn of(&self, key: DefinitionKey) -> CardInfo {
-        self.cards[key.index()]
+    pub fn of<C: CardId>(&self, key: DefinitionKey<C>) -> CardInfo {
+        self.row(key.index())
     }
 }
 

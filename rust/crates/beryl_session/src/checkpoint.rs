@@ -622,9 +622,7 @@ fn from_library(
 
 /// The game index of the card or token `name`.
 fn game_index(t: &GameTable, name: &str) -> Result<CardIx, String> {
-    (0..t.len())
-        .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
-        .find(|&card| t.def(card).name == name)
+    t.index_named(name)
         .ok_or_else(|| format!("the game has no {name}"))
 }
 

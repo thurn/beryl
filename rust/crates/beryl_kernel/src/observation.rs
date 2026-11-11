@@ -3,7 +3,7 @@
 
 use crate::bitboard::{Bitboard, Slots};
 use crate::filter::{Evaluate, Filter};
-use crate::ids::{CardIx, Seat, SlotId};
+use crate::ids::{CardId, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
@@ -62,7 +62,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// The game index of the card in a slot, if the viewer knows it.
-    pub fn card(&self, slot: L::Slot) -> Option<CardIx> {
+    pub fn card(&self, slot: L::Slot) -> Option<L::Card> {
         self.knows(slot).then(|| self.state.card(slot))
     }
 
@@ -73,7 +73,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     pub fn object(&self, slot: L::Slot) -> Object<L> {
         let mut o = *self.state.object(slot);
         if !self.knows(slot) {
-            o.card = CardIx::default();
+            o.card = L::Card::FIRST;
             if o.face != FaceIx::DOWN {
                 o.face = FaceIx::FRONT;
             }
@@ -139,7 +139,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// # Panics
     ///
     /// If `slot` is not on the battlefield.
-    pub fn derived(&self, slot: L::Slot) -> &'a Derived {
+    pub fn derived(&self, slot: L::Slot) -> &'a Derived<L> {
         self.state.derived(slot)
     }
 
@@ -214,14 +214,13 @@ impl<'a, L: Layout> Observation<'a, L> {
     ) -> State<L> {
         let mut s = self.root.clone();
         for player in Seat::BOTH {
-            let deck = t.deck(player);
-            let mut remainder: L::Deck<CardIx> = Default::default();
-            for &card in deck {
+            let mut remainder: L::Deck<L::Card> = Default::default();
+            for card in t.deck(player) {
                 // A deck never holds more cards than the layout has slots for (State::deal).
                 let _ = remainder.push(card);
             }
             let mut unknown: L::Deck<L::Slot> = Default::default();
-            for i in 0..deck.len() {
+            for i in 0..t.deck_len(player) {
                 let slot = L::Slot::deck(player, i);
                 if self.root.knows(self.viewer, slot) || shown(slot) {
                     let card = s.object(slot).card;

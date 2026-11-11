@@ -4,7 +4,7 @@
 
 use beryl_card::Modification;
 
-use crate::ids::{CardIx, Seat};
+use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, Small};
 use crate::object::ObjectRef;
 
@@ -72,7 +72,7 @@ pub struct FloatingEffect<L: Layout = Small> {
     /// then. The source may since have left its zone, and once hidden its slot may hold another
     /// card ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a): the effect lasts
     /// as stated even then), so the effect keeps the card rather than the slot.
-    pub source: CardIx,
+    pub source: L::Card,
     pub timestamp: u16,
     pub duration: Duration,
     pub affected: ObjectRef<L>,
@@ -82,7 +82,7 @@ pub struct FloatingEffect<L: Layout = Small> {
 impl<L: Layout> Default for FloatingEffect<L> {
     fn default() -> Self {
         FloatingEffect {
-            source: CardIx::default(),
+            source: L::Card::FIRST,
             timestamp: 0,
             duration: Duration::EndOfTurn,
             affected: ObjectRef::default(),

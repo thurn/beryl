@@ -45,7 +45,7 @@ impl<L: Layout> Deref for Rederive<'_, L> {
 impl<L: Layout> Rederive<'_, L> {
     /// The layer results to write, one for each permanent, in battlefield order.
     #[inline]
-    pub fn results(&mut self) -> &mut [Derived] {
+    pub fn results(&mut self) -> &mut [Derived<L>] {
         let len = self.0.battlefield.len();
         &mut self.0.derived.as_mut_slice()[..len]
     }

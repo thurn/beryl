@@ -23,15 +23,17 @@ use std::collections::VecDeque;
 
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
-use crate::ids::{CardIx, Seat};
+use crate::ids::{CardId, LargeCardIx, Seat};
 use crate::layout::Layout;
 use crate::state::{ObjectFlags, State, TurnStep, Zone, ZoneKey};
 
 /// The outcome of one random event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Random {
-    /// A card no player knew became known: `card` is what `owner`'s slot holds.
-    Reveal { owner: Seat, card: CardIx },
+    /// A card no player knew became known: `card` is what `owner`'s slot holds, as a game
+    /// index of the widest numbering, so a record reads the same whatever layout the game is
+    /// in ([`CardId::wide`]).
+    Reveal { owner: Seat, card: LargeCardIx },
     /// `player` flipped a coin and won the flip, or lost it.
     Flip { player: Seat, won: bool },
 }
@@ -63,7 +65,7 @@ pub struct Chance {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Recorded {
-    reveals: VecDeque<(Seat, CardIx)>,
+    reveals: VecDeque<(Seat, LargeCardIx)>,
     flips: VecDeque<(Seat, bool)>,
 }
 
@@ -161,7 +163,7 @@ fn settle_but<L: Layout>(
     if let Some(r) = &mut chance.replaying {
         let happened = Random::Reveal {
             owner: o.owner,
-            card: o.card,
+            card: o.card.wide(),
         };
         match r.reveals.pop_front() {
             None => chance.mismatch(s, None, happened),
@@ -169,13 +171,16 @@ fn settle_but<L: Layout>(
                 let recorded = Some(Random::Reveal { owner, card });
                 if owner != o.owner {
                     chance.mismatch(s, recorded, happened);
-                } else if card != o.card {
-                    match partner(s, slot, card, settled | sink.revealed) {
-                        Some(p) => {
-                            s.object_mut(p).card = o.card;
-                            s.object_mut(slot).card = card;
-                        }
-                        None => chance.mismatch(s, recorded, happened),
+                } else if card != o.card.wide() {
+                    // A card the layout's index cannot name is in no slot to trade with.
+                    let traded = card.to::<L::Card>().and_then(|card| {
+                        let p = partner(s, slot, card, settled | sink.revealed)?;
+                        s.object_mut(p).card = o.card;
+                        s.object_mut(slot).card = card;
+                        Some(())
+                    });
+                    if traded.is_none() {
+                        chance.mismatch(s, recorded, happened);
                     }
                 }
             }
@@ -183,7 +188,7 @@ fn settle_but<L: Layout>(
     }
     chance.happened.push(Random::Reveal {
         owner: o.owner,
-        card: s.object(slot).card,
+        card: s.object(slot).card.wide(),
     });
 }
 
@@ -206,7 +211,7 @@ pub fn adopt_unknown<L: Layout>(s: &mut State<L>, run: &State<L>) {
 fn partner<L: Layout>(
     s: &State<L>,
     slot: L::Slot,
-    card: CardIx,
+    card: L::Card,
     settled: Bitboard<L::Slot>,
 ) -> Option<L::Slot> {
     let o = s.object(slot);

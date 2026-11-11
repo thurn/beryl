@@ -78,9 +78,8 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
             f => return Err(format!("no face {f}")),
         };
         let slot = if m.token {
-            let card = (0..t.len())
-                .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
-                .find(|&card| t.def(card).name == m.card)
+            let card: CardIx = t
+                .index_named(&m.card)
                 .ok_or_else(|| format!("no card makes a {}", m.card))?;
             let token = s.board().place_token(owner, card, face, m.one_one);
             token.map_err(full)?
