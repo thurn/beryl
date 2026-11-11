@@ -7,11 +7,16 @@
 
 use beryl_engine::card::{AbilityKind, CastingOption, ManaColor, ObjectAbility, Types};
 use beryl_engine::state::ObjectFlags;
-use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, State, TurnStep, Zone};
+use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::Counter;
 use crate::perturb;
+
+mod kind;
+
+use kind::KindFile;
+pub use kind::{Kind, KindBeforeV10};
 
 /// One answer in the choice log: what it does, and where it stood among the candidates.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,6 +38,15 @@ pub struct Described {
     pub turn: u16,
     pub step: StepName,
     pub kind: Kind,
+    /// The kind a file before version 10 gave it, where that format had a kind of its own for
+    /// the question ([`KindBeforeV10`]). Replay matches an answer by `kind`; this says which
+    /// question an old answer was to where replaying an old file turns on it.
+    #[serde(
+        default,
+        rename = "kindBeforeV10",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub before_v10: Option<KindBeforeV10>,
     pub act: Act,
     /// Where the candidate taken stood among those that do alike, in the order of the
     /// battlefield or its graveyard, since version 6: two permanents alike to one answer can
@@ -52,7 +66,13 @@ enum ChosenFile {
         player: u8,
         turn: u16,
         step: StepName,
-        kind: Kind,
+        kind: KindFile,
+        #[serde(
+            default,
+            rename = "kindBeforeV10",
+            skip_serializing_if = "Option::is_none"
+        )]
+        kind_before_v10: Option<KindBeforeV10>,
         act: Act,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         nth: Option<u8>,
@@ -74,6 +94,7 @@ impl From<ChosenFile> for Chosen {
                 turn,
                 step,
                 kind,
+                kind_before_v10,
                 act,
                 nth,
             } => Chosen {
@@ -83,7 +104,8 @@ impl From<ChosenFile> for Chosen {
                     player,
                     turn,
                     step,
-                    kind,
+                    kind: kind.now(),
+                    before_v10: kind_before_v10.or(kind.before_v10()),
                     act,
                     nth,
                 }),
@@ -101,6 +123,7 @@ impl From<Chosen> for ChosenFile {
                 turn,
                 step,
                 kind,
+                before_v10,
                 act,
                 nth,
             }) => ChosenFile::Described {
@@ -109,7 +132,8 @@ impl From<Chosen> for ChosenFile {
                 player,
                 turn,
                 step,
-                kind,
+                kind: KindFile::Now(kind),
+                kind_before_v10: before_v10,
                 act,
                 nth,
             },
@@ -136,6 +160,7 @@ impl Chosen {
                 turn: s.turn().number(),
                 step: s.turn().step().into(),
                 kind: d.kind.into(),
+                before_v10: None,
                 act,
                 nth,
             }),
@@ -239,102 +264,6 @@ fn in_order<L: Layout>(
 pub fn when<L: Layout>(s: &State<L>) -> (u16, StepName) {
     let turn = s.turn();
     (turn.number(), turn.step().into())
-}
-
-/// What is being decided: [`DecisionKind`], under names a save keeps.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Kind {
-    Priority,
-    PlayOrDraw,
-    KeepOrMulligan,
-    PutOnBottom,
-    Discard,
-    LegendRule,
-    TriggerOrder,
-    PayLife,
-    Attacker,
-    AttackTarget,
-    Blocker,
-    BlockTarget,
-    DamageDivision,
-    X,
-    TargetCount,
-    Target,
-    PaymentPlan,
-    ManaPayment,
-    CastOffer,
-    YesNo,
-    ChooseObject,
-    Crew,
-    ChooseUpTo,
-    Waterbend,
-    ExileCost,
-}
-
-impl Kind {
-    /// Every kind, in order. A new kind goes here as well as in the match below, which the
-    /// compiler holds to every [`DecisionKind`].
-    pub const ALL: [Kind; 25] = [
-        Kind::Priority,
-        Kind::PlayOrDraw,
-        Kind::KeepOrMulligan,
-        Kind::PutOnBottom,
-        Kind::Discard,
-        Kind::LegendRule,
-        Kind::TriggerOrder,
-        Kind::PayLife,
-        Kind::Attacker,
-        Kind::AttackTarget,
-        Kind::Blocker,
-        Kind::BlockTarget,
-        Kind::DamageDivision,
-        Kind::X,
-        Kind::TargetCount,
-        Kind::Target,
-        Kind::PaymentPlan,
-        Kind::ManaPayment,
-        Kind::CastOffer,
-        Kind::YesNo,
-        Kind::ChooseObject,
-        Kind::Crew,
-        Kind::ChooseUpTo,
-        Kind::Waterbend,
-        Kind::ExileCost,
-    ];
-}
-
-impl From<DecisionKind> for Kind {
-    fn from(kind: DecisionKind) -> Kind {
-        // Exhaustive, so a new kind of decision can't go unnamed.
-        match kind {
-            DecisionKind::Priority => Kind::Priority,
-            DecisionKind::PlayOrDraw => Kind::PlayOrDraw,
-            DecisionKind::KeepOrMulligan => Kind::KeepOrMulligan,
-            DecisionKind::PutOnBottom => Kind::PutOnBottom,
-            DecisionKind::Discard => Kind::Discard,
-            DecisionKind::LegendRule => Kind::LegendRule,
-            DecisionKind::TriggerOrder => Kind::TriggerOrder,
-            DecisionKind::PayLife => Kind::PayLife,
-            DecisionKind::Attacker => Kind::Attacker,
-            DecisionKind::AttackTarget => Kind::AttackTarget,
-            DecisionKind::Blocker => Kind::Blocker,
-            DecisionKind::BlockTarget => Kind::BlockTarget,
-            DecisionKind::DamageDivision => Kind::DamageDivision,
-            DecisionKind::X => Kind::X,
-            DecisionKind::TargetCount => Kind::TargetCount,
-            DecisionKind::Target => Kind::Target,
-            DecisionKind::PaymentPlan => Kind::PaymentPlan,
-            DecisionKind::ManaPayment => Kind::ManaPayment,
-            DecisionKind::CastOffer => Kind::CastOffer,
-            DecisionKind::YesNo => Kind::YesNo,
-            DecisionKind::ChooseObject => Kind::ChooseObject,
-            DecisionKind::Crew => Kind::Crew,
-            DecisionKind::ChooseUpTo => Kind::ChooseUpTo,
-            DecisionKind::Waterbend => Kind::Waterbend,
-            DecisionKind::ExileCost => Kind::ExileCost,
-        }
-    }
 }
 
 /// A step of the turn ([`TurnStep`]), under names a save keeps, in turn order.

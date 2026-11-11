@@ -1,7 +1,7 @@
 //! State-based actions, shuffles, filters and mana abilities on hand-built positions.
 
 use super::{DUAL, LANDS, MIXED, begin, decide, table};
-use crate::card::{ManaColor, Types};
+use crate::card::{ManaColor, Purpose, Types};
 use crate::effect::EffectCtx;
 use crate::event::Sink;
 use crate::filter::{Evaluate, Filter, Whose};
@@ -46,8 +46,8 @@ fn the_legend_rule_asks_which_to_keep_when_the_two_differ() {
     s.board().set_tapped(b, true);
     let d = decide(&t, &mut s);
     assert_eq!(
-        (d.kind, d.player, d.len()),
-        (DecisionKind::LegendRule, p, 2)
+        (d.kind, d.prompt.purpose, d.player, d.len()),
+        (DecisionKind::ChooseObject, Purpose::LegendRule, p, 2)
     );
     let keep_b = (0..2)
         .find(|&i| d.candidates.object(Choice(i)) == Some(b))
@@ -99,8 +99,8 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
     // The one put into the graveyard goes to its owner's: a different game.
     let d = decide(&t, &mut s);
     assert_eq!(
-        (d.kind, d.player, d.len()),
-        (DecisionKind::LegendRule, p, 2)
+        (d.kind, d.prompt.purpose, d.player, d.len()),
+        (DecisionKind::ChooseObject, Purpose::LegendRule, p, 2)
     );
 }
 

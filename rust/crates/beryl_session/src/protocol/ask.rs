@@ -79,6 +79,9 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
         },
         (Purpose::PayLife, ..) => AskView::PayLife { life: count },
         (Purpose::Cleanup, ..) => AskView::Cleanup { count: most },
+        (Purpose::PutOnBottom, ..) => AskView::PutOnBottom,
+        (Purpose::LegendRule, ..) => AskView::LegendRule,
+        (Purpose::Discard, ..) => AskView::Discard,
         _ => AskView::Plain,
     }
 }

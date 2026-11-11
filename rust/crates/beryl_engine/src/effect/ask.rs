@@ -219,7 +219,7 @@ impl<L: Layout> EffectCtx<'_, L> {
             return Ok(None);
         }
         let prompt = Prompt::new(Purpose::Discard).most(left);
-        let kind = DecisionKind::Discard;
+        let kind = DecisionKind::ChooseObject;
         let slot = self.ask_object(player, kind, cards, prompt, Bitboard::EMPTY)?;
         self.discard(self.state.object_ref(slot));
         Ok(Some(self.state.object_ref(slot)))

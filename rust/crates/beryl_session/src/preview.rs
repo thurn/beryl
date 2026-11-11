@@ -31,7 +31,7 @@ pub fn add_previews<L: Layout>(
     d: &Decision<L>,
 ) {
     if let Status::Deciding { decision } = &mut view.status {
-        if d.kind == DecisionKind::Waterbend {
+        if d.prompt.purpose == Purpose::Waterbend {
             decision.waterbend = waterbend(s, t, d, &[]).map(Box::new);
         }
         for (((c, p), b), targets) in decision
@@ -238,10 +238,7 @@ fn unless_paid<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>, i: usize
     apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
     while let Step::Decide(paying) = next(&mut copy, t, &mut scratch, &mut Replay)
         && paying.player == d.player
-        && matches!(
-            paying.kind,
-            DecisionKind::PaymentPlan | DecisionKind::ManaPayment
-        )
+        && paying.prompt.purpose == Purpose::Mana
     {
         apply(&mut copy, t, &mut scratch, &mut Replay, Choice(0));
     }
@@ -568,7 +565,7 @@ fn waterbend_plan<L: Layout>(
     let mut manual_benders = 0;
     loop {
         let index = match decision.kind {
-            DecisionKind::Waterbend => {
+            DecisionKind::ManaPayment if decision.prompt.purpose == Purpose::Waterbend => {
                 let activation = activations.get(mana.len());
                 let desired = selected.get(manual_benders);
                 let wanted = desired.and_then(|&wanted| {
@@ -707,7 +704,7 @@ mod tests {
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
             panic!("waterbend");
         };
-        assert_eq!(d.kind, DecisionKind::Waterbend);
+        assert_eq!(d.prompt.purpose, Purpose::Waterbend);
         let benders: Vec<_> = s
             .battlefield()
             .iter()

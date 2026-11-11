@@ -14,17 +14,20 @@ function paymentPlan(preview: WaterbendPreview): Intent[] {
   const { mana, benders, plan } = preview;
   return [
     ...mana.map(({ slot, color }): Intent => ({
-      kind: "waterbend",
+      kind: "manaPayment",
+      ask: "waterbend",
       wants: (o) => o.kind === "mana" && o.slot === slot && o.color === color,
       continuation: true,
     })),
     ...benders.map((slot): Intent => ({
-      kind: "waterbend",
+      kind: "manaPayment",
+      ask: "waterbend",
       wants: (o) => o.kind === "object" && o.slot === slot,
       continuation: true,
     })),
     {
-      kind: "waterbend",
+      kind: "manaPayment",
+      ask: "waterbend",
       wants: (o) => o.kind === "done",
       optional: true,
       continuation: true,
@@ -47,7 +50,7 @@ export function useWaterbend(
   decision: DecisionView | undefined,
   onPay: (index: CandidateIndex, then: Intent[]) => void,
 ) {
-  const active = decision?.kind === "waterbend" ? decision : undefined;
+  const active = decision?.ask.kind === "waterbend" ? decision : undefined;
   const key = active ? `${active.id.session}:${active.id.seq}` : undefined;
   const revision = useRef(0);
   const [edit, setEdit] = useState<{

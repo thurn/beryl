@@ -461,7 +461,7 @@ export function Board({
     decision !== undefined &&
     decision.kind !== "priority" &&
     !isCombat(decision.kind) &&
-    !isOpening(decision.kind);
+    !isOpening(decision);
   const castingNow = deciding ? casting : undefined;
   const pickedAction = pickedMode?.action;
   const chosenAbility =

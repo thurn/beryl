@@ -38,10 +38,9 @@ macro_rules! mirror {
 mirror! {
     /// What is being decided ([`DecisionKind`]).
     Kind from DecisionKind {
-        Priority, PlayOrDraw, KeepOrMulligan, PutOnBottom, Discard, LegendRule, TriggerOrder,
-        PayLife, Attacker, AttackTarget, Blocker, BlockTarget, DamageDivision, X, TargetCount,
-        Target, PaymentPlan, ManaPayment, CastOffer, YesNo, ChooseObject, Crew, ChooseUpTo, Waterbend,
-        ExileCost,
+        Priority, PlayOrDraw, KeepOrMulligan, TriggerOrder, Attacker, AttackTarget, Blocker,
+        BlockTarget, DamageDivision, X, TargetCount, Target, PaymentPlan, ManaPayment, CastOffer,
+        YesNo, ChooseObject, ChooseUpTo,
     }
 }
 

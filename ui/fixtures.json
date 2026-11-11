@@ -6,7 +6,8 @@
       "seed": 34,
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
-      "until": "first putOnBottom decision for seat 0"
+      "until": "first chooseObject decision for seat 0",
+      "where": ["ask putOnBottom"]
     },
     {
       "name": "opening-opponent-play",
@@ -162,7 +163,8 @@
     {
       "name": "cast-exile-choice",
       "board": "cast-exile-choice",
-      "until": "first exileCost decision for seat 0",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["ask exileCards"],
       "after": 1
     },
     {
@@ -174,8 +176,8 @@
     {
       "name": "cast-evoke",
       "board": "cast-evoke",
-      "until": "first exileCost decision for seat 0",
-      "where": ["casting Subtlety"]
+      "until": "first chooseObject decision for seat 0",
+      "where": ["casting Subtlety", "ask exileCards"]
     },
     {
       "name": "teferi-timing",
@@ -388,7 +390,8 @@
     {
       "name": "pay-life",
       "board": "pay-life",
-      "until": "first payLife decision for seat 0"
+      "until": "first yesNo decision for seat 0",
+      "where": ["ask payLife"]
     },
     {
       "name": "namesake-target",
@@ -429,8 +432,8 @@
     {
       "name": "choice-loot",
       "board": "choice-loot",
-      "until": "first discard decision for seat 0",
-      "where": ["resolving Jace, Vryn's Prodigy"]
+      "until": "first chooseObject decision for seat 0",
+      "where": ["resolving Jace, Vryn's Prodigy", "ask discard"]
     },
     {
       "name": "choice-untap",
@@ -464,14 +467,14 @@
     {
       "name": "choice-thirst",
       "board": "choice-thirst",
-      "until": "first discard decision for seat 0",
-      "where": ["resolving Thirst for Discovery"]
+      "until": "first chooseObject decision for seat 0",
+      "where": ["resolving Thirst for Discovery", "ask discard"]
     },
     {
       "name": "choice-cleanup",
       "board": "choice-cleanup",
-      "until": "first discard decision for seat 0",
-      "where": ["step cleanup"]
+      "until": "first chooseObject decision for seat 0",
+      "where": ["step cleanup", "ask cleanup"]
     },
     {
       "name": "attack-token",
@@ -482,7 +485,8 @@
     {
       "name": "crew",
       "board": "crew",
-      "until": "first crew decision for seat 0",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["ask crew"],
       "after": 1
     },
     {
@@ -493,7 +497,8 @@
     {
       "name": "waterbend-tap",
       "board": "waterbend-tap",
-      "until": "first waterbend decision for seat 0"
+      "until": "first manaPayment decision for seat 0",
+      "where": ["ask waterbend"]
     }
   ]
 }

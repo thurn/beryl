@@ -52,7 +52,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use beryl_engine::card::FaceIx;
+use beryl_engine::card::{FaceIx, Purpose};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Bitboard, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
@@ -1199,7 +1199,7 @@ impl<L: Layout> Tree<L> {
                     let (child, Choice(i)) = self.select(node, &pair.map(|i| keys[i]), d.player);
                     (child, Choice(pair[usize::from(i)] as u16))
                 }
-                _ if !at_root && self.family.options.mid && answered_by_policy(d.kind) => {
+                _ if !at_root && self.family.options.mid && answered_by_policy(&d) => {
                     let c = policy.choose(t, Observation::new(&s, d.player), &d);
                     (self.only(node, keys[usize::from(c.0)], d.player), c)
                 }
@@ -1373,9 +1373,10 @@ pub fn guarded<L: Layout>(
 /// bookkeeping choices like them, are: as tree nodes, each child tried once in random order
 /// and averaged, they price the option before them as if they were answered at random.
 /// Turns, priority and combat stay the tree's: they are the choices it searches for. Every
-/// kind is named, so a new one must be decided here.
-fn answered_by_policy(kind: DecisionKind) -> bool {
-    match kind {
+/// kind is named, so a new one must be decided here. The card a mulligan puts on the bottom
+/// stays the tree's too, with the keep it follows.
+fn answered_by_policy<L: Layout>(d: &Decision<L>) -> bool {
+    match d.kind {
         DecisionKind::Target
         | DecisionKind::TargetCount
         | DecisionKind::X
@@ -1383,21 +1384,15 @@ fn answered_by_policy(kind: DecisionKind) -> bool {
         | DecisionKind::ManaPayment
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
-        | DecisionKind::ChooseObject
         | DecisionKind::ChooseUpTo
-        | DecisionKind::ExileCost
-        | DecisionKind::Crew
-        | DecisionKind::Waterbend
-        // Discarding to hand size, the order of one's own triggers, the legend to keep and a
-        // land's life payment are as wide or as minor, and greedy answers them sensibly.
-        | DecisionKind::Discard
-        | DecisionKind::TriggerOrder
-        | DecisionKind::LegendRule
-        | DecisionKind::PayLife => true,
+        // The order of one's own triggers is as wide or as minor, as are discarding to hand
+        // size, the legend to keep and a land's life payment among the kinds above and
+        // below, and greedy answers them sensibly.
+        | DecisionKind::TriggerOrder => true,
+        DecisionKind::ChooseObject => d.prompt.purpose != Purpose::PutOnBottom,
         DecisionKind::Priority
         | DecisionKind::PlayOrDraw
         | DecisionKind::KeepOrMulligan
-        | DecisionKind::PutOnBottom
         | DecisionKind::Attacker
         | DecisionKind::AttackTarget
         | DecisionKind::Blocker
@@ -1808,7 +1803,7 @@ mod tests {
                 smart(&mut s);
             }
             if let Step::Decide(below) = next(&mut s, t, &mut x, &mut Replay) {
-                if n.first != NONE && answered_by_policy(below.kind) {
+                if n.first != NONE && answered_by_policy(&below) {
                     let mut children = 0;
                     let mut g = n.first;
                     while g != NONE {

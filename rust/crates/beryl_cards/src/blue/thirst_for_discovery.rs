@@ -74,7 +74,7 @@ const fn count(zone: Zone, card: Option<&'static str>, count: u8) -> Action {
 }
 
 const fn discard(card: &'static str) -> Action {
-    Action::choose(P0, DecisionKind::Discard, card)
+    Action::choose(P0, DecisionKind::ChooseObject, card)
 }
 
 const fn yes_no(player: Seat, pick: Pick) -> Action {

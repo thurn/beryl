@@ -2,7 +2,7 @@
 // untap's lands, and a choice of cards from the hand (a discard, a card exiled to pay a cost),
 // for which the hand rises whole into view. Pure functions of the view.
 import { faceEntry } from "../cards";
-import type { Kind, ObjectView, PlayerView } from "../generated/protocol";
+import type { ObjectView, PlayerView } from "../generated/protocol";
 import {
   slotOf,
   twins,
@@ -11,6 +11,9 @@ import {
   type Interactions,
 } from "./decisions";
 import { untapChoice } from "./untapChoice";
+
+/** What a pick of a card from the hand is for: the ask of its `chooseObject` decision. */
+type Ask = NonNullable<Intent["ask"]>;
 
 /** A choice of cards made on the table rather than in an overlay, with the table in view: the
  * cards that can be picked, glowing; how many may be; those picked to begin with; and, for
@@ -41,22 +44,22 @@ export function tablePick(
   if (ask.kind === "discardBasicLand" && decision.kind === "yesNo") {
     return basicLandOrCards(view, objects, ask.count);
   }
-  if (ask.kind === "plain" && decision.kind === "discard") {
+  if (ask.kind === "discard") {
     return handPick(view, objects, "discard", 1, "Discard");
   }
-  if (ask.kind === "cleanup" && decision.kind === "discard") {
+  if (ask.kind === "cleanup") {
     // Down to the hand size, its picks counted on the button.
     return handPick(
       view,
       objects,
-      "discard",
+      "cleanup",
       Math.max(1, ask.count),
       "Discard",
       true,
     );
   }
   if (ask.kind === "exileCards" && ask.zone === "hand") {
-    return handPick(view, objects, "exileCost", 1, "Exile");
+    return handPick(view, objects, "exileCards", 1, "Exile");
   }
   return undefined;
 }
@@ -70,12 +73,13 @@ const handOf = (view: PlayerView) =>
 /** Picks the card in `slot`, or one the engine offers in its place: an interchangeable one
  * (`twins`), of which it offers one (architecture §7.2). */
 function pickOf(
-  kind: Kind,
+  ask: Ask,
   slot: number,
   objects: Map<number, ObjectView>,
 ): Intent {
   return {
-    kind,
+    kind: "chooseObject",
+    ask,
     wants: (o) => o.kind === "object" && o.slot === slot,
     alike: (o) => {
       const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
@@ -94,7 +98,7 @@ function pickOf(
 function handPick(
   view: PlayerView,
   objects: Map<number, ObjectView>,
-  kind: Kind,
+  ask: Ask,
   count: number,
   verb: string,
   counted = count > 1,
@@ -119,7 +123,7 @@ function handPick(
     initial: [],
     ready,
     label: (picked) => (counted ? `${verb} ${picked.size}/${need}` : verb),
-    plan: (picked) => [...picked].map((slot) => pickOf(kind, slot, objects)),
+    plan: (picked) => [...picked].map((slot) => pickOf(ask, slot, objects)),
   };
 }
 

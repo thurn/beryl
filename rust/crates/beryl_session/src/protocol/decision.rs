@@ -160,6 +160,14 @@ pub enum AskView {
     /// A card to discard in the cleanup step, `count` of them still to discard to reach the
     /// maximum hand size.
     Cleanup { count: u8 },
+    /// A `chooseObject` for a card from the viewer's hand to put on the bottom of their
+    /// library after a mulligan. Like the two below, here until the prompt itself is on the
+    /// wire: the decision's kind said this before it became `chooseObject`.
+    PutOnBottom,
+    /// A `chooseObject` for the legendary permanent to keep.
+    LegendRule,
+    /// A `chooseObject` for a card to discard as a spell or ability says.
+    Discard,
 }
 
 /// Where passing priority takes the viewer if the other player passes too ([`NextStop`](beryl_engine::NextStop)).

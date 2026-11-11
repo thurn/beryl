@@ -179,22 +179,24 @@ impl RolloutPolicy {
                     Some(i32::from((c.option() == Some(Opt::Keep)) == keep))
                 })
             }
-            DecisionKind::YesNo | DecisionKind::PayLife => {
-                let yes = d.kind == DecisionKind::YesNo || obs.player(p.me).life() > 10;
+            // A "may" is taken; life for an untapped land is paid only from above 10.
+            DecisionKind::YesNo => {
+                let yes = d.prompt.purpose != Purpose::PayLife || obs.player(p.me).life() > 10;
                 best(d, |c| {
                     Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
                 })
             }
-            DecisionKind::PutOnBottom | DecisionKind::Discard | DecisionKind::ExileCost => {
-                pick.choose(d, |c| c.object().map(|slot| -p.in_hand(slot)))
-            }
+            // A card leaving the player's own hand (a mulligan's, a discard's) is the one least
+            // worth holding; anything else is taken by its value, as the legend to keep. Two
+            // costs are paid with the least: a crew's creatures, an exile cost's cards.
             DecisionKind::ChooseObject => pick.choose(d, |c| {
                 c.object().map(|slot| {
                     let o = obs.object(slot);
-                    if o.zone() == Zone::Hand && o.owner() == p.me {
-                        -p.in_hand(slot)
-                    } else {
-                        p.value(slot)
+                    match d.prompt.purpose {
+                        Purpose::Crew => -p.value(slot),
+                        Purpose::ExileCost => -p.in_hand(slot),
+                        _ if o.zone() == Zone::Hand && o.owner() == p.me => -p.in_hand(slot),
+                        _ => p.value(slot),
                     }
                 })
             }),
@@ -212,9 +214,6 @@ impl RolloutPolicy {
                 Some(slot) => Some(p.value(slot)),
                 None => Some(0),
             }),
-            DecisionKind::LegendRule => pick.choose(d, |c| c.object().map(|slot| p.value(slot))),
-            DecisionKind::Crew => pick.choose(d, |c| c.object().map(|slot| -p.value(slot))),
-            DecisionKind::Waterbend => best(d, |c| Some(i32::from(c.option() == Some(Opt::Done)))),
             DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
                 Some(Opt::Attack(slot)) => p.safe_attack(slot).then(|| 1 + p.value(slot)),
                 _ => Some(0),
@@ -260,6 +259,7 @@ impl RolloutPolicy {
                 Some(Opt::Number(n)) => Some(i32::from(n)),
                 _ => None,
             }),
+            // The first: a cost that offers permanents in place of mana lists mana first.
             DecisionKind::TriggerOrder | DecisionKind::PaymentPlan | DecisionKind::ManaPayment => {
                 Choice(0)
             }
@@ -475,7 +475,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// Keep a hand of two to five lands, and any hand of five cards or fewer, judging the hand
     /// left once a card per mulligan taken goes to the bottom: the least worth keeping, as
-    /// [`DecisionKind::PutOnBottom`] picks them.
+    /// the pick for the bottom ([`Purpose::PutOnBottom`]) takes them.
     pub(crate) fn keep(&self) -> bool {
         let mut kept = self.obs.zone(ZoneKey::Of(self.me, Zone::Hand));
         for _ in 0..self.obs.player(self.me).mulligans() {

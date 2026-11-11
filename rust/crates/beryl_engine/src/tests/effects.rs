@@ -246,8 +246,8 @@ fn a_choice_in_the_data_pauses_until_it_is_answered() {
     let them = p.opponent();
     let question = resolve(&t, &mut { s }, &mut x, source, &DISCARD, &[], &[]).unwrap();
     assert_eq!(
-        (question.player, question.kind),
-        (them, DecisionKind::Discard)
+        (question.player, question.kind, question.prompt.purpose),
+        (them, DecisionKind::ChooseObject, Purpose::Discard)
     );
     let mut discarded = s;
     assert!(resolve(&t, &mut discarded, &mut x, source, &DISCARD, &[], &[0]).is_none());

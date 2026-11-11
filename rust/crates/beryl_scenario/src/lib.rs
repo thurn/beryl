@@ -16,7 +16,7 @@ mod setup;
 #[cfg(test)]
 mod tests;
 
-use beryl_engine::card::{Castings, FaceIx, ManaColor, ObjectAbility};
+use beryl_engine::card::{Castings, FaceIx, ManaColor, ObjectAbility, Purpose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
@@ -595,6 +595,11 @@ pub struct Position {
     pub decider: Option<Seat>,
     #[serde(serialize_with = "optional_variant")]
     pub kind: Option<DecisionKind>,
+    /// What the open decision's prompt is for, by its name ([`Purpose::name`]): a kind says
+    /// only the form of the answer, and an oracle asks a cost's picks, say, unlike an
+    /// effect's.
+    #[serde(serialize_with = "optional_purpose")]
+    pub purpose: Option<Purpose>,
     /// Bottom first.
     pub stack: Vec<StackItem>,
     /// The coin flips since the previous action began, in order, so that an oracle can
@@ -619,13 +624,15 @@ pub struct Position {
     pub creatures: [u8; 2],
 }
 
-/// A question with one answer, as the answer a scenario would script, and the turn and step
-/// it came in.
+/// A question with one answer, as the answer a scenario would script, what its prompt was
+/// for, and the turn and step it came in.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Forced {
     pub turn: u16,
     #[serde(serialize_with = "variant")]
     pub step: TurnStep,
+    #[serde(serialize_with = "purpose")]
+    pub purpose: Purpose,
     #[serde(flatten)]
     pub answer: Action,
 }
@@ -653,6 +660,19 @@ pub struct StackItem {
 fn optional_seat<S: Serializer>(player: &Option<Seat>, s: S) -> Result<S::Ok, S::Error> {
     match player {
         Some(p) => s.serialize_some(&p.get()),
+        None => s.serialize_none(),
+    }
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn purpose<S: Serializer>(purpose: &Purpose, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(purpose.name())
+}
+
+#[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)] // as `serialize_with` calls
+fn optional_purpose<S: Serializer>(purpose: &Option<Purpose>, s: S) -> Result<S::Ok, S::Error> {
+    match purpose {
+        Some(p) => s.serialize_some(p.name()),
         None => s.serialize_none(),
     }
 }

@@ -1083,7 +1083,10 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
             .unwrap();
         apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
         let d = decide_with(&t, &mut s, &mut x);
-        assert_eq!((d.kind, d.player), (DecisionKind::PayLife, p));
+        assert_eq!(
+            (d.kind, d.prompt.purpose, d.player),
+            (DecisionKind::YesNo, Purpose::PayLife, p)
+        );
         let answer = if pay { Opt::Yes } else { Opt::No };
         let c = (0..2)
             .find(|&i| d.candidates.option(Choice(i)) == Some(answer))

@@ -137,10 +137,15 @@ export function choiceOf(view: PlayerView): Choice | undefined {
     case "untap":
     case "discardBasicLand":
     case "cleanup":
+    case "discard":
     case "crew":
     case "waterbend":
     case "unlessPays":
+    // The opening screen asks for a mulligan's card for the bottom.
+    case "putOnBottom":
       return undefined;
+    case "legendRule":
+      return small(at) ? undefined : legendRule(at);
     case "payLife":
       return payLife(at, ask);
     case "manifestDread":
@@ -165,8 +170,6 @@ function plain(at: Situation): Choice | undefined {
       return small(at) ? undefined : chooseObject(at);
     case "yesNo":
       return yesNo(at);
-    case "legendRule":
-      return small(at) ? undefined : legendRule(at);
     case "castOffer":
       return castOffer(at);
     case "x":
@@ -307,11 +310,13 @@ class Situation {
       .filter((s) => this.name(s) !== undefined);
   }
 
-  /** Picks the card in `slot`, or one interchangeable with it. */
-  pickCard(kind: Kind, slot: number): Intent {
+  /** Picks the card in `slot`, or one interchangeable with it, at a decision of `kind`
+   * that asks `ask`, if it says. */
+  pickCard(kind: Kind, slot: number, ask?: Intent["ask"]): Intent {
     const name = this.name(slot);
     return {
       kind,
+      ask,
       wants: (o) => o.kind === "object" && o.slot === slot,
       alike: (o) =>
         o.kind === "object" && name !== undefined && this.name(o.slot) === name,
@@ -661,7 +666,7 @@ function graveyardExile(at: Situation, count: number): Pick {
         // The lowest card of that name is the one the engine offers and exiles.
         const first = window.findIndex((s) => (at.name(s) ?? "") === name);
         if (names.size > 1)
-          picks.push(at.pickCard("exileCost", window[first]!));
+          picks.push(at.pickCard("chooseObject", window[first]!, "exileCards"));
         need.set(name, need.get(name)! - 1);
         left.splice(from + first, 1);
         from += first;
@@ -688,7 +693,9 @@ function legendRule(at: Situation): Pick {
     max: 1,
     confirm: () => "Keep",
     plan: ([slot]) =>
-      slot === undefined ? [] : [at.pickCard("legendRule", slot)],
+      slot === undefined
+        ? []
+        : [at.pickCard("chooseObject", slot, "legendRule")],
   };
 }
 
@@ -698,8 +705,14 @@ function legendRule(at: Situation): Pick {
 function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
   const name = at.source?.name;
   const land = name ? landFace(name) : undefined;
-  const pay = { label: `Pay ${life} Life`, plan: [yes("payLife")] };
-  const tapped = { label: "Tapped", plan: [no("payLife")] };
+  const pay = {
+    label: `Pay ${life} Life`,
+    plan: [{ ...yes("yesNo"), ask: "payLife" as const }],
+  };
+  const tapped = {
+    label: "Tapped",
+    plan: [{ ...no("yesNo"), ask: "payLife" as const }],
+  };
   return {
     kind: "ask",
     key: at.key,

@@ -2,6 +2,7 @@
 //! kernel's data (`beryl_kernel::profile`), stops a player in the game as it stands.
 //! `crate::profile` re-exports these beside the kernel's types.
 
+use crate::card::Purpose;
 use crate::combat;
 use crate::decision::{Decision, DecisionKind};
 use crate::ids::Seat;
@@ -25,7 +26,7 @@ pub(crate) fn stops_for<L: Layout>(profile: Profile, s: &State<L>, player: Seat)
 /// A triggered ability's lone target stays silent, as nothing can take it back
 /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
 pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<L>) -> bool {
-    (d.kind == DecisionKind::Waterbend && profile.taps_mana == Some(d.player))
+    (d.prompt.purpose == Purpose::Waterbend && profile.taps_mana == Some(d.player))
         || d.kind == DecisionKind::Target
             && profile.asks_targets == Some(d.player)
             && matches!(s.pending(), Pending::Casting(c) if !c.triggered)

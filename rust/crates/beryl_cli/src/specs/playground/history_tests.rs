@@ -233,7 +233,7 @@ fn costs_tokens_returned_spells_and_coin_flips_are_reachable() {
     // by-0dg: seven graveyard cards expose the additional-cost picker during the cast.
     exercise("Abhorrent Oculus", "six of seven", false, |v| {
         matches!(&v.status, Status::Deciding { decision }
-        if decision.kind == Kind::ExileCost && decision.candidates.len() > 1)
+        if matches!(decision.ask, AskView::ExileCards { .. }) && decision.candidates.len() > 1)
     });
     // by-kgc: the source of two tokens is a resolving spell, unlike Staff's permanent.
     exercise("Get Lost", "on a creature", false, |v| {

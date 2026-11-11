@@ -174,11 +174,13 @@ impl Runner {
             match step {
                 // A question with one answer, which the exact profile answers silently.
                 Step::Decide(d) if d.len() == 1 && d.kind != DecisionKind::Priority => {
-                    if let Some(pick) = self.forced_pick(&d) {
+                    // The only answer, where the scenario vocabulary can name it.
+                    if let Some(pick) = self.pick_for(&d, Choice(0)) {
                         let turn = self.s.turn();
                         self.forced.push(Forced {
                             turn: turn.number(),
                             step: turn.step(),
+                            purpose: d.prompt.purpose,
                             answer: Action::answer(d.player, d.kind, pick),
                         });
                     }
@@ -337,9 +339,9 @@ impl Runner {
                 controller: e.controller,
             })
             .collect();
-        let (decider, kind) = match *step {
-            Step::Decide(d) => (Some(d.player), Some(d.kind)),
-            Step::Over(_) => (None, None),
+        let (decider, kind, purpose) = match *step {
+            Step::Decide(d) => (Some(d.player), Some(d.kind), Some(d.prompt.purpose)),
+            Step::Over(_) => (None, None, None),
         };
         let flashback = self
             .s
@@ -373,6 +375,7 @@ impl Runner {
             active: turn.active(),
             decider,
             kind,
+            purpose,
             stack,
             flips,
             taps,
@@ -385,11 +388,6 @@ impl Runner {
 
     fn named(&self, o: Opt) -> Option<Slot> {
         o.object_named(&self.s)
-    }
-
-    /// The only answer to `d` as a pick, where the scenario vocabulary can name it.
-    fn forced_pick(&self, d: &Decision) -> Option<Pick> {
-        self.pick_for(d, Choice(0))
     }
 
     /// The candidate `c` of `d` as a pick, where the scenario vocabulary can name it. The pick
@@ -962,9 +960,10 @@ pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> Stri
         .collect();
     let turn = s.turn();
     format!(
-        "player {} {:?} in turn {} {:?}, among [{}]",
+        "player {} {:?} ({}) in turn {} {:?}, among [{}]",
         d.player,
         d.kind,
+        d.prompt.purpose.name(),
         turn.number(),
         turn.step(),
         candidates.join(", ")

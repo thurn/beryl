@@ -193,7 +193,7 @@ pub const SCENARIOS: &[Scenario] = &[
             // Four in the graveyard after the first loot: no transformation.
             Action::activate(P0, JACE, 0),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, PLAINS),
+            Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
             Action::assert(Assertion::Creature {
                 player: P0,
                 card: JACE,

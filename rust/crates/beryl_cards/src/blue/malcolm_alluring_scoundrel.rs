@@ -157,7 +157,7 @@ pub const SCENARIOS: &[Scenario] = &[
             // Three Islands and the Spellbinder in hand.
             Action::Answer {
                 player: P0,
-                kind: DecisionKind::Discard,
+                kind: DecisionKind::ChooseObject,
                 pick: Pick::Card { card: SPELLBINDER },
             },
             Action::Answer {

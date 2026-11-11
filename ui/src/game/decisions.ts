@@ -1,6 +1,7 @@
 // What the human can do on the board at their open decision: which cards they can act on and
 // how, which they can pick, and what the prompt asks. Pure functions of the decision.
 import type {
+  AskView,
   Candidate,
   CandidateIndex,
   DecisionView,
@@ -55,6 +56,11 @@ export interface Interactions {
  * when it may block only one). */
 export interface Intent {
   kind: Kind;
+  /** The question the decision must ask (`AskView`'s kind), for a pick whose kind other
+   * prompts are asked in too: a cost's or a rule's pick is a `chooseObject`, a `yesNo` or a
+   * `manaPayment` like an effect's, and until the prompt itself is on the wire its ask
+   * tells them apart. */
+  ask?: AskView["kind"];
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
   picked?(option: Candidate): void;
@@ -65,12 +71,17 @@ export interface Intent {
   continuation?: boolean;
 }
 
+/** Whether `intent` is for `decision`: of its kind and, where it says, its ask. */
+const answers = (decision: DecisionView, intent: Intent) =>
+  decision.kind === intent.kind &&
+  (intent.ask === undefined || decision.ask.kind === intent.ask);
+
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
 export function intended(
   decision: DecisionView,
   intent: Intent,
 ): CandidateIndex | undefined {
-  if (decision.kind !== intent.kind) return undefined;
+  if (!answers(decision, intent)) return undefined;
   const options = decision.candidates.map((c) => c.option);
   let index = options.findIndex((o) => intent.wants(o));
   if (index < 0 && intent.alike) {
@@ -86,7 +97,7 @@ export function follow(
   plan: Intent[],
 ): { intent?: Intent; index?: CandidateIndex; rest: Intent[] } {
   let i = 0;
-  while (plan[i]?.optional && plan[i]!.kind !== decision.kind) {
+  while (plan[i]?.optional && !answers(decision, plan[i]!)) {
     plan[i]!.skipped?.();
     i += 1;
   }
@@ -281,8 +292,10 @@ export const isCombat = (kind: Kind) =>
   kind === "damageDivision";
 
 /** The decisions before the first turn, which the opening screen asks over the table. */
-export const isOpening = (kind: Kind) =>
-  kind === "playOrDraw" || kind === "keepOrMulligan" || kind === "putOnBottom";
+export const isOpening = ({ kind, ask }: DecisionView) =>
+  kind === "playOrDraw" ||
+  kind === "keepOrMulligan" ||
+  ask.kind === "putOnBottom";
 
 /** Whether a hand card's candidates include playing or casting it: what dropping it on the
  * battlefield does. */
@@ -292,11 +305,7 @@ export const playActs = (acts: Act[]) =>
 const PROMPTS: Partial<Record<Kind, string>> = {
   playOrDraw: "Play or draw?",
   keepOrMulligan: "Keep or mulligan?",
-  putOnBottom: "Put a card on the bottom of your library",
-  discard: "Discard a card",
-  legendRule: "Choose the legend to keep",
   triggerOrder: "Put a trigger on the stack",
-  payLife: "Pay life?",
   attacker: "Declare attackers",
   attackTarget: "Choose attack target",
   blocker: "Declare blockers",
@@ -310,10 +319,19 @@ const PROMPTS: Partial<Record<Kind, string>> = {
   castOffer: "Cast it?",
   yesNo: "Choose",
   chooseObject: "Choose a card",
-  crew: "Crew",
   chooseUpTo: "Choose cards",
+};
+
+/** The prompts of the questions a general kind asks for one rule or one cost, by their ask. */
+const ASKED: Partial<Record<AskView["kind"], string>> = {
+  putOnBottom: "Put a card on the bottom of your library",
+  discard: "Discard a card",
+  cleanup: "Discard a card",
+  legendRule: "Choose the legend to keep",
+  payLife: "Pay life?",
+  crew: "Crew",
   waterbend: "Waterbend",
-  exileCost: "Exile a card",
+  exileCards: "Exile a card",
 };
 
 /** A move to a zone, as a "you may" asks it. */
@@ -356,7 +374,7 @@ export function prompt(
     case "mayMove":
       return mayMoveQuestion(ask.to, from);
   }
-  const asked = PROMPTS[decision.kind] ?? "Choose";
+  const asked = ASKED[ask.kind] ?? PROMPTS[decision.kind] ?? "Choose";
   return source && decision.kind === "target"
     ? `${asked} for ${source}`
     : asked;

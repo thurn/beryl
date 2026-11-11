@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use beryl_engine::card::Purpose;
 use beryl_engine::chance::{Chance, Mismatch, Random};
 use beryl_engine::event::{Event, LossCause, Recipient};
 use beryl_engine::layout::Queue;
@@ -32,7 +33,7 @@ use crate::protocol::{
     StopsSetting, player_view,
 };
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
-use crate::save::{self, Chosen};
+use crate::save::{self, Chosen, KindBeforeV10};
 use crate::{HandOver, Prepared, SessionError, StartGame};
 use crate::{journal, perturb, preview};
 
@@ -957,7 +958,7 @@ impl Game {
                 && self.unpaid_cast()
                 && steps.clone().all(|(entry, _)| {
                     matches!(entry, Entry::Choice(c)
-                    if c.what.as_ref().is_some_and(|w| w.kind == save::Kind::ExileCost))
+                    if c.what.as_ref().is_some_and(|w| w.before_v10 == Some(KindBeforeV10::ExileCost)))
                 })
             {
                 break;
@@ -1002,7 +1003,7 @@ impl Game {
         let At::Human(id, open @ Open::Decision(d)) = &self.at else {
             return false;
         };
-        if d.kind != DecisionKind::Waterbend {
+        if d.prompt.purpose != Purpose::Waterbend {
             return false;
         }
         let lone_bender = (file.legacy_waterbend || file.format_version < 8)
@@ -1014,7 +1015,7 @@ impl Game {
             return false;
         }
         if matches!(next, Some(Entry::Choice(c)) if c.what.as_ref()
-            .is_some_and(|w| w.kind == save::Kind::Waterbend))
+            .is_some_and(|w| w.before_v10 == Some(KindBeforeV10::Waterbend)))
         {
             return false;
         }
@@ -1037,7 +1038,7 @@ impl Game {
     fn unpaid_cast(&self) -> bool {
         matches!(&self.at,
             At::Agent(d) | At::Human(_, Open::Decision(d))
-                if matches!(d.kind, DecisionKind::PaymentPlan | DecisionKind::ManaPayment))
+                if d.prompt.purpose == Purpose::Mana)
     }
 
     /// Fails where a replay's chance could not reproduce what its record says chance produced.
@@ -1581,7 +1582,7 @@ impl Game {
         let At::Human(_, Open::Decision(d)) = &self.at else {
             return Err(SessionError::NotDeciding);
         };
-        if d.kind != DecisionKind::Waterbend {
+        if d.prompt.purpose != Purpose::Waterbend {
             return Ok(None);
         }
         Ok(
@@ -1641,7 +1642,7 @@ impl Game {
                 let d = without_floating(d.relayout());
                 // These confirmations are for the human. A stand-in has only the one
                 // ordinary payment choice and need not advance its random stream.
-                if d.kind == DecisionKind::Waterbend && d.len() == 1 {
+                if d.prompt.purpose == Purpose::Waterbend && d.len() == 1 {
                     0
                 } else {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
@@ -1855,7 +1856,7 @@ impl Game {
     /// shuffle loses a player a card they put back on top, a cost not worth a question before
     /// every search: a player who must keep it plays under exact stops, which ask.
     fn searches_unasked(d: &Decision<Large>) -> bool {
-        d.prompt.purpose == beryl_engine::card::Purpose::MaySearch
+        d.prompt.purpose == Purpose::MaySearch
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their
@@ -2175,9 +2176,8 @@ fn only_nonland_mana<L: Layout>(s: &State<L>, d: &Decision<L>) -> bool {
 /// dominated by tapping during it (architecture §10), and search never sees them. The engine
 /// lists them last, so every other candidate keeps its index.
 fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
-    if let (DecisionKind::Priority | DecisionKind::Waterbend, Candidates::Options(list)) =
-        (d.kind, &mut d.candidates)
-    {
+    let floats = d.kind == DecisionKind::Priority || d.prompt.purpose == Purpose::Waterbend;
+    if let (true, Candidates::Options(list)) = (floats, &mut d.candidates) {
         let kept = list
             .iter()
             .take_while(|o| !matches!(o, Opt::Mana { .. }))

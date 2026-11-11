@@ -172,6 +172,7 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
                 let start = obs.determinize(t, &mut self.rng);
                 sim.choose(&start, d)
             }
+            DecisionKind::YesNo if d.prompt.purpose == Purpose::PayLife => e.pay_life(d),
             DecisionKind::YesNo => e
                 .yes_no(d)
                 .unwrap_or_else(|| self.policy.decide(t, obs, d, true)),
@@ -223,12 +224,11 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
                 })
             }
             // Crew with the creatures that could not attack anyway, then the least valuable.
-            DecisionKind::Crew => best(d, |c| {
+            DecisionKind::ChooseObject if d.prompt.purpose == Purpose::Crew => best(d, |c| {
                 let slot = c.object()?;
                 let sick = obs.object(slot).flags().has(ObjectFlags::SUMMONING_SICK);
                 Some(i32::from(sick) * 1000 - e.value(slot))
             }),
-            DecisionKind::PayLife => e.pay_life(d),
             DecisionKind::ChooseObject => e
                 .take_from_hand(d)
                 .unwrap_or_else(|| self.policy.decide(t, obs, d, true)),

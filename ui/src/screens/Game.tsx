@@ -437,7 +437,7 @@ function Playing({ playback }: { playback: Playback }) {
     if (then.length > 0) {
       if (decision.kind === "attacker" || decision.kind === "blocker")
         gather("combat");
-      else if (decision.kind === "waterbend") gather();
+      else if (decision.ask.kind === "waterbend") gather();
     }
     send(index, then);
   };
@@ -603,10 +603,7 @@ function Playing({ playback }: { playback: Playback }) {
     status.kind !== "stopped";
   // A pick still planned answers the decision it waits for: the player has nothing to do.
   const openDecision =
-    decision &&
-    isOpening(decision.kind) &&
-    !waiting &&
-    planned.current.length === 0
+    decision && isOpening(decision) && !waiting && planned.current.length === 0
       ? decision
       : undefined;
   const ended = status.kind === "over" || status.kind === "stopped";
@@ -820,7 +817,7 @@ function Opening({
   const choosingFirst =
     !spinning && starting === null && flipWinner === "opponent";
   const considering = view.handling?.zone === "hand";
-  const kind = decision?.kind;
+  const picking = decision?.ask.kind === "putOnBottom";
   // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
   const [bottom, setBottom] = useState<ObjectView[]>([]);
   const inHand = view.objects.filter(
@@ -829,14 +826,12 @@ function Opening({
   const hand = inHand.filter((o) => !bottom.some((b) => b.slot === o.slot));
   const unsent = bottom.filter((b) => inHand.some((o) => o.slot === b.slot));
   // One card per mulligan goes on the bottom; any already there count.
-  const toBottom =
-    kind === "putOnBottom"
-      ? Math.max(1, inHand.length - (STARTING_HAND - you.mulligans))
-      : 0;
+  const toBottom = picking
+    ? Math.max(1, inHand.length - (STARTING_HAND - you.mulligans))
+    : 0;
   const slots = Math.max(toBottom, bottom.length);
   // The cards are small to fit seven: hovering one shows it whole.
   const [inspector, inspect] = useHoverInspect();
-  const picking = kind === "putOnBottom";
   // A card clicked moves out from under the pointer, which never leaves it: its inspector goes.
   const toggle = (o: ObjectView) => {
     inspect(o).onPointerLeave();
@@ -851,7 +846,8 @@ function Opening({
   const confirm = () =>
     onPlan(
       unsent.map((o) => ({
-        kind: "putOnBottom",
+        kind: "chooseObject",
+        ask: "putOnBottom",
         wants: (c) => c.kind === "object" && c.slot === o.slot,
         // The engine offers one of interchangeable cards (architecture §7.2): its slot fills
         // with the card that went.

@@ -4,7 +4,7 @@
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::Seat;
-use beryl_session::protocol::{Candidate, Kind, StackItem};
+use beryl_session::protocol::{AskView, Candidate, Kind, StackItem};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, SessionError, SessionId, StartGame, Status, StopsSetting,
@@ -246,7 +246,10 @@ fn exile_cost_picker_follows_mana_and_cancel_restores_payment() {
         ) {
             choosing = answer(&mut game, &choosing, 0);
         }
-        assert_eq!(deciding(&choosing).unwrap().kind, Kind::ExileCost);
+        assert!(matches!(
+            deciding(&choosing).unwrap().ask,
+            AskView::ExileCards { .. }
+        ));
         assert_eq!(
             choosing
                 .objects
@@ -269,7 +272,7 @@ fn exile_cost_picker_follows_mana_and_cancel_restores_payment() {
         ) {
             again = answer(&mut game, &again, 0);
         }
-        while deciding(&again).is_some_and(|d| d.kind == Kind::ExileCost) {
+        while deciding(&again).is_some_and(|d| matches!(d.ask, AskView::ExileCards { .. })) {
             again = answer(&mut game, &again, 0);
             assert!(
                 !again

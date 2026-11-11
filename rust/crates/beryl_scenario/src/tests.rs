@@ -249,7 +249,7 @@ fn a_scripted_game_plays_lands_discards_and_reaches_the_next_turn() {
             },
             Action::Answer {
                 player: P0,
-                kind: DecisionKind::Discard,
+                kind: DecisionKind::ChooseObject,
                 pick: Pick::Card { card: L },
             },
             Action::AdvanceTo {
@@ -280,7 +280,7 @@ fn an_unscripted_decision_fails_the_scenario() {
         }]);
     let e = error(&S);
     assert!(
-        e.contains("action 0: unscripted decision: player 0 Discard"),
+        e.contains("action 0: unscripted decision: player 0 ChooseObject (cleanup)"),
         "{e}"
     );
 }

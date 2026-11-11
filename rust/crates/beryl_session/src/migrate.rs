@@ -26,6 +26,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
+use crate::save::KindBeforeV10;
 use crate::{Game, SessionError, SessionId};
 
 /// One migration: a file of version `n`, upgraded to version `n + 1`.
@@ -34,7 +35,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// The migrations, in order: the first upgrades a version 1 file to version 2. Its length is
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
-    v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9,
+    v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -229,6 +230,35 @@ fn v7_to_v8(mut file: Value, _: &'static CardTable) -> Result<Value, SessionErro
 fn v8_to_v9(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
     set_version(&mut file, 9)?;
     file["legacyWaterbendMana"] = true.into();
+    Ok(file)
+}
+
+/// Version 9 to 10: version 10 has no kind of decision for one rule's or one cost's pick (the
+/// card a mulligan puts on the bottom, a discard, the legend rule's permanent, the life a land
+/// asks, a crew, waterbend or exile cost). Each such answer takes the general kind this build
+/// asks the question as ([`KindBeforeV10::now`]) and keeps the kind it had as
+/// `kindBeforeV10`, which replay reads where an old file's answers were recorded otherwise
+/// (`Game::replay_log`).
+fn v9_to_v10(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    if let Some(log) = file.get_mut("log").and_then(Value::as_array_mut) {
+        for entry in log.iter_mut().filter_map(Value::as_object_mut) {
+            for key in ["choice", "auto"] {
+                let Some(answer) = entry.get_mut(key).and_then(Value::as_object_mut) else {
+                    continue;
+                };
+                let Some(before) = answer
+                    .get("kind")
+                    .and_then(|kind| KindBeforeV10::deserialize(kind).ok())
+                else {
+                    continue;
+                };
+                let now = serde_json::to_value(before.now()).map_err(|e| bad(&e))?;
+                let was = answer.insert("kind".to_owned(), now).expect("a kind");
+                answer.insert("kindBeforeV10".to_owned(), was);
+            }
+        }
+    }
+    set_version(&mut file, 10)?;
     Ok(file)
 }
 
@@ -428,6 +458,61 @@ mod tests {
         expected["formatVersion"] = 6.into();
         expected["log"][0]["choice"]["act"]["creature"]["beforeV6"] = true.into();
         assert_eq!(v6, expected);
+    }
+
+    #[test]
+    fn version_9_to_10_renames_the_kinds_version_10_dropped_and_keeps_their_names() {
+        let answer = |kind: &str| {
+            json!({ "index": 0, "player": 0, "turn": 2, "step": "precombatMain", "kind": kind,
+                "act": { "act": "done" } })
+        };
+        let renamed = [
+            ("putOnBottom", "chooseObject"),
+            ("discard", "chooseObject"),
+            ("legendRule", "chooseObject"),
+            ("crew", "chooseObject"),
+            ("exileCost", "chooseObject"),
+            ("payLife", "yesNo"),
+            ("waterbend", "manaPayment"),
+        ];
+        assert_eq!(renamed.len(), KindBeforeV10::ALL.len());
+        let mut log = vec![
+            json!({ "flip": { "player": 0, "won": true } }),
+            json!({ "choice": answer("priority") }),
+            json!({ "auto": answer("manaPayment") }),
+        ];
+        log.extend(
+            renamed
+                .iter()
+                .map(|(old, _)| json!({ "choice": answer(old) })),
+        );
+        log.extend(
+            renamed
+                .iter()
+                .map(|(old, _)| json!({ "auto": answer(old) })),
+        );
+        let v9 = json!({ "formatVersion": 9, "seed": 1, "legacyWaterbend": true, "log": log });
+        let v10 = v9_to_v10(v9.clone(), &CARDS).unwrap();
+        let mut expected = v9;
+        expected["formatVersion"] = 10.into();
+        for (i, (old, new)) in renamed.iter().enumerate() {
+            for (entry, key) in [(3 + i, "choice"), (3 + renamed.len() + i, "auto")] {
+                expected["log"][entry][key]["kind"] = (*new).into();
+                expected["log"][entry][key]["kindBeforeV10"] = (*old).into();
+            }
+        }
+        assert_eq!(v10, expected);
+        // An answer reads the same from a file of either version: the migrations before this
+        // one read version 9's names.
+        let read = |file: &Value, entry: usize| -> crate::save::Chosen {
+            serde_json::from_value(file["log"][entry]["choice"].clone()).unwrap()
+        };
+        for entry in 3..3 + renamed.len() {
+            assert_eq!(read(&expected, entry), read(&v10, entry));
+            let what = read(&v10, entry).what.unwrap();
+            assert_eq!(what.before_v10.map(KindBeforeV10::now), Some(what.kind));
+        }
+        assert_eq!(read(&v10, 1).what.unwrap().before_v10, None);
     }
 
     #[test]

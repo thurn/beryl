@@ -1,6 +1,7 @@
 //! The London mulligan, and what each player can see of the other's cards.
 
 use super::{LANDS, MIXED, decide, land_go, play, table};
+use crate::card::Purpose;
 use crate::ids::Seat;
 use crate::state::{Zone, ZoneKey};
 use crate::two_player::TwoPlayerSeat as _;
@@ -11,19 +12,19 @@ fn mulligans_until(
     t: &crate::GameTable,
     s: &mut State,
     mulligan: impl Fn(Seat, u8) -> bool,
-) -> (Decision, Vec<(DecisionKind, Seat)>) {
+) -> (Decision, Vec<(Purpose, Seat)>) {
     let mut log = Vec::new();
     loop {
         let d = decide(t, s);
-        let c = match d.kind {
-            DecisionKind::PlayOrDraw | DecisionKind::PutOnBottom => Choice(0),
-            DecisionKind::KeepOrMulligan => Choice(u16::from(mulligan(
+        let c = match d.prompt.purpose {
+            Purpose::PlayOrDraw | Purpose::PutOnBottom => Choice(0),
+            Purpose::Mulligan => Choice(u16::from(mulligan(
                 d.player,
                 s.player(d.player).mulligans(),
             ))),
             _ => return (d, log),
         };
-        log.push((d.kind, d.player));
+        log.push((d.prompt.purpose, d.player));
         apply(s, t, &mut Scratch::new(), &mut Replay, c);
     }
 }
@@ -41,12 +42,12 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     assert_eq!(
         log[1..],
         [
-            (DecisionKind::KeepOrMulligan, p),
-            (DecisionKind::KeepOrMulligan, q),
-            (DecisionKind::KeepOrMulligan, p),
-            (DecisionKind::PutOnBottom, p),
-            (DecisionKind::KeepOrMulligan, q),
-            (DecisionKind::PutOnBottom, q),
+            (Purpose::Mulligan, p),
+            (Purpose::Mulligan, q),
+            (Purpose::Mulligan, p),
+            (Purpose::PutOnBottom, p),
+            (Purpose::Mulligan, q),
+            (Purpose::PutOnBottom, q),
         ]
     );
     for player in [p, q] {
@@ -74,16 +75,16 @@ fn a_player_decides_on_a_full_new_seven_before_putting_cards_on_the_bottom() {
         .iter()
         .filter(|&&(_, player)| player == Seat::P0)
         .map(|&(k, _)| k)
-        .skip_while(|&k| k == DecisionKind::PlayOrDraw)
+        .skip_while(|&k| k == Purpose::PlayOrDraw)
         .collect();
     assert_eq!(
         asked,
         [
-            DecisionKind::KeepOrMulligan,
-            DecisionKind::KeepOrMulligan,
-            DecisionKind::KeepOrMulligan,
-            DecisionKind::PutOnBottom,
-            DecisionKind::PutOnBottom,
+            Purpose::Mulligan,
+            Purpose::Mulligan,
+            Purpose::Mulligan,
+            Purpose::PutOnBottom,
+            Purpose::PutOnBottom,
         ]
     );
     assert_eq!(s.player(Seat::P0).mulligans(), 2);
@@ -100,7 +101,7 @@ fn a_player_can_mulligan_down_to_nothing() {
     // The eighth declaration is never asked: the hand would already be empty.
     let asked = log
         .iter()
-        .filter(|&&(k, player)| k == DecisionKind::KeepOrMulligan && player == Seat::P0)
+        .filter(|&&(k, player)| k == Purpose::Mulligan && player == Seat::P0)
         .count();
     assert_eq!(asked, 7);
     assert_eq!(

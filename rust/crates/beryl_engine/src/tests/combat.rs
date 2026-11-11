@@ -832,13 +832,13 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
         },
     );
     // The Wagon can't crew itself; both creatures are needed for power 3.
-    let first = g.expect(DecisionKind::Crew);
+    let first = g.expect(DecisionKind::ChooseObject);
     assert_eq!(
         first.candidates,
         Candidates::Objects([bear, sentry].into_iter().collect())
     );
     assert_eq!(first.prompt, Prompt::new(Purpose::Crew).count(3).most(3));
-    g.pick_object(DecisionKind::Crew, bear);
+    g.pick_object(DecisionKind::ChooseObject, bear);
     // One creature is left, so the second pick is applied silently. Crew uses the stack.
     g.expect(DecisionKind::Priority);
     assert!(g.s.object(sentry).flags().has(ObjectFlags::TAPPED));
@@ -900,6 +900,7 @@ fn stop_at_turn(g: &mut Game, turn: u16, step: TurnStep) {
 #[test]
 fn random_combat_games_keep_the_invariants() {
     let mut kinds = std::collections::BTreeSet::new();
+    let mut crewed = false;
     for seed in 0..12u64 {
         let mut g = Game::seeded(seed);
         g.s.set_profile(Profile::EXACT);
@@ -916,6 +917,7 @@ fn random_combat_games_keep_the_invariants() {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(d) => {
                     kinds.insert(format!("{:?}", d.kind));
+                    crewed |= d.prompt.purpose == Purpose::Crew;
                     rng ^= rng << 13;
                     rng ^= rng >> 7;
                     rng ^= rng << 17;
@@ -935,10 +937,10 @@ fn random_combat_games_keep_the_invariants() {
         "Blocker",
         "BlockTarget",
         "DamageDivision",
-        "Crew",
     ] {
         assert!(kinds.contains(kind), "no {kind} decision in any game");
     }
+    assert!(crewed, "no crew decision in any game");
 }
 
 /// Where passing takes a player, as `next_stop` says for the pass button: the smart stops

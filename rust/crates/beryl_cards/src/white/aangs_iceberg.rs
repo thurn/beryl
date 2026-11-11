@@ -121,7 +121,7 @@ pub const SCENARIOS: &[Scenario] = &[
             },
             Action::activate(P0, ICEBERG, 1),
             // CR 701.67a: Jace taps for one generic mana; two Plains pay the rest.
-            Action::answer(P0, DecisionKind::Waterbend, Pick::Card { card: JACE }),
+            Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: JACE }),
             Action::assert(Assertion::Tapped {
                 player: P0,
                 card: PLAINS,
@@ -175,10 +175,10 @@ pub const SCENARIOS: &[Scenario] = &[
             // One Plains can't pay {3} alone: no paying the rest with mana yet.
             Action::assert(Assertion::Decision {
                 player: P0,
-                kind: DecisionKind::Waterbend,
+                kind: DecisionKind::ManaPayment,
                 candidates: 2,
             }),
-            Action::answer(P0, DecisionKind::Waterbend, Pick::Card { card: STAFF }),
+            Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: STAFF }),
             // Then Jace is the only way left to pay one more, and the Plains pays the last.
             Action::assert(Assertion::Tapped {
                 player: P0,
@@ -216,7 +216,7 @@ pub const SCENARIOS: &[Scenario] = &[
             // Jace and the Converter create the Treasure while tapping themselves.
             Action::activate(P0, JACE, 0),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, PLAINS),
+            Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::activate(P0, names::CURRENCY_CONVERTER, 2),
@@ -224,8 +224,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::activate(P0, ICEBERG, 1),
             // A Treasure tapped to waterbend does not activate its own mana ability or
             // sacrifice itself (CR 701.67a and CR 111.10a).
-            Action::choose(P0, DecisionKind::Waterbend, TREASURE_TOKEN),
-            Action::choose(P0, DecisionKind::Waterbend, names::MANA_CRYPT),
+            Action::choose(P0, DecisionKind::ManaPayment, TREASURE_TOKEN),
+            Action::choose(P0, DecisionKind::ManaPayment, names::MANA_CRYPT),
             Action::choose(P0, DecisionKind::ChooseUpTo, ISLAND),
             Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
             Action::assert(Assertion::Tapped {

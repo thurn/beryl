@@ -184,7 +184,8 @@ pub(super) fn making(view: &PlayerView) -> bool {
     matches!(
         &view.status,
         Status::Deciding { decision }
-            if decision.kind == Kind::ManaPayment
+            if (decision.kind == Kind::ManaPayment
+                && !matches!(decision.ask, AskView::Waterbend { .. }))
                 || (decision.cancellable && decision.kind != Kind::Priority)
     )
 }

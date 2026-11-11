@@ -1,7 +1,7 @@
 //! Whole games: turns, priority, land drops, drawing, decking and determinism.
 
 use super::{LANDS, MIXED, fingerprint, land_go, play, table};
-use crate::card::Types;
+use crate::card::{Purpose, Types};
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::profile::Limits;
@@ -116,7 +116,7 @@ fn cleanup_discards_down_to_seven() {
         let active = s.turn().active();
         // The player who isn't active ended their own turn at seven cards or fewer.
         assert!(s.zone(ZoneKey::Of(active.opponent(), Zone::Hand)).count() <= 7);
-        if d.kind == DecisionKind::Discard {
+        if d.prompt.purpose == Purpose::Cleanup {
             assert_eq!(d.player, active);
             assert!(s.zone(ZoneKey::Of(active, Zone::Hand)).count() > 7);
             discards += 1;

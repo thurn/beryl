@@ -426,7 +426,7 @@ fn scried_cards_are_known_where_they_went() {
             Action::activate(P0, names::AANGS_ICEBERG, 1),
             Action::answer(
                 P0,
-                DecisionKind::Waterbend,
+                DecisionKind::ManaPayment,
                 Pick::Card {
                     card: names::STAFF_OF_THE_STORYTELLER,
                 },

@@ -18,7 +18,7 @@ use beryl_cards::names::{
     THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
     TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON,
 };
-use beryl_engine::card::{Castings, FaceIx};
+use beryl_engine::card::{Castings, FaceIx, Purpose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Layout, Observation, Seat, TurnStep,
@@ -772,16 +772,16 @@ pub const BOARDS: &[Scenario] = &[
         "converter-may-exile",
         &[
             Action::cast(P0, THIRST_FOR_DISCOVERY),
-            choose(P0, DecisionKind::Discard, TUNDRA),
-            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+            choose(P0, DecisionKind::ChooseObject, TUNDRA),
+            choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
         ],
     ),
     converter(
         "converter-exiled",
         &[
             Action::cast(P0, THIRST_FOR_DISCOVERY),
-            choose(P0, DecisionKind::Discard, TUNDRA),
-            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+            choose(P0, DecisionKind::ChooseObject, TUNDRA),
+            choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
         ],
@@ -790,8 +790,8 @@ pub const BOARDS: &[Scenario] = &[
         "converter-choose",
         &[
             Action::cast(P0, THIRST_FOR_DISCOVERY),
-            choose(P0, DecisionKind::Discard, TUNDRA),
-            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+            choose(P0, DecisionKind::ChooseObject, TUNDRA),
+            choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::activate(P0, CURRENCY_CONVERTER, 2),
@@ -925,7 +925,7 @@ pub const BOARDS: &[Scenario] = &[
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, ABHORRENT_OCULUS),
-            Action::choose(P0, DecisionKind::ExileCost, THIRST_FOR_DISCOVERY),
+            Action::choose(P0, DecisionKind::ChooseObject, THIRST_FOR_DISCOVERY),
         ]),
     // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
     Scenario::new("namesake-target")
@@ -1379,8 +1379,8 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P0, SWIFT_RECONFIGURATION),
             choose(P0, DecisionKind::Target, JACE_VRYNS_PRODIGY),
             Action::activate_granted(P0, JACE_VRYNS_PRODIGY, 0),
-            choose(P0, DecisionKind::Crew, SNAPCASTER_MAGE),
-            choose(P0, DecisionKind::Crew, ELITE_SPELLBINDER),
+            choose(P0, DecisionKind::ChooseObject, SNAPCASTER_MAGE),
+            choose(P0, DecisionKind::ChooseObject, ELITE_SPELLBINDER),
         ]),
     // Aang's Iceberg's waterbend {3} with one Plains: the Staff of the Storyteller or Jace,
     // Vryn's Prodigy taps for one of it.
@@ -1735,7 +1735,7 @@ impl Scripted {
         next: Option<Action>,
     ) -> Option<Choice> {
         let scripted = matches!(next, Some(Action::Answer { kind, .. }) if kind == d.kind);
-        if d.kind == DecisionKind::Discard && s.turn().step() == TurnStep::Cleanup && !scripted {
+        if d.prompt.purpose == Purpose::Cleanup && !scripted {
             return Some(Choice(0));
         }
         if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker)

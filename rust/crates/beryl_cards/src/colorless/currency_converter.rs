@@ -178,7 +178,7 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::activate(P0, CONVERTER, 1),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::OUST),
+            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             count(P0, Zone::Exile, names::OUST, 1),
@@ -217,7 +217,7 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::ISLAND),
+            Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::No),
             count(P0, Zone::Graveyard, names::ISLAND, 1),
@@ -245,8 +245,8 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::cast(P0, names::THIRST_FOR_DISCOVERY),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::TUNDRA),
-            Action::choose(P0, DecisionKind::Discard, names::COUNTERSPELL),
+            Action::choose(P0, DecisionKind::ChooseObject, names::TUNDRA),
+            Action::choose(P0, DecisionKind::ChooseObject, names::COUNTERSPELL),
             // The two triggers carry different cards, so their order is a choice.
             Action::choose(P0, DecisionKind::TriggerOrder, CONVERTER),
             Action::Resolve,
@@ -267,12 +267,12 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::ISLAND),
+            Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::activate(P0, CONVERTER, 1),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::OUST),
+            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             count(P0, Zone::Exile, names::ISLAND, 1),
@@ -307,7 +307,7 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::activate(P0, CONVERTER, 1),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::OUST),
+            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::AdvanceTo {
@@ -336,7 +336,7 @@ pub const SCENARIOS: &[Scenario] = &[
         .actions(&[
             Action::activate(P0, CONVERTER, 1),
             Action::Resolve,
-            Action::choose(P0, DecisionKind::Discard, names::OUST),
+            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
             Action::Resolve,
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
             Action::pass(P0),

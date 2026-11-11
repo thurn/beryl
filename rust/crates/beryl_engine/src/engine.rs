@@ -330,7 +330,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::Mulligans => match start::mulligan_question(s) {
             (p, true) => Ok(Decision::objects(
                 p,
-                DecisionKind::PutOnBottom,
+                DecisionKind::ChooseObject,
                 collapse(s, turn::hand(s, p)),
                 Prompt::new(Purpose::PutOnBottom).most(s.player(p).to_bottom()),
             )),
@@ -348,7 +348,7 @@ pub(crate) fn decision<L: Layout>(
             let count = s.hand_size(p).saturating_sub(turn::MAX_HAND_SIZE);
             Ok(Decision::objects(
                 p,
-                DecisionKind::Discard,
+                DecisionKind::ChooseObject,
                 collapse(s, turn::hand(s, p)),
                 Prompt::new(Purpose::Cleanup).most(u8::try_from(count).unwrap_or(u8::MAX)),
             ))
@@ -357,17 +357,13 @@ pub(crate) fn decision<L: Layout>(
             let (p, group) =
                 sba::unresolved_legends(s, t, kept).expect("a legend-rule group without a keeper");
             let keep = Prompt::new(Purpose::LegendRule).most(1);
-            Ok(Decision::objects(
-                p,
-                DecisionKind::LegendRule,
-                collapse(s, group),
-                keep,
-            ))
+            let kind = DecisionKind::ChooseObject;
+            Ok(Decision::objects(p, kind, collapse(s, group), keep))
         }
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
             s.object(slot).owner(),
-            DecisionKind::PayLife,
+            DecisionKind::YesNo,
             &[Opt::Yes, Opt::No],
             Prompt::new(Purpose::PayLife).count(life),
         )?
@@ -505,7 +501,8 @@ pub fn refusal<L: Layout>(
 }
 
 /// Answers a question of the casting machine, a paused resolution or a resolution's offer
-/// to cast, if one is open.
+/// to cast, if one is open, or one of the rules' own questions that a general kind asks: the
+/// pending state says which question it is, where the kind says only the form of its answer.
 fn perform_machine<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -541,6 +538,29 @@ fn perform_machine<L: Layout>(
                 cast_option => {
                     cast::begin_cast(s, t, &mut x.events, player, cast_option, Some(free))
                 }
+            }
+        }
+        Pending::EnterPayingLife { slot, .. } => {
+            s.settle_question();
+            let pay = d.candidates.option(c) == Some(Opt::Yes);
+            enter_from_hand(s, t, &mut x.events, slot, pay)
+        }
+        // The other question of a mulligan, keep or mulligan, has a kind of its own.
+        Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
+            let card = d.candidates.object(c).expect("an object choice");
+            start::put_on_bottom(s, t, &mut x.events, d.player, card)
+        }
+        Pending::Discard => {
+            let card = d.candidates.object(c).expect("an object choice");
+            turn::cleanup_discard(s, t, &mut x.events, card)
+        }
+        Pending::LegendRule { mut kept } => {
+            kept.insert(d.candidates.object(c).expect("an object choice"));
+            if sba::unresolved_legends(s, t, kept).is_some() {
+                s.ask(Pending::LegendRule { kept });
+                Ok(())
+            } else {
+                sba::apply_legend_rule(s, t, &mut x.events, kept)
             }
         }
         _ => return None,
@@ -601,13 +621,6 @@ fn perform<L: Layout>(
             Opt::Trigger(i) => trigger::put_on_stack(s, t, sink, i),
             _ => unreachable!("a trigger-order decision offers only triggers"),
         },
-        DecisionKind::PayLife => {
-            let Pending::EnterPayingLife { slot, .. } = *s.pending() else {
-                unreachable!("a pay-life decision without its pending state");
-            };
-            s.settle_question();
-            enter_from_hand(s, t, sink, slot, option() == Opt::Yes)
-        }
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
         DecisionKind::Blocker => {
             match option() {
@@ -631,13 +644,10 @@ fn perform<L: Layout>(
         | DecisionKind::Target
         | DecisionKind::PaymentPlan
         | DecisionKind::ManaPayment
-        | DecisionKind::Crew
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
         | DecisionKind::ChooseObject
-        | DecisionKind::ChooseUpTo
-        | DecisionKind::Waterbend
-        | DecisionKind::ExileCost => unreachable!("answered through the pending state"),
+        | DecisionKind::ChooseUpTo => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
             // Of two: with more players the chooser names who takes the first turn (CR 103.1).
             let starting = if option() == Opt::Play {
@@ -649,20 +659,6 @@ fn perform<L: Layout>(
         }
         DecisionKind::KeepOrMulligan => {
             start::declare(s, t, sink, d.player, option() == Opt::Mulligan)
-        }
-        DecisionKind::PutOnBottom => start::put_on_bottom(s, t, sink, d.player, object()),
-        DecisionKind::Discard => turn::cleanup_discard(s, t, sink, object()),
-        DecisionKind::LegendRule => {
-            let Pending::LegendRule { mut kept } = *s.pending() else {
-                unreachable!("a legend-rule decision without its pending state");
-            };
-            kept.insert(object());
-            if sba::unresolved_legends(s, t, kept).is_some() {
-                s.ask(Pending::LegendRule { kept });
-                Ok(())
-            } else {
-                sba::apply_legend_rule(s, t, sink, kept)
-            }
         }
     }
 }

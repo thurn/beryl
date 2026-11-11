@@ -3,7 +3,7 @@
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Subtype, Supertypes, Types};
+use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::ObjectFlags;
 use beryl_engine::{
@@ -884,7 +884,7 @@ fn each_payment_mode_finishes_mana_before_exile_choices() {
             let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
                 panic!("cost choice")
             };
-            if d.kind == DecisionKind::ExileCost {
+            if d.prompt.purpose == Purpose::ExileCost {
                 break;
             }
             assert_eq!(d.kind, DecisionKind::ManaPayment);
@@ -912,7 +912,7 @@ fn each_payment_mode_finishes_mana_before_exile_choices() {
                     .any(|e| matches!(e, Event::Mana { .. } | Event::Tap { .. })),
                 "cost completion never pays twice"
             );
-            if after.kind != DecisionKind::ExileCost {
+            if after.prompt.purpose != Purpose::ExileCost {
                 break;
             }
         }

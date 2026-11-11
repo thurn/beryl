@@ -1562,7 +1562,7 @@ pub(crate) fn decision<L: Layout>(
             let entry = top(s);
             Decision {
                 player: c.player,
-                kind: DecisionKind::Crew,
+                kind: DecisionKind::ChooseObject,
                 candidates: Candidates::Objects(collapse(
                     s,
                     crew_candidates(s, c.player, source_of(&entry).expect("a Vehicle to crew")),
@@ -1580,14 +1580,14 @@ pub(crate) fn decision<L: Layout>(
             Prompt::new(Purpose::Mana).cost(c.remaining),
         ),
         CastStep::Waterbend => options(
-            DecisionKind::Waterbend,
+            DecisionKind::ManaPayment,
             waterbend_options(s, t, c)?,
             Prompt::new(Purpose::Waterbend).cost(total_cost(t, &top(s), c)),
         ),
         // The cards lie in the zone the cost exiles from, the hand or the graveyard.
         CastStep::Exile => Decision {
             player: c.player,
-            kind: DecisionKind::ExileCost,
+            kind: DecisionKind::ChooseObject,
             candidates: Candidates::Objects(exile_choices(s, t, c)),
             prompt: Prompt::new(Purpose::ExileCost).most(c.left),
             about: Bitboard::EMPTY,

@@ -2255,7 +2255,7 @@ const plainCast = evokeCasts.findIndex(
     (c) => c.option.kind === "cast" && c.option.costs.length === 0,
 );
 const exiling = evokeViews.at(-1).status.decision;
-assert.equal(exiling.kind, "exileCost");
+assert.equal(exiling.ask.kind, "exileCards");
 assert.ok(exiling.cancellable, "the exile is asked while the cast is unpaid");
 const subtlety = `[data-slot="${evokeCasts[evoked].option.slot}"]`;
 const evokeFixture = {
@@ -5692,7 +5692,9 @@ if (wanted(taxFlow)) {
 const beforeChooser = "mana finishes before the additional-cost chooser opens";
 if (wanted(beforeChooser)) {
     const views = await load("cast-exile-choice");
-    const at = views.findIndex((v) => v.status.decision?.kind === "exileCost");
+    const at = views.findIndex(
+        (v) => v.status.decision?.ask.kind === "exileCards",
+    );
     const spell = views[at].stack.at(-1).slot;
     await check(
         beforeChooser,
@@ -5711,11 +5713,11 @@ if (wanted(beforeChooser)) {
                 window.berylShown.map((s) => ({
                     at: s.at,
                     events: s.update.view.events.map((e) => e.kind),
-                    kind: s.update.view.status.decision?.kind,
+                    ask: s.update.view.status.decision?.ask.kind,
                 })),
             );
             const mana = shown.find((s) => s.events.includes("mana"));
-            const chooser = shown.find((s) => s.kind === "exileCost");
+            const chooser = shown.find((s) => s.ask === "exileCards");
             assert.ok(
                 chooser.at - mana.at >= 800,
                 "payment finishes before selection",
@@ -5752,7 +5754,9 @@ const pendingMana =
     "pending costs route mana without catching later standalone mana";
 if (wanted(pendingMana)) {
     const views = await load("cast-exile-choice");
-    const view = views.find((v) => v.status.decision?.kind === "exileCost");
+    const view = views.find(
+        (v) => v.status.decision?.ask.kind === "exileCards",
+    );
     await check(
         pendingMana,
         async (page) => {
@@ -6428,7 +6432,7 @@ if (wanted("manifest cards")) {
             ...before.status,
             decision: {
                 ...before.status.decision,
-                kind: "exileCost",
+                kind: "chooseObject",
                 ask: { kind: "exileCards", zone: "graveyard", count: 1 },
             },
         },
@@ -10093,7 +10097,9 @@ if (wanted("attack destinations use thin lines")) {
 // Crewing (`crew`: Swift Reconfiguration's crew 5) is picked on the board, a meter of pips
 // showing the power tapped against the cost, and what the creature pointed at would add.
 const crewViews = await load("crew");
-const crewAt = crewViews.findIndex((v) => v.status.decision?.kind === "crew");
+const crewAt = crewViews.findIndex(
+    (v) => v.status.decision?.ask.kind === "crew",
+);
 const crewing = crewViews[crewAt].status.decision;
 const crewer = (name) =>
     crewing.candidates.find((c) => c.label === name).option.slot;
@@ -10137,7 +10143,7 @@ await check(
 // Auto Pay previews on hover, with no selected permanents until the player picks.
 const scryViews = await load("choice-scry");
 const bendAt = scryViews.findIndex(
-    (v) => v.status.decision?.kind === "waterbend",
+    (v) => v.status.decision?.ask.kind === "waterbend",
 );
 assert.ok(bendAt >= 0, "waterbend opens a payment review");
 const bending = scryViews[bendAt].status.decision;
@@ -10171,7 +10177,7 @@ if (wanted(bendCost)) {
     for (const fixture of ["choice-scry", "waterbend-tap"]) {
         const views = await load(fixture);
         const at = views.findIndex(
-            (v) => v.status.decision?.kind === "waterbend",
+            (v) => v.status.decision?.ask.kind === "waterbend",
         );
         const cost = views[at].status.decision.ask.cost;
         await check(
@@ -10274,7 +10280,7 @@ await check(
 // both are chosen and confirmed, and then the first goes at once.
 const openingViews = await load("opening-bottom");
 const bottoming = openingViews.at(-1);
-assert.equal(bottoming.status.decision.kind, "putOnBottom");
+assert.equal(bottoming.status.decision.ask.kind, "putOnBottom");
 assert.equal(bottoming.players.you.mulligans, 2, "two cards go on the bottom");
 await check(
     "cards for the bottom toggle in their slots until confirmed",

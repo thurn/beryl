@@ -181,7 +181,7 @@ pub const SCENARIOS: &[Scenario] = &[
                 step: TurnStep::PrecombatMain,
             },
             Action::activate(P1, JACE, 0),
-            Action::choose(P1, DecisionKind::Discard, names::ISLAND),
+            Action::choose(P1, DecisionKind::ChooseObject, names::ISLAND),
             // The stack empty in its main phase: sorcery timing.
             Action::cast(P1, ICEBERG),
             Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),

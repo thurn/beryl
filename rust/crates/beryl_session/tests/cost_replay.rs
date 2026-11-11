@@ -3,7 +3,7 @@ use beryl_cards::{CARDS, names};
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::checkpoint::Checkpoint;
-use beryl_session::protocol::{Candidate, Kind};
+use beryl_session::protocol::{AskView, Candidate, Kind};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, ReplayFile, SessionId, Status, StopsSetting,
 };
@@ -53,6 +53,16 @@ fn answer(g: &mut Game, v: &PlayerView, i: usize) -> PlayerView {
     }
     last.unwrap()
 }
+/// `file`, a save this build recorded, with each answer of the kind `now` under the name
+/// `before`, which a format before version 10 had for the one question of that kind asked
+/// here.
+fn name_as_before_v10(file: &mut serde_json::Value, now: &str, before: &str) {
+    for entry in file["log"].as_array_mut().unwrap() {
+        if entry["choice"]["kind"] == now {
+            entry["choice"]["kind"] = before.into();
+        }
+    }
+}
 fn setup(scenario: &Scenario) -> (Game, PlayerView) {
     let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let decks = Seat::BOTH.map(|p| {
@@ -98,8 +108,8 @@ fn old_cost_order_replays_complete_and_partial_casts() {
     v = answer(&mut g, &v, cast);
     assert_eq!(decision(&v).kind, Kind::PaymentPlan);
     v = answer(&mut g, &v, 0);
-    assert_eq!(decision(&v).kind, Kind::ExileCost);
-    while decision(&v).kind == Kind::ExileCost {
+    assert!(matches!(decision(&v).ask, AskView::ExileCards { .. }));
+    while matches!(decision(&v).ask, AskView::ExileCards { .. }) {
         v = answer(&mut g, &v, 0);
     }
     let file = g.replay().clone();
@@ -115,6 +125,7 @@ fn old_cost_order_replays_complete_and_partial_casts() {
     );
     let mut old = serde_json::to_value(&file).unwrap();
     old["formatVersion"] = 6.into();
+    name_as_before_v10(&mut old, "chooseObject", "exileCost");
     let log = old["log"].as_array_mut().unwrap();
     let plan = log
         .iter()
@@ -193,11 +204,12 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
         })
         .unwrap();
     view = answer(&mut game, &view, activate);
-    assert_eq!(decision(&view).kind, Kind::Waterbend);
+    assert!(matches!(decision(&view).ask, AskView::Waterbend { .. }));
     assert!(!decision(&view).waterbend.as_ref().unwrap().ready);
     let after = answer(&mut game, &view, 0);
     let mut old = serde_json::to_value(game.replay()).unwrap();
     old["formatVersion"] = 7.into();
+    name_as_before_v10(&mut old, "manaPayment", "waterbend");
     old["log"]
         .as_array_mut()
         .unwrap()
@@ -247,7 +259,7 @@ fn old_waterbend_saves_restore_an_automatic_mana_rock() {
         })
         .unwrap();
     view = answer(&mut game, &view, activate);
-    assert_eq!(decision(&view).kind, Kind::Waterbend);
+    assert!(matches!(decision(&view).ask, AskView::Waterbend { .. }));
     let suggested = decision(&view).waterbend.as_ref().unwrap();
     assert!(!suggested.ready, "the rock needs to be picked manually");
     let rock = decision(&view)
@@ -262,6 +274,7 @@ fn old_waterbend_saves_restore_an_automatic_mana_rock() {
     let after = answer(&mut game, &view, rock);
     let mut old = serde_json::to_value(game.replay()).unwrap();
     old["formatVersion"] = 8.into();
+    name_as_before_v10(&mut old, "manaPayment", "waterbend");
     old["log"]
         .as_array_mut()
         .unwrap()

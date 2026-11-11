@@ -11,7 +11,7 @@ use beryl_cards::names::{
 use beryl_engine::state::{CounterKind, StackEntry};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
+use beryl_session::protocol::{AskView, Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, Seat, SessionId, StartGame, Status, StopsSetting,
@@ -330,8 +330,8 @@ const WATERBEND: Scenario = Scenario::new("waterbend")
     .library(P1, &[ISLAND, ISLAND, ISLAND]);
 
 /// The kinds of decision the human is asked after activating [`WATERBEND`]'s Iceberg, up to
-/// its scry.
-fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
+/// its scry, each with whether it is the waterbend payment.
+fn asked_after_waterbend(stops: StopsSetting) -> Vec<(Kind, bool)> {
     let (table, state) = beryl_scenario::position(&CARDS, &WATERBEND).unwrap();
     let random = beryl_search::agent("random").unwrap();
     let mut game = Game::prepared(
@@ -347,18 +347,19 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
         },
         SESSION,
     );
-    let mut asked: Option<Vec<Kind>> = None;
+    let mut asked: Option<Vec<(Kind, bool)>> = None;
     while let Some(view) = game.next_view() {
         let Status::Deciding { decision } = &view.status else {
             continue;
         };
+        let bending = matches!(decision.ask, AskView::Waterbend { .. });
         if let Some(asked) = &mut asked {
-            asked.push(decision.kind);
+            asked.push((decision.kind, bending));
             if decision.kind == Kind::ChooseUpTo {
                 break;
             }
         }
-        if decision.kind == Kind::Waterbend {
+        if bending {
             let suggested = decision.waterbend.as_deref().expect("a suggested payment");
             assert!(suggested.benders.is_empty());
             assert_eq!(suggested.taps.len(), 3);
@@ -420,11 +421,11 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
 fn smart_stops_offer_waterbend_even_when_mana_can_pay() {
     assert_eq!(
         asked_after_waterbend(StopsSetting::SMART).first(),
-        Some(&Kind::Waterbend)
+        Some(&(Kind::ManaPayment, true))
     );
     assert_eq!(
         asked_after_waterbend(StopsSetting::EXACT).first(),
-        Some(&Kind::Waterbend)
+        Some(&(Kind::ManaPayment, true))
     );
 }
 

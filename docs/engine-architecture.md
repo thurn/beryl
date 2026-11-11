@@ -501,9 +501,13 @@ engine and its search. A save records an answer by what it does
 (`beryl_session::save`, §14), and every `DecisionKind` and `Opt` has a
 description there, checked by exhaustive matches.
 
-The kind says the form of one answer. The `Prompt` (`beryl_card::prompt`) says
-which prompt the pick belongs to: its purpose, from a closed list (a scry, a
-look that may take a card, a fateseal, an explore, "untap up to six", "unless
+The kind says the form of one answer, and no kind belongs to one mechanic: the
+card a mulligan puts on the bottom, the cleanup discard, the legendary permanent
+to keep, the creatures that crew and the cards an exile cost takes are each one
+card from a set, the life an entering land asks is a yes or no, and the
+permanents a waterbend taps are a payment. The `Prompt` (`beryl_card::prompt`)
+says which prompt the pick belongs to: its purpose, from a closed list (a scry,
+a look that may take a card, a fateseal, an explore, "untap up to six", "unless
 pays", the cleanup discard); the shape that purpose is answered in; the shape's
 parameters (counts, destinations, a mana cost); and the part of the shape this
 pick answers. `about` is the set of objects the prompt concerns beyond the

@@ -189,7 +189,7 @@ fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
             .collect::<Vec<_>>(),
         [
             (
-                Kind::Waterbend,
+                Kind::ManaPayment,
                 AskView::Waterbend {
                     cost: "{3}".to_owned()
                 }
@@ -198,7 +198,7 @@ fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
             (Kind::ChooseObject, scry),
             // The mana-source scenario can continue after its first bender.
             (
-                Kind::Waterbend,
+                Kind::ManaPayment,
                 AskView::Waterbend {
                     cost: "{2}".to_owned()
                 }
@@ -325,7 +325,7 @@ fn subtlety_asks_the_spells_owner_top_or_bottom_and_its_evoke_exile() {
         matches!(
             ask,
             (
-                Kind::ExileCost,
+                Kind::ChooseObject,
                 AskView::ExileCards {
                     zone: ZoneName::Hand,
                     count: 1
@@ -347,7 +347,7 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
         asks(names::ABHORRENT_OCULUS),
         [
             (
-                Kind::ExileCost,
+                Kind::ChooseObject,
                 AskView::ExileCards {
                     zone: ZoneName::Graveyard,
                     count: 6
@@ -381,7 +381,7 @@ fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
             )
             .actions(&[
                 Action::cast(P0, names::ABHORRENT_OCULUS),
-                Action::choose(P0, DecisionKind::ExileCost, names::THIRST_FOR_DISCOVERY),
+                Action::choose(P0, DecisionKind::ChooseObject, names::THIRST_FOR_DISCOVERY),
             ]);
     let mut checked = false;
     beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {

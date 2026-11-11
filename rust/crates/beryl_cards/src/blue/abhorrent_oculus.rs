@@ -113,10 +113,10 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::cast(P0, OCULUS),
             Action::assert(Assertion::Decision {
                 player: P0,
-                kind: DecisionKind::ExileCost,
+                kind: DecisionKind::ChooseObject,
                 candidates: 2,
             }),
-            Action::choose(P0, DecisionKind::ExileCost, names::THIRST_FOR_DISCOVERY),
+            Action::choose(P0, DecisionKind::ChooseObject, names::THIRST_FOR_DISCOVERY),
             Action::assert(Assertion::Count {
                 player: P0,
                 zone: Zone::Graveyard,

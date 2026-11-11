@@ -213,10 +213,10 @@ pub const SCENARIOS: &[Scenario] = &[
             },
             Action::assert(Assertion::Decision {
                 player: P0,
-                kind: DecisionKind::ExileCost,
+                kind: DecisionKind::ChooseObject,
                 candidates: 2,
             }),
-            Action::choose(P0, DecisionKind::ExileCost, names::TIME_SPIRAL),
+            Action::choose(P0, DecisionKind::ChooseObject, names::TIME_SPIRAL),
             Action::assert(Assertion::Count {
                 player: P0,
                 zone: Zone::Exile,

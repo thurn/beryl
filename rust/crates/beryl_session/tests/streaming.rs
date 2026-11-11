@@ -9,7 +9,7 @@ use beryl_engine::event::{Event, Reason};
 use beryl_engine::{
     Choice, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step, apply, next,
 };
-use beryl_session::protocol::{GameEvent, Kind, Side, StackItem, Step as TurnStep, ZoneName};
+use beryl_session::protocol::{AskView, GameEvent, Side, StackItem, Step as TurnStep, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting, with_stops,
@@ -172,7 +172,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
     game.set_stand_in("greedy").unwrap();
     let looting = |view: &PlayerView| {
         matches!(&view.status, Status::Deciding { decision }
-            if decision.kind == Kind::Discard
+            if decision.ask == AskView::Discard
                 && matches!(&decision.resolving,
                     Some(StackItem::Ability { name, .. }) if name == names::JACE_VRYNS_PRODIGY))
     };
