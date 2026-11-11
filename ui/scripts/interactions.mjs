@@ -5013,9 +5013,11 @@ for (const fixture of [
         await check(
             "target arrows disappear while a card moves",
             async (page) => {
-                const arrow = page.locator(
-                    ".board-arrows .arrow:is(.arrow-red, .arrow-green)",
-                );
+                const targetArrow =
+                    ".board-arrows .arrow:is(.arrow-red, .arrow-green)";
+                const arrow = page.locator(targetArrow);
+                // The target's arrow shows once both its ends have rested.
+                await until(page, targetArrow);
                 const target = await arrow.getAttribute("data-to");
                 const card = page.locator(`#${target}`);
                 // Time between browser calls must not count toward the arrow's rest.
@@ -5028,10 +5030,7 @@ for (const fixture of [
                     await page.clock.runFor(50);
                     assert.equal(await arrow.count(), 0);
                 }
-                await until(
-                    page,
-                    ".board-arrows .arrow:is(.arrow-red, .arrow-green)",
-                );
+                await until(page, targetArrow);
             },
             { fixture, at: views.length, ready: ".arrow" },
         );
@@ -7908,6 +7907,8 @@ if (wanted(manifestFlight)) {
                     "the tray owns the card",
                 );
             }
+            // The tray's cards come out of the library before they can be picked.
+            await page.clock.runFor(1000);
             await page.locator('.choice-card[data-slot="800"]').click();
             await page.clock.runFor(700);
             const origin = center(
