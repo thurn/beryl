@@ -145,9 +145,26 @@ let failed = false;
 // alone on 8 of 20 cores, 12 s over the suite's budget. Six cut a run from 148 s to 125 s here.
 const queue = workers(6);
 
-/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches, alongside
- * other checks (capture.mjs' workers): awaiting it waits only for a free worker. The page's
- * fixtures come from `fixtures`, not from what Vite serves. */
+/** Pauses the page's clock where it stands: from then on the page's time moves only when the
+ * check moves it (`clock.runFor` and friends). `pauseAt` only moves forward, and the page's time
+ * runs on while the call travels, so it aims a frame ahead, and further if that was too close. */
+async function pause(page) {
+    for (let ahead = 16; ; ahead *= 2) {
+        const now = await page.evaluate(() => Date.now());
+        try {
+            await page.clock.pauseAt(now + ahead);
+            return;
+        } catch (e) {
+            if (!String(e).includes("to the past") || ahead > 60_000) throw e;
+        }
+    }
+}
+
+/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches and its
+ * fonts have loaded, alongside other checks (capture.mjs' workers): awaiting it waits only for
+ * a free worker. The page's fixtures come from `fixtures`, not from what Vite serves. The
+ * page runs on Playwright's fake clock, paused once the page is ready so that a check cannot
+ * race the wall clock; `clock: "off"` leaves the browser's own, and says why. */
 async function check(
     title,
     body,
@@ -160,7 +177,7 @@ async function check(
         hash = "#/game",
         init,
         phone = false,
-        clock = true,
+        clock = "paused",
     } = {},
 ) {
     if (!wanted(title)) return;
@@ -199,7 +216,8 @@ async function check(
             let booted = false;
             let threw = false;
             try {
-                if (clock) await page.clock.install();
+                assert.ok(["paused", "off"].includes(clock), clock);
+                if (clock === "paused") await page.clock.install();
                 if (init) await page.addInitScript(init);
                 const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
                 await page.goto(new URL(route, base).href, {
@@ -207,6 +225,8 @@ async function check(
                 });
                 await page.waitForSelector(ready);
                 booted = true;
+                await page.evaluate(() => document.fonts.ready.then(() => {}));
+                if (clock === "paused") await pause(page);
                 await body(page);
                 await assertSounded(page);
                 console.log(`ok: ${title}`);
@@ -393,7 +413,9 @@ await check(
             .getByRole("heading", { name: "Playground", exact: true })
             .waitFor();
     },
-    { clock: false },
+    // Off: it reloads and navigates the testing pages, waiting on their requests and their
+    // stubbed EventSource's timer as a browser would; it measures no motion.
+    { clock: "off" },
 );
 
 await check(
@@ -542,7 +564,6 @@ await check(
         }
         await page.clock.runFor(3000);
         assertBetween(flight, inHand, await where(handle), "its flight");
-        await page.clock.resume();
         // It asks for its target; Escape takes the cast back, and the card is in hand again.
         const targeting = page.getByRole("dialog", {
             name: `Choose a target for ${name}`,
@@ -1219,6 +1240,15 @@ async function untilGone(page, selector, limit, step = 16) {
         await page.clock.runFor(step);
     }
     throw new Error(`${selector} outlasted ${limit} ms`);
+}
+
+/** Starts audit.mjs' frame recorder, stepping the paused clock a frame at a time until it has
+ * the few frames it takes before anything is set going. */
+async function startRecording(page) {
+    let started = false;
+    const starting = page.evaluate(record).finally(() => (started = true));
+    while (!started) await page.clock.runFor(16);
+    await starting;
 }
 
 /** Drags the element `from` matches by its center to `to`'s center, or by `by`, in steps. */
@@ -2523,6 +2553,8 @@ await check(
         );
         const label =
             attachedView.status.decision.candidates[abilities[1]].label;
+        // The frames spring out of the card into their places.
+        await page.clock.runFor(1000);
         await menu
             .getByRole("button", {
                 name: label.slice(label.lastIndexOf(": ") + 2),
@@ -2892,6 +2924,7 @@ await check(
         await assertCaptionAligned(
             frames.first().locator(".ability-choice-caption"),
         );
+        await page.clock.runFor(1000);
         await frames
             .and(
                 page.getByRole("button", {
@@ -3246,6 +3279,7 @@ await check(
             "cancel returns the card without casting",
         );
         await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
+        await page.clock.runFor(1000);
         await frames(page)
             .and(page.getByRole("button", { name: /Cast Subtlety with evoke/ }))
             .click();
@@ -3403,6 +3437,7 @@ await check(
         const evoke = async () => {
             await page.clock.runFor(2000);
             await page.click(subtlety);
+            await page.clock.runFor(1000);
             await frames(page)
                 .and(
                     page.getByRole("button", {
@@ -3541,7 +3576,7 @@ await check(
         await page.clock.runFor(2000);
         await page.click(byDefault.spell);
         await settled(page, 2);
-        await page.clock.runFor(2500);
+        await until(page, 'role=button[name="Undo"]');
         await page.getByRole("button", { name: "Undo" }).click();
         await page.clock.runFor(1500);
         await page.locator(`${byDefault.spell}[data-zone="hand"]`).waitFor();
@@ -4000,7 +4035,7 @@ await check(
                 .getByLabel(`${listed[0]}, inspected`)
                 .waitFor({ state: "visible" });
             await close[i](page);
-            await page.waitForSelector(viewer, { state: "detached" });
+            await untilGone(page, viewer, 2000);
             for (const slot of slots) {
                 assert.equal(
                     await page
@@ -4033,7 +4068,7 @@ await check(
 await check(
     "the physical audit rejects copies in dialogs and prompts",
     async (page) => {
-        await page.evaluate(record);
+        await startRecording(page);
         await page.evaluate(() => {
             const panel = (klass, role) => {
                 const e = document.createElement("div");
@@ -4112,7 +4147,7 @@ for (const { viewport, reducedMotion } of motionConfigs) {
         `physical audit follows both graveyard browsers (${config})`,
         async (page) => {
             await page.clock.runFor(800);
-            await page.evaluate(record);
+            await startRecording(page);
             await page.clock.pauseAt(Date.now() + 60_000);
             const release = new Map();
             for (const side of ["you", "opponent"]) {
@@ -4210,7 +4245,7 @@ for (const { viewport, reducedMotion } of motionConfigs) {
         `physical audit follows a scry tray's same-zone return (${config})`,
         async (page) => {
             await page.clock.runFor(650);
-            await page.evaluate(record);
+            await startRecording(page);
             await page.clock.pauseAt(Date.now() + 60_000);
             await page
                 .getByRole("button", { name: "View Battlefield" })
@@ -4621,6 +4656,7 @@ await check(
             "the −3 says what it does",
         );
         assert.deepEqual(await chosen(page), [], "nothing activated");
+        await page.clock.runFor(1000);
         await items.nth(1).click({ force: true });
         assert.deepEqual(await chosen(page), [], "the −3 does nothing");
         await items.nth(0).click();
@@ -4659,6 +4695,7 @@ await check(
         );
         assert.equal((await cues(page)).at(-1), "no", "a refusal sounds no");
         await page.hover(".turn-action");
+        await page.clock.runFor(500);
         await page.hover(counterspell);
         await page.getByLabel("Counterspell, inspected").waitFor();
         assert.equal(
@@ -5243,7 +5280,7 @@ if (wanted(localScryReturn)) {
             );
             await page.locator(tray(bottom)).click({ force: true });
             await page.clock.runFor(500);
-            await page.evaluate(record);
+            await startRecording(page);
             await page.clock.pauseAt(Date.now() + 60_000);
             await page
                 .getByRole("button", { name: "Done", exact: true })
@@ -5316,7 +5353,7 @@ if (wanted(parkedHand)) {
             `${parkedHand} (${choice})`,
             async (page) => {
                 await page.clock.runFor(800);
-                await page.evaluate(record);
+                await startRecording(page);
                 await page.clock.pauseAt(Date.now() + 60_000);
                 const answer =
                     choice === "mulligan"
@@ -5648,12 +5685,8 @@ if (wanted(opponentScry)) {
                         "top-bound backs have already returned directly",
                     );
                 }
-                await page.clock.runFor(1650);
-                assert.equal(
-                    await page.locator(".library-choice-hud").count(),
-                    0,
-                    "the result expires without another view",
-                );
+                // The result expires without another view.
+                await untilGone(page, ".library-choice-hud", 1800);
                 for (const card of cards) {
                     assert.equal(await card.count(), 1);
                     assert.equal(
@@ -6220,7 +6253,7 @@ if (wanted(opponentWaterbend)) {
     await check(
         opponentWaterbend,
         async (page) => {
-            await page.evaluate(record);
+            await startRecording(page);
             await page.locator(".turn-action button").first().click();
             await page.clock.runFor(3500);
             const recording = await page.evaluate(collect, 0);
@@ -6352,9 +6385,11 @@ if (wanted(tapBeforeSacrifice)) {
                 await page
                     .getByRole("button", { name: "Resolve", exact: true })
                     .click();
-                await page
-                    .locator(`${slotOf(token.slot)}[data-zone="graveyard"]`)
-                    .waitFor({ state: "attached" });
+                await until(
+                    page,
+                    `${slotOf(token.slot)}[data-zone="graveyard"]`,
+                    16,
+                );
                 assert.deepEqual(
                     await page.evaluate(() => window.tokenTap),
                     { initial: 0, rotated: true },
@@ -6362,7 +6397,7 @@ if (wanted(tapBeforeSacrifice)) {
                 );
                 assert.equal(await page.locator(field).count(), 0);
             },
-            { ...run, ready: slotOf(token.slot), clock: false },
+            { ...run, ready: slotOf(token.slot) },
         );
     }
 }
@@ -6395,7 +6430,7 @@ if (wanted(tokenDissolve)) {
         await check(
             `${tokenDissolve} (${viewport.width}x${viewport.height} ${reducedMotion})`,
             async (page) => {
-                await page.evaluate(record);
+                await startRecording(page);
                 await page.clock.pauseAt(Date.now() + 60_000);
                 const dying = `[data-ceasing-slot="${token.slot}"]`;
                 await page
@@ -6487,7 +6522,7 @@ if (wanted(revealFlip)) {
             async (page) => {
                 const card = page.locator(slotOf(slot));
                 assert.equal(await card.locator(".card-back").count(), 1);
-                await page.evaluate(record);
+                await startRecording(page);
                 await page
                     .getByRole("button", { name: "Resolve", exact: true })
                     .click();
@@ -6664,7 +6699,7 @@ if (wanted(departureFlip)) {
                             await card.getAttribute("data-card"),
                             null,
                         );
-                    await page.evaluate(record);
+                    await startRecording(page);
                     await page
                         .getByRole("button", { name: "Resolve", exact: true })
                         .click();
@@ -6862,7 +6897,7 @@ if (wanted(counterFlight)) {
         counterFlight,
         async (page) => {
             await page.clock.runFor(800);
-            await page.evaluate(record);
+            await startRecording(page);
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
                 .click();
@@ -8044,7 +8079,6 @@ for (const [controller, resolution] of wanted(triggerLift)
     await check(
         `${triggerLift} (${controller}, ${resolution})`,
         async (page) => {
-            // Motion plays the stack card on the browser's compositor clock.
             await page.evaluate((source) => {
                 window.triggerFrames = [];
                 const end = performance.now() + 4500;
@@ -8199,7 +8233,9 @@ for (const [controller, resolution] of wanted(triggerLift)
             );
             await page.locator(".stack-ability").waitFor({ state: "detached" });
         },
-        { ...run, clock: false, ready: slotOf(source.slot) },
+        // Off: Motion plays the stack card as a Web Animation, on the document's timeline,
+        // which a fake clock does not drive, so the flight is sampled in the browser's time.
+        { ...run, clock: "off", ready: slotOf(source.slot) },
     );
 }
 
@@ -8341,7 +8377,9 @@ if (wanted(staffChain)) {
                 assert.equal(await abilities.count(), 0);
                 assert.equal(await page.locator(slotOf(staff.slot)).count(), 1);
             },
-            { ...run, clock: false, ready: slotOf(staff.slot) },
+            // Off: the triggers fade as Web Animations, on the document's timeline, which a
+            // fake clock does not drive: paused, the Spirit's trigger never leaves.
+            { ...run, clock: "off", ready: slotOf(staff.slot) },
         );
     }
     // Multiple real items sharing a source stay on the stack. The covered
@@ -10778,7 +10816,7 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(slotOf(jaceVp));
-        await page.getByRole("dialog", { name: "Discard a card" }).waitFor();
+        await until(page, 'role=dialog[name="Discard a card"]');
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         await page.clock.runFor(1500);
         const drawn = page.locator(
@@ -11562,7 +11600,6 @@ if (wanted(regroup)) {
                 startY - endY > 10,
                 "the sampled frames include the card's glide",
             );
-            await page.clock.resume();
             await page.click(slotOf(second));
             await page.click(slotOf(walker));
             assert.deepEqual(
@@ -11951,7 +11988,7 @@ await check(
         assert.deepEqual(await lit(page), []);
         await autoPay.click();
         await settled(page, 1);
-        await page.waitForSelector(".choice");
+        await until(page, ".choice");
     },
     { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
 );
@@ -12809,7 +12846,7 @@ if (wanted("tokens reach their destination before ceasing")) {
                             .innerText(),
                         "Token",
                     );
-                    await page.evaluate(record);
+                    await startRecording(page);
                     // Only explicit steps may advance the flight: awaited browser calls
                     // otherwise consume its hold under load before the 650ms sample.
                     await page.clock.pauseAt(Date.now() + 60_000);
