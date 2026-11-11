@@ -20,7 +20,7 @@ use crate::card::{
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
-use crate::filter::{Evaluate, Filter, Whose};
+use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};
@@ -114,7 +114,7 @@ fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -
         .iter()
         .zip(s.derived.iter())
         .find(|&(&slot, d)| {
-            d.controller == player.opponent()
+            filter::is_an_opponent(player, d.controller)
                 && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
         })
         .map(|(&slot, _)| slot)
@@ -318,8 +318,7 @@ pub(crate) enum TargetSet<L: Layout = Small> {
 fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
     match filter {
         Filter::Any => true,
-        Filter::Whose(Whose::You) => player == you,
-        Filter::Whose(Whose::Opponent) => player == you.opponent(),
+        Filter::Whose(whose) => filter::is_whose(whose, player, you),
         _ => unreachable!("a player filter is Any or Whose"),
     }
 }

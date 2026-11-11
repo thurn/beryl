@@ -18,9 +18,13 @@ use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
-const THEIR_CREATURES: Filter = Filter::All(&[
+/// "Creature you don't control". Not "an opponent controls": a teammate's creature is one
+/// you don't control too
+/// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): "the player's opponents
+/// are all players not on their team."
+const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[
     Filter::Types(Types::CREATURE),
-    Filter::Whose(Whose::Opponent),
+    Filter::Not(&Filter::Whose(Whose::You)),
 ]);
 
 const BASIC_LANDS: Filter = Filter::All(&[
@@ -75,13 +79,13 @@ fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)).
 fn exile_each<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let s = ctx.state();
-    let theirs = THEIR_CREATURES.select(
+    let creatures = CREATURES_YOU_DONT_CONTROL.select(
         s,
         ctx.table(),
         s.battlefield().iter().copied().collect(),
         ctx.controller(),
     );
-    exile_and_fetch(ctx, theirs)
+    exile_and_fetch(ctx, creatures)
 }
 
 pub static CARD: CardDef = CardDef {
@@ -93,7 +97,9 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Permanent, THEIR_CREATURES).removal()],
+                targets: &[
+                    TargetSpec::one(TargetKind::Permanent, CREATURES_YOU_DONT_CONTROL).removal(),
+                ],
                 may_pause: true,
                 body: bodies!(exile_target),
                 ..Ability::NONE

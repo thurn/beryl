@@ -104,7 +104,7 @@ pub static EMBLEM: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::Opponent),
+                Filter::Whose(Whose::AnOpponent),
             )],
             ..Ability::triggered(Trigger::YouCast, Behavior::Data(&MILL_FIVE))
         }],

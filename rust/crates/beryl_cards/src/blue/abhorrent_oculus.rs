@@ -45,7 +45,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             may_pause: true,
             ..Ability::triggered(
-                Trigger::Step(TurnStep::Upkeep, Whose::Opponent),
+                Trigger::Step(TurnStep::Upkeep, Whose::AnOpponent),
                 bodies!(manifest_dread),
             )
         }],

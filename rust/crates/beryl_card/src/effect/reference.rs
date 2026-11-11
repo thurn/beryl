@@ -51,11 +51,12 @@ pub enum Players {
     /// game, a player's opponent is the other player." With more players, each of them
     /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)).
     EachOpponent,
-    /// "Each player".
+    /// "Each player": everyone in the game (CR 102.1), whoever controls the effect.
     EachPlayer,
     /// The players chosen for the `n`th instance of the word "target", counting from 0 (CR
     /// 115.1): "target player", "target opponent". Its [`crate::TargetSpec`] says which
-    /// players may be chosen.
+    /// players may be chosen: any for "target player", and for "target opponent" those
+    /// [`crate::Whose::AnOpponent`] accepts.
     Target(u8),
     /// "Its controller", "their controllers"
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's

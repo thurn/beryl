@@ -197,12 +197,12 @@ fn filters_select_by_type_and_owner() {
     }
     assert_eq!(Filter::Whose(Whose::You).select(&s, &t, hand, p), hand);
     assert!(
-        Filter::Whose(Whose::Opponent)
+        Filter::Whose(Whose::AnOpponent)
             .select(&s, &t, hand, p)
             .is_empty()
     );
     assert_eq!(
-        Filter::Whose(Whose::Opponent).select(&s, &t, hand, p.opponent()),
+        Filter::Whose(Whose::AnOpponent).select(&s, &t, hand, p.opponent()),
         hand
     );
 }

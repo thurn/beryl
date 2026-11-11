@@ -59,7 +59,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::Opponent),
+                Filter::Whose(Whose::AnOpponent),
             )],
             may_pause: true,
             ..Ability::triggered(Trigger::Enters, bodies!(spellbind))

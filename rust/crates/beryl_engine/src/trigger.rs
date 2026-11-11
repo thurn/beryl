@@ -3,7 +3,7 @@
 
 use crate::card::{Ability, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
 use crate::event::{Event, Reason, Recipient, Sink, kind};
-use crate::filter::Whose;
+use crate::filter;
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
@@ -162,7 +162,7 @@ fn fires<L: Layout>(
             },
         ) if is_this(source) => Some(info(Some(source), player, amount)),
         (Trigger::Step(step, whose), Event::StepBegins { step: now, active })
-            if step == now && whose_turn(whose, you, active) =>
+            if step == now && filter::is_whose(whose, active, you) =>
         {
             Some(info(None, active, 0))
         }
@@ -194,13 +194,6 @@ fn fires<L: Layout>(
         ) if s.object(object.slot).owner == you => Some(info(Some(object), you, 0)),
         (Trigger::YouDraw, Event::Draw { player, .. }) if player == you => Some(info(None, you, 0)),
         _ => None,
-    }
-}
-
-fn whose_turn(whose: Whose, you: Seat, active: Seat) -> bool {
-    match whose {
-        Whose::You => active == you,
-        Whose::Opponent => active != you,
     }
 }
 

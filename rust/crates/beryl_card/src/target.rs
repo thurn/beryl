@@ -13,7 +13,8 @@ pub enum TargetKind {
     SpellOrPermanent,
     /// A card in a graveyard, such as "target instant or sorcery card from your graveyard".
     GraveyardCard,
-    /// A player. The filter may be [`Filter::Any`] or [`Filter::Whose`], read for players.
+    /// A player. The filter is [`Filter::Any`] for "target player" or [`Filter::Whose`], read
+    /// for players, for "target opponent".
     Player,
 }
 

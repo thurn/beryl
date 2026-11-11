@@ -108,7 +108,7 @@ static WATCHER: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(
-            Trigger::Step(TurnStep::Upkeep, Whose::Opponent),
+            Trigger::Step(TurnStep::Upkeep, Whose::AnOpponent),
             bodies!(gain_one),
         )],
         ..Face::EMPTY

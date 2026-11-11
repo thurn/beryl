@@ -9,7 +9,9 @@
 //!
 //! An entry is designed from its rule and says the card's words, not what they come to in a
 //! two-player game (plan K7): "each opponent" is [`Players::EachOpponent`] and "target
-//! opponent" is [`Players::Target`], though both name the same player today.
+//! opponent" is [`Players::Target`], though both name the same player today. Which players a
+//! target may be is its [`crate::TargetSpec`]'s to say, in the same words
+//! ([`crate::Whose`]).
 //!
 //! # What the instruction before did
 //!

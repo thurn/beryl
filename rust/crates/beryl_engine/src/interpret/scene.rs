@@ -30,6 +30,18 @@ impl Who {
         Who(1 << player.get())
     }
 
+    /// [`Players::EachOpponent`]: every opponent of `you`
+    /// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player
+    /// game, a player's opponent is the other player."
+    ///
+    /// The one place that entry meets the two-player game. With more players, "the player's
+    /// opponents are all players not on their team"
+    /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function
+    /// changes then, and no card does.
+    pub(super) fn each_opponent(you: Seat) -> Who {
+        Who::only(you.opponent())
+    }
+
     pub(super) fn insert(&mut self, player: Seat) {
         self.0 |= 1 << player.get();
     }
@@ -227,8 +239,7 @@ impl<L: Layout> Scene<'_, L> {
             // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
             // controller".
             Players::You => Who::only(self.you()),
-            // CR 102.2: "In a two-player game, a player's opponent is the other player."
-            Players::EachOpponent => Who::only(self.you().opponent()),
+            Players::EachOpponent => Who::each_opponent(self.you()),
             Players::EachPlayer => Who::EVERYONE,
             Players::Target(spec) => {
                 let mut who = Who::NOBODY;

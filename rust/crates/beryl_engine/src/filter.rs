@@ -87,11 +87,7 @@ impl Evaluate for Filter {
                 } else {
                     o.owner
                 };
-                player
-                    == match whose {
-                        Whose::You => you,
-                        Whose::Opponent => you.opponent(),
-                    }
+                is_whose(whose, player, you)
             }
             Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
             Filter::ManaValueAtMost(n) => mana_value(s, t, slot) <= n,
@@ -101,6 +97,32 @@ impl Evaluate for Filter {
             Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),
         }
     }
+}
+
+/// Whether `player` is the one `whose` means, read for `you`. Every reading of a [`Whose`]
+/// comes here: the controller or owner of an object ([`Filter::Whose`]), a player a target
+/// may choose, and the player whose step begins.
+#[inline]
+pub(crate) fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
+    match whose {
+        // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
+        // controller".
+        Whose::You => player == you,
+        Whose::AnOpponent => is_an_opponent(player, you),
+    }
+}
+
+/// [`Whose::AnOpponent`]: whether `player` is one of `you`'s opponents
+/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
+/// player's opponent is the other player."
+///
+/// The one place that entry meets the two-player game. With more players, "the player's
+/// opponents are all players not on their team"
+/// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function changes
+/// then, and no card does.
+#[inline]
+pub(crate) fn is_an_opponent(player: Seat, you: Seat) -> bool {
+    player == you.opponent()
 }
 
 /// The mana value of the object in `slot`, without the X of a spell

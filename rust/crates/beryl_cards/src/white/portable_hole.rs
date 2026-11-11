@@ -28,7 +28,7 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[
                     Filter::Not(&Filter::Types(Types::LAND)),
-                    Filter::Whose(Whose::Opponent),
+                    Filter::Whose(Whose::AnOpponent),
                     Filter::ManaValueAtMost(2),
                 ]),
             )],

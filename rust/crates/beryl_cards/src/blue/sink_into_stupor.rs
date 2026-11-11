@@ -35,7 +35,7 @@ pub static CARD: CardDef = CardDef {
                 targets: &[TargetSpec::one(
                     TargetKind::SpellOrPermanent,
                     Filter::All(&[
-                        Filter::Whose(Whose::Opponent),
+                        Filter::Whose(Whose::AnOpponent),
                         Filter::Not(&Filter::Types(Types::LAND)),
                     ]),
                 )

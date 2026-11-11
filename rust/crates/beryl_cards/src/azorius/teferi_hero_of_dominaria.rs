@@ -77,7 +77,7 @@ pub static EMBLEM: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
-                Filter::Whose(Whose::Opponent),
+                Filter::Whose(Whose::AnOpponent),
             )],
             ..Ability::triggered(Trigger::YouDraw, Behavior::Data(&EXILE_TARGET))
         }],

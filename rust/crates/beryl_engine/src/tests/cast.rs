@@ -442,7 +442,7 @@ pub(crate) static STUPOR: CardDef = CardDef {
                 kind: AbilityKind::Spell,
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
-                    Filter::All(&[Filter::Not(&LANDS), Filter::Whose(Whose::Opponent)]),
+                    Filter::All(&[Filter::Not(&LANDS), Filter::Whose(Whose::AnOpponent)]),
                 )],
                 body: bodies!(bounce_target),
                 ..Ability::NONE
@@ -593,7 +593,7 @@ pub(crate) static BINDER: CardDef = CardDef {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::Opponent),
+                Filter::Whose(Whose::AnOpponent),
             )],
             may_pause: true,
             body: bodies!(binder),
@@ -630,7 +630,7 @@ pub(crate) static STINGER: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
-                Filter::All(&[CREATURE, Filter::Whose(Whose::Opponent)]),
+                Filter::All(&[CREATURE, Filter::Whose(Whose::AnOpponent)]),
             )],
             ..Ability::triggered(Trigger::Enters, bodies!(destroy_target))
         }],
