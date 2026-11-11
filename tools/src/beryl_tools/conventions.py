@@ -15,6 +15,8 @@ A verb's values are Arena's, measured (K27): `data/arena-motion.json` holds each
 instances in the recordings, how each was taken and their summary, or why the recordings cannot
 show the verb. `by conventions` derives the summaries and the values from the instances; the
 check fails when they disagree. A verb a numbered exception covers is `exempt` and keeps its own.
+Where the instances are of several cases (a draw, a discard), the verb's `cases` hold each
+case's own values, derived the same way, and the stage plays a step of that case with them.
 """
 
 from __future__ import annotations
@@ -160,6 +162,19 @@ def measured(summary: dict[str, Any]) -> dict[str, Any]:
     return {**values, "curve": summary["curve"]}
 
 
+def cases(summary: dict[str, Any]) -> dict[str, Any]:
+    """Each case's own values where Arena's instances are of several cases, which the stage
+    plays that case with: a draw is not a discard. A value a case has none of is the verb's."""
+    return {case: measured(own) for case, own in summary.get("cases", {}).items()}
+
+
+def derived(verb: dict[str, Any], summary: dict[str, Any]) -> bool:
+    """Whether `verb`'s values and its cases' are those of `summary`."""
+    return verb.get("values") == measured(summary) and verb.get("cases", {}) == cases(
+        summary
+    )
+
+
 def instance_problems(where: str, instance: dict[str, Any]) -> list[str]:
     """Why one instance does not say where it is, how it was taken and what it gave."""
     found = evidence_problems(where, {"arena": {"evidence": [instance]}})
@@ -227,7 +242,7 @@ def motion_problems(motion: dict[str, Any], data: dict[str, Any]) -> list[str]:
         if entry.get("summary") != summary:
             found.append(f"{where}: summary is stale: run `just conventions`")
         verb = verbs.get(name, {})
-        if verb and "exempt" not in verb and verb.get("values") != measured(summary):
+        if verb and "exempt" not in verb and not derived(verb, summary):
             found.append(
                 f"{where}: ui-conventions values are stale: run `just conventions`"
             )
@@ -244,6 +259,9 @@ def derive(motion: dict[str, Any], data: dict[str, Any]) -> None:
         verb = verbs.get(entry.get("verb"))
         if verb is not None and "exempt" not in verb:
             verb["values"] = measured(entry["summary"])
+            verb.pop("cases", None)
+            if own := cases(entry["summary"]):
+                verb["cases"] = own
 
 
 def problems(data: dict[str, Any]) -> list[str]:
