@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -120,7 +121,23 @@ def shard_lib(first: int, picks: list[Source]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def card_crates() -> list[str]:
+    """The checkout's crates a card file may use: those `beryl_cards` depends on by path, so
+    a clone compiles wherever its original does."""
+    manifest = tomllib.loads((CRATES / "beryl_cards" / "Cargo.toml").read_text())
+    dependencies: dict[str, object] = manifest["dependencies"]
+    return sorted(
+        name
+        for name, spec in dependencies.items()
+        if isinstance(spec, dict) and "path" in spec
+    )
+
+
 def shard_manifest(name: str) -> str:
+    dependencies = "".join(
+        f'{crate} = {{ path = "{CRATES / crate}" }}\n'
+        for crate in ["beryl_cards", *card_crates()]
+    )
     return f"""[package]
 name = "{name}"
 version = "0.0.0"
@@ -128,10 +145,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-beryl_cards = {{ path = "{CRATES / "beryl_cards"}" }}
-beryl_engine = {{ path = "{CRATES / "beryl_engine"}" }}
-beryl_scenario = {{ path = "{CRATES / "beryl_scenario"}" }}
-"""
+{dependencies}"""
 
 
 def main_rs(shards: list[str]) -> str:

@@ -50,6 +50,14 @@ def test_generated_workspace_holds_every_card_once(tmp_path: Path) -> None:
             in (tmp_path / shard / "Cargo.toml").read_text()
         )
     assert len(names) == cards == len(set(names))
+    # A clone compiles only if its shard depends on every crate its card file uses.
+    used = {
+        crate
+        for source in pool
+        for crate in re.findall(r"^use (\w+)::", source.text, re.MULTILINE)
+    } - {"crate", "super", "std"}
+    manifest = (tmp_path / "shard0" / "Cargo.toml").read_text()
+    assert used and all(f'{crate} = {{ path = "' in manifest for crate in used)
     assert len(list(tmp_path.glob("shard*/src/c*.rs"))) == cards
     main = (tmp_path / "all" / "src" / "main.rs").read_text()
     for shard in shards:
