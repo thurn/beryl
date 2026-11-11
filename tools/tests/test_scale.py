@@ -24,7 +24,9 @@ def test_a_clone_renames_only_its_own_card() -> None:
     assert "hand(P0, &[names::COUNTERSPELL_7])" in text
     assert not re.search(r"names::COUNTERSPELL\b", text)
     assert "names::MANA_CRYPT" in text  # the other cards stay what they are
-    assert "fn counter<L: Layout>" in text  # its body and scenarios come along
+    assert (
+        "Behavior::Data(&counter(TARGET))" in text
+    )  # its body and scenarios come along
 
 
 def test_shard_counts_split_evenly_and_never_leave_one_empty() -> None:
