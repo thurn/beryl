@@ -1,15 +1,18 @@
-//! Arranging a position by hand, for scenarios and tests (architecture §17.1) and for a saved
-//! game rebuilt from a turn-start checkpoint (§14): the turn and step, where each card is,
-//! life totals and tapped permanents. None of this is a rules action, and no player decides
-//! anything; the moves still go through the zone chokepoints, so identities, knowledge and
-//! zone membership stay in agreement.
+//! The board door: arranging a position by hand, for scenarios and tests (architecture
+//! §17.1) and for a saved game rebuilt from a turn-start checkpoint (§14): the turn and step,
+//! where each card is, life totals and tapped permanents. None of this is a rules action, no
+//! player decides anything and no event says it happened; the moves still go through the zone
+//! chokepoints, so identities, knowledge and zone membership stay in agreement.
+//!
+//! [`State::board`] is the one way in (the crate's contract, "The board door"). Rules code
+//! and card bodies never open it: a search for `.board()` finds whoever does.
 
 use beryl_card::{FaceIx, Trigger};
 
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, Small};
 use crate::state::{
     CounterKind, DECK_SLOTS, Duration, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone,
     token_slots,
@@ -17,79 +20,25 @@ use crate::state::{
 use crate::table::GameTable;
 use crate::zone;
 
-impl<L: Layout> State<L> {
-    /// Skips the start of the game and puts it at `step` of turn `turn`, with `active` the
-    /// active player and holding priority, and both opening hands kept. The step's turn-based
-    /// actions are not performed: the game is already in it. Call it on a new state, before
-    /// any decision is answered.
-    ///
-    /// Turns alternate from the starting player
-    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)), so `active` takes the
-    /// odd-numbered turns.
-    ///
-    /// The step must be one where players get priority:
-    /// [CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024): "No player receives
-    /// priority during the untap step", and
-    /// [CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143): "Normally, no player
-    /// receives priority during the cleanup step".
-    pub fn begin_at(&mut self, turn: u16, active: Seat, step: TurnStep) {
-        assert!(turn >= 1, "turns are numbered from 1");
-        assert!(
-            !matches!(step, TurnStep::Untap | TurnStep::Cleanup),
-            "no priority in the {step:?} step"
-        );
-        assert!(
-            matches!(self.pending, Pending::PlayOrDraw { .. }),
-            "begin_at on a game already begun"
-        );
-        self.turn.number = turn;
-        self.turn.active = active;
-        self.turn.starting_player = if turn % 2 == 1 {
-            active
-        } else {
-            active.opponent()
-        };
-        self.turn.step = step;
-        self.turn.priority = active;
-        self.turn.passes = 0;
-        self.pending = Pending::None;
-        for p in &mut self.players {
-            p.mulligan = MulliganStatus::Kept;
-        }
-    }
+/// Lent by [`State::board`]: the handle that arranges a position with no event and no rules
+/// action.
+pub struct Board<'a, L: Layout>(&'a mut State<L>);
 
-    /// Skips the start of the game and puts it just before turn `turn` begins, with `active`
-    /// its active player and both opening hands kept: the previous turn's cleanup step is
-    /// over, so the engine's next call begins the turn, untapping, emptying what lasted
-    /// "until your next turn" and triggering what the turn's beginning triggers, as play would
-    /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "If no state-based
-    /// actions are performed and no triggered abilities trigger during the cleanup step, no
-    /// player receives priority and the turn ends." Call it on a new state, before any
-    /// decision is answered. Turns alternate from the starting player
-    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)).
-    pub fn begin_before_turn(&mut self, turn: u16, active: Seat) {
-        assert!(turn >= 1, "turns are numbered from 1");
-        assert!(
-            matches!(self.pending, Pending::PlayOrDraw { .. }),
-            "begin_before_turn on a game already begun"
-        );
-        self.turn.starting_player = if turn % 2 == 1 {
-            active
-        } else {
-            active.opponent()
-        };
-        self.turn.number = turn - 1;
-        // The previous turn's active player, or before the first turn the starting player:
-        // the turn begun next is theirs, or their opponent's.
-        self.turn.active = if turn == 1 { active } else { active.opponent() };
-        self.turn.step = TurnStep::Cleanup;
-        self.turn.priority = self.turn.active;
-        self.turn.passes = 0;
-        self.turn.cleanup_check = true;
-        self.pending = Pending::None;
-        for p in &mut self.players {
-            p.mulligan = MulliganStatus::Kept;
-        }
+/// A way [`Board::corrupt`] breaks an object.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+pub enum Corruption {
+    /// Says the object is in a zone it is not listed in.
+    Zone(Zone),
+    /// Taps it wherever it is.
+    Tapped,
+}
+
+impl<L: Layout> State<L> {
+    /// Opens the board door, for scenarios, checkpoints, tools and tests.
+    #[inline]
+    pub fn board(&mut self) -> Board<'_, L> {
+        Board(self)
     }
 
     /// What of the game, beyond what a turn-start checkpoint records of its board, rebuilding
@@ -148,14 +97,91 @@ impl<L: Layout> State<L> {
         }
         None
     }
+}
+
+impl<L: Layout> Board<'_, L> {
+    /// Skips the start of the game and puts it at `step` of turn `turn`, with `active` the
+    /// active player and holding priority, and both opening hands kept. The step's turn-based
+    /// actions are not performed: the game is already in it. Call it on a new state, before
+    /// any decision is answered.
+    ///
+    /// Turns alternate from the starting player
+    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)), so `active` takes the
+    /// odd-numbered turns.
+    ///
+    /// The step must be one where players get priority:
+    /// [CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024): "No player receives
+    /// priority during the untap step", and
+    /// [CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143): "Normally, no player
+    /// receives priority during the cleanup step".
+    pub fn begin_at(&mut self, turn: u16, active: Seat, step: TurnStep) {
+        assert!(turn >= 1, "turns are numbered from 1");
+        assert!(
+            !matches!(step, TurnStep::Untap | TurnStep::Cleanup),
+            "no priority in the {step:?} step"
+        );
+        assert!(
+            matches!(self.0.pending, Pending::PlayOrDraw { .. }),
+            "begin_at on a game already begun"
+        );
+        self.0.turn.number = turn;
+        self.0.turn.active = active;
+        self.0.turn.starting_player = if turn % 2 == 1 {
+            active
+        } else {
+            active.opponent()
+        };
+        self.0.turn.step = step;
+        self.0.turn.priority = active;
+        self.0.turn.passes = 0;
+        self.0.pending = Pending::None;
+        for p in &mut self.0.players {
+            p.mulligan = MulliganStatus::Kept;
+        }
+    }
+
+    /// Skips the start of the game and puts it just before turn `turn` begins, with `active`
+    /// its active player and both opening hands kept: the previous turn's cleanup step is
+    /// over, so the engine's next call begins the turn, untapping, emptying what lasted
+    /// "until your next turn" and triggering what the turn's beginning triggers, as play would
+    /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "If no state-based
+    /// actions are performed and no triggered abilities trigger during the cleanup step, no
+    /// player receives priority and the turn ends." Call it on a new state, before any
+    /// decision is answered. Turns alternate from the starting player
+    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)).
+    pub fn begin_before_turn(&mut self, turn: u16, active: Seat) {
+        assert!(turn >= 1, "turns are numbered from 1");
+        assert!(
+            matches!(self.0.pending, Pending::PlayOrDraw { .. }),
+            "begin_before_turn on a game already begun"
+        );
+        self.0.turn.starting_player = if turn % 2 == 1 {
+            active
+        } else {
+            active.opponent()
+        };
+        self.0.turn.number = turn - 1;
+        // The previous turn's active player, or before the first turn the starting player:
+        // the turn begun next is theirs, or their opponent's.
+        self.0.turn.active = if turn == 1 { active } else { active.opponent() };
+        self.0.turn.step = TurnStep::Cleanup;
+        self.0.turn.priority = self.0.turn.active;
+        self.0.turn.passes = 0;
+        self.0.turn.cleanup_check = true;
+        self.0.pending = Pending::None;
+        for p in &mut self.0.players {
+            p.mulligan = MulliganStatus::Kept;
+        }
+    }
 
     /// Moves the object in `slot` to the top of `zone`. A permanent put onto the battlefield
     /// this way has been there since its controller's turn began, so it is not summoning sick
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
-        zone::move_to(self, &mut Sink::off(), slot, zone)?;
+        zone::move_to(self.0, &mut Sink::off(), slot, zone)?;
         if zone == Zone::Battlefield {
-            self.object_mut(slot)
+            self.0
+                .object_mut(slot)
                 .flags
                 .set(ObjectFlags::SUMMONING_SICK, false);
         }
@@ -169,9 +195,9 @@ impl<L: Layout> State<L> {
     /// cards and an ability printed on it that refers either to 'the exiled cards' or to cards
     /// 'exiled with [this object],' these abilities are linked."
     pub fn set_exiled_with(&mut self, slot: L::Slot, source: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Exile);
-        debug_assert_eq!(self.object(source).zone, Zone::Battlefield);
-        let o = self.object_mut(slot);
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
+        debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
+        let o = self.0.object_mut(slot);
         o.flags.set(ObjectFlags::EXILED_WITH, true);
         o.linked = Some(source);
     }
@@ -181,9 +207,9 @@ impl<L: Layout> State<L> {
     /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot effects
     /// cause an object to change zones 'until' a specified event occurs."
     pub fn set_exiled_until(&mut self, slot: L::Slot, source: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Exile);
-        debug_assert_eq!(self.object(source).zone, Zone::Battlefield);
-        let o = self.object_mut(slot);
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Exile);
+        debug_assert_eq!(self.0.object(source).zone, Zone::Battlefield);
+        let o = self.0.object_mut(slot);
         o.flags.set(ObjectFlags::EXILED_UNTIL, true);
         o.linked = Some(source);
     }
@@ -192,7 +218,7 @@ impl<L: Layout> State<L> {
     /// by `owner` ([CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player
     /// who creates a token is its owner"), with face `face` up and, for a copy that is 1/1 by
     /// exception, `one_one` ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
-    /// No ability triggers: it is already there. Like [`State::place`], it has been there since
+    /// No ability triggers: it is already there. Like [`Board::place`], it has been there since
     /// its controller's turn began.
     pub fn place_token(
         &mut self,
@@ -202,14 +228,9 @@ impl<L: Layout> State<L> {
         one_one: bool,
     ) -> Result<L::Slot, Full> {
         let slot = token_slots()
-            .find(|&slot: &L::Slot| self.object(slot).zone == Zone::Nowhere)
+            .find(|&slot: &L::Slot| self.0.object(slot).zone == Zone::Nowhere)
             .ok_or(Full)?;
-        let o = self.object_mut(slot);
-        o.card = card;
-        o.owner = owner;
-        o.base_controller = owner;
-        o.flags = ObjectFlags(ObjectFlags::TOKEN);
-        o.flags.set(ObjectFlags::ONE_ONE, one_one);
+        self.0.make_token(slot, owner, card, one_one);
         self.place(slot, Zone::Battlefield)?;
         if face != FaceIx::FRONT {
             self.set_face(slot, face);
@@ -222,17 +243,18 @@ impl<L: Layout> State<L> {
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's
     /// controller is, by default, the player under whose control it entered the battlefield."
     pub fn set_controller(&mut self, slot: L::Slot, player: Seat) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot).base_controller = player;
-        self.flags.derived_dirty = true;
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0.object_mut(slot).base_controller = player;
+        self.0.flags.derived_dirty = true;
     }
 
     /// Whether the permanent in `slot` has been under its controller's control continuously
     /// since their most recent turn began
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub fn set_sick(&mut self, slot: L::Slot, sick: bool) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot)
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0
+            .object_mut(slot)
             .flags
             .set(ObjectFlags::SUMMONING_SICK, sick);
     }
@@ -240,39 +262,40 @@ impl<L: Layout> State<L> {
     /// Attaches the Aura or Equipment in `slot` to the permanent in `to`
     /// ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)).
     pub fn attach(&mut self, slot: L::Slot, to: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        debug_assert_eq!(self.object(to).zone, Zone::Battlefield);
-        self.object_mut(slot).attached_to = Some(to);
-        self.flags.derived_dirty = true;
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        debug_assert_eq!(self.0.object(to).zone, Zone::Battlefield);
+        self.0.object_mut(slot).attached_to = Some(to);
+        self.0.flags.derived_dirty = true;
     }
 
     /// Marks `damage` on the permanent in `slot`
     /// ([CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e)).
     pub fn set_damage(&mut self, slot: L::Slot, damage: u8) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot).damage = damage;
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0.object_mut(slot).damage = damage;
     }
 
     /// Whether the permanent in `slot` was cast for its impending cost
     /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
     pub fn set_impending(&mut self, slot: L::Slot, impending: bool) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot)
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0
+            .object_mut(slot)
             .flags
             .set(ObjectFlags::IMPENDING, impending);
-        self.flags.derived_dirty = true;
+        self.0.flags.derived_dirty = true;
     }
 
     /// Gives `player` the emblem of the game-table card `card`
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)).
     pub fn add_emblem(&mut self, player: Seat, card: CardIx) -> Result<(), Full> {
-        self.player_mut(player).emblems.push(card)
+        self.0.player_mut(player).emblems.push(card)
     }
 
     /// Whether `player` knows the identity of the object in `slot` (architecture §13), as a
     /// look or a reveal would have told them.
     pub fn set_known(&mut self, player: Seat, slot: L::Slot, known: bool) {
-        let k = &mut self.knowledge[player.index()];
+        let k = &mut self.0.knowledge[player.index()];
         if known {
             k.insert(slot);
         } else {
@@ -282,8 +305,8 @@ impl<L: Layout> State<L> {
 
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
     pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        *self.object_mut(slot).counters.get_mut(kind) = n;
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        *self.0.object_mut(slot).counters.get_mut(kind) = n;
     }
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
@@ -292,29 +315,70 @@ impl<L: Layout> State<L> {
     /// permanent face down ([`FaceIx::DOWN`]), as a manifested one is. Then only its
     /// controller knows it (CR 708.5).
     pub fn set_face(&mut self, slot: L::Slot, face: FaceIx) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot).face = face;
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0.object_mut(slot).face = face;
         if face == FaceIx::DOWN {
-            let other = self.object(slot).base_controller.opponent();
-            self.knowledge[other.index()].remove(slot);
+            let other = self.0.object(slot).base_controller.opponent();
+            self.0.knowledge[other.index()].remove(slot);
         }
-        self.flags.derived_dirty = true;
+        self.0.flags.derived_dirty = true;
     }
 
     /// Taps or untaps a permanent.
     pub fn set_tapped(&mut self, slot: L::Slot, tapped: bool) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot).flags.set(ObjectFlags::TAPPED, tapped);
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0
+            .object_mut(slot)
+            .flags
+            .set(ObjectFlags::TAPPED, tapped);
+    }
+
+    /// Whether the permanent in `slot` entered the battlefield this turn.
+    pub fn set_entered_this_turn(&mut self, slot: L::Slot, entered: bool) {
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0
+            .object_mut(slot)
+            .flags
+            .set(ObjectFlags::ENTERED_THIS_TURN, entered);
+    }
+
+    /// Whether a loyalty ability of the permanent in `slot` was activated this turn
+    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
+    pub fn set_loyalty_activated(&mut self, slot: L::Slot, activated: bool) {
+        debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
+        self.0
+            .object_mut(slot)
+            .flags
+            .set(ObjectFlags::LOYALTY_ACTIVATED, activated);
+    }
+
+    /// Trades the identities of two cards, as the deal could have dealt them: which card a
+    /// slot holds says nothing until a player knows it (architecture §13).
+    pub fn swap_cards(&mut self, a: L::Slot, b: L::Slot) {
+        let (card_a, card_b) = (self.0.object(a).card, self.0.object(b).card);
+        self.0.object_mut(a).card = card_b;
+        self.0.object_mut(b).card = card_a;
+    }
+
+    /// Breaks the state on purpose, for the tests of the invariant check
+    /// ([`State::check_invariants`]).
+    #[doc(hidden)]
+    pub fn corrupt(&mut self, slot: L::Slot, how: Corruption) {
+        let o = self.0.object_mut(slot);
+        match how {
+            Corruption::Zone(zone) => o.zone = zone,
+            Corruption::Tapped => o.flags.set(ObjectFlags::TAPPED, true),
+        }
     }
 
     pub fn set_life(&mut self, player: Seat, life: i16) {
-        self.player_mut(player).life = life;
+        self.0.player_mut(player).life = life;
     }
 
     /// Puts a player's library in the given order, top first. `top_first` must hold exactly
     /// the slots of that library.
     pub fn order_library(&mut self, player: Seat, top_first: &[L::Slot]) {
-        let library = &mut self.zones.library[player.index()];
+        let library = &mut self.0.zones.library[player.index()];
         assert_eq!(library.len(), top_first.len(), "not the whole library");
         let distinct: crate::bitboard::Bitboard<L::Slot> = top_first.iter().copied().collect();
         assert_eq!(distinct.count() as usize, top_first.len(), "a slot twice");
@@ -339,15 +403,15 @@ impl<L: Layout> State<L> {
     /// If the choice to play or draw is not open.
     pub fn set_flip_winner(&mut self, chooser: Seat) {
         assert!(
-            matches!(self.pending, Pending::PlayOrDraw { .. }),
+            matches!(self.0.pending, Pending::PlayOrDraw { .. }),
             "the choice to play or draw is open"
         );
-        self.pending = Pending::PlayOrDraw { chooser };
+        self.0.pending = Pending::PlayOrDraw { chooser };
     }
 }
 
-impl State {
-    /// Renumbers each library's slots last first ([`State::renumber_deck_slots`]). For tests.
+impl Board<'_, Small> {
+    /// Renumbers each library's slots last first ([`Board::renumber_deck_slots`]). For tests.
     ///
     /// # Panics
     ///
@@ -370,21 +434,21 @@ impl State {
     #[doc(hidden)]
     pub fn renumber_deck_slots(&mut self, mut order: impl FnMut(&mut [Slot])) {
         assert!(
-            matches!(self.pending, Pending::PlayOrDraw { .. }) && self.turn.number == 0,
+            matches!(self.0.pending, Pending::PlayOrDraw { .. }) && self.0.turn.number == 0,
             "the game has not begun"
         );
         for player in Seat::BOTH {
             let p = player.index();
-            let mut slots = self.zones.library[p];
+            let mut slots = self.0.zones.library[p];
             let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
             for &slot in &slots {
-                let _ = cards.push(self.object(slot).card);
+                let _ = cards.push(self.0.object(slot).card);
             }
             order(slots.as_mut_slice());
             for (&slot, &card) in slots.iter().zip(cards.iter()) {
-                self.object_mut(slot).card = card;
+                self.0.object_mut(slot).card = card;
             }
-            self.zones.library[p] = slots;
+            self.0.zones.library[p] = slots;
         }
     }
 }

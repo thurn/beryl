@@ -325,12 +325,12 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
         let _ = write!(text, " {}/{}", d.power, d.toughness);
     }
     let c = o.counters;
-    for (kind, n) in [
+    let common = [
         (CounterKind::PlusOne, c.plus_one),
         (CounterKind::MinusOne, c.minus_one),
         (CounterKind::Loyalty, c.loyalty),
-        (c.other_kind, c.other),
-    ] {
+    ];
+    for (kind, n) in common.into_iter().chain(c.long_tail()) {
         if n > 0 {
             let _ = write!(text, " [{n} {}]", counter(kind));
         }

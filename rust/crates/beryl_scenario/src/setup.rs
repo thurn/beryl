@@ -28,10 +28,10 @@ impl Slots {
     fn apply(self, s: &mut State) {
         match self {
             Slots::Dealt => {}
-            Slots::Reversed => s.reverse_deck_slots(),
+            Slots::Reversed => s.board().reverse_deck_slots(),
             Slots::Shuffled => {
                 let mut rng = SplitMix64::new(0x510f_5eed);
-                s.renumber_deck_slots(|slots| rng.shuffle(slots));
+                s.board().renumber_deck_slots(|slots| rng.shuffle(slots));
             }
         }
     }
@@ -86,26 +86,27 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
     let setup = &scenario.setup;
     let mut s = State::new(t, setup.seed, Profile::EXACT);
     slots.apply(&mut s);
-    s.begin_at(setup.turn, setup.active, setup.step);
+    s.board().begin_at(setup.turn, setup.active, setup.step);
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
-        s.set_life(p, player.life);
+        s.board().set_life(p, player.life);
         let full = |_| "a zone is full".to_string();
         for &name in player.hand {
-            s.place(library_slot(&s, t, p, name), Zone::Hand)
-                .map_err(full)?;
+            let slot = library_slot(&s, t, p, name);
+            s.board().place(slot, Zone::Hand).map_err(full)?;
         }
         for b in player.battlefield {
             let slot = if b.token {
-                s.place_token(p, token_index(t, b.card)?, b.face, false)
+                s.board()
+                    .place_token(p, token_index(t, b.card)?, b.face, false)
                     .map_err(full)?
             } else {
                 let slot = library_slot(&s, t, p, b.card);
-                s.place(slot, Zone::Battlefield).map_err(full)?;
-                s.set_face(slot, b.face);
+                s.board().place(slot, Zone::Battlefield).map_err(full)?;
+                s.board().set_face(slot, b.face);
                 slot
             };
-            s.set_tapped(slot, b.tapped);
-            s.set_sick(slot, b.sick);
+            s.board().set_tapped(slot, b.tapped);
+            s.board().set_sick(slot, b.sick);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
             let printed = t.def(s.card(slot)).face(b.face).loyalty;
@@ -114,22 +115,22 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
                 .map(|c| (c.kind, c.count))
                 .or(printed.map(|n| (CounterKind::Loyalty, n)));
             if let Some((kind, n)) = counters {
-                s.set_counters(slot, kind, n);
+                s.board().set_counters(slot, kind, n);
             }
             for &name in b.exiled_with {
                 let card = library_slot(&s, t, p, name);
-                s.place(card, Zone::Exile).map_err(full)?;
-                s.set_exiled_with(card, slot);
+                s.board().place(card, Zone::Exile).map_err(full)?;
+                s.board().set_exiled_with(card, slot);
             }
         }
         // Top first: the last placed is on top.
         for &name in player.graveyard.iter().rev() {
-            s.place(library_slot(&s, t, p, name), Zone::Graveyard)
-                .map_err(full)?;
+            let slot = library_slot(&s, t, p, name);
+            s.board().place(slot, Zone::Graveyard).map_err(full)?;
         }
         for &name in player.exile {
-            s.place(library_slot(&s, t, p, name), Zone::Exile)
-                .map_err(full)?;
+            let slot = library_slot(&s, t, p, name);
+            s.board().place(slot, Zone::Exile).map_err(full)?;
         }
         let mut order = Vec::new();
         for &name in player.library {
@@ -141,7 +142,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
                 .expect("the library holds the cards it lists");
             order.push(slot);
         }
-        s.order_library(p, &order);
+        s.board().order_library(p, &order);
     }
     Ok(s)
 }

@@ -15,7 +15,7 @@ use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{Seat, Slot};
-use crate::state::{Pending, TurnStep, Zone};
+use crate::state::{CounterKind, Pending, TurnStep, Zone};
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
@@ -723,11 +723,10 @@ impl Game {
         crate::zone::move_to(&mut self.s, &mut crate::event::Sink::off(), slot, zone).unwrap();
         if zone == Zone::Battlefield {
             let loyalty = self.t.def(self.s.object(slot).card).front().loyalty;
-            let o = self.s.object_mut(slot);
-            o.flags
-                .set(crate::state::ObjectFlags::SUMMONING_SICK, false);
+            let mut board = self.s.board();
+            board.set_sick(slot, false);
             // CR 306.5b: it enters with its printed loyalty.
-            o.counters.loyalty = loyalty.unwrap_or(0);
+            board.set_counters(slot, CounterKind::Loyalty, loyalty.unwrap_or(0));
         }
         slot
     }

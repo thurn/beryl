@@ -3,7 +3,7 @@
 
 use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
-use crate::ids::{CardIx, SlotId};
+use crate::ids::CardIx;
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
@@ -89,9 +89,7 @@ pub(crate) fn counters_matter<L: Layout>(
 /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
 fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     // Effects on an object that left its zone end: that object no longer exists (CR 400.7).
-    let objects = &s.objects;
-    s.effects
-        .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
+    s.drop_stale_effects();
 
     s.listening = listening(s, t);
 

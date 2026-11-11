@@ -137,7 +137,7 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
                 Bitboard::EMPTY,
                 &plans.as_slice()[0],
             )?;
-            turn_face_up(s, slot);
+            s.turn_face_up(slot);
             return Ok(());
         }
     }
@@ -200,32 +200,9 @@ pub(crate) fn perform<L: Layout>(
     };
     if remaining.is_zero() {
         s.pending = Pending::None;
-        turn_face_up(s, slot);
+        s.turn_face_up(slot);
     } else {
         s.pending = Pending::TurningFaceUp { slot, remaining };
     }
     Ok(())
-}
-
-/// Turns the face-down permanent in `slot` face up. It stays the same object, with its
-/// counters, damage and status, and does not enter again
-/// ([CR 708.8](https://yawgatog.com/resources/magic-rules/#R7088)): "As a face-down permanent
-/// is turned face up, its copiable values revert to its normal copiable values. Any effects
-/// that have been applied to the face-down permanent still apply to the face-up permanent. Any
-/// abilities relating to the permanent entering the battlefield don't trigger and don't have
-/// any effect, because the permanent has already entered the battlefield."
-///
-/// Every player has seen it (CR 701.40b), and it gets a new timestamp
-/// ([CR 613.7f](https://yawgatog.com/resources/magic-rules/#R6137f)): "A permanent receives a
-/// new timestamp each time it turns face up or face down."
-fn turn_face_up<L: Layout>(s: &mut State<L>, slot: L::Slot) {
-    let timestamp = s.zones.next_timestamp;
-    s.zones.next_timestamp = timestamp.wrapping_add(1);
-    let o = s.object_mut(slot);
-    o.face = FaceIx::FRONT;
-    o.timestamp = timestamp;
-    for k in &mut s.knowledge {
-        k.insert(slot);
-    }
-    s.flags.derived_dirty = true;
 }

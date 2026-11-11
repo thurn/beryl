@@ -265,19 +265,21 @@ impl Checkpoint {
     pub fn arrange(&self, t: &GameTable, s: &mut State<Small>, seed: u64) -> Result<(), String> {
         let seat = |p: u8| Seat::try_new(p).ok_or_else(|| format!("no seat {p}"));
         let full = |_| "a zone is full".to_owned();
-        s.begin_before_turn(self.turn, seat(self.active)?);
+        s.board().begin_before_turn(self.turn, seat(self.active)?);
         for (p, side) in Seat::BOTH.into_iter().zip(&self.players) {
-            s.set_life(p, side.life);
+            s.board().set_life(p, side.life);
             for name in &side.emblems {
-                s.add_emblem(p, game_index(t, name)?).map_err(full)?;
+                s.board()
+                    .add_emblem(p, game_index(t, name)?)
+                    .map_err(full)?;
             }
             let mut shown = side.shown.clone();
             for name in &side.hand {
                 let slot = from_library(t, s, p, name)?;
-                s.place(slot, Zone::Hand).map_err(full)?;
+                s.board().place(slot, Zone::Hand).map_err(full)?;
                 if let Some(i) = shown.iter().position(|n| n == name) {
                     shown.swap_remove(i);
-                    s.set_known(p.opponent(), slot, true);
+                    s.board().set_known(p.opponent(), slot, true);
                 }
             }
             if let Some(name) = shown.first() {
@@ -291,27 +293,28 @@ impl Checkpoint {
         for b in &self.battlefield {
             let owner = seat(b.owner)?;
             let slot = if b.token {
-                s.place_token(owner, game_index(t, &b.card)?, b.face.ix(), b.one_one)
+                s.board()
+                    .place_token(owner, game_index(t, &b.card)?, b.face.ix(), b.one_one)
                     .map_err(full)?
             } else {
                 let slot = from_library(t, s, owner, &b.card)?;
-                s.place(slot, Zone::Battlefield).map_err(full)?;
+                s.board().place(slot, Zone::Battlefield).map_err(full)?;
                 slot
             };
-            s.set_controller(slot, seat(b.controller)?);
+            s.board().set_controller(slot, seat(b.controller)?);
             if !b.token && b.face != Face::Front {
-                s.set_face(slot, b.face.ix());
+                s.board().set_face(slot, b.face.ix());
             }
-            s.set_tapped(slot, b.tapped);
-            s.set_sick(slot, b.sick);
+            s.board().set_tapped(slot, b.tapped);
+            s.board().set_sick(slot, b.sick);
             for c in &b.counters {
-                s.set_counters(slot, c.kind.kind(), c.count);
+                s.board().set_counters(slot, c.kind.kind(), c.count);
             }
-            s.set_damage(slot, b.damage);
-            s.set_impending(slot, b.impending);
+            s.board().set_damage(slot, b.damage);
+            s.board().set_impending(slot, b.impending);
             if b.face == Face::Down {
                 for p in Seat::BOTH {
-                    s.set_known(p, slot, b.known.contains(&p.get()));
+                    s.board().set_known(p, slot, b.known.contains(&p.get()));
                 }
             }
             slots.push(slot);
@@ -324,23 +327,23 @@ impl Checkpoint {
         };
         for (b, &slot) in self.battlefield.iter().zip(&slots) {
             if let Some(i) = b.attached_to {
-                s.attach(slot, permanent(i)?);
+                s.board().attach(slot, permanent(i)?);
             }
         }
         for (p, side) in Seat::BOTH.into_iter().zip(&self.players) {
             // Top first: the last placed is on top.
             for name in side.graveyard.iter().rev() {
                 let slot = from_library(t, s, p, name)?;
-                s.place(slot, Zone::Graveyard).map_err(full)?;
+                s.board().place(slot, Zone::Graveyard).map_err(full)?;
             }
             for x in &side.exile {
                 let slot = from_library(t, s, p, &x.card)?;
-                s.place(slot, Zone::Exile).map_err(full)?;
+                s.board().place(slot, Zone::Exile).map_err(full)?;
                 if let Some(i) = x.with {
-                    s.set_exiled_with(slot, permanent(i)?);
+                    s.board().set_exiled_with(slot, permanent(i)?);
                 }
                 if let Some(i) = x.until {
-                    s.set_exiled_until(slot, permanent(i)?);
+                    s.board().set_exiled_until(slot, permanent(i)?);
                 }
             }
             arrange_library(t, s, p, side, seed)?;
@@ -579,7 +582,7 @@ fn arrange_library(
             return Err(format!("two cards at depth {}", k.depth));
         }
         for q in Seat::BOTH {
-            s.set_known(q, slot, k.by.contains(&q.get()));
+            s.board().set_known(q, slot, k.by.contains(&q.get()));
         }
     }
     rest.sort_unstable();
@@ -587,7 +590,7 @@ fn arrange_library(
     shuffle.shuffle(&mut rest);
     for slot in &rest {
         for q in Seat::BOTH {
-            s.set_known(q, *slot, false);
+            s.board().set_known(q, *slot, false);
         }
     }
     let mut rest = rest.into_iter();
@@ -598,7 +601,7 @@ fn arrange_library(
                 .expect("as many slots as places")
         })
         .collect();
-    s.order_library(p, &order);
+    s.board().order_library(p, &order);
     Ok(())
 }
 

@@ -152,6 +152,7 @@
 //! are parameters of the layout (by-w8gv.5.14, by-w8gv.5.15).
 
 pub mod bitboard;
+pub mod board;
 pub mod chance;
 pub mod decision;
 pub mod event;
@@ -161,6 +162,8 @@ mod floating;
 pub mod ids;
 pub mod invariants;
 pub mod layout;
+pub mod legacy;
+pub mod mutate;
 mod new;
 mod object;
 pub mod observation;
@@ -169,7 +172,6 @@ mod player;
 pub mod profile;
 pub mod relayout;
 pub mod rng;
-mod setup;
 mod stack;
 pub mod state;
 pub mod table;

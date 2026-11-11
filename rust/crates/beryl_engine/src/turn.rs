@@ -62,16 +62,7 @@ pub(crate) fn begin_turn<L: Layout>(
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began. Nothing has entered, and no loyalty ability has been
     // activated (CR 606.3), this turn.
-    for i in 0..s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
-        let controlled = s.controller(slot) == active;
-        let o = s.object_mut(slot);
-        if controlled {
-            o.flags.set(ObjectFlags::SUMMONING_SICK, false);
-        }
-        o.flags.set(ObjectFlags::ENTERED_THIS_TURN, false);
-        o.flags.set(ObjectFlags::LOYALTY_ACTIVATED, false);
-    }
+    s.reset_permanents_for_turn(active);
     // "Until your next turn" ends as that turn begins.
     s.player_mut(active).sorceries_as_flash = false;
     begin_step(s, t, sink, TurnStep::Untap)
@@ -230,10 +221,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
 /// where every priority check runs, in `next`; `cleanup_check` tells it to end the turn
 /// instead when nothing happens.
 fn finish_cleanup<L: Layout>(s: &mut State<L>) {
-    for i in 0..s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
-        s.object_mut(slot).damage = 0;
-    }
+    s.clear_damage();
     let before = s.effects.len();
     s.effects.retain(|e| e.duration != Duration::EndOfTurn);
     if s.effects.len() != before {

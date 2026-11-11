@@ -317,10 +317,7 @@ fn impending_is_an_alternative_cost_that_enters_with_time_counters() {
     let o = g.s.object(overlord);
     assert_eq!(o.zone, Zone::Battlefield);
     assert!(o.flags.has(ObjectFlags::IMPENDING));
-    assert_eq!(
-        (o.counters.other_kind, o.counters.other),
-        (CounterKind::Time, 4)
-    );
+    assert_eq!(o.counters.long_tail(), Some((CounterKind::Time, 4)));
 }
 
 #[test]
@@ -358,7 +355,7 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
 fn loyalty_abilities_are_sorcery_speed_and_once_a_turn() {
     let mut g = Game::new(Profile::EXACT);
     let raveler = g.give(g.me, "Test Raveler", Zone::Battlefield);
-    g.s.object_mut(raveler).counters.loyalty = 2;
+    g.s.board().set_counters(raveler, CounterKind::Loyalty, 2);
     let plus = Opt::Activate {
         slot: raveler,
         ability: AbilityIx::Own(1),
@@ -407,10 +404,8 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     assert_eq!(g.s.object(emperor).counters.loyalty, 4);
     g.pass_both();
     // The turn it did not enter, it is sorcery speed again.
-    g.s.object_mut(emperor).flags.set(
-        ObjectFlags::ENTERED_THIS_TURN | ObjectFlags::LOYALTY_ACTIVATED,
-        false,
-    );
+    g.s.board().set_entered_this_turn(emperor, false);
+    g.s.board().set_loyalty_activated(emperor, false);
     g.at(g.them, TurnStep::End);
     let d = g.current();
     assert!(index_of(&d, plus).is_none());
@@ -643,7 +638,7 @@ fn a_triggered_ability_chooses_its_targets_as_it_goes_on_the_stack() {
             .collect();
         // Two bears with different tapped states are two targets.
         if let Some(&first) = bears.first() {
-            g.s.object_mut(first).flags.set(ObjectFlags::TAPPED, true);
+            g.s.board().set_tapped(first, true);
         }
         g.pick(cast(stinger));
         g.pass_both();

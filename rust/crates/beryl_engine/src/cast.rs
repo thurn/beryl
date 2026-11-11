@@ -1001,9 +1001,7 @@ pub(crate) fn begin_cast<L: Layout>(
     let permission = permission(s, player, slot);
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let card = s.object(slot).card;
-    let o = s.object_mut(slot);
-    o.face = face;
-    o.base_controller = player;
+    s.become_spell(slot, face, player);
     s.stack.push(StackEntry {
         object: Some(s.object_ref(slot)),
         controller: player,
@@ -1052,9 +1050,8 @@ pub(crate) fn begin_activate<L: Layout>(
     let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
     let a = t.def(card).face(face).ability(index);
     if a.is_loyalty() {
-        s.object_mut(slot)
-            .flags
-            .set(ObjectFlags::LOYALTY_ACTIVATED, true);
+        s.legacy_mut()
+            .set_object_flags(slot, ObjectFlags::LOYALTY_ACTIVATED, true);
     }
     s.stack.push(StackEntry {
         object: Some(s.object_ref(slot)),

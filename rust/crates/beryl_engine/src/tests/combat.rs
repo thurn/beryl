@@ -9,7 +9,7 @@ use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
-use crate::state::{ObjectFlags, Zone};
+use crate::state::{CounterKind, ObjectFlags, Zone};
 use crate::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next, zone,
@@ -214,10 +214,11 @@ impl Game {
             Zone::Battlefield,
         )
         .unwrap();
-        let o = self.s.object_mut(slot);
-        o.flags.set(ObjectFlags::SUMMONING_SICK, false);
-        if let Some(loyalty) = self.t.def(o.card).front().loyalty {
-            o.counters.loyalty = loyalty;
+        self.s.board().set_sick(slot, false);
+        if let Some(loyalty) = self.t.def(self.s.card(slot)).front().loyalty {
+            self.s
+                .board()
+                .set_counters(slot, CounterKind::Loyalty, loyalty);
         }
         slot
     }
@@ -356,11 +357,9 @@ fn only_untapped_creatures_controlled_since_the_turn_began_attack() {
     let mut g = Game::new();
     let a = g.attacker;
     let sick = g.put(a, "Bear");
-    g.s.object_mut(sick)
-        .flags
-        .set(ObjectFlags::SUMMONING_SICK, true);
+    g.s.board().set_sick(sick, true);
     let tapped = g.put(a, "Ogre");
-    g.s.object_mut(tapped).flags.set(ObjectFlags::TAPPED, true);
+    g.s.board().set_tapped(tapped, true);
     // Only the defender's creature is ready: the attacking player declares nothing, and with
     // no attackers the declare blockers and combat damage steps are skipped (CR 508.8).
     g.put(g.defender(), "Bear");
@@ -812,9 +811,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     let bear = g.put(a, "Bear");
     let sentry = g.put(a, "Sentry");
     // A summoning-sick creature can crew: tapping it is a cost of the Vehicle's ability.
-    g.s.object_mut(sentry)
-        .flags
-        .set(ObjectFlags::SUMMONING_SICK, true);
+    g.s.board().set_sick(sentry, true);
     g.expect(DecisionKind::Priority);
     assert!(!is_creature(&g, wagon));
     g.pick(
@@ -865,7 +862,7 @@ fn crew_is_offered_only_with_enough_power() {
         ability: AbilityIx::Own(0),
     };
     assert!(!options(&priority).contains(&crew));
-    g.s.object_mut(bear).flags.set(ObjectFlags::TAPPED, true);
+    g.s.board().set_tapped(bear, true);
     g.put(a, "Ogre");
     let priority = g.expect(DecisionKind::Priority);
     assert!(options(&priority).contains(&crew));

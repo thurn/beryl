@@ -1,10 +1,10 @@
 //! Objects: the base data of each slot, a reference to one incarnation of it, and the layer
 //! results of a permanent (architecture §4.2, §5, §9).
 //!
-//! Transitional: the fields are `pub` so `beryl_engine` builds against the crate as it did
-//! against its own module. by-w8gv.5.3 writes objects only through the kernel's mutators and
-//! makes [`State::object_mut`](crate::State::object_mut) private; by-w8gv.5.9 turns the
-//! fields other crates read into getters.
+//! Only the kernel writes an object: through [`State`](crate::State)'s mutators, the zone and
+//! chance chokepoints, the board door and the legacy accessor. No `&mut Object` leaves the
+//! crate. Transitional: the fields are still `pub` to read; by-w8gv.5.9 moves the readers in
+//! other crates to the getters below and makes the fields private.
 
 use beryl_card::{Colors, CounterKind, FaceIx, Keywords, Subtypes, Supertypes, Types, Zone};
 
@@ -74,6 +74,15 @@ impl ObjectFlags {
     pub const IMPENDING: u32 = 1 << 20;
     /// Its evoke cost was paid (CR 702.74a).
     pub const EVOKED: u32 = 1 << 21;
+    /// The flags milestone 4 (by-w8gv.7.1) moves to memos. No mutator sets them: they are
+    /// written through [`State::legacy_mut`](crate::State::legacy_mut) alone.
+    pub const LEGACY: u32 = Self::KICKED
+        | Self::OFFSPRING
+        | Self::IMPENDING
+        | Self::EVOKED
+        | Self::EXILED_UNTIL
+        | Self::EXILED_WITH
+        | Self::LOYALTY_ACTIVATED;
 
     #[inline]
     pub fn has(self, flag: u32) -> bool {
@@ -90,17 +99,34 @@ impl ObjectFlags {
     }
 }
 
-/// Counters on an object: the common kinds, and one (kind, count) pair for the long tail.
+/// Counters on an object: the common kinds, and one (kind, count) pair for the long tail,
+/// which milestone 4 (by-w8gv.7.1) moves to a store and only
+/// [`State::legacy_mut`](crate::State::legacy_mut) writes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Counters {
     pub plus_one: u8,
     pub minus_one: u8,
     pub loyalty: u8,
-    pub other_kind: CounterKind,
-    pub other: u8,
+    pub(crate) other_kind: CounterKind,
+    pub(crate) other: u8,
 }
 
 impl Counters {
+    /// Whether a kind is one of the long tail, kept in the one (kind, count) pair.
+    #[inline]
+    pub const fn is_long_tail(kind: CounterKind) -> bool {
+        !matches!(
+            kind,
+            CounterKind::PlusOne | CounterKind::MinusOne | CounterKind::Loyalty
+        )
+    }
+
+    /// The long-tail kind this object has counters of, and how many.
+    #[inline]
+    pub fn long_tail(self) -> Option<(CounterKind, u8)> {
+        (self.other > 0).then_some((self.other_kind, self.other))
+    }
+
     /// How many counters of a kind there are.
     #[inline]
     pub fn get(self, kind: CounterKind) -> u8 {
@@ -116,7 +142,7 @@ impl Counters {
     /// The count of a kind, to change. One object carries one long-tail kind at a time,
     /// which the cube's cards never exceed; adding a second kind replaces the first.
     #[inline]
-    pub fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
+    pub(crate) fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
         match kind {
             CounterKind::PlusOne => &mut self.plus_one,
             CounterKind::MinusOne => &mut self.minus_one,
@@ -135,8 +161,8 @@ impl Counters {
 
 /// The base data of the object in one slot (architecture §4.2).
 ///
-/// Transitional: the fields are `pub`. by-w8gv.5.3 makes every write a mutator of the
-/// kernel's, and by-w8gv.5.9 makes the fields private behind getters.
+/// Transitional: the fields are `pub` to read. Only the kernel can write one, since no
+/// `&mut Object` leaves the crate; by-w8gv.5.9 makes the fields private behind the getters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: which card this is. Engine-only, since an
@@ -196,6 +222,176 @@ impl<L: Layout> Object<L> {
         combat: None,
         battlefield_index: OFF_BATTLEFIELD,
     };
+}
+
+/// What the rules give an object, to read. A field has one getter, and a status flag one
+/// each.
+impl<L: Layout> Object<L> {
+    /// Index into the game table: which card this is. Players read it through
+    /// [`crate::Observation::card`], which masks what they do not know.
+    #[inline]
+    pub fn card(&self) -> CardIx {
+        self.card
+    }
+
+    /// Bumped on every zone change
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that moves
+    /// from one zone to another becomes a new object".
+    #[inline]
+    pub fn incarnation(&self) -> u16 {
+        self.incarnation
+    }
+
+    #[inline]
+    pub fn zone(&self) -> Zone {
+        self.zone
+    }
+
+    /// [CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083): "The owner of a card in
+    /// the game is the player who started the game with it in their deck."
+    #[inline]
+    pub fn owner(&self) -> Seat {
+        self.owner
+    }
+
+    /// The controller before continuous effects
+    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)).
+    #[inline]
+    pub fn base_controller(&self) -> Seat {
+        self.base_controller
+    }
+
+    /// Every status and combat flag at once.
+    #[inline]
+    pub fn flags(&self) -> ObjectFlags {
+        self.flags
+    }
+
+    /// [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105): "A permanent's status
+    /// is its physical state. There are four status categories, each of which has two
+    /// possible values: tapped/untapped, flipped/unflipped, face up/face down, and phased
+    /// in/phased out."
+    #[inline]
+    pub fn is_tapped(&self) -> bool {
+        self.flags.has(ObjectFlags::TAPPED)
+    }
+
+    /// Not under its controller's control continuously since their most recent turn began
+    /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+    #[inline]
+    pub fn is_summoning_sick(&self) -> bool {
+        self.flags.has(ObjectFlags::SUMMONING_SICK)
+    }
+
+    /// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "a marker used to
+    /// represent any permanent that isn't represented by a card."
+    #[inline]
+    pub fn is_token(&self) -> bool {
+        self.flags.has(ObjectFlags::TOKEN)
+    }
+
+    /// A copy whose copiable values are 1/1 by exception
+    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
+    #[inline]
+    pub fn is_one_one(&self) -> bool {
+        self.flags.has(ObjectFlags::ONE_ONE)
+    }
+
+    #[inline]
+    pub fn entered_this_turn(&self) -> bool {
+        self.flags.has(ObjectFlags::ENTERED_THIS_TURN)
+    }
+
+    /// An attacking creature ([CR 506.3](https://yawgatog.com/resources/magic-rules/#R5063)).
+    #[inline]
+    pub fn is_attacking(&self) -> bool {
+        self.flags.has(ObjectFlags::ATTACKING)
+    }
+
+    /// A blocking creature
+    /// ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g)).
+    #[inline]
+    pub fn is_blocking(&self) -> bool {
+        self.flags.has(ObjectFlags::BLOCKING)
+    }
+
+    /// An attacking creature that has been blocked
+    /// ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h)).
+    #[inline]
+    pub fn is_blocked(&self) -> bool {
+        self.flags.has(ObjectFlags::BLOCKED)
+    }
+
+    /// An attacker attacking a planeswalker rather than a player
+    /// ([CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062)).
+    #[inline]
+    pub fn attacks_planeswalker(&self) -> bool {
+        self.flags.has(ObjectFlags::ATTACKS_PLANESWALKER)
+    }
+
+    /// Dealt its combat damage in the first-strike step
+    /// ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
+    #[inline]
+    pub fn struck_first(&self) -> bool {
+        self.flags.has(ObjectFlags::STRUCK_FIRST)
+    }
+
+    /// Damage marked this turn
+    /// ([CR 120.6](https://yawgatog.com/resources/magic-rules/#R1206)): "Damage marked on a
+    /// creature remains until the cleanup step".
+    #[inline]
+    pub fn damage(&self) -> u8 {
+        self.damage
+    }
+
+    #[inline]
+    pub fn counters(&self) -> Counters {
+        self.counters
+    }
+
+    /// How many counters of a kind are on it
+    /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)).
+    #[inline]
+    pub fn counters_of(&self, kind: CounterKind) -> u8 {
+        self.counters.get(kind)
+    }
+
+    /// The object an Aura or Equipment is attached to
+    /// ([CR 701.3](https://yawgatog.com/resources/magic-rules/#R7013)).
+    #[inline]
+    pub fn attached_to(&self) -> Option<L::Slot> {
+        self.attached_to
+    }
+
+    /// The object that exiled this one
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a),
+    /// [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)).
+    #[inline]
+    pub fn linked(&self) -> Option<L::Slot> {
+        self.linked
+    }
+
+    /// When it entered the battlefield or last turned face up, among the layers' timestamps
+    /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)).
+    #[inline]
+    pub fn timestamp(&self) -> u16 {
+        self.timestamp
+    }
+
+    /// Which face is up ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)), or
+    /// [`FaceIx::DOWN`] ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
+    #[inline]
+    pub fn face(&self) -> FaceIx {
+        self.face
+    }
+
+    /// In combat: the planeswalker an attacker attacks, or the attacker a blocker blocks
+    /// ([CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062),
+    /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g)).
+    #[inline]
+    pub fn combat(&self) -> Option<L::Slot> {
+        self.combat
+    }
 }
 
 const _: () = assert!(size_of::<Option<Slot>>() == 1 && size_of::<Option<CardIx>>() == 1);

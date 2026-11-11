@@ -126,7 +126,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
     ];
     let t = GameTable::new(&CARDS, [&deck, &[(1, PLAINS)]]).unwrap();
     let mut s = State::new(&t, 0, Profile::SMART);
-    s.begin_at(3, Seat::P0, TurnStep::PrecombatMain);
+    s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
     let named = |s: &State, name: &str| {
         s.library(Seat::P0)
             .iter()
@@ -135,16 +135,17 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
             .unwrap()
     };
     let iceberg = named(&s, AANGS_ICEBERG);
-    s.place(iceberg, Zone::Battlefield).unwrap();
+    s.board().place(iceberg, Zone::Battlefield).unwrap();
     for name in [PLAINS, PLAINS, PLAINS, ISLAND, ISLAND, ISLAND] {
-        s.place(named(&s, name), Zone::Battlefield).unwrap();
+        let slot = named(&s, name);
+        s.board().place(slot, Zone::Battlefield).unwrap();
     }
     let top_first = [
         named(&s, PLAINS),
         named(&s, JACE_THE_MIND_SCULPTOR),
         named(&s, ISLAND),
     ];
-    s.order_library(Seat::P0, &top_first);
+    s.board().order_library(Seat::P0, &top_first);
 
     let policy = RolloutPolicy::new(&t);
     let mut x = Scratch::new();

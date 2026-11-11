@@ -395,7 +395,7 @@ fn a_question_after_a_look_keeps_the_look() {
     ];
     let t = GameTable::new(&CARDS, [p0, p1]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     for player in Seat::BOTH {
         for slot in s.library(player).to_vec() {
             let land = t.def(s.card(slot)).front().types.contains(Types::LAND);
@@ -404,7 +404,7 @@ fn a_question_after_a_look_keeps_the_look() {
             } else {
                 Zone::Hand
             };
-            s.place(slot, zone).unwrap();
+            s.board().place(slot, zone).unwrap();
         }
     }
     let mut x = Scratch::new();

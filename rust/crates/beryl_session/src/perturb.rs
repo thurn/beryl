@@ -118,7 +118,7 @@ pub(crate) fn seed(seed: u64) -> u64 {
 pub(crate) fn new_game(t: &GameTable, seed: u64, profile: Profile) -> State {
     let mut state = State::new(t, self::seed(seed), profile);
     if current().slots {
-        state.reverse_deck_slots();
+        state.board().reverse_deck_slots();
     }
     state
 }

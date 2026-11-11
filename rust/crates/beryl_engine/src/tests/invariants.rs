@@ -1,8 +1,9 @@
 //! The invariant check catches a corrupted state.
 
 use super::{MIXED, begin, table};
-use crate::state::{ObjectFlags, Zone};
+use crate::state::Zone;
 use crate::{Profile, Seat, Slot, State};
+use beryl_kernel::board::Corruption as Break;
 
 /// Breaks one invariant of a state, given the active player and a card in their hand.
 type Corruption = fn(&mut State, Seat, Slot);
@@ -17,7 +18,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
     let hand = s.zone(p, Zone::Hand).first().unwrap();
     let corruptions: [(&str, Corruption); 6] = [
         ("zone bitboards disagree", |s, _, slot| {
-            s.object_mut(slot).zone = Zone::Library;
+            s.board().corrupt(slot, Break::Zone(Zone::Library));
         }),
         ("the library list disagrees", |s, p, _| {
             s.zones.library[p.index()].pop();
@@ -26,7 +27,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
             s.knowledge[p.index()].remove(slot);
         }),
         ("permanent status off the battlefield", |s, _, slot| {
-            s.object_mut(slot).flags.set(ObjectFlags::TAPPED, true);
+            s.board().corrupt(slot, Break::Tapped);
         }),
         ("a player who has lost has priority", |s, p, _| {
             s.player_mut(p).life = 0;
@@ -55,7 +56,7 @@ fn the_engine_panics_on_a_broken_invariant() {
     begin(&t, &mut s);
     let p = s.turn().active;
     let hand = s.zone(p, Zone::Hand).first().unwrap();
-    s.object_mut(hand).flags.set(ObjectFlags::TAPPED, true);
+    s.board().corrupt(hand, Break::Tapped);
     let message = |run: &mut dyn FnMut(&mut State)| {
         let mut bad = s;
         let err = catch_unwind(AssertUnwindSafe(|| run(&mut bad))).unwrap_err();

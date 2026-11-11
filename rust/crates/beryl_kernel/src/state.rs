@@ -80,14 +80,14 @@ pub struct Flags {
 /// Transitional: every field is `pub` for the one push that moved the state into this crate,
 /// so `beryl_engine` builds against it as it did against its own module. Four beads make them
 /// private, each field naming its own (the crate's contract: only the kernel writes a
-/// field): objects, by-w8gv.5.3; zones, the battlefield, the derived cache, knowledge and
+/// field): objects, which already are (by-w8gv.5.3); zones, the battlefield, the derived cache, knowledge and
 /// listening, by-w8gv.5.4; players, the turn and the game-level fields, by-w8gv.5.7; the
 /// stack and the queues, by-w8gv.5.8. The fields keep their order: a state's hash feeds them
 /// in it.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
-    /// Private with by-w8gv.5.3.
-    pub objects: L::Table<Object<L>, SLOTS>,
+    /// Written through [`State::object_mut`] alone, which stays in the crate.
+    pub(crate) objects: L::Table<Object<L>, SLOTS>,
     /// Slots on the battlefield, in the order they entered. Private with by-w8gv.5.4.
     pub battlefield: L::Queue<L::Slot, BATTLEFIELD>,
     /// Layer results, by battlefield index. Private with by-w8gv.5.4.
@@ -361,8 +361,9 @@ impl<L: Layout> State<L> {
         self.effects.as_slice()
     }
 
-    /// Transitional: private with by-w8gv.5.3.
-    pub fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
+    /// The one way to an object to write, which never leaves the crate.
+    #[inline]
+    pub(crate) fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
         &mut self.objects[slot.index()]
     }
 

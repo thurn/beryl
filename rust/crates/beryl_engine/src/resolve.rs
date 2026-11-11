@@ -136,12 +136,7 @@ fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, knowledge: [Bitboard<
 fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool) {
     let random = run.rng != s.rng;
     if settled && !random {
-        let known = s.knowledge[0] | s.knowledge[1];
-        for p in Seat::BOTH {
-            for slot in (s.zone(p, Zone::Library) & !known).iter() {
-                s.object_mut(slot).card = run.object(slot).card;
-            }
-        }
+        chance::adopt_unknown(s, run);
     }
     for p in Seat::BOTH {
         let gained = run.knowledge[p.index()] & !s.knowledge[p.index()];

@@ -6,7 +6,7 @@ use crate::effect::EffectCtx;
 use crate::event::Sink;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{CardIx, Seat, Slot};
-use crate::state::{ObjectFlags, PendingTrigger, Zone};
+use crate::state::{PendingTrigger, Zone};
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
     zone,
@@ -30,7 +30,7 @@ fn the_legend_rule_asks_which_to_keep_when_the_two_differ() {
     let mut s = State::new(&t, 1, Profile::EXACT);
     begin(&t, &mut s);
     let (p, a, b) = two_legends(&mut s);
-    s.object_mut(b).flags.set(ObjectFlags::TAPPED, true);
+    s.board().set_tapped(b, true);
     let d = decide(&t, &mut s);
     assert_eq!(
         (d.kind, d.player, d.len()),
@@ -82,7 +82,7 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
         Zone::Battlefield,
     )
     .unwrap();
-    s.object_mut(stolen).base_controller = p;
+    s.board().set_controller(stolen, p);
     // The one put into the graveyard goes to its owner's: a different game.
     let d = decide(&t, &mut s);
     assert_eq!(

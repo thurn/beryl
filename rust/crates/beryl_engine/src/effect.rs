@@ -1016,9 +1016,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.object(object.slot).zone == Zone::Exile {
-            let o = self.state.object_mut(object.slot);
-            o.flags.set(ObjectFlags::EXILED_UNTIL, true);
-            o.linked = Some(source.slot);
+            self.state.link(object.slot, source.slot);
+            self.state
+                .legacy_mut()
+                .set_object_flags(object.slot, ObjectFlags::EXILED_UNTIL, true);
         }
     }
 
@@ -1040,9 +1041,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let source = self.source();
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.is_current(source) && self.state.object(object.slot).zone == Zone::Exile {
-            let o = self.state.object_mut(object.slot);
-            o.flags.set(ObjectFlags::EXILED_WITH, true);
-            o.linked = Some(source.slot);
+            self.state.link(object.slot, source.slot);
+            self.state
+                .legacy_mut()
+                .set_object_flags(object.slot, ObjectFlags::EXILED_WITH, true);
         }
     }
 
@@ -1216,9 +1218,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             };
             if let Some(walker) = walker {
                 for slot in tokens.iter() {
-                    let o = self.state.object_mut(slot);
-                    o.combat = Some(walker);
-                    o.flags.set(ObjectFlags::ATTACKS_PLANESWALKER, true);
+                    self.state.choose_attacked(slot, Some(walker));
                 }
             }
         }
@@ -1266,10 +1266,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             Continuous::Layer(crate::card::Modification::Control(player)),
             duration,
         );
-        self.state
-            .object_mut(object.slot)
-            .flags
-            .set(ObjectFlags::SUMMONING_SICK, true);
+        self.state.set_summoning_sick(object.slot, true);
         let r = event::settle(
             self.state,
             self.table,

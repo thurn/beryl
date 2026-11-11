@@ -8,6 +8,7 @@
 //! most draws) arrive with the cards that create them.
 
 pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, kind};
+use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
@@ -15,7 +16,9 @@ use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
-use crate::state::{Continuous, CounterKind, ObjectFlags, ObjectRef, State, Zone, token_slots};
+use crate::state::{
+    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, token_slots,
+};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::{self, Place};
@@ -43,6 +46,33 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub x: u8,
     /// The object an Aura spell attaches to as it resolves (CR 608.3c).
     pub attach: Option<L::Slot>,
+}
+
+/// Gives the permanent that just entered in `slot` what it enters with. The kinds of counter
+/// and the flags milestone 4 (by-w8gv.7.1) moves to memos go raw, through the legacy accessor.
+fn arrive<L: Layout>(s: &mut State<L>, slot: L::Slot, entry: Entry<L>) {
+    let long_tail = entry
+        .counters
+        .filter(|&(kind, _)| Counters::is_long_tail(kind));
+    s.arrive(
+        slot,
+        Arrival {
+            tapped: entry.tapped,
+            attacking: entry.attacking,
+            controller: entry.controller,
+            face: entry.face,
+            counters: if long_tail.is_some() {
+                None
+            } else {
+                entry.counters
+            },
+            attach: entry.attach,
+        },
+    );
+    if let Some((kind, n)) = long_tail {
+        s.legacy_mut().set_counters(slot, kind, n);
+    }
+    s.legacy_mut().set_object_flags(slot, entry.flags, true);
 }
 
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
@@ -217,20 +247,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         }
         zone::move_to_place(s, sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
-            let o = s.object_mut(slot);
-            o.flags.set(ObjectFlags::TAPPED, entry.tapped);
-            o.flags.set(ObjectFlags::ATTACKING, entry.attacking);
-            o.face = entry.face;
-            if let Some(controller) = entry.controller {
-                o.base_controller = controller;
-            }
-            if let Some((kind, n)) = entry.counters {
-                *o.counters.get_mut(kind) = n;
-            }
-            o.flags.0 |= entry.flags;
-            if let Some(host) = entry.attach {
-                o.attached_to = Some(host);
-            }
+            arrive(s, slot, entry);
             if entry.x > 0 {
                 let r = s.object_ref(slot);
                 let mut i = 0;
@@ -503,33 +520,24 @@ pub(crate) fn deal_damage<L: Layout>(
     if amount == 0 {
         return Ok(());
     }
-    match to {
-        Recipient::Player(p) => s.player_mut(p).life -= i16::from(amount),
-        Recipient::Permanent(r) => {
-            if !s.is_current(r) || s.object(r.slot).zone != Zone::Battlefield {
-                return Ok(());
-            }
-            let types = s.derived(r.slot).types;
-            let o = s.object_mut(r.slot);
-            if types.contains(Types::PLANESWALKER) {
-                o.counters.loyalty = o.counters.loyalty.saturating_sub(amount);
-            }
-            if types.contains(Types::CREATURE) {
-                o.damage = o.damage.saturating_add(amount);
+    let e = match to {
+        Recipient::Player(p) => {
+            s.player_mut(p).life -= i16::from(amount);
+            Event::Damage {
+                source,
+                to,
+                amount,
+                combat,
             }
         }
-    }
-    settle(
-        s,
-        t,
-        sink,
-        Event::Damage {
-            source,
-            to,
-            amount,
-            combat,
-        },
-    )
+        Recipient::Permanent(r) => {
+            if !s.is_current(r) || s.object(r.slot).zone() != Zone::Battlefield {
+                return Ok(());
+            }
+            s.mark_damage(source, r, amount, combat)
+        }
+    };
+    settle(s, t, sink, e)
 }
 
 /// Puts counters on a permanent
@@ -545,21 +553,15 @@ pub(crate) fn add_counters<L: Layout>(
     if !s.is_current(object) || amount == 0 {
         return Ok(());
     }
-    let n = s.object_mut(object.slot).counters.get_mut(kind);
-    *n = n.saturating_add(amount);
+    let e = if Counters::is_long_tail(kind) {
+        s.legacy_mut().add_counters(object, kind, amount)
+    } else {
+        s.add_counters(object, kind, amount)
+    };
     if layers::counters_matter(s, t, object.slot, kind) {
         s.flags.derived_dirty = true;
     }
-    settle(
-        s,
-        t,
-        sink,
-        Event::CountersAdded {
-            object,
-            kind,
-            amount,
-        },
-    )
+    settle(s, t, sink, e)
 }
 
 /// Removes up to `amount` counters of a kind from a permanent.
@@ -576,24 +578,19 @@ pub(crate) fn remove_counters<L: Layout>(
     }
     // Read before writing: asking for the count to change would make `kind` the object's
     // long-tail kind even when it has none to remove.
-    let amount = amount.min(s.object(object.slot).counters.get(kind));
+    let amount = amount.min(s.object(object.slot).counters_of(kind));
     if amount == 0 {
         return Ok(());
     }
-    *s.object_mut(object.slot).counters.get_mut(kind) -= amount;
+    let e = if Counters::is_long_tail(kind) {
+        s.legacy_mut().remove_counters(object, kind, amount)
+    } else {
+        s.remove_counters(object, kind, amount)
+    };
     if layers::counters_matter(s, t, object.slot, kind) {
         s.flags.derived_dirty = true;
     }
-    settle(
-        s,
-        t,
-        sink,
-        Event::CountersRemoved {
-            object,
-            kind,
-            amount,
-        },
-    )
+    settle(s, t, sink, e)
 }
 
 /// Taps or untaps a permanent.
@@ -611,17 +608,10 @@ pub(crate) fn set_tapped<L: Layout>(
     object: ObjectRef<L>,
     tapped: bool,
 ) -> Result<(), Full> {
-    if !s.is_current(object) || s.object(object.slot).flags.has(ObjectFlags::TAPPED) == tapped {
+    if !s.is_current(object) || s.object(object.slot).is_tapped() == tapped {
         return Ok(());
     }
-    s.object_mut(object.slot)
-        .flags
-        .set(ObjectFlags::TAPPED, tapped);
-    let e = if tapped {
-        Event::Tap { object }
-    } else {
-        Event::Untap { object }
-    };
+    let e = s.set_tapped(object, tapped);
     settle(s, t, sink, e)
 }
 
@@ -666,12 +656,7 @@ pub(crate) fn create_tokens<L: Layout>(
         tokens.insert(slot);
     }
     for slot in tokens.iter() {
-        let o = s.object_mut(slot);
-        o.card = card;
-        o.owner = controller;
-        o.base_controller = controller;
-        o.flags = ObjectFlags(ObjectFlags::TOKEN);
-        o.flags.set(ObjectFlags::ONE_ONE, how.one_one);
+        s.make_token(slot, controller, card, how.one_one);
     }
     move_batch(
         s,

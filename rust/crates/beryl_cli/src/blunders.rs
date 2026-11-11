@@ -253,7 +253,8 @@ fn counter_named(name: &str) -> Result<CounterKind, String> {
 pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
     let human = seat(b.human)?;
     let mut s = State::new(t, b.seed, with_stops(Profile::SMART, b.stops, human));
-    s.begin_at(b.turn, seat(b.active)?, step_named(&b.step)?);
+    s.board()
+        .begin_at(b.turn, seat(b.active)?, step_named(&b.step)?);
     let full = |_| "a zone is full".to_owned();
     let from_library = |s: &State, p: Seat, name: &str| {
         s.library(p)
@@ -263,11 +264,11 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
             .ok_or_else(|| format!("player {}'s deck has no {name} left", p.get()))
     };
     for (p, side) in Seat::BOTH.into_iter().zip(&b.players) {
-        s.set_life(p, side.life);
+        s.board().set_life(p, side.life);
         for h in &side.hand {
             let slot = from_library(&s, p, &h.card)?;
-            s.place(slot, Zone::Hand).map_err(full)?;
-            s.set_known(p.opponent(), slot, h.shown);
+            s.board().place(slot, Zone::Hand).map_err(full)?;
+            s.board().set_known(p.opponent(), slot, h.shown);
         }
     }
     let mut slots: Vec<Slot> = Vec::with_capacity(b.battlefield.len());
@@ -284,21 +285,22 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
                 .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
                 .find(|&card| t.def(card).name == m.card)
                 .ok_or_else(|| format!("no card makes a {}", m.card))?;
-            s.place_token(owner, card, face, m.one_one).map_err(full)?
+            let token = s.board().place_token(owner, card, face, m.one_one);
+            token.map_err(full)?
         } else {
             let slot = from_library(&s, owner, &m.card)?;
-            s.place(slot, Zone::Battlefield).map_err(full)?;
+            s.board().place(slot, Zone::Battlefield).map_err(full)?;
             if face != FaceIx::FRONT {
-                s.set_face(slot, face);
+                s.board().set_face(slot, face);
             }
             slot
         };
-        s.set_controller(slot, seat(m.controller)?);
-        s.set_tapped(slot, m.tapped);
-        s.set_sick(slot, m.sick);
-        s.set_damage(slot, m.damage);
+        s.board().set_controller(slot, seat(m.controller)?);
+        s.board().set_tapped(slot, m.tapped);
+        s.board().set_sick(slot, m.sick);
+        s.board().set_damage(slot, m.damage);
         for (kind, n) in &m.counters {
-            s.set_counters(slot, counter_named(kind)?, *n);
+            s.board().set_counters(slot, counter_named(kind)?, *n);
         }
         slots.push(slot);
     }
@@ -310,23 +312,23 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
     };
     for (m, &slot) in b.battlefield.iter().zip(&slots) {
         if let Some(i) = m.attached_to {
-            s.attach(slot, permanent(i)?);
+            s.board().attach(slot, permanent(i)?);
         }
     }
     for (p, side) in Seat::BOTH.into_iter().zip(&b.players) {
         // Top first: the last placed is on top.
         for name in side.graveyard.iter().rev() {
             let slot = from_library(&s, p, name)?;
-            s.place(slot, Zone::Graveyard).map_err(full)?;
+            s.board().place(slot, Zone::Graveyard).map_err(full)?;
         }
         for x in &side.exile {
             let slot = from_library(&s, p, &x.card)?;
-            s.place(slot, Zone::Exile).map_err(full)?;
+            s.board().place(slot, Zone::Exile).map_err(full)?;
             if let Some(i) = x.with {
-                s.set_exiled_with(slot, permanent(i)?);
+                s.board().set_exiled_with(slot, permanent(i)?);
             }
             if let Some(i) = x.until {
-                s.set_exiled_until(slot, permanent(i)?);
+                s.board().set_exiled_until(slot, permanent(i)?);
             }
         }
         let mut order: Vec<Slot> = Vec::with_capacity(side.library.len());
@@ -347,7 +349,7 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
                 s.library(p).len()
             ));
         }
-        s.order_library(p, &order);
+        s.board().order_library(p, &order);
     }
     Ok(s)
 }

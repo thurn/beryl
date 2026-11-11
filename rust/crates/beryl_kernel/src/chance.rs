@@ -187,6 +187,19 @@ fn settle_but<L: Layout>(
     });
 }
 
+/// Takes from `run`, a copy of `s` played on, the identity of each library card no player
+/// knows in `s`: a run that replayed a record may have bound recorded cards to the slots it
+/// revealed, trading identities among the cards no one knew ([`settle`]). They stay unknown
+/// to every player in `s`.
+pub fn adopt_unknown<L: Layout>(s: &mut State<L>, run: &State<L>) {
+    let known = s.knowledge[0] | s.knowledge[1];
+    for p in Seat::BOTH {
+        for slot in (s.zone(p, Zone::Library) & !known).iter() {
+            s.object_mut(slot).card = run.object(slot).card;
+        }
+    }
+}
+
 /// Another slot of the owner of `slot`, in its zone, that no player knows and that holds
 /// `card`, but those `settled` (or revealed by an earlier run of a paused body, whose
 /// identities are known in the committed state): the first by slot, as any of them would do.

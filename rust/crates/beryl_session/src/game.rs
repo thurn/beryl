@@ -1028,7 +1028,7 @@ impl Game {
     /// Settles the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
     /// as a record says: `chooser` won it and chooses to play or draw.
     fn set_flip_winner(&mut self, chooser: Seat) {
-        on_board!(&mut self.board, b => b.state.set_flip_winner(chooser));
+        on_board!(&mut self.board, b => b.state.board().set_flip_winner(chooser));
         self.flip_winner = Some(chooser);
         self.replay.chooser = Some(chooser.get());
     }

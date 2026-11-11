@@ -159,7 +159,7 @@ pub(crate) fn attack<L: Layout>(
         Opt::Attack(slot) => {
             // CR 508.1k: "Each chosen creature still controlled by the active player becomes
             // an attacking creature."
-            s.object_mut(slot).flags.set(ObjectFlags::ATTACKING, true);
+            s.declare_attacker(slot);
             s.pending = Pending::DeclareAttackers {
                 attacker: Some(slot),
             };
@@ -172,10 +172,7 @@ pub(crate) fn attack<L: Layout>(
             else {
                 unreachable!("an attack target without an attacker");
             };
-            let o = s.object_mut(attacker);
-            o.combat = target;
-            o.flags
-                .set(ObjectFlags::ATTACKS_PLANESWALKER, target.is_some());
+            s.choose_attacked(attacker, target);
             s.pending = Pending::DeclareAttackers { attacker: None };
             Ok(())
         }
@@ -329,7 +326,7 @@ pub(crate) fn block_decision<L: Layout>(
 /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature
 /// still controlled by the defending player becomes a blocking creature."
 pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
-    s.object_mut(blocker).flags.set(ObjectFlags::BLOCKING, true);
+    s.declare_blocker(blocker);
     s.pending = Pending::DeclareBlockers {
         blocker: Some(blocker),
     };
@@ -348,8 +345,7 @@ pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) {
     else {
         unreachable!("a block target without a blocker");
     };
-    s.object_mut(blocker).combat = Some(attacker);
-    s.object_mut(attacker).flags.set(ObjectFlags::BLOCKED, true);
+    s.block(blocker, attacker);
     s.pending = Pending::DeclareBlockers { blocker: None };
 }
 
@@ -430,9 +426,7 @@ pub(crate) fn begin_damage<L: Layout>(
         for i in 0..s.battlefield.len() {
             let slot = s.battlefield.as_slice()[i];
             if assigns_now(s, slot) {
-                s.object_mut(slot)
-                    .flags
-                    .set(ObjectFlags::STRUCK_FIRST, true);
+                s.mark_struck_first(slot);
             }
         }
     }
@@ -688,25 +682,13 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
             continue;
         };
         if !is_creature(s, slot) || s.controller(slot) != side {
-            remove_from_combat(s, slot);
+            s.remove_from_combat(slot);
         } else if o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER)
             && let Some(walker) = o.combat
             && (s.controller(walker) != active.opponent()
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {
-            s.object_mut(slot).combat = None;
-        }
-    }
-}
-
-fn remove_from_combat<L: Layout>(s: &mut State<L>, slot: L::Slot) {
-    let o = s.object_mut(slot);
-    o.flags.set(ObjectFlags::COMBAT, false);
-    o.combat = None;
-    for i in 0..s.battlefield.len() {
-        let other = s.battlefield.as_slice()[i];
-        if s.object(other).combat == Some(slot) {
-            s.object_mut(other).combat = None;
+            s.forget_attacked(slot);
         }
     }
 }
@@ -728,10 +710,5 @@ pub(crate) fn in_combat(step: TurnStep) -> bool {
 /// combat."
 pub(crate) fn end_combat<L: Layout>(s: &mut State<L>) {
     s.turn.attacked = false;
-    for i in 0..s.battlefield.len() {
-        let slot = s.battlefield.as_slice()[i];
-        let o = s.object_mut(slot);
-        o.flags.set(ObjectFlags::COMBAT, false);
-        o.combat = None;
-    }
+    s.end_combat();
 }

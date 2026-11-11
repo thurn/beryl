@@ -773,7 +773,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let adeline = put(&t, &mut s, &mut x, p, "Test Adeline");
     let attackers: Bitboard = [a, b, adeline].into_iter().collect();
     for slot in attackers.iter() {
-        s.object_mut(slot).flags.set(ObjectFlags::ATTACKING, true);
+        s.declare_attacker(slot);
     }
     event::settle(
         &mut s,
@@ -1141,8 +1141,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
-    s.object_mut(aura).attached_to = Some(bear);
-    s.flags.derived_dirty = true;
+    s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
@@ -1153,14 +1152,12 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(granted.kind, AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
-    s.object_mut(aura).attached_to = Some(land);
-    s.flags.derived_dirty = true;
+    s.board().attach(aura, land);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let subtypes = s.derived(land).subtypes;
     assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
-    s.object_mut(aura).attached_to = Some(bear);
-    s.flags.derived_dirty = true;
+    s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
@@ -1184,8 +1181,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
-    s.object_mut(aura).attached_to = Some(bear);
-    s.flags.derived_dirty = true;
+    s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
@@ -1207,8 +1203,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
         token = ctx.create_tokens(&MAP, 1, TokenEntry::default());
     });
     let token = token.first().unwrap();
-    s.object_mut(aura).attached_to = Some(token);
-    s.flags.derived_dirty = true;
+    s.board().attach(aura, token);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let r = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
@@ -1277,7 +1272,7 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     assert!(s.object(theirs).flags.has(ObjectFlags::SUMMONING_SICK));
     assert_eq!(s.derived(mine).power, 2, "Adeline counts it");
     // It untaps in its new controller's untap step and goes to its owner's graveyard.
-    s.object_mut(theirs).flags.set(ObjectFlags::TAPPED, true);
+    s.board().set_tapped(theirs, true);
     advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
     assert!(
         s.object(theirs).flags.has(ObjectFlags::TAPPED),
@@ -1318,9 +1313,7 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
         .iter()
         .find(|&slot| s.object(slot).card != s.object(mine).card)
         .unwrap();
-    let (a, b) = (s.object(mine).card, s.object(other).card);
-    s.object_mut(mine).card = b;
-    s.object_mut(other).card = a;
+    s.board().swap_cards(mine, other);
     let turn = s.turn().number + 1;
     s.set_profile(Profile {
         breakpoint: Some(Breakpoint {
@@ -1507,10 +1500,10 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
     )
     .unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let mut x = Scratch::new();
     let cathar = find(&s, &t, Seat::P0, "Test Cathar");
-    s.place(cathar, Zone::Battlefield).unwrap();
+    s.board().place(cathar, Zone::Battlefield).unwrap();
     let walker = put(&t, &mut s, &mut x, Seat::P1, "Test Walker");
     let mut declared = false;
     let human = loop {
@@ -1641,17 +1634,17 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
         )
         .unwrap();
         let mut s = State::new(&t, 1, Profile::EXACT);
-        s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+        s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
         let mut scratch = Scratch::new();
         let thief = find(&s, &t, Seat::P0, "Test Thief");
-        s.place(thief, Zone::Hand).unwrap();
+        s.board().place(thief, Zone::Hand).unwrap();
         for _ in 0..4 {
             let land = find(&s, &t, Seat::P0, "Test Land");
-            s.place(land, Zone::Battlefield).unwrap();
+            s.board().place(land, Zone::Battlefield).unwrap();
         }
         let rocks = ["Test Rock 1", "Test Rock 3"].map(|name| {
             let rock = find(&s, &t, Seat::P1, name);
-            s.place(rock, Zone::Battlefield).unwrap();
+            s.board().place(rock, Zone::Battlefield).unwrap();
             rock
         });
         let mut cast = false;
@@ -1730,10 +1723,10 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     )
     .unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let prodigy = find(&s, &t, Seat::P0, "Test Prodigy");
-    s.place(prodigy, Zone::Battlefield).unwrap();
-    s.set_face(prodigy, FaceIx::BACK);
+    s.board().place(prodigy, Zone::Battlefield).unwrap();
+    s.board().set_face(prodigy, FaceIx::BACK);
     assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
     assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
     let mut x = Scratch::new();
