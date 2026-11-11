@@ -254,6 +254,11 @@ check:
 ci *lanes:
     {{ by }} ci "$@"
 
+# Each check's runs, failures and seconds from the run log, costliest first, with lane totals (--days 30, --json)
+[group('checks')]
+ci-report *args:
+    {{ by }} ci-report "$@"
+
 # Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
 [group('checks')]
 fmt:

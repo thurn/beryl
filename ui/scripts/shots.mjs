@@ -17,6 +17,7 @@ import {
     launch,
     openPage,
     phoneFaults,
+    recordResult,
     screenFaults,
     settle,
     still,
@@ -139,7 +140,14 @@ let failed = false;
 try {
     for (const shot of chosen) {
         await run(async () => {
-            if (!(await capture(browser, shot))) failed = true;
+            const started = performance.now();
+            const ok = await capture(browser, shot);
+            if (!ok) failed = true;
+            recordResult(
+                `shots:${shot.name}`,
+                ok ? "pass" : "fail",
+                (performance.now() - started) / 1000,
+            );
         });
     }
     await run.drain();

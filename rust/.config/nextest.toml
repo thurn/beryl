@@ -1,0 +1,4 @@
+# The rust lane's profile (tools/src/beryl_tools/checks.py, rust_tests_step): each test's
+# outcome and time as JUnit XML, which the run log reads.
+[profile.check.junit]
+path = "junit.xml"

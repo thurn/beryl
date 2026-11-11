@@ -22,7 +22,7 @@ import {
 } from "../src/game/decisions.ts";
 import { logLines } from "../src/game/log.ts";
 import { untapChoice } from "../src/game/untapChoice.ts";
-import { cutText, launch, workers } from "./capture.mjs";
+import { cutText, launch, recordResult, workers } from "./capture.mjs";
 import { audit, collect, record } from "./audit.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
@@ -168,6 +168,7 @@ async function check(
         // runs out of socket buffers, net::ERR_NO_BUFFER_SPACE, beside the slow suite's other
         // lanes) never shows the board: boot it once more, in a fresh context. Any other
         // failure, and any after the board shows, fails the check.
+        const started = performance.now();
         for (let boots = 1; ; boots++) {
             const context = await browser.newContext({
                 viewport,
@@ -194,6 +195,7 @@ async function check(
                     m.type() === "error" && seen.push(`${title}: ${m.text()}`),
             );
             let booted = false;
+            let threw = false;
             try {
                 if (clock) await page.clock.install();
                 if (init) await page.addInitScript(init);
@@ -210,11 +212,18 @@ async function check(
                 const lost = seen.some((s) => s.includes("net::ERR_"));
                 if (!booted && lost && boots < 2) continue;
                 failed = true;
+                threw = true;
                 console.error(`FAILED: ${title}\n${e.stack ?? e}`);
             } finally {
                 await context.close();
             }
             errors.push(...seen);
+            // A page error fails the run (below) and, in the run log, the check whose page it was.
+            recordResult(
+                `ui-test:${title}`,
+                threw || seen.length ? "fail" : "pass",
+                (performance.now() - started) / 1000,
+            );
             break;
         }
     });
@@ -949,6 +958,7 @@ await check(
 // (the counters paid go unsaid) and its targets, and a trigger with targets its source and them,
 // so a mill or a bounce that follows has its cause.
 {
+    const started = performance.now();
     const ability = (source, name, targets, triggered = false) => ({
         kind: "ability",
         source,
@@ -1017,7 +1027,13 @@ await check(
             "Subtlety triggered targeting Snapcaster Mage",
         ],
     );
-    console.log("ok: the log names an ability's source, cost and targets");
+    const title = "the log names an ability's source, cost and targets";
+    console.log(`ok: ${title}`);
+    recordResult(
+        `ui-test:${title}`,
+        "pass",
+        (performance.now() - started) / 1000,
+    );
 }
 
 // The log rests at its newest entry, even one laid out while hidden (by an ancestor), which has
@@ -10798,6 +10814,8 @@ await check(
     const title = "an untap picks the lands the hand's instants want";
     if (wanted(title)) {
         ran += 1;
+        const started = performance.now();
+        let outcome = "fail";
         try {
             const data = JSON.parse(
                 await readFile(
@@ -10840,10 +10858,16 @@ await check(
                 "blue for Counterspell",
             );
             console.log(`ok: ${title}`);
+            outcome = "pass";
         } catch (e) {
             failed = true;
             console.error(`FAILED: ${title}\n${e.stack ?? e}`);
         }
+        recordResult(
+            `ui-test:${title}`,
+            outcome,
+            (performance.now() - started) / 1000,
+        );
     }
 }
 

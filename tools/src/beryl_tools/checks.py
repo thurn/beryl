@@ -32,13 +32,14 @@ import sys
 import tempfile
 import threading
 import time
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cards, paths, system, warm
+from . import cards, paths, runlog, system, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -206,7 +207,10 @@ class Steps:
                 system.kill_tree(proc.pid)
 
 
-def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outcome:
+def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> Outcome:
+    """Runs the lane's steps until one fails, logging each attempt's checks (runlog.py): a
+    rerun's own, so a check that failed and then passed shows as both."""
+    script: str = run.script
     clock: Clock = steps.clock
     started = clock.now()
     log: list[str] = []
@@ -216,8 +220,10 @@ def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outc
     def attempt(step: Step, cmd: list[str]) -> int | None:
         """Runs `cmd` for `step`, logging its output and how it ended; its exit code."""
         t, wall = clock.now(), clock.wall()
-        code, output = steps.run(cmd, step.cwd, env)
-        seconds, wall = clock.now() - t, clock.wall() - wall
+        with run.step(env) as (step_env, results):
+            code, output = steps.run(cmd, step.cwd, step_env)
+            seconds, wall = clock.now() - t, clock.wall() - wall
+            run.log(lane.name, step.name, code == 0, wall, results)
         if output.strip():
             log.append(output.rstrip())
         ended = f"{script} {lane.name} {step.name}: "
@@ -312,10 +318,11 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
     if any(lane.warm for lane in lanes):
         warm.ensure()
     env = dict(os.environ)
+    run = runlog.Run.start(script)
     with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
         try:
             outcomes = list(
-                pool.map(lambda lane: run_lane(lane, script, env, steps), lanes)
+                pool.map(lambda lane: run_lane(lane, run, env, steps), lanes)
             )
         # Ctrl-C reaches only this process, not the steps' sessions.
         except BaseException:
@@ -653,7 +660,9 @@ def rust_tests_step(*only: str) -> int:
     """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`).
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
     it cannot list the harness-less `allocations` targets, so cargo test runs those beside it
-    once everything is built. Plain cargo test where cargo-nextest is missing."""
+    once everything is built. Plain cargo test where cargo-nextest is missing. Each test's result
+    goes to the run log: nextest's from its JUnit report (rust/.config/nextest.toml), the
+    `allocations` targets' as one check."""
     cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
@@ -667,6 +676,7 @@ def rust_tests_step(*only: str) -> int:
         "nextest",
         "run",
         "--locked",
+        f"--profile={NEXTEST_PROFILE}",
         "--workspace",
         "--cargo-quiet",
         "--no-fail-fast",
@@ -677,9 +687,12 @@ def rust_tests_step(*only: str) -> int:
     ]
     allocations = [*cargo, "--test", "allocations"]
     jobs = [nextest] if only else [nextest, allocations]
+    junit = nextest_junit()
+    junit.unlink(missing_ok=True)
 
-    def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+    def run(cmd: list[str]) -> tuple[subprocess.CompletedProcess[str], float]:
+        started = time.perf_counter()
+        done = subprocess.run(
             cmd,
             cwd=paths.RUST,
             stdout=subprocess.PIPE,
@@ -688,14 +701,49 @@ def rust_tests_step(*only: str) -> int:
             errors="replace",
             check=False,
         )
+        return done, time.perf_counter() - started
 
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         runs = list(pool.map(run, jobs))
-    for cmd, r in zip(jobs, runs):
+    for cmd, (r, seconds) in zip(jobs, runs):
         print(r.stdout.rstrip(), flush=True)
-        if cmd is allocations and r.returncode != 0:
-            print(ALLOCATIONS_FAILED, flush=True)
-    return next((r.returncode for r in runs if r.returncode != 0), 0)
+        if cmd is allocations:
+            if r.returncode != 0:
+                print(ALLOCATIONS_FAILED, flush=True)
+            runlog.result(
+                "rust:allocations", "pass" if r.returncode == 0 else "fail", seconds
+            )
+    try:
+        for check, outcome, took in junit_results(junit.read_text()):
+            runlog.result(check, outcome, took)
+    except (OSError, ET.ParseError) as e:
+        print(f"rust-tests: no per-test results for the run log: {e}")
+    return next((r.returncode for r, _ in runs if r.returncode != 0), 0)
+
+
+NEXTEST_PROFILE = "check"
+
+
+def nextest_junit() -> Path:
+    """Where nextest's `check` profile writes its JUnit report (rust/.config/nextest.toml)."""
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or paths.RUST / "target")
+    return target / "nextest" / NEXTEST_PROFILE / "junit.xml"
+
+
+def junit_results(xml: str) -> list[tuple[str, str, float]]:
+    """Each test in nextest's JUnit report as a run-log check, `rust:<binary>::<test path>`,
+    with its outcome and seconds. A test that failed and then passed on a retry passed.
+    """
+    found: list[tuple[str, str, float]] = []
+    for case in ET.fromstring(xml).iter("testcase"):
+        outcome = "pass"
+        if case.find("failure") is not None or case.find("error") is not None:
+            outcome = "fail"
+        elif case.find("skipped") is not None:
+            outcome = "skip"
+        check = f"rust:{case.get('classname')}::{case.get('name')}"
+        found.append((check, outcome, float(case.get("time") or 0)))
+    return found
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

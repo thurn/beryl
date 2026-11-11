@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import cards, checks, forge, paths, system, xmage
+from . import cards, checks, forge, paths, runlog, system, xmage
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -605,6 +605,33 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     return {**counts, "stale_allowlist": stale, "scenarios": scenarios, "log": str(log)}
 
 
+# How each scenario status counts in the run log: an allowlisted divergence fails no run.
+RUN_LOG_OUTCOMES = {
+    "pass": "pass",
+    "allowlisted": "pass",
+    "fail": "fail",
+    "unsupported": "skip",
+}
+
+
+def log_results(
+    results: dict[str, dict[str, object]], seconds: dict[str, float]
+) -> None:
+    """Reports each scenario of each oracle to the run log as `oracle:<card>/<scenario>/<engine>`.
+    Neither oracle times a scenario, so each engine's seconds are shared evenly among those it
+    played."""
+    for engine, result in results.items():
+        scenarios = cast(list[dict[str, object]], result["scenarios"])
+        played = sum(1 for s in scenarios if s["status"] != "unsupported") or 1
+        for s in scenarios:
+            outcome = RUN_LOG_OUTCOMES.get(cast(str, s["status"]), "fail")
+            runlog.result(
+                f"oracle:{s['card']}/{s['name']}/{engine}",
+                outcome,
+                0.0 if outcome == "skip" else seconds[engine] / played,
+            )
+
+
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
@@ -619,15 +646,20 @@ def oracle(args: argparse.Namespace) -> int:
                 entries = [e for e in entries if e["card"] in args.cards]
             xmage_log = log_dir() / "xmage-oracle.log"
             xmage_log.write_text("")
+            started = time.perf_counter()
             results: dict[str, dict[str, object]] = {
-                "xmage": check_xmage(entries, xmage_log),
-                "forge": check_forge(entries, work),
+                "xmage": check_xmage(entries, xmage_log)
             }
+            seconds = {"xmage": time.perf_counter() - started}
+            started = time.perf_counter()
+            results["forge"] = check_forge(entries, work)
+            seconds["forge"] = time.perf_counter() - started
             # A few AI-versus-AI games of the deck: Forge knows every card of it.
             sim_log = log_dir() / "forge-sim.log"
             sim_log.write_text("")
             results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
             stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
+            log_results(results, seconds)
     except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
         print(f"oracle: {e}", file=sys.stderr)
         return 1 if built else checks.CANNOT_RUN

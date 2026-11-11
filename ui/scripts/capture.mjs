@@ -1,11 +1,26 @@
 // What the headless capture scripts share: opening a page at a fixed size and waiting until it has
 // settled.
+import { appendFileSync } from "node:fs";
 import { chromium, webkit } from "playwright";
 
 /** The engine of the app's webview on this platform, as `by` names it (`BERYL_BROWSER`):
  * WebKit (WKWebView, macOS) unless Chromium (WebView2, Windows). */
 export const launch = () =>
     (process.env.BERYL_BROWSER === "chromium" ? chromium : webkit).launch();
+
+/** Reports one check's result to the run log (tools/src/beryl_tools/runlog.py) when `by check`
+ * or `by ci` asked for results (`BERYL_CHECK_RESULTS`); otherwise does nothing. A log that cannot
+ * be written fails no check. */
+export function recordResult(check, outcome, seconds) {
+    const path = process.env.BERYL_CHECK_RESULTS;
+    if (!path) return;
+    const line = { check, outcome, seconds: Math.round(seconds * 1000) / 1000 };
+    try {
+        appendFileSync(path, `${JSON.stringify(line)}\n`);
+    } catch (e) {
+        console.error(`run log: not written: ${e.message}`);
+    }
+}
 
 /** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default 4) at a time, each on its own
  * browser context. Awaiting a hand-off waits for a free worker, not for the task, so a script
