@@ -9,6 +9,7 @@
 //!
 //! Rules code cites the Comprehensive Rules at <https://yawgatog.com/resources/magic-rules/>.
 
+mod announced;
 mod bodies;
 pub mod card;
 mod cast;
@@ -52,9 +53,10 @@ pub mod profile {
     pub use beryl_kernel::profile::*;
 }
 
+pub use announced::target_takes;
 pub use beryl_kernel::Misfit;
 pub use bitboard::Bitboard;
-pub use cast::{cost_being_cast, pointless, target_removes_permanent};
+pub use cast::{cost_being_cast, pointless};
 pub use combat::preferred_damage;
 pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, Replay,

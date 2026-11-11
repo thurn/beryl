@@ -12,7 +12,7 @@ mod untap;
 mod zone;
 
 use beryl_engine::card::{Part, Purpose};
-use beryl_engine::{Layout, target_removes_permanent};
+use beryl_engine::{Layout, SlotId as _, target_takes};
 
 use self::damage::Damage;
 use self::priority::Priority;
@@ -204,11 +204,17 @@ impl Objects {
             (on, holes.title(wording))
         };
         let friendly: Vec<Subject> = eligible.iter().copied().filter(yours).collect();
-        // UI Conventions, exception 7: a removal aimed at the viewer's own permanent is asked
-        // about first. The engine says whether the target being chosen is one a removal takes.
-        let removes = target_removes_permanent(table.s, table.t);
+        // UI Conventions, exception 7: a removal aimed at the viewer's own permanent, or a
+        // counter at their own spell, is asked about first. The engine says whether the
+        // effect whose target is being chosen would take the object.
+        let taken = |on: &Subject| match *on {
+            Subject::Object { slot } => {
+                L::Slot::from_num(slot).is_some_and(|slot| target_takes(table.s, table.t, slot))
+            }
+            _ => false,
+        };
         let warned = (friendly.iter().copied())
-            .filter(|&on| removes && of(on).is_some_and(|o| o.zone == ZoneName::Battlefield))
+            .filter(taken)
             .map(|on| says(on, &OWN_TARGET))
             .collect();
         // Among two or more spells on the stack, the pick waits for the button, as in Arena's
@@ -460,7 +466,11 @@ impl Objects {
 
     fn show(&self, view: &mut PromptView) {
         let asking = self.asking();
-        (asking.or_else(|| self.says(&self.aimed)))
+        // A pick that waits for its button is asked about in its title, and that button
+        // answers.
+        let confirming = self.says(&self.warned).filter(|_| !self.aimed.is_empty());
+        (asking.or(confirming))
+            .or_else(|| self.says(&self.aimed))
             .unwrap_or(&self.title)
             .clone_into(&mut view.title);
         // Past the most, a click picks nothing more; with one to pick, it picks another.

@@ -293,9 +293,10 @@ function upToOne(
   return none;
 }
 
-/** The permanent the answer `index` to `decision` would target, itself or as the target
+/** The object the answer `index` to `decision` would target, itself or as the target
  * `then` plans after a count, if the session asks about that target before it is taken
- * (its prompt's `warned`: the player's own permanent, for a removal). */
+ * (its prompt's `warned`: the player's own permanent, for a removal, or their own spell,
+ * for a counter). */
 export function warnedTarget(
   decision: DecisionView,
   index: CandidateIndex,

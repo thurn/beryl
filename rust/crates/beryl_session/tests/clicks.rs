@@ -197,7 +197,8 @@ const TITHED: Scenario = Scenario::new("stack targets")
 
 /// Among two or more spells on the stack none opens picked, and the pick waits for the
 /// button, as in Arena's browser of the stack: a click on a spell picks it, one on another
-/// takes its place, and none answers.
+/// takes its place, and none answers. The viewer's own spell, which a counter would take, is
+/// asked about in the title while it is the one picked (UI Conventions, exception 7).
 #[test]
 fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
     let tithed = || Play::against(&TITHED, Some(Box::new(Casts(0))));
@@ -211,6 +212,7 @@ fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
     let open = format!(
         "pick target: Target a spell.\n\
          picked 0 of 1\n\
+         warned #{crypt}\n\
          eligible {}\n\
          confirm(Submit 0)\n",
         cards(&[crypt, tithe]),
@@ -219,29 +221,99 @@ fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
     let on_tithe = format!(
         "pick target: Target Mana Tithe\n\
          picked 1 of 1: #{tithe}\n\
+         warned #{crypt}\n\
          eligible #{crypt}\n\
          hostile-target #{tithe}\n\
          confirm[Submit 1]*\n"
     );
     assert_eq!(play.on(tithe).as_deref(), Some(on_tithe.as_str()));
     // The viewer's own spell takes the pick's place, and a second click on it leaves none.
-    assert_eq!(
-        play.on(crypt).unwrap(),
-        format!(
-            "pick target: Target Mana Crypt\n\
-             picked 1 of 1: #{crypt}\n\
-             eligible #{tithe}\n\
-             friendly-target #{crypt}\n\
-             confirm[Submit 1]*\n"
-        )
+    let on_crypt = format!(
+        "pick target: Do you want to target Mana Crypt?\n\
+         picked 1 of 1: #{crypt}\n\
+         warned #{crypt}\n\
+         eligible #{tithe}\n\
+         friendly-target #{crypt}\n\
+         confirm[Submit 1]*\n"
     );
+    assert_eq!(play.on(crypt).as_deref(), Some(on_crypt.as_str()));
     assert_eq!(play.on(crypt).as_deref(), Some(open.as_str()));
     assert_eq!(play.on(tithe).as_deref(), Some(on_tithe.as_str()));
     // The button answers, as picking the Mana Tithe does.
+    let cast = |play: &mut Play, target: u16| {
+        play.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == crypt));
+        play.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == counterspell));
+        play.choose(|c| *c == Candidate::Object { slot: target });
+    };
     let mut picked = tithed();
+    cast(&mut picked, tithe);
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    assert_eq!(play.game.state(), picked.game.state());
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
+
+    // Asked about their own spell, the same button answers with it.
+    let mut own = tithed();
+    own.on(crypt);
+    own.on(counterspell);
+    assert_eq!(own.on(crypt).as_deref(), Some(on_crypt.as_str()));
+    let mut picked = tithed();
+    cast(&mut picked, crypt);
+    assert_eq!(own.press(ButtonId::Confirm), None);
+    assert_eq!(own.game.state(), picked.game.state());
+    assert_eq!(own.game.replay().log, picked.game.replay().log);
+}
+
+/// P0 holds a Mana Crypt and a Counterspell in their main phase, with nothing to answer.
+const UNOPPOSED: Scenario = Scenario::new("own spell")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
+    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// A counter aimed at the viewer's own spell, all there is to target, is asked about first
+/// (UI Conventions, exception 7): the click picks it, marked as theirs, and the prompt's
+/// buttons confirm it or take it back. Full control gives the viewer priority over their own
+/// spell.
+#[test]
+fn a_counter_aimed_at_a_lone_own_spell_is_asked_about() {
+    let unopposed = || {
+        let mut play = Play::scenario(&UNOPPOSED);
+        play.view = play.game.set_stops(StopsSetting::EXACT).unwrap();
+        play
+    };
+    let mut play = unopposed();
+    let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
+    let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
+    assert_eq!(play.on(crypt), None, "the Mana Crypt is cast");
+    assert_eq!(play.on(counterspell), None, "Counterspell is cast");
+    assert!(play.decision().prompt.is(Purpose::Target));
+    let open = format!(
+        "pick target: Choose a target.\n\
+         picked 0 of 1\n\
+         warned #{crypt}\n\
+         eligible #{crypt}\n"
+    );
+    assert_eq!(play.prompt(), open);
+    let asked = format!(
+        "pick target: Do you want to target Mana Crypt?\n\
+         picked 1 of 1: #{crypt}\n\
+         warned #{crypt}\n\
+         friendly-target #{crypt}\n\
+         confirm[Yes] decline[No]*\n"
+    );
+    assert_eq!(play.on(crypt).as_deref(), Some(asked.as_str()));
+    // No takes the pick back.
+    assert_eq!(
+        play.press(ButtonId::Decline).as_deref(),
+        Some(open.as_str())
+    );
+    assert_eq!(play.on(crypt).as_deref(), Some(asked.as_str()));
+    // Yes answers, as picking the Mana Crypt does.
+    let mut picked = unopposed();
     picked.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == crypt));
     picked.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == counterspell));
-    picked.choose(|c| *c == Candidate::Object { slot: tithe });
+    picked.choose(|c| *c == Candidate::Object { slot: crypt });
     assert_eq!(play.press(ButtonId::Confirm), None);
     assert_eq!(play.game.state(), picked.game.state());
     assert_eq!(play.game.replay().log, picked.game.replay().log);

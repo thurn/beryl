@@ -8772,6 +8772,9 @@ const counterRun = {
     ready: ".prompt",
 };
 
+const ownSpellWarning = (page) =>
+    page.getByRole("dialog", { name: "Target your Mana Crypt?" });
+
 async function pickStackCard(page, slot) {
     const rect = await page.locator(`#card-${slot}`).boundingBox();
     await page.mouse.click(rect.x + rect.width / 2, rect.y + 8);
@@ -8789,13 +8792,14 @@ await check(
         await pickStackCard(page, titheSlot);
         assert.match(await prompt.innerText(), /Target Mana Tithe/);
         assert.deepEqual(await chosen(page), []);
+        // The player's own spell, which the session asks about first, opens its warning
+        // in place of the pick, and backing out leaves the pick made before.
         await pickStackCard(page, cryptSlot);
-        assert.match(
-            await prompt.innerText(),
-            /Counter your own spell, Mana Crypt\?/,
-        );
+        await ownSpellWarning(page).waitFor();
         assert.deepEqual(await chosen(page), []);
-        await pickStackCard(page, titheSlot);
+        await ownSpellWarning(page)
+            .getByRole("button", { name: "Cancel" })
+            .click();
         assert.match(await prompt.innerText(), /Target Mana Tithe/);
         await prompt.getByRole("button", { name: "Confirm" }).click();
         assert.deepEqual(await settled(page, 1), [titheIndex]);
@@ -8807,13 +8811,10 @@ await check(
     "Counterspell can back out of its self-target warning",
     async (page) => {
         await pickStackCard(page, cryptSlot);
-        const prompt = page.getByRole("dialog");
-        assert.match(
-            await prompt.innerText(),
-            /Counter your own spell, Mana Crypt\?/,
-        );
-        await prompt.getByRole("button", { name: "Cancel" }).click();
-        assert.equal(await cancels(page), 1);
+        const warning = ownSpellWarning(page);
+        await warning.getByRole("button", { name: "Cancel" }).click();
+        assert.equal(await warning.count(), 0);
+        assert.equal(await cancels(page), 0, "the cast stands");
         assert.deepEqual(await chosen(page), []);
     },
     counterRun,
@@ -8823,7 +8824,9 @@ await check(
     "Counterspell can confirm the warned-about self-target",
     async (page) => {
         await pickStackCard(page, cryptSlot);
-        await page.getByRole("button", { name: "Confirm" }).click();
+        await ownSpellWarning(page)
+            .getByRole("button", { name: "Confirm" })
+            .click();
         const ownIndex = counterDecision.candidates.findIndex(
             (c) => c.label === "Mana Crypt",
         );

@@ -1119,16 +1119,6 @@ fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpe
     entry_ability(t, entry).map_or(&[], |a| a.targets)
 }
 
-/// Whether the target currently being announced (CR 601.2c, 603.3d) is for a removal
-/// effect. This describes the choice without running the effect or changing legality.
-pub fn target_removes_permanent<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    let Pending::Casting(c) = *s.pending() else {
-        return false;
-    };
-    matches!(c.step, CastStep::TargetCount | CastStep::Target)
-        && entry_ability(t, &top(s)).is_some_and(|ability| ability.removes_target(c.spec))
-}
-
 /// The total mana cost of the spell or ability being cast, once X is announced.
 fn total_cost<L: Layout>(t: &GameTable, entry: &StackEntry<L>, c: &Casting) -> ManaCost {
     let face = t.def(entry.card).face(entry.face);

@@ -88,6 +88,7 @@ import {
   suggestedDamage,
   tapsOnly,
   triggerPlan,
+  warnedTarget,
   withResolving,
   type Act,
   type Intent,
@@ -404,18 +405,6 @@ export function Board({
   const browsingSpells =
     stackTargets.length > 1 &&
     stackTargets.length === decision?.candidates.length;
-  const sourceSpell =
-    decision?.source == null ? undefined : objects.get(decision.source);
-  const counteringSpell =
-    sourceSpell?.zone === "stack" &&
-    sourceSpell.name &&
-    /^Counter target /m.test(faceEntry(sourceSpell.name)?.oracle_text ?? "");
-  const selfCounter = (act: Act) =>
-    counteringSpell &&
-    stackTargets.some(
-      ({ act: target, object }) =>
-        target.index === act.index && object.controller === "you",
-    );
   const stackConfirmation = selectedSpell && (() => pick(selectedSpell.index));
   // The table as the declaration would leave it.
   const shown = useMemo(() => {
@@ -1205,8 +1194,12 @@ export function Board({
       // One use acts on the click: a land is played, an ability activated, a target picked.
       const act = acts[0]!;
       if (
+        browsingSpells &&
         stackTargets.some((target) => target.act.index === act.index) &&
-        (browsingSpells || selfCounter(act))
+        // A spell the session asks about first is asked about in place of the Confirm
+        // button: the answer stages its warning, as a permanent's does.
+        decision &&
+        warnedTarget(decision, act.index) === undefined
       ) {
         setStackPick({ view, act });
       } else {
@@ -1812,12 +1805,7 @@ export function Board({
             }}
             onCancel={cancellable ? cancel : undefined}
             onPoint={setPointedOff}
-            targetLabel={
-              selectedSpell &&
-              (selfCounter(selectedSpell)
-                ? `Counter your own spell, ${selectedSpell.label}?`
-                : `Target ${selectedSpell.label}`)
-            }
+            targetLabel={selectedSpell && `Target ${selectedSpell.label}`}
             confirm={
               stackConfirmation
                 ? {
