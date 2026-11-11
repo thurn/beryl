@@ -1179,7 +1179,7 @@
           "duration": 500,
           "delay": null,
           "stagger": null,
-          "curve": "ease-out"
+          "curve": "none"
         },
         "exiled": {
           "duration": 600,
