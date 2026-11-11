@@ -157,27 +157,20 @@ pub mod decision;
 pub mod event;
 pub mod filter;
 pub mod fixed;
+mod floating;
 pub mod ids;
 pub mod invariants;
 pub mod layout;
 mod new;
-mod object {
-    pub use crate::state::{Derived, Object, ObjectRef};
-}
+mod object;
 pub mod observation;
-mod pending {
-    pub use crate::state::Pending;
-}
-mod player {
-    pub use crate::state::{ManaPool, MulliganStatus, Player, Turn};
-}
+mod pending;
+mod player;
 pub mod profile;
 pub mod relayout;
 pub mod rng;
 mod setup;
-mod stack {
-    pub use crate::state::{StackEntry, TARGETS, Target};
-}
+mod stack;
 pub mod state;
 pub mod table;
 pub mod zone;
