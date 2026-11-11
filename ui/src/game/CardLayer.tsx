@@ -45,12 +45,12 @@ import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
 import {
   RAISE,
-  isEmblem,
   type Box,
   type Layout,
   type Look,
   type Placement,
-} from "./layout";
+} from "./placement";
+import { isEmblem } from "./zoneViews";
 import { useCardPhysics } from "./physics";
 import { dissolve } from "./dissolve";
 

@@ -21,7 +21,7 @@ import { Button, Dock, DockButtons } from "../components/Controls";
 import { StackItem } from "../components/Stack";
 import type { Candidate, ObjectView } from "../generated/protocol";
 import { useAbilityFace, useFace } from "./faces";
-import { STAGE } from "./layout";
+import { STAGE } from "./perspective";
 import { dissolve } from "./dissolve";
 import { stageBox, type CardHandoff } from "./choiceFlight";
 

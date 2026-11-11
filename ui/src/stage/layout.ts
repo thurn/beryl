@@ -8,7 +8,7 @@ import type {
   StackItem,
   ZoneName,
 } from "../generated/protocol";
-import type { Look } from "../game/layout";
+import type { Look } from "../game/placement";
 import type { Pose } from "./pose.ts";
 import type { Table } from "./table.ts";
 

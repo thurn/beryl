@@ -5811,8 +5811,9 @@ if (wanted(pendingMana)) {
         async (page) => {
             const result = await page.evaluate(async (v) => {
                 const { manaMotes } = await import("/src/game/ManaFlow.tsx");
-                const { layout, zonePiles, MANA_POOLS } =
-                    await import("/src/game/layout.ts");
+                const { layout } = await import("/src/game/layout.ts");
+                const { zonePiles } = await import("/src/game/zoneViews.ts");
+                const { MANA_POOLS } = await import("/src/game/tableRows.ts");
                 const { choiceOf } = await import("/src/game/choices.ts");
                 const { beats } = await import("/src/game/beats.ts");
                 const source = v.objects.find(
@@ -7107,8 +7108,8 @@ await check(
         // The board's layout of variants of the fixture's view, by the page's own module.
         const counts = await page.evaluate(
             async ({ view, map }) => {
-                const { layout, zonePiles } =
-                    await import("/src/game/layout.ts");
+                const { layout } = await import("/src/game/layout.ts");
+                const { zonePiles } = await import("/src/game/zoneViews.ts");
                 const order = new Map();
                 const borrowed = new Set();
                 // Each card of the pile of `map`'s copies that wears a count, with the count.

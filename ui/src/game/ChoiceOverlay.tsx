@@ -31,7 +31,7 @@ import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { StageScale, useStageWidth } from "./Stage";
-import { STAGE, STAGE_WIDTHS } from "./layout";
+import { STAGE, STAGE_WIDTHS } from "./perspective";
 import {
   choiceSlots,
   floats,

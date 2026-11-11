@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { setStageWidth, STAGE, STAGE_WIDTHS } from "./layout";
+import { setStageWidth, STAGE, STAGE_WIDTHS } from "./perspective";
 
 /** How many window pixels a stage pixel takes, for turning pointer motion into stage pixels. */
 export const StageScale = createContext(1);

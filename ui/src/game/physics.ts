@@ -11,7 +11,7 @@
 // runs no frame at all, so a still board costs nothing.
 import { useEffect, useRef, type RefObject } from "react";
 import type { MotionValue } from "motion/react";
-import { cameraDistance } from "./layout";
+import { cameraDistance } from "./perspective";
 
 /** How far a card's shadow falls from beneath it on the table, per pixel of height: the light
  * hangs above the far left of the table, so shadows fall toward you and a little right. */

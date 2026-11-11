@@ -34,54 +34,6 @@ import {
   playableElsewhere,
 } from "./zoneViews";
 
-export {
-  STAGE,
-  STAGE_WIDTHS,
-  cameraDistance,
-  depthScale,
-  fromMiddle,
-  fromRight,
-  lean,
-  setStageWidth,
-} from "./perspective";
-export {
-  BENEATH_STEP,
-  CREATURE_WIDTH,
-  FULL_WIDTH,
-  HAND,
-  LAND_STEP,
-  LAND_WIDTH,
-  RAISE,
-  footprint,
-} from "./placement";
-export type { Box, Layout, Look, Placement } from "./placement";
-export { MANA_POOLS, overLog } from "./tableRows";
-export { PILES, pileLook } from "./pileLook";
-export type { PileLook } from "./pileLook";
-export { SHOWCASE, STACK, showcasePlace, stackPlace } from "./stackLayout";
-export type { Spotlight } from "./stackLayout";
-export { RAISED_HAND } from "./handLayout";
-export type { HandHold } from "./handLayout";
-export {
-  attachments,
-  emblemObjects,
-  emblemSlot,
-  exiledWith,
-  held,
-  isEmblem,
-  knownLibraries,
-  linked,
-  playableElsewhere,
-  zonePiles,
-} from "./zoneViews";
-export type { ZonePile } from "./zoneViews";
-export {
-  HALT_BUTTON,
-  STEP_NAMES,
-  combatBanner,
-  passButton,
-} from "./stepLabels";
-
 /** How far a targeted card under a pile's top rises out of it, in its own heights. */
 const PILE_RISE = 0.6;
 

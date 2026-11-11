@@ -21,7 +21,8 @@ import {
 import { beats, eventsHold, HOLD, type Beat } from "./beats";
 import { FLIGHT_HOLD } from "./flight";
 import { soundBeat } from "../audio/events";
-import { liftsHandling, type Spotlight } from "./layout";
+import { liftsHandling } from "./layout";
+import { type Spotlight } from "./stackLayout";
 import { logged, UNLOGGED, type LogEntry, type Logged } from "./log";
 import { useGameUpdates, useShownToFrame } from "./updates";
 

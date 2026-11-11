@@ -35,7 +35,7 @@ import { LifeOrb } from "../components/Player";
 import { attackPlan, blockPlan } from "../game/combat";
 import { follow, interactions, tapsOnly, type Intent } from "../game/decisions";
 import { faceDownFace, marksOf, SCAN, useFace } from "../game/faces";
-import { HALT_BUTTON, passButton } from "../game/layout";
+import { HALT_BUTTON, passButton } from "../game/stepLabels";
 import { PaymentButton } from "../game/PaymentButton";
 import { useWaterbend } from "../game/waterbend";
 import { useCardArt } from "../cards";

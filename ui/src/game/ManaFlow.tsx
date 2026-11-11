@@ -16,13 +16,9 @@ import type {
   StackItem,
 } from "../generated/protocol";
 import { sameItem } from "./beats";
-import {
-  footprint,
-  MANA_POOLS,
-  stackPlace,
-  type Layout,
-  type Placement,
-} from "./layout";
+import { footprint, type Layout, type Placement } from "./placement";
+import { stackPlace } from "./stackLayout";
+import { MANA_POOLS } from "./tableRows";
 
 interface Point {
   x: number;

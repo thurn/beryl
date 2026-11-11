@@ -4,7 +4,7 @@ import { CARD_ASPECT, Card } from "../components/Card";
 import type { ObjectView } from "../generated/protocol";
 import { useBorrowedCard } from "./choiceFlight";
 import { useFace } from "./faces";
-import { STAGE } from "./layout";
+import { STAGE } from "./perspective";
 
 /** Where a risen card stands: the place of the table card it is (its center and top, and
  * its width there), in stage pixels. */

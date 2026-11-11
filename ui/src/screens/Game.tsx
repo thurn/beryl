@@ -40,8 +40,6 @@ import { usePhone } from "../mobile/phone";
 import { GameOver, resultTitle, useResult } from "./GameOver";
 import { Opening } from "./Opening";
 
-export { StartScreen } from "./StartScreen";
-
 /** A command's failure as the player should hear of it; none for an answer to a decision
  * that was answered already (a double click) or replaced, or a cast completed before it could
  * be taken back. */

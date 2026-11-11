@@ -2,19 +2,17 @@
 // anchors. It places every card; nothing here does.
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
+import { layout, STACK_Z } from "../game/layout";
+import { fromMiddle } from "../game/perspective";
+import { FULL_WIDTH, type Placement } from "../game/placement";
+import { stackPlace } from "../game/stackLayout";
+import { MANA_POOLS } from "../game/tableRows";
 import {
   emblemObjects,
   emblemSlot,
-  fromMiddle,
-  FULL_WIDTH,
   knownLibraries,
-  layout,
-  MANA_POOLS,
-  STACK_Z,
-  stackPlace,
   zonePiles,
-  type Placement,
-} from "../game/layout";
+} from "../game/zoneViews";
 import {
   abilityName,
   type Anchors,

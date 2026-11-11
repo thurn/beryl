@@ -135,37 +135,34 @@ import { useStageWidth } from "./Stage";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { useStandIns } from "./standIns";
 import { tablePick } from "./tablePick";
+import { handlingSlots, layout, sameHandling, STACK_Z } from "./layout";
+import { fromMiddle, STAGE } from "./perspective";
+import {
+  footprint,
+  FULL_WIDTH,
+  type Box,
+  type Layout,
+  type Placement,
+} from "./placement";
+import { STACK, stackPlace, type Spotlight } from "./stackLayout";
 import {
   combatBanner,
+  HALT_BUTTON,
+  passButton,
+  STEP_NAMES,
+} from "./stepLabels";
+import { MANA_POOLS, overLog } from "./tableRows";
+import {
   emblemObjects,
   emblemSlot,
   exiledWith,
   held,
-  handlingSlots,
-  footprint,
-  fromMiddle,
   isEmblem,
-  FULL_WIDTH,
-  HALT_BUTTON,
-  layout,
   linked,
-  MANA_POOLS,
-  overLog,
-  passButton,
-  sameHandling,
-  STACK,
-  STACK_Z,
-  stackPlace,
-  STEP_NAMES,
-  STAGE,
   zonePiles,
   knownLibraries,
-  type Box,
-  type Layout,
-  type Placement,
-  type Spotlight,
   type ZonePile,
-} from "./layout";
+} from "./zoneViews";
 import {
   abilityChoices,
   playChoices,

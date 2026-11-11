@@ -26,7 +26,9 @@ import { ManaSymbol } from "../components/Mana";
 import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
-import { STAGE, type Box, type ZonePile } from "./layout";
+import { STAGE } from "./perspective";
+import { type Box } from "./placement";
+import { type ZonePile } from "./zoneViews";
 import { useReducedMotion } from "motion/react";
 import { BORROW_FLIGHT_MS, useBorrowedCard } from "./choiceFlight";
 
