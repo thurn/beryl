@@ -68,17 +68,23 @@
     rgb(255 226 170 / 85%);
   opacity: calc((1 - var(--settle)) * 0.6);
 }
-/* The card breaks up from the top down along the mask's stippled edge (the old board's, which
-   the cut-over leaves to this rule), darkening as it goes. */
+/* The card darkens at once and holds dark, a warning of what comes, then breaks up from the top
+   down along the mask's stippled edge (the old board's, which the cut-over leaves to this
+   rule) for the rest of its time. */
 .stage-node:has(> .stage-effect-dissolve) {
   mask-image: url("../design/dissolve-mask.svg");
   mask-size: 100% 240%;
   mask-repeat: no-repeat;
-  mask-position: 50% calc(100% - var(--dissolve) * 110%);
+  mask-position: 50% calc(100% - max(0, (var(--dissolve) - 0.45) / 0.55) * 110%);
 }
 .stage-effect-dissolve {
   background: #17120e;
-  opacity: calc(var(--dissolve) * 0.8);
+  opacity: calc(min(1, var(--dissolve) / 0.15) * 0.6);
+}
+/* The card darkens whole, and is never broken: it only fades (stage/tracks.ts dissolve). */
+.stage-effect-dim {
+  background: #17120e;
+  opacity: calc(min(1, var(--dim) / 0.3) * 0.65);
 }
 /* The card is lost in white light, which is whole well before the card is gone. */
 .stage-effect-blanch {

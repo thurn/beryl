@@ -1242,6 +1242,11 @@
           "when": "start"
         },
         {
+          "effect": "dim",
+          "when": "start",
+          "case": "resolved instant or sorcery"
+        },
+        {
           "effect": "blanch",
           "when": "start",
           "case": "exiled"
@@ -1822,7 +1827,17 @@
     },
     {
       "name": "dissolve",
-      "shows": "A card darkens and breaks up along a stippled edge from the top down, for as long as its step: it is going to a graveyard.",
+      "shows": "A card darkens, holds dark, and then breaks up along a stippled edge from the top down, for as long as its step: it is destroyed, countered or sacrificed.",
+      "layer": "over",
+      "values": {
+        "duration": null,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "dim",
+      "shows": "A card darkens whole and fades where it lies, for as long as its step: a spell that has resolved is done.",
       "layer": "over",
       "values": {
         "duration": null,

@@ -362,8 +362,9 @@ held to by `just motion`.
   (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w
   19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67,
   pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Beryl: 565 ms, 260 ms after its
-  cause, in place. Effects: dissolve as it begins, blanch as it begins (exiled),
-  glow as it begins (bounced).
+  cause, in place. Effects: dissolve as it begins, dim as it begins (resolved
+  instant or sorcery), blanch as it begins (exiled), glow as it begins
+  (bounced).
 - **emerge.** An ability lifts out of its source and goes on the stack. The
   source stays as it is. A small copy of the card appears on the source and
   travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated
@@ -458,9 +459,11 @@ says what a player may do; an effect says what just happened, and is gone.
   300 ms, ease-out.
 - **settle.** A wash of light over a card and a halo around it, bright as it
   lands and gone as it settles. Drawn over its card. Beryl: 350 ms, ease-out.
-- **dissolve.** A card darkens and breaks up along a stippled edge from the top
-  down, for as long as its step: it is going to a graveyard. Drawn over its
-  card. Beryl: linear.
+- **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
+  edge from the top down, for as long as its step: it is destroyed, countered or
+  sacrificed. Drawn over its card. Beryl: linear.
+- **dim.** A card darkens whole and fades where it lies, for as long as its
+  step: a spell that has resolved is done. Drawn over its card. Beryl: linear.
 - **blanch.** A card is lost in white light, for as long as its step: it is
   going to exile. Drawn over its card. Beryl: linear.
 - **cover.** A veil of light closes over a card, hides it while it changes, and

@@ -141,8 +141,12 @@ export function sounded(run, sound, at, what, delay = 0) {
 
 /** What each verb's check asks of the moment as `seat` saw it: `whole`, a run of the fixture
  * that holds it in one view, and `cut`, one of the fixture that cuts it at each priority. */
-/** How a card that does not go to a graveyard leaves, by where it goes (`vanish`). */
-const LEAVES = { exile: "blanch over", returned: "glow under" };
+/** How a card that is not broken up leaves, by where it goes and why (`vanish`). */
+const LEAVES = {
+    exile: "blanch over",
+    returned: "glow under",
+    resolve: "dim over",
+};
 
 export const CASES = {
     // A card flies from where it lay to where it then lies, over everything at rest, and
@@ -448,10 +452,11 @@ export const CASES = {
     // no sound of its own.
     // A card that leaves (`zones`, and the permanent sacrificed in `scry`) goes from sight
     // where it lay, dressed as it was and never aloft, and only as its step ends is it in its
-    // new zone, with no flight; a token is then no more. How it goes says where: what goes to
-    // a graveyard darkens and breaks up for as long as it takes to leave, what goes to exile
-    // is lost in light, and what goes back to a hand leaves in a halo; nothing of any stays
-    // on a card at its new place. Every way of leaving is seen: a
+    // new zone, with no flight; a token is then no more. How it goes says what became of it:
+    // what is destroyed, countered or sacrificed darkens and breaks up for as long as it takes
+    // to leave, a spell that resolved only darkens, what goes to exile is lost in light, and
+    // what goes back to a hand leaves in a halo; nothing of any stays on a card at its new
+    // place. Every way of leaving is seen: a
     // spell countered and spells resolved, a creature and a token destroyed, a permanent
     // exiled and one sacrificed, and the opponent's spell returned to their hand.
     vanish({ whole, script, zones, scry, seat }) {
@@ -523,8 +528,9 @@ export const CASES = {
                         `${what}: how it goes`,
                     );
                 }
-                // It has broken up by the time it is gone, before its step is over.
-                if (gone.at.middle && !(kind in LEAVES)) {
+                // What lasts while it leaves is over by the time it is gone, before its
+                // step is; a halo has its own time.
+                if (gone.at.middle && kind !== "returned") {
                     const [{ progress }] = gone.at.middle.effects[name];
                     assert.ok(progress > 0.5 && progress < 1, what);
                 }
