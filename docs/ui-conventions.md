@@ -6,8 +6,12 @@ only what Arena does not settle: where Beryl differs on purpose, what Arena has
 no equivalent for, and what the recordings do not show.
 
 The rulings were made on 2026-11-10 from an audit of 180 bug reports against the
-recordings in `~/arena`. Most of the Arena findings rest on one instance. This
-page is kept by hand until it is generated from the design-language data (K28).
+recordings in `~/arena`. Each Arena finding cites the recording moments that
+show it, as `<recording id> <time>`, for `just video film`.
+
+This page is generated from `data/ui-conventions.json` (K28) by
+`just conventions`: edit the data, not the page. The repo lane fails when the
+page is stale.
 
 ## Beryl exceptions
 
@@ -23,8 +27,8 @@ removes an entry; nothing else does.
    screen could take: open the search, chooser or payment with a way to decline
    (by-kac). Arena asks "Search your library…?" first.
 4. **Target arrows by relationship.** Red at something an opponent controls,
-   green at your own (by-pnm, by-sm5, by-vrv). Arena uses one color. This is
-   skin, listed so nobody removes it.
+   green at your own. This is skin, listed so nobody removes it (by-pnm, by-sm5,
+   by-vrv). Arena uses one color.
 5. **Lands unstacked until seven.** Each land is separate until its controller
    has seven or more; then same-named lands stack (by-p9e, by-goui). Arena's
    threshold has not been measured.
@@ -36,31 +40,35 @@ removes an entry; nothing else does.
 
 ## Settled as Arena
 
-Earlier reports asked for something else in each of these. Arena's way stands,
+Earlier reports asked for something else in some of these. Arena's way stands,
 so do not restore the old behavior.
 
-- **Tokens** appear at their slot; they do not fly out of their source (by-kgc,
-  by-81h).
-- **Permanents that leave** dissolve where they are, tokens included (by-1ug).
-- **Choosing how to cast** (evoke, cycling) is a modal showing the card once per
-  option (by-lzl, by-9fb).
-- **A finished ability** is removed at once, with no fade (by-c8b).
-- **Wording** is Arena's exactly: "All Attack", "Choose attackers." (by-u4g,
+- **Tokens.** Tokens appear at their slot; they do not fly out of their source
+  (by-kgc, by-81h).
+- **Permanents that leave.** They dissolve where they are, tokens included
+  (by-1ug).
+- **Choosing how to cast.** Evoke, cycling and the like open a modal showing the
+  card once per option (by-lzl, by-9fb).
+- **A finished ability.** It is removed at once, with no fade (by-c8b).
+- **Wording.** Arena's exactly: "All Attack", "Choose attackers." (by-u4g,
   by-a09o).
-- **Button order** follows Arena prompt by prompt; there is no blanket "default
-  on the right" (by-ceo3).
-- **The opponent's turn** shows Arena's "Opponent's Turn" label in the action
+- **Button order.** It follows Arena prompt by prompt; there is no blanket
+  "default on the right" (by-ceo3).
+- **The opponent's turn.** Arena's "Opponent's Turn" label shows in the action
   button's place, and no spinner (by-58n, by-7ih, by-oyx).
 - **Attacking a planeswalker.** No prompt: an attacker defaults to the player,
-  and the player pulls an arrow to the planeswalker (by-p00u).
-- **Two items on the stack** still get their target arrow (by-i88).
-- **An additional-cost chooser** opens before mana taps (by-jqd).
-- **A countered spell** leaves before the spell that countered it (by-kxyq).
-- **Cards the opponent looks at** stay library-size beside their library, face
-  down, and visibly go to the top or bottom (by-pv6p, by-yfb2).
-- **A line from an ability to its source** is always shown while the ability is
-  on the stack, thin and faint as Arena draws it, and hidden during a prompt
-  (by-wkr, by-afh, by-110h). A heavy arrow is not that line.
+  and the player pulls an arrow to the planeswalker (by-p00u). Attackers that
+  can attack get a cyan outline; a clicked attacker turns gold, the opponent's
+  life total and the planeswalker glow, and an arrow follows the cursor to the
+  planeswalker (SswBO8aOOgc 33:30.5).
+- **Two items on the stack.** The top one still gets its target arrow (by-i88).
+- **An additional-cost chooser.** It opens before mana taps (by-jqd).
+- **A countered spell.** It leaves before the spell that countered it (by-kxyq).
+- **Cards the opponent looks at.** They stay library-size beside their library,
+  face down, and visibly go to the top or bottom (by-pv6p, by-yfb2).
+- **A line from an ability to its source.** It is always shown while the ability
+  is on the stack, thin and faint as Arena draws it, and hidden during a prompt.
+  A heavy arrow is not that line (by-wkr, by-afh, by-110h).
 
 ## No Arena equivalent
 
@@ -73,16 +81,16 @@ so do not restore the old behavior.
 - **Suggestions are sensible.** The suggested untap targets and the auto-pay
   sources are the ones a player would pick (by-svq, by-ufmq).
 - **Nothing overlaps.** The hand, the stack and their indicators never cover a
-  control or each other (by-biv, by-krxg). No layer of a library, graveyard or
-  exile pile covers a card in play, for either seat, however long a row grows.
-  The opponent's piles keep the band above their back row to themselves.
+  control or each other. No layer of a library, graveyard or exile pile covers a
+  card in play, for either seat, however long a row grows. The opponent's piles
+  keep the band above their back row to themselves (by-biv, by-krxg).
 
 ## Not seen in Arena
 
 Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
-- **Paying with permanents** (waterbend, convoke, crew). Start with no payment
+- **Paying with permanents.** Waterbend, convoke, crew. Start with no payment
   highlights. Hover over Auto Pay on desktop or long-press it on mobile to see
   which permanents Beryl would use. Click or tap the button to accept. To pay
   manually, click or tap each permanent you want to contribute. For a
@@ -91,32 +99,10 @@ recordings do not show them.
   cost and keep the player's picks. Let the player finish manually or accept
   Auto Pay for the remainder, and stop taking picks once the cost is covered.
   Arena documents the preview and acceptance gestures in its
-  [May 23, 2019 patch notes]. A selected permanent turns and carries a tap mark,
-  and an outline means one thing at a time (by-1y4, by-uld, by-4hjm, by-z973).
-- **A creature that enters attacking** gets an explicit choice of what it
+  [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes).
+  A selected permanent turns and carries a tap mark, and an outline means one
+  thing at a time (by-1y4, by-uld, by-4hjm, by-z973).
+- **A creature that enters attacking.** It gets an explicit choice of what it
   attacks, and its line stays drawn throughout (by-l26, by-y3sp).
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own.
-
-## Still open
-
-To be settled from the recordings (Project 50k, presentation track). Until then
-the current behavior stays.
-
-- Whether "pass to end step" keeps passing when the opponent acts (by-sqo).
-- The local player's scry: whether the chooser shows the real library, and how
-  top-bound and bottom-bound cards travel (by-8qq, by-2wn7, by-kyig, by-1mrh).
-- Known cards in the opponent's library, and a known top card (by-nva, by-9es).
-- Mana travelling into what it pays for (by-p1j).
-- A card turning face up, and a face-down card revealed as it leaves (by-5hcb,
-  by-thod).
-- Preselecting the one opposing spell, with Confirm (by-2lwc, by-69ps).
-- Cards going to the graveyard from a look, and returned cards (by-2ma,
-  by-ubgt).
-- A batch exile's stagger, and a linked-exile return moving with its departing
-  source (by-5pj, by-esr2).
-- A spell returned to hand (by-e0l).
-- Hover inspection: a separate readable preview, or a modest enlargement in
-  place where the card is already large.
-
-[may 23, 2019 patch notes]: https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes

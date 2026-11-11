@@ -1,0 +1,227 @@
+{
+  "title": "UI Conventions",
+  "intro": [
+    "MTG Arena is the reference for Beryl's flow, motion, timing, table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22). This page lists only what Arena does not settle: where Beryl differs on purpose, what Arena has no equivalent for, and what the recordings do not show.",
+    "The rulings were made on 2026-11-10 from an audit of 180 bug reports against the recordings in `~/arena`. Each Arena finding cites the recording moments that show it, as `<recording id> <time>`, for `just video film`.",
+    "This page is generated from `data/ui-conventions.json` (K28) by `just conventions`: edit the data, not the page. The repo lane fails when the page is stale."
+  ],
+  "sections": [
+    {
+      "kind": "exception",
+      "heading": "Beryl exceptions",
+      "intro": [
+        "Beryl does these and Arena does not. A bug report from the user adds, changes or removes an entry; nothing else does."
+      ]
+    },
+    {
+      "kind": "settled",
+      "heading": "Settled as Arena",
+      "intro": [
+        "Earlier reports asked for something else in some of these. Arena's way stands, so do not restore the old behavior."
+      ]
+    },
+    {
+      "kind": "no-equivalent",
+      "heading": "No Arena equivalent"
+    },
+    {
+      "kind": "not-seen",
+      "heading": "Not seen in Arena",
+      "intro": [
+        "Built from motions and shapes Beryl already has. Arena has these, but the recordings do not show them."
+      ]
+    },
+    {
+      "kind": "open",
+      "heading": "Still open",
+      "intro": [
+        "To be settled from the recordings (Project 50k, presentation track). Until then the current behavior stays."
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "kind": "exception",
+      "number": 1,
+      "name": "Phase icons",
+      "rule": "Twelve icons, two rows of three on each side of the life total, filled where a stop is set, the same rows for both seats.",
+      "reports": ["by-2o5", "by-42v", "by-sjp", "by-cio"],
+      "arena": { "does": "Arena shows one row above the action button." }
+    },
+    {
+      "kind": "exception",
+      "number": 2,
+      "name": "Full cards that tap",
+      "rule": "A permanent is its whole card and turns when it taps.",
+      "arena": { "does": "Arena shows a crop of the art." }
+    },
+    {
+      "kind": "exception",
+      "number": 3,
+      "name": "No question before a choice",
+      "rule": "Never ask a yes or no whose answer the next screen could take: open the search, chooser or payment with a way to decline.",
+      "reports": ["by-kac"],
+      "arena": { "does": "Arena asks \"Search your library…?\" first." }
+    },
+    {
+      "kind": "exception",
+      "number": 4,
+      "name": "Target arrows by relationship",
+      "rule": "Red at something an opponent controls, green at your own. This is skin, listed so nobody removes it.",
+      "reports": ["by-pnm", "by-sm5", "by-vrv"],
+      "arena": { "does": "Arena uses one color." }
+    },
+    {
+      "kind": "exception",
+      "number": 5,
+      "name": "Lands unstacked until seven",
+      "rule": "Each land is separate until its controller has seven or more; then same-named lands stack.",
+      "reports": ["by-p9e", "by-goui"],
+      "arena": { "does": "Arena's threshold has not been measured." }
+    },
+    {
+      "kind": "exception",
+      "number": 6,
+      "name": "Linked exile under its host",
+      "rule": "A card exiled \"until this leaves the battlefield\" sits tucked under the permanent that exiled it.",
+      "reports": ["by-8g5"],
+      "arena": { "does": "Arena shows no link on the table." }
+    },
+    {
+      "kind": "exception",
+      "number": 7,
+      "name": "Own-target warning",
+      "rule": "Confirm before a counter or removal spell targets the player's own spell or permanent.",
+      "reports": ["by-cp2y", "by-jmx9"]
+    },
+    {
+      "kind": "settled",
+      "name": "Tokens",
+      "rule": "Tokens appear at their slot; they do not fly out of their source.",
+      "reports": ["by-kgc", "by-81h"]
+    },
+    {
+      "kind": "settled",
+      "name": "Permanents that leave",
+      "rule": "They dissolve where they are, tokens included.",
+      "reports": ["by-1ug"]
+    },
+    {
+      "kind": "settled",
+      "name": "Choosing how to cast",
+      "rule": "Evoke, cycling and the like open a modal showing the card once per option.",
+      "reports": ["by-lzl", "by-9fb"]
+    },
+    {
+      "kind": "settled",
+      "name": "A finished ability",
+      "rule": "It is removed at once, with no fade.",
+      "reports": ["by-c8b"]
+    },
+    {
+      "kind": "settled",
+      "name": "Wording",
+      "rule": "Arena's exactly: \"All Attack\", \"Choose attackers.\"",
+      "reports": ["by-u4g", "by-a09o"]
+    },
+    {
+      "kind": "settled",
+      "name": "Button order",
+      "rule": "It follows Arena prompt by prompt; there is no blanket \"default on the right\".",
+      "reports": ["by-ceo3"]
+    },
+    {
+      "kind": "settled",
+      "name": "The opponent's turn",
+      "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place, and no spinner.",
+      "reports": ["by-58n", "by-7ih", "by-oyx"]
+    },
+    {
+      "kind": "settled",
+      "name": "Attacking a planeswalker",
+      "rule": "No prompt: an attacker defaults to the player, and the player pulls an arrow to the planeswalker.",
+      "reports": ["by-p00u"],
+      "arena": {
+        "does": "Attackers that can attack get a cyan outline; a clicked attacker turns gold, the opponent's life total and the planeswalker glow, and an arrow follows the cursor to the planeswalker.",
+        "evidence": [{ "recording": "SswBO8aOOgc", "time": "33:30.5" }]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Two items on the stack",
+      "rule": "The top one still gets its target arrow.",
+      "reports": ["by-i88"]
+    },
+    {
+      "kind": "settled",
+      "name": "An additional-cost chooser",
+      "rule": "It opens before mana taps.",
+      "reports": ["by-jqd"]
+    },
+    {
+      "kind": "settled",
+      "name": "A countered spell",
+      "rule": "It leaves before the spell that countered it.",
+      "reports": ["by-kxyq"]
+    },
+    {
+      "kind": "settled",
+      "name": "Cards the opponent looks at",
+      "rule": "They stay library-size beside their library, face down, and visibly go to the top or bottom.",
+      "reports": ["by-pv6p", "by-yfb2"]
+    },
+    {
+      "kind": "settled",
+      "name": "A line from an ability to its source",
+      "rule": "It is always shown while the ability is on the stack, thin and faint as Arena draws it, and hidden during a prompt. A heavy arrow is not that line.",
+      "reports": ["by-wkr", "by-afh", "by-110h"]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Undo",
+      "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",
+      "reports": ["by-2ml", "by-96t", "by-pwe"]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Chrome",
+      "rule": "Round icon buttons; the log toggle top left; the bug button above undo with no gap kept for a missing button.",
+      "reports": ["by-kib", "by-8g4"]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Why a click is refused",
+      "rule": "An illegal click shows its reason at the permanent that forbids it.",
+      "reports": ["by-l2ez"]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Suggestions are sensible",
+      "rule": "The suggested untap targets and the auto-pay sources are the ones a player would pick.",
+      "reports": ["by-svq", "by-ufmq"]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Nothing overlaps",
+      "rule": "The hand, the stack and their indicators never cover a control or each other. No layer of a library, graveyard or exile pile covers a card in play, for either seat, however long a row grows. The opponent's piles keep the band above their back row to themselves.",
+      "reports": ["by-biv", "by-krxg"]
+    },
+    {
+      "kind": "not-seen",
+      "name": "Paying with permanents",
+      "rule": "Waterbend, convoke, crew. Start with no payment highlights. Hover over Auto Pay on desktop or long-press it on mobile to see which permanents Beryl would use. Click or tap the button to accept. To pay manually, click or tap each permanent you want to contribute. For a three-creature Convoke, pick A, B and D directly even if Auto Pay would use A, B and C. After each manual pick, recalculate the proposal for the remaining cost and keep the player's picks. Let the player finish manually or accept Auto Pay for the remainder, and stop taking picks once the cost is covered. Arena documents the preview and acceptance gestures in its [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes). A selected permanent turns and carries a tap mark, and an outline means one thing at a time.",
+      "reports": ["by-1y4", "by-uld", "by-4hjm", "by-z973"]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A creature that enters attacking",
+      "rule": "It gets an explicit choice of what it attacks, and its line stays drawn throughout.",
+      "reports": ["by-l26", "by-y3sp"]
+    },
+    {
+      "kind": "not-seen",
+      "name": "The phone",
+      "rule": "It plays what the desktop plays; its layout and gestures are Beryl's own."
+    }
+  ]
+}

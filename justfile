@@ -142,6 +142,11 @@ count-gate:
 cards *args:
     {{ by }} cards "$@"
 
+# Write docs/ui-conventions.md from data/ui-conventions.json (--check)
+[group('data')]
+conventions *args:
+    {{ by }} conventions "$@"
+
 # Transcode the UI's music and sounds from the staged CC0 packs into ui/public/audio (--check)
 [group('data')]
 audio *args:
