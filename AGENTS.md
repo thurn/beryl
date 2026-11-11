@@ -27,7 +27,8 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
   IPC commands, `tauri.conf.json`, capabilities, icons). Keep it thin: game
   rules and AI go in their own library crates under `rust/crates/`, which build
-  and test without Tauri. `docs/engine-architecture.md` §16 maps the crates.
+  and test without Tauri. `docs/engine-architecture.md` §16 maps the crates;
+  `docs/project-50k.md` is the plan for restructuring them to scale.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it. Its fixture
   transport replays sessions recorded from seeded games or scripted boards
@@ -92,9 +93,31 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   files, helpers and tests it needs. Give beads that touch the same code one
   `lane:<name>` label: one session works them in turn. Label mechanical beads
   (wiring, renames, boilerplate tests) `tier:light` to run them on Sonnet.
+- No plan, bead or skill has a step that waits for the user's approval (plan
+  K31). Where his judgement is wanted, proceed on a default and file a
+  non-blocking bead labelled `human` (`bd human list`). The one exception is the
+  count gate of K1 in `docs/project-50k.md`.
 - `/enact <beads|epic|task>` runs work inline in one session;
   `/enact-plan <bead|plan|task>` runs it unattended across sessions. Most work
   uses neither.
+
+## Code structure
+
+- Spell words out; never misspell to dodge a keyword (`static_ability`, not
+  `statik`).
+- No procedural macros written in this repo; a `macro_rules!` only where a
+  `const fn` cannot remove the repetition.
+- No source file over 800 lines (`file-length`, held to
+  `data/file-length-allowlist.json`).
+- No card name in generic code (`card-names`, held to its allowlist); a one-card
+  mechanic is a sign the abstraction is missing.
+- State a card creates lives in a store, not in a new field on Player, Object or
+  State (plan K4).
+- Helpers shared by two cards live in the shared library, not in a card file.
+- The kernel, rules and card crates take no runtime dependencies; a new
+  dependency's `Cargo.toml` comment says what it replaces.
+- Forge is a test oracle only: no card data, vocabulary or design comes from its
+  scripts or code (plan K16).
 
 ## Testing your work
 
