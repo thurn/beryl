@@ -2,6 +2,7 @@
 // anchors. It places every card; nothing here does.
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
+import type { HandHold } from "../game/handLayout";
 import { layout, STACK_Z } from "../game/layout";
 import { fromMiddle } from "../game/perspective";
 import { FULL_WIDTH, type Placement } from "../game/placement";
@@ -104,11 +105,22 @@ function origin(view: PlayerView, item: StackAbility): number | undefined {
   return index < 0 ? undefined : emblemSlot(item.controller, index);
 }
 
-function rest({ view, abilities }: Table): Map<Name, Resting> {
+/** What of the screen around the table its layout goes by. */
+export interface Around {
+  /** How the hand is held: tucked or away under a screen over the table. */
+  hold: HandHold;
+  /** The game log stands open in its column, and the permanents' rows keep clear of it. */
+  logOpen: boolean;
+}
+
+function rest(
+  { view, abilities }: Table,
+  { hold, logOpen }: Around,
+): Map<Name, Resting> {
   const placements = layout(
     view,
-    "held",
-    false,
+    hold,
+    logOpen,
     {},
     NO_ORDER,
     NONE,
@@ -166,5 +178,13 @@ function anchors(table: PlayerView): Anchors {
   };
 }
 
-/** The table as the desktop lays it out, on the stage as wide as it now is (game/Stage.tsx). */
-export const desktop: StageLayout = { rest, anchors, emerging };
+/** The table as the desktop lays it out, on the stage as wide as it now is (game/Stage.tsx),
+ * with what stands `around` it. */
+export const desktopWith = (around: Around): StageLayout => ({
+  rest: (table) => rest(table, around),
+  anchors,
+  emerging,
+});
+
+/** The desktop's table with nothing over it. */
+export const desktop = desktopWith({ hold: "held", logOpen: false });

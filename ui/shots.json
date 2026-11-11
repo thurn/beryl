@@ -388,6 +388,51 @@
       "height": 900
     },
     {
+      "name": "stage-main",
+      "route": "/?stage&fixture=greedy-turn-9&at=-1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-opponent-turn",
+      "route": "/?stage&fixture=opponent-turn&at=12#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-stack",
+      "route": "/?stage&fixture=stack-counter#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-game-over",
+      "route": "/?stage&fixture=game-over#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-hover",
+      "route": "/?stage&fixture=emblems#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[data-card='Teferi, Hero of Dominaria Emblem']"
+    },
+    {
+      "name": "stage-graveyard-viewer",
+      "route": "/?stage&fixture=choice-scry&at=1#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-pile=graveyard][data-side=you]"
+    },
+    {
+      "name": "stage-log-open",
+      "route": "/?stage&fixture=combat-double-block&at=14#/game",
+      "width": 1600,
+      "height": 900,
+      "click": ".game-log-toggle"
+    },
+    {
       "name": "game-declare-attack",
       "route": "/?fixture=combat-declare&at=26#/game",
       "width": 1600,

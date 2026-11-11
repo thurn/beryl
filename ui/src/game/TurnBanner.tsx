@@ -50,12 +50,19 @@ export function TurnBanner({
   }, [shown]);
   if (!shown) return null;
   return (
+    <TurnAnnouncement key={shown.turn} side={shown.side} ms={TURN_BANNER_MS} />
+  );
+}
+
+/** The announcement itself, of `side`'s turn, fading in and out within `ms`: whoever shows it
+ * says for how long (the old board a timer, the stage the step that announces the turn). */
+export function TurnAnnouncement({ side, ms }: { side: Side; ms: number }) {
+  return (
     <div
-      key={shown.turn}
-      className={`turn-banner turn-banner-${shown.side}`}
+      className={`turn-banner turn-banner-${side}`}
       role="status"
-      data-turn={shown.side}
-      style={{ "--turn-ms": `${TURN_BANNER_MS}ms` } as CSSProperties}
+      data-turn={side}
+      style={{ "--turn-ms": `${ms}ms` } as CSSProperties}
     >
       <div className="turn-banner-band" />
       <svg
@@ -69,7 +76,7 @@ export function TurnBanner({
         <circle className="turn-banner-rim" r={104} />
       </svg>
       <span className="turn-banner-title">
-        {shown.side === "you" ? "Your Turn" : "Opponent's Turn"}
+        {side === "you" ? "Your Turn" : "Opponent's Turn"}
       </span>
     </div>
   );

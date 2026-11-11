@@ -12,18 +12,13 @@ import { StageBoard } from "./StageBoard.tsx";
 
 const staged = new URLSearchParams(window.location.search).has("stage");
 
-/** The game's table. The stage's takes none of the old board's controls yet, but the click
- * that skips what is playing. */
+/** The game's table. The stage's has the old board's chrome and none of its prompts yet. */
 export function Board(props: ComponentProps<typeof CardBoard>) {
-  return staged ? (
-    <StageBoard onSkip={props.onSkip} />
-  ) : (
-    <CardBoard {...props} />
-  );
+  return staged ? <StageBoard {...props} /> : <CardBoard {...props} />;
 }
 
-/** The game's screen on a phone. The stage's keeps the phone's chrome; no card on it takes
- * the pointer yet. */
+/** The game's screen on a phone. The stage's has the phone's chrome and none of its prompts
+ * yet. */
 export const PhoneBoard = staged ? PhoneStageBoard : CardPhoneBoard;
 
 /** The game in progress as the player watches it: on the stage, the views' scripts played on
