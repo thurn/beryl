@@ -23,8 +23,7 @@ pub(super) fn decision_view<L: Layout>(
     stops: StopsSetting,
 ) -> DecisionView {
     let candidates = match &d.candidates {
-        Candidates::Objects(b) => b
-            .iter()
+        Candidates::Objects(_) => (d.candidates.objects())
             .map(|slot| CandidateView {
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
                 option: Candidate::Object { slot: slot.num() },
@@ -67,8 +66,7 @@ pub(super) fn decision_view<L: Layout>(
 /// The cards in the viewer's hand they may neither cast nor play as a land at their priority
 /// ([`DecisionView::refused`]).
 pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
-    obs.zone(ZoneKey::Of(obs.viewer(), Zone::Hand))
-        .iter()
+    obs.in_candidate_order(obs.zone(ZoneKey::Of(obs.viewer(), Zone::Hand)))
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {
                 Refusal::Timing { by } => RefusalView::Timing {
@@ -183,7 +181,7 @@ fn decision_source<L: Layout>(
 ) -> Option<u16> {
     let slot = match (d.kind, d.prompt.purpose) {
         // The land entering asks.
-        (_, Purpose::PayLife) => d.about.first(),
+        (_, Purpose::PayLife) => d.about.sole(),
         (
             DecisionKind::Priority
             | DecisionKind::Attacker

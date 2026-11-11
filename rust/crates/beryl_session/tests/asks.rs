@@ -102,7 +102,7 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
         assert_eq!(observer.status, Status::Thinking);
         assert_eq!(observer.pending_attackers, Some(slots.clone()));
         assert_eq!(controller.pending_attackers, Some(slots.clone()));
-        assert_eq!(attackers.iter().count(), slots.len());
+        assert_eq!(attackers.count() as usize, slots.len());
         assert!(
             observer
                 .objects

@@ -100,9 +100,8 @@ fn the_hands_sight_keeps_the_hands_and_deals_the_libraries() {
     for seed in 0..4 {
         let det = obs.determinize_libraries(&t, &mut SplitMix64::new(seed));
         for p in Seat::BOTH {
-            for slot in s.zone(ZoneKey::Of(p, Zone::Hand)).iter() {
-                assert_eq!(det.card_behind(slot), s.card_behind(slot));
-            }
+            let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
+            assert!(hand.all(|slot| det.card_behind(slot) == s.card_behind(slot)));
             libraries_differ |= s
                 .library(p)
                 .iter()

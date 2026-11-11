@@ -15,7 +15,9 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
     begin(&t, &mut s);
     assert_eq!(s.check_invariants(&t), Ok(()));
     let p = s.turn().active;
-    let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).first().unwrap();
+    // Any card in hand does.
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
+    let hand = s.in_candidate_order(hand).next().unwrap();
     let corruptions: [(&str, Corruption); 6] = [
         ("zone bitboards disagree", |s, _, slot| {
             s.board().corrupt(slot, Break::Zone(Zone::Library));
@@ -55,7 +57,9 @@ fn the_engine_panics_on_a_broken_invariant() {
     let mut s = State::new(&t, 2, Profile::EXACT);
     begin(&t, &mut s);
     let p = s.turn().active;
-    let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).first().unwrap();
+    // Any card in hand does.
+    let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
+    let hand = s.in_candidate_order(hand).next().unwrap();
     s.board().corrupt(hand, Break::Tapped);
     let message = |run: &mut dyn FnMut(&mut State)| {
         let mut bad = s;

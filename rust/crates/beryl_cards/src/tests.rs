@@ -421,12 +421,11 @@ fn a_question_after_a_look_keeps_the_look() {
         }
     };
     assert_eq!(question.player, Seat::P0);
-    for slot in s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).iter() {
-        assert!(
-            s.knows(Seat::P0, slot),
-            "player 0 forgot the card in slot {slot}"
-        );
-    }
+    let hand = s.zone(ZoneKey::Of(Seat::P1, Zone::Hand));
+    assert!(
+        hand.all(|slot| s.knows(Seat::P0, slot)),
+        "player 0 forgot a card of {hand:?}"
+    );
     let choices = |s: &mut State| {
         let mut x = Scratch::new();
         apply(s, &t, &mut x, &mut Replay, Choice(0));
@@ -467,10 +466,7 @@ fn a_search_that_finds_nothing_still_shuffles() {
     let mut known = Vec::new();
     beryl_scenario::visit(&CARDS, &SEARCH, |_, s, d| {
         let library = s.zone(ZoneKey::Of(Seat::P0, Zone::Library));
-        let count = library
-            .iter()
-            .filter(|&slot| s.knows(Seat::P0, slot))
-            .count();
+        let count = library.filter(|slot| s.knows(Seat::P0, slot)).count();
         known.push((d.kind, count));
     })
     .unwrap();

@@ -110,8 +110,10 @@ fn a_look_keeps_its_cards_from_the_yes_or_no_through_the_pick() {
             if d.prompt.purpose != Purpose::Look {
                 return;
             }
-            // The cards lie together in one player's library or hand.
-            let first = s.object(d.about.first().expect("cards to look at"));
+            // The cards lie together in one player's library or hand: where any one of them
+            // is, the rest are.
+            let mut about = s.in_candidate_order(d.about);
+            let first = s.object(about.next().expect("cards to look at"));
             assert!(matches!(first.zone, Zone::Library | Zone::Hand));
             assert!((d.about & !s.zone(ZoneKey::Of(first.owner, first.zone))).is_empty());
             if d.prompt.part == Part::Whether {

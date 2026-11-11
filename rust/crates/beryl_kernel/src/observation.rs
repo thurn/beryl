@@ -1,7 +1,7 @@
 //! `Observation`: a borrowed view of the state for one player, masking what they do not know
 //! (architecture §13, decision D9).
 
-use crate::bitboard::Bitboard;
+use crate::bitboard::{Bitboard, Slots};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat};
@@ -111,6 +111,13 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// The objects in the zone `key` names: public, though the identities may not be.
     pub fn zone(&self, key: ZoneKey) -> Bitboard<L::Slot> {
         self.state.zone(key)
+    }
+
+    /// `objects` by ascending slot, the order a decision lists its candidates in and no order
+    /// of the rules ([`State::in_candidate_order`]).
+    #[inline]
+    pub fn in_candidate_order(&self, objects: Bitboard<L::Slot>) -> Slots<L::Slot> {
+        objects.iter()
     }
 
     /// A player's library as slots, bottom first.

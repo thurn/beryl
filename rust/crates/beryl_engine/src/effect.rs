@@ -688,7 +688,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             left.remove(slot);
             let _ = order.push(slot);
         }
-        if let Some(slot) = left.first() {
+        if let Some(slot) = left.sole() {
             let _ = order.push(slot);
         }
         for &slot in order.iter().rev() {
@@ -911,7 +911,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         player: Seat,
         filter: Filter,
     ) -> Result<Option<L::Slot>, Pause> {
-        Ok(self.search_library_up_to(player, filter, 1)?.iter().next())
+        Ok(self.search_library_up_to(player, filter, 1)?.sole())
     }
 
     /// Creates `count` tokens of a predefined kind under this ability's controller
@@ -1027,7 +1027,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 unreachable!("a defender")
             };
             if let Some(walker) = walker {
-                for slot in tokens.iter() {
+                // Each token is told what it attacks, with no event: the order is nothing.
+                for slot in self.state.in_candidate_order(tokens) {
                     self.state.choose_attacked(slot, Some(walker));
                 }
             }
@@ -1139,10 +1140,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield)),
             you,
         );
-        for slot in self
-            .choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?
-            .iter()
-        {
+        let chosen = self.choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?;
+        // A bug kept for parity (by-w8gv.23): the untap events come in candidate order.
+        for slot in self.state.in_candidate_order(chosen) {
             let land = self.state.object_ref(slot);
             self.untap(land);
         }

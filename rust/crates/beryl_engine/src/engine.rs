@@ -1,6 +1,8 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
 
+use std::cell::OnceCell;
+
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Prompt, Purpose, Types};
 use crate::decision::{
@@ -425,11 +427,9 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
     };
     list.push(Opt::Pass)?;
     if turn::may_play_land(s, player) {
-        let lands: Bitboard<L::Slot> = turn::hand(s, player)
-            .iter()
-            .filter(|&slot| land_face(s, t, slot).is_some())
-            .collect();
-        for slot in collapse(s, lands).iter() {
+        let lands = turn::hand(s, player).filter(|slot| land_face(s, t, slot).is_some());
+        // Candidates are listed in the candidate order, which a `Choice` counts in.
+        for slot in s.in_candidate_order(collapse(s, lands)) {
             list.push(Opt::PlayLand(slot))?;
         }
     }
@@ -777,7 +777,8 @@ pub(crate) fn collapse<L: Layout>(
     if candidates.count() < 2 {
         return candidates;
     }
-    collapse_ordered(s, candidates.iter())
+    // Of interchangeable objects the candidate is the first in candidate order.
+    collapse_ordered(s, s.in_candidate_order(candidates))
 }
 
 /// Whether two object slots are represented by one candidate (architecture §7.2). Read-only
@@ -806,25 +807,24 @@ fn collapse_ordered<L: Layout>(
     };
     // Found only once two candidates are of one card: until then every one is kept, named by
     // a reference or not.
-    let mut referenced = None;
+    let referenced = OnceCell::new();
     let mut kept = Bitboard::EMPTY;
     for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
         let of_card = |k: L::Slot| s.copiable(k).key() == s.copiable(slot).key();
-        if s.object(slot).face == FaceIx::DOWN || !kept.iter().any(of_card) {
+        if s.object(slot).face == FaceIx::DOWN || !kept.any(of_card) {
             kept.insert(slot);
             continue;
         }
-        let referenced =
-            *referenced.get_or_insert_with(|| cast::referenced(s) | combat::related(s));
-        let mut own = None;
+        let referenced = *referenced.get_or_init(|| cast::referenced(s) | combat::related(s));
+        let own = OnceCell::new();
         if referenced.contains(slot)
-            || !kept.iter().any(|k| {
+            || !kept.any(|k| {
                 !referenced.contains(k)
                     && of_card(k)
                     && known(k) == known(slot)
-                    && signature(k) == *own.get_or_insert_with(|| signature(slot))
+                    && signature(k) == *own.get_or_init(|| signature(slot))
             })
         {
             kept.insert(slot);

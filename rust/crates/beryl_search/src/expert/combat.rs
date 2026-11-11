@@ -323,7 +323,7 @@ impl<L: Layout> Sim<'_, L> {
     fn follow_up(&mut self, start: &State<L>, d: &Decision<L>) -> Choice {
         let candidates: Vec<Opt<L>> = match &d.candidates {
             Candidates::Options(o) => o.iter().copied().collect(),
-            Candidates::Objects(b) => b.iter().map(Opt::Object).collect(),
+            Candidates::Objects(_) => d.candidates.objects().map(Opt::Object).collect(),
         };
         let mut top = (0, i32::MIN);
         for (i, &o) in candidates.iter().enumerate() {
@@ -681,8 +681,8 @@ fn attacking<L: Layout>(s: &State<L>, me: Seat) -> Vec<L::Slot> {
 fn option<L: Layout>(d: &Decision<L>, want: Opt<L>) -> Option<Choice> {
     match &d.candidates {
         Candidates::Options(o) => o.iter().position(|&o| o == want),
-        Candidates::Objects(b) => match want {
-            Opt::Object(slot) => b.iter().position(|s| s == slot),
+        Candidates::Objects(_) => match want {
+            Opt::Object(slot) => d.candidates.objects().position(|s| s == slot),
             _ => None,
         },
     }

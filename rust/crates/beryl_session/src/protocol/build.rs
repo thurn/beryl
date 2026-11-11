@@ -66,7 +66,8 @@ pub fn player_view<L: Layout>(
         }
         // Unordered zones: their objects say where they are.
         for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {
-            objects.extend(slots.iter().map(|slot| object_view(t, obs, slot)));
+            let slots = obs.in_candidate_order(slots);
+            objects.extend(slots.map(|slot| object_view(t, obs, slot)));
         }
         state
     };
@@ -136,7 +137,7 @@ pub fn player_view<L: Layout>(
     PlayerView {
         status,
         handling,
-        pending_attackers: pending_attackers(moment),
+        pending_attackers: pending_attackers(obs, moment),
         turn: TurnView {
             number: turn.number,
             active: side(obs, turn.active),
@@ -156,7 +157,10 @@ pub fn player_view<L: Layout>(
     }
 }
 
-pub(super) fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<u16>> {
+pub(super) fn pending_attackers<L: Layout>(
+    obs: Observation<'_, L>,
+    moment: Moment<'_, L>,
+) -> Option<Vec<u16>> {
     let decision = match moment {
         Moment::Deciding(_, d, _)
         | Moment::Thinking {
@@ -167,7 +171,7 @@ pub(super) fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<
     // The aim of an attack names the creatures being aimed.
     decision
         .filter(|d| d.prompt.purpose == Purpose::Attack && d.prompt.part == Part::Aim)
-        .map(|d| slots(d.about.iter()))
+        .map(|d| slots(obs.in_candidate_order(d.about)))
 }
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
@@ -207,8 +211,10 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
     {
         return None;
     }
-    let shown = d.about.first().or_else(|| match &d.candidates {
-        Candidates::Objects(cards) => cards.first(),
+    // The cards shown share an owner and a zone, so the first in candidate order does.
+    let about = obs.in_candidate_order(d.about).next();
+    let shown = about.or_else(|| match &d.candidates {
+        Candidates::Objects(_) => d.candidates.objects().next(),
         Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
             Opt::Object(slot) => Some(slot),
             _ => None,
@@ -244,7 +250,7 @@ pub(super) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
     }
 }
 
-/// Slots as the protocol numbers them.
+/// Slots as the protocol numbers them. A set of objects is sent in the candidate order.
 pub(super) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
     slots.into_iter().map(SlotId::num).collect()
 }

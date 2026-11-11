@@ -83,7 +83,7 @@ fn fateseal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(player) = ctx.target_player(0) else {
         return Ok(());
     };
-    let Some(top) = ctx.top_of_library(player, 1).first() else {
+    let Some(top) = ctx.top_of_library(player, 1).sole() else {
         return Ok(());
     };
     let top = ctx.state().object_ref(top);

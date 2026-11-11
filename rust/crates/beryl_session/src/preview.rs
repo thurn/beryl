@@ -120,11 +120,10 @@ fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<u1
             let mut scratch = Scratch::new();
             apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
             match next(&mut copy, t, &mut scratch, &mut Replay) {
-                Step::Decide(Decision {
-                    kind: DecisionKind::BlockTarget,
-                    candidates: Candidates::Objects(attackers),
-                    ..
-                }) => attackers.iter().map(SlotId::num).collect(),
+                // The attackers offered, which are objects.
+                Step::Decide(d) if d.kind == DecisionKind::BlockTarget => {
+                    d.candidates.objects().map(SlotId::num).collect()
+                }
                 _ => Vec::new(),
             }
         })
@@ -164,8 +163,8 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
                     candidates,
                     ..
                 }) => match candidates {
-                    Candidates::Objects(objects) => objects
-                        .iter()
+                    Candidates::Objects(objects) => copy
+                        .in_candidate_order(objects)
                         .map(|slot| TargetRef::Object { slot: slot.num() })
                         .collect(),
                     Candidates::Options(opts) => opts

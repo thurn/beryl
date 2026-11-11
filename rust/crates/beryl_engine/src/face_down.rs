@@ -100,7 +100,8 @@ pub(crate) fn face_up_options<L: Layout>(
         .copied()
         .filter(|&slot| s.object(slot).face == FaceIx::DOWN && s.controller(slot) == player)
         .collect();
-    for slot in collapse(s, face_down).iter() {
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for slot in s.in_candidate_order(collapse(s, face_down)) {
         if let Some(cost) = face_up_cost(s, t, slot)
             && mana::payable(s, t, player, cost, Bitboard::EMPTY)?
         {

@@ -5,7 +5,7 @@
 //! changes nothing the UI sees.
 
 use beryl_engine::card::{Part, Place, Prompt, Purpose};
-use beryl_engine::{Candidates, Decision, Layout, Observation, SlotId, Zone, ZoneKey};
+use beryl_engine::{Decision, Layout, Observation, SlotId, Zone, ZoneKey};
 
 use super::{AskView, mana_text, side, slots};
 
@@ -19,19 +19,17 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
         cost,
     } = d.prompt;
     // The card the question is about, and the first of the cards the prompt shows: a card of
-    // its object set, or else a candidate. Its owner and zone say whose cards are shown.
-    let about = d.about.first();
+    // its object set, or else a candidate. Its owner and zone say whose cards are shown, and
+    // the cards shown share them, so the first in candidate order does.
+    let about = obs.in_candidate_order(d.about).next();
     let shown = about
-        .or_else(|| match &d.candidates {
-            Candidates::Objects(cards) => cards.first(),
-            Candidates::Options(_) => None,
-        })
+        .or_else(|| d.candidates.objects().next())
         .map(|slot| obs.object(slot));
     // Where a card picked, or the card asked about, goes.
     let to = zone_of(places[0]);
     match (purpose, about, shown, to) {
         (Purpose::Attack, ..) if part == Part::Aim => AskView::AttackTarget {
-            attackers: slots(d.about.iter()),
+            attackers: slots(obs.in_candidate_order(d.about)),
         },
         (Purpose::Scry, ..) => AskView::Scry { count },
         (Purpose::Look, _, Some(card), Some(to)) => AskView::Look {
@@ -44,7 +42,7 @@ pub(super) fn ask_view<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> A
                 _ => count,
             },
             to: to.into(),
-            eligible: slots(d.about.iter()),
+            eligible: slots(obs.in_candidate_order(d.about)),
         },
         (Purpose::PutBack, ..) => AskView::PutBack { count: most },
         (Purpose::Fateseal, _, Some(card), _) => AskView::Fateseal {

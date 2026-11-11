@@ -201,11 +201,12 @@ impl Game {
 
     /// The slots of `player`'s cards named `name` not yet on the battlefield, lowest first.
     fn cards(&self, player: Seat, name: &str) -> Vec<Slot> {
-        (self.s.zone(ZoneKey::Of(player, Zone::Library))
-            | self.s.zone(ZoneKey::Of(player, Zone::Hand)))
-        .iter()
-        .filter(|&slot| self.s.definition_name(&self.t, slot) == name)
-        .collect()
+        // Copies of a card are alike, so any order of them does.
+        let cards = self.s.zone(ZoneKey::Of(player, Zone::Library))
+            | self.s.zone(ZoneKey::Of(player, Zone::Hand));
+        (self.s.in_candidate_order(cards))
+            .filter(|&slot| self.s.definition_name(&self.t, slot) == name)
+            .collect()
     }
 
     fn put_slot(&mut self, slot: Slot) -> Slot {

@@ -35,12 +35,14 @@ fn at_last_action(scenario: &Scenario) -> (GameTable, State) {
     (t, states.pop().expect("the scenario has actions"))
 }
 
-/// The slots `owner` has in `zone`, top of a library first.
+/// The slots `owner` has in `zone`, top of a library first. The rest come in candidate
+/// order: the tests look a card up among them by name, and copies of a card are alike.
 fn slots(s: &State, owner: Seat, zone: Zone) -> Vec<Slot> {
     if zone == Zone::Library {
-        s.library(owner).iter().rev().copied().collect()
+        s.library_from_top(owner).collect()
     } else {
-        s.zone(ZoneKey::Of(owner, zone)).iter().collect()
+        s.in_candidate_order(s.zone(ZoneKey::Of(owner, zone)))
+            .collect()
     }
 }
 

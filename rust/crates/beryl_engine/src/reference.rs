@@ -97,9 +97,9 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         return Ok(());
     };
     let at = Some(At::Player(player));
+    // Every cost is checked, so the order only decides which disagreement is reported.
     let hand = s
-        .zone(ZoneKey::Of(player, Zone::Hand))
-        .iter()
+        .in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand)))
         .filter_map(|slot| s.card_def(t, slot))
         .flat_map(|def| def.faces.iter().map(|f| f.cost));
     let abilities = s

@@ -454,17 +454,18 @@ fn side<L: Layout>(
     place: &impl Fn(L::Slot) -> Option<u16>,
 ) -> Side {
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
-    let mut shown: Vec<String> = hand
-        .iter()
-        .filter(|&slot| s.knows(p.opponent(), slot))
-        .map(|slot| name(t, s, slot))
-        .collect();
+    // The candidate order three times, each sorted next: a checkpoint names cards, not
+    // slots.
+    let names = |cards| -> Vec<String> {
+        let cards = s.in_candidate_order(cards);
+        cards.map(|slot| name(t, s, slot)).collect()
+    };
+    let mut shown = names(hand.filter(|slot| s.knows(p.opponent(), slot)));
     shown.sort();
-    let mut hand: Vec<String> = hand.iter().map(|slot| name(t, s, slot)).collect();
+    let mut hand = names(hand);
     hand.sort();
     let mut exile: Vec<Exiled> = s
-        .zone(ZoneKey::Of(p, Zone::Exile))
-        .iter()
+        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Exile)))
         .map(|slot| {
             let o = s.object(slot);
             let link = |flag| {

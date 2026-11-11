@@ -117,7 +117,8 @@ pub(crate) fn attack_decision<L: Layout>(
             .copied()
             .filter(|&slot| may_attack(s, slot))
             .collect();
-        for slot in collapse(s, able).iter() {
+        // Candidates are listed in the candidate order, which a `Choice` counts in.
+        for slot in s.in_candidate_order(collapse(s, able)) {
             list.push(Opt::Attack(slot))?;
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
@@ -201,8 +202,8 @@ fn finish_attack<L: Layout>(
     s.settle_question();
     let attackers = with_flag(s, ObjectFlags::ATTACKING);
     // In battlefield order, never slot order: the taps' events are seen in this order, and a
-    // slot number says nothing about a card (architecture §13). Tapping moves nothing. One
-    // attacker has no order, and needs no walk of the battlefield.
+    // slot number says nothing about a card (architecture §13). Tapping moves nothing. A
+    // sole attacker has no order, and needs no walk of the battlefield.
     let tap = |s: &mut State<L>, sink: &mut Sink<L>, slot| {
         if has(s, slot, Keywords::VIGILANCE) {
             return Ok(());
@@ -222,7 +223,7 @@ fn finish_attack<L: Layout>(
             }
         }
     }
-    for slot in untapped.iter() {
+    if let Some(slot) = untapped.sole() {
         tap(s, sink, slot)?;
     }
     if attackers.is_empty() {
@@ -311,7 +312,8 @@ pub(crate) fn block_decision<L: Layout>(
         .copied()
         .filter(|&slot| may_block(s, slot))
         .collect();
-    for slot in collapse(s, able).iter() {
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for slot in s.in_candidate_order(collapse(s, able)) {
         list.push(Opt::Block(slot))?;
     }
     Ok(Decision {
@@ -460,21 +462,16 @@ pub(crate) fn division_decision<L: Layout>(
     let attacker = next_division(s, done).expect("a division without an attacker");
     let blockers = blockers_of(s, attacker);
     let killed = blockers & chosen;
-    let spent: u32 = killed.iter().map(|b| u32::from(lethal(s, b))).sum();
+    let spent: u32 = killed.sum(|b| u32::from(lethal(s, b)));
     let left = u32::from(power(s, attacker)) - spent;
-    let absorbable: u32 = (blockers & !chosen)
-        .iter()
-        .map(|b| u32::from(lethal(s, b)) - 1)
-        .sum();
+    let absorbable: u32 = (blockers & !chosen).sum(|b| u32::from(lethal(s, b)) - 1);
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
     if !killed.is_empty() || left <= absorbable {
         list.push(Opt::Done)?;
     }
-    let more = (blockers & !chosen)
-        .iter()
-        .filter(|&b| u32::from(lethal(s, b)) <= left)
-        .collect();
-    for b in collapse(s, more).iter() {
+    let more = (blockers & !chosen).filter(|b| u32::from(lethal(s, b)) <= left);
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for b in s.in_candidate_order(collapse(s, more)) {
         list.push(Opt::Lethal(b))?;
     }
     Ok(Decision {
@@ -503,16 +500,12 @@ pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Cho
     };
     let attacker = next_division(s, done)?;
     let blockers = blockers_of(s, attacker);
-    let spent: u32 = (blockers & chosen)
-        .iter()
-        .map(|b| u32::from(lethal(s, b)))
-        .sum();
+    let spent: u32 = (blockers & chosen).sum(|b| u32::from(lethal(s, b)));
     let left = u32::from(power(s, attacker)) - spent;
-    let cost: u32 = (blockers & !chosen)
-        .iter()
-        .map(|b| u32::from(lethal(s, b)))
-        .filter(|&cost| cost <= left)
-        .sum();
+    let cost: u32 = (blockers & !chosen).sum(|b| {
+        let cost = u32::from(lethal(s, b));
+        if cost <= left { cost } else { 0 }
+    });
     let picks = options.iter().enumerate().filter_map(|(i, option)| {
         let Opt::Lethal(slot) = *option else {
             return None;
@@ -633,7 +626,7 @@ fn division<L: Layout>(
     let mut out: L::Queue<(L::Slot, u8), 128> = Default::default();
     let blockers = blockers_of(s, attacker);
     let mut left = power(s, attacker);
-    if let (1, Some(blocker)) = (blockers.count(), blockers.first()) {
+    if let Some(blocker) = blockers.sole() {
         let _ = out.push((blocker, left));
         return out;
     }

@@ -173,8 +173,7 @@ fn fires<L: Layout>(
             if controller == you =>
         {
             let matching = tokens
-                .iter()
-                .filter(|&slot| {
+                .filter(|slot| {
                     s.object(slot).zone == Zone::Battlefield
                         && s.derived(slot).types.intersects(types)
                 })

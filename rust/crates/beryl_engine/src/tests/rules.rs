@@ -169,7 +169,10 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let mut s = State::new(&t, 9, Profile::EXACT);
     begin(&t, &mut s);
     let p = s.turn().starting_player;
-    let hand: Vec<Slot> = s.zone(ZoneKey::Of(p, Zone::Hand)).iter().collect();
+    // Any order: every card is checked.
+    let hand: Vec<Slot> = s
+        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
+        .collect();
     for &slot in &hand {
         assert!(s.knows(p, slot));
         s.move_object(
@@ -215,9 +218,7 @@ fn filters_select_by_type_and_owner() {
     let others = Filter::Not(&Filter::Types(Types::LAND)).select(&s, &t, hand, p);
     assert_eq!((lands | others), hand);
     assert!((lands & others).is_empty());
-    for slot in lands.iter() {
-        assert_eq!(s.definition_name(&t, slot), "Test Land");
-    }
+    assert!(lands.all(|slot| s.definition_name(&t, slot) == "Test Land"));
     assert_eq!(Filter::Whose(Whose::You).select(&s, &t, hand, p), hand);
     assert!(
         Filter::Whose(Whose::AnOpponent)

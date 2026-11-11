@@ -1,7 +1,7 @@
 //! Decisions and their answers (architecture §3, §7.1, decision D6), and how a game ends
 //! (§12.2).
 
-use crate::bitboard::Bitboard;
+use crate::bitboard::{Bitboard, Slots};
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
@@ -179,6 +179,16 @@ impl<L: Layout> Candidates<L> {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// The objects offered, in the order a [`Choice`] counts them (the candidate order,
+    /// [`State::in_candidate_order`]): none for option candidates.
+    #[inline]
+    pub fn objects(&self) -> Slots<L::Slot> {
+        match self {
+            Candidates::Objects(b) => b.iter(),
+            Candidates::Options(_) => Bitboard::EMPTY.iter(),
+        }
     }
 
     /// The object a choice names, for object candidates.

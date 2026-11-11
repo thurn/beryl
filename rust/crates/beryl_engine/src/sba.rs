@@ -52,7 +52,8 @@ pub(crate) fn check<L: Layout>(
         });
         return Ok(true);
     }
-    for slot in tokens.iter() {
+    // Each token ceases to exist on its own, with no event, so the order is nothing.
+    for slot in s.in_candidate_order(tokens) {
         s.cease_to_exist(slot);
     }
     event::move_batch(
@@ -121,10 +122,7 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
             away |= s.zone(ZoneKey::Of(player, zone));
         }
     }
-    let tokens = (away & L::TOKEN_POOL)
-        .iter()
-        .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
-        .collect();
+    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags.has(ObjectFlags::TOKEN));
     (graveyard, tokens, legendary)
 }
 
@@ -217,11 +215,14 @@ fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> 
 /// Whether some player controls two legendary permanents of `legendary` with the same name:
 /// whether any legend-rule group exists, kept or not.
 fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard<L::Slot>; 2]) -> bool {
+    // Each pair is compared once, and whether one matches is the same in any order: the
+    // candidate order saves the half of the comparisons that `any` within `any` would repeat,
+    // in a check the engine makes after every action.
     legendary.iter().any(|&mine| {
         let mut rest = mine;
-        mine.iter().any(|a| {
+        s.in_candidate_order(mine).any(|a| {
             rest.remove(a);
-            rest.iter().any(|b| same_name(s, t, a, b))
+            rest.any(|b| same_name(s, t, a, b))
         })
     })
 }
@@ -235,10 +236,7 @@ fn legend_group<L: Layout>(
     slot: L::Slot,
 ) -> Bitboard<L::Slot> {
     let name_of = name(s, t, slot);
-    legendary[s.controller(slot).index()]
-        .iter()
-        .filter(|&other| name(s, t, other) == name_of)
-        .collect()
+    legendary[s.controller(slot).index()].filter(|other| name(s, t, other) == name_of)
 }
 
 /// The first legend-rule group, in APNAP order, with no permanent in `kept`: its controller
@@ -293,13 +291,10 @@ pub(crate) fn apply_legend_rule<L: Layout>(
     kept: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
     let legendary = legendary(s);
-    let mut doomed = Bitboard::EMPTY;
-    for slot in (legendary[0] | legendary[1]).iter() {
-        let group = legend_group(s, t, &legendary, slot);
-        if group.count() >= 2 {
-            doomed |= group & !kept;
-        }
-    }
+    // A permanent is in its own group, so the doomed are those not kept whose group has
+    // another member.
+    let doomed = ((legendary[0] | legendary[1]) & !kept)
+        .filter(|slot| legend_group(s, t, &legendary, slot).count() >= 2);
     s.settle_question();
     event::move_batch(
         s,

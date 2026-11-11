@@ -8,6 +8,7 @@
 
 use beryl_card::{Amount, CastingKind, Comparison, Condition, Objects, Players, SpecIx};
 
+use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::cast;
@@ -17,49 +18,6 @@ use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{Counters, ObjectFlags, PendingTrigger, State, TARGETS, Target, Zone};
 use crate::table::GameTable;
-
-/// A set of players.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Who(u8);
-
-impl Who {
-    pub(super) const NOBODY: Who = Who(0);
-    pub(super) const EVERYONE: Who = Who(0b11);
-
-    pub(super) fn only(player: Seat) -> Who {
-        Who(1 << player.get())
-    }
-
-    /// [`Players::EachOpponent`]: every opponent of `you`
-    /// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player
-    /// game, a player's opponent is the other player."
-    ///
-    /// The one place that entry meets the two-player game. With more players, "the player's
-    /// opponents are all players not on their team"
-    /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function
-    /// changes then, and no card does.
-    pub(super) fn each_opponent(you: Seat) -> Who {
-        Who::only(you.opponent())
-    }
-
-    pub(super) fn insert(&mut self, player: Seat) {
-        self.0 |= 1 << player.get();
-    }
-
-    pub(super) fn contains(self, player: Seat) -> bool {
-        self.0 & (1 << player.get()) != 0
-    }
-
-    /// The players in the order they act when several do
-    /// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)): "If multiple players
-    /// would make choices and/or take actions at the same time, the active player makes any
-    /// choices required, then the next player in turn order".
-    pub(super) fn in_turn_order(self, active: Seat) -> impl Iterator<Item = Seat> {
-        [active, active.opponent()]
-            .into_iter()
-            .filter(move |&player| self.contains(player))
-    }
-}
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and
@@ -216,15 +174,15 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The players `players` names.
-    pub(super) fn players(&self, players: Players) -> Who {
+    pub(super) fn players(&self, players: Players) -> PlayerSet {
         match players {
             // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
             // controller".
-            Players::You => Who::only(self.you()),
-            Players::EachOpponent => Who::each_opponent(self.you()),
-            Players::EachPlayer => Who::EVERYONE,
+            Players::You => PlayerSet::only(self.you()),
+            Players::EachOpponent => PlayerSet::each_opponent(self.you()),
+            Players::EachPlayer => PlayerSet::EVERYONE,
             Players::Target(spec) => {
-                let mut who = Who::NOBODY;
+                let mut who = PlayerSet::NOBODY;
                 for player in self.targets(spec).filter_map(|(_, t)| t.as_player()) {
                     who.insert(player);
                 }
@@ -233,8 +191,10 @@ impl<L: Layout> Scene<'_, L> {
             // A target the effect moved is known as it last was. What `Those` and `All`
             // name are read where they are now, so their owners once they have left.
             Players::ControllerOf(objects) => {
-                let mut who = Who::NOBODY;
-                for slot in self.objects(objects).iter() {
+                let mut who = PlayerSet::NOBODY;
+                // The candidate order, here and for the owners: a set is built, whose order
+                // is nothing.
+                for slot in self.s.in_candidate_order(self.objects(objects)) {
                     who.insert(self.s.controller(slot));
                 }
                 for known in self.moved(objects) {
@@ -245,8 +205,8 @@ impl<L: Layout> Scene<'_, L> {
             // CR 108.3: "The owner of a card in the game is the player who started the game
             // with it in their deck." A slot keeps its owner through every move.
             Players::OwnerOf(objects) => {
-                let mut who = Who::NOBODY;
-                for slot in self.objects(objects).iter() {
+                let mut who = PlayerSet::NOBODY;
+                for slot in self.s.in_candidate_order(self.objects(objects)) {
                     who.insert(self.s.object(slot).owner);
                 }
                 if let Objects::Target(spec) = objects {
@@ -261,7 +221,9 @@ impl<L: Layout> Scene<'_, L> {
                     self.registers.that_player.is_some(),
                     "\"that player\" outside \"each player\""
                 );
-                self.registers.that_player.map_or(Who::NOBODY, Who::only)
+                self.registers
+                    .that_player
+                    .map_or(PlayerSet::NOBODY, PlayerSet::only)
             }
         }
     }
@@ -285,11 +247,7 @@ impl<L: Layout> Scene<'_, L> {
         of: impl Fn(&Self, L::Slot) -> i32,
         known: impl Fn(&Known) -> i32,
     ) -> i32 {
-        let here: i32 = self
-            .objects(objects)
-            .iter()
-            .map(|slot| of(self, slot))
-            .sum();
+        let here: i32 = self.objects(objects).sum(|slot| of(self, slot));
         here + self.moved(objects).map(known).sum::<i32>()
     }
 

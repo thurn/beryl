@@ -368,7 +368,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::AbilityFinished => GameEvent::AbilityFinished,
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
-            tokens: slots(tokens.iter()),
+            tokens: slots(obs.in_candidate_order(tokens)),
         },
         Event::Cast {
             spell, controller, ..
@@ -380,7 +380,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::Ability { .. } => ability_event(t, obs, e),
         Event::Attack { player, attackers } => GameEvent::Attack {
             player: side(player),
-            attackers: slots(attackers.iter()),
+            attackers: slots(obs.in_candidate_order(attackers)),
         },
         Event::StepBegins { step, active } => GameEvent::StepBegins {
             step: step.into(),

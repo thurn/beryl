@@ -514,8 +514,9 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     let mut s = State::new(&t, seed, Profile::EXACT);
     begin(&t, &mut s);
     for player in Seat::BOTH {
-        let land = (s.zone(ZoneKey::Of(player, Zone::Library)))
-            .iter()
+        // Any of the copies does.
+        let land = s
+            .in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Library)))
             .find(|&slot| s.definition_name(&t, slot) == "Test Land")
             .unwrap();
         s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
@@ -527,8 +528,10 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 
 /// A slot holding `name` in the player's library or hand.
 fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
-    (s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand)))
-        .iter()
+    // Copies of a card are alike, so any of them does.
+    let cards =
+        s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand));
+    s.in_candidate_order(cards)
         .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap_or_else(|| panic!("no {name}"))
 }
@@ -614,9 +617,9 @@ fn types<L: Layout>(s: &State<L>, slot: L::Slot) -> Types {
 fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
+    // Any two of the copies do.
     let lands: Vec<Slot> = s
-        .zone(ZoneKey::Of(p, Zone::Library))
-        .iter()
+        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Library)))
         .filter(|&slot| s.definition_name(&t, slot) == "Test Land")
         .take(2)
         .collect();
@@ -717,8 +720,7 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         token = ctx
             .create_tokens_of(values, 1, TokenEntry::default())
-            .iter()
-            .next();
+            .sole();
     });
     let token = token.expect("a token copy");
     let land = find(&s, &t, p, "Test Land");
@@ -777,7 +779,8 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let b = put(&t, &mut s, &mut x, p, "Test Raider");
     let adeline = put(&t, &mut s, &mut x, p, "Test Adeline");
     let attackers: Bitboard = [a, b, adeline].into_iter().collect();
-    for slot in attackers.iter() {
+    // Each pick of the declaration is marked on its own, with no event.
+    for slot in s.in_candidate_order(attackers) {
         s.declare_attacker(slot);
     }
     event::settle(
@@ -1219,7 +1222,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
         token = ctx.create_tokens(&MAP, 1, TokenEntry::default());
     });
-    let token = token.first().unwrap();
+    let token = token.sole().unwrap();
     s.board().attach(aura, token);
     crate::layers::refresh(&mut s, &t, &mut x.events);
     let r = s.object_ref(token);
@@ -1326,8 +1329,9 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
         Reason::Effect,
     )
     .unwrap();
-    let other = (s.zone(ZoneKey::Of(p, Zone::Library)))
-        .iter()
+    // Any card of another name does.
+    let other = s
+        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Library)))
         .find(|&slot| s.card_behind(slot) != s.card_behind(mine))
         .unwrap();
     s.board().swap_cards(mine, other);
@@ -1390,7 +1394,7 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     with_ctx(&t, &mut s, &mut x, trainer, |ctx| {
         token = ctx.create_tokens_of(values, 1, TokenEntry::default());
     });
-    let token = token.first().unwrap();
+    let token = token.sole().unwrap();
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (1, 1));
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.player(p).life, 22, "the copy's enters trigger");
@@ -1747,8 +1751,7 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
         let values = ctx.state().copiable(prodigy);
         copy = ctx
             .create_tokens_of_for(Seat::P1, values, 1, TokenEntry::default())
-            .iter()
-            .next();
+            .sole();
     });
     let copy = copy.expect("a token copy");
     assert_eq!(s.object(copy).face, FaceIx::BACK);

@@ -524,8 +524,7 @@ impl Runner {
                 }
                 let n = s
                     .zone(ZoneKey::Of(player, zone))
-                    .iter()
-                    .filter(|&slot| card.is_none_or(|c| self.name(slot) == c))
+                    .filter(|slot| card.is_none_or(|c| self.name(slot) == c))
                     .count();
                 (n.to_string(), count.to_string())
             }
@@ -626,8 +625,10 @@ impl Runner {
         }
         for player in Seat::BOTH {
             for zone in [Zone::Hand, Zone::Graveyard, Zone::Exile, Zone::Library] {
-                let slots: Vec<Slot> = s.zone(ZoneKey::Of(player, zone)).iter().collect();
-                let names: Vec<&'static str> = slots.iter().map(|&slot| self.name(slot)).collect();
+                let cards = s.zone(ZoneKey::Of(player, zone));
+                // Counts by name, true in any order: the candidate order only arranges them.
+                let names = s.in_candidate_order(cards).map(|slot| self.name(slot));
+                let names: Vec<&'static str> = names.collect();
                 out.push(Assertion::Count {
                     player,
                     zone,
@@ -640,10 +641,8 @@ impl Runner {
                 for card in distinct(&names) {
                     // A card only its owner knows was drawn or searched for, and an oracle may
                     // have found another.
-                    let public = slots
-                        .iter()
-                        .filter(|&&slot| self.name(slot) == card)
-                        .all(|&slot| Seat::BOTH.into_iter().all(|p| s.knows(p, slot)));
+                    let known = |slot| Seat::BOTH.into_iter().all(|p| s.knows(p, slot));
+                    let public = cards.all(|slot| self.name(slot) != card || known(slot));
                     if !public || card.is_empty() {
                         continue;
                     }

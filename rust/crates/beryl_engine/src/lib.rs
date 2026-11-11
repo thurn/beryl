@@ -33,10 +33,10 @@ mod turn;
 // The game state and everything that writes it are the kernel's (`beryl_kernel`, plan K6).
 // The engine stays the facade other crates import until the last caller has moved, so each
 // moved module keeps its old path here.
+pub(crate) use beryl_kernel::{PlayerSet, invariants, zone};
 pub use beryl_kernel::{
     bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state, table,
 };
-pub(crate) use beryl_kernel::{invariants, zone};
 
 /// The kernel's storage layouts, and the rules' per-layout function tables beside them.
 pub mod layout {

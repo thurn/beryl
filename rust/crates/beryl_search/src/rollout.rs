@@ -282,8 +282,7 @@ pub(crate) fn best<L: Layout>(
         }
     };
     match &d.candidates {
-        Candidates::Objects(b) => b
-            .iter()
+        Candidates::Objects(_) => (d.candidates.objects())
             .enumerate()
             .for_each(|(i, slot)| consider(i, Candidate::Object(slot))),
         Candidates::Options(o) => o
@@ -382,8 +381,7 @@ impl Softmax<'_> {
 /// Calls `f` with each candidate of `d` and its index.
 fn for_each<L: Layout>(d: &Decision<L>, mut f: impl FnMut(usize, Candidate<L>)) {
     match &d.candidates {
-        Candidates::Objects(b) => b
-            .iter()
+        Candidates::Objects(_) => (d.candidates.objects())
             .enumerate()
             .for_each(|(i, slot)| f(i, Candidate::Object(slot))),
         Candidates::Options(o) => o
@@ -465,8 +463,7 @@ impl<L: Layout> Policy<'_, L> {
                 .is_some_and(|c| !self.t.def(c).front().types.intersects(Types::LAND));
         let mine = |zone| self.obs.zone(ZoneKey::Of(self.me, zone));
         let lands = (mine(Zone::Hand) | mine(Zone::Battlefield))
-            .iter()
-            .filter(|&s| self.is_land(s))
+            .filter(|s| self.is_land(s))
             .count();
         let land = if lands > 5 { 5 } else { 80 };
         if spell {
@@ -482,12 +479,14 @@ impl<L: Layout> Policy<'_, L> {
     pub(crate) fn keep(&self) -> bool {
         let mut kept = self.obs.zone(ZoneKey::Of(self.me, Zone::Hand));
         for _ in 0..self.obs.player(self.me).mulligans {
-            match kept.iter().min_by_key(|&slot| self.in_hand(slot)) {
+            // Of the least wanted alike, the first in candidate order goes: the policy's pick.
+            let least = self.obs.in_candidate_order(kept);
+            match least.min_by_key(|&slot| self.in_hand(slot)) {
                 Some(least) => kept.remove(least),
                 None => break,
             }
         }
-        let lands = kept.iter().filter(|&slot| self.is_land(slot)).count();
+        let lands = kept.filter(|slot| self.is_land(slot)).count();
         kept.count() <= 5 || (2..=5).contains(&lands)
     }
 
@@ -623,7 +622,6 @@ impl<L: Layout> Policy<'_, L> {
             || self
                 .obs
                 .zone(ZoneKey::Of(self.me, Zone::Hand))
-                .iter()
                 .any(|s| self.info(s).is_some_and(|info| info.wheel))
             || self.wins_from_empty(self.me)
     }

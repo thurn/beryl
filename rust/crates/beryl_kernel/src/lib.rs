@@ -138,21 +138,28 @@
 //! ## Sets and orders
 //!
 //! Outside the kernel a [`Bitboard`] is a set: union, intersection, difference, `contains`,
-//! `count`, `is_empty`, `any`, `all`, `filter` and `sole`, its one member. It does not
-//! iterate. A caller that needs a sequence asks the state for an order by name (by-w8gv.5.6):
+//! `count`, `is_empty`, [`Bitboard::any`], [`Bitboard::all`], [`Bitboard::at_least`],
+//! [`Bitboard::filter`], [`Bitboard::sum`] and [`Bitboard::sole`], its one member. It does
+//! not iterate, it has no first member and its words are the crate's. Each of those takes a
+//! `Fn`, which cannot carry what it saw from one member to the next, so its answer is the
+//! same in any order. [`PlayerSet`] is the same for players. A caller that needs a sequence
+//! asks for an order by name:
 //!
 //! | Order | Query |
 //! | --- | --- |
 //! | the battlefield, as permanents entered it | [`State::battlefield`] |
-//! | a library, top first | `State::library_from_top` |
+//! | a library, top first | [`State::library_from_top`] |
 //! | a graveyard, as cards were put there (CR 404.2) | [`State::graveyard`] |
-//! | players in turn order from the active player (CR 101.4) | `State::players_in_turn_order` |
-//! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | `State::in_game_order` |
-//! | a decision's candidates, by ascending slot | `State::in_candidate_order` |
+//! | players in turn order from the active player (CR 101.4) | [`State::players_in_turn_order`] |
+//! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
+//! | a decision's candidates, by ascending slot | [`State::in_candidate_order`], [`Observation::in_candidate_order`], [`decision::Candidates::objects`] |
 //!
 //! The last is not a rules order, since the deal and every shuffle put cards in slots at
 //! random. A `Choice` is an index into candidates listed that way, so saves and
-//! `rollouts_never_change` depend on it; it is for listing candidates and nothing else.
+//! `rollouts_never_change` depend on it. It lists candidates. Anything else that walks it
+//! says in a comment why its result is the same in any order: it builds a set or a sum, it
+//! sorts next, or it does to each member something no event shows. A walk whose order an
+//! event, a queue or a zone would show takes a rules order instead.
 //!
 //! ## Queries
 //!
@@ -192,15 +199,20 @@
 //! ## Players
 //!
 //! Rules code reaches players through sets and orders (by-w8gv.5.13), never the other
-//! player of two. `Players` is an order-free set (the interpreter's `Who`, moved here), and:
+//! player of two. [`PlayerSet`] is the order-free set (the interpreter's `Who`, moved here;
+//! `beryl_card`'s `Players` is the vocabulary's word for which players an effect names, so
+//! the set is not called that), and [`State::players_in_turn_order`] puts one in order.
+//! Still to come:
 //!
 //! ```text
-//! fn players(&self) -> Players
-//! fn opponents_of(&self, player: Seat) -> Players
-//! fn players_in_turn_order(&self) -> impl Iterator<Item = Seat>
-//! fn defending_players(&self) -> Players
+//! fn players(&self) -> PlayerSet
+//! fn opponents_of(&self, player: Seat) -> PlayerSet
+//! fn defending_players(&self) -> PlayerSet
 //! fn defending_player(&self, attacker: L::Slot) -> Option<Seat>
 //! ```
+//!
+//! Until then [`PlayerSet::EVERYONE`] and [`PlayerSet::each_opponent`] hold the two-player
+//! game's answers.
 //!
 //! `defending_player` is the player an attacking creature attacks, or the controller of the
 //! planeswalker it attacks (CR 506.2). `Seat::opponent` is not part of the API: it stays
@@ -225,8 +237,10 @@ pub mod mutate;
 mod new;
 mod object;
 pub mod observation;
+mod order;
 mod pending;
 mod player;
+mod player_set;
 pub mod profile;
 pub mod query;
 pub mod relayout;
@@ -241,6 +255,7 @@ pub use bitboard::Bitboard;
 pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
+pub use player_set::PlayerSet;
 pub use query::Copiable;
 pub use state::State;
 pub use table::GameTable;

@@ -29,7 +29,9 @@ pub struct Transcript {
 /// Each candidate of `d` in `s` as a transcript labels it, in the decision's order.
 pub fn labels(t: &GameTable, s: &State, d: &Decision) -> Vec<String> {
     match &d.candidates {
-        Candidates::Objects(b) => b.iter().map(|slot| candidate(t, s, slot)).collect(),
+        Candidates::Objects(_) => (d.candidates.objects())
+            .map(|slot| candidate(t, s, slot))
+            .collect(),
         Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
     }
 }
@@ -113,9 +115,9 @@ impl Transcript {
         );
         for p in Seat::BOTH {
             let player = s.player(p);
+            // A hand has no order; a transcript lists it in the candidate order.
             let hand: Vec<String> = s
-                .zone(ZoneKey::Of(p, Zone::Hand))
-                .iter()
+                .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
                 .map(|slot| name(t, s, slot))
                 .collect();
             let board: Vec<String> = s
@@ -214,8 +216,9 @@ impl Transcript {
                     Some(format!("P{} gains {amount} life", player.get()))
                 }
                 Event::Attack { player, attackers } => {
-                    let names: Vec<String> = attackers
-                        .iter()
+                    // Attackers are declared together; listed in the candidate order.
+                    let names: Vec<String> = s
+                        .in_candidate_order(attackers)
                         .map(|a| self.called(t, s, s.object_ref(a)))
                         .collect();
                     Some(format!(

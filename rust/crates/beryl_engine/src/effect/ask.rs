@@ -125,7 +125,9 @@ impl<L: Layout> EffectCtx<'_, L> {
     ) -> Result<Option<L::Slot>, Pause> {
         let mut opts: L::Queue<Opt<L>, 64> = Default::default();
         let left = crate::engine::collapse(self.state, candidates);
-        for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
+        // Candidates are listed in the candidate order, which a `Choice` counts in.
+        let left = self.state.in_candidate_order(left).map(Opt::Object);
+        for o in core::iter::once(Opt::Done).chain(left) {
             if opts.push(o).is_err() {
                 self.full = true;
                 return Err(Pause);

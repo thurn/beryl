@@ -26,6 +26,11 @@ use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone, 
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 
+mod units;
+
+use units::Groups;
+pub(crate) use units::Units;
+
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
 const KINDS: usize = 6;
 /// Classes of interchangeable sources one solve considers in [`Small`]; [`crate::Large`] holds
@@ -35,160 +40,6 @@ const CLASSES: usize = 16;
 /// How many sources of each class a plan taps, an entry per class: in a layout that holds more
 /// classes than [`Small`], an entry per slot, as every class has a member.
 type Taps<L> = <L as Layout>::Table<u8, CLASSES>;
-
-/// Mana available to pay with, counted by the set of kinds each unit can be: a floating
-/// {W} is one unit of `{W}`, an untapped Tundra one unit of `{W, U}`, a Mana Crypt two units
-/// of `{C}`.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Units {
-    by_kinds: [u16; 1 << KINDS],
-    /// A bit per set of kinds with a unit, so reading the units skips the empty sets.
-    some: u64,
-}
-
-impl Default for Units {
-    fn default() -> Self {
-        Units::NONE
-    }
-}
-
-impl Units {
-    const NONE: Units = Units {
-        by_kinds: [0; 1 << KINDS],
-        some: 0,
-    };
-
-    pub(crate) fn add(&mut self, kinds: u8, n: u16) {
-        let k = &mut self.by_kinds[usize::from(kinds)];
-        *k = k.saturating_add(n);
-        if *k > 0 {
-            self.some |= 1 << kinds;
-        }
-    }
-
-    /// Takes back `n` units that [`Units::add`] added. Units never reach the cap that adding
-    /// saturates at: a player holds far fewer sources and floating mana.
-    fn take(&mut self, kinds: u8, n: u16) {
-        let k = &mut self.by_kinds[usize::from(kinds)];
-        debug_assert!(*k >= n && *k < u16::MAX, "units taken that were added");
-        *k -= n;
-        if *k == 0 {
-            self.some &= !(1 << kinds);
-        }
-    }
-
-    /// The sets of kinds with units, and how many each has, in order of the sets.
-    fn nonempty(&self) -> impl Iterator<Item = (u8, u16)> + '_ {
-        let mut some = self.some;
-        std::iter::from_fn(move || {
-            if some == 0 {
-                return None;
-            }
-            let kinds = some.trailing_zeros() as u8;
-            some &= some - 1;
-            Some((kinds, self.by_kinds[usize::from(kinds)]))
-        })
-    }
-
-    fn total(&self) -> u32 {
-        self.nonempty().map(|(_, n)| u32::from(n)).sum()
-    }
-
-    /// Whether these units can pay `cost` (X already announced).
-    ///
-    /// Colored and colorless symbols need units of their kind
-    /// ([CR 107.4a](https://yawgatog.com/resources/magic-rules/#R1074a)): "Colored mana in
-    /// costs can be paid only with the appropriate color of mana."; generic symbols take
-    /// any. That is a bipartite matching, and by Hall's theorem it exists exactly when every
-    /// set of symbol kinds has at least as many units able to pay one of them as it has
-    /// symbols, and the units cover the total. A source that makes several mana of one kind
-    /// it chooses counts as several independent units, which the cube's colorless rocks are.
-    pub(crate) fn pays(&self, cost: ManaCost) -> bool {
-        debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if self.total() < cost.total(0) {
-            return false;
-        }
-        let present = (0..KINDS)
-            .filter(|&k| cost.symbols[k] > 0)
-            .fold(0u8, |m, k| m | (1 << k));
-        let mut mask = present;
-        while mask != 0 {
-            let need: u32 = (0..KINDS)
-                .filter(|&k| mask & (1 << k) != 0)
-                .map(|k| u32::from(cost.symbols[k]))
-                .sum();
-            let cover: u32 = self
-                .nonempty()
-                .filter(|&(kinds, _)| kinds & mask != 0)
-                .map(|(_, n)| u32::from(n))
-                .sum();
-            if cover < need {
-                return false;
-            }
-            mask = (mask - 1) & present;
-        }
-        true
-    }
-
-    /// The units grouped by their set of kinds, the form [`Units::pays`] checks.
-    fn groups(&self) -> Groups {
-        let mut g = Groups {
-            total: self.total(),
-            kinds: [0; 1 << KINDS],
-            units: [0; 1 << KINDS],
-            len: 0,
-        };
-        for (kinds, n) in self.nonempty() {
-            g.kinds[g.len] = kinds;
-            g.units[g.len] = n;
-            g.len += 1;
-        }
-        g
-    }
-}
-
-/// Units grouped by their set of kinds, with their total: what [`Units::pays`] reads, kept by
-/// [`Funds`] for the many checks of one decision.
-#[derive(Clone, Copy, Debug)]
-struct Groups {
-    total: u32,
-    /// The first `len` sets of kinds with units, and how many units each has.
-    kinds: [u8; 1 << KINDS],
-    units: [u16; 1 << KINDS],
-    len: usize,
-}
-
-impl Groups {
-    /// [`Units::pays`].
-    fn pays(&self, cost: ManaCost) -> bool {
-        debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if self.total < cost.total(0) {
-            return false;
-        }
-        // Only sets of kinds the cost has symbols of can fail the condition: adding a kind
-        // with no symbols adds no need.
-        let present = (0..KINDS)
-            .filter(|&k| cost.symbols[k] > 0)
-            .fold(0u8, |m, k| m | (1 << k));
-        let groups = || self.kinds[..self.len].iter().zip(&self.units[..self.len]);
-        let mut mask = present;
-        while mask != 0 {
-            let need: u32 = (0..KINDS)
-                .filter(|&k| mask & (1 << k) != 0)
-                .map(|k| u32::from(cost.symbols[k]))
-                .sum();
-            let cover: u32 = groups()
-                .filter(|&(&kinds, _)| kinds & mask != 0)
-                .map(|(_, &n)| u32::from(n))
-                .sum();
-            if cover < need {
-                return false;
-            }
-            mask = (mask - 1) & present;
-        }
-        true
-    }
-}
 
 /// Interchangeable sources: the same mana, and nothing else to do with them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -526,7 +377,8 @@ impl<L: Layout> Funds<L> {
             return self.all.pays(cost);
         }
         let mut u = self.units;
-        for slot in excluded.iter() {
+        // Each source's units come off its own count, so the order is nothing.
+        for slot in s.in_candidate_order(excluded) {
             let (kinds, amount, _, _) =
                 source(s, t, self.player, slot, s.derived(slot)).expect("a source");
             u.take(kinds, u16::from(amount));
@@ -804,8 +656,9 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
             let _ = later.push(l);
         }
     };
-    let hand = s.zone(ZoneKey::Of(player, Zone::Hand));
-    for def in hand.iter().filter_map(|slot| s.card_def(t, slot)) {
+    // Each cost is kept once, and `still_payable` reads the list as a set: no order shows.
+    let hand = s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand)));
+    for def in hand.filter_map(|slot| s.card_def(t, slot)) {
         for face in def.faces {
             if !face.types.intersects(Types::LAND) {
                 add(Later {
@@ -976,7 +829,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     // it meets the costs in can decide, and the slots are where the game's randomness dealt
     // the cards.
     let mut hand: L::Queue<L::Slot, 64> = Default::default();
-    for slot in s.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
+    for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
         let _ = hand.push(slot);
     }
     hand.as_mut_slice()
@@ -1334,8 +1187,7 @@ fn looking_ahead<L: Layout>(
     for (i, c) in sources.classes().iter().enumerate() {
         creatures[i] = c
             .members
-            .iter()
-            .filter(|&m| s.derived(m).types.intersects(Types::CREATURE))
+            .filter(|m| s.derived(m).types.intersects(Types::CREATURE))
             .count() as u8;
     }
     let mut best: L::Queue<Outlook, 64> = Default::default();
@@ -1434,14 +1286,15 @@ pub(crate) fn pay<L: Layout>(
 /// it dealt the cards to them; copies of one card are alike to it.
 fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
     let mut v: L::Queue<L::Slot, 64> = Default::default();
-    let first = c.members.iter().next().map(|m| s.copiable(m).key());
-    if c.members.iter().all(|m| Some(s.copiable(m).key()) == first) {
-        for slot in c.members.iter().take(usize::from(n)) {
+    let first = s.in_candidate_order(c.members).next();
+    let first = first.map(|m| s.copiable(m).key());
+    if c.members.all(|m| Some(s.copiable(m).key()) == first) {
+        for slot in s.in_candidate_order(c.members).take(usize::from(n)) {
             v.push(slot)?;
         }
         return Ok(v);
     }
-    for slot in c.members.iter() {
+    for slot in s.in_candidate_order(c.members) {
         v.push(slot)?;
     }
     v.as_mut_slice().sort_by_key(|&slot| s.copiable(slot).key());
@@ -1625,7 +1478,9 @@ pub(crate) fn manual_options<L: Layout>(
         }
     }
     for (i, c) in sources.classes().iter().enumerate() {
-        let slot = c.members.iter().next().expect("a class has a member");
+        // A class's members are alike to a payment: its first in candidate order names it.
+        let mut members = s.in_candidate_order(c.members);
+        let slot = members.next().expect("a class has a member");
         let mut taps: Taps<L> = Table::filled(0);
         taps[i] = 1;
         for kind in (0..KINDS).filter(|&k| c.kinds & (1 << k) != 0) {
@@ -1713,7 +1568,8 @@ fn add_activations<L: Layout>(
     out: &mut L::Queue<Opt<L>, 64>,
     sources: Bitboard<L::Slot>,
 ) {
-    for slot in sources.iter() {
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for slot in s.in_candidate_order(sources) {
         let Some((kinds, ..)) = source(s, t, player, slot, s.derived(slot)) else {
             continue;
         };

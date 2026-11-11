@@ -150,12 +150,7 @@ fn alone(live: &Live, player: beryl_engine::Seat, card: &str) -> bool {
         .count();
     let elsewhere: usize = [Zone::Hand, Zone::Graveyard, Zone::Exile]
         .into_iter()
-        .map(|zone| {
-            s.zone(ZoneKey::Of(player, zone))
-                .iter()
-                .filter(|&slot| named(slot))
-                .count()
-        })
+        .map(|zone| s.zone(ZoneKey::Of(player, zone)).filter(named).count() as usize)
         .sum();
     on_battlefield + elsewhere == 1
 }

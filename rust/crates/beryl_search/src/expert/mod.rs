@@ -487,7 +487,6 @@ impl<L: Layout> Expert<'_, L> {
         let opp = self.opp();
         let gone = (self.obs().zone(ZoneKey::Of(opp, Zone::Graveyard))
             | self.obs().zone(ZoneKey::Of(opp, Zone::Exile)))
-        .iter()
         .any(|s| self.is(s, names::JACE_WIELDER_OF_MYSTERIES));
         self.p.wins_from_empty(opp)
             || (self.in_their_deck(names::JACE_WIELDER_OF_MYSTERIES) && !gone)
@@ -575,14 +574,12 @@ impl<L: Layout> Expert<'_, L> {
                 && counter(p.object.slot)
                 && mana >= 2 + i32::from(p.extra)
         });
-        exiled || (mana >= 2 && self.hand(self.opp()).iter().any(counter))
+        exiled || (mana >= 2 && self.hand(self.opp()).any(counter))
     }
 
     /// Whether we have seen a Mana Tithe in the opponent's hand, as Elite Spellbinder shows.
     fn tithe_known(&self) -> bool {
-        self.hand(self.opp())
-            .iter()
-            .any(|s| self.is(s, names::MANA_TITHE))
+        self.hand(self.opp()).any(|s| self.is(s, names::MANA_TITHE))
     }
 
     /// What removing the permanent in `slot` would give back to the other side: the
@@ -592,11 +589,10 @@ impl<L: Layout> Expert<'_, L> {
             return 0;
         }
         self.obs()
-            .zone(ZoneKey::Of(
+            .in_candidate_order(self.obs().zone(ZoneKey::Of(
                 self.obs().controller(slot).opponent(),
                 Zone::Exile,
-            ))
-            .iter()
+            )))
             .filter(|&s| self.obs().object(s).linked == Some(slot))
             .map(|s| self.value(s))
             .sum()
@@ -610,7 +606,9 @@ impl<L: Layout> Expert<'_, L> {
         let (player, zone) = match d.prompt.purpose {
             // The cards looked at lie in their owner's library or hand.
             Purpose::Look => {
-                let card = self.obs().object(d.about.first()?);
+                let card = self
+                    .obs()
+                    .object(self.obs().in_candidate_order(d.about).next()?);
                 (card.owner, card.zone)
             }
             Purpose::Scry => (self.me(), Zone::Library),
@@ -673,13 +671,13 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether a card named `name` is in our hand.
     fn holds(&self, name: &str) -> bool {
-        self.hand(self.me()).iter().any(|s| self.is(s, name))
+        self.hand(self.me()).any(|s| self.is(s, name))
     }
 
     /// The counterspells in our hand.
     fn counters_in_hand(&self) -> impl Iterator<Item = L::Slot> + '_ {
-        self.hand(self.me())
-            .iter()
+        self.obs()
+            .in_candidate_order(self.hand(self.me()))
             .filter(|&s| self.counter_cost(s).is_some())
     }
 
@@ -785,7 +783,7 @@ impl<L: Layout> Expert<'_, L> {
         // speed ("Each opponent can cast spells only any time they could cast a sorcery"):
         // what we could cast now is better cast than lost, unless we counter it.
         let teferi = self.p.t.def(top.card).name == names::TEFERI_TIME_RAVELER;
-        let countered = self.hand(self.me()).iter().any(|s| {
+        let countered = self.hand(self.me()).any(|s| {
             self.obs().card(s).is_some_and(|c| {
                 i32::from(self.p.t.def(c).front().cost.mana_value()) <= self.mana(self.me())
             }) && self.counter_score(top, s, FaceIx::FRONT) > 0
@@ -926,8 +924,8 @@ impl<L: Layout> Expert<'_, L> {
         // Elite Spellbinder takes the best nonland card from our hand, the counterspell too.
         if def.name == names::ELITE_SPELLBINDER {
             v += self
-                .hand(self.me())
-                .iter()
+                .obs()
+                .in_candidate_order(self.hand(self.me()))
                 .filter(|&s| !self.p.is_land(s))
                 .map(|s| self.value(s))
                 .max()
@@ -1047,7 +1045,7 @@ impl<L: Layout> Expert<'_, L> {
                 )
             )
         });
-        let spells = self.hand(me).iter().any(|s| !self.p.is_land(s));
+        let spells = self.hand(me).any(|s| !self.p.is_land(s));
         if lands >= 7 && looter && !spells {
             return 0;
         }
@@ -1060,7 +1058,7 @@ impl<L: Layout> Expert<'_, L> {
         let base = 1000;
         match self.name(slot) {
             Some(names::SINK_INTO_STUPOR) => {
-                let others = self.hand(me).iter().any(|s| {
+                let others = self.hand(me).any(|s| {
                     s != slot && !self.is(s, names::SINK_INTO_STUPOR) && self.p.is_land(s)
                 });
                 if others || lands >= 4 { 0 } else { base }
@@ -1075,7 +1073,7 @@ impl<L: Layout> Expert<'_, L> {
             }
             // Strip Mine is the land drop to strip with only once no other land would do.
             Some(names::STRIP_MINE) => {
-                let others = self.hand(me).iter().any(|s| {
+                let others = self.hand(me).any(|s| {
                     s != slot && self.p.is_land(s) && !self.is(s, names::SINK_INTO_STUPOR)
                 });
                 if self.strip_worth(lands + 1) && (!others || lands >= 4) {
@@ -1101,7 +1099,7 @@ impl<L: Layout> Expert<'_, L> {
     /// untapped land drop would let us cast it.
     fn needs_land_mana(&self) -> bool {
         let mana = self.mana(self.me());
-        self.hand(self.me()).iter().any(|s| {
+        self.hand(self.me()).any(|s| {
             self.obs().card(s).is_some_and(|c| {
                 let f = self.p.t.def(c).front();
                 !f.types.intersects(Types::LAND) && i32::from(f.cost.mana_value()) == mana + 1
@@ -1138,7 +1136,7 @@ impl<L: Layout> Expert<'_, L> {
         }
         let mana = self.mana(self.me());
         let left = self.mana_after(self.p.t.def(card).face(face), costs);
-        self.hand(self.me()).iter().any(|s| {
+        self.hand(self.me()).any(|s| {
             s != slot
                 && self.obs().card(s).is_some_and(|c| {
                     let f = self.p.t.def(c).front();
@@ -1280,7 +1278,7 @@ impl<L: Layout> Expert<'_, L> {
             // hand.
             names::MANA_CRYPT => {
                 let lands = self.lands(self.me()) as i32;
-                let stuck = self.hand(self.me()).iter().any(|s| {
+                let stuck = self.hand(self.me()).any(|s| {
                     s != slot
                         && !self.p.is_land(s)
                         && self.obs().card(s).is_some_and(|c| {
@@ -1298,7 +1296,7 @@ impl<L: Layout> Expert<'_, L> {
                 // Teferi first when more is to follow: once he resolves, nothing we cast this
                 // turn can be countered.
                 let left = self.mana(self.me()) - 3;
-                let more = self.hand(self.me()).iter().any(|s| {
+                let more = self.hand(self.me()).any(|s| {
                     s != slot
                         && self.obs().card(s).is_some_and(|c| {
                             let f = self.p.t.def(c).front();
@@ -1406,7 +1404,7 @@ impl<L: Layout> Expert<'_, L> {
                 | obs.zone(ZoneKey::Of(p, Zone::Graveyard))
                 | obs.zone(ZoneKey::Of(p, Zone::Exile));
         }
-        zones.iter().any(|s| self.is(s, name))
+        zones.any(|s| self.is(s, name))
             || obs.battlefield().iter().any(|&s| self.is(s, name))
             || obs
                 .stack()
@@ -1465,8 +1463,8 @@ impl<L: Layout> Expert<'_, L> {
     /// in hand, if any: what we hold mana up for on the opponent's turn.
     fn keeps_counter_mana(&self, cost: i32) -> bool {
         let flash = self
-            .hand(self.me())
-            .iter()
+            .obs()
+            .in_candidate_order(self.hand(self.me()))
             .filter_map(|s| match self.name(s)? {
                 names::THE_WANDERING_EMPEROR | names::SPHINX_OF_FALSE_CONCLUSIONS => Some(4),
                 names::MALCOLM_ALLURING_SCOUNDREL => Some(2),
@@ -1501,7 +1499,7 @@ impl<L: Layout> Expert<'_, L> {
             self.permanents(self.me())
                 .any(|s| springs(s) && !self.tapped(s)),
         );
-        let enables = self.hand(self.me()).iter().any(|s| {
+        let enables = self.hand(self.me()).any(|s| {
             !springs(s)
                 && !self.p.is_land(s)
                 && self.obs().card(s).is_some_and(|c| {
@@ -1558,7 +1556,7 @@ impl<L: Layout> Expert<'_, L> {
         } else {
             names::TIMETWISTER
         };
-        let from_hand = self.hand(self.me()).iter().any(|s| self.is(s, wheel));
+        let from_hand = self.hand(self.me()).any(|s| self.is(s, wheel));
         // Cast from the graveyard (Jace, Telepath Unbound's −3), it is not shuffled in either.
         let own = from_hand
             || self
@@ -1593,7 +1591,7 @@ impl<L: Layout> Expert<'_, L> {
         let decking = self.obs().library(me).len() <= 1 && pool >= 8;
         // Nor while we hold a real spell the wheel would shuffle away, one our lands have the
         // colors for.
-        let holding = self.hand(self.me()).iter().any(|s| {
+        let holding = self.hand(self.me()).any(|s| {
             !self.is(s, wheel)
                 && !self.p.is_land(s)
                 && self.value(s) >= COUNTER_SPARE
@@ -1820,8 +1818,8 @@ impl<L: Layout> Expert<'_, L> {
             })
             .count();
         let mut costs: Vec<i32> = self
-            .hand(self.me())
-            .iter()
+            .obs()
+            .in_candidate_order(self.hand(self.me()))
             .filter(|&s| {
                 self.name(s)
                     .is_some_and(|n| n != names::OUST && REMOVAL.contains(&n))
@@ -2356,7 +2354,7 @@ impl<L: Layout> Expert<'_, L> {
         }
         let total = w + u + both + c;
         let mut v = 3 * total;
-        for slot in self.hand(me).iter() {
+        for slot in self.obs().in_candidate_order(self.hand(me)) {
             let Some(card) = self.obs().card(slot) else {
                 continue;
             };
@@ -2733,7 +2731,11 @@ impl<L: Layout> Expert<'_, L> {
     fn yes_no(&self, d: &Decision<L>) -> Option<Choice> {
         let player = match d.prompt.purpose {
             // The card looked at is the top of its owner's library.
-            Purpose::Fateseal => self.obs().object(d.about.first()?).owner,
+            Purpose::Fateseal => {
+                self.obs()
+                    .object(self.obs().in_candidate_order(d.about).next()?)
+                    .owner
+            }
             Purpose::Explore => self.me(),
             _ => return None,
         };

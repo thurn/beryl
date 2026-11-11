@@ -118,9 +118,7 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let s = ctx.state();
     let nonland: Bitboard<L::Slot> = s
         .zone(ZoneKey::Of(opponent, Zone::Hand))
-        .iter()
-        .filter(|&slot| !LANDS.matches(s, ctx.table, slot, opponent))
-        .collect();
+        .filter(|slot| !LANDS.matches(s, ctx.table, slot, opponent));
     let may = Prompt::new(Purpose::May);
     if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), may, Bitboard::EMPTY)? {
         return Ok(());
@@ -699,7 +697,8 @@ impl Game {
         begin(&t, &mut s);
         let me = s.turn().starting_player;
         for p in Seat::BOTH {
-            for slot in s.zone(ZoneKey::Of(p, Zone::Hand)).iter() {
+            // Any order: the test puts what it needs back on top.
+            for slot in s.in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand))) {
                 s.move_object(
                     &mut crate::event::Sink::off(),
                     slot,

@@ -122,15 +122,13 @@ fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_libra
         for viewer in Seat::BOTH {
             let obs = Observation::new(s, viewer);
             let other = viewer.opponent();
-            for slot in obs.zone(ZoneKey::Of(other, Zone::Hand)).iter() {
-                assert_eq!(obs.card(slot), None);
-            }
+            let hidden = obs.zone(ZoneKey::Of(other, Zone::Hand));
+            assert!(hidden.all(|slot| obs.card(slot).is_none()));
             for &slot in obs.library(other) {
                 assert_eq!(obs.card(slot), None);
             }
-            for slot in obs.zone(ZoneKey::Of(viewer, Zone::Hand)).iter() {
-                assert_eq!(obs.card(slot), s.card_behind(slot));
-            }
+            let own = obs.zone(ZoneKey::Of(viewer, Zone::Hand));
+            assert!(own.all(|slot| obs.card(slot) == s.card_behind(slot)));
             for &slot in obs.battlefield() {
                 assert_eq!(obs.card(slot), s.card_behind(slot));
             }

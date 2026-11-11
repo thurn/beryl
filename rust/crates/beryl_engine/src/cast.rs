@@ -203,10 +203,7 @@ impl ExileCost {
             ExileCost::Graveyard(n) => {
                 let mut graveyard = s.zone(ZoneKey::Of(player, Zone::Graveyard));
                 graveyard.remove(itself);
-                let cards = graveyard
-                    .iter()
-                    .filter(|&slot| s.card_behind(slot).is_some());
-                cards.count() >= usize::from(n)
+                graveyard.at_least(usize::from(n), |slot| s.card_behind(slot).is_some())
             }
         }
     }
@@ -222,9 +219,7 @@ fn hand_cards<L: Layout>(
 ) -> Bitboard<L::Slot> {
     let mut hand = s.zone(ZoneKey::Of(player, Zone::Hand));
     hand.remove(itself);
-    hand.iter()
-        .filter(|&slot| s.copiable(slot).face(t).colors.intersects(colors))
-        .collect()
+    hand.filter(|slot| s.copiable(slot).face(t).colors.intersects(colors))
 }
 
 /// The cards the exile step may choose next, one of each set of interchangeable ones (§7.2).
@@ -402,12 +397,7 @@ fn enough_candidates<L: Layout>(
     let need = usize::from(spec.count);
     match domain(s, spec, you, itself, source) {
         TargetSet::Objects(within) => {
-            within
-                .iter()
-                .filter(|&slot| spec.filter.matches_x(s, t, slot, you, x))
-                .take(need)
-                .count()
-                >= need
+            within.at_least(need, |slot| spec.filter.matches_x(s, t, slot, you, x))
         }
         TargetSet::Players(players) => players.count_ones() as usize >= need,
     }
@@ -686,19 +676,20 @@ fn cast_options<L: Layout>(
     // Cards no face of which may be cast now are left out before collapsing, which saves
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
-    let cards: Bitboard<L::Slot> = cards
-        .iter()
-        .filter(|&slot| {
-            s.card_def(t, slot).is_some_and(|def| {
-                def.face_ixs().any(|f| {
-                    let face = def.face(f);
-                    !face.transformed && in_time(s, t, now, face, from)
-                })
+    let cards = cards.filter(|slot| {
+        s.card_def(t, slot).is_some_and(|def| {
+            def.face_ixs().any(|f| {
+                let face = def.face(f);
+                !face.transformed && in_time(s, t, now, face, from)
             })
         })
-        .collect();
+    });
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
     let with_def = |slot| Some((slot, s.card_def(t, slot)?));
-    for (slot, def) in collapse(s, cards).iter().filter_map(with_def) {
+    for (slot, def) in s
+        .in_candidate_order(collapse(s, cards))
+        .filter_map(with_def)
+    {
         let flashback =
             from == From::Priority && permission(s, player, slot).is_some_and(|p| p.flashback);
         for f in def.face_ixs() {
@@ -753,10 +744,7 @@ fn power_of<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 
 /// The total power of the creatures that could crew the Vehicle in `vehicle`.
 fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: L::Slot) -> u32 {
-    crew_candidates(s, player, vehicle)
-        .iter()
-        .map(|slot| u32::from(power_of(s, slot)))
-        .sum()
+    crew_candidates(s, player, vehicle).sum(|slot| u32::from(power_of(s, slot)))
 }
 
 /// Whether `player` may activate ability `ability` of the object in `slot` now.
@@ -860,7 +848,11 @@ fn waterbend_payable<L: Layout>(
     mut exclude: Bitboard<L::Slot>,
 ) -> bool {
     let free = benders(s, player) & !exclude & !funds.sources(exclude);
-    for slot in free.iter().take(usize::from(bendable.min(cost.generic))) {
+    // Any of them do: each pays one generic mana, and none is a source the funds count.
+    for slot in s
+        .in_candidate_order(free)
+        .take(usize::from(bendable.min(cost.generic)))
+    {
         cost.generic -= 1;
         exclude.insert(slot);
     }
@@ -918,22 +910,19 @@ fn activation_options<L: Layout>(
     let prunes = s.profile().hides_pointless[player.index()] && t.needy();
     let mine = s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
         | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield));
-    let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
-    let objects: Bitboard<L::Slot> =
-        objects.collect::<Bitboard<L::Slot>>() | s.zone(ZoneKey::Of(player, Zone::Hand));
+    let objects =
+        mine.filter(|slot| s.controller(slot) == player) | s.zone(ZoneKey::Of(player, Zone::Hand));
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
     let facts = |slot: L::Slot| s.copiable(slot).facts(t);
-    let objects: Bitboard<L::Slot> = objects
-        .iter()
-        .filter(|&slot| {
-            facts(slot).activates()
-                || (s.object(slot).zone == Zone::Battlefield
-                    && s.derived(slot).granted.iter().any(Option::is_some))
-        })
-        .collect();
-    for slot in collapse(s, objects).iter() {
+    let objects = objects.filter(|slot| {
+        facts(slot).activates()
+            || (s.object(slot).zone == Zone::Battlefield
+                && s.derived(slot).granted.iter().any(Option::is_some))
+    });
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for slot in s.in_candidate_order(collapse(s, objects)) {
         let granted = if s.object(slot).zone == Zone::Battlefield {
             s.derived(slot).granted.len() as u8
         } else {
@@ -1304,7 +1293,8 @@ fn waterbend_options<L: Layout>(
         let mut fewer = cost;
         fewer.generic -= 1;
         let funds = Funds::of(s, t, c.player)?;
-        for slot in collapse(s, benders(s, c.player)).iter() {
+        // Candidates are listed in the candidate order, which a `Choice` counts in.
+        for slot in s.in_candidate_order(collapse(s, benders(s, c.player))) {
             let rest = Bitboard::single(slot);
             if waterbend_payable(s, t, &funds, c.player, fewer, c.left - 1, rest) {
                 objects.push(Opt::Object(slot))?;

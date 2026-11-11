@@ -128,7 +128,8 @@ fn advance_mulligans<L: Layout>(
                 continue;
             }
             any = true;
-            for slot in turn::hand(s, p).iter() {
+            // The shuffle that follows loses the order they went in.
+            for slot in s.in_candidate_order(turn::hand(s, p)) {
                 s.move_object(sink, slot, Zone::Library, Place::Top)?;
             }
             s.shuffle_library(p);

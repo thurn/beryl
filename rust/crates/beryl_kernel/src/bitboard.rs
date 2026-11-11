@@ -7,8 +7,17 @@ use crate::ids::{Slot, SlotId};
 /// A set of object slots of type `S`: for [`Slot`], `[u64; 4]` for the 255 slots. Zone
 /// membership, knowledge and filters are ANDs and ORs over these, in the style of chess
 /// bitboards.
+///
+/// Outside the kernel it is a set and nothing more: it has no first member and does not
+/// iterate, because a slot number is no order the rules can see (the deal and every shuffle
+/// put cards in slots at random, architecture §14). What a caller may ask is whatever the
+/// answer to cannot depend on the order the members are met in: membership, the set algebra,
+/// [`Bitboard::count`], [`Bitboard::any`], [`Bitboard::all`], [`Bitboard::at_least`],
+/// [`Bitboard::filter`], [`Bitboard::sum`] and [`Bitboard::sole`]. Each takes a `Fn`, which
+/// cannot keep what it saw from one member to the next. A sequence is asked of the state by
+/// the name of its order (the crate's contract, "Sets and orders").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Bitboard<S: SlotId = Slot>(pub S::Words);
+pub struct Bitboard<S: SlotId = Slot>(pub(crate) S::Words);
 
 impl<S: SlotId> Bitboard<S> {
     pub const EMPTY: Self = Self(S::NO_WORDS);
@@ -45,21 +54,57 @@ impl<S: SlotId> Bitboard<S> {
         self.0.as_ref().iter().map(|w| w.count_ones()).sum()
     }
 
-    /// The lowest slot in the set.
+    /// Whether `f` holds for some member.
     #[inline]
-    pub fn first(self) -> Option<S> {
-        self.iter().next()
+    pub fn any(self, f: impl Fn(S) -> bool) -> bool {
+        self.iter().any(f)
+    }
+
+    /// Whether `f` holds for every member.
+    #[inline]
+    pub fn all(self, f: impl Fn(S) -> bool) -> bool {
+        self.iter().all(f)
+    }
+
+    /// Whether `f` holds for at least `n` members. It stops counting at `n`, which
+    /// `filter(f).count() >= n` would not.
+    #[inline]
+    pub fn at_least(self, n: usize, f: impl Fn(S) -> bool) -> bool {
+        self.iter().filter(|&slot| f(slot)).take(n).count() >= n
+    }
+
+    /// The members `f` holds for.
+    #[inline]
+    #[must_use]
+    pub fn filter(self, f: impl Fn(S) -> bool) -> Self {
+        self.iter().filter(|&slot| f(slot)).collect()
+    }
+
+    /// The sum of `f` over the members: of numbers that add exactly, so that the order they
+    /// are added in is nothing.
+    #[inline]
+    pub fn sum<T: core::iter::Sum<T>>(self, f: impl Fn(S) -> T) -> T {
+        self.iter().map(f).sum()
+    }
+
+    /// The one member of a set of one, and nothing for any other set.
+    #[inline]
+    pub fn sole(self) -> Option<S> {
+        let mut rest = self.iter();
+        let slot = rest.next()?;
+        rest.next().is_none().then_some(slot)
     }
 
     /// The `n`th slot in ascending order, the meaning of a `Choice` over objects.
     #[inline]
-    pub fn nth(self, n: usize) -> Option<S> {
+    pub(crate) fn nth(self, n: usize) -> Option<S> {
         self.iter().nth(n)
     }
 
-    /// The slots in ascending order.
+    /// The slots in ascending order. Other crates reach it as the candidate order
+    /// (`State::in_candidate_order`), which names what it is.
     #[inline]
-    pub fn iter(self) -> Slots<S> {
+    pub(crate) fn iter(self) -> Slots<S> {
         Slots(self)
     }
 
@@ -82,7 +127,7 @@ impl From<Bitboard<Slot>> for Bitboard<crate::ids::LargeSlot> {
     }
 }
 
-/// The slots of a [`Bitboard`], lowest first.
+/// The slots of a [`Bitboard`], lowest first: the candidate order.
 pub struct Slots<S: SlotId>(Bitboard<S>);
 
 impl<S: SlotId> Iterator for Slots<S> {
@@ -193,6 +238,25 @@ mod tests {
         assert_eq!(slots(a & b), vec![2, 200]);
         assert_eq!((a | b).count(), 4);
         assert_eq!(slots(a & !b), vec![1]);
+    }
+
+    #[test]
+    fn order_free_questions() {
+        let b = set(&[3, 64, 130, 254]);
+        let even = |slot: Slot| slot.get().is_multiple_of(2);
+        assert!(b.any(even) && !b.all(even));
+        assert!(!Bitboard::<Slot>::EMPTY.any(even) && Bitboard::<Slot>::EMPTY.all(even));
+        assert_eq!(slots(b.filter(even)), vec![64, 130, 254]);
+        assert!(b.at_least(3, even) && !b.at_least(4, even));
+        assert!(Bitboard::<Slot>::EMPTY.at_least(0, even));
+        assert_eq!(b.sum(|slot| u32::from(slot.get())), 451);
+    }
+
+    #[test]
+    fn only_a_set_of_one_has_a_sole_member() {
+        assert_eq!(set(&[130]).sole(), Some(Slot::new(130)));
+        assert_eq!(set(&[3, 130]).sole(), None);
+        assert_eq!(Bitboard::<Slot>::EMPTY.sole(), None);
     }
 
     #[test]
