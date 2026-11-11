@@ -10,7 +10,9 @@ use beryl_engine::{
     Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
 };
 
-use crate::{Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem};
+use crate::{
+    Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem, script,
+};
 
 /// Why a scenario failed: at which action, and what went wrong.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -503,28 +505,7 @@ impl Runner {
     /// The candidate `c` of `d` as a pick, where the scenario vocabulary can name it. The pick
     /// may name an earlier candidate too, of the same name.
     fn pick_for(&self, d: &Decision, c: Choice) -> Option<Pick> {
-        if let Some(slot) = d.candidates.object(c) {
-            return Some(Pick::Card {
-                card: self.name(slot),
-            });
-        }
-        let o = d.candidates.option(c)?;
-        if let Some(slot) = self.named(o) {
-            return Some(Pick::Card {
-                card: self.name(slot),
-            });
-        }
-        Some(match o {
-            Opt::Pass => Pick::Pass,
-            Opt::Yes => Pick::Yes,
-            Opt::No => Pick::No,
-            Opt::Done => Pick::Done,
-            Opt::Number(n) => Pick::Number { n },
-            Opt::Plan(i) => Pick::Plan { i: i.into() },
-            Opt::Player(player) => Pick::Player { player },
-            Opt::Defender(None) => Pick::DefendingPlayer,
-            _ => return None,
-        })
+        crate::script::pick(&self.t, &self.s, d, c)
     }
 
     /// The candidate of `d` that `pick` names.
@@ -880,48 +861,11 @@ impl Runner {
     /// The candidates of `d` that an action of the scenario vocabulary takes, each with that
     /// action: one the runner, given the action, would answer `d` with.
     fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
-        let mut out = Vec::new();
-        for c in (0..d.len() as u16).map(Choice) {
-            let action = if d.kind == DecisionKind::Priority {
-                let Some(o) = d.candidates.option(c) else {
-                    continue;
-                };
-                let player = d.player;
-                let card = |slot| self.name(slot);
-                match o {
-                    Opt::Pass => Action::pass(player),
-                    Opt::PlayLand(slot) => Action::PlayLand {
-                        player,
-                        card: card(slot),
-                    },
-                    Opt::Cast { slot, face, costs } => Action::Cast {
-                        player,
-                        card: card(slot),
-                        face,
-                        costs,
-                    },
-                    Opt::Activate { slot, ability } => Action::Activate {
-                        player,
-                        card: card(slot),
-                        ability,
-                    },
-                    Opt::TurnFaceUp(slot) => Action::TurnFaceUp {
-                        player,
-                        card: card(slot),
-                    },
-                    _ => continue,
-                }
-            } else {
-                let Some(pick) = self.pick_for(d, c) else {
-                    continue;
-                };
-                Action::answer(d.player, d.kind, pick)
-            };
-            if answer(&self.t, &self.s, d, &action) == Some(c) {
-                out.push((c, action));
-            }
-        }
-        out
+        (0..d.len() as u16)
+            .map(Choice)
+            .filter_map(|c| Some((c, script(&self.t, &self.s, d, c)?)))
+            .filter(|(c, action)| answer(&self.t, &self.s, d, action) == Some(*c))
+            .collect()
     }
 }
 

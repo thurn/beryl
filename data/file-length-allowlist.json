@@ -13,7 +13,7 @@
   "rust/crates/beryl_engine/src/event.rs": 1062,
   "rust/crates/beryl_engine/src/mana.rs": 1812,
   "rust/crates/beryl_engine/src/state.rs": 1100,
-  "rust/crates/beryl_scenario/src/run.rs": 1139,
+  "rust/crates/beryl_scenario/src/run.rs": 1083,
   "rust/crates/beryl_search/src/mcts.rs": 903,
   "rust/crates/beryl_search/src/rollout.rs": 1177,
   "rust/crates/beryl_session/src/bugs.rs": 838,
@@ -21,6 +21,7 @@
   "rust/crates/beryl_session/src/preview.rs": 1209,
   "rust/crates/beryl_session/src/protocol.rs": 2489,
   "rust/crates/beryl_session/src/save.rs": 839,
+  "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/design/components.css": 1810,
   "ui/src/game/Board.tsx": 3522,
   "ui/src/game/CardLayer.tsx": 1145,
@@ -28,6 +29,5 @@
   "ui/src/game/beats.ts": 1194,
   "ui/src/game/layout.ts": 1979,
   "ui/src/screens/Game.tsx": 1189,
-  "ui/src/screens/screens.css": 2951,
-  "tools/src/beryl_tools/xmage.py": 1080
+  "ui/src/screens/screens.css": 2951
 }

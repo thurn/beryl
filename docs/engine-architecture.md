@@ -1088,6 +1088,10 @@ exercises, and `just fuzz` reports those random play never reaches.
   decision: zone bitboards agree with object zones, every stack reference names
   a live incarnation, no object is in two zones, `derived` is clean when read,
   counters and life are in range.
+- **Shrinking:** a fuzz game is also a seed and a vector of choice indices that
+  proptest generates (`beryl_search/tests/shrink.rs`). A failing game shrinks to
+  the fewest choices that still fail and prints as a scenario, its setup at the
+  first priority, to paste into a card's file.
 - **References:** slow reference implementations of the fast paths, checked at
   every fuzz decision and scenario position: the layer results, listeners and
   knowledge against a recompute from scratch, and the prefilter, funds and
