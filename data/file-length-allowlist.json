@@ -6,7 +6,7 @@
   "rust/crates/beryl_cli/src/specs/auto.rs": 1536,
   "rust/crates/beryl_cli/src/specs/mod.rs": 939,
   "rust/crates/beryl_cli/src/specs/serve.rs": 888,
-  "rust/crates/beryl_engine/src/cast.rs": 1838,
+  "rust/crates/beryl_engine/src/cast.rs": 1837,
   "rust/crates/beryl_engine/src/effect.rs": 1420,
   "rust/crates/beryl_engine/src/engine.rs": 842,
   "rust/crates/beryl_engine/src/event.rs": 1062,
