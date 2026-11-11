@@ -475,13 +475,17 @@ def frame_size(source: Path) -> tuple[int, int]:
 
 
 def geometry(
-    table: tuple[int, int], crop: str | None, width: int
+    table: tuple[int, int],
+    crop: str | None,
+    width: int,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[list[int], int, int, str]:
-    """The crop in source pixels, the working size and the filter that makes it."""
+    """The crop in the table's pixels, the working size and the filter that makes it from a
+    frame whose table starts at `origin`."""
     x, y, w, h = (int(p) for p in crop.split(",")) if crop else (0, 0, *table)
     work_w = min(width, w)
     work_h = max(1, round(h * work_w / w))
-    filters = f"crop={w}:{h}:{x}:{y},scale={work_w}:{work_h}:flags=area,format=gray"
+    filters = f"crop={w}:{h}:{x + origin[0]}:{y + origin[1]},scale={work_w}:{work_h}:flags=area,format=gray"
     return [x, y, w, h], work_w, work_h, filters
 
 
@@ -502,8 +506,10 @@ def read_recording(
     source: Path, start: float, span: float, crop: str | None, width: int
 ) -> Clip:
     """A recording's frames from `start` for `span` seconds, at its own rate."""
-    table = frame_size(source)
-    box, w, h, filters = geometry(table, crop, width)
+    # Measured on the table, which a letterboxed recording holds within its bars.
+    left, top, *size = video.table_box(*frame_size(source))
+    table = (size[0], size[1])
+    box, w, h, filters = geometry(table, crop, width, (left, top))
     raw, log = decode(
         ["-ss", f"{start:.3f}", "-t", f"{span:.3f}", "-i", str(source)]
         + ["-vf", f"{filters},showinfo", "-fps_mode", "passthrough"]

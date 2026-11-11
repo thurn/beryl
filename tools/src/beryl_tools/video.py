@@ -18,7 +18,9 @@ rate and crop, to study an animation without stepping through the video.
 
 Nothing here knows the rules: an event says what was on screen, not who controls it, and what
 never reaches the stack or a heading (a land drop, combat damage) is only in the text layer.
-The regions are Arena's desktop layout at 16:9. Only macOS has the recognizer."""
+The regions are Arena's desktop layout at 16:9. A recording of another shape shows that table
+letterboxed (a 16:10 screen) or pillarboxed, so every frame is cut to the table first: shots,
+filmstrips and their crops are all in its pixels. Only macOS has the recognizer."""
 
 from __future__ import annotations
 
@@ -51,6 +53,8 @@ OCR_SOURCE: Path = Path(__file__).with_name("video_ocr.swift")
 # Positions are in these pixels whatever the recording's size.
 WIDTH = 1920.0
 HEIGHT = 1080.0
+# Cuts a frame to the centered 16:9 table: a 1920x1200 recording has bars of 60 above and below.
+TABLE = "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'"
 # Two readings name the same thing when they are this alike: recognition drops and swaps
 # letters while a card flies in or a glow passes over it.
 ALIKE = 0.7
@@ -139,7 +143,8 @@ CENTERED = 70.0
 LIFE_THEIRS = Box(900, 1000, 128, 178, h0=24, h1=45, w1=70)
 LIFE_YOURS = Box(900, 1000, 865, 930, h0=24, h1=45, w1=70)
 OPPONENT = Box(55, 140, 15, 48, h0=20)
-# The draft's button, on every pick.
+# The draft's button, on every pick, read loosely ("Confirm Rick", "nfirm Pick"), but its last
+# word must have three letters: a game's "Confirm 0" is as alike.
 DRAFT = "Confirm Pick"
 
 
@@ -205,7 +210,11 @@ def centered(box: Box, frame: Frame) -> str:
 
 
 def is_draft(frame: Frame) -> bool:
-    return any(alike(line.text, DRAFT) for line in frame.lines if len(line.text) > 8)
+    return any(
+        alike(line.text, DRAFT) and sum(c.isalpha() for c in line.text.split()[-1]) >= 3
+        for line in frame.lines
+        if len(line.text) > 8
+    )
 
 
 def run_events(
@@ -474,6 +483,12 @@ def recognizer() -> Path:
     return binary
 
 
+def table_box(width: int, height: int) -> tuple[int, int, int, int]:
+    """x, y, w and h of the table in a frame of this size, as `TABLE` cuts it."""
+    w, h = min(width, height * 16 // 9), min(height, width * 9 // 16)
+    return (width - w) // 2, (height - h) // 2, w, h
+
+
 def ffmpeg(*args: str) -> None:
     run = subprocess.run(
         [FFMPEG, "-v", "error", "-y", *args],
@@ -535,7 +550,10 @@ def sample(source: Path, out: Path, fps: float, jobs: int) -> list[Frame]:
     shutil.rmtree(stills, ignore_errors=True)
     stills.mkdir(parents=True)
     print(f"decoding at {fps:g} fps", flush=True)
-    ffmpeg("-i", str(source), "-vf", f"fps={fps:g}", "-q:v", "4", f"{stills}/%06d.jpg")
+    ffmpeg(
+        *("-i", str(source), "-vf", f"fps={fps:g},{TABLE}"),
+        *("-q:v", "4", f"{stills}/%06d.jpg"),
+    )
     images = sorted(stills.glob("*.jpg"))
     print(f"reading {len(images)} frames", flush=True)
     text = recognize(images, jobs)
@@ -569,7 +587,7 @@ def save_shots(source: Path, out: Path, events: list[Event], fps: float) -> None
         if still.exists():
             shutil.copy(still, out / name)
         else:
-            args = ("-frames:v", "1", "-q:v", "4", str(out / name))
+            args = ("-vf", TABLE, "-frames:v", "1", "-q:v", "4", str(out / name))
             ffmpeg("-ss", f"{t:.3f}", "-i", str(source), *args)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -578,8 +596,26 @@ def save_shots(source: Path, out: Path, events: list[Event], fps: float) -> None
 
 
 def index(args: argparse.Namespace) -> int:
+    """Indexes the recording named, or with --new each one not yet indexed, in turn: each
+    takes every core, so they never run together."""
+    if args.new == bool(args.video):
+        print("name one recording, or pass --new", file=sys.stderr)
+        return 2
+    if not args.new:
+        return index_one(args.video, args)
+    fresh = [name for name in known() if not (root() / name / "timeline.txt").is_file()]
+    failed = 0
+    for n, name in enumerate(fresh, 1):
+        print(f"[{n}/{len(fresh)}] {name}", flush=True)
+        failed += index_one(name, args) != 0
+    if not fresh:
+        print("every recording is indexed")
+    return 1 if failed else 0
+
+
+def index_one(name: str, args: argparse.Namespace) -> int:
     try:
-        source, out = resolve(args.video)
+        source, out = resolve(name)
         out.mkdir(parents=True, exist_ok=True)
         text = out / "text.jsonl"
         meta = out / "meta.json"
@@ -652,7 +688,7 @@ def film(args: argparse.Namespace) -> int:
         count = max(1, round(span * fps))
         cols = min(cols, count)
         rows = math.ceil(count / cols)
-        filters = [f"fps={fps:g}"]
+        filters = [f"fps={fps:g}", TABLE]
         if args.crop:
             x, y, w, h = (int(part) for part in args.crop.split(","))
             filters.append(f"crop={w}:{h}:{x}:{y}")
@@ -688,7 +724,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     video_cards.register(commands)
 
     p = commands.add_parser("index", help="write a recording's text, events and shots")
-    p.add_argument("video", help="the recording or its id")
+    p.add_argument("video", nargs="?", help="the recording or its id")
+    p.add_argument("--new", action="store_true", help="every recording not yet indexed")
     p.add_argument("--fps", default="2", help="samples a second (default 2)")
     p.add_argument("--jobs", default="6", help="recognizer processes (default 6)")
     p.add_argument("--force", action="store_true", help="read the frames again")
@@ -710,7 +747,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--fps", default="10", help="frames a second (default 10)")
     p.add_argument("--cols", default="6", help="frames a row (default 6)")
     p.add_argument("--width", default="480", help="each frame's width (default 480)")
-    p.add_argument("--crop", help="x,y,w,h in the recording's pixels")
+    p.add_argument("--crop", help="x,y,w,h in the table's pixels")
     p.set_defaults(func=film)
 
     video_measure.register(commands)

@@ -30,7 +30,8 @@ indexed recording has a folder `~/arena/<id>/`:
 
 `~/arena/cards/` holds the card dumps and their sheets.
 
-To index one, run `just video index <id>`. It takes about four minutes an hour
+To index one, run `just video index <id>`; `just video index --new` indexes
+each recording not yet indexed, in turn. It takes about four minutes an hour
 of video and all the machine's cores, so index one recording at a time, and
 never as part of a check. It costs no tokens. Indexing again only derives the
 events again unless `--force` is given.
@@ -110,7 +111,8 @@ The kinds of event:
 
    Use 6 fps to see states, and the recording's own rate (30, sometimes 60)
    with a crop to see motion: how long a flight takes, where an arrow starts,
-   what eases. `--crop x,y,w,h` is in the recording's own pixels. Keep a sheet
+   what eases. `--crop x,y,w,h` is in the table's pixels: the recording's own,
+   less the black bars a 16:10 recording puts around it. Keep a sheet
    to about 16 frames, or its text stops being readable.
 
    To put numbers on a motion, measure it instead of counting frames:
@@ -163,7 +165,8 @@ The kinds of event:
 - The right spelling, always. Names come from reading the screen: expect the
   odd "Alll Attack", a life total misread while mana floats beside it, and a
   wrong detail on unusual frames such as Classes. Search with a loose pattern.
-- Layouts other than Arena's desktop client at 16:9.
+- Layouts other than Arena's desktop client. A recording of another shape is
+  the 16:9 table with bars, and every command cuts it to the table first.
 
 ## What to take from Arena
 
