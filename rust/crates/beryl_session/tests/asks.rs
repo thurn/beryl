@@ -6,11 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use beryl_cards::{CARDS, SCENARIOS, names};
-use beryl_engine::card::{Part, Purpose};
+use beryl_engine::card::{Part, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Observation, Scratch, view};
-use beryl_session::prompt::{Lies, PlaceName, PromptView};
+use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeName};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 
@@ -416,145 +416,48 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
     );
 }
 
-/// What the scenarios' prompts of one purpose are titled.
-enum Titled {
-    /// Each of these, and nothing else.
-    As(&'static [&'static str]),
-    /// By the name of a card.
-    ByName,
-}
-
-/// Every purpose the cards' scenarios reach, with its shape and what its prompts are titled:
-/// a scenario that reaches another purpose adds its line here.
-const REACHED: &[(Purpose, &str, Titled)] = &[
-    (Purpose::Priority, "pick", Titled::As(&[""])),
-    (Purpose::Target, "pick", Titled::As(&["Choose a target."])),
-    (Purpose::Choose, "pick", Titled::As(&["Choose One"])),
-    (
-        Purpose::Discard,
-        "pick",
-        Titled::As(&[
-            "Discard a basic land card or two cards.",
-            "Discard a card.",
-            "Discard two cards.",
-        ]),
-    ),
-    (
-        Purpose::Look,
-        "pick",
-        Titled::As(&[
-            "Exile one of them?",
-            "Put one of them into your hand.",
-            "Put one of them into your hand?",
-        ]),
-    ),
-    (Purpose::Search, "pick", Titled::As(&["Search for a card."])),
-    (
-        Purpose::Untap,
-        "pick",
-        Titled::As(&["Untap up to six lands.", "Untap up to two lands."]),
-    ),
-    (
-        Purpose::ManifestDread,
-        "pick",
-        Titled::As(&["Manifest one of them."]),
-    ),
-    (
-        Purpose::ExileCost,
-        "pick",
-        Titled::As(&["Exile a card.", "Exile six other cards."]),
-    ),
-    (
-        Purpose::TriggerOrder,
-        "order",
-        Titled::As(&["Order Triggers"]),
-    ),
-    (Purpose::Scry, "split", Titled::As(&["Scry"])),
-    (
-        Purpose::Arrange,
-        "split",
-        Titled::As(&[
-            "Order Cards",
-            "Put one of them into your hand.",
-            "Put two of them into your hand.",
-        ]),
-    ),
-    (
-        Purpose::PutBack,
-        "split",
-        Titled::As(&["Put a card on top.", "Put two cards on top."]),
-    ),
-    (
-        Purpose::MaySearch,
-        "yesNo",
-        Titled::As(&["Search your library?"]),
-    ),
-    (
-        Purpose::Move,
-        "yesNo",
-        Titled::As(&["Exile that card from your graveyard?"]),
-    ),
-    (Purpose::Fateseal, "yesNo", Titled::As(&["Top of Library"])),
-    (Purpose::TopOrBottom, "yesNo", Titled::ByName),
-    (Purpose::Explore, "yesNo", Titled::As(&["Explore"])),
-    (
-        Purpose::UnlessPays,
-        "yesNo",
-        Titled::As(&["Pay {1}.", "Pay {3}."]),
-    ),
-    (Purpose::PayLife, "yesNo", Titled::As(&["Pay 3 life?"])),
-    (Purpose::X, "number", Titled::As(&["Select a value for X."])),
-    (Purpose::CastOffer, "mode", Titled::As(&["Cast that card?"])),
-    (
-        Purpose::Waterbend,
-        "pay",
-        Titled::As(&["Tap permanents to Waterbend"]),
-    ),
-    (
-        Purpose::Attack,
-        "declare",
-        Titled::As(&["Choose attack target", "Choose attackers."]),
-    ),
-    (Purpose::Block, "declare", Titled::As(&["Choose blockers."])),
-];
-
+/// Every prompt the cards' scenarios reach is sent whole, whatever card asks it and whatever
+/// it is for: the shape its purpose fixes, and a title with every hole filled. No list of the
+/// purposes reached or of their titles is kept here, so a card with a new question, or a new
+/// purpose, changes nothing in this file (plan K10).
 #[test]
-fn every_purpose_the_scenarios_reach_is_sent_with_its_shape_and_title() {
-    let mut titles: BTreeMap<String, (String, BTreeSet<String>)> = BTreeMap::new();
+fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
+    let shapes: BTreeMap<&str, String> = (Purpose::ALL.iter())
+        .map(|purpose| (purpose.name(), name(&ShapeName::from(purpose.shape()))))
+        .collect();
+    let mut reached = BTreeSet::new();
     for &(card, _) in SCENARIOS {
         for decision in decisions(card) {
             let prompt = *decision.prompt;
-            // The state is not the session's yet.
+            // The state is the game's to add: a view of a position has none.
             assert_eq!((prompt.revision, &prompt.state), (0, &None), "{card}");
             assert!(
                 prompt.marks.is_empty() && prompt.buttons.is_empty(),
                 "{card}"
             );
-            let (shape, seen) = titles.entry(prompt.purpose).or_default();
-            *shape = name(&prompt.shape);
-            seen.insert(prompt.title);
+            let purpose = prompt.purpose.as_str();
+            assert_eq!(
+                Some(&name(&prompt.shape)),
+                shapes.get(purpose),
+                "{card}: {purpose}"
+            );
+            // The turn button is the priority prompt: it has no title.
+            let title = &prompt.title;
+            assert_eq!(title.is_empty(), purpose == "priority", "{card}: {purpose}");
+            // A hole left unfilled is a lowercase word in braces; a mana symbol is not.
+            let unfilled = (title.split('{').skip(1))
+                .any(|rest| rest.starts_with(|c: char| c.is_ascii_lowercase()));
+            assert!(!unfilled, "{card}: {purpose} is titled {title:?}");
+            reached.insert(prompt.purpose);
         }
     }
-    for (purpose, shape, titled) in REACHED {
-        let (sent, seen) = titles
-            .remove(purpose.name())
-            .unwrap_or_else(|| panic!("no scenario reaches {purpose:?}"));
-        assert_eq!(sent, *shape, "{purpose:?}");
-        match titled {
-            Titled::As(expected) => {
-                assert_eq!(seen.iter().collect::<Vec<_>>(), *expected, "{purpose:?}");
-            }
-            Titled::ByName => assert!(
-                seen.iter()
-                    .all(|title| !title.is_empty() && !title.contains('{')),
-                "{purpose:?}: {seen:?}"
-            ),
-        }
+    // The scenarios reach a prompt of every shape but the two no card asks yet.
+    for &shape in Shape::ALL {
+        let asked = !matches!(shape, Shape::Catalog | Shape::Divide);
+        let seen = (Purpose::ALL.iter())
+            .any(|purpose| purpose.shape() == shape && reached.contains(purpose.name()));
+        assert!(seen || !asked, "no scenario reaches a prompt of {shape:?}");
     }
-    assert!(
-        titles.is_empty(),
-        "purposes reached and not expected: {titles:?}"
-    );
 }
 
 #[test]

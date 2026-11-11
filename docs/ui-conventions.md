@@ -259,29 +259,29 @@ recordings do not show them.
   0VsYGs88NXA 56:48.5).
 - **Words: prompts the recordings lack.** Each is composed from the nearest
   prompt Arena shows. A discard to hand size: "Discard {most} cards." A mulligan
-  of more than one card: "Return {most} Cards". A count of targets asked first:
-  "How many targets?". Manifest dread: "Manifest one of them." Cards put back
-  from a hand: "Put a card on top.", "Put {most:words} cards on top." A
-  fateseal: "Top of Library", answered "BOTTOM" or "TOP" as a scry's piles are
-  named. A card that goes on top or bottom with no asker to name: "Top or
-  Bottom?". Looked-at cards sent to a graveyard or the battlefield: "Put
-  {most:words} of them into your graveyard.", "Put {most:words} of them onto the
-  battlefield." An optional move of a card anywhere but to exile: "Put that card
-  into your hand{from}?", "Put that card into your graveyard{from}?", "Put that
-  card onto the battlefield{from}?", "Put that card into your library{from}?",
-  "Move that card{from}?". A cost of no mana: "Pay {0}." The opening choices:
-  "Play or draw?", answered Play or Draw, and "Keep or mulligan?" over Arena's
-  own buttons. Catalogs: "Choose Creature Type", "Choose Card Name". Waterbend:
-  "Tap permanents to Waterbend". What a declared creature is aimed at: "Choose
-  attack target", "Choose what to block". Piles of a split: "Hand", "Exile",
-  "Battlefield". The pass button's captions for where Arena shows none: "To
-  Untap", "To Upkeep", "To Main 1", "To Main 2", "To Cleanup", "Nothing to play"
-  under a halt and "To Opponent's Turn" under the player's own End Turn. The
-  own-target warning (exception 7) asks Arena's question less its end, "Do you
-  want to target {name}?", and a spell picked on the stack reads "Target
-  {name}". Only the opponent's manifest dread, fateseal and put-back are seen,
-  and games begin with the first player chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc
-  34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
+  of more than one card: "Return {most} Cards". Manifest dread: "Manifest one of
+  them." Cards put back from a hand: "Put a card on top.", "Put {most:words}
+  cards on top." A fateseal: "Top of Library", answered "BOTTOM" or "TOP" as a
+  scry's piles are named. A card that goes on top or bottom with no asker to
+  name: "Top or Bottom?". Looked-at cards sent to a graveyard or the
+  battlefield: "Put {most:words} of them into your graveyard.", "Put
+  {most:words} of them onto the battlefield." An optional move of a card
+  anywhere but to exile: "Put that card into your hand{from}?", "Put that card
+  into your graveyard{from}?", "Put that card onto the battlefield{from}?", "Put
+  that card into your library{from}?", "Move that card{from}?". A cost of no
+  mana: "Pay {0}." The opening choices: "Play or draw?", answered Play or Draw,
+  and "Keep or mulligan?" over Arena's own buttons. Catalogs: "Choose Creature
+  Type", "Choose Card Name". Waterbend: "Tap permanents to Waterbend". What a
+  declared creature is aimed at: "Choose attack target", "Choose what to block".
+  Piles of a split: "Hand", "Exile", "Battlefield". The pass button's captions
+  for where Arena shows none: "To Untap", "To Upkeep", "To Main 1", "To Main 2",
+  "To Cleanup", "Nothing to play" under a halt and "To Opponent's Turn" under
+  the player's own End Turn. The own-target warning (exception 7) asks Arena's
+  question less its end, "Do you want to target {name}?", and a spell picked on
+  the stack reads "Target {name}". Only the opponent's manifest dread, fateseal
+  and put-back are seen, and games begin with the first player chosen
+  (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA
+  16:58.0).
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own. Every motion is one of the desktop's verbs between the phone's
   places. A card flies between your hand's fan, the stack in the middle band and

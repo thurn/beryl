@@ -108,12 +108,14 @@ const DECLINE: &str = "Decline";
 /// "Auto Pay", under a cost being paid (`0VsYGs88NXA 20:46.0`, `SswBO8aOOgc 23:48.5`).
 const AUTO_PAY: &str = "Auto Pay";
 
-/// A prompt that picks, with its title.
+/// A prompt that picks, with its title. Where picking nothing is an answer, submitting none
+/// gives it, unless the purpose has a word of its own for that.
 const fn picks(title: &'static str) -> Wording {
     Wording {
         title,
         confirm: SUBMIT,
         counted: SUBMIT,
+        decline: SUBMIT_NONE,
         ..NONE
     }
 }
@@ -189,15 +191,9 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         // `IEXcjBn3BXk 38:17.5`). The title is composed from that last. Up to one target is
         // declined by submitting none. Arena takes a variable number of targets with the
         // targets themselves ("Target any number of creatures.", `3sEoP_s4DQE 28:30.0`,
-        // `TbrYIs2juCw 26:58.5`); the count asked first (CR 601.2c) is composed.
-        Purpose::Target => Wording {
-            title: match (part, most) {
-                (Part::Count, 2..) => "How many targets?",
-                _ => "Choose a target.",
-            },
-            decline: SUBMIT_NONE,
-            ..picks("")
-        },
+        // `TbrYIs2juCw 26:58.5`), and so does the prompt: the count the rules announce first
+        // (CR 601.2c) is the number picked, never a question of its own.
+        Purpose::Target => picks("Choose a target."),
         // A browser's heading, over a line from the card: "Choose One" over "Put a card
         // exiled with Currency Converter into its owner's graveyard." (`5UHzpVvUkfI 25:17.0`,
         // `3sEoP_s4DQE 27:04.5`), "Choose Two" (`I3Te0m1bBFw 29:36.5`, `SN9QFe2kM4Y 27:05.0`),
@@ -228,6 +224,7 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         // (`0VsYGs88NXA 54:21.5`, `MnhyzykajXw 32:10.0`). The plural is composed.
         Purpose::PutOnBottom => Wording {
             counted: DONE,
+            decline: DONE,
             ..arranges(match most {
                 0 | 1 => "Return 1 Card",
                 _ => "Return {most} Cards",
@@ -254,10 +251,7 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         },
         // "Untap up to two lands." (`gIhJjyoJ0_M 20:07.0`, `iRr-GeSF0lI 25:17.5`), "Untap up
         // to six lands." (`yvNZVakbnrQ 21:53.5`). The purpose's one asker untaps lands.
-        Purpose::Untap => Wording {
-            decline: SUBMIT_NONE,
-            ..picks("Untap up to {most:words} lands.")
-        },
+        Purpose::Untap => picks("Untap up to {most:words} lands."),
         // Composed, as "Exile one of them." is said of cards looked at: only an opponent's
         // manifest dread is in the recordings (`pE4XSNi-nZc 28:43.5`).
         Purpose::ManifestDread => picks("Manifest one of them."),

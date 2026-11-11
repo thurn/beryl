@@ -115,7 +115,6 @@ fn every_purpose_and_button_has_words() {
             );
             let shown: &[(&str, &str)] = match purpose.shape() {
                 _ if purpose == Purpose::Priority => &[("decline", entry.decline)],
-                Shape::Pick => &[("confirm", entry.confirm), ("counted", entry.counted)],
                 Shape::Order | Shape::Split | Shape::Number | Shape::Catalog | Shape::Divide => {
                     &[("confirm", entry.confirm)]
                 }
@@ -123,7 +122,9 @@ fn every_purpose_and_button_has_words() {
                 // A mode's buttons are the decision's candidates, worded with them.
                 Shape::Mode => &[],
                 Shape::Pay => &[("auto", entry.auto)],
-                Shape::Declare => &[
+                // A pick may offer its end, whatever it is for: the button that takes
+                // nothing has words too.
+                Shape::Pick | Shape::Declare => &[
                     ("confirm", entry.confirm),
                     ("counted", entry.counted),
                     ("decline", entry.decline),

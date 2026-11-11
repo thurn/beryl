@@ -476,7 +476,7 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
             "pick untap: Untap up to two lands.\n\
              picked 2 of 0..2: {both}\n\
              selected {both}\n\
-             confirm[Submit 2]* decline[Submit 0]\n",
+             confirm[Submit 2]*\n",
             both = cards(&[island, tundra]),
         )
     );
@@ -488,7 +488,7 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
              picked 1 of 0..2: #{tundra}\n\
              eligible {}\n\
              selected #{tundra}\n\
-             confirm[Submit 1]* decline[Submit 0]\n",
+             confirm[Submit 1]*\n",
             cards(&[plains, island, theirs]),
         )
     );
@@ -498,7 +498,7 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
             "pick untap: Untap up to two lands.\n\
              picked 2 of 0..2: #{tundra} #{plains}\n\
              selected {}\n\
-             confirm[Submit 2]* decline[Submit 0]\n",
+             confirm[Submit 2]*\n",
             cards(&[tundra, plains]),
         )
     );
@@ -525,7 +525,7 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
         ]
     );
 
-    // With none picked the confirm button has nothing to say, and the other untaps none.
+    // With none picked the one button says so and untaps none, as Arena's "Submit 0" does.
     let mut none = Play::scenario(&TEFERI_UNTAPS);
     to_the_untap(&mut none);
     none.on(island);
@@ -535,14 +535,19 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
             "pick untap: Untap up to two lands.\n\
              picked 0 of 0..2\n\
              eligible {}\n\
-             confirm(Submit 0) decline[Submit 0]*\n",
+             confirm[Submit 0]*\n",
             cards(&[plains, island, tundra, theirs]),
         )
     );
     picked = Play::scenario(&TEFERI_UNTAPS);
     to_the_untap(&mut picked);
     picked.choose(|c| *c == Candidate::Done);
-    assert_eq!(none.press(ButtonId::Decline), None);
+    assert_eq!(
+        none.press(ButtonId::Decline).as_deref(),
+        Some(none.prompt().as_str()),
+        "no such button is shown"
+    );
+    assert_eq!(none.press(ButtonId::Confirm), None);
     assert_eq!(none.game.state(), picked.game.state());
 }
 

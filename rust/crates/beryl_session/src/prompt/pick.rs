@@ -46,6 +46,20 @@ impl Pick {
         if prompt.shape != ShapeName::Pick {
             return None;
         }
+        // Three purposes are answered in forms of their own: a priority by what a card can
+        // do, a division of damage by the blockers that die, targets by objects and players
+        // with a count. Every other pick is of cards, and where they lie says how it is
+        // made, never what it is for: a purpose added to the list is held with no entry here
+        // (plan K10).
+        let hidden = matches!(
+            prompt.from.map(|lies| lies.zone),
+            Some(ZoneName::Hand | ZoneName::Library)
+        );
+        let from_zone = || {
+            Objects::from_zone(table, purpose, decision)
+                .map(Box::new)
+                .map(Pick::Objects)
+        };
         match (purpose, prompt.part) {
             (Purpose::Priority, _) => {
                 Some(Pick::Priority(Box::new(Priority::open(table, decision))))
@@ -54,21 +68,15 @@ impl Pick {
             (Purpose::Target, PartName::Count | PartName::Pick) => {
                 Some(Pick::Objects(Box::new(Objects::targets(table, decision))))
             }
-            (Purpose::Untap | Purpose::LegendRule | Purpose::Choose, PartName::Pick) => Some(
-                Pick::Objects(Box::new(Objects::on_table(table, purpose, decision))),
-            ),
-            (
-                Purpose::Search
-                | Purpose::Look
-                | Purpose::Discard
-                | Purpose::Cleanup
-                | Purpose::PutOnBottom
-                | Purpose::ExileCost
-                | Purpose::ManifestDread,
-                _,
-            ) => Objects::from_zone(table, purpose, decision)
-                .map(Box::new)
-                .map(Pick::Objects),
+            (Purpose::Target, _) => None,
+            // A yes or no before the picks, and cards of a hand or a library: looked over
+            // and confirmed (`zone.rs`). A cost's cards are too, whose graveyard the engine
+            // takes them from in its own order.
+            (_, PartName::Whether | PartName::Instead) | (Purpose::ExileCost, _) => from_zone(),
+            (_, PartName::Pick) if hidden => from_zone(),
+            (_, PartName::Pick) => Some(Pick::Objects(Box::new(Objects::on_table(
+                table, purpose, decision,
+            )))),
             _ => None,
         }
     }
@@ -347,11 +355,31 @@ impl Objects {
         }
     }
 
+    /// What the button that answers with what is picked says with `picked` of them picked.
+    fn confirm_label(&self, picked: usize) -> String {
+        let words = if self.most > 1 && !self.several.is_empty() {
+            &self.several
+        } else {
+            &self.confirm
+        };
+        words
+            .replace("{picked}", &picked.to_string())
+            .replace("{of}", &self.most.to_string())
+    }
+
+    /// Whether the button that answers with what is picked is the one that answers with
+    /// nothing too: the prompt may, and the words for it are that button's with none picked.
+    /// Arena has the one button, "Submit 0", enabled with nothing picked ("Untap up to two
+    /// lands.", `gIhJjyoJ0_M 20:07.0`), so two that read alike are never shown.
+    fn submits_none(&self) -> bool {
+        self.declines() && !self.answers_by_click() && self.confirm_label(0) == self.decline
+    }
+
     /// Whether what is picked answers the prompt.
     fn ready(&self) -> bool {
         let picked = self.picked.len();
         let enough = (usize::from(self.least)..=usize::from(self.most)).contains(&picked)
-            && (picked > 0 || !self.declines());
+            && (picked > 0 || !self.declines() || self.submits_none());
         enough || self.alone()
     }
 
@@ -396,7 +424,7 @@ impl Objects {
             }
             Click::Button {
                 button: ButtonId::Decline,
-            } if self.declines() => {
+            } if self.declines() && !self.submits_none() => {
                 self.picked.clear();
                 Clicked::Answers(self.run())
             }
@@ -467,23 +495,16 @@ impl Objects {
     }
 
     /// The confirm button, where a click on an object does not answer, and the button that
-    /// answers with nothing, where the prompt may.
+    /// answers with nothing, where the prompt may and the confirm button does not.
     fn buttons(&self) -> Vec<PromptButton> {
         let mut buttons = Vec::new();
         let confirms = !self.answers_by_click();
         let ready = self.ready();
         if confirms {
-            let words = if self.most > 1 && !self.several.is_empty() {
-                &self.several
-            } else {
-                &self.confirm
-            };
-            let label = words
-                .replace("{picked}", &self.picked.len().to_string())
-                .replace("{of}", &self.most.to_string());
+            let label = self.confirm_label(self.picked.len());
             buttons.push(button(ButtonId::Confirm, &label, ready, ready));
         }
-        if self.declines() {
+        if self.declines() && !self.submits_none() {
             let primary = confirms && !ready;
             buttons.push(button(ButtonId::Decline, &self.decline, true, primary));
         }
