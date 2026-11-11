@@ -72,8 +72,8 @@
 //! - The kernel knows what changed; only the rules know why. `settle` adds the cause as it
 //!   records (plan K23), so no mutator takes one and no event exists without its change.
 //!
-//! Builds deny warnings, so dropping an event does not compile: no visible change happens
-//! without one. A mutator takes as an argument what the event needs and the state cannot say,
+//! The checks deny warnings (clippy with `-D warnings`), so dropping an event does not pass
+//! them: no visible change happens without one. A mutator takes as an argument what the event needs and the state cannot say,
 //! such as a zone change's [`event::Reason`] or the source of damage. Bookkeeping no player
 //! sees as an event (passes, budgets, the open question, the derived cache) returns nothing,
 //! and neither does a change the rules announce as part of a larger one: what a permanent
