@@ -167,7 +167,7 @@ impl<L: Layout> Scene<'_, L> {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),
                     Zone::Stack => cast::spells(s),
-                    _ => cast::in_zone(s, zone),
+                    _ => s.in_zone(zone),
                 };
                 filter.select_x(s, self.t, within, self.you(), self.x)
             }
@@ -180,8 +180,10 @@ impl<L: Layout> Scene<'_, L> {
             // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
             // controller".
             Players::You => PlayerSet::only(self.you()),
-            Players::EachOpponent => PlayerSet::each_opponent(self.you()),
-            Players::EachPlayer => PlayerSet::EVERYONE,
+            // CR 102.2: "In a two-player game, a player's opponent is the other player."
+            Players::EachOpponent => self.s.opponents_of(self.you()),
+            // CR 102.1: "A player is one of the people in the game."
+            Players::EachPlayer => self.s.players(),
             Players::Target(spec) => {
                 let mut who = PlayerSet::NOBODY;
                 for player in self.targets(spec).filter_map(|(_, t)| t.as_player()) {

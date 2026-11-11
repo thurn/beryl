@@ -35,7 +35,8 @@ mod turn;
 // moved module keeps its old path here.
 pub(crate) use beryl_kernel::{PlayerSet, invariants, zone};
 pub use beryl_kernel::{
-    bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state, table,
+    bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state,
+    table, two_player,
 };
 
 /// The kernel's storage layouts, and the rules' per-layout function tables beside them.

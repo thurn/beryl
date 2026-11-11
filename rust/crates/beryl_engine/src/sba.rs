@@ -8,9 +8,8 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Table};
-use crate::state::{ObjectFlags, Pending, State, Zone, ZoneKey};
+use crate::state::{ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
-use crate::turn::apnap;
 
 /// Checks state-based actions and performs them, returning whether any were performed. A
 /// player losing ends the game; a legend-rule choice opens [`Pending::LegendRule`], whose
@@ -117,12 +116,15 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
     }
     // The zones' memberships hold everything off the battlefield and in a zone, so the
     // token slots need no scan.
-    let mut away = s.zone(ZoneKey::Stack);
-    for player in Seat::BOTH {
-        for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
-            away |= s.zone(ZoneKey::Of(player, zone));
-        }
-    }
+    let away = [
+        Zone::Stack,
+        Zone::Library,
+        Zone::Hand,
+        Zone::Graveyard,
+        Zone::Exile,
+    ]
+    .into_iter()
+    .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
     let tokens =
         (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags().has(ObjectFlags::TOKEN));
     (graveyard, tokens, legendary)
@@ -140,29 +142,30 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
 fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
-    // Both may hold at one check: life is named.
-    let causes = Seat::BOTH.map(|player| {
+    let mut causes = [None; 2];
+    // Each player's cause is their own: the result is the same in any order.
+    for player in s.players_in_seat_order(s.players()) {
         let p = s.player(player);
-        if p.life() <= 0 {
+        // Both may hold at one check: life is named.
+        causes[player.index()] = if p.life() <= 0 {
             Some(LossCause::Life)
         } else if p.drew_from_empty() {
             Some(LossCause::Library)
         } else {
             None
-        }
-    });
-    if causes == [None, None] {
+        };
+    }
+    if causes.iter().all(Option::is_none) {
         return false;
     }
     end(s, sink, causes);
     true
 }
 
-/// Ends the game as `loser` loses it for `cause`: they conceded, or an effect had their
-/// opponent win ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b): "An effect
-/// may state that a player wins the game"). In a two-player game either is one ending
-/// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
-/// game wins the game if that player's opponents have all left the game."
+/// Ends the game as `loser` loses it for `cause`: they conceded
+/// ([CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a)): "A player can concede
+/// the game at any time. A player who concedes leaves the game immediately. That player loses
+/// the game."
 pub(crate) fn end_game<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
@@ -174,14 +177,39 @@ pub(crate) fn end_game<L: Layout>(
     end(s, sink, causes);
 }
 
-/// Ends the game as each player with a cause loses it.
+/// Ends the game as an effect has `winner` win it
+/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
+/// that a player wins the game." Each of their opponents loses it for `cause`, which leaves
+/// the winner alone in the game.
+pub(crate) fn win_game<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    winner: Seat,
+    cause: LossCause<L>,
+) {
+    let mut causes = [None; 2];
+    // Every opponent gets the one cause: the result is the same in any order.
+    for loser in s.players_in_seat_order(s.opponents_of(winner)) {
+        causes[loser.index()] = Some(cause);
+    }
+    end(s, sink, causes);
+}
+
+/// Ends the game as each player with a cause loses it. The one player left wins
+/// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
+/// game wins the game if that player's opponents have all left the game." With nobody left it
+/// is a draw ([CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a)): "If all the
+/// players remaining in a game lose simultaneously, the game is a draw."
+///
+/// The game always ends here, which is the two-player game's: with more players a loss
+/// that leaves two or more in the game ends nothing, and they play on.
 fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: [Option<LossCause<L>>; 2]) {
-    s.end_game(match causes {
-        [Some(_), None] => Outcome::Win(Seat::P1),
-        [None, Some(_)] => Outcome::Win(Seat::P0),
-        _ => Outcome::Draw,
-    });
-    for player in Seat::BOTH {
+    let left = s
+        .players()
+        .filter(|player| causes[player.index()].is_none());
+    s.end_game(left.sole().map_or(Outcome::Draw, Outcome::Win));
+    // They lose at once: the events of one happening, by seat.
+    for player in s.players_in_seat_order(s.players()) {
         sink.push(match causes[player.index()] {
             Some(cause) => Event::Lose { player, cause },
             None => Event::Win { player },
@@ -268,7 +296,7 @@ fn legend_group_in<L: Layout>(
     if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, legendary) {
         return None;
     }
-    for player in apnap(s) {
+    for player in s.players_in_turn_order(s.players()) {
         let mut seen = Bitboard::EMPTY;
         for &slot in s.battlefield() {
             if !legendary[player.index()].contains(slot) || seen.contains(slot) {

@@ -3,6 +3,7 @@
 use super::{LANDS, MIXED, decide, land_go, play, table};
 use crate::ids::Seat;
 use crate::state::{Zone, ZoneKey};
+use crate::two_player::TwoPlayerSeat as _;
 use crate::{Choice, Decision, DecisionKind, Observation, Profile, Replay, Scratch, State, apply};
 
 /// Answers mulligan decisions with `mulligan(player, mulligans so far)` and plays first.

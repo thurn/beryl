@@ -51,22 +51,33 @@ fn controls<L: Layout>(s: &State<L>, player: Seat, types: Types) -> usize {
 /// triggers. A tie is not "more".
 fn compare<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    let them = you.opponent();
-    if controls(ctx.state(), them, Types::LAND) > controls(ctx.state(), you, Types::LAND) {
+    if an_opponent_has_more(ctx.state(), you, |s, p| controls(s, p, Types::LAND)) {
         ctx.create_tokens(&TREASURE, 1, TokenEntry::default());
     }
-    if ctx.state().player(them).life() > ctx.state().player(you).life() {
+    if an_opponent_has_more(ctx.state(), you, |s, p| s.player(p).life()) {
         ctx.gain_life(you, 4);
     }
-    let creatures = |s: &State<L>, p| controls(s, p, Types::CREATURE);
-    if creatures(ctx.state(), them) > creatures(ctx.state(), you) {
+    if an_opponent_has_more(ctx.state(), you, |s, p| controls(s, p, Types::CREATURE)) {
         ctx.create_tokens(&FISH, 2, TokenEntry::default());
     }
-    let hand = |s: &State<L>, p| s.zone(ZoneKey::Of(p, Zone::Hand)).count();
-    if hand(ctx.state(), them) > hand(ctx.state(), you) {
+    if an_opponent_has_more(ctx.state(), you, |s, p| {
+        s.zone(ZoneKey::Of(p, Zone::Hand)).count()
+    }) {
         ctx.draw(you, 1);
     }
     Ok(())
+}
+
+/// Whether "an opponent" has more than `you` of what `count` counts: any one of them
+/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022): "In a two-player game, a
+/// player's opponent is the other player").
+fn an_opponent_has_more<L: Layout, N: PartialOrd>(
+    s: &State<L>,
+    you: Seat,
+    count: impl Fn(&State<L>, Seat) -> N,
+) -> bool {
+    s.opponents_of(you)
+        .any(|them| count(s, them) > count(s, you))
 }
 
 pub static CARD: CardDef = CardDef {

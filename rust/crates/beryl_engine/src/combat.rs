@@ -19,8 +19,15 @@ use crate::table::GameTable;
 /// The defending player ([CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062)):
 /// "During the combat phase of a two-player game, the nonactive player is the defending
 /// player".
+///
+/// The declarations here are the two-player game's: [`Opt::Defender`] names a planeswalker or
+/// "the" defending player, and one player declares every block. With more players each of the
+/// attacking player's opponents is a defending player (CR 802.2), an attacker is declared
+/// against one of them and each declares their own blocks.
 fn defender<L: Layout>(s: &State<L>) -> Seat {
-    s.turn().active().opponent()
+    s.defending_players()
+        .sole()
+        .expect("one defending player in a two-player game")
 }
 
 fn flags<L: Layout>(s: &State<L>, slot: L::Slot) -> ObjectFlags {
@@ -123,7 +130,7 @@ pub(crate) fn attack_decision<L: Layout>(
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
-        list = attack_targets(s, defender(s));
+        list = attack_targets(s);
         (s.turn().active(), DecisionKind::AttackTarget, Part::Aim)
     };
     Ok(Decision {
@@ -137,7 +144,8 @@ pub(crate) fn attack_decision<L: Layout>(
 }
 
 /// What a creature can attack: the defending player, then each planeswalker they control.
-pub(crate) fn attack_targets<L: Layout>(s: &State<L>, defending: Seat) -> L::Queue<Opt<L>, 64> {
+pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> L::Queue<Opt<L>, 64> {
+    let defending = defender(s);
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
     // No player controls 63 planeswalkers.
     let _ = list.push(Opt::Defender(None));
@@ -259,7 +267,7 @@ fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bo
 /// untapped and they can't also be battles."
 fn may_block<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
-    s.controller(slot) == defender(s)
+    s.defending_players().contains(s.controller(slot))
         && is_creature(s, slot)
         && !o.flags().has(ObjectFlags::TAPPED)
         && !o.flags().has(ObjectFlags::BLOCKING)
@@ -599,8 +607,8 @@ fn deal<L: Layout>(
             if let Some(other) = o.combat() {
                 push(Recipient::Permanent(s.object_ref(other)), amount)?;
             }
-        } else {
-            push(Recipient::Player(defender(s)), amount)?;
+        } else if let Some(player) = s.defending_player(slot) {
+            push(Recipient::Player(player), amount)?;
         }
     }
     for a in assigned.iter() {
@@ -666,22 +674,31 @@ fn division<L: Layout>(
 /// from combat stops being an attacking, blocking, blocked, and/or unblocked creature. A
 /// planeswalker or battle that's removed from combat stops being attacked."
 pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
-    let active = s.turn().active();
+    // A permanent keeps no record of who controlled it as it was declared. An attacker's
+    // controller was the attacking player. A blocker's, and an attacked planeswalker's, was a
+    // defending player, of which a two-player game has one: with more, a change from one
+    // defending player to another is a change this does not see.
+    let attacking = s.turn().active();
+    let defending = s.defending_players();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
-        let side = if o.flags().has(ObjectFlags::ATTACKING) {
-            active
-        } else if o.flags().has(ObjectFlags::BLOCKING) {
-            active.opponent()
-        } else {
+        let attacker = o.flags().has(ObjectFlags::ATTACKING);
+        if !attacker && !o.flags().has(ObjectFlags::BLOCKING) {
             continue;
+        }
+        let changed = |controller: Seat| {
+            if attacker {
+                controller != attacking
+            } else {
+                !defending.contains(controller)
+            }
         };
-        if !is_creature(s, slot) || s.controller(slot) != side {
+        if !is_creature(s, slot) || changed(s.controller(slot)) {
             s.remove_from_combat(slot);
         } else if o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER)
             && let Some(walker) = o.combat()
-            && (s.controller(walker) != active.opponent()
+            && (!defending.contains(s.controller(walker))
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {
             s.forget_attacked(slot);

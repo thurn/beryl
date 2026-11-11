@@ -21,6 +21,7 @@ use crate::state::{
     Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TargetPlace,
     TurnStep, Zone, ZoneKey,
 };
+use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,

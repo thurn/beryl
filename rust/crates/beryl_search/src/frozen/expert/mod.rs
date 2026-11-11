@@ -52,6 +52,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat, Slot,
     Step, TurnStep, Zone, ZoneKey, apply, next,

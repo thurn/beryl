@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Decision, State, Zone, ZoneKey};
 
 use super::game::{GameDecision, Line};

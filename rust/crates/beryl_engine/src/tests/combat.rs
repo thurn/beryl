@@ -11,6 +11,7 @@ use crate::event::{Event, TokenEntry};
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
 use crate::state::{CounterKind, ObjectFlags, Zone, ZoneKey};
+use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,

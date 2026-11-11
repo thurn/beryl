@@ -7,6 +7,7 @@ use crate::event::Sink;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{PendingTrigger, Zone, ZoneKey};
+use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,

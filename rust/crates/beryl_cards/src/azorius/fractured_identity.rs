@@ -55,10 +55,9 @@ fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.move_to(permanent, Zone::Exile, Reason::Exile);
     // CR 111.2: "The player who creates a token is its owner. The token enters the
     // battlefield under that player's control."
-    for player in Seat::BOTH {
-        if player != controller {
-            ctx.create_tokens_of_for(player, what, 1, TokenEntry::default());
-        }
+    let others = ctx.state().players().without(controller);
+    for player in ctx.state().players_in_turn_order(others) {
+        ctx.create_tokens_of_for(player, what, 1, TokenEntry::default());
     }
     Ok(())
 }

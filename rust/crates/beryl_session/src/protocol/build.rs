@@ -6,6 +6,7 @@ use beryl_engine::card::{
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, Zone,
     ZoneKey,

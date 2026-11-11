@@ -36,7 +36,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
     CardIx, Decision, GameTable, Profile, Replay, Scratch, Seat, Slot, State, Step, TurnStep, Zone,
-    apply, next, observe, view,
+    apply, next, observe, two_player::TwoPlayerSeat as _, view,
 };
 use beryl_search::{Agent, Budget, DEEP_SEARCHER};
 use beryl_session::replay::Entry as LogEntry;

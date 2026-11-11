@@ -19,6 +19,7 @@ use crate::event::{self, Event, Reason};
 use crate::filter::{Filter, Whose};
 use crate::ids::{Seat, Slot};
 use crate::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, Zone, ZoneKey};
+use crate::two_player::TwoPlayerSeat as _;
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 
 use super::events::{INSECT, game, put, with_ctx};

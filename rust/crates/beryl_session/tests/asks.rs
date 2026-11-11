@@ -4,6 +4,7 @@
 use beryl_cards::{CARDS, SCENARIOS, names};
 use beryl_engine::card::{Part, Purpose};
 use beryl_engine::state::Pending;
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Observation, Scratch, view};
 use beryl_session::protocol::{AskView, CardHandling, Kind, Moment, Side, ZoneName, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};

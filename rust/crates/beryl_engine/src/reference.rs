@@ -54,7 +54,8 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
         return Ok(());
     }
     check_layers(s, t)?;
-    for p in Seat::BOTH {
+    // A check of each player alone: the order decides only which violation is reported.
+    for p in s.players_in_seat_order(s.players()) {
         check_payments(s, t, p)?;
     }
     Ok(())

@@ -14,6 +14,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Choice, Seat, Small};
 use beryl_engine::{observe, view};
 use beryl_search::{Agent, Budget, GameAgent, Search, agent};

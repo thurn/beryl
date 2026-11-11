@@ -111,11 +111,12 @@ pub fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
 /// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
 /// player's opponent is the other player."
 ///
-/// The one place that entry meets the two-player game. With more players, "the player's
-/// opponents are all players not on their team"
+/// The one place that entry is read, and [`crate::State::opponents_of`] is the set it tests.
+/// With more players and no teams every other player is an opponent, as written here.
+/// Between teams, "the player's opponents are all players not on their team"
 /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function changes
 /// then, and no card does.
 #[inline]
 pub fn is_an_opponent(player: Seat, you: Seat) -> bool {
-    player == you.opponent()
+    player != you
 }

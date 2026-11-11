@@ -6,6 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::layout::Queue;
 use beryl_engine::state::CounterKind;
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId};
 
 use super::{Candidate, CandidateView, Mana, Side, ability_order, face_name, name, side};

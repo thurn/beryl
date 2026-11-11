@@ -14,12 +14,6 @@ use crate::table::GameTable;
 /// "normally seven".
 pub(crate) const MAX_HAND_SIZE: u32 = 7;
 
-/// The players in APNAP order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)):
-/// "the active player ... makes any choices required, then the next player in turn order".
-pub(crate) fn apnap<L: Layout>(s: &State<L>) -> [Seat; 2] {
-    [s.turn().active(), s.turn().active().opponent()]
-}
-
 /// Whether any creature is attacking.
 pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
     s.battlefield()

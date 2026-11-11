@@ -23,7 +23,7 @@
 //!   a search finds, and scry to the bottom only the cards not worth drawing.
 
 use beryl_engine::layout::Queue;
-use beryl_engine::{Layout, Small, ZoneKey};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use std::cell::Cell;
 
 use beryl_engine::card::{
@@ -33,8 +33,8 @@ use beryl_engine::card::{
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
-    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Scratch, Seat, State, Step, Zone, apply_decided, next,
+    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Observation, Opt,
+    Outcome, Scratch, Seat, Small, State, Step, Zone, ZoneKey, apply_decided, next,
 };
 
 use beryl_engine::rng::SplitMix64;

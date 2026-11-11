@@ -31,6 +31,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Seat, Slot,
     Zone, ZoneKey,

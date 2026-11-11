@@ -15,6 +15,7 @@
 use beryl_cards::names;
 use beryl_engine::card::{Keywords, Types};
 use beryl_engine::state::ObjectFlags;
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Scratch,
     Seat, Slot, State, Step, TurnStep, apply, next,

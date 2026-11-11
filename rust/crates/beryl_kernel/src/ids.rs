@@ -263,9 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn seats_are_each_others_opponents() {
-        assert_eq!(Seat::P0.opponent(), Seat::P1);
-        assert_eq!(Seat::P1.opponent(), Seat::P0);
+    fn seats_are_numbered_from_zero() {
         assert_eq!(Seat::try_new(2), None);
         assert_eq!(Seat::new(1).index(), 1);
     }

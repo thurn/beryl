@@ -683,7 +683,7 @@ impl Obj {
             owner: (o.owner() != controller).then_some(o.owner().get()),
             tapped: o.flags().has(ObjectFlags::TAPPED),
             shown: matches!(o.zone(), Zone::Hand | Zone::Library)
-                && s.knows(o.owner().opponent(), slot),
+                && s.opponents_of(o.owner()).any(|p| s.knows(p, slot)),
             before_v5: false,
             token: permanent && o.flags().has(ObjectFlags::TOKEN),
             sick: permanent

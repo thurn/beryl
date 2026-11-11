@@ -4,9 +4,9 @@
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::{Layout, ZoneKey, bodies};
+use beryl_engine::{Layout, bodies};
 
-use beryl_engine::{Bitboard, Seat, Zone};
+use beryl_engine::{Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -44,13 +44,10 @@ fn twist<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
 pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
     let s = ctx.state();
-    let active = s.turn().active();
-    let players = [active, active.opponent()];
-    let cards = players.iter().fold(Bitboard::EMPTY, |b, &p| {
-        b | s.zone(ZoneKey::Of(p, Zone::Hand)) | s.zone(ZoneKey::Of(p, Zone::Graveyard))
-    });
+    let players = s.players_in_turn_order(s.players());
+    let cards = s.in_zone(Zone::Hand) | s.in_zone(Zone::Graveyard);
     ctx.move_all(cards, Zone::Library, Reason::Effect);
-    for p in players {
+    for p in players.clone() {
         ctx.shuffle(p);
     }
     for p in players {

@@ -20,7 +20,7 @@ use beryl_engine::{
     Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
     NextStop, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, Small,
     StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
-    view,
+    two_player::TwoPlayerSeat as _, view,
 };
 use beryl_search::{Agent, AgentDecision, GameAgent};
 use serde_json::json;

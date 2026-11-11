@@ -9,7 +9,6 @@ use crate::bitboard::{Bitboard, Slots};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::player_set::PlayerSet;
 use crate::state::{State, ZoneKey};
 use crate::table::GameTable;
 
@@ -37,15 +36,6 @@ impl<L: Layout> State<L> {
         self.library(player).iter().rev().copied()
     }
 
-    /// `players` in the order they act when several do
-    /// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)): "If multiple players
-    /// would make choices and/or take actions at the same time, the active player makes any
-    /// choices required, then the next player in turn order".
-    #[inline]
-    pub fn players_in_turn_order(&self, players: PlayerSet) -> impl Iterator<Item = Seat> + use<L> {
-        players.in_turn_order(self.turn.active)
-    }
-
     /// `objects` in an order that depends on the game alone: permanents in the order they
     /// entered the battlefield, then each library's cards top first, then the rest by name.
     /// Slots are no order at all: the deal and shuffles put cards in them at random
@@ -68,9 +58,7 @@ impl<L: Layout> State<L> {
             return Ok(ordered);
         }
         let mut rest = objects;
-        let zone =
-            |z: Zone| self.zone(ZoneKey::Of(Seat::P0, z)) | self.zone(ZoneKey::Of(Seat::P1, z));
-        if !(rest & zone(Zone::Battlefield)).is_empty() {
+        if !(rest & self.in_zone(Zone::Battlefield)).is_empty() {
             for &slot in self.battlefield() {
                 if rest.contains(slot) {
                     rest.remove(slot);

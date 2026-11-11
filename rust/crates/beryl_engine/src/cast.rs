@@ -12,6 +12,7 @@
 
 use std::cell::{Cell, OnceCell};
 
+use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CastingIx, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
@@ -303,8 +304,7 @@ fn spell_cost(face: &Face, costs: Castings, x: u8, extra: u8, free: bool) -> Man
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TargetSet<L: Layout = Small> {
     Objects(Bitboard<L::Slot>),
-    /// A bit per player.
-    Players(u8),
+    Players(PlayerSet),
 }
 
 fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
@@ -322,10 +322,6 @@ pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
         .filter_map(StackEntry::spell)
         .map(|r| r.slot)
         .collect()
-}
-
-pub(crate) fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
-    s.zone(ZoneKey::Of(Seat::P0, zone)) | s.zone(ZoneKey::Of(Seat::P1, zone))
 }
 
 /// The objects or players a target spec can choose now, for a spell or ability controlled by
@@ -363,16 +359,13 @@ fn domain<L: Layout>(
 ) -> TargetSet<L> {
     let mut within = match spec.kind {
         TargetKind::Player => {
-            let players = Seat::BOTH
-                .into_iter()
-                .filter(|&p| player_matches(spec.filter, p, you))
-                .fold(0, |m, p| m | (1 << p.get()));
+            let players = s.players().filter(|p| player_matches(spec.filter, p, you));
             return TargetSet::Players(players);
         }
-        TargetKind::Permanent => in_zone(s, Zone::Battlefield),
+        TargetKind::Permanent => s.in_zone(Zone::Battlefield),
         TargetKind::Spell => spells(s),
-        TargetKind::SpellOrPermanent => spells(s) | in_zone(s, Zone::Battlefield),
-        TargetKind::GraveyardCard => in_zone(s, Zone::Graveyard),
+        TargetKind::SpellOrPermanent => spells(s) | s.in_zone(Zone::Battlefield),
+        TargetKind::GraveyardCard => s.in_zone(Zone::Graveyard),
     };
     if let Some(itself) = itself {
         within.remove(itself);
@@ -399,7 +392,7 @@ fn enough_candidates<L: Layout>(
         TargetSet::Objects(within) => {
             within.at_least(need, |slot| spec.filter.matches_x(s, t, slot, you, x))
         }
-        TargetSet::Players(players) => players.count_ones() as usize >= need,
+        TargetSet::Players(players) => players.count() as usize >= need,
     }
 }
 
@@ -407,7 +400,7 @@ impl<L: Layout> TargetSet<L> {
     fn count(self) -> u32 {
         match self {
             TargetSet::Objects(b) => b.count(),
-            TargetSet::Players(p) => p.count_ones(),
+            TargetSet::Players(p) => p.count(),
         }
     }
 }
@@ -908,10 +901,10 @@ fn activation_options<L: Layout>(
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
     let prunes = s.profile().hides_pointless[player.index()] && t.needy();
-    let mine = s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
-        | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield));
-    let objects =
-        mine.filter(|slot| s.controller(slot) == player) | s.zone(ZoneKey::Of(player, Zone::Hand));
+    let objects = s
+        .in_zone(Zone::Battlefield)
+        .filter(|slot| s.controller(slot) == player)
+        | s.zone(ZoneKey::Of(player, Zone::Hand));
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
@@ -1494,7 +1487,7 @@ fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Target
         TargetSet::Players(mut p) => {
             for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
                 if let Some(player) = target.as_player() {
-                    p &= !(1 << player.get());
+                    p.remove(player);
                 }
             }
             TargetSet::Players(p)
@@ -1547,7 +1540,8 @@ pub(crate) fn decision<L: Layout>(
             },
             TargetSet::Players(p) => {
                 let mut list: L::Queue<Opt<L>, 64> = Default::default();
-                for player in Seat::BOTH.into_iter().filter(|q| p & (1 << q.get()) != 0) {
+                // Candidates are listed by seat, which a `Choice` counts in.
+                for player in s.players_in_seat_order(p) {
                     list.push(Opt::Player(player))?;
                 }
                 options(DecisionKind::Target, list, target)

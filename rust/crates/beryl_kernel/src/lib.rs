@@ -150,7 +150,7 @@
 //! | the battlefield, as permanents entered it | [`State::battlefield`] |
 //! | a library, top first | [`State::library_from_top`] |
 //! | a graveyard, as cards were put there (CR 404.2) | [`State::graveyard`] |
-//! | players in turn order from the active player (CR 101.4) | [`State::players_in_turn_order`] |
+//! | players in turn order (CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
 //! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
 //! | a decision's candidates, by ascending slot | [`State::in_candidate_order`], [`Observation::in_candidate_order`], [`decision::Candidates::objects`] |
 //!
@@ -203,26 +203,38 @@
 //!
 //! ## Players
 //!
-//! Rules code reaches players through sets and orders (by-w8gv.5.13), never the other
-//! player of two. [`PlayerSet`] is the order-free set (the interpreter's `Who`, moved here;
-//! `beryl_card`'s `Players` is the vocabulary's word for which players an effect names, so
-//! the set is not called that), and [`State::players_in_turn_order`] puts one in order.
-//! Still to come:
+//! Rules code reaches players through sets and orders, never the other player of two.
+//! [`PlayerSet`] is the order-free set (`beryl_card`'s `Players` is the vocabulary's word for
+//! which players an effect names, so the set is not called that): `contains`, `count`,
+//! `is_empty`, [`PlayerSet::any`], [`PlayerSet::filter`], [`PlayerSet::without`] and
+//! [`PlayerSet::sole`], its one member. It does not iterate. The state names the sets and
+//! puts one in order:
 //!
-//! ```text
-//! fn players(&self) -> PlayerSet
-//! fn opponents_of(&self, player: Seat) -> PlayerSet
-//! fn defending_players(&self) -> PlayerSet
-//! fn defending_player(&self, attacker: L::Slot) -> Option<Seat>
-//! ```
+//! | The rules ask | Query |
+//! | --- | --- |
+//! | every player (CR 102.1) | [`State::players`] |
+//! | a player's opponents (CR 102.2, 102.3) | [`State::opponents_of`] |
+//! | the defending players of this turn's combat (CR 506.2, 802.2) | [`State::defending_players`] |
+//! | the defending player an attacker attacks (CR 508.5) | [`State::defending_player`] |
+//! | the next player in turn order: who takes the next turn, who gets priority on a pass (CR 103.1, 117.3d) | [`State::next_player`] |
+//! | players in the order they act, from the active player (CR 101.4) | [`State::players_in_turn_order`] |
+//! | the same from a named player, as from the starting player (CR 103.5) | [`State::players_in_turn_order_from`] |
+//! | players by seat: a decision's candidates, the events of one simultaneous happening | [`State::players_in_seat_order`] |
+//! | who knows an object's identity | [`State::who_knows`] |
+//! | every object in a zone, whoever owns it (CR 400.1) | [`State::in_zone`] |
 //!
-//! Until then [`PlayerSet::EVERYONE`] and [`PlayerSet::each_opponent`] hold the two-player
-//! game's answers.
+//! Seat order is to players what candidate order is to objects: no order of the rules, and
+//! what saves and `rollouts_never_change` see. A walk in it lists players or says in a
+//! comment why its result is the same in any order.
 //!
-//! `defending_player` is the player an attacking creature attacks, or the controller of the
-//! planeswalker it attacks (CR 506.2). `Seat::opponent` is not part of the API: it stays
-//! inside the two-player layout. Player count, deck size, slot count and card-index width
-//! are parameters of the layout (by-w8gv.5.14, by-w8gv.5.15).
+//! Each of these answers for the two-player game, and its rustdoc cites the rule that
+//! changes the answer with more players: no multiplayer logic is written (plan K7).
+//! `Seat` has no `opponent`. The shortcut is the trait [`two_player::TwoPlayerSeat`], in
+//! scope only where a module imports it: the kernel's turn order and test door, and callers
+//! outside the rules that mean the other seat at this table (a view's "opponent", an
+//! evaluation's other side, tests). Rules modules and card bodies never import it. Player
+//! count, deck size, slot count and card-index width are parameters of the layout
+//! (by-w8gv.5.14, by-w8gv.5.15).
 
 pub mod bitboard;
 pub mod board;
@@ -246,6 +258,7 @@ mod order;
 mod pending;
 mod player;
 mod player_set;
+mod players;
 pub mod profile;
 pub mod query;
 pub mod relayout;
@@ -254,6 +267,7 @@ mod stack;
 pub mod state;
 pub mod table;
 mod turn;
+pub mod two_player;
 pub mod zone;
 
 pub use bitboard::Bitboard;

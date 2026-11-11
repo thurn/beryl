@@ -17,6 +17,7 @@ use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Object, ObjectFlags};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::{Deserialize, Serialize};
 

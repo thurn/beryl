@@ -630,8 +630,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             Entry::default(),
         );
         self.check(r);
-        // Rebound within each owner's library, among the slots that went there.
-        for owner in Seat::BOTH {
+        // Rebound within each owner's library, among the slots that went there. Each takes
+        // from the one random stream, by seat.
+        for owner in self.state.players_in_seat_order(self.state.players()) {
             let mut moved: L::Queue<L::Slot, 64> = Default::default();
             for &slot in self.state.library(owner) {
                 if cards.contains(slot) && moved.push(slot).is_err() {
@@ -1015,7 +1016,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             // ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
             // controller of the spell or ability follows its instructions in the order
             // written").
-            let opts = crate::combat::attack_targets(self.state, you.opponent());
+            let opts = crate::combat::attack_targets(self.state);
             let Opt::Defender(walker) = self.ask_options(
                 you,
                 DecisionKind::AttackTarget,
@@ -1121,7 +1122,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 face: self.entry.face,
                 ability: self.entry.ability,
             };
-            crate::sba::end_game(self.state, self.sink, player.opponent(), cause);
+            crate::sba::win_game(self.state, self.sink, player, cause);
         }
     }
 
@@ -1133,13 +1134,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let you = self.entry.controller;
         let tapped = Filter::All(&[Filter::Types(Types::LAND), Filter::Tapped]);
         let s = &*self.state;
-        let lands = tapped.select(
-            s,
-            self.table,
-            s.zone(ZoneKey::Of(Seat::P0, Zone::Battlefield))
-                | s.zone(ZoneKey::Of(Seat::P1, Zone::Battlefield)),
-            you,
-        );
+        let lands = tapped.select(s, self.table, s.in_zone(Zone::Battlefield), you);
         let chosen = self.choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?;
         // A bug kept for parity (by-w8gv.23): the untap events come in candidate order.
         for slot in self.state.in_candidate_order(chosen) {

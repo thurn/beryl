@@ -12,7 +12,6 @@ use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
 use crate::table::GameTable;
-use crate::turn::apnap;
 
 /// The face a permanent has up, or a face-down one's blank characteristics: its copiable
 /// values (CR 707.2).
@@ -76,7 +75,8 @@ pub(crate) fn match_event<L: Layout>(
                 }
             }
         }
-        for player in Seat::BOTH {
+        // Triggers wait in the order found, which the queue of them keeps: by seat.
+        for player in s.players_in_seat_order(s.players()) {
             for index in 0..s.player(player).emblems().len() {
                 let card = s.player(player).emblems()[index];
                 if t.listens(card) & k == 0 {
@@ -304,8 +304,8 @@ fn fire_delayed<L: Layout>(
 /// order, puts each triggered ability they control ... on the stack in any order they
 /// choose."
 pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
-    let player = apnap(s)
-        .into_iter()
+    let player = s
+        .players_in_turn_order(s.players())
         .find(|&p| s.triggers().iter().any(|tr| tr.controller == p))?;
     let mut kept: L::Queue<L::Index, 64> = Default::default();
     let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();

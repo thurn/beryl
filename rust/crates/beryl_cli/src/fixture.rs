@@ -4,11 +4,11 @@
 //! to a named stopping condition.
 
 use std::path::Path;
-use std::sync::Arc;
-use std::sync::mpsc::channel;
+use std::sync::{Arc, mpsc::channel};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_search::GameAgent;
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{

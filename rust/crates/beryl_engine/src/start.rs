@@ -27,19 +27,18 @@ pub(crate) fn set_starting_player<L: Layout>(
     starting: Seat,
 ) -> Result<(), Full> {
     s.set_starting_player(starting);
-    for player in [starting, starting.opponent()] {
+    for player in turn_order(s) {
         s.draw_n(sink, player, STARTING_HAND)?;
     }
     s.ask(Pending::Mulligans);
     advance_mulligans(s, t, sink)
 }
 
-/// The players in turn order from the starting player.
-pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> [Seat; 2] {
-    [
-        s.turn().starting_player(),
-        s.turn().starting_player().opponent(),
-    ]
+/// The players in turn order from the starting player
+/// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)): "The game's default turn
+/// order begins with the starting player and proceeds clockwise."
+pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> impl Iterator<Item = Seat> + Clone + use<L> {
+    s.players_in_turn_order_from(s.turn().starting_player(), s.players())
 }
 
 /// Records a keep or mulligan declaration. A player who keeps after taking mulligans then
@@ -106,7 +105,7 @@ fn advance_mulligans<L: Layout>(
 ) -> Result<(), Full> {
     let order = turn_order(s);
     loop {
-        for &p in &order {
+        for p in order.clone() {
             let player = s.player(p);
             if player.mulligan() == MulliganStatus::Undeclared
                 && player.mulligans() >= STARTING_HAND
@@ -115,17 +114,17 @@ fn advance_mulligans<L: Layout>(
             }
         }
         // Bottom picks come first: they finish the hand just kept.
-        if order.iter().any(|&p| s.player(p).to_bottom() > 0) {
+        if order.clone().any(|p| s.player(p).to_bottom() > 0) {
             return Ok(());
         }
         if order
-            .iter()
-            .any(|&p| s.player(p).mulligan() == MulliganStatus::Undeclared)
+            .clone()
+            .any(|p| s.player(p).mulligan() == MulliganStatus::Undeclared)
         {
             return Ok(());
         }
         let mut any = false;
-        for &p in &order {
+        for p in order.clone() {
             if s.player(p).mulligan() != MulliganStatus::WillMulligan {
                 continue;
             }
@@ -147,13 +146,12 @@ fn advance_mulligans<L: Layout>(
 
 /// Who answers the open mulligan question, and whether it is a bottom pick.
 pub(crate) fn mulligan_question<L: Layout>(s: &State<L>) -> (Seat, bool) {
-    let order = turn_order(s);
-    if let Some(&p) = order.iter().find(|&&p| s.player(p).to_bottom() > 0) {
+    let mut order = turn_order(s);
+    if let Some(p) = order.clone().find(|&p| s.player(p).to_bottom() > 0) {
         return (p, true);
     }
     let p = order
-        .into_iter()
         .find(|&p| s.player(p).mulligan() == MulliganStatus::Undeclared)
-        .unwrap_or(order[0]);
+        .unwrap_or(s.turn().starting_player());
     (p, false)
 }

@@ -5,6 +5,7 @@
 
 use beryl_cards::{CARDS, SCENARIOS, names};
 use beryl_engine::event::{Event, Recipient};
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Choice, Observation, Opt, Outcome, Replay, Scratch, Seat, Step, TurnStep, apply, next,
 };

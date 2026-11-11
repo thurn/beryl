@@ -639,10 +639,11 @@ fn perform<L: Layout>(
         | DecisionKind::Waterbend
         | DecisionKind::ExileCost => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
+            // Of two: with more players the chooser names who takes the first turn (CR 103.1).
             let starting = if option() == Opt::Play {
                 d.player
             } else {
-                d.player.opponent()
+                s.next_player(d.player)
             };
             start::set_starting_player(s, t, sink, starting)
         }
@@ -802,8 +803,7 @@ fn collapse_ordered<L: Layout>(
 ) -> Bitboard<L::Slot> {
     let signature = |slot: L::Slot| s.signature(slot);
     let known = |slot: L::Slot| {
-        matches!(s.object(slot).zone(), Zone::Hand | Zone::Library)
-            .then(|| Seat::BOTH.map(|p| s.knows(p, slot)))
+        matches!(s.object(slot).zone(), Zone::Hand | Zone::Library).then(|| s.who_knows(slot))
     };
     // Found only once two candidates are of one card: until then every one is kept, named by
     // a reference or not.

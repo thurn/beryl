@@ -44,7 +44,7 @@ pub(crate) fn manifest<L: Layout>(
     slot: L::Slot,
     player: Seat,
 ) -> Result<(), Full> {
-    let knew = Seat::BOTH.map(|p| s.knows(p, slot));
+    let knew = s.who_knows(slot);
     event::move_batch(
         s,
         t,
@@ -58,10 +58,10 @@ pub(crate) fn manifest<L: Layout>(
             ..Entry::default()
         },
     )?;
-    for p in Seat::BOTH {
-        if !knew[p.index()] && p != player {
-            s.forget(p, slot);
-        }
+    // Each forgets alone: the result is the same in any order.
+    let others = s.players().filter(|p| !knew.contains(p) && p != player);
+    for p in s.players_in_seat_order(others) {
+        s.forget(p, slot);
     }
     Ok(())
 }

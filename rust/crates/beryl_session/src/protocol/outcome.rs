@@ -2,6 +2,7 @@
 
 use beryl_engine::card::{Ability, AbilityKind, Face, FaceAbility};
 use beryl_engine::event::LossCause;
+use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{GameTable, Layout, Observation, Outcome};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;

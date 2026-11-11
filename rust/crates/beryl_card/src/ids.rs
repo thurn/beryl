@@ -4,7 +4,9 @@
 
 use std::fmt;
 
-/// One of the two players, by seat: the first decklist's and the second's.
+/// One of the two players, by seat: the first decklist's and the second's. A seat has no
+/// "other player": the rules ask the state for a player's opponents, the next player in turn
+/// order and the defending players (`beryl_kernel`'s contract, "Players").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Seat {
@@ -36,15 +38,6 @@ impl Seat {
             0 => Some(Seat::P0),
             1 => Some(Seat::P1),
             _ => None,
-        }
-    }
-
-    /// The other player.
-    #[must_use]
-    pub const fn opponent(self) -> Seat {
-        match self {
-            Seat::P0 => Seat::P1,
-            Seat::P1 => Seat::P0,
         }
     }
 

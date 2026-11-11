@@ -118,7 +118,7 @@ impl<L: Layout> State<L> {
         self.turn.active = if self.turn.number == 0 {
             self.turn.starting_player
         } else {
-            self.turn.active.opponent()
+            self.next_player(self.turn.active)
         };
         self.turn.number += 1;
         self.budgets.decisions = 0;
@@ -164,7 +164,7 @@ impl<L: Layout> State<L> {
     pub fn pass_priority(&mut self) -> bool {
         self.turn.passes += 1;
         if self.turn.passes < 2 {
-            self.turn.priority = self.turn.priority.opponent();
+            self.turn.priority = self.next_player(self.turn.priority);
             return false;
         }
         true

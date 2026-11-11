@@ -18,7 +18,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
 use crate::state::{
-    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, ZoneKey, token_slots,
+    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, token_slots,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -241,11 +241,10 @@ fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.
 fn exiled_until<L: Layout>(s: &State<L>, slot: L::Slot) -> Bitboard<L::Slot> {
-    (s.zone(ZoneKey::Of(Seat::P0, Zone::Exile)) | s.zone(ZoneKey::Of(Seat::P1, Zone::Exile)))
-        .filter(|x| {
-            let o = s.object(x);
-            o.flags().has(ObjectFlags::EXILED_UNTIL) && o.linked() == Some(slot)
-        })
+    s.in_zone(Zone::Exile).filter(|x| {
+        let o = s.object(x);
+        o.flags().has(ObjectFlags::EXILED_UNTIL) && o.linked() == Some(slot)
+    })
 }
 
 /// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
@@ -404,7 +403,7 @@ pub(crate) fn draw<L: Layout>(
         )?;
     }
     if let Some(cause) = wins {
-        crate::sba::end_game(s, sink, player.opponent(), cause);
+        crate::sba::win_game(s, sink, player, cause);
     }
     Ok(())
 }

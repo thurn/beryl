@@ -18,6 +18,7 @@ use crate::state::{
     State, TurnStep, Zone, token_slots,
 };
 use crate::table::GameTable;
+use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 
 /// Lent by [`State::board`]: the handle that arranges a position with no event and no rules
@@ -325,8 +326,10 @@ impl<L: Layout> Board<'_, L> {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.object_mut(slot).face = face;
         if face == FaceIx::DOWN {
-            let other = self.0.object(slot).base_controller.opponent();
-            self.0.knowledge[other.index()].remove(slot);
+            let controller = self.0.object(slot).base_controller;
+            for other in self.0.players().without(controller).in_seat_order() {
+                self.0.knowledge[other.index()].remove(slot);
+            }
         }
         self.0.flags.derived_dirty = true;
     }
