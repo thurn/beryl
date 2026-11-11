@@ -529,9 +529,7 @@ pub fn find(card: &str, name: &str) -> Option<&'static Variant> {
     if !name.starts_with("playground-") {
         return None;
     }
-    super::specs()
-        .iter()
-        .find(|s| slug(s.card) == card)?
+    super::spec(card)?
         .playground()
         .examples
         .iter()
@@ -679,7 +677,7 @@ mod tests {
 
     #[test]
     fn first_example_offers_the_card_in_hand() {
-        for spec in super::super::specs() {
+        for spec in super::super::sample() {
             let card = spec.card;
             let generated = Box::leak(Box::new(generate(card)));
             assert!(
@@ -710,7 +708,7 @@ mod tests {
     #[test]
     fn every_prepared_example_reaches_its_interaction() {
         let mut failures = Vec::new();
-        for spec in super::super::specs() {
+        for spec in super::super::sample() {
             for example in &spec.playground().examples {
                 for variant in &example.variants {
                     match prepare(variant) {

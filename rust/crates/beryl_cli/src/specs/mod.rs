@@ -11,106 +11,158 @@
 //!
 //! Every implemented card has a spec: its moments are generated from its definition and its
 //! scenarios ([`auto`]), each played headless from both seats to its first live decision, and
-//! what holds there is recorded for `specs-describe`. A moment a card needs that nothing generates comes from
-//! a scenario in its file, or a general capability of the generator: the `specs` skill
-//! (`.agents/skills/specs/SKILL.md`) says which.
+//! what holds there is recorded for `specs-describe`. A card's spec is generated when it is
+//! first asked for, and no other card's with it ([`spec`]). A moment a card needs that nothing
+//! generates comes from a scenario in its file, or a general capability of the generator: the
+//! `specs` skill (`.agents/skills/specs/SKILL.md`) says which.
 
 mod auto;
+mod describe;
+mod listing;
 mod playground;
 pub mod reviews;
 pub mod serve;
+mod start;
 
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_cards::CARDS;
+use beryl_engine::card::CardDef;
 use beryl_scenario::{Action, Scenario};
-use beryl_search::GameAgent;
-use beryl_session::{GameUpdate, Prepared, Seat, Sessions, Status, StopsSetting};
-use serde::Serialize;
+use beryl_session::Seat;
 
-use crate::boards::{self, Scripted, Shared};
+pub use describe::describe;
+use describe::reach;
+pub use start::{Phase, start};
+use start::{at_checkpoint, review_position, start_review};
 
-/// Every card's spec, generated once: those with no moments left out.
-pub fn specs() -> &'static [Spec] {
-    &generation().0
+/// The specs, one per implemented card, each generated on its first request: asking for one
+/// card's moments plays no other card's.
+struct Library {
+    specs: Vec<Spec>,
 }
 
-/// The candidates each card's generation dropped, each with why, by card.
-fn dropped() -> &'static [(&'static str, Vec<(String, String)>)] {
-    &generation().1
-}
-
-type Generation = (Vec<Spec>, Vec<(&'static str, Vec<(String, String)>)>);
-
-fn generation() -> &'static Generation {
-    static GENERATION: OnceLock<Generation> = OnceLock::new();
-    GENERATION.get_or_init(|| {
-        let cards = CARDS.cards();
-        let generated: Vec<auto::Generated> = std::thread::scope(|scope| {
-            let handles: Vec<_> = cards
-                .iter()
-                .map(|&def| {
-                    let scenarios = beryl_cards::SCENARIOS
-                        .iter()
-                        .find(|(name, _)| *name == def.name)
-                        .map_or(&[][..], |(_, s)| *s);
-                    scope.spawn(move || auto::generate(def, scenarios))
-                })
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| h.join().expect("generating a spec panicked"))
-                .collect()
-        });
-        let mut specs = Vec::new();
-        let mut dropped = Vec::new();
-        for (def, g) in cards.iter().zip(generated) {
-            let moments = g.moments;
-            if !moments.is_empty() {
-                specs.push(Spec {
-                    card: def.name,
-                    checkpoints: OnceLock::new(),
-                    playground: OnceLock::new(),
-                    moments: Box::leak(moments.into_boxed_slice()),
-                });
-            }
-            dropped.push((def.name, g.dropped));
+impl Library {
+    fn new() -> Library {
+        Library {
+            specs: CARDS.cards().iter().map(|&def| Spec::new(def)).collect(),
         }
-        (specs, dropped)
-    })
+    }
+
+    fn find(&self, card: &str) -> Option<&Spec> {
+        self.specs.iter().find(|s| s.card == card || s.slug == card)
+    }
+}
+
+fn library() -> &'static Library {
+    static LIBRARY: OnceLock<Library> = OnceLock::new();
+    LIBRARY.get_or_init(Library::new)
+}
+
+/// Every implemented card's spec, generating none.
+pub fn cards() -> &'static [Spec] {
+    &library().specs
+}
+
+/// The spec of the card `card` names, by its name or its slug, generating nothing.
+pub fn spec(card: &str) -> Option<&'static Spec> {
+    library().find(card)
+}
+
+/// The specs `cards` name (by name or slug; every one if none), each generated, failing on an
+/// unknown card. Generating every card is a sweep someone asked for (`specs-check` with no
+/// card), so it runs on a pool the size of the machine, not a thread per card.
+fn chosen(cards: &[String]) -> Result<Vec<&'static Spec>, String> {
+    let chosen: Vec<&'static Spec> = if cards.is_empty() {
+        self::cards().iter().collect()
+    } else {
+        cards
+            .iter()
+            .map(|c| spec(c).ok_or_else(|| format!("no card {c:?}")))
+            .collect::<Result<_, _>>()?
+    };
+    generate(&chosen);
+    Ok(chosen)
+}
+
+/// Generates each of `specs` not yet generated, on as many threads as the machine has cores.
+fn generate(specs: &[&Spec]) {
+    let next = AtomicUsize::new(0);
+    let threads = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZero::get)
+        .min(specs.len());
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                while let Some(spec) = specs.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    spec.moments();
+                }
+            });
+        }
+    });
+}
+
+/// The scenarios in `card`'s file.
+fn scenarios(card: &str) -> &'static [Scenario] {
+    beryl_cards::SCENARIOS
+        .iter()
+        .find(|(name, _)| *name == card)
+        .map_or(&[][..], |(_, scenarios)| *scenarios)
 }
 
 /// One card's spec.
 pub struct Spec {
     pub card: &'static str,
-    pub moments: &'static [Moment],
+    /// Its name in the page's URL ([`slug`]).
+    pub slug: String,
+    def: &'static CardDef,
+    generated: OnceLock<auto::Generated>,
     checkpoints: OnceLock<auto::ReviewSet>,
     playground: OnceLock<playground::Playground>,
 }
 
 impl Spec {
+    fn new(def: &'static CardDef) -> Spec {
+        Spec {
+            card: def.name,
+            slug: slug(def.name),
+            def,
+            generated: OnceLock::new(),
+            checkpoints: OnceLock::new(),
+            playground: OnceLock::new(),
+        }
+    }
+
+    /// Its moments, generated on the first call by playing each candidate from both seats to
+    /// its first live decision: empty if none got there.
+    pub fn moments(&self) -> &[Moment] {
+        &self.generated().moments
+    }
+
+    /// The candidates its generation dropped, each with why.
+    fn dropped(&self) -> &[(String, String)] {
+        &self.generated().dropped
+    }
+
+    fn generated(&self) -> &auto::Generated {
+        self.generated
+            .get_or_init(|| auto::generate(self.def, scenarios(self.card)))
+    }
+
     fn playground(&self) -> &playground::Playground {
         self.playground
             .get_or_init(|| playground::generate(self.card))
     }
 
     pub fn checkpoints(&self) -> &auto::ReviewSet {
-        self.checkpoints.get_or_init(|| {
-            let def = CARDS
-                .cards()
-                .iter()
-                .find(|d| d.name == self.card)
-                .expect("spec card");
-            let scenarios = beryl_cards::SCENARIOS
-                .iter()
-                .find(|(name, _)| *name == self.card)
-                .map_or(&[][..], |(_, scenarios)| *scenarios);
-            auto::checkpoints(def, scenarios)
-        })
+        self.checkpoints
+            .get_or_init(|| auto::checkpoints(self.def, scenarios(self.card)))
     }
+
     /// The original replay, if it shows this card being cast from hand.
-    fn replay_from_hand(&self, group: &str) -> Option<&'static str> {
-        self.moments
+    fn replay_from_hand(&self, group: &str) -> Option<&str> {
+        self.moments()
             .iter()
             .find(|m| {
                 m.group == group
@@ -219,555 +271,57 @@ pub fn slug(card: &str) -> String {
 
 /// The spec for the card `slug` names, and its moment `name`.
 pub fn find(slug: &str, name: &str) -> Option<(&'static Spec, &'static Moment)> {
-    let spec = specs().iter().find(|s| self::slug(s.card) == slug)?;
-    Some((spec, spec.moments.iter().find(|m| m.name == name)?))
-}
-
-/// Where a moment's game stood when it emitted a view.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Phase {
-    /// Still being set up: the page never shows it.
-    Setup,
-    /// Playing out the moment's own actions, which the page animates.
-    Play,
-    /// Every action taken: the human plays on.
-    Live,
-}
-
-/// Starts `moment` in its own [`Sessions`], seen from `view`, each view sent to `emit` with the
-/// phase it was emitted in. Scripts that fail report to the view's phase as `Live` with the
-/// failure.
-pub fn start(
-    moment: &'static Moment,
-    view: View,
-    emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
-) -> Result<(Sessions, Shared), String> {
-    let progress = Shared::default();
-    // An `AdvanceTo` holds the scripts rather than being taken.
-    let setup = moment
-        .board
-        .actions
-        .iter()
-        .filter(|a| !matches!(a, Action::AdvanceTo { .. }))
-        .count();
-    // A trailing `AdvanceTo` holds the hand-over until the game reaches its turn.
-    if let Some(Action::AdvanceTo { turn, .. }) =
-        moment.board.actions.iter().chain(moment.play).last()
-    {
-        boards::lock(&progress).until = Some(*turn);
-    }
-    let watched = Arc::clone(&progress);
-    let sessions = Sessions::new(None, move |update| {
-        // The emitting thread is the one the scripts answer on, so this is the phase the view
-        // was made in. Views are published before the stand-in answers, so the hand-over sees
-        // the turn this one shows.
-        let mut p = boards::lock(&watched);
-        p.turn = update.view.turn.number;
-        let phase = if p.taken < setup {
-            Phase::Setup
-        } else if p.done() {
-            Phase::Live
-        } else {
-            Phase::Play
-        };
-        drop(p);
-        let mut update = update;
-        if phase != Phase::Live && matches!(update.view.status, Status::Deciding { .. }) {
-            // A stand-in answers the viewer's decisions until the actions are taken, at once:
-            // the viewer watches the game go on through them, each held as long as its events
-            // take to follow (the opponent's ability on the stack, read before it resolves), as
-            // the app holds the opponent's play.
-            update.view.status = Status::Playing;
-        }
-        emit(update, phase);
-    });
-    let (table, state) =
-        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
-    let actions = || moment.board.actions.iter().chain(moment.play);
-    let agent = |seat: Seat| {
-        Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))
-            .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
-    };
-    let handed = Arc::clone(&progress);
-    sessions
-        .start_prepared(Prepared {
-            opponent: agent(view.other())?,
-            stand_in: agent(view.seat())?,
-            scripted: true,
-            hand_over: Some(Box::new(move || boards::lock(&handed).done())),
-            table,
-            state,
-            human: view.seat(),
-            stops: StopsSetting::SMART,
-        })
-        .map_err(|e| e.to_string())?;
-    Ok((sessions, progress))
-}
-
-/// Run the setup in one shared game, then publish both seats at every manual decision.
-fn start_review(
-    moment: &Moment,
-    emit: impl Fn([GameUpdate; 2], bool) + Send + 'static,
-) -> Result<Sessions, String> {
-    let progress = Shared::default();
-    let actions = || moment.board.actions.iter().chain(moment.play);
-    if let Some(Action::AdvanceTo { turn, .. }) = actions().last() {
-        boards::lock(&progress).until = Some(*turn);
-    }
-    let (table, state) =
-        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
-    let agent = |seat| {
-        Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))
-            .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
-    };
-    let watched = Arc::clone(&progress);
-    let sessions = Sessions::new(None, |_| {});
-    sessions
-        .start_review(
-            Prepared {
-                opponent: agent(Seat::P1)?,
-                stand_in: agent(Seat::P0)?,
-                scripted: true,
-                hand_over: Some(Box::new(move || boards::lock(&watched).done())),
-                table,
-                state,
-                human: Seat::P0,
-                stops: StopsSetting::SMART,
-            },
-            Box::new(move |session, views| {
-                let mut p = boards::lock(&progress);
-                let live = p.done() && p.failure.is_none();
-                p.turn = views[0].turn.number;
-                drop(p);
-                emit(views.map(|view| GameUpdate { session, view }), live);
-            }),
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(sessions)
-}
-
-fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
-    live && updates
-        .iter()
-        .any(|u| matches!(u.view.status, Status::Deciding { .. } | Status::Over { .. }))
-}
-
-fn review_position(
-    moment: &Moment,
-) -> Result<([beryl_session::PlayerView; 2], Option<String>), String> {
-    use beryl_session::protocol::{GameEvent, Why};
-
-    let (sent, received) = std::sync::mpsc::channel();
-    let _sessions = start_review(moment, move |updates, live| {
-        let _ = sent.send((updates, live));
-    })?;
-    let mut countered = None;
-    loop {
-        let (updates, live) = received
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .map_err(|_| "setup never reached a checkpoint".to_owned())?;
-        if live {
-            let view = &updates[0].view;
-            for event in &view.events {
-                if let GameEvent::ZoneChange {
-                    slot,
-                    reason: Why::Counter,
-                    ..
-                } = *event
-                {
-                    countered = view
-                        .objects
-                        .iter()
-                        .find(|o| o.slot == slot)
-                        .and_then(|o| o.name.clone())
-                        .or(countered);
-                }
-            }
-        }
-        if at_checkpoint(&updates, live) {
-            return Ok((updates.map(|u| u.view), countered));
-        }
-        if matches!(
-            updates[0].view.status,
-            Status::Over { .. } | Status::Stopped
-        ) {
-            return Err("game ended during setup".to_owned());
-        }
-    }
-}
-
-/// The specs as the page lists them.
-#[derive(Serialize)]
-pub struct Listing {
-    card: &'static str,
-    slug: String,
-    moments: Vec<MomentListing>,
-}
-
-#[derive(Serialize)]
-pub struct MomentListing {
-    name: &'static str,
-    title: &'static str,
-    /// The scenario it comes from, empty for the card's own moments.
-    group: &'static str,
-    /// Whether it plays actions out once shown, which a replay plays again.
-    plays: bool,
-    replay: Option<&'static str>,
-}
-
-pub fn listing() -> Vec<Listing> {
-    specs()
-        .iter()
-        .map(|s| Listing {
-            card: s.card,
-            slug: slug(s.card),
-            moments: s
-                .moments
-                .iter()
-                .map(|m| MomentListing {
-                    name: m.name,
-                    title: m.title,
-                    group: m.group,
-                    plays: !m.play.is_empty(),
-                    replay: s.replay_from_hand(m.group),
-                })
-                .collect(),
-        })
-        .collect()
-}
-
-/// Plays `moment` headless, seen from `view`, to the viewer's first live decision (or the
-/// game's end, once every action is taken), and returns what the viewer sees there: an error
-/// says what failed on the way.
-pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::PlayerView, String> {
-    trace(moment, view).map(|(view, _)| view)
-}
-
-/// [`reach`], with the views the viewer was shown on the way once the setup was done, each
-/// with the events it animates.
-fn trace(
-    moment: &'static Moment,
-    view: View,
-) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), String> {
-    let (sent, received) = std::sync::mpsc::channel();
-    let (_sessions, progress) = start(moment, view, move |update, phase| {
-        let _ = sent.send((update, phase));
-    })?;
-    let mut shown = false;
-    let mut events = Vec::new();
-    loop {
-        let (update, phase) = received
-            .recv_timeout(std::time::Duration::from_secs(30))
-            .map_err(|_| "no live decision within 30 s".to_owned())?;
-        if let Some(failure) = boards::lock(&progress).failure.take() {
-            return Err(failure);
-        }
-        // The first view shown animates nothing (`specs-serve` clears its events).
-        if shown {
-            events.push(update.view.clone());
-        }
-        shown |= phase != Phase::Setup;
-        match update.view.status {
-            // A game won or lost once shown is a moment too: its end.
-            Status::Over { .. } if shown && boards::lock(&progress).done() => {
-                return Ok((update.view, events));
-            }
-            Status::Over { .. } | Status::Stopped => {
-                return Err(match boards::lock(&progress).stalled() {
-                    None => "the game ended before a live decision".to_owned(),
-                    Some(why) => format!("the game ended with {why}"),
-                });
-            }
-            Status::Deciding { .. } if phase == Phase::Live => {
-                if !shown {
-                    return Err("nothing was shown".to_owned());
-                }
-                return Ok((update.view, events));
-            }
-            _ => {}
-        }
-    }
-}
-
-/// A view's events in a line, each its kind and fields, objects by name: "turn 5 your
-/// postcombatMain: zoneChange Island exile->graveyard (effect); tokensCreated you [Treasure]".
-/// None if it has none but steps beginning, which every view of a turn passing has.
-fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
-    let name = |slot: &serde_json::Value| {
-        slot.as_u64()
-            .and_then(|s| view.objects.iter().find(|o| u64::from(o.slot) == s))
-            .and_then(|o| o.name.clone())
-            .unwrap_or_else(|| format!("#{slot}"))
-    };
-    let text = |v: &serde_json::Value| match v {
-        serde_json::Value::String(s) => s.clone(),
-        v => v.to_string(),
-    };
-    let events: Vec<String> = view
-        .events
-        .iter()
-        .filter(|e| !matches!(e, beryl_session::protocol::GameEvent::StepBegins { .. }))
-        .map(|e| {
-            let serde_json::Value::Object(fields) = serde_json::to_value(e).unwrap_or_default()
-            else {
-                return format!("{e:?}");
-            };
-            let mut parts = vec![fields.get("kind").map(text).unwrap_or_default()];
-            if let (Some(from), Some(to)) = (fields.get("from"), fields.get("to"))
-                && fields.contains_key("slot")
-            {
-                parts.push(format!(
-                    "{} {}->{}",
-                    name(&fields["slot"]),
-                    text(from),
-                    text(to)
-                ));
-                if let Some(why) = fields.get("reason") {
-                    parts.push(format!("({})", text(why)));
-                }
-                return parts.join(" ");
-            }
-            for (k, v) in &fields {
-                match k.as_str() {
-                    "kind" => {}
-                    "slot" | "source" => parts.push(name(v)),
-                    // A stack item by its name: "Currency Converter ability 2".
-                    "item" => {
-                        parts.push(v.get("name").map(text).unwrap_or_default());
-                        if let Some(k) = v.get("ability") {
-                            parts.push(format!("ability {}", text(k)));
-                        }
-                    }
-                    "loyalty" if v.is_null() => {}
-                    "tokens" | "attackers" => {
-                        let names: Vec<String> =
-                            v.as_array().into_iter().flatten().map(name).collect();
-                        parts.push(format!("[{}]", names.join(", ")));
-                    }
-                    _ => parts.push(format!("{k}={}", text(v))),
-                }
-            }
-            parts.join(" ")
-        })
-        .collect();
-    let turn = &view.turn;
-    let whose = if turn.active == beryl_session::protocol::Side::You {
-        "your"
-    } else {
-        "their"
-    };
-    let step = serde_json::to_value(turn.step)
-        .ok()
-        .map(|v| text(&v))
-        .unwrap_or_default();
-    (!events.is_empty())
-        .then(|| format!("turn {} {whose} {step}: {}", turn.number, events.join("; ")))
-}
-
-/// One view as `specs-describe --views` prints it: its turn and events, what the viewer is
-/// asked (or the game's status), the stack bottom first, and each side's battlefield, hand,
-/// graveyard and exile by name (a card the viewer cannot see as `?`, tapped ones marked), and
-/// their library's size.
-fn view_lines(view: &beryl_session::PlayerView) -> Vec<String> {
-    let v = serde_json::to_value(view).unwrap_or_default();
-    let objects = v["objects"].as_array().cloned().unwrap_or_default();
-    let named = |slot: &serde_json::Value| {
-        objects
-            .iter()
-            .find(|o| o["slot"] == *slot)
-            .and_then(|o| o["name"].as_str())
-            .unwrap_or("?")
-            .to_owned()
-    };
-    let mut lines = vec![events_line(view).unwrap_or_else(|| {
-        format!(
-            "turn {} {:?} {:?}: no events",
-            view.turn.number, view.turn.active, view.turn.step
-        )
-    })];
-    lines.push(match &v["status"] {
-        s if s["kind"] == "deciding" => format!(
-            "asks   {} ({} candidates)",
-            s["decision"]["kind"].as_str().unwrap_or("?"),
-            s["decision"]["candidates"].as_array().map_or(0, Vec::len)
-        ),
-        s => format!("status {}", s["kind"].as_str().unwrap_or("?")),
-    });
-    let stack: Vec<String> = v["stack"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|item| match item["kind"].as_str() {
-            Some("spell") => named(&item["slot"]),
-            _ => item["name"].as_str().map_or_else(
-                || format!("{} ability", named(&item["source"])),
-                str::to_owned,
-            ),
-        })
-        .collect();
-    if !stack.is_empty() {
-        lines.push(format!("stack  {}", stack.join(" < ")));
-    }
-    for side in ["you", "opponent"] {
-        let mut zones = Vec::new();
-        for zone in ["battlefield", "hand", "graveyard", "exile"] {
-            // A permanent is on its controller's side; a card elsewhere, its owner's.
-            let whose = if zone == "battlefield" {
-                "controller"
-            } else {
-                "owner"
-            };
-            let cards: Vec<String> = objects
-                .iter()
-                .filter(|o| o["zone"] == zone && o[whose] == side)
-                .map(|o| {
-                    let name = o["name"].as_str().unwrap_or("?");
-                    // A permanent's status, power and toughness, counters and keywords, as
-                    // the view gives them: what its frame shows beyond its card.
-                    let mut marks = Vec::new();
-                    if o["tapped"] == true {
-                        marks.push("tapped".to_owned());
-                    }
-                    if let (Some(p), Some(t)) =
-                        (o["pt"]["power"].as_i64(), o["pt"]["toughness"].as_i64())
-                    {
-                        marks.push(format!("{p}/{t}"));
-                    }
-                    for c in o["counters"].as_array().into_iter().flatten() {
-                        if let (Some(kind), Some(n)) = (c["kind"].as_str(), c["count"].as_u64()) {
-                            marks.push(format!("{n} {kind}"));
-                        }
-                    }
-                    for k in o["keywords"].as_array().into_iter().flatten() {
-                        marks.extend(k.as_str().map(str::to_owned));
-                    }
-                    if zone == "battlefield" && !marks.is_empty() {
-                        format!("{name} ({})", marks.join(", "))
-                    } else if o["tapped"] == true {
-                        format!("{name} (tapped)")
-                    } else {
-                        name.to_owned()
-                    }
-                })
-                .collect();
-            if !cards.is_empty() {
-                zones.push(format!("{zone}: {}", cards.join(", ")));
-            }
-        }
-        let library = v["players"][side]["library"].as_array().map_or(0, Vec::len);
-        zones.push(format!("library: {library}"));
-        lines.push(format!("{side:<6} {}", zones.join(" | ")));
-    }
-    lines
-}
-
-/// Prints each moment of the specs for `cards` (by name or slug; all of them if none), or the
-/// one `moment` names: its page, the actions it plays once shown, and from each seat the
-/// events shown on the way and what holds at its first live decision, abilities by their cost.
-/// With `views`, each view shown is printed whole instead: its events, what it asks, the stack
-/// and each side's zones ([`view_lines`]).
-pub fn describe(cards: &[String], moment: Option<&str>, views: bool) -> Result<(), String> {
-    let wanted =
-        |card: &str| cards.is_empty() || cards.iter().any(|c| c == card || *c == slug(card));
-    let mut found = false;
-    for spec in specs().iter().filter(|s| wanted(s.card)) {
-        let def = CARDS
-            .cards()
-            .iter()
-            .find(|d| d.name == spec.card)
-            .ok_or_else(|| format!("no card {:?}", spec.card))?;
-        let labels = auto::ability_labels(def);
-        // An ability by its cost rather than its index: "offers Currency Converter {T}".
-        let label = |c: &str| {
-            labels.iter().fold(c.to_owned(), |c, (k, l)| {
-                c.replace(
-                    &format!("{} ability {k}", spec.card),
-                    &format!("{} {l}", spec.card),
-                )
-            })
-        };
-        for m in spec
-            .moments
-            .iter()
-            .filter(|m| moment.is_none_or(|n| n == m.name))
-        {
-            found = true;
-            let card = slug(spec.card);
-            println!("== {card} / {}  \"{}\"", m.name, m.title);
-            if !m.group.is_empty() {
-                println!("scenario: {}", m.group);
-            }
-            println!("page: /specs/{card}/{}", m.name);
-            for a in m.play {
-                println!("plays: {a:?}");
-            }
-            for view in View::ALL {
-                let (shown, events) = trace(m, view)?;
-                println!("{}:", view.name());
-                for (n, v) in events.iter().enumerate() {
-                    if views {
-                        println!("  view {}", n + 1);
-                        for line in view_lines(v) {
-                            println!("    {}", label(&line));
-                        }
-                    } else if let Some(line) = events_line(v) {
-                        println!("  shown  {}", label(&line));
-                    }
-                }
-                let holds: Vec<String> = auto::snapshot(&shown, def)
-                    .iter()
-                    .map(|c| label(c))
-                    .collect();
-                println!("  holds  {}", holds.join(", "));
-            }
-            println!();
-        }
-    }
-    if found {
-        Ok(())
-    } else {
-        Err(format!(
-            "no moment {cards:?} {}",
-            moment.unwrap_or_default()
-        ))
-    }
+    let spec = spec(slug)?;
+    Some((spec, spec.moments().iter().find(|m| m.name == name)?))
 }
 
 /// Lists every moment of the specs for `cards` (by name or slug; all of them if none), each
 /// generated by playing it headless from both seats to its first live decision, then the
 /// candidates generation could not play, with why. Fails on an unknown card.
 pub fn check_all(cards: &[String]) -> Result<(), String> {
-    let wanted =
-        |card: &str| cards.is_empty() || cards.iter().any(|c| c == card || *c == slug(card));
-    if let Some(c) = cards.iter().find(|c| {
-        !CARDS
-            .cards()
-            .iter()
-            .any(|d| d.name == **c || slug(d.name) == **c)
-    }) {
-        return Err(format!("no card {c:?}"));
-    }
+    let chosen = chosen(cards)?;
     let mut moments = 0;
-    for spec in specs().iter().filter(|s| wanted(s.card)) {
-        for m in spec.moments {
+    for spec in &chosen {
+        for m in spec.moments() {
             moments += 1;
-            println!("ok    {} / {}  ({})", slug(spec.card), m.name, m.title);
+            println!("ok    {} / {}  ({})", spec.slug, m.name, m.title);
         }
     }
     let mut skipped = 0;
-    for (card, dropped) in dropped().iter().filter(|(c, _)| wanted(c)) {
-        for (name, why) in dropped {
+    for spec in &chosen {
+        for (name, why) in spec.dropped() {
             skipped += 1;
-            println!("skip  {} / {name}: {why}", slug(card));
+            println!("skip  {} / {name}: {why}", spec.slug);
         }
     }
     println!("{moments} moments, {skipped} candidates skipped");
     Ok(())
 }
 
+/// The specs a test that walks every spec takes: every card while there are at most 64, and
+/// otherwise a fixed 64 chosen by a stable hash of the name, so a failure reproduces. The full
+/// sweep is `beryl_cli specs-check` with no card, which runs nightly (`by nightly`).
+#[cfg(test)]
+fn sample() -> Vec<&'static Spec> {
+    const SAMPLE: usize = 64;
+    // FNV-1a: stable across runs and platforms, unlike std's hasher.
+    let hash = |name: &str| {
+        name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+        })
+    };
+    let mut specs: Vec<&'static Spec> = cards().iter().collect();
+    if specs.len() > SAMPLE {
+        specs.sort_by_key(|s| (hash(s.card), s.card));
+        specs.truncate(SAMPLE);
+    }
+    specs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use beryl_session::Status;
 
     #[test]
     fn slugs_name_cards() {
@@ -921,14 +475,36 @@ mod tests {
         assert!(error.contains("fit no candidate"), "{error}");
     }
 
-    /// Generating every spec plays every moment from both seats: a moment is kept only once it
+    /// Asking for one card's spec generates that card and no other.
+    #[test]
+    fn a_spec_generates_only_its_card() {
+        use beryl_cards::names::COUNTERSPELL;
+        let library = Library::new();
+        let spec = library
+            .find(&slug(COUNTERSPELL))
+            .expect("Counterspell has a spec");
+        assert!(library.specs.iter().all(|s| s.generated.get().is_none()));
+        assert!(!spec.moments().is_empty());
+        let generated: Vec<&str> = library
+            .specs
+            .iter()
+            .filter(|s| s.generated.get().is_some())
+            .map(|s| s.card)
+            .collect();
+        assert_eq!(generated, [COUNTERSPELL]);
+    }
+
+    /// Generating a spec plays every moment from both seats: a moment is kept only once it
     /// reaches a live decision from each.
     #[test]
     fn moments_are_named_uniquely() {
-        for spec in specs() {
-            for (i, m) in spec.moments.iter().enumerate() {
+        let specs = sample();
+        generate(&specs);
+        for spec in specs {
+            let moments = spec.moments();
+            for (i, m) in moments.iter().enumerate() {
                 assert!(
-                    spec.moments[..i].iter().all(|n| n.name != m.name),
+                    moments[..i].iter().all(|n| n.name != m.name),
                     "{}: two moments are named {}",
                     spec.card,
                     m.name

@@ -3,8 +3,9 @@
 //! so the game screen's live transport (`?live=<prefix>`, `ui/src/ipc.ts`) plays a moment as
 //! it plays an app game:
 //!
-//! - `GET /specs` lists the specs and their moments, each with when it was `reviewed` (null if
-//!   not, [`super::reviews`]) and how many open bug `reports` are about it.
+//! - `GET /specs` lists the cards, generating none, each with when it was `reviewed` (null if
+//!   not, [`super::reviews`]) and how many open bug `reports` are about it; `GET /specs/<card>`
+//!   generates that card's spec and lists its moments ([`super::listing`]).
 //! - `POST /review/<card>` with `{"reviewed": bool}` marks the card reviewed, or not.
 //! - `GET /bug-reports.zip` downloads the active local reports.
 //! - `POST /report` with `{"key": instance key, "description": ...}` writes a bug report about
@@ -43,7 +44,7 @@ use beryl_session::protocol::{Candidate, GameEvent, PlayerView, Side};
 use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
-use super::{Phase, View, find, listing, reviews, slug, specs};
+use super::{Phase, View, cards, find, listing, reviews, spec};
 use crate::serve::{CORS, HttpRequest, card_records, invoke, read_request, respond};
 
 /// How many instances live at once; the least recently used goes first. A page keeps each
@@ -146,11 +147,17 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         return export_reports(&mut stream);
     }
     if method == "GET" && path == "/specs" {
-        let body = annotated_listing().to_string();
+        let body = listing::cards().to_string();
         return respond(&mut stream, "200 OK", &body);
     }
+    if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/specs/")) {
+        let Some(spec) = spec(card) else {
+            return respond(&mut stream, "404 Not Found", "{}");
+        };
+        return respond(&mut stream, "200 OK", &listing::moments(spec).to_string());
+    }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/playground/")) {
-        let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+        let Some(spec) = spec(card) else {
             return respond(&mut stream, "404 Not Found", "{}");
         };
         return respond(
@@ -160,7 +167,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         );
     }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/checkpoints/")) {
-        let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+        let Some(spec) = spec(card) else {
             return respond(&mut stream, "404 Not Found", "{}");
         };
         let checkpoints = spec.checkpoints();
@@ -353,33 +360,10 @@ fn export_reports(stream: &mut TcpStream) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// The specs as `GET /specs` lists them: each with when it was reviewed and its open reports.
-fn annotated_listing() -> Value {
-    let reviewed = reviews::load(&reviews::path());
-    let reports = bugs::open_by_card(&bugs::dir());
-    let moment_reports = bugs::open_by_moment(&bugs::dir());
-    let mut listing = serde_json::to_value(listing()).unwrap_or_else(|_| json!([]));
-    if let Some(specs) = listing.as_array_mut() {
-        for spec in specs {
-            let card = spec["card"].as_str().unwrap_or_default().to_owned();
-            let slug = spec["slug"].as_str().unwrap_or_default().to_owned();
-            spec["reviewed"] = json!(reviewed.get(&card));
-            spec["reports"] = json!(reports.get(&slug).copied().unwrap_or(0));
-            spec["momentReports"] = json!(
-                moment_reports
-                    .iter()
-                    .filter(|(key, _)| key.starts_with(&format!("{slug}/")))
-                    .collect::<HashMap<_, _>>()
-            );
-        }
-    }
-    listing
-}
-
-/// `POST /review/<card>`: sets the review mark and, when marking, finds the next unreviewed spec.
+/// `POST /review/<card>`: sets the review mark and, when marking, finds the next unreviewed card.
 fn review(card: &str, body: &[u8]) -> Value {
-    let specs = specs();
-    let Some(index) = specs.iter().position(|s| slug(s.card) == card) else {
+    let specs = cards();
+    let Some(index) = specs.iter().position(|s| s.slug == card) else {
         return json!({ "err": { "kind": "spec", "message": format!("no spec {card}") } });
     };
     let Some(reviewed) = serde_json::from_slice::<Value>(body)
@@ -396,7 +380,7 @@ fn review(card: &str, body: &[u8]) -> Value {
                     .iter()
                     .chain(&specs[..index])
                     .find(|s| !all.contains_key(s.card))
-                    .map(|s| slug(s.card))
+                    .map(|s| s.slug.clone())
             } else {
                 None
             };
@@ -511,9 +495,7 @@ fn checkpoint(card: &str, name: &str) -> Option<&'static super::auto::Checkpoint
     if !name.starts_with("review-") {
         return None;
     }
-    specs()
-        .iter()
-        .find(|s| slug(s.card) == card)?
+    spec(card)?
         .checkpoints()
         .examples
         .iter()

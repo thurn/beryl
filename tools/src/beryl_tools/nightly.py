@@ -1,10 +1,11 @@
 """`by nightly`: the work that runs once a night on the development machine, from a launchd
 agent (`just nightly-install`): today, removing the cache folders of checkouts that are gone
-(`by prune-caches`), coverage of origin/staging (`by coverage`) and the checks' verdicts the fast
-check orders by (`by ci-history`). It costs no agent tokens and needs no session open. Its
-record is this machine's, in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped
-or not) and `last-output.txt` (the last run's output). More nightly work, such as the presentation track's motion captures and
-the nightly fuzz, joins as another [`Step`] in [`STEPS`].
+(`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
+check orders by (`by ci-history`) and every card's spec (`by specs --check`, the sweep the
+tests sample). It costs no agent tokens and needs no session open. Its record is this
+machine's, in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
+`last-output.txt` (the last run's output). More nightly work, such as the presentation track's
+motion captures and the nightly fuzz, joins as another [`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
 over [`FRESH_HOURS`] old and the machine is not busy, so the hourly retries cost nothing once a
@@ -27,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
 
-from . import caches, paths, system
+from . import caches, coverage, paths, system
 
 LABEL = "ca.thurn.beryl.nightly"
 # The agent's first firing, and its last retry.
@@ -89,10 +90,18 @@ def history_step(commit: str, out: IO[str]) -> int:
     ).returncode
 
 
+def specs_step(commit: str, out: IO[str]) -> int:
+    """Every card's spec generated and listed, at low priority (`beryl_cli specs-check` with no
+    card): the full sweep the tests, which take a bounded sample of cards, leave out."""
+    command = [sys.executable, "-m", "beryl_tools.cli", "specs", "--check"]
+    return coverage.in_tree(commit, system.utility(command), out)
+
+
 STEPS: list[Step] = [
     Step("prune", caches.prune_step),
     Step("coverage", coverage_step),
     Step("history", history_step),
+    Step("specs", specs_step),
 ]
 
 

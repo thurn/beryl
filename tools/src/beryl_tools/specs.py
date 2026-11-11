@@ -261,16 +261,22 @@ def serve_specs(binary: Path, port: int) -> subprocess.Popen[bytes]:
     )
 
 
-def warm_specs(port: int) -> None:
-    """Asks the spec server for its listing, which generates every spec, so the first page
-    after a start does not wait on it."""
+def warm_specs(port: int, slugs: list[str]) -> None:
+    """Waits for the spec server to answer, then asks it for each of `slugs`' moments, which
+    generates those cards' specs, so the first page after a start does not wait on them. A
+    card not asked for is generated when its page first asks."""
     deadline = time.monotonic() + 600
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/specs", timeout=600):
-                return
-        except (urllib.error.URLError, OSError):
-            time.sleep(0.5)
+    for path in ["specs", *(f"specs/{s}" for s in slugs)]:
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/{path}", timeout=600
+                ):
+                    break
+            except urllib.error.HTTPError:
+                break  # It answered: there is nothing to wait for.
+            except (urllib.error.URLError, OSError):
+                time.sleep(0.5)
 
 
 def newest(root: Path, suffix: str) -> float:
@@ -344,7 +350,7 @@ def drive(
                 servers[-1].wait()
                 binary = built or binary
                 servers.append(serve_specs(binary, spec_port))
-                warm_specs(spec_port)
+                warm_specs(spec_port, args.cards)
                 print("specs: spec server restarted; open moments again", flush=True)
             changed = newest(scripts, ".mjs")
             if changed > js or driver.poll() is not None:

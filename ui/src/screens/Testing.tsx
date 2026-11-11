@@ -20,10 +20,10 @@ interface MomentListing {
   opponentMove?: boolean;
 }
 
+/** A card as the spec server lists it: its moments come from `/specs/<slug>`. */
 interface SpecListing {
   card: string;
   slug: string;
-  moments: MomentListing[];
   /** When it was marked reviewed, or null. */
   reviewed: string | null;
   /** Its open bug reports. */
@@ -137,6 +137,12 @@ export function SpecOpponentMove({
   );
 }
 
+/** One card's moments, and the candidates its generation dropped, each with why. */
+interface MomentsListing {
+  moments: MomentListing[];
+  dropped: string[];
+}
+
 interface PlaygroundExample {
   title: string;
   variants: (MomentListing & { label: string })[];
@@ -153,22 +159,25 @@ export function Testing({ path }: { path: string }) {
   const base = playground ? "/playground" : "/scenarios";
   const [query, setQuery] = useState("");
   const [data, setData] = useState<PlaygroundListing>();
+  const [moments, setMoments] = useState<MomentsListing>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     document.title = playground ? "Beryl Playground" : "Beryl Scenarios";
-    if (!playground || !slug) return;
+    if (!slug) return;
     const abort = new AbortController();
-    fetch(`${API}/playground/${slug}`, { signal: abort.signal })
+    fetch(`${API}/${playground ? "playground" : "specs"}/${slug}`, {
+      signal: abort.signal,
+    })
       .then((r) => {
-        if (!r.ok) throw Error("Could not load playground");
-        return r.json() as Promise<PlaygroundListing>;
+        if (!r.ok) throw Error(`Could not load ${base.slice(1)}`);
+        return r.json() as Promise<PlaygroundListing & MomentsListing>;
       })
-      .then(setData)
+      .then(playground ? setData : setMoments)
       .catch((e: Error) => {
         if (!abort.signal.aborted) setError(e.message);
       });
     return () => abort.abort();
-  }, [playground, slug]);
+  }, [playground, slug, base]);
   if (typeof specs === "string" || error)
     return (
       <div className="specs specs-empty" role="alert">
@@ -181,8 +190,8 @@ export function Testing({ path }: { path: string }) {
     ? data?.examples
         .flatMap((e) => e.variants)
         .find((m) => m.name === momentName)
-    : spec?.moments.find((m) => m.name === momentName);
-  if (spec && momentName && !selected && (!playground || data))
+    : moments?.moments.find((m) => m.name === momentName);
+  if (spec && momentName && !selected && (playground ? data : moments))
     return (
       <div className="specs specs-empty">
         Example not found.{" "}
@@ -243,7 +252,7 @@ export function Testing({ path }: { path: string }) {
         </>
       ) : !spec ? (
         <p className="specs-empty">Card not found.</p>
-      ) : playground && !data ? (
+      ) : (playground ? !data : !moments) ? (
         <p className="specs-empty">Preparing examples…</p>
       ) : (
         <TestingCard
@@ -251,6 +260,7 @@ export function Testing({ path }: { path: string }) {
           spec={spec}
           playground={playground}
           data={data}
+          moments={moments}
           selected={selected}
         />
       )}
@@ -286,11 +296,13 @@ function TestingCard({
   spec,
   playground,
   data,
+  moments,
   selected,
 }: {
   spec: SpecListing;
   playground: boolean;
   data?: PlaygroundListing;
+  moments?: MomentsListing;
   selected?: MomentListing;
 }) {
   const page = useMemo(() => Math.random().toString(36).slice(2, 10), []);
@@ -300,15 +312,14 @@ function TestingCard({
   const [reviewed, setReviewed] = useState(spec.reviewed !== null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  const groups = [
-    ...new Set(spec.moments.map((m) => m.group || "Ability probes")),
-  ].sort(
+  const all = moments?.moments ?? [];
+  const groups = [...new Set(all.map((m) => m.group || "Ability probes"))].sort(
     (a, b) => Number(a === "Ability probes") - Number(b === "Ability probes"),
   );
   const [group, setGroup] = useState(
     selected ? selected.group || "Ability probes" : groups[0],
   );
-  const checkpoints = spec.moments.filter(
+  const checkpoints = all.filter(
     (m) => (m.group || "Ability probes") === group,
   );
   const [checkpoint, setCheckpoint] = useState(
@@ -417,6 +428,13 @@ function TestingCard({
               </section>
             ))}
         </>
+      ) : all.length === 0 ? (
+        // No candidate reached a live decision from both seats: say why each was dropped.
+        ["No moments.", ...(moments?.dropped ?? [])].map((m) => (
+          <p role="status" key={m}>
+            {m}
+          </p>
+        ))
       ) : (
         <>
           <div className="testing-selectors">

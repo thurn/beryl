@@ -40,14 +40,28 @@ export function request(url, init) {
     });
 }
 
-/** The spec server's listing: each card's slug and its moments. */
+/** The spec server's listing: each card's name and slug, generating no spec. */
 export async function listing(base) {
-    const response = await request(new URL("spec-api/specs", base));
+    return answer(await request(new URL("spec-api/specs", base)));
+}
+
+/** One card's moments, generating its spec. */
+export async function moments(base, slug) {
+    const response = await request(new URL(`spec-api/specs/${slug}`, base));
+    return (await answer(response)).moments;
+}
+
+/** A spec server answer's JSON, or a throw saying what it answered. */
+function answer(response) {
     if (!response.ok) {
         throw new Error(`the spec server answered HTTP ${response.status}`);
     }
     return response.json();
 }
+
+/** How many cards' moments are asked for at once when every card's are: each generates a
+ * spec on the server, so not every card at once. */
+const AT_ONCE = 8;
 
 /** The specs for `slugs` (every one if none), each with its moments, the one `moment` names
  * if given. Throws naming a slug or moment with no spec. */
@@ -55,12 +69,22 @@ export async function chosen(base, slugs, moment) {
     const all = await listing(base);
     const unknown = slugs.filter((s) => !all.some((x) => x.slug === s));
     if (unknown.length) throw new Error(`no spec for ${unknown.join(", ")}`);
-    const specs = all
-        .filter((s) => slugs.length === 0 || slugs.includes(s.slug))
-        .map((s) => ({
-            ...s,
-            moments: s.moments.filter((m) => !moment || m.name === moment),
-        }));
+    const picked = all.filter(
+        (s) => slugs.length === 0 || slugs.includes(s.slug),
+    );
+    const specs = [];
+    for (let i = 0; i < picked.length; i += AT_ONCE) {
+        const batch = picked.slice(i, i + AT_ONCE);
+        const listed = await Promise.all(
+            batch.map((s) => moments(base, s.slug)),
+        );
+        batch.forEach((s, n) =>
+            specs.push({
+                ...s,
+                moments: listed[n].filter((m) => !moment || m.name === moment),
+            }),
+        );
+    }
     if (moment && specs.every((s) => s.moments.length === 0)) {
         throw new Error(`no moment ${moment}`);
     }

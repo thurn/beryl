@@ -35,6 +35,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import IO
 
 from . import paths, runlog, selection, shots, system, warm
 
@@ -345,6 +346,15 @@ def measure_here() -> int:
 def measure(commit: str) -> int:
     """Measures `commit` in a detached worktree of its own, removed after, by that commit's own
     `by coverage --here`."""
+    return in_tree(
+        commit, [sys.executable, "-m", "beryl_tools.cli", "coverage", "--here"]
+    )
+
+
+def in_tree(commit: str, command: list[str], out: IO[str] | None = None) -> int:
+    """Runs `command` in a detached worktree of `commit`, removed after, with that commit's own
+    tools on the Python path (`by` is `python -m beryl_tools.cli`), its output to `out` (this
+    process's if None)."""
     with system.file_lock(folder() / ".lock"):
         if commit.startswith("origin/"):
             subprocess.run(
@@ -360,9 +370,11 @@ def measure(commit: str) -> int:
             warm.ensure(tree)
             env = {**os.environ, "PYTHONPATH": str(tree / "tools" / "src")}
             return subprocess.run(
-                [sys.executable, "-m", "beryl_tools.cli", "coverage", "--here"],
+                command,
                 cwd=tree,
                 env=env,
+                stdout=out,
+                stderr=None if out is None else subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
                 check=False,
             ).returncode

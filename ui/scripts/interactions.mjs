@@ -354,7 +354,6 @@ await check(
                     {
                         card: "Aang’s Iceberg",
                         slug: "aangs-iceberg",
-                        moments: [],
                         reviewed: null,
                         reports,
                         momentReports: {

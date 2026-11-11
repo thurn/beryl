@@ -11,9 +11,7 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 
 fn variant(card: &str, fragment: &str) -> &'static Variant {
-    super::super::specs()
-        .iter()
-        .find(|s| s.card == card)
+    super::super::spec(card)
         .unwrap()
         .playground()
         .examples
