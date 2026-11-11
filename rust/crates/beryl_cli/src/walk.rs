@@ -66,7 +66,8 @@ impl Walk {
         }
         let human = Seat::try_new(file.human).ok_or("no such human seat")?;
         let t = game::mirror();
-        let s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human));
+        let s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human))
+            .map_err(|e| e.to_string())?;
         // Each turn's board, as it began, is the session's to check.
         let log = file
             .log

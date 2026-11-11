@@ -4,6 +4,7 @@
 use beryl_card::TurnStep;
 
 use crate::ids::Seat;
+use crate::layout::PerSeat;
 use crate::turn::Turn;
 
 /// Where players get priority as a decision.
@@ -179,7 +180,7 @@ pub enum Payment {
 pub struct Profile {
     pub stops: Stops,
     /// Each seat's steps under the smart stops, by seat index.
-    pub step_stops: [StepStops; 2],
+    pub step_stops: PerSeat<StepStops>,
     pub limits: Limits,
     pub breakpoint: Option<Breakpoint>,
     pub payment: Payment,
@@ -230,7 +231,7 @@ pub struct Profile {
     /// which then spend no effort on them, and a human not in full control. Full control and
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
     /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
-    pub hides_pointless: [bool; 2],
+    pub hides_pointless: PerSeat<bool>,
     /// The player, if any, offered activations that would do nothing without their stopping
     /// for them: a human under the smart stops, who may still tap Currency Converter with
     /// nothing exiled, as the rules allow ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
@@ -246,27 +247,27 @@ impl Profile {
     /// Everything the rules offer, less what §7.2 settles silently.
     pub const EXACT: Profile = Profile {
         stops: Stops::Exact,
-        step_stops: [StepStops::SMART; 2],
+        step_stops: [StepStops::SMART; Seat::BOTH.len()],
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
         full_control: None,
         asks_targets: None,
         taps_mana: None,
-        hides_pointless: [false; 2],
+        hides_pointless: [false; Seat::BOTH.len()],
         quiet_pointless: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
         stops: Stops::Smart,
-        step_stops: [StepStops::SMART; 2],
+        step_stops: [StepStops::SMART; Seat::BOTH.len()],
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
         full_control: None,
         asks_targets: None,
         taps_mana: None,
-        hides_pointless: [true; 2],
+        hides_pointless: [true; Seat::BOTH.len()],
         quiet_pointless: None,
     };
 

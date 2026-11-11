@@ -694,7 +694,7 @@ impl Game {
     /// A game of `deck` mirrors, with empty hands.
     pub fn of(deck: &Decklist, profile: Profile) -> Game {
         let t = GameTable::new(&CAST_CARDS, [deck, deck]).unwrap();
-        let mut s = State::new(&t, 5, profile);
+        let mut s = State::new(&t, 5, profile).unwrap();
         begin(&t, &mut s);
         let me = s.turn().starting_player();
         for p in Seat::BOTH {

@@ -1,6 +1,7 @@
-//! A game's values in another [`Layout`] (architecture §4.1): the same objects in the same
-//! slots by number, the same queues in the same order. Widening a [`State<Small>`] into
-//! [`crate::Large`] is lossless; values a `Small` game produced fit back into `Small`.
+//! A game's values in another [`Layout`] (architecture §4.1): the same objects at the same
+//! places ([`SlotId::to`]), the same queues in the same order. Widening a [`State<Small>`]
+//! into [`crate::Large`] is lossless; values a `Small` game produced fit back into `Small`.
+//! Whether a whole game fits another layout is [`State::try_relayout`]'s to say.
 
 use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
@@ -9,7 +10,7 @@ use crate::ids::SlotId;
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
     CastPermission, Derived, FloatingEffect, Object, ObjectRef, Pending, PendingTrigger, Player,
-    Resolving, StackEntry, State, Target, TriggerInfo, Zones,
+    Resolving, SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -17,22 +18,27 @@ pub trait Relayout {
     /// The value's type in layout `M`.
     type In<M: Layout>;
 
-    /// This value in layout `M`: every slot by its number, every queue in its order.
+    /// This value in layout `M`: every slot by its place, every queue in its order.
     ///
     /// # Panics
     ///
     /// If `M` cannot hold it: a slot or index past `M`'s, or a queue past a capacity of `M`.
-    /// A value that came from an `M` game always fits.
+    /// A value that came from an `M` game always fits, and so does a game
+    /// [`State::fits`] accepts.
     fn relayout<M: Layout>(&self) -> Self::In<M>;
 }
 
-/// `s` as the slot of the same number.
+/// `s` as the slot at the same place.
 fn slot<S: SlotId, T: SlotId>(s: S) -> T {
-    T::from_index(s.index())
+    s.to().expect("a slot past the layout's")
 }
 
-/// `b` over the slots of the same numbers.
+/// `b` over the slots at the same places.
 pub(crate) fn bits<S: SlotId, T: SlotId>(b: Bitboard<S>) -> Bitboard<T> {
+    if !S::deals_as::<T>() {
+        return b.iter().map(slot).collect();
+    }
+    // The same numbers, word for word.
     let mut out = Bitboard::<T>::EMPTY;
     let (from, to) = (b.0.as_ref(), out.0.as_mut());
     let n = from.len().min(to.len());
@@ -75,6 +81,24 @@ fn table<T, U: Item, Q: Table<U>>(
         }
     }
     q
+}
+
+/// The objects of `from` in the slots of `M`, each at the place it had. A slot of `M` whose
+/// place `L` lacks is empty; an object at a place `M` lacks does not fit.
+fn objects<L: Layout, M: Layout>(from: &L::Table<Object<L>, SLOTS>) -> M::Table<Object<M>, SLOTS> {
+    assert!(
+        L::Slot::all().all(|s| s.to::<M::Slot>().is_some() || from[s.index()] == Object::EMPTY),
+        "an object past the layout's slots"
+    );
+    Table::from_fn(|i| {
+        let from_slot = M::Slot::try_from_index(i).and_then(SlotId::to::<L::Slot>);
+        from_slot.map_or(Object::EMPTY, |s| from[s.index()].relayout())
+    })
+}
+
+/// Each player's value of `from`, converted by `f`.
+fn per_player<T: Item, U: Item, P: Table<T>, Q: Table<U>>(from: &P, f: impl Fn(&T) -> U) -> Q {
+    Q::from_fn(|player| f(&from[player]))
 }
 
 impl<L: Layout> Relayout for ObjectRef<L> {
@@ -225,7 +249,7 @@ impl<L: Layout> Relayout for Resolving<L> {
         Resolving {
             record: queue(self.record.as_slice(), |&i| index::<M>(i.into())),
             question: self.question.relayout(),
-            knowledge: self.knowledge.map(bits),
+            knowledge: per_player(&self.knowledge, |&k| bits(k)),
         }
     }
 }
@@ -590,16 +614,10 @@ impl<L: Layout> Relayout for Zones<L> {
 
     fn relayout<M: Layout>(&self) -> Zones<M> {
         Zones {
-            members: self.members.map(|owned| owned.map(bits)),
+            members: per_player(&self.members, |owned| owned.map(bits)),
             stack: bits(self.stack),
-            library: self
-                .library
-                .each_ref()
-                .map(|q| queue(q.as_slice(), |&s| slot(s))),
-            graveyard: self
-                .graveyard
-                .each_ref()
-                .map(|q| queue(q.as_slice(), |&s| slot(s))),
+            library: per_player(&self.library, |q| queue(q.as_slice(), |&s| slot(s))),
+            graveyard: per_player(&self.graveyard, |q| queue(q.as_slice(), |&s| slot(s))),
             next_timestamp: self.next_timestamp,
         }
     }
@@ -608,7 +626,7 @@ impl<L: Layout> Relayout for Zones<L> {
 impl<L: Layout> Relayout for State<L> {
     type In<M: Layout> = State<M>;
 
-    /// The game in layout `M`, losslessly: every slot keeps its number and object, every
+    /// The game in layout `M`, losslessly: every slot keeps its place and object, every
     /// queue its order, every player their knowledge, and the random streams their place, so
     /// the game goes on exactly as it would have, past where `L` runs out.
     fn relayout<M: Layout>(&self) -> State<M> {
@@ -635,7 +653,7 @@ impl<L: Layout> Relayout for State<L> {
             outcome,
         } = self;
         State {
-            objects: table(objects.as_slice(), &Object::EMPTY, None, Object::relayout),
+            objects: self::objects::<L, M>(objects),
             battlefield: queue(battlefield.as_slice(), |&s| slot(s)),
             // Entries past the battlefield's are stale; copied too, so a widened game equals one
             // that was wide all along.
@@ -647,7 +665,7 @@ impl<L: Layout> Relayout for State<L> {
             ),
             listening: *listening,
             zones: zones.relayout(),
-            players: players.each_ref().map(Player::relayout),
+            players: per_player(players, Player::relayout),
             turn: *turn,
             stack: queue(stack.as_slice(), StackEntry::relayout),
             triggers: queue(triggers.as_slice(), PendingTrigger::relayout),
@@ -656,7 +674,7 @@ impl<L: Layout> Relayout for State<L> {
             permissions: queue(permissions.as_slice(), CastPermission::relayout),
             entered_x: queue(entered_x.as_slice(), |&(r, x)| (r.relayout(), x)),
             pending: pending.relayout(),
-            knowledge: knowledge.map(bits),
+            knowledge: per_player(knowledge, |&k| bits(k)),
             rng: *rng,
             profile: *profile,
             budgets: *budgets,

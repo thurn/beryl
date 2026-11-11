@@ -11,7 +11,7 @@ use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::event::{Event, Recipient};
 use crate::ids::{CardIx, Seat, SlotId};
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, Table};
 use crate::object::{Counters, ObjectFlags, ObjectRef};
 use crate::query::Copiable;
 use crate::state::State;
@@ -228,7 +228,7 @@ impl<L: Layout> State<L> {
         let o = self.object_mut(slot);
         o.face = FaceIx::FRONT;
         o.timestamp = timestamp;
-        for k in &mut self.knowledge {
+        for k in self.knowledge.as_mut_slice() {
             k.insert(slot);
         }
         self.flags.derived_dirty = true;

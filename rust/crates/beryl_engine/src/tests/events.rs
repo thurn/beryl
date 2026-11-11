@@ -512,7 +512,7 @@ pub(super) fn game() -> (GameTable, State, Seat) {
 /// (passing priority never plays it) and tests can stop there.
 fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
-    let mut s = State::new(&t, seed, Profile::EXACT);
+    let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     for player in Seat::BOTH {
         // Any of the copies does.
@@ -1468,7 +1468,7 @@ fn random_games_with_triggers_never_read_derived_dirty() {
     ];
     let t = GameTable::new(&CARDS, [LANDS, LANDS]).unwrap();
     for seed in 0..20 {
-        let mut s = State::new(&t, seed, Profile::EXACT);
+        let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
         let mut rng = crate::rng::SplitMix64::new(seed);
         let outcome = super::play(
             &t,
@@ -1519,7 +1519,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         ],
     )
     .unwrap();
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let mut x = Scratch::new();
     let cathar = find(&s, &t, Seat::P0, "Test Cathar");
@@ -1656,7 +1656,7 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
             ],
         )
         .unwrap();
-        let mut s = State::new(&t, 1, Profile::EXACT);
+        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
         s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
         let mut scratch = Scratch::new();
         let thief = find(&s, &t, Seat::P0, "Test Thief");
@@ -1745,7 +1745,7 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
         ],
     )
     .unwrap();
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let prodigy = find(&s, &t, Seat::P0, "Test Prodigy");
     s.board().place(prodigy, Zone::Battlefield).unwrap();

@@ -119,11 +119,9 @@ impl<S: SlotId> Bitboard<S> {
 }
 
 impl From<Bitboard<Slot>> for Bitboard<crate::ids::LargeSlot> {
-    /// The same slots, as [`crate::ids::LargeSlot`]s.
+    /// The slots at the same places ([`SlotId::to`]), as [`crate::ids::LargeSlot`]s.
     fn from(b: Bitboard<Slot>) -> Self {
-        let mut wide = Self::EMPTY;
-        wide.0[..4].copy_from_slice(&b.0);
-        wide
+        crate::relayout::bits(b)
     }
 }
 
@@ -216,10 +214,12 @@ mod tests {
 
     #[test]
     fn the_token_pool_is_the_token_slots() {
-        let slots: Bitboard = crate::state::token_slots::<Slot>().collect();
+        let slots: Bitboard = Slot::pool().collect();
         assert_eq!(Small::TOKEN_POOL, slots);
-        let slots: Bitboard<LargeSlot> = crate::state::token_slots::<LargeSlot>().collect();
+        assert_eq!(slots.count(), 135);
+        let slots: Bitboard<LargeSlot> = LargeSlot::pool().collect();
         assert_eq!(Large::TOKEN_POOL, slots);
+        assert_eq!(slots.count(), 512);
     }
 
     #[test]
@@ -270,9 +270,10 @@ mod tests {
     }
 
     #[test]
-    fn widening_keeps_the_slots() {
-        let wide = Bitboard::<LargeSlot>::from(set(&[0, 64, 254]));
+    fn widening_keeps_each_slot_at_its_place() {
+        // The first and last card of each deck, and of the pool.
+        let wide = Bitboard::<LargeSlot>::from(set(&[0, 59, 60, 119, 120, 254]));
         let indices: Vec<usize> = wide.iter().map(LargeSlot::index).collect();
-        assert_eq!(indices, vec![0, 64, 254]);
+        assert_eq!(indices, vec![0, 59, 256, 315, 512, 646]);
     }
 }

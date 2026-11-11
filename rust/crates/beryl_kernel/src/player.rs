@@ -7,7 +7,7 @@ use beryl_card::ManaColor;
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::state::State;
 
@@ -233,7 +233,7 @@ impl<L: Layout> State<L> {
     /// ends ... any unspent mana left in a player's mana pool empties."
     #[inline]
     pub fn empty_mana_pools(&mut self) {
-        for p in &mut self.players {
+        for p in self.players.as_mut_slice() {
             p.mana = ManaPool::default();
         }
     }

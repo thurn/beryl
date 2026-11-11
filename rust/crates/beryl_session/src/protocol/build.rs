@@ -59,11 +59,9 @@ pub fn player_view<L: Layout>(
     let mut player_state = |p: Seat| {
         let state = player_state(t, obs, p);
         for slots in [&state.library, &state.graveyard] {
-            objects.extend(
-                slots
-                    .iter()
-                    .map(|&slot| object_view(t, obs, L::Slot::from_index(usize::from(slot)))),
-            );
+            objects.extend(slots.iter().map(|&slot| {
+                object_view(t, obs, L::Slot::from_num(slot).expect("a slot of the game"))
+            }));
         }
         // Unordered zones: their objects say where they are.
         for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {

@@ -125,7 +125,7 @@ impl Chance {
 
 /// Whether no player knows the card in `slot`.
 fn unknown<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    !s.knowledge[0].contains(slot) && !s.knowledge[1].contains(slot)
+    !s.known_to_someone().contains(slot)
 }
 
 /// Settles the identity of the card in `slot` as a player is about to learn it, at a
@@ -192,7 +192,7 @@ fn settle_but<L: Layout>(
 /// revealed, trading identities among the cards no one knew ([`settle`]). They stay unknown
 /// to every player in `s`.
 pub fn adopt_unknown<L: Layout>(s: &mut State<L>, run: &State<L>) {
-    let known = s.knowledge[0] | s.knowledge[1];
+    let known = s.known_to_someone();
     for p in Seat::BOTH {
         for slot in (s.zone(ZoneKey::Of(p, Zone::Library)) & !known).iter() {
             s.object_mut(slot).card = run.object(slot).card;

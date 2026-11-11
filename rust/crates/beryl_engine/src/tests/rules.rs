@@ -40,7 +40,7 @@ fn two_legends(s: &mut State) -> (Seat, Slot, Slot) {
 #[test]
 fn the_legend_rule_asks_which_to_keep_when_the_two_differ() {
     let t = table([LEGENDS, LEGENDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let (p, a, b) = two_legends(&mut s);
     s.board().set_tapped(b, true);
@@ -64,7 +64,7 @@ fn the_legend_rule_asks_which_to_keep_when_the_two_differ() {
 #[test]
 fn the_legend_rule_keeps_one_of_two_interchangeable_legends_silently() {
     let t = table([LEGENDS, LEGENDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let (p, a, b) = two_legends(&mut s);
     assert_eq!(decide(&t, &mut s).kind, DecisionKind::Priority);
@@ -76,7 +76,7 @@ fn the_legend_rule_keeps_one_of_two_interchangeable_legends_silently() {
 #[test]
 fn the_legend_rule_tells_apart_legends_with_different_owners() {
     let t = table([LEGENDS, LEGENDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     let mine = s.library(p)[0];
@@ -107,7 +107,7 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
 #[test]
 fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 3, Profile::EXACT);
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     let q = p.opponent();
@@ -148,7 +148,7 @@ fn a_player_at_zero_life_loses_and_two_at_once_draw() {
         ([20, -3], Outcome::Win(Seat::P0)),
         ([0, 0], Outcome::Draw),
     ] {
-        let mut s = State::new(&t, 1, Profile::EXACT);
+        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
         begin(&t, &mut s);
         s.board().set_life(Seat::P0, lives[0]);
         s.board().set_life(Seat::P1, lives[1]);
@@ -167,7 +167,7 @@ fn card(s: &State, slot: Slot) -> CardIx {
 #[test]
 fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 9, Profile::EXACT);
+    let mut s = State::new(&t, 9, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     // Any order: every card is checked.
@@ -211,7 +211,7 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
 #[test]
 fn filters_select_by_type_and_owner() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 9, Profile::EXACT);
+    let mut s = State::new(&t, 9, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
@@ -235,7 +235,7 @@ fn filters_select_by_type_and_owner() {
 #[test]
 fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
     let t = table([&[(40, "Test Dual")], LANDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     let source = s.object_ref(Slot::new(0));
     let mut sink = Sink::off();
     for (ability, color) in DUAL

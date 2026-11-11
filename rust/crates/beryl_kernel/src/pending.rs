@@ -80,7 +80,7 @@ pub struct Resolving<L: Layout = Small> {
     /// What each player knew as the resolution began. Every run of the body starts from it,
     /// not from what earlier runs showed, so a run asks its questions with the candidates the
     /// first run asked them with and each recorded index names the answer it named then.
-    pub knowledge: [Bitboard<L::Slot>; 2],
+    pub knowledge: L::PerPlayer<Bitboard<L::Slot>>,
 }
 
 impl Copy for Resolving<Small> {}
@@ -160,8 +160,8 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn pause_resolution(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
         let knowledge = match &self.pending {
-            Pending::Resolving(r) => r.knowledge,
-            _ => self.knowledge,
+            Pending::Resolving(r) => r.knowledge.clone(),
+            _ => self.knowledge.clone(),
         };
         self.pending = Pending::Resolving(Resolving {
             record,

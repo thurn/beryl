@@ -29,7 +29,7 @@ fn greedy_beats_random() {
         if greedy == Seat::P1 {
             agents.swap(0, 1);
         }
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |_, _| {});
         if outcome == Outcome::Win(greedy) {
             wins += 1;
@@ -69,7 +69,7 @@ fn inline_answers_replay_to_the_same_game() {
     let policy = RolloutPolicy::new(&t);
     let mut inlined = 0;
     for seed in 0..8 {
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let mut x = Scratch::new();
         let mut asked = 0;
         let mut rec = Recording {
@@ -93,7 +93,7 @@ fn inline_answers_replay_to_the_same_game() {
         let (final_hash, answers) = (fingerprint(&s), rec.answers);
         inlined += answers.len() - asked;
 
-        let mut r = State::new(&t, seed, Profile::SMART);
+        let mut r = State::new(&t, seed, Profile::SMART).unwrap();
         let mut x = Scratch::new();
         let mut answers = answers.into_iter();
         let replayed = loop {
@@ -126,7 +126,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         (1, JACE_THE_MIND_SCULPTOR),
     ];
     let t = GameTable::new(&CARDS, [&deck, &[(1, PLAINS)]]).unwrap();
-    let mut s = State::new(&t, 0, Profile::SMART);
+    let mut s = State::new(&t, 0, Profile::SMART).unwrap();
     s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
     let named = |s: &State, name: &str| {
         s.library(Seat::P0)

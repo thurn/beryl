@@ -276,9 +276,10 @@ pub fn play(
     mut answered: impl FnMut(GameDecision, &Line, &str) -> Result<(), String>,
 ) -> Result<Played, Stop> {
     let mut players = seat(t, g, build)?;
-    let mut s = g
-        .start
-        .unwrap_or_else(|| State::new(t, g.seed, Profile::SMART));
+    let mut s = match g.start {
+        Some(start) => start,
+        None => State::new(t, g.seed, Profile::SMART).map_err(|e| e.to_string())?,
+    };
     let mut x = Scratch::recording();
     let mut transcript = Transcript::new([
         g.entrants[0].label().as_str(),

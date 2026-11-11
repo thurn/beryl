@@ -40,7 +40,7 @@ enum Logged {
 /// A random game with inline answers, under `profile`.
 fn inline_game(seed: u64, profile: Profile) -> (Vec<Logged>, Outcome) {
     let t = GameTable::new(&CAST_CARDS, [EVERYTHING, EVERYTHING]).unwrap();
-    let mut s = State::new(&t, seed, profile);
+    let mut s = State::new(&t, seed, profile).unwrap();
     let mut x = Scratch::new();
     let mut answers = Inline {
         rng: SplitMix64::new(seed ^ 0xA5A5),
@@ -74,7 +74,7 @@ fn inline_game(seed: u64, profile: Profile) -> (Vec<Logged>, Outcome) {
 /// its decisions. Returns how many questions paused.
 fn replay(seed: u64, profile: Profile, logged: &[Logged], outcome: Outcome) -> usize {
     let t = GameTable::new(&CAST_CARDS, [EVERYTHING, EVERYTHING]).unwrap();
-    let mut s = State::new(&t, seed, profile);
+    let mut s = State::new(&t, seed, profile).unwrap();
     let mut x = Scratch::new();
     let mut log = logged.iter();
     let mut paused = 0;

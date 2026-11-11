@@ -102,7 +102,7 @@ pub fn play(
     mut transcript: Option<&mut Transcript>,
 ) -> Result<Played, String> {
     let mut agents = agents(t, names, seed, budget)?;
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     // A transcript tells what happened between decisions, from the engine's events.
     let mut x = if transcript.is_some() {
         Scratch::recording()

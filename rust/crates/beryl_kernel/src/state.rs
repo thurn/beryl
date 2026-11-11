@@ -26,23 +26,8 @@ use crate::rng::Rng;
 
 /// Object slots: deck cards, tokens and spell copies.
 pub const SLOTS: usize = Slot::COUNT;
-/// Slots reserved for each player's deck: player `p`'s cards sit in
-/// `p * DECK_SLOTS .. p * DECK_SLOTS + deck size`.
-pub const DECK_SLOTS: usize = 60;
-/// The first slot of the shared pool for tokens and spell copies, after both decks'. Of the
-/// 255 slots, the decks reserve 120 and the pool has the other 135.
-pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
-/// The slot of the `i`th card of `player`'s deck.
-pub fn deck_slot<S: SlotId>(player: Seat, i: usize) -> S {
-    S::from_index(player.index() * DECK_SLOTS + i)
-}
-
-/// The slots of the shared pool for tokens and spell copies ([`Layout::TOKEN_POOL`]).
-pub fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
-    (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
-}
 
 /// Names a zone, or a player's part of one, for [`State::zone`]
 /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has their
@@ -76,12 +61,12 @@ pub enum ZoneKey {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone as usize` for the owned zones.
-    pub(crate) members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
+    pub(crate) members: L::PerPlayer<[Bitboard<L::Slot>; Zone::OWNED]>,
     pub(crate) stack: Bitboard<L::Slot>,
     /// Bottom first: the top card is the last.
-    pub(crate) library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    pub(crate) library: L::PerPlayer<L::Deck<L::Slot>>,
     /// Bottom first: the top card is the last.
-    pub(crate) graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
+    pub(crate) graveyard: L::PerPlayer<L::Deck<L::Slot>>,
     /// The next battlefield timestamp.
     pub(crate) next_timestamp: u16,
 }
@@ -123,7 +108,7 @@ pub struct State<L: Layout = Small> {
     /// current while they are.
     pub(crate) listening: u16,
     pub(crate) zones: Zones<L>,
-    pub(crate) players: [Player<L>; 2],
+    pub(crate) players: L::PerPlayer<Player<L>>,
     pub(crate) turn: Turn,
     /// The stack's entries, bottom first: [`State::put_on_stack`] and its kin write it.
     pub(crate) stack: L::Queue<StackEntry<L>, 64>,
@@ -147,7 +132,7 @@ pub struct State<L: Layout = Small> {
     /// The open question of a machine step: [`State::ask`] and its kin write it.
     pub(crate) pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
-    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
+    pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
     pub(crate) rng: Rng,
     pub(crate) profile: Profile,
     pub(crate) budgets: Budgets,
@@ -251,14 +236,13 @@ impl<L: Layout> State<L> {
     /// instruction to exile them in the first ability." Kept while that object has left its
     /// zone, until a new object arrives in the slot (CR 400.7).
     pub fn exiled_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
-        (self.zone(ZoneKey::Of(Seat::P0, Zone::Exile))
-            | self.zone(ZoneKey::Of(Seat::P1, Zone::Exile)))
-        .iter()
-        .filter(|&x| {
-            let o = self.object(x);
-            o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
-        })
-        .collect()
+        self.in_zone(Zone::Exile)
+            .iter()
+            .filter(|&x| {
+                let o = self.object(x);
+                o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
+            })
+            .collect()
     }
 
     /// A player's library as slots, bottom first.
@@ -297,8 +281,8 @@ impl<L: Layout> State<L> {
     /// The slots whose identity each player knows, by seat (architecture §13): what a paused
     /// resolution keeps to give back ([`State::restore_knowledge`]).
     #[inline]
-    pub fn knowledge(&self) -> [Bitboard<L::Slot>; 2] {
-        self.knowledge
+    pub fn knowledge(&self) -> L::PerPlayer<Bitboard<L::Slot>> {
+        self.knowledge.clone()
     }
 
     /// Whether a change since the layer results were last stored may have changed one, so

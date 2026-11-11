@@ -46,8 +46,8 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     let name = "Counterspell counters a spell into its owner's graveyard";
     // The second player casts Mana Crypt for nothing.
     let [first, second] = script(names::COUNTERSPELL, name, 1);
-    assert_eq!(first, "fly #60 (Mana Crypt) hand>stack cast <- opponent\n");
-    assert_eq!(second, "fly #60 (Mana Crypt) hand>stack cast <- you\n");
+    assert_eq!(first, "fly #256 (Mana Crypt) hand>stack cast <- opponent\n");
+    assert_eq!(second, "fly #256 (Mana Crypt) hand>stack cast <- you\n");
     // The first answers. Their Islands tap together, each sending its mana into the spell; the
     // spell is read by the player who did not cast it; the countered spell and the
     // counterspell leave in one beat.
@@ -55,29 +55,29 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     assert_eq!(
         first,
         text(&[
-            "fly #1 (Counterspell) hand>stack cast at #60 <- you",
-            "& +point hostile-target #1 > #60",
+            "fly #1 (Counterspell) hand>stack cast at #256 <- you",
+            "& +point hostile-target #1 > #256",
             "tap #0 (Island) <- you",
             "& streak #0 > #1 blue 1 <- you",
             "& tap #2 (Island) <- you",
             "& streak #2 > #1 blue 1 <- you",
-            "-point hostile-target #1 > #60",
-            "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
+            "-point hostile-target #1 > #256",
+            "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
     );
     assert_eq!(
         second,
         text(&[
-            "fly #1 (Counterspell) hand>stack cast at #60 <- opponent",
-            "& +point hostile-target #1 > #60",
+            "fly #1 (Counterspell) hand>stack cast at #256 <- opponent",
+            "& +point hostile-target #1 > #256",
             "tap #0 (Island) <- opponent",
             "& streak #0 > #1 blue 1 <- opponent",
             "& tap #2 (Island) <- opponent",
             "& streak #2 > #1 blue 1 <- opponent",
             "dwell #1",
-            "-point hostile-target #1 > #60",
-            "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
+            "-point hostile-target #1 > #256",
+            "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
     );
@@ -97,7 +97,7 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
         (
             7,
             vec![
-                "appear #120 (Human Token) nowhere>battlefield created <- a1",
+                "appear #512 (Human Token) nowhere>battlefield created <- a1",
                 "-point source a1 > #0",
                 "vanish a1 stack>gone resolve",
                 "count #0 (Adeline, Resplendent Cathar) pt 3/4",
@@ -141,7 +141,7 @@ fn combat_damage_strikes_and_counts_life() {
             "set turn 1 you combatDamage",
             "strike #0 > opponent 3",
             "& count opponent life 17",
-            "& strike #120 > opponent 1",
+            "& strike #512 > opponent 1",
             "& count opponent life 16",
             "set turn 1 you endOfCombat",
         ])
@@ -153,7 +153,7 @@ fn combat_damage_strikes_and_counts_life() {
             "set turn 1 opponent combatDamage",
             "strike #0 > you 3",
             "& count you life 17",
-            "& strike #120 > you 1",
+            "& strike #512 > you 1",
             "& count you life 16",
             "set turn 1 opponent endOfCombat",
         ])
@@ -212,13 +212,13 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
     assert_eq!(
         first,
         text(&[
-            "emerge a1 (The Wandering Emperor, activated) you from #1 at #61 <- you",
+            "emerge a1 (The Wandering Emperor, activated) you from #1 at #257 <- you",
             "& +point source a1 > #1",
-            "& +point hostile-target a1 > #61",
+            "& +point hostile-target a1 > #257",
             "count #1 (The Wandering Emperor) loyalty 1 <- you",
-            "-point attack #61 > you",
-            "& -point hostile-target a1 > #61",
-            "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "-point attack #257 > you",
+            "& -point hostile-target a1 > #257",
+            "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
@@ -240,14 +240,14 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
     assert_eq!(
         second,
         text(&[
-            "emerge a1 (The Wandering Emperor, activated) opponent from #1 at #61 <- opponent",
+            "emerge a1 (The Wandering Emperor, activated) opponent from #1 at #257 <- opponent",
             "& +point source a1 > #1",
-            "& +point hostile-target a1 > #61",
+            "& +point hostile-target a1 > #257",
             "count #1 (The Wandering Emperor) loyalty 1 <- opponent",
             "dwell a1",
-            "-point attack #61 > opponent",
-            "& -point hostile-target a1 > #61",
-            "vanish #61 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "-point attack #257 > opponent",
+            "& -point hostile-target a1 > #257",
+            "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
@@ -297,8 +297,8 @@ fn a_stolen_permanent_flies_to_its_new_side() {
     assert_eq!(
         first,
         text(&[
-            "-point hostile-target a1 > #60",
-            "fly #60 (Mana Crypt) battlefield>battlefield you effect <- a1",
+            "-point hostile-target a1 > #256",
+            "fly #256 (Mana Crypt) battlefield>battlefield you effect <- a1",
             "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
@@ -306,8 +306,8 @@ fn a_stolen_permanent_flies_to_its_new_side() {
     assert_eq!(
         second,
         text(&[
-            "-point hostile-target a1 > #60",
-            "fly #60 (Mana Crypt) battlefield>battlefield opponent effect <- a1",
+            "-point hostile-target a1 > #256",
+            "fly #256 (Mana Crypt) battlefield>battlefield opponent effect <- a1",
             "-point source a1 > #0",
             "vanish a1 stack>gone resolve",
         ])
@@ -325,9 +325,9 @@ fn a_sweepers_creatures_vanish_together() {
     );
     let lines = [
         "vanish #4 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #0",
-        "& vanish #120 battlefield>gone destroy <- #0",
-        "& vanish #62 (Elite Spellbinder) battlefield>graveyard destroy <- #0",
-        "& vanish #61 (Snapcaster Mage) battlefield>graveyard destroy <- #0",
+        "& vanish #512 battlefield>gone destroy <- #0",
+        "& vanish #258 (Elite Spellbinder) battlefield>graveyard destroy <- #0",
+        "& vanish #257 (Snapcaster Mage) battlefield>graveyard destroy <- #0",
         "vanish #0 (Damn) stack>graveyard resolve",
     ];
     assert_eq!(first, text(&lines));
@@ -345,12 +345,12 @@ fn a_permanent_put_into_a_library_takes_its_place() {
     assert_eq!(
         first,
         text(&[
-            "fly #0 (Oust) hand>stack cast at #60 <- you",
-            "& +point hostile-target #0 > #60",
+            "fly #0 (Oust) hand>stack cast at #256 <- you",
+            "& +point hostile-target #0 > #256",
             "tap #2 (Plains) <- you",
             "& streak #2 > #0 white 1 <- you",
-            "-point hostile-target #0 > #60",
-            "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
+            "-point hostile-target #0 > #256",
+            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count opponent life 23 <- #0",
             "vanish #0 (Oust) stack>graveyard resolve",
         ])
@@ -358,13 +358,13 @@ fn a_permanent_put_into_a_library_takes_its_place() {
     assert_eq!(
         second,
         text(&[
-            "fly #0 (Oust) hand>stack cast at #60 <- opponent",
-            "& +point hostile-target #0 > #60",
+            "fly #0 (Oust) hand>stack cast at #256 <- opponent",
+            "& +point hostile-target #0 > #256",
             "tap #2 (Plains) <- opponent",
             "& streak #2 > #0 white 1 <- opponent",
             "dwell #0",
-            "-point hostile-target #0 > #60",
-            "vanish #60 (Elite Spellbinder) battlefield>library @1 effect <- #0",
+            "-point hostile-target #0 > #256",
+            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count you life 23 <- #0",
             "vanish #0 (Oust) stack>graveyard resolve",
         ])
@@ -412,7 +412,7 @@ fn a_face_down_permanent_flips() {
             "tap #1 (Island) <- you",
             "& tap #3 (Island) <- you",
             "set turn 2 opponent draw",
-            "fly #60 library>hand draw",
+            "fly #256 library>hand draw",
             "set turn 2 opponent precombatMain",
             "flip #2 (Snapcaster Mage)",
         ])
@@ -423,7 +423,7 @@ fn a_face_down_permanent_flips() {
             "tap #1 (Island) <- opponent",
             "& tap #3 (Island) <- opponent",
             "set turn 2 you draw",
-            "fly #60 (Plains) library>hand draw",
+            "fly #256 (Plains) library>hand draw",
             "set turn 2 you precombatMain",
             "flip #2 (Snapcaster Mage)",
         ])
@@ -458,12 +458,12 @@ fn a_shuffle_sets_the_library() {
             .collect()
     };
     let wheel = [
-        "fly #60 hand>library top effect <- #1",
-        "& fly #61 hand>library top effect <- #1",
+        "fly #256 hand>library top effect <- #1",
+        "& fly #257 hand>library top effect <- #1",
         "& fly #2 hand>library top effect <- #1",
     ]
     .map(str::to_owned);
-    let (own, theirs) = ([3, 11, 8, 4, 10, 7, 2], [67, 62, 65, 64, 60, 63, 61]);
+    let (own, theirs) = ([3, 11, 8, 4, 10, 7, 2], [263, 258, 261, 260, 256, 259, 257]);
     let mut expected = cast("you");
     expected.extend(wheel.clone());
     expected.push("set you library 8 <- #1".to_owned());

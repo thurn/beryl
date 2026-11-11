@@ -224,7 +224,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event<Large>> {
     });
     let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
     let profile = with_stops(Profile::SMART, begin.stops, begin.human);
-    let mut s = State::new(&t, begin.seed, profile);
+    let mut s = State::new(&t, begin.seed, profile).unwrap();
     let mut x = Scratch::recording();
     let mut choices = log.iter().filter_map(|e| match e {
         Entry::Choice(c) | Entry::Auto(c) => Some(Choice(c.index)),

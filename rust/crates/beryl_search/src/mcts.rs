@@ -816,7 +816,7 @@ mod tests {
             limits: Limits::PLAYER,
             ..Profile::SMART
         };
-        let mut s: State<Small> = State::new(&t, 0, player);
+        let mut s: State<Small> = State::new(&t, 0, player).unwrap();
         smart(&mut s);
         assert_eq!(s.profile().limits, Limits::DEFAULT);
     }

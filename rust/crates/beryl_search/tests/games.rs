@@ -8,11 +8,15 @@ mod common;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+use beryl_cards::CARDS;
+use beryl_cards::decks::fuzz_deck;
+use beryl_engine::card::FaceIx;
 use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Observation, Outcome, Profile,
-    Relayout, Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, ZoneKey, apply, next,
+    CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Misfit, Observation, Outcome,
+    Profile, Relayout, Replay, Scratch, Seat, Slot, Small, StallReason, State, Step, Zone, ZoneKey,
+    apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};
@@ -101,6 +105,128 @@ fn a_widened_game_plays_on_as_the_small_one() {
         }
         assert!(decisions > 40, "seed {seed}: a short game");
     }
+}
+
+/// The table of a game between two decks of `cards` cards each, drawn from `seed`: fuzz decks
+/// one after another.
+fn table_of(cards: usize, seed: u64) -> GameTable {
+    let deck = |seed: u64| -> Vec<(u8, &'static str)> {
+        (0..)
+            .flat_map(|i| fuzz_deck(seed.wrapping_add(i << 32)))
+            .flat_map(|(count, name)| (0..count).map(move |_| (1, name)))
+            .take(cards)
+            .collect()
+    };
+    let decks = [deck(seed), deck(seed.wrapping_add(1 << 16))];
+    GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap()
+}
+
+/// Two decks of 80 cards are more than [`Small`] has slots for, and no rule forbids them
+/// ([CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
+/// size for non-Commander decks."). `Small` refuses the game where its state is made;
+/// [`Large`] deals it, and it plays to its end with the invariants holding at every step.
+#[test]
+fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
+    let too_large = Misfit::DeckTooLarge {
+        player: Seat::P0,
+        cards: 80,
+        slots: 60,
+    };
+    for seed in 0..3 {
+        let t = table_of(80, seed);
+        assert_eq!(State::new(&t, seed, Profile::SMART).err(), Some(too_large));
+        let mut s: State<Large> = State::deal(&t, seed, Profile::SMART).unwrap();
+        assert!(Seat::BOTH.iter().all(|&p| s.library(p).len() == 80));
+        assert_eq!(s.fits::<Small>(), Err(too_large));
+        let check = |s: &State<Large>| {
+            s.check_invariants(&t)
+                .unwrap_or_else(|v| panic!("seed {seed}: {v:?}"));
+        };
+        let mut decisions = 0;
+        let mut x = Scratch::new();
+        let outcome = play(&t, &mut s, &mut x, &mut agents(seed), |s, _| {
+            check(s);
+            decisions += 1;
+        });
+        check(&s);
+        assert!(
+            matches!(outcome, Outcome::Win(_) | Outcome::Draw),
+            "seed {seed}: {outcome:?}"
+        );
+        assert!(decisions > 40, "seed {seed}: a short game");
+        // The cards a player owns are still their 80, wherever they went.
+        for p in Seat::BOTH {
+            let owned = [
+                Zone::Library,
+                Zone::Hand,
+                Zone::Battlefield,
+                Zone::Graveyard,
+                Zone::Exile,
+            ]
+            .map(|zone| s.zone(ZoneKey::Of(p, zone)).count())
+            .iter()
+            .sum::<u32>();
+            assert!(owned >= 80, "seed {seed}: player {p:?} owns {owned}");
+        }
+    }
+}
+
+/// A game between 60-card decks, the most [`Small`] holds, is the same game in either
+/// layout: the same seed deals it the same, and at every decision the `Small` game widened
+/// and narrowed again is itself, slot for slot, as is each decision it is asked.
+#[test]
+fn a_sixty_card_game_round_trips_between_the_layouts() {
+    for seed in 0..3 {
+        let t = table_of(60, seed);
+        let mut small = State::new(&t, seed, Profile::SMART).unwrap();
+        let dealt_wide: State<Large> = State::deal(&t, seed, Profile::SMART).unwrap();
+        assert!(dealt_wide == small.widen(), "seed {seed}");
+        let (mut x, mut agents) = (Scratch::new(), agents(seed));
+        let mut decisions = 0;
+        loop {
+            let wide = small.widen();
+            assert!(wide.try_relayout::<Small>() == Ok(small), "seed {seed}");
+            assert!(wide.try_relayout::<Large>() == Ok(wide), "seed {seed}");
+            let Step::Decide(d) = next(&mut small, &t, &mut x, &mut Replay) else {
+                break;
+            };
+            assert_eq!(d.relayout::<Large>().relayout::<Small>(), d, "seed {seed}");
+            let c = agents[d.player.index()].choose(Observation::new(&small, d.player), &d);
+            apply(&mut small, &t, &mut x, &mut Replay, c);
+            decisions += 1;
+        }
+        assert!(decisions > 40, "seed {seed}: a short game");
+    }
+}
+
+/// A game that has outgrown [`Small`] is refused there by name, not by a panic: one token
+/// more than its battlefield lists, then one more than its pool has slots for.
+#[test]
+fn a_game_past_small_does_not_narrow() {
+    let (_, small) = game(0);
+    let mut s = small.widen();
+    assert!(s.try_relayout::<Small>() == Ok(small), "a Small game fits");
+    let token = |s: &mut State<Large>| {
+        s.board()
+            .place_token(Seat::P0, CardIx::new(0), FaceIx::FRONT, false)
+            .unwrap();
+    };
+    for _ in 0..129 {
+        token(&mut s);
+    }
+    let battlefield = Misfit::ListTooLong {
+        list: "the battlefield",
+        len: 129,
+        capacity: 128,
+    };
+    assert_eq!(s.try_relayout::<Small>().err(), Some(battlefield));
+    for _ in 129..136 {
+        token(&mut s);
+    }
+    assert_eq!(
+        s.try_relayout::<Small>().err(),
+        Some(Misfit::PoolTooSmall { slots: 135 })
+    );
 }
 
 /// What a long run reached: how often each kind of decision came up, and the abilities and
@@ -270,7 +396,7 @@ fn mirror_agents(t: &GameTable, greedy: bool, seed: u64) -> [Box<dyn Agent>; 2] 
 
 /// The perf counts of one seeded WU Control mirror game under smart stops, and its outcome.
 fn mirror_game(t: &GameTable, greedy: bool, seed: u64) -> (Counts, Outcome) {
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).unwrap();
     let mut x = Scratch::new();
     let outcome = play(
         t,

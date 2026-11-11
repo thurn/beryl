@@ -8,10 +8,10 @@ use beryl_card::{
 use beryl_kernel::event::Sink;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;
-use beryl_kernel::state::{Derived, StackEntry, token_slots};
+use beryl_kernel::state::{Derived, StackEntry};
 use beryl_kernel::table::CardTable;
 use beryl_kernel::zone::Place;
-use beryl_kernel::{Copiable, GameTable, Observation, Seat, Slot, State};
+use beryl_kernel::{Copiable, GameTable, Observation, Seat, Slot, SlotId, State};
 
 static SOLDIER: CardDef = CardDef {
     name: "Test Soldier",
@@ -84,7 +84,7 @@ fn game() -> (GameTable, State) {
         ],
     )
     .unwrap();
-    let s = State::new(&t, 7, Profile::EXACT);
+    let s = State::new(&t, 7, Profile::EXACT).unwrap();
     (t, s)
 }
 
@@ -99,7 +99,7 @@ fn put(t: &GameTable, s: &mut State, player: Seat, name: &str, zone: Zone) -> Sl
 
 /// A token with the copiable values `what`, created by `owner`.
 fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
-    let slot: Slot = token_slots()
+    let slot = Slot::pool()
         .find(|&slot| s.object(slot).zone() == Nowhere)
         .unwrap();
     let face = s.make_token(t, slot, owner, what);

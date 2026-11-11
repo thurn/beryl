@@ -177,7 +177,7 @@ impl Game {
             }),
             ..Profile::EXACT
         };
-        let mut s = State::new(&t, seed, profile);
+        let mut s = State::new(&t, seed, profile).unwrap();
         let d = begin(&t, &mut s);
         assert_eq!(d.kind, DecisionKind::Priority);
         let attacker = s.turn().active();

@@ -13,13 +13,11 @@ use beryl_kernel::mutate::Arrival;
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, SlotId};
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::query::Copiable;
-use crate::state::{
-    Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone, token_slots,
-};
+use crate::state::{Continuous, CounterKind, Counters, ObjectFlags, ObjectRef, State, Zone};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -573,7 +571,7 @@ pub(crate) fn create_tokens<L: Layout>(
     how: TokenEntry,
 ) -> Result<Bitboard<L::Slot>, Full> {
     let mut tokens = Bitboard::EMPTY;
-    let mut free = token_slots().filter(|&slot| s.object(slot).zone() == Zone::Nowhere);
+    let mut free = L::Slot::pool().filter(|&slot| s.object(slot).zone() == Zone::Nowhere);
     for _ in 0..count {
         let slot = free.next().ok_or(Full)?;
         tokens.insert(slot);

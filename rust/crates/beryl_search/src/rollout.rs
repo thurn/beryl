@@ -1064,7 +1064,7 @@ mod tests {
     fn decision(n: usize) -> Decision {
         let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
         let policy = RolloutPolicy::new(&t);
-        let mut s = State::new(&t, 0, Profile::SMART);
+        let mut s = State::new(&t, 0, Profile::SMART).unwrap();
         let mut x = Scratch::new();
         loop {
             let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
@@ -1124,7 +1124,7 @@ mod tests {
         let policy = RolloutPolicy::new(&t);
         let mut rng = SplitMix64::new(3);
         for seed in 0..4 {
-            let start = State::new(&t, seed, Profile::SMART);
+            let start = State::new(&t, seed, Profile::SMART).unwrap();
             let mut x = Scratch::new();
             let greedy = rollout(&mut start.clone(), &t, &mut x, &policy);
             let mut soft = Softmax {
@@ -1147,7 +1147,7 @@ mod tests {
         let mut x = Scratch::new();
         let (mut cast, mut held) = (0, 0);
         for seed in 0..60 {
-            let mut s = State::new(&t, seed, Profile::SMART);
+            let mut s = State::new(&t, seed, Profile::SMART).unwrap();
             while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
                 let obs = observe(&s, &t, &mut x, d.player);
                 let target = obs.battlefield().iter().any(|&slot| {

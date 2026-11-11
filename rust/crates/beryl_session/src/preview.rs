@@ -854,7 +854,7 @@ mod tests {
                                 p.plan,
                                 p.taps
                                     .iter()
-                                    .map(|&t| named(Slot::from_index(usize::from(t))))
+                                    .map(|&t| named(Slot::from_num(t).unwrap()))
                                     .collect(),
                             )
                         })
@@ -959,7 +959,7 @@ mod tests {
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
             if d.prompt.purpose == Purpose::UnlessPays {
                 let untapped = |slot: u16| {
-                    !s.object(Slot::from_index(usize::from(slot)))
+                    !s.object(Slot::from_num(slot).unwrap())
                         .flags()
                         .has(ObjectFlags::TAPPED)
                 };
@@ -1008,7 +1008,7 @@ mod tests {
             ]);
         let mut taps = Vec::new();
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-            let named = |slot: u16| s.definition_name(t, Slot::from_index(usize::from(slot)));
+            let named = |slot: u16| s.definition_name(t, Slot::from_num(slot).unwrap());
             taps = payments(s, t, d)
                 .into_iter()
                 .zip((0..d.len()).map(|i| d.candidates.option(choice(i))))
@@ -1120,9 +1120,7 @@ mod tests {
                     assert!(b.is_empty(), "only a blocker blocks");
                     return None;
                 };
-                let attackers = b
-                    .into_iter()
-                    .map(|a| named(&s, Slot::from_index(usize::from(a))));
+                let attackers = b.into_iter().map(|a| named(&s, Slot::from_num(a).unwrap()));
                 Some((named(&s, blocker), attackers.collect::<Vec<_>>()))
             })
             .collect();
@@ -1151,7 +1149,7 @@ mod tests {
             .battlefield(P0, TEFERI)
             .battlefield(P1, STAFF);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
-        let named = |s: &State, slot: u16| s.definition_name(&t, Slot::from_index(slot.into()));
+        let named = |s: &State, slot: u16| s.definition_name(&t, Slot::from_num(slot).unwrap());
         let mut scratch = Scratch::new();
         // Teferi's −3, its third ability: "Return up to one target artifact, creature, or
         // enchantment to its owner's hand."

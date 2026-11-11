@@ -20,7 +20,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::interpret;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, PerPlayer, Queue};
 use crate::scratch::Scratch;
 use crate::state::{
     CounterKind, ObjectFlags, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone,
@@ -38,7 +38,7 @@ pub(crate) fn resolve<L: Layout>(
     let entry = s.stack().last().expect("a stack entry to resolve").clone();
     let ability = entry_ability(t, &entry);
     let (record, knowledge) = match *s.pending() {
-        Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge)),
+        Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge.clone())),
         _ => (Default::default(), None),
     };
     // The source is asked first: whether an ability written as data asks is read from its
@@ -99,7 +99,11 @@ pub(crate) fn resolve<L: Layout>(
 /// ([`Resolving::knowledge`]), and with the cards its earlier runs revealed beyond that in the
 /// sink, so chance does not count them as revealed again ([`chance`]). The caller empties
 /// `sink.revealed` once the run returns.
-fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, knowledge: [Bitboard<L::Slot>; 2]) {
+fn rewind<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    knowledge: PerPlayer<L, Bitboard<L::Slot>>,
+) {
     sink.revealed = s.restore_knowledge(knowledge);
 }
 

@@ -22,7 +22,7 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
     let t = mirror();
     let values = CardValues::new(&t);
     let mut agents = agents(&t, names, seed, Budget::DEFAULT)?;
-    let mut s = State::new(&t, seed, Profile::SMART);
+    let mut s = State::new(&t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::new();
     let mut turn = 0;
     let mut at_turns = Vec::new();

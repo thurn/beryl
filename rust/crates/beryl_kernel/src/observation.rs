@@ -3,13 +3,12 @@
 
 use crate::bitboard::{Bitboard, Slots};
 use crate::filter::{Evaluate, Filter};
-use crate::fixed::Fixed;
-use crate::ids::{CardIx, Seat};
-use crate::layout::{Layout, Small};
+use crate::ids::{CardIx, Seat, SlotId};
+use crate::layout::{Layout, Queue, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
-    CastPermission, DECK_SLOTS, Derived, Object, Pending, PendingTrigger, Player, StackEntry,
-    State, Turn, Zone, ZoneKey, deck_slot,
+    CastPermission, Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn,
+    Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use beryl_card::FaceIx;
@@ -216,14 +215,14 @@ impl<'a, L: Layout> Observation<'a, L> {
         let mut s = self.root.clone();
         for player in Seat::BOTH {
             let deck = t.deck(player);
-            let mut remainder: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
+            let mut remainder: L::Deck<CardIx> = Default::default();
             for &card in deck {
-                // A deck never holds more than DECK_SLOTS cards (GameTable::new).
+                // A deck never holds more cards than the layout has slots for (State::deal).
                 let _ = remainder.push(card);
             }
-            let mut unknown: Fixed<L::Slot, DECK_SLOTS> = Fixed::new();
+            let mut unknown: L::Deck<L::Slot> = Default::default();
             for i in 0..deck.len() {
-                let slot = deck_slot(player, i);
+                let slot = L::Slot::deck(player, i);
                 if self.root.knows(self.viewer, slot) || shown(slot) {
                     let card = s.object(slot).card;
                     let at = remainder

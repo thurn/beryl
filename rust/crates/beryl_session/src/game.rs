@@ -871,7 +871,7 @@ impl Game {
         let Some(from) = &file.from else {
             return Ok(game);
         };
-        let mut state = perturb::new_game(&game.table, file.seed, game.board.profile());
+        let mut state = perturb::new_game(&game.table, file.seed, game.board.profile())?;
         from.arrange(&game.table, &mut state, perturb::seed(file.seed))
             .map_err(|reason| SessionError::BadReplay {
                 reason: format!("the checkpoint of turn {}: {reason}", from.turn),

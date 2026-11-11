@@ -11,9 +11,9 @@ use std::ops::{Index, IndexMut};
 
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{LargeSlot, Slot, SlotId};
+use crate::ids::{LargeSlot, Seat, Slot, SlotId};
 use crate::relayout::Relayout;
-use crate::state::{State, TOKEN_SLOTS};
+use crate::state::State;
 
 /// What a layout's arrays and queues hold: in [`Small`], always `Copy` values; in [`Large`],
 /// values that may hold queues of their own.
@@ -24,6 +24,9 @@ impl<T: Clone + Debug + Eq + Hash + Send + Sync> Item for T {}
 /// An ordered list of items, as [`Fixed`]. A push may fail with [`Full`], which the engine
 /// turns into a stall.
 pub trait Queue<T: Item>: Clone + Debug + Default + Eq + Hash + Send + Sync {
+    /// The most items it holds, or `usize::MAX` for one that grows.
+    const CAPACITY: usize;
+
     fn as_slice(&self) -> &[T];
     fn as_mut_slice(&mut self) -> &mut [T];
     fn push(&mut self, item: T) -> Result<(), Full>;
@@ -61,8 +64,15 @@ pub trait Queue<T: Item>: Clone + Debug + Default + Eq + Hash + Send + Sync {
 pub trait Table<T: Item>:
     Clone + Debug + Eq + Hash + Send + Sync + Index<usize, Output = T> + IndexMut<usize>
 {
+    /// A table whose entry at each index is `f` of it.
+    fn from_fn(f: impl FnMut(usize) -> T) -> Self;
+
     /// A table whose every entry is `item`.
-    fn filled(item: T) -> Self;
+    #[inline]
+    fn filled(item: T) -> Self {
+        Self::from_fn(|_| item.clone())
+    }
+
     fn as_slice(&self) -> &[T];
     fn as_mut_slice(&mut self) -> &mut [T];
 
@@ -90,18 +100,49 @@ pub fn index<L: Layout>(i: usize) -> L::Index {
     L::Index::try_from(i).unwrap_or_else(|_| panic!("index {i} past the layout's"))
 }
 
+/// One value for each seat there is ([`Seat`] names two), indexed by [`Seat::index`]: the
+/// per-player table of both layouts ([`Layout::PerPlayer`]), and of what is the same in every
+/// layout, as a [`crate::Profile`]'s stops and a [`crate::GameTable`]'s decks are.
+pub type PerSeat<T> = [T; Seat::BOTH.len()];
+
+/// One value for each player of a game in layout `L`, indexed by [`Seat::index`]
+/// ([`Layout::PerPlayer`]).
+pub type PerPlayer<L, T> = <L as Layout>::PerPlayer<T>;
+
 /// A storage layout for [`State`]: the types of its slots, tables and queues. `N` is the
 /// capacity a fixed layout gives the table or queue.
+///
+/// What a layout sets, and nothing outside it assumes:
+///
+/// - how many players a game has ([`SlotId::PLAYERS`] of its slots, the length of its
+///   [`Layout::PerPlayer`]);
+/// - how many cards a deck may have, and so a library and a graveyard
+///   ([`SlotId::DECK_SLOTS`], the capacity of its [`Layout::Deck`]);
+/// - how many tokens and spell copies exist at once (its [`Layout::TOKEN_POOL`]);
+/// - how many objects a game holds ([`SlotId::COUNT`]) and how long each queue grows.
+///
+/// A game too large for a layout is refused where a state of it is made, with a [`Misfit`]
+/// ([`State::deal`], [`State::try_relayout`]).
+///
+/// [`Misfit`]: crate::Misfit
 pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
-    /// The object slots, and so how many objects a game holds.
+    /// The object slots: how many objects a game holds, and how they are dealt among the
+    /// players' decks and the pool ([`SlotId`]).
     type Slot: SlotId;
     /// An index into a queue or a decision's options, as the state stores it: in a choice
     /// record or an [`Opt::Trigger`](crate::decision::Opt::Trigger).
     type Index: Item + Copy + Default + Ord + Into<usize> + Into<u16> + TryFrom<usize>;
     type Queue<T: Item + Default, const N: usize>: Queue<T>;
     type Table<T: Item, const N: usize>: Table<T>;
+    /// A list as long as a deck may be ([`SlotId::DECK_SLOTS`]): a library, a graveyard, the
+    /// cards of one being dealt.
+    type Deck<T: Item + Default>: Queue<T>;
+    /// One value for each player, indexed by [`Seat::index`]: as many entries as
+    /// [`SlotId::PLAYERS`].
+    type PerPlayer<T: Item>: Table<T>;
 
-    /// The slots of the shared pool for tokens and spell copies, after both decks'.
+    /// The slots of the shared pool for tokens and spell copies, after every deck's
+    /// ([`SlotId::pool`]).
     const TOKEN_POOL: Bitboard<Self::Slot>;
 
     /// A copy of `state`: for [`Small`], one `memcpy`.
@@ -114,6 +155,11 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
 
 /// Today's layout: [`Fixed`] queues and arrays, so a [`State<Small>`] is `Copy` and at most
 /// 20 KiB. Search and rollouts run on it.
+///
+/// It is two players with 60 slots a deck, which is the least a constructed deck may have
+/// ([CR 100.2a](https://yawgatog.com/resources/magic-rules/#R1002a): "each deck has a minimum
+/// deck size of 60 cards"), and 135 slots for tokens and spell copies. A game between larger
+/// decks is refused here and dealt in [`Large`] ([`State::deal`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Small;
 
@@ -122,9 +168,11 @@ impl Layout for Small {
     type Index = u8;
     type Queue<T: Item + Default, const N: usize> = Fixed<T, N>;
     type Table<T: Item, const N: usize> = [T; N];
+    type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
+    type PerPlayer<T: Item> = PerSeat<T>;
 
     const TOKEN_POOL: Bitboard =
-        Bitboard([0, !0 << (TOKEN_SLOTS - 64), !0, !0 >> (256 - Slot::COUNT)]);
+        Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);
 
     #[inline]
     fn clone_state(state: &State<Self>) -> State<Self> {
@@ -137,11 +185,18 @@ impl Layout for Small {
     }
 }
 
-/// The layout a game outgrowing [`Small`] goes on in: its queues are `Vec`s, whose push never
-/// fails, and its tables have an entry for every slot, so the battlefield can hold every
-/// object. It has four times [`Small`]'s slots ([`LargeSlot`]), and its indices are `u16`, so
-/// a decision may offer more options than a `Small` choice record could name. A
-/// [`State<Large>`] is `Clone`, not `Copy`.
+/// The layout a game outgrowing [`Small`] goes on in, and the one a game too large for
+/// `Small` begins in: its queues are `Vec`s, whose push never fails, and its tables have an
+/// entry for every slot, so the battlefield can hold every object. It has four times
+/// [`Small`]'s slots ([`LargeSlot`]), and its indices are `u16`, so a decision may offer more
+/// options than a `Small` choice record could name. A [`State<Large>`] is `Clone`, not
+/// `Copy`.
+///
+/// A deck may have 256 cards. No rule sets that
+/// ([CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
+/// size for non-Commander decks."); it is the share of the 1,024 slots each deck is given,
+/// which leaves 512 for the pool of tokens and spell copies, nearly four times `Small`'s
+/// 135. A deck may also name no more distinct cards than a [`crate::ids::CardIx`] numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Large;
 
@@ -150,11 +205,17 @@ impl Layout for Large {
     type Index = u16;
     type Queue<T: Item + Default, const N: usize> = Vec<T>;
     type Table<T: Item, const N: usize> = PerSlot<T>;
+    type Deck<T: Item + Default> = Vec<T>;
+    type PerPlayer<T: Item> = PerSeat<T>;
 
     const TOKEN_POOL: Bitboard<LargeSlot> = {
-        let mut words = [!0; 16];
-        words[0] = 0;
-        words[1] = !0 << (TOKEN_SLOTS - 64);
+        assert!(LargeSlot::POOL.is_multiple_of(64) && LargeSlot::COUNT == 16 * 64);
+        let mut words = [0; 16];
+        let mut word = LargeSlot::POOL / 64;
+        while word < 16 {
+            words[word] = !0;
+            word += 1;
+        }
         Bitboard(words)
     };
 
@@ -213,7 +274,7 @@ impl Layout for Large {
 
 impl State<Small> {
     /// This game in the [`Large`] layout, losslessly ([`Relayout`]): every slot keeps its
-    /// number and object, every queue its order, every player their knowledge, and the random
+    /// place and object, every queue its order, every player their knowledge, and the random
     /// streams their place, so the game goes on exactly as it would have, past where `Small`
     /// runs out.
     pub fn widen(&self) -> State<Large> {
@@ -222,6 +283,8 @@ impl State<Small> {
 }
 
 impl<T: Item + Default, const N: usize> Queue<T> for Fixed<T, N> {
+    const CAPACITY: usize = N;
+
     #[inline]
     fn as_slice(&self) -> &[T] {
         Fixed::as_slice(self)
@@ -275,8 +338,8 @@ impl<T: Item + Default, const N: usize> Queue<T> for Fixed<T, N> {
 
 impl<T: Item, const N: usize> Table<T> for [T; N] {
     #[inline]
-    fn filled(item: T) -> Self {
-        std::array::from_fn(|_| item.clone())
+    fn from_fn(f: impl FnMut(usize) -> T) -> Self {
+        std::array::from_fn(f)
     }
 
     #[inline]
@@ -291,6 +354,8 @@ impl<T: Item, const N: usize> Table<T> for [T; N] {
 }
 
 impl<T: Item + Default> Queue<T> for Vec<T> {
+    const CAPACITY: usize = usize::MAX;
+
     fn as_slice(&self) -> &[T] {
         self
     }
@@ -345,6 +410,10 @@ impl<T> IndexMut<usize> for PerSlot<T> {
 }
 
 impl<T: Item> Table<T> for PerSlot<T> {
+    fn from_fn(f: impl FnMut(usize) -> T) -> Self {
+        PerSlot((0..LargeSlot::COUNT).map(f).collect())
+    }
+
     fn filled(item: T) -> Self {
         PerSlot(vec![item; LargeSlot::COUNT].into_boxed_slice())
     }

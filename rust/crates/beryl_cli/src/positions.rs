@@ -171,7 +171,7 @@ pub fn clean(board: &Checkpoint) -> bool {
 
 /// The state a game of `seed` starts from at `position`, before its turn begins.
 pub fn start(t: &GameTable, position: &Position, seed: u64) -> Result<State, String> {
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     position
         .board
         .arrange(t, &mut s, seed)
@@ -226,7 +226,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
     let seed = game_seed(b.seed, 0, g);
     let seeds = seat_seeds(seed);
     let mut agents = seeds.map(|s| LongSearch::<beryl_engine::Small>::new(t, b.settings, s));
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::new();
     let mut at = (s.turn().number(), s.turn().step());
     let mut out = GameCuts {

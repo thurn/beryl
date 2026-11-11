@@ -7,7 +7,7 @@ use crate::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
-use crate::layout::{Layout, Table};
+use crate::layout::{Layout, PerPlayer, Table};
 use crate::state::{ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
 
@@ -69,7 +69,14 @@ pub(crate) fn check<L: Layout>(
 
 /// What [`doomed`] finds: the permanents bound for graveyards, the tokens that cease to exist,
 /// and each player's legendary permanents.
-type Doomed<S> = (Bitboard<S>, Bitboard<S>, [Bitboard<S>; 2]);
+type Doomed<L> = (
+    Bitboard<<L as Layout>::Slot>,
+    Bitboard<<L as Layout>::Slot>,
+    Legendary<L>,
+);
+
+/// The legendary permanents each player controls.
+type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 
 /// The permanents state-based actions put into graveyards, and the tokens that cease to
 /// exist.
@@ -96,9 +103,9 @@ type Doomed<S> = (Bitboard<S>, Bitboard<S>, [Bitboard<S>; 2]);
 ///
 /// With them, in the same pass, the legendary permanents each player controls, for the legend
 /// rule.
-fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
+fn doomed<L: Layout>(s: &State<L>) -> Doomed<L> {
     let mut graveyard = Bitboard::EMPTY;
-    let mut legendary = [Bitboard::EMPTY; 2];
+    let mut legendary: Legendary<L> = Table::filled(Bitboard::EMPTY);
     for (slot, d) in s.permanents() {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             legendary[d.controller.index()].insert(slot);
@@ -142,7 +149,7 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
 fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
-    let mut causes = [None; 2];
+    let mut causes: Causes<L> = Table::filled(None);
     // Each player's cause is their own: the result is the same in any order.
     for player in s.players_in_seat_order(s.players()) {
         let p = s.player(player);
@@ -158,9 +165,12 @@ fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
     if causes.iter().all(Option::is_none) {
         return false;
     }
-    end(s, sink, causes);
+    end(s, sink, &causes);
     true
 }
+
+/// Why each player loses the game, if they do.
+type Causes<L> = PerPlayer<L, Option<LossCause<L>>>;
 
 /// Ends the game as `loser` loses it for `cause`: they conceded
 /// ([CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a)): "A player can concede
@@ -172,9 +182,9 @@ pub(crate) fn end_game<L: Layout>(
     loser: Seat,
     cause: LossCause<L>,
 ) {
-    let mut causes = [None; 2];
+    let mut causes: Causes<L> = Table::filled(None);
     causes[loser.index()] = Some(cause);
-    end(s, sink, causes);
+    end(s, sink, &causes);
 }
 
 /// Ends the game as an effect has `winner` win it
@@ -187,12 +197,12 @@ pub(crate) fn win_game<L: Layout>(
     winner: Seat,
     cause: LossCause<L>,
 ) {
-    let mut causes = [None; 2];
+    let mut causes: Causes<L> = Table::filled(None);
     // Every opponent gets the one cause: the result is the same in any order.
     for loser in s.players_in_seat_order(s.opponents_of(winner)) {
         causes[loser.index()] = Some(cause);
     }
-    end(s, sink, causes);
+    end(s, sink, &causes);
 }
 
 /// Ends the game as each player with a cause loses it. The one player left wins
@@ -203,7 +213,7 @@ pub(crate) fn win_game<L: Layout>(
 ///
 /// The game always ends here, which is the two-player game's: with more players a loss
 /// that leaves two or more in the game ends nothing, and they play on.
-fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: [Option<LossCause<L>>; 2]) {
+fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
     let left = s
         .players()
         .filter(|player| causes[player.index()].is_none());
@@ -223,8 +233,8 @@ fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
 }
 
 /// The legendary permanents each player controls.
-fn legendary<L: Layout>(s: &State<L>) -> [Bitboard<L::Slot>; 2] {
-    let mut by_controller = [Bitboard::EMPTY; 2];
+fn legendary<L: Layout>(s: &State<L>) -> Legendary<L> {
+    let mut by_controller: Legendary<L> = Table::filled(Bitboard::EMPTY);
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
     for (slot, d) in s.permanents() {
@@ -244,7 +254,7 @@ fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> 
 
 /// Whether some player controls two legendary permanents of `legendary` with the same name:
 /// whether any legend-rule group exists, kept or not.
-fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard<L::Slot>; 2]) -> bool {
+fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &Legendary<L>) -> bool {
     // Each pair is compared once, and whether one matches is the same in any order: the
     // candidate order saves the half of the comparisons that `any` within `any` would repeat,
     // in a check the engine makes after every action.
@@ -262,7 +272,7 @@ fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard<L::Sl
 fn legend_group<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    legendary: &[Bitboard<L::Slot>; 2],
+    legendary: &Legendary<L>,
     slot: L::Slot,
 ) -> Bitboard<L::Slot> {
     let name_of = name(s, t, slot);
@@ -288,7 +298,7 @@ pub(crate) fn unresolved_legends<L: Layout>(
 fn legend_group_in<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    legendary: &[Bitboard<L::Slot>; 2],
+    legendary: &Legendary<L>,
     kept: Bitboard<L::Slot>,
 ) -> Option<(Seat, Bitboard<L::Slot>)> {
     // A group needs two legendary permanents of one controller with one name, which most
@@ -323,8 +333,10 @@ pub(crate) fn apply_legend_rule<L: Layout>(
     let legendary = legendary(s);
     // A permanent is in its own group, so the doomed are those not kept whose group has
     // another member.
-    let doomed = ((legendary[0] | legendary[1]) & !kept)
-        .filter(|slot| legend_group(s, t, &legendary, slot).count() >= 2);
+    let legends = legendary
+        .iter()
+        .fold(Bitboard::EMPTY, |all, &mine| all | mine);
+    let doomed = (legends & !kept).filter(|slot| legend_group(s, t, &legendary, slot).count() >= 2);
     s.settle_question();
     event::move_batch(
         s,

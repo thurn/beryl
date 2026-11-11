@@ -84,7 +84,7 @@ fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
 /// The setup's position: every card starts in its owner's library and moves to its zone.
 fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, String> {
     let setup = &scenario.setup;
-    let mut s = State::new(t, setup.seed, Profile::EXACT);
+    let mut s = State::new(t, setup.seed, Profile::EXACT).map_err(|e| e.to_string())?;
     slots.apply(&mut s);
     s.board().begin_at(setup.turn, setup.active, setup.step);
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {

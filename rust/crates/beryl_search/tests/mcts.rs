@@ -24,7 +24,7 @@ const PARALLEL: Budget = Budget {
 /// such decisions before the game's last. Late positions make short rollouts, the cost of
 /// these tests.
 fn positions(t: &GameTable, from_end: [usize; 2]) -> Vec<(State, Decision)> {
-    let mut s = State::new(t, 4, Profile::SMART);
+    let mut s = State::new(t, 4, Profile::SMART).unwrap();
     let mut agents = [GreedyAgent::new(t), GreedyAgent::new(t)];
     let mut all = Vec::new();
     play(t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
@@ -115,7 +115,7 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
 #[test]
 fn a_search_plays_on_from_a_paused_resolution() {
     let t = mirror();
-    let mut s = State::new(&t, 2, Profile::SMART);
+    let mut s = State::new(&t, 2, Profile::SMART).unwrap();
     let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
     let mut x = Scratch::new();
     let mut previous: Option<(State, Decision)> = None;
@@ -143,7 +143,7 @@ fn a_search_plays_on_from_a_paused_resolution() {
 fn searched_positions(t: &GameTable, count: usize, from_end: usize) -> Vec<(State, Decision)> {
     let mut all = Vec::new();
     for seed in 0..8 {
-        let mut s = State::new(t, seed, Profile::SMART);
+        let mut s = State::new(t, seed, Profile::SMART).unwrap();
         let mut agents = [GreedyAgent::new(t), GreedyAgent::new(t)];
         let mut game = Vec::new();
         play(t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
@@ -223,7 +223,7 @@ const REUSING: Budget = Budget {
 /// passing priority. Late positions make short rollouts.
 fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<usize>) {
     let mut starts = Vec::new();
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).unwrap();
     play(
         t,
         &mut s,

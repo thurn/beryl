@@ -41,8 +41,8 @@ const TEFERI_FALLS: &str = "combat damage removes Teferi while other attacks rem
 fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
     let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 4);
     let chosen = text(&[
-        "set #1 (Beza, the Bounding Spring) battlefield 4/5 attacking #60",
-        "& +point attack #1 > #60",
+        "set #1 (Beza, the Bounding Spring) battlefield 4/5 attacking #256",
+        "& +point attack #1 > #256",
     ]);
     assert_eq!(first, chosen);
     assert_eq!(second, chosen);
@@ -55,12 +55,12 @@ fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
             "& tap #3 (Subtlety)".to_owned(),
             format!("set turn 1 {attacker} declareBlockers"),
             format!("set turn 1 {attacker} combatDamage"),
-            "strike #1 > #60 4".to_owned(),
-            "& strike #0 > #62 2".to_owned(),
+            "strike #1 > #256 4".to_owned(),
+            "& strike #0 > #258 2".to_owned(),
             format!("& strike #3 > {defender} 3"),
             format!("& count {defender} life 17"),
-            "-point attack #1 > #60".to_owned(),
-            "vanish #60 (Teferi, Time Raveler) battlefield>graveyard stateBased".to_owned(),
+            "-point attack #1 > #256".to_owned(),
+            "vanish #256 (Teferi, Time Raveler) battlefield>graveyard stateBased".to_owned(),
             format!("set turn 1 {attacker} endOfCombat"),
         ])
     };
@@ -78,19 +78,19 @@ fn a_combat_line_is_begun_once_and_never_swings() {
     assert_eq!(
         first,
         lines(&[
-            (4, "+point attack #1 > #60"),
-            (6, "+point attack #0 > #62"),
+            (4, "+point attack #1 > #256"),
+            (6, "+point attack #0 > #258"),
             (8, "+point attack #3 > opponent"),
-            (8, "-point attack #1 > #60"),
+            (8, "-point attack #1 > #256"),
         ])
     );
     assert_eq!(
         second,
         lines(&[
-            (4, "+point attack #1 > #60"),
-            (6, "+point attack #0 > #62"),
+            (4, "+point attack #1 > #256"),
+            (6, "+point attack #0 > #258"),
             (8, "+point attack #3 > you"),
-            (8, "-point attack #1 > #60"),
+            (8, "-point attack #1 > #256"),
         ])
     );
     // An attacker's line stays through its attack trigger and through the choice of what
@@ -101,14 +101,14 @@ fn a_combat_line_is_begun_once_and_never_swings() {
         first,
         lines(&[
             (4, "+point attack #0 > opponent"),
-            (5, "+point attack #120 > #60"),
+            (5, "+point attack #512 > #256"),
         ])
     );
     assert_eq!(
         second,
         lines(&[
             (4, "+point attack #0 > you"),
-            (5, "+point attack #120 > #60"),
+            (5, "+point attack #512 > #256"),
         ])
     );
 }
@@ -122,8 +122,8 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
     let [first, second] = script(names::SPHINX_OF_FALSE_CONCLUSIONS, name, 7);
     let declared = text(&[
         "set #1 (Sphinx of False Conclusions) battlefield tapped 4/2 attacking",
-        "& set #60 (Elite Spellbinder) battlefield 3/1 blocking #1",
-        "& +point block #60 > #1",
+        "& set #256 (Elite Spellbinder) battlefield 3/1 blocking #1",
+        "& +point block #256 > #1",
     ]);
     assert_eq!(first, declared);
     assert_eq!(second, declared);
@@ -133,14 +133,14 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
         let turn = |step: &str| format!("set turn 1 {who} {step}");
         text(&[
             turn("combatDamage"),
-            "strike #1 > #60 4".to_owned(),
-            "& strike #60 > #1 3".to_owned(),
+            "strike #1 > #256 4".to_owned(),
+            "& strike #256 > #1 3".to_owned(),
             format!("emerge a2 (Sphinx of False Conclusions, triggered) {who} from #1"),
             "& +point source a2 > #1".to_owned(),
-            "-point block #60 > #1".to_owned(),
+            "-point block #256 > #1".to_owned(),
             "& -point source a2 > #1".to_owned(),
             "vanish #1 (Sphinx of False Conclusions) battlefield>graveyard stateBased".to_owned(),
-            "& vanish #60 (Elite Spellbinder) battlefield>graveyard stateBased".to_owned(),
+            "& vanish #256 (Elite Spellbinder) battlefield>graveyard stateBased".to_owned(),
         ])
     };
     assert_eq!(first, damage("you"));
@@ -208,15 +208,15 @@ fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
         game.choose(game.answer(decision.id, index).unwrap());
     }
     // Both creatures awaited their choice in a view of their own.
-    assert_eq!(pending, [0, 120]);
+    assert_eq!(pending, [0, 512]);
     // Each line is begun once, at the planeswalker, and ended once, as combat ends.
     assert_eq!(
         lines,
         [
-            "+point attack #0 > #60",
-            "+point attack #120 > #60",
-            "-point attack #0 > #60",
-            "-point attack #120 > #60",
+            "+point attack #0 > #256",
+            "+point attack #512 > #256",
+            "-point attack #0 > #256",
+            "-point attack #512 > #256",
         ]
     );
 }
@@ -232,18 +232,18 @@ const HOLE: &str = "Portable Hole's target gone before the trigger resolves";
 fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     let [first, second] = script(names::PORTABLE_HOLE, HOLE, 5);
     let destroyed = text(&[
-        "-point hostile-target a1 > #61",
-        "& -point hostile-target #3 > #61",
-        "vanish #61 (Jace, Vryn's Prodigy) battlefield>graveyard destroy <- #3",
-        "appear #120 (Map Token) nowhere>battlefield created <- #3",
-        "& appear #121 (Map Token) nowhere>battlefield created <- #3",
+        "-point hostile-target a1 > #257",
+        "& -point hostile-target #3 > #257",
+        "vanish #257 (Jace, Vryn's Prodigy) battlefield>graveyard destroy <- #3",
+        "appear #512 (Map Token) nowhere>battlefield created <- #3",
+        "& appear #513 (Map Token) nowhere>battlefield created <- #3",
         "vanish #3 (Get Lost) stack>graveyard resolve",
     ]);
     assert_eq!(first, destroyed);
     assert_eq!(second, destroyed);
     let aimed = lines(&[
-        (2, "+point hostile-target a1 > #61"),
-        (5, "-point hostile-target a1 > #61"),
+        (2, "+point hostile-target a1 > #257"),
+        (5, "-point hostile-target a1 > #257"),
     ]);
     let [first, second] = steps(names::PORTABLE_HOLE, HOLE, "target a1");
     assert_eq!(first, aimed);
@@ -253,9 +253,9 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     let view = &views(names::PORTABLE_HOLE, HOLE, |_, _, _| {})[6][0];
     assert!(matches!(
         view.stack.as_slice(),
-        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: 61 }]
+        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: 257 }]
     ));
-    let jace = view.objects.iter().find(|o| o.slot == 61).unwrap();
+    let jace = view.objects.iter().find(|o| o.slot == 257).unwrap();
     assert_eq!(jace.zone, ZoneName::Graveyard);
     // A spell returned to its owner's hand takes no arrow there with it (by-8uw): the
     // arrow at it, and its own at what it would have countered, end before it goes.
@@ -264,19 +264,19 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     assert_eq!(
         first,
         text(&[
-            "-point hostile-target #62 > #0",
-            "& -point hostile-target #2 > #62",
-            "vanish #62 (Counterspell) stack>hand effect <- #2",
+            "-point hostile-target #258 > #0",
+            "& -point hostile-target #2 > #258",
+            "vanish #258 (Counterspell) stack>hand effect <- #2",
             "fly #1 (Island) library>hand draw <- #2",
             "vanish #2 (Reprieve) stack>graveyard resolve",
         ])
     );
-    let [first, _] = steps(names::REPRIEVE, name, "target #2 > #62");
+    let [first, _] = steps(names::REPRIEVE, name, "target #2 > #258");
     assert_eq!(
         first,
         lines(&[
-            (5, "+point hostile-target #2 > #62"),
-            (6, "-point hostile-target #2 > #62"),
+            (5, "+point hostile-target #2 > #258"),
+            (6, "-point hostile-target #2 > #258"),
         ])
     );
 }
@@ -306,8 +306,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
     let [first, second] = views(names::COUNTERSPELL, name, floating).swap_remove(2);
     let paid = |who: &str, dwell: bool| {
         let mut lines = vec![
-            format!("fly #1 (Counterspell) hand>stack cast at #60 <- {who}"),
-            "& +point hostile-target #1 > #60".to_owned(),
+            format!("fly #1 (Counterspell) hand>stack cast at #256 <- {who}"),
+            "& +point hostile-target #1 > #256".to_owned(),
             format!("tap #0 (Island) <- {who}"),
             format!("& streak #0 > #1 blue 1 <- {who}"),
             format!("& tap #2 (Island) <- {who}"),
@@ -321,8 +321,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
         }
         lines.extend(
             [
-                "-point hostile-target #1 > #60",
-                "vanish #60 (Mana Crypt) stack>graveyard counter <- #1",
+                "-point hostile-target #1 > #256",
+                "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
                 "& vanish #1 (Counterspell) stack>graveyard resolve",
             ]
             .map(str::to_owned),
@@ -353,7 +353,7 @@ fn counterspell() -> (Table, Script) {
 const ARROW: Open = Open::Point {
     arrow: Arrow::HostileTarget,
     from: Subject::Object { slot: 1 },
-    to: Subject::Object { slot: 60 },
+    to: Subject::Object { slot: 256 },
 };
 
 fn step(act: Act) -> Step {
@@ -375,13 +375,13 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     late.beats[2].insert(1, step(ARROW.act(Span::Begin)));
     assert_eq!(
         broken(&table, &[], &late),
-        "`+point hostile-target #1 > #60`: #60 is moving"
+        "`+point hostile-target #1 > #256`: #256 is moving"
     );
     // A line from an ability that is not on the stack.
     let source = Open::Point {
         arrow: Arrow::Source,
         from: Subject::Ability { id: 9 },
-        to: Subject::Object { slot: 60 },
+        to: Subject::Object { slot: 256 },
     };
     let gone = Script {
         reset: None,
@@ -389,7 +389,7 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     };
     assert_eq!(
         broken(&table, &[], &gone),
-        "`+point source a9 > #60`: a9 has left the table"
+        "`+point source a9 > #256`: a9 has left the table"
     );
 }
 
@@ -402,8 +402,8 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     kept.beats.remove(2);
     assert_eq!(
         broken(&table, &[], &kept),
-        "`vanish #60 (Mana Crypt) stack>graveyard counter <- #1`: \
-         `+point hostile-target #1 > #60` is not ended before #60 moves"
+        "`vanish #256 (Mana Crypt) stack>graveyard counter <- #1`: \
+         `+point hostile-target #1 > #256` is not ended before #256 moves"
     );
     // Ended in the beat that moves its target is not before.
     let mut together = whole.clone();
@@ -411,8 +411,8 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     together.beats[2].splice(0..0, end);
     assert_eq!(
         broken(&table, &[], &together),
-        "`vanish #60 (Mana Crypt) stack>graveyard counter <- #1`: \
-         `+point hostile-target #1 > #60` ends in the beat that moves #60, not before it"
+        "`vanish #256 (Mana Crypt) stack>graveyard counter <- #1`: \
+         `+point hostile-target #1 > #256` ends in the beat that moves #256, not before it"
     );
 }
 
@@ -425,7 +425,7 @@ fn two_visuals_of_one_thing_break_a_rule() {
     doubled.beats[0].push(step(ARROW.act(Span::Begin)));
     assert_eq!(
         broken(&table, &[], &doubled),
-        "`+point hostile-target #1 > #60`: it is begun already: one visual per thing"
+        "`+point hostile-target #1 > #256`: it is begun already: one visual per thing"
     );
     // A card flying to two places in one beat.
     let mut twice = whole.clone();
@@ -433,11 +433,11 @@ fn two_visuals_of_one_thing_break_a_rule() {
     twice.beats[0].push(fly);
     assert_eq!(
         broken(&table, &[], &twice),
-        "`fly #1 (Counterspell) hand>stack cast at #60 <- you`: \
+        "`fly #1 (Counterspell) hand>stack cast at #256 <- you`: \
          #1 moves twice in one beat: one visual per thing"
     );
     // A card on the table coming to be again.
-    let crypt: ObjectView = table.objects[&60].clone();
+    let crypt: ObjectView = table.objects[&256].clone();
     let again = Script {
         reset: None,
         beats: vec![vec![step(Act::Appear {
@@ -450,8 +450,8 @@ fn two_visuals_of_one_thing_break_a_rule() {
     };
     assert_eq!(
         broken(&table, &[], &again),
-        "`appear #60 (Mana Crypt) nowhere>stack created`: \
-         #60 is on the table already: one visual per thing"
+        "`appear #256 (Mana Crypt) nowhere>stack created`: \
+         #256 is on the table already: one visual per thing"
     );
 }
 
@@ -471,7 +471,7 @@ fn a_span_is_ended_by_its_script_or_carried_to_the_next() {
     // An end with no beginning: the screen was not carrying the arrow.
     assert_eq!(
         broken(&shown, &[], &rest),
-        "`-point hostile-target #1 > #60`: it ends what was never begun"
+        "`-point hostile-target #1 > #256`: it ends what was never begun"
     );
     // A reset drops what was carried: the stage starts over with the spans it begins.
     let over = Script {
@@ -490,8 +490,8 @@ fn the_session_carries_an_open_span_to_the_script_that_ends_it() {
     let [first, second] = steps(names::THIEVING_SKYDIVER, name, " a1 > ");
     let spans = lines(&[
         (7, "+point source a1 > #0"),
-        (9, "+point hostile-target a1 > #60"),
-        (10, "-point hostile-target a1 > #60"),
+        (9, "+point hostile-target a1 > #256"),
+        (10, "-point hostile-target a1 > #256"),
         (10, "-point source a1 > #0"),
     ]);
     assert_eq!(first, spans);

@@ -176,7 +176,7 @@ impl ReplayFile {
                 TableError::UnknownCard(name) => SessionError::UnknownCard {
                     name: name.to_owned(),
                 },
-                e => SessionError::Deck {
+                e @ TableError::TooManyCards => SessionError::Deck {
                     reason: format!("{e:?}"),
                 },
             },
@@ -186,7 +186,7 @@ impl ReplayFile {
             self.stops,
             self.start()?.human,
         );
-        let state = perturb::new_game(&table, self.seed, profile);
+        let state = perturb::new_game(&table, self.seed, profile)?;
         Ok((table, state))
     }
 

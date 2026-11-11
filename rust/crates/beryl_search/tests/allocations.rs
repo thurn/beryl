@@ -74,7 +74,7 @@ fn main() {
     let policy = RolloutPolicy::new(&t);
     let mut x = Scratch::new();
     for seed in 0..8 {
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let before = x.counts.decisions;
         COUNTING.store(true, Ordering::Relaxed);
         let outcome = rollout(&mut s, &t, &mut x, &policy);

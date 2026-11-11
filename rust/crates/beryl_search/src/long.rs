@@ -1544,7 +1544,7 @@ mod tests {
         let policy = RolloutPolicy::new(&t);
         let mut unseen = 0;
         for seed in 0..6 {
-            let mut s = State::new(&t, seed, Profile::SMART);
+            let mut s = State::new(&t, seed, Profile::SMART).unwrap();
             let mut x = Scratch::new();
             loop {
                 let d = match next(&mut s, &t, &mut x, &mut Replay) {
@@ -1729,7 +1729,7 @@ mod tests {
     /// questions asked while casting or resolving.
     fn positions(t: &GameTable, seed: u64) -> Vec<(State, Decision)> {
         let policy = RolloutPolicy::new(t);
-        let mut s = State::new(t, seed, Profile::SMART);
+        let mut s = State::new(t, seed, Profile::SMART).unwrap();
         let mut x = Scratch::new();
         let mut out = Vec::new();
         loop {
@@ -1908,7 +1908,7 @@ mod tests {
         let mut x = Scratch::new();
         let (mut never, mut other) = (0, 0);
         for seed in 0..40 {
-            let mut s = State::new(&t, seed, Profile::SMART);
+            let mut s = State::new(&t, seed, Profile::SMART).unwrap();
             loop {
                 let d = match next(&mut s, &t, &mut x, &mut Replay) {
                     Step::Over(_) => break,

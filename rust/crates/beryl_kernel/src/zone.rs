@@ -8,11 +8,11 @@
 use crate::bitboard::Bitboard;
 use crate::chance;
 use crate::event::Sink;
-use crate::fixed::{Fixed, Full};
+use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, Table};
 use crate::rng::SplitMix64;
-use crate::state::{Counters, DECK_SLOTS, Derived, Object, ObjectFlags, State, Zone, ZoneKey};
+use crate::state::{Counters, Derived, Object, ObjectFlags, State, Zone, ZoneKey};
 use beryl_card::FaceIx;
 
 /// Where in a library an object goes.
@@ -56,7 +56,7 @@ impl<L: Layout> State<L> {
         // as they move it." Whatever zone it goes to, a hidden one included.
         let o = *self.object(slot);
         if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
-            for k in &mut self.knowledge {
+            for k in self.knowledge.as_mut_slice() {
                 k.insert(slot);
             }
         }
@@ -108,7 +108,7 @@ impl<L: Layout> State<L> {
         }
         // CR 400.2: cards in public zones are seen by every player.
         if to.is_public() {
-            for k in &mut self.knowledge {
+            for k in self.knowledge.as_mut_slice() {
                 k.insert(slot);
             }
         }
@@ -206,9 +206,9 @@ impl<L: Layout> State<L> {
     /// player's library are shuffled or otherwise reordered, any revealed cards that are
     /// reordered stop being revealed and become new objects."
     pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) {
-        let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
+        let mut cards: L::Deck<CardIx> = Default::default();
         for &slot in slots {
-            // A library never holds more than its owner'self deck slots.
+            // A library never holds more than its owner's deck slots.
             let _ = cards.push(self.object(slot).card);
         }
         rng.shuffle(cards.as_mut_slice());
@@ -218,7 +218,7 @@ impl<L: Layout> State<L> {
             o.incarnation = o.incarnation.wrapping_add(1);
         }
         let rebound: Bitboard<L::Slot> = slots.iter().copied().collect();
-        for k in &mut self.knowledge {
+        for k in self.knowledge.as_mut_slice() {
             *k &= !rebound;
         }
     }
@@ -236,7 +236,7 @@ impl<L: Layout> State<L> {
             ..Object::EMPTY
         };
         forget_exiled_with(self, slot);
-        for k in &mut self.knowledge {
+        for k in self.knowledge.as_mut_slice() {
             k.remove(slot);
         }
     }
@@ -293,7 +293,7 @@ fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
 /// left finds them; the new object is not that object
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not.
 fn forget_exiled_with<L: Layout>(s: &mut State<L>, slot: L::Slot) {
-    let exile = s.zones.members[0][Zone::Exile as usize] | s.zones.members[1][Zone::Exile as usize];
+    let exile = s.in_zone(Zone::Exile);
     for x in exile.iter() {
         let o = s.object_mut(x);
         if o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(slot) {

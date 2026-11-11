@@ -23,7 +23,7 @@ pub fn game(seed: u64) -> (GameTable, State) {
     } else {
         Profile::SMART
     };
-    let s = State::new(&t, seed, profile);
+    let s = State::new(&t, seed, profile).unwrap();
     (t, s)
 }
 

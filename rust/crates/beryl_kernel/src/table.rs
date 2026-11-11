@@ -8,7 +8,7 @@ use beryl_card::{
 
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
-use crate::state::DECK_SLOTS;
+use crate::layout::PerSeat;
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
 #[derive(Debug)]
@@ -39,8 +39,6 @@ pub type Decklist = [(u8, &'static str)];
 pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
-    /// A deck has more cards than the engine reserves slots for.
-    DeckTooLarge { player: Seat, cards: usize },
     /// The decks and their tokens need more game indices than [`CardIx`] has.
     TooManyCards,
 }
@@ -52,7 +50,7 @@ pub enum TableError {
 pub struct GameTable {
     cards: &'static CardTable,
     defs: Vec<&'static CardDef>,
-    decks: [Vec<CardIx>; 2],
+    decks: PerSeat<Vec<CardIx>>,
     /// Per game index, the event kinds its triggered abilities listen to.
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
@@ -72,9 +70,12 @@ impl GameTable {
     /// Assigns game indices in order of first appearance, the first deck before the second,
     /// then the tokens and emblems those cards can create, then [`FACE_DOWN_COPY`], so the
     /// same decklists always give the same table.
-    pub fn new(cards: &'static CardTable, decks: [&Decklist; 2]) -> Result<Self, TableError> {
+    ///
+    /// A deck of any size makes a table: whether a game between them fits a layout is asked
+    /// where its state is made ([`crate::State::deal`]).
+    pub fn new(cards: &'static CardTable, decks: PerSeat<&Decklist>) -> Result<Self, TableError> {
         let mut defs: Vec<&'static CardDef> = Vec::new();
-        let mut indices: [Vec<CardIx>; 2] = [Vec::new(), Vec::new()];
+        let mut indices: PerSeat<Vec<CardIx>> = Default::default();
         for (player, list) in Seat::BOTH.into_iter().zip(decks) {
             for &(count, name) in list {
                 let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
@@ -91,12 +92,6 @@ impl GameTable {
                 for _ in 0..count {
                     indices[player.index()].push(index);
                 }
-            }
-            if indices[player.index()].len() > DECK_SLOTS {
-                return Err(TableError::DeckTooLarge {
-                    player,
-                    cards: indices[player.index()].len(),
-                });
             }
         }
         let mut i = 0;

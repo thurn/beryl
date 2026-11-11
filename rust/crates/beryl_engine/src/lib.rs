@@ -52,6 +52,7 @@ pub mod profile {
     pub use beryl_kernel::profile::*;
 }
 
+pub use beryl_kernel::Misfit;
 pub use bitboard::Bitboard;
 pub use cast::{cost_being_cast, pointless, target_removes_permanent};
 pub use combat::preferred_damage;
@@ -63,7 +64,7 @@ pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step, observe,
     paused_events, refusal, view,
 };
-pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
+pub use ids::{CardIx, LargeSlot, Place, Seat, Slot, SlotId};
 pub use invariants::{At, Violation};
 pub use layout::{Large, Layout, Small};
 pub use mana::mana_contribution;

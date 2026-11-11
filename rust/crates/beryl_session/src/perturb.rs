@@ -11,6 +11,8 @@ use std::cell::Cell;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, GameTable, Profile, State};
 
+use crate::SessionError;
+
 /// What a replay on this thread perturbs. The default perturbs nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Perturbation {
@@ -115,12 +117,15 @@ pub(crate) fn seed(seed: u64) -> u64 {
 }
 
 /// A new game between the decks of `t`, recorded with `seed` ([`State::new`]).
-pub(crate) fn new_game(t: &GameTable, seed: u64, profile: Profile) -> State {
-    let mut state = State::new(t, self::seed(seed), profile);
+pub(crate) fn new_game(t: &GameTable, seed: u64, profile: Profile) -> Result<State, SessionError> {
+    let mut state =
+        State::new(t, self::seed(seed), profile).map_err(|misfit| SessionError::Deck {
+            reason: misfit.to_string(),
+        })?;
     if current().slots {
         state.board().reverse_deck_slots();
     }
-    state
+    Ok(state)
 }
 
 /// The candidates of a decision of `n`, in the order this thread lists them.

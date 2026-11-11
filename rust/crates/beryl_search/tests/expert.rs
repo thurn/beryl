@@ -691,7 +691,7 @@ fn expert_beats_random() {
         if expert == Seat::P1 {
             agents.swap(0, 1);
         }
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |_, _| {});
         wins += u64::from(outcome == Outcome::Win(expert));
     }

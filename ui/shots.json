@@ -393,9 +393,9 @@
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='120']",
+        "[data-slot='512']",
         "[data-slot='10']",
-        "[data-slot='121']",
+        "[data-slot='513']",
         "[data-slot='12']"
       ],
       "keep": "the only shot of attackers picked but not declared; its stale updates were combat-declare's re-recordings"
@@ -405,7 +405,7 @@
       "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-slot='8']", "[data-slot='62']", "[data-slot='9']"]
+      "click": ["[data-slot='8']", "[data-slot='258']", "[data-slot='9']"]
     },
     {
       "name": "game-log-open",
@@ -421,11 +421,11 @@
       "height": 900,
       "click": [
         "[data-slot='8']",
-        "[data-slot='62']",
+        "[data-slot='258']",
         "[data-slot='9']",
-        "[data-slot='62']",
+        "[data-slot='258']",
         "[data-slot='15']",
-        "[data-slot='69']"
+        "[data-slot='265']"
       ],
       "keep": "the only shot of a double block declared; its stale updates were combat-double-block's re-recordings"
     },

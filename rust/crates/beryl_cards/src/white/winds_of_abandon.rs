@@ -12,6 +12,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
+use beryl_engine::layout::{PerPlayer, Table};
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
@@ -43,7 +44,7 @@ const BASIC_LANDS: Filter = Filter::All(&[
 /// as it last existed on the battlefield: in exile it has none.
 fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard<L::Slot>) -> Flow {
     let players = ctx.state().players_in_turn_order(ctx.state().players());
-    let mut controlled = [Bitboard::EMPTY; 2];
+    let mut controlled: PerPlayer<L, Bitboard<L::Slot>> = Table::filled(Bitboard::EMPTY);
     for player in players.clone() {
         controlled[player.index()] =
             creatures.filter(|slot| ctx.state().controller(slot) == player);

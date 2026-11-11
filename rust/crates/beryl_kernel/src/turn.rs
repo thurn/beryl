@@ -12,8 +12,8 @@ use beryl_card::TurnStep;
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
 use crate::event::Event;
-use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::ids::{Seat, SlotId};
+use crate::layout::{Layout, Table};
 use crate::state::{Budgets, State};
 
 /// Where the game is in its turns (architecture §4.4).
@@ -122,7 +122,7 @@ impl<L: Layout> State<L> {
         };
         self.turn.number += 1;
         self.budgets.decisions = 0;
-        for p in &mut self.players {
+        for p in self.players.as_mut_slice() {
             p.lands_played = 0;
         }
         self.turn.active
@@ -163,7 +163,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn pass_priority(&mut self) -> bool {
         self.turn.passes += 1;
-        if self.turn.passes < 2 {
+        if usize::from(self.turn.passes) < L::Slot::PLAYERS {
             self.turn.priority = self.next_player(self.turn.priority);
             return false;
         }

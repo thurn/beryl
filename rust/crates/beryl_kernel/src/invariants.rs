@@ -2,9 +2,9 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
-use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue};
-use crate::state::{DECK_SLOTS, Object, ObjectFlags, Pending, State, TOKEN_SLOTS, Zone};
+use crate::ids::{Place, Seat, SlotId};
+use crate::layout::{Layout, Queue, Table};
+use crate::state::{Object, ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
 
@@ -51,17 +51,18 @@ impl<L: Layout> State<L> {
 
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
         for slot in L::Slot::all() {
-            let i = slot.index();
             let at = Some(At::Slot(slot.index()));
             let o = self.object(slot);
-            let deck_owner = Seat::try_new((i / DECK_SLOTS) as u8);
-            let in_deck = deck_owner.is_some_and(|p| i % DECK_SLOTS < t.deck(p).len());
+            let (deck_owner, in_deck) = match slot.place() {
+                Place::Deck(player, card) => (Some(player), card < t.deck(player).len()),
+                Place::Pool(_) => (None, false),
+            };
             if o.zone == Zone::Nowhere {
                 check(!in_deck, "a deck card is nowhere", at)?;
                 continue;
             }
             let token = o.flags.has(ObjectFlags::TOKEN);
-            if i >= usize::from(TOKEN_SLOTS) {
+            if deck_owner.is_none() {
                 // The shared pool holds tokens.
                 check(token, "a non-token in the token pool", at)?;
             } else {
@@ -141,7 +142,7 @@ impl<L: Layout> State<L> {
                 )?;
             } else if o.zone.is_public() {
                 check(
-                    known_by(Seat::P0) && known_by(Seat::P1),
+                    self.who_knows(slot) == self.players(),
                     "a public card unknown",
                     at,
                 )?;
@@ -154,7 +155,7 @@ impl<L: Layout> State<L> {
     }
 
     fn check_zones(&self) -> Result<(), Violation> {
-        let mut members = [[Bitboard::EMPTY; Zone::OWNED]; 2];
+        let mut members: L::PerPlayer<_> = Table::filled([Bitboard::EMPTY; Zone::OWNED]);
         let mut stack = Bitboard::EMPTY;
         for slot in L::Slot::all() {
             let o = self.object(slot);
@@ -191,8 +192,7 @@ impl<L: Layout> State<L> {
                 Some(At::Player(p)),
             )?;
         }
-        let battlefield =
-            members[0][Zone::Battlefield as usize] | members[1][Zone::Battlefield as usize];
+        let battlefield = self.in_zone(Zone::Battlefield);
         let listed: Bitboard<L::Slot> = self.battlefield().iter().copied().collect();
         check(
             listed == battlefield && listed.count() as usize == self.battlefield().len(),
@@ -234,7 +234,8 @@ impl<L: Layout> State<L> {
         // resolution paused for an answer is still resolving (§7.3).
         let resolving = matches!(self.pending, Pending::Resolving(_));
         check(
-            t.passes < 2 || (t.passes == 2 && resolving),
+            usize::from(t.passes) < L::Slot::PLAYERS
+                || (usize::from(t.passes) == L::Slot::PLAYERS && resolving),
             "a bad turn",
             None,
         )?;

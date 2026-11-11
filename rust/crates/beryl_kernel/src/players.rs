@@ -6,8 +6,8 @@
 use beryl_card::Zone;
 
 use crate::bitboard::Bitboard;
-use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::ids::{Seat, SlotId};
+use crate::layout::{Layout, Table};
 use crate::player_set::PlayerSet;
 use crate::state::{State, ZoneKey};
 use crate::two_player::TwoPlayerSeat as _;
@@ -21,7 +21,7 @@ impl<L: Layout> State<L> {
     /// concedes leaves the game immediately"); this is then the players still in it.
     #[inline]
     pub fn players(&self) -> PlayerSet {
-        PlayerSet::seats(self.players.len())
+        PlayerSet::seats(L::Slot::PLAYERS)
     }
 
     /// The opponents of `player`

@@ -14,7 +14,7 @@ use common::{mirror, play};
 /// Positions from a greedy mirror game with more than two candidates, `from_end` such
 /// decisions before the game's last: late ones, for short rollouts.
 fn positions(t: &GameTable, from_end: &[usize]) -> Vec<(State, Decision)> {
-    let mut s = State::new(t, 4, Profile::SMART);
+    let mut s = State::new(t, 4, Profile::SMART).unwrap();
     let mut agents = [GreedyAgent::new(t), GreedyAgent::new(t)];
     let mut all = Vec::new();
     play(t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
@@ -152,7 +152,7 @@ fn a_decision_spends_about_its_budget() {
 fn every_family_plays_a_game_to_its_end() {
     let t = mirror();
     for (i, family) in FAMILIES.iter().enumerate() {
-        let mut s = State::new(&t, i as u64, Profile::SMART);
+        let mut s = State::new(&t, i as u64, Profile::SMART).unwrap();
         let mut agents: [Box<dyn Agent>; 2] = [
             Box::new(LongSearch::new(&t, settings(family, 600, 2), i as u64)),
             Box::new(GreedyAgent::new(&t)),

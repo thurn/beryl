@@ -96,7 +96,7 @@ pub fn start(dir: &Path, t: &GameTable, g: &GameLine) -> Result<State, String> {
                 serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
             positions::start(t, &p, g.seed)
         }
-        None => Ok(State::new(t, g.seed, Profile::SMART)),
+        None => State::new(t, g.seed, Profile::SMART).map_err(|e| e.to_string()),
     }
 }
 

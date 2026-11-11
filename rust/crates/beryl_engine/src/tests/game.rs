@@ -13,7 +13,7 @@ use crate::{Choice, DecisionKind, Decklist, Opt, Outcome, Profile, StallReason, 
 /// every decision.
 fn land_and_pass(decks: [&Decklist; 2], seed: u64, profile: Profile) -> (Outcome, State, Vec<u64>) {
     let t = table(decks);
-    let mut s = State::new(&t, seed, profile);
+    let mut s = State::new(&t, seed, profile).unwrap();
     let mut hashes = Vec::new();
     let outcome = play(&t, &mut s, land_go, |s, _| hashes.push(fingerprint(s)));
     (outcome, s, hashes)
@@ -55,7 +55,7 @@ fn one_seed_reproduces_the_game_hash_for_hash() {
 #[test]
 fn choosing_to_draw_makes_the_other_player_start() {
     let t = table([LANDS, LANDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT);
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     let mut chooser = None;
     let outcome = play(
         &t,
@@ -78,7 +78,7 @@ fn choosing_to_draw_makes_the_other_player_start() {
 #[test]
 fn only_the_active_player_plays_one_land_in_a_main_phase() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 3, Profile::EXACT);
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     let mut land_offers = 0;
     play(&t, &mut s, land_go, |s, d| {
         if d.kind != DecisionKind::Priority {
@@ -110,7 +110,7 @@ fn only_the_active_player_plays_one_land_in_a_main_phase() {
 fn cleanup_discards_down_to_seven() {
     let spells: &Decklist = &[(20, "Test Spell A"), (20, "Test Spell B")];
     let t = table([spells, spells]);
-    let mut s = State::new(&t, 5, Profile::SMART);
+    let mut s = State::new(&t, 5, Profile::SMART).unwrap();
     let mut discards = 0;
     let outcome = play(&t, &mut s, land_go, |s, d| {
         let active = s.turn().active();
@@ -142,7 +142,7 @@ fn a_game_past_its_turn_budget_stalls() {
         },
         ..Profile::EXACT
     };
-    let mut s = State::new(&t, 0, profile);
+    let mut s = State::new(&t, 0, profile).unwrap();
     let outcome = play(&t, &mut s, land_go, |_, _| {});
     assert_eq!(outcome, Outcome::Stalled(StallReason::Turns));
     assert_eq!(s.turn().number(), 10);

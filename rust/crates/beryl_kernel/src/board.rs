@@ -11,11 +11,11 @@ use beryl_card::{FaceIx, Trigger};
 
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
-use crate::layout::{Layout, Queue, Small};
+use crate::ids::{CardIx, Seat, Slot, SlotId};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, Counters, DECK_SLOTS, Duration, ManaPool, MulliganStatus, ObjectFlags, Pending,
-    State, TurnStep, Zone, token_slots,
+    CounterKind, Counters, Duration, ManaPool, MulliganStatus, ObjectFlags, Pending, State,
+    TurnStep, Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -138,7 +138,7 @@ impl<L: Layout> Board<'_, L> {
         self.0.turn.priority = active;
         self.0.turn.passes = 0;
         self.0.pending = Pending::None;
-        for p in &mut self.0.players {
+        for p in self.0.players.as_mut_slice() {
             p.mulligan = MulliganStatus::Kept;
         }
     }
@@ -172,7 +172,7 @@ impl<L: Layout> Board<'_, L> {
         self.0.turn.passes = 0;
         self.0.turn.cleanup_check = true;
         self.0.pending = Pending::None;
-        for p in &mut self.0.players {
+        for p in self.0.players.as_mut_slice() {
             p.mulligan = MulliganStatus::Kept;
         }
     }
@@ -233,8 +233,8 @@ impl<L: Layout> Board<'_, L> {
         face: FaceIx,
         one_one: bool,
     ) -> Result<L::Slot, Full> {
-        let slot = token_slots()
-            .find(|&slot: &L::Slot| self.0.object(slot).zone == Zone::Nowhere)
+        let slot = L::Slot::pool()
+            .find(|&slot| self.0.object(slot).zone == Zone::Nowhere)
             .ok_or(Full)?;
         self.0.ready_token(slot, owner, card, one_one);
         self.place(slot, Zone::Battlefield)?;
@@ -487,7 +487,7 @@ impl Board<'_, Small> {
         for player in Seat::BOTH {
             let p = player.index();
             let mut slots = self.0.zones.library[p];
-            let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
+            let mut cards: <Small as Layout>::Deck<CardIx> = Fixed::new();
             for &slot in &slots {
                 let _ = cards.push(self.0.object(slot).card);
             }

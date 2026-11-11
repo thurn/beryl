@@ -251,8 +251,8 @@ fn counter_named(name: &str) -> Result<CounterKind, String> {
 /// The state `b` describes, in the game of `t`, as `beryl_scenario` arranges its setups:
 /// every card starts in its owner's library and moves to its zone.
 pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
-    let human = seat(b.human)?;
-    let mut s = State::new(t, b.seed, with_stops(Profile::SMART, b.stops, human));
+    let profile = with_stops(Profile::SMART, b.stops, seat(b.human)?);
+    let mut s = State::new(t, b.seed, profile).map_err(|e| e.to_string())?;
     s.board()
         .begin_at(b.turn, seat(b.active)?, step_named(&b.step)?);
     let full = |_| "a zone is full".to_owned();
@@ -373,7 +373,7 @@ pub fn reach(e: &Entry) -> Result<Reached, String> {
             let text = fs::read_to_string(&path).map_err(|err| drift(err.to_string()))?;
             let r: Seeded = serde_json::from_str(&text).map_err(|err| drift(err.to_string()))?;
             let t = mirror();
-            let s = State::new(&t, r.seed, Profile::SMART);
+            let s = State::new(&t, r.seed, Profile::SMART).map_err(|e| drift(e.to_string()))?;
             let log = r.history.into_iter().map(LogEntry::Choice).collect();
             // Hunt games have no human stops or automatic session answers. Do not use
             // Walk::of_file, which changes one seat's profile to the app's human profile.

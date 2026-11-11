@@ -11,7 +11,7 @@ use crate::bitboard::Bitboard;
 use crate::chance;
 use crate::event::Sink;
 use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::layout::{Layout, Table};
 use crate::state::State;
 
 impl<L: Layout> State<L> {
@@ -21,7 +21,7 @@ impl<L: Layout> State<L> {
     /// until it is shuffled or otherwise hidden anew.
     pub fn reveal(&mut self, sink: &mut Sink<L>, slot: L::Slot) {
         chance::settle(self, sink, slot);
-        for k in &mut self.knowledge {
+        for k in self.knowledge.as_mut_slice() {
             k.insert(slot);
         }
     }
@@ -48,10 +48,22 @@ impl<L: Layout> State<L> {
     /// as a paused resolution run again from its start needs. Returns the cards some player
     /// knew beyond that: what the earlier runs revealed, which chance must not count as
     /// revealed again ([`chance`]).
-    pub fn restore_knowledge(&mut self, knowledge: [Bitboard<L::Slot>; 2]) -> Bitboard<L::Slot> {
-        let revealed = (self.knowledge[0] | self.knowledge[1]) & !(knowledge[0] | knowledge[1]);
+    pub fn restore_knowledge(
+        &mut self,
+        knowledge: L::PerPlayer<Bitboard<L::Slot>>,
+    ) -> Bitboard<L::Slot> {
+        let earlier = knowledge.iter().fold(Bitboard::EMPTY, |all, &k| all | k);
+        let revealed = self.known_to_someone() & !earlier;
         self.knowledge = knowledge;
         revealed
+    }
+
+    /// The slots whose identity some player knows.
+    #[inline]
+    pub(crate) fn known_to_someone(&self) -> Bitboard<L::Slot> {
+        self.knowledge
+            .iter()
+            .fold(Bitboard::EMPTY, |all, &k| all | k)
     }
 
     /// What `run`, a copy of this state played on, showed a player stays known here

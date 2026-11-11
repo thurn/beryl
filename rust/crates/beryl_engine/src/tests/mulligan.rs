@@ -32,7 +32,7 @@ fn mulligans_until(
 #[test]
 fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 11, Profile::EXACT);
+    let mut s = State::new(&t, 11, Profile::EXACT).unwrap();
     let (first, log) = mulligans_until(&t, &mut s, |_, n| n == 0);
     let p = s.turn().starting_player();
     let q = p.opponent();
@@ -68,7 +68,7 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
 #[test]
 fn a_player_decides_on_a_full_new_seven_before_putting_cards_on_the_bottom() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 11, Profile::EXACT);
+    let mut s = State::new(&t, 11, Profile::EXACT).unwrap();
     // Mulligan twice, keeping the third seven.
     let (_, log) = mulligans_until(&t, &mut s, |player, n| player == Seat::P0 && n < 2);
     let asked: Vec<_> = log
@@ -94,7 +94,7 @@ fn a_player_decides_on_a_full_new_seven_before_putting_cards_on_the_bottom() {
 #[test]
 fn a_player_can_mulligan_down_to_nothing() {
     let t = table([LANDS, LANDS]);
-    let mut s = State::new(&t, 2, Profile::EXACT);
+    let mut s = State::new(&t, 2, Profile::EXACT).unwrap();
     let (_, log) = mulligans_until(&t, &mut s, |player, _| player == Seat::P0);
     assert_eq!(s.player(Seat::P0).mulligans(), 7);
     assert_eq!(s.player(Seat::P1).mulligans(), 0);
@@ -114,7 +114,7 @@ fn a_player_can_mulligan_down_to_nothing() {
 #[test]
 fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_library() {
     let t = table([MIXED, MIXED]);
-    let mut s = State::new(&t, 4, Profile::EXACT);
+    let mut s = State::new(&t, 4, Profile::EXACT).unwrap();
     let mut checked = 0;
     let agent = |obs: Observation<'_>, d: &Decision| match d.kind {
         // Mulligan once each, to put a known card into each library.

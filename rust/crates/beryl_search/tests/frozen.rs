@@ -27,7 +27,7 @@ fn moves() -> u64 {
         if seed % 2 == 1 {
             agents.swap(0, 1);
         }
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let x = &mut Scratch::new();
         let outcome = loop {
             match next(&mut s, &t, x, &mut Replay) {

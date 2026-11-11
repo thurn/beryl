@@ -146,7 +146,7 @@ impl Default for Workload {
 /// Plays one seeded game under smart stops, keeping the state at its first decision on or
 /// after each turn in [`CUTS`], until the last cut or the end of the game.
 fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec<State>) {
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).expect("decks that fit Small");
     let mut x = Scratch::new();
     let mut cuts = CUTS.iter().peekable();
     while let Some(&&turn) = cuts.peek() {

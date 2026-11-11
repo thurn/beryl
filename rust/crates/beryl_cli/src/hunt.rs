@@ -216,7 +216,7 @@ fn entry(p: &Packet) -> Entry {
 
 /// Reconstruct from semantic choices and fail on drift, including the candidate labels.
 fn reconstruct(t: &GameTable, p: &Packet) -> Result<(State, Decision), String> {
-    let mut s = State::new(t, p.seed, Profile::SMART);
+    let mut s = State::new(t, p.seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::new();
     if p.history.len() != p.decision {
         return Err("history length differs from decision index".into());
@@ -484,7 +484,7 @@ fn collect(
     game: u32,
     max_decisions: usize,
 ) -> Result<(Vec<Pending>, String, bool), String> {
-    let mut s = State::new(t, seed, Profile::SMART);
+    let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::recording();
     let mut players = seat_seeds(seed).map(|seed| LongSearch::new(t, c.settings(), seed));
     let mut experts = seat_seeds(seed).map(|seed| {
@@ -613,7 +613,7 @@ mod tests {
     fn collected_positions_replay_and_detect_drift() {
         let t = mirror();
         let seed = 7;
-        let mut s = State::new(&t, seed, Profile::SMART);
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let mut x = Scratch::new();
         let policy = RolloutPolicy::with(&t, DEEP_SEARCHER.knowledge);
         let mut history = Vec::new();

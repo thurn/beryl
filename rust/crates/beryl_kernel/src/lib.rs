@@ -232,9 +232,44 @@
 //! `Seat` has no `opponent`. The shortcut is the trait [`two_player::TwoPlayerSeat`], in
 //! scope only where a module imports it: the kernel's turn order and test door, and callers
 //! outside the rules that mean the other seat at this table (a view's "opponent", an
-//! evaluation's other side, tests). Rules modules and card bodies never import it. Player
-//! count, deck size, slot count and card-index width are parameters of the layout
-//! (by-w8gv.5.14, by-w8gv.5.15).
+//! evaluation's other side, tests). Rules modules and card bodies never import it.
+//!
+//! ## Layouts
+//!
+//! How many players a game has, how many cards a deck, a library and a graveyard may hold,
+//! how many tokens and spell copies exist at once and how many objects there are in all are
+//! parameters of the [`Layout`], and nothing outside the layouts assumes them (by-w8gv.5.14;
+//! the card-index width is by-w8gv.5.15's):
+//!
+//! | parameter | where a layout sets it |
+//! |---|---|
+//! | players | [`SlotId::PLAYERS`] of its slots; [`Layout::PerPlayer`], the table with one entry each |
+//! | deck, library and graveyard size | [`SlotId::DECK_SLOTS`]; [`Layout::Deck`], the queue that long |
+//! | tokens and spell copies | the pool, [`SlotId::POOL`] to [`SlotId::COUNT`]: [`SlotId::pool`], [`Layout::TOKEN_POOL`] |
+//! | objects in all | [`SlotId::COUNT`] |
+//!
+//! [`Small`] is two players, 60-card decks and 255 slots, and stays within 20 KiB;
+//! [`Large`] is two players, 256-card decks and 1,024 slots. Code generic over the layout
+//! asks `L::Slot` and builds `L::PerPlayer` and `L::Deck` values; a value that is the same
+//! in every layout (a [`profile::Profile`]'s stops, a [`GameTable`]'s decks) is a
+//! [`layout::PerSeat`], one entry for each seat `beryl_card` names. `Seat` stays the
+//! two-variant enum it is, so `Seat::BOTH` still walks the players inside the kernel: a
+//! third player needs a third seat first.
+//!
+//! The numbering of slots belongs to the slot type, not to the layout beside it, so a
+//! conversion between two numberings needs only their types and a slot number of one cannot
+//! pass for a number of the other. A slot keeps its [`ids::Place`] in every numbering (the
+//! `i`th card of a player's deck, the `k`th slot of the pool) and its order among the
+//! others, so [`relayout::Relayout`] takes a game to another layout place by place and a
+//! `Choice` over objects names the same object in each. The UI's protocol names an object
+//! by its number among [`LargeSlot`]s whatever layout its game is in ([`SlotId::num`]). A
+//! layout with other deck sizes is a new slot type and a new `impl Layout`.
+//!
+//! A game that does not fit a layout is refused where a state of that layout is made, with
+//! a [`Misfit`] and never a panic: [`State::deal`] refuses a deck with more cards than the
+//! layout's `DECK_SLOTS`, and [`State::try_relayout`] a game with a deck, a token or a list
+//! past what the target holds. [`GameTable`] is not generic over the layout and refuses no
+//! deck for its size.
 
 pub mod bitboard;
 pub mod board;
@@ -243,6 +278,7 @@ pub mod decision;
 pub mod derive;
 pub mod event;
 pub mod filter;
+mod fit;
 pub mod fixed;
 mod floating;
 pub mod ids;
@@ -271,7 +307,8 @@ pub mod two_player;
 pub mod zone;
 
 pub use bitboard::Bitboard;
-pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
+pub use fit::Misfit;
+pub use ids::{CardIx, LargeSlot, Place, Seat, Slot, SlotId};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use player_set::PlayerSet;

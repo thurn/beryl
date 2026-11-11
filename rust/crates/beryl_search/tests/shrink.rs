@@ -66,7 +66,7 @@ impl Game {
         let mut i = 0;
         catch_unwind(AssertUnwindSafe(|| {
             let t = self.table();
-            let mut s = State::new(&t, self.seed, TRACED);
+            let mut s = State::new(&t, self.seed, TRACED).unwrap();
             let mut x = Scratch::new();
             loop {
                 let step = next(&mut s, &t, &mut x, &mut Replay);
