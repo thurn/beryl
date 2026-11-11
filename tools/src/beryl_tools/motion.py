@@ -12,9 +12,11 @@ verb as its values say.
 - The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moments (ui/verbs.json)
   on the stage in stepped stage time: the first (a cast, its trigger and tokens), every step of
   the suite's verbs screenshotted at every tick; and with `--more` the moments of cards
-  changing zone (`zones` and `scry`), every step of fly, vanish and lift timed and the first of
-  each kind (a case, whose flight it is, alone or among like steps) screenshotted, its subject
-  drawn alone. Each step is held to its verb's values (its case's, where the case has its own):
+  changing zone (`zones` and `scry`: fly, vanish and lift) and of changes on a card where it
+  lies and to players (`combat` and `place`: tap, strike, count and flip), every step of those
+  verbs timed and the first of each kind (a case, whose flight it is, alone or among like
+  steps) screenshotted, its subject drawn alone. A step's case is the page's
+  (src/stage/timing.ts caseOf), read from the table the step found, as the stage times it. Each step is held to its verb's values (its case's, where the case has its own):
   how long it played and, in a batch of like steps, how far apart they began, by the step's own
   start and end in stage time; and for a step screenshotted, whether its subject travels and
   how its progress is eased, by what `by video measure` (video_measure.py) reads of its frames
@@ -26,14 +28,29 @@ verb as its values say.
   machine load cannot change a result. `by motion` runs it: the fast check when the stage or
   these data change (checks.py) and nightly (nightly.py), with one run-log record a verb and
   layout, `motion:<verb>/<layout>`.
-- `--more` runs nightly only: the moments of cards changing zone add about 100 s to the lane
-  (by-w8gv.21.38: the capture took 107 to 127 s with them and about 20 s without, at loads of
-  25 to 50 on 18 cores; `zones` is nearly all of it, its ten steps screenshotted about 350
-  frames a seat), past the fast check's 60 s. The fast check skips the verbs only they play
-  (MORE_ONLY).
+- What the tracker can hold of the verbs that change a card where it lies (by-w8gv.21.41).
+  A flip grows and turns over in place (src/stage/tracks.ts FLIP): its travel is held (in
+  place) and its peak size shown. A strike lunges at what it hits and drifts back to where it
+  lay, which the tracker, measuring a card from one rest to the next, cannot follow (it reads
+  more than one mover, or a card that never comes to rest): the verb declares no curve, so its
+  duration and stagger are held and what the tracker found is shown. A count of
+  counters changes a badge on a card that stays put: its travel is held (in place). A count of
+  life is drawn over the life orb by the screen (src/stage/Chrome.tsx LifeChange, animated by
+  CSS on the page's clock, which the capture stops), not the stage: it is only timed. A tap
+  turns its card a quarter about its own middle, which is no travel, and video_shape reads a
+  turn only of a card the tracker follows from one place to another: its steps are timed, as
+  every verb's are against its own values, and never screenshotted, until the motion review
+  wants a measure of a card turning where it lies.
+- `--more` runs nightly only: its moments add about two minutes to the lane, past the fast
+  check's 60 s (by-w8gv.21.38: the capture took 107 to 127 s with the moments of cards
+  changing zone and about 20 s without, at loads of 25 to 50 on 18 cores, `zones` nearly all
+  of it, its ten steps screenshotted about 350 frames a seat; by-w8gv.21.41: about 145 s with
+  `combat` and `place` too, at loads of 20 to 30, their seven steps shot about 360 frames a
+  seat). The fast check skips the verbs only they play (MORE_ONLY).
 
 A number is held within one tick of the capture or SHARE of its value, whichever is larger. A
-step's delay counts from its cause, which a step's record does not name, so it is not held.
+step's delay counts from its turn in its beat, but it begins no earlier than the step before
+it, so its start is not held to its delay; it is to the stagger of a like step before it.
 """
 
 from __future__ import annotations
@@ -70,17 +87,11 @@ EASED = 0.05
 # A layout the capture plays (ui/scripts/stepped.mjs LAYOUTS).
 LAYOUTS = ("desktop",)
 CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
-# The suite's verbs the capture's moment plays no step of, and why: logged as skipped.
-NOT_CAPTURED: dict[str, str] = {
-    verb: "the capture takes no step of it yet;"
-    " by-w8gv.21.41 captures the moments `combat` and `place`"
-    for verb in ("strike", "count", "flip")
-}
-# The suite's verbs only the moments of cards changing zone play (`--more`), which the fast
-# check leaves to the nightly run: logged as skipped without it.
+# The suite's verbs only the moments of `--more` play, which the fast check leaves to the
+# nightly run: logged as skipped without it.
 MORE_ONLY: dict[str, str] = {
-    "lift": "only the moments of cards changing zone play it, captured nightly"
-    " (`by motion --more`)",
+    verb: "only the moments of `--more` play it, captured nightly (`by motion --more`)"
+    for verb in ("lift", "strike", "count", "flip")
 }
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
@@ -215,9 +226,9 @@ def held(
 
 
 def exempted(data: dict[str, Any]) -> dict[str, int]:
-    """The verbs a numbered exception exempts, each with its exception: no capture holds them
-    (stepped.mjs shoots none of their steps). A permanent that taps turns where it lies, which
-    the tracker, made to follow a card that travels, does not read."""
+    """The verbs a numbered exception exempts, each with its exception: stepped.mjs times their
+    steps but shoots none. A permanent that taps turns where it lies, which the tracker, made
+    to follow a card that travels, does not read."""
     return {v["name"]: v["exempt"] for v in data.get("verbs", []) if "exempt" in v}
 
 
@@ -228,7 +239,7 @@ def timing_verdicts(
 ) -> list[list[Verdict]]:
     """For each step a capture recorded (stepped.mjs's steps.json), how long it played held to
     its verb's duration and, where the next step is the same verb and case right after it in
-    the script, how long after it that one began held to its stagger. A value the data leaves
+    the script, how long after it that one began held to its stagger (`apart`). A value the data leaves
     null is played as 0 (timing.ts), and held so."""
     verbs = {v["name"]: v for v in data.get("verbs", [])}
     tick = float(captured.get("tick") or TICK)
@@ -237,10 +248,10 @@ def timing_verdicts(
     out: list[list[Verdict]] = []
     for step, after in zip(steps, [*steps[1:], None]):
         verb = verbs.get(step["verb"], {})
-        if "exempt" in verb or not verb:
+        if not verb:
             out.append([])
             continue
-        case = case_of(step["act"], seat)
+        case = case_in(step, seat)
         values = values_of(verb, case)
         found = [
             held(
@@ -257,7 +268,7 @@ def timing_verdicts(
             after is not None
             and after["n"] == step["n"] + 1
             and after["verb"] == step["verb"]
-            and case_of(after["act"], seat) == case
+            and case_in(after, seat) == case
         ):
             found.append(
                 held(
@@ -265,7 +276,7 @@ def timing_verdicts(
                     step["verb"],
                     "stagger",
                     after["from"] - step["from"],
-                    values["stagger"] or 0,
+                    apart(step, values),
                     case,
                     tick,
                 )
@@ -274,7 +285,28 @@ def timing_verdicts(
     return out
 
 
+def apart(step: dict[str, Any], values: dict[str, Any]) -> float:
+    """How long after `step`, played with `values`, a like step right after it in its beat
+    (its verb and case) begins: its stagger, but for a step that began after its turn, held
+    back by an earlier step's delay (the stage begins a beat's steps in order), which the next
+    step's turn may not be. Where the capture recorded no turn, the stagger."""
+    stagger = float(values["stagger"] or 0)
+    if "turn" not in step:
+        return stagger
+    delay = float(values["delay"] or 0)
+    return max(step["from"], step["turn"] + stagger + delay) - step["from"]
+
+
 # The capture: what the tracker found of a step, and the case its verb's values are of.
+
+
+def case_in(step: dict[str, Any], seat: str) -> str | None:
+    """The case of a captured step: as the page told it, which reads it from the table the
+    step found (a life total's rise or fall), where the capture recorded it; else as
+    `case_of` reads the step's act alone."""
+    if "case" in step:
+        return step["case"]
+    return case_of(step["act"], seat)
 
 
 def case_of(act: dict[str, Any], seat: str) -> str | None:
@@ -417,8 +449,8 @@ def capture_verdicts(
 ) -> list[Verdict]:
     """What the tracker found of one step of `verb`, held to its curve (its `case`'s): nothing
     travels for `none`, and neither is held where the verb has no curve. Its sizes are shown
-    beside Arena's, and its path's bow, its turn and its squash for the motion review, held to
-    nothing."""
+    beside Arena's, its path's bow, its turn and its squash for the motion review, and what
+    the tracker could not follow of a step held to no travel, each held to nothing."""
     declared = next(v for v in data.get("verbs", []) if v["name"] == verb)
     curve = values_of(declared, case)["curve"]
     arena_curve = arena_of(reference, verb, "curve", case)
@@ -450,6 +482,10 @@ def capture_verdicts(
                     arena_curve,
                 )
             )
+    if found.failure and curve_class(curve) is None:
+        # What the tracker could not follow where nothing is held of how it travels, such as
+        # a strike's lunge, which comes back to where it lay: shown, held to nothing.
+        out.append(Verdict(verb, "tracked", found.failure, None, False, case))
     for measure in SIZED:
         value = getattr(found, measure)
         if value is not None:
@@ -474,8 +510,8 @@ def measure_capture(
         for step, timed in zip(captured["steps"], timings):
             frames = steps_file.parent / step["folder"]
             name = f"{captured['layout']}/{steps_file.parent.name}/{step['folder']}"
+            case = case_in(step, captured["seat"])
             if "rest" not in step:
-                case = case_of(step["act"], captured["seat"])
                 why = step.get("unshot")
                 said = [Verdict(step["verb"], "frames", why, None, False, case)]
                 out.append((step["verb"], name, timed + (said if why else [])))
@@ -483,7 +519,6 @@ def measure_capture(
             clip = video_measure.read_folder(
                 frames, "*", None, video_measure.WORK_WIDTH, None
             )
-            case = case_of(step["act"], captured["seat"])
             x, y = step["rest"]
             found = seen(clip, (x * clip.width, y * clip.height))
             verdicts = capture_verdicts(data, reference, step["verb"], case, found)
@@ -494,7 +529,7 @@ def measure_capture(
 def capture(out: Path, tick: float | None = None, more: bool = False) -> int:
     """Records the verb suite's fixtures, serves the UI and runs the stepped capture into
     `out`, in ticks of `tick` ms (stepped.mjs's sixtieth of a second by default), with the
-    moments of cards changing zone if `more`; its exit code. An earlier capture's frames are
+    moments of `more` if `more`; its exit code. An earlier capture's frames are
     removed first, so that none is measured again."""
     recorded = out / "fixtures"
     if shots.record_fixtures(recorded, selection.verb_fixtures()):
@@ -552,20 +587,20 @@ def command(args: argparse.Namespace) -> int:
     exempt = exempted(data)
     for layout in LAYOUTS:
         for verb in verbs:
-            if verb in exempt:
-                print(f"{layout}: {verb} is exempt (exception {exempt[verb]})")
-                runlog.result(f"motion:{verb}/{layout}", "pass", took)
-                continue
             mine = [
                 (name, vs)
                 for v, name, vs in measured
                 if v == verb and name.startswith(f"{layout}/")
             ]
+            if not mine and verb in exempt:
+                print(
+                    f"{layout}: {verb} is exempt (exception {exempt[verb]}), not played"
+                )
+                runlog.result(f"motion:{verb}/{layout}", "pass", took)
+                continue
             if not mine:
                 said = f"{layout}: the stage played no {verb} to capture"
-                why = NOT_CAPTURED.get(verb) or (
-                    None if args.more else MORE_ONLY.get(verb)
-                )
+                why = None if args.more else MORE_ONLY.get(verb)
                 runlog.result(
                     f"motion:{verb}/{layout}", "skip" if why else "fail", took
                 )
@@ -605,7 +640,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--more",
         action="store_true",
-        help="also the moments of cards changing zone (nightly: past the fast check's budget)",
+        help="also the moments of cards changing zone and changing in place (nightly: past"
+        " the fast check's budget)",
     )
     p.add_argument(
         "--film",

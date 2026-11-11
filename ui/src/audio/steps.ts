@@ -4,8 +4,9 @@
 // move, the direction of a tap, what a count counts and whether it rose from the table's
 // value), in a map the compiler holds whole, so a new verb does not build until it has one.
 // It is asked for as its step begins, or as the step's motion ends where it is the sound of
-// something arriving (a card placed as it lands), at that edge's stage time: nothing waits a
-// fixed time. This is audio/events.ts for the stage, which takes its place at the cut-over.
+// something arriving (a card placed as it lands), at that edge's stage time, and sounds then
+// or a share of the step after (a strike's hit, as its lunge lands): nothing waits a fixed
+// time. This is audio/events.ts for the stage, which takes its place at the cut-over.
 import type {
   Act,
   ObjectView,
@@ -18,13 +19,16 @@ import type {
 } from "../generated/protocol";
 import type { Edge, ScriptStage } from "../stage/stage.ts";
 import type { Table } from "../stage/table.ts";
+import { STRIKE } from "../stage/tracks.ts";
 import { ARRIVING, THEIRS_DB } from "./events";
 import { play, type Sound } from "./sound";
 
-/** A sound a step asks for, and the edge of the step it sounds at. */
+/** A sound a step asks for, the edge of the step it is asked for at, and how far into the
+ * step after that edge it sounds, as a share of the step's time (none: at the edge). */
 export interface Cue {
   sound: Sound;
   edge: Edge["edge"];
+  into?: number;
 }
 
 /** What a step's sounds are picked from besides its act: the table as the step found it, and
@@ -100,7 +104,9 @@ const CUES: Cues = {
     ...at("start", object.tapped ? "tap" : "untap"),
     ...at("start", attacks(object, table) && "attack"),
   ],
-  strike: () => at("start", "hit"),
+  // A creature hits as its lunge lands, a share of the way through its strike (tracks.ts
+  // STRIKE.hit), where Arena's screen flashes: one step, so the sound waits within it.
+  strike: () => [{ sound: "hit", edge: "start", into: STRIKE.hit }],
   // Mana sounds as it leaves its source; damage hits as its streak lands.
   streak: ({ stream }) =>
     stream.kind === "mana" ? at("start", "mana") : at("end", "hit"),
@@ -204,8 +210,9 @@ function sideOf({ act, cause }: ScriptStep, table: Table): Side | undefined {
 }
 
 /** Plays the sounds of `stage`'s steps from now on, each as the edge of its step it belongs
- * to comes, stamped with that edge's stage time; returns how to stop. A sound asked for more
- * than once at one stage time plays once, as the first of those steps asks. */
+ * to comes, or its share of the step after, stamped with that edge's stage time; returns how
+ * to stop. A sound asked for more than once at one stage time plays once, as the first of
+ * those steps asks. */
 export function soundSteps(stage: Pick<ScriptStage, "follow">) {
   let time = NaN;
   const sounded = new Set<Sound>();
@@ -216,7 +223,8 @@ export function soundSteps(stage: Pick<ScriptStage, "follow">) {
       if (cue.edge !== edge.edge || sounded.has(cue.sound)) continue;
       sounded.add(cue.sound);
       const theirs = sideOf(edge.step, edge.table) === "opponent";
-      play(cue.sound, { at: edge.at, gain: theirs ? THEIRS_DB : 0 });
+      const delay = (cue.into ?? 0) * (edge.span.to - edge.span.from);
+      play(cue.sound, { at: edge.at, delay, gain: theirs ? THEIRS_DB : 0 });
     }
   });
 }

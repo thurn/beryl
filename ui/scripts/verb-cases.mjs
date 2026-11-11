@@ -121,10 +121,15 @@ export function onSide(run, pose, seat, what) {
     assert.equal(far, seat === "theirs", `${what} lies at y ${pose.y}`);
 }
 
-/** `run`'s page was asked for `sound` at the stage time `at`, with no delay. */
-export function sounded(run, sound, at, what) {
+/** `run`'s page was asked for `sound` at the stage time `at`, to sound `delay` ms after. */
+export function sounded(run, sound, at, what, delay = 0) {
     assert.ok(
-        run.sounds.some((s) => s.sound === sound && s.at === at && !s.delay),
+        run.sounds.some(
+            (s) =>
+                s.sound === sound &&
+                s.at === at &&
+                Math.abs((s.delay ?? 0) - delay) < 1e-6,
+        ),
         `${what}: no ${sound} at ${at} ms among ${JSON.stringify(run.sounds)}`,
     );
 }

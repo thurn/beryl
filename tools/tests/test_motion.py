@@ -193,6 +193,12 @@ def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown
     assert failed("fly", "land played", even) == []
     # A verb with no curve is held to nothing it travels.
     assert failed("strike", None, even) == []
+    # What the tracker could not follow of a step held to no travel is shown, not failed.
+    lunge = motion.Seen(travels=False, failure="2 things moved")
+    said = motion.capture_verdicts(data, reference, "strike", "blocked attacker", lunge)
+    assert [(v.measure, v.seen, v.failed) for v in said] == [
+        ("tracked", "2 things moved", False)
+    ]
     lost = motion.Seen(travels=True, failure="2 things moved")
     assert failed("emerge", "triggered ability", lost) == ["tracked"]
 
@@ -200,7 +206,7 @@ def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown
 def test_a_verb_the_capture_does_not_play_is_one_of_the_suites() -> None:
     suite = selection.verb_suite()["verbs"]
     assert isinstance(suite, list)
-    assert set(motion.NOT_CAPTURED) | set(motion.MORE_ONLY) <= {str(v) for v in suite}
+    assert set(motion.MORE_ONLY) <= {str(v) for v in suite}
 
 
 def test_a_step_not_screenshotted_is_held_to_its_timing_and_says_why(
@@ -329,8 +335,60 @@ def test_a_change_in_place_is_held_to_its_case() -> None:
     assert counted({"kind": "life", "player": "you", "life": 17}) is None
 
 
-def test_an_exempt_verb_is_held_to_no_capture() -> None:
-    """A verb a numbered exception covers is Beryl's own: the capture lists it and shoots no
-    step of it."""
+def test_an_exempt_verb_is_listed() -> None:
     data = {"verbs": [{"name": "tap", "exempt": 2}, {"name": "fly"}]}
     assert motion.exempted(data) == {"tap": 2}
+
+
+def test_a_step_is_timed_by_the_case_the_page_told(tmp_path: Path) -> None:
+    """A life total's case is the page's, which reads it from the table the step found; a tap,
+    exempt and never screenshotted, is still held to its own duration."""
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+    play = tmp_path / "desktop" / "yours.combat"
+    play.mkdir(parents=True)
+    life = {"verb": "count", "tally": {"kind": "life", "player": "you", "life": 23}}
+    tap = {"verb": "tap", "object": {"slot": 4, "tapped": False}}
+    steps: list[dict[str, Any]] = [
+        {"n": 3, "verb": "count", "act": life, "case": "life gain", "to": 500},
+        {"n": 5, "verb": "count", "act": life, "case": "life loss", "to": 500},
+        {"n": 7, "verb": "tap", "act": tap, "case": "untap", "to": 100},
+    ]
+    for step in steps:
+        step |= {"from": 0, "folder": f"{step['n']}-{step['verb']}", "unshot": "-"}
+    captured = {"seat": "yours", "layout": "desktop", "tick": 1000 / 60}
+    (play / "steps.json").write_text(json.dumps({**captured, "steps": steps}))
+    measured = motion.measure_capture(data, reference, tmp_path)
+    said = {
+        name: [(v.measure, v.case, v.failed) for v in vs if v.measure == "duration"]
+        for _, name, vs in measured
+    }
+    assert said == {
+        "desktop/yours.combat/3-count": [("duration", "life gain", False)],
+        "desktop/yours.combat/5-count": [("duration", "life loss", True)],
+        "desktop/yours.combat/7-tap": [("duration", "untap", False)],
+    }
+
+
+def test_a_stagger_after_a_step_held_back_is_what_the_stage_waits() -> None:
+    """The stage begins a beat's steps in order: a strike held back by the delay of a life
+    total's count before it begins after its turn, and the like strike after it then begins
+    less than a stagger later, by when its own turn comes."""
+    data: dict[str, Any] = conventions.load()
+    reference: dict[str, Any] = motion.motion()
+    at_blocker: dict[str, Any] = {"verb": "strike", "to": {"kind": "object", "slot": 3}}
+    case: str = "blocked attacker"
+    held_back = {"n": 20, "turn": 3288, "from": 3388, "to": 4438}
+    after = {"n": 21, "turn": 3508, "from": 3508, "to": 4558}
+
+    def stagger(*steps: dict[str, Any]) -> list[tuple[str, bool]]:
+        played = [
+            {**s, "verb": "strike", "act": at_blocker, "case": case} for s in steps
+        ]
+        captured = {"seat": "yours", "tick": 1000 / 60, "steps": played}
+        verdicts = motion.timing_verdicts(data, reference, captured)[0]
+        return [(v.want or "", v.failed) for v in verdicts if v.measure == "stagger"]
+
+    assert stagger(held_back, after) == [("120 ms (±18)", False)]
+    on_turn = {**held_back, "turn": 3388}
+    assert stagger(on_turn, after) == [("220 ms (±33)", True)]

@@ -140,6 +140,7 @@ async function walk({ tick, gap, answers, middle, whole }) {
             at: edge.at - origin,
             verb: edge.step.act.verb,
             act: edge.step.act,
+            span: edge.span.to - edge.span.from,
             cues: window.berylStepSounds(edge),
         });
         if (edge.edge !== "start") return;
@@ -355,15 +356,16 @@ async function ending(fixture) {
 }
 
 /** Every sound `run`'s page was asked for is a step's, at the stage time that step begins or
- * ends as the step says, with no delay; and every sound a step asks for was asked for then,
- * once however many steps ask at one time. */
+ * ends as the step says, to sound then or the share of the step after it the step says; and
+ * every sound a step asks for was asked for then, once however many steps ask at one time. */
 function soundsFollowSteps(run) {
     const asked = [];
-    for (const { edge, at, cues } of run.edges) {
+    for (const { edge, at, span, cues } of run.edges) {
         for (const cue of cues) {
             const same = (s) => s.sound === cue.sound && s.at === at;
             if (cue.edge === edge && !asked.some(same)) {
-                asked.push({ sound: cue.sound, at, delay: 0 });
+                const delay = (cue.into ?? 0) * span;
+                asked.push({ sound: cue.sound, at, delay });
             }
         }
     }

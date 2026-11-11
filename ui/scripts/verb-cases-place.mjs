@@ -14,6 +14,7 @@ import {
     sounded,
     where,
 } from "./verb-cases.mjs";
+import { STRIKE } from "../src/stage/tracks.ts";
 
 /** The middle of a permanent's card at `pose`: of its frame, which lies turned a quarter in
  * its slot when it is tapped, leaned as the table leans it (src/stage/desktop.ts middle). */
@@ -220,7 +221,9 @@ export const CASES = {
                 `${what}: it is back where it lay`,
             );
             assert.ok(strike.at.to.poses[source].depth < ALOFT, what);
-            sounded(combat, "hit", strike.from, what);
+            // As its lunge lands, within the step.
+            const lands = STRIKE.hit * (strike.to - strike.from);
+            sounded(combat, "hit", strike.from, what, lands);
             for (const [name, pose] of Object.entries(was.poses)) {
                 if (strikers.includes(name)) continue;
                 for (const sample of Object.values(strike.at)) {

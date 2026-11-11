@@ -141,6 +141,9 @@ export interface Edge {
   edge: "start" | "end";
   /** The stage time it happens at, whenever the tick that finds it runs. */
   at: number;
+  /** The step's own start and end, in stage time, and when its turn in its beat came: it
+   * begins its delay after, or as an earlier step of its beat does, whichever is later. */
+  span: Readonly<Pick<Run, "from" | "to" | "turn">>;
   step: ScriptStep;
   /** The table as the step found it, before its act. */
   table: Table;
@@ -162,6 +165,8 @@ interface Entry {
 
 /** One step of the beat under way. */
 interface Run extends Playing {
+  /** When its turn in its beat came, which its delay counts from (`Timing`). */
+  turn: number;
   ease(progress: number): number;
   each?: number;
   begun: boolean;
@@ -503,13 +508,15 @@ export class ScriptStage {
     playback.steps = playback.beats[playback.beat]!.map((step, i) => {
       const timing = this.timings(step.act, table.view);
       table = apply(table, step.act);
-      from = Math.max(from, turn + timing.delay);
+      const own = turn;
+      from = Math.max(from, own + timing.delay);
       turn += timing.stagger;
       const to = from + timing.duration;
       playback.end = Math.max(playback.end, to);
       return {
         index: playback.played + i,
         verb: step.act.verb,
+        turn: own,
         from,
         to,
         step,
@@ -603,6 +610,7 @@ export class ScriptStage {
     const told: Edge = {
       edge,
       at: edge === "start" ? run.from : run.to,
+      span: { from: run.from, to: run.to, turn: run.turn },
       step: run.step,
       table: run.found!,
       earlier: steps.slice(0, steps.indexOf(run)).map((s) => s.step),

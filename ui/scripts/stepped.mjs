@@ -4,22 +4,23 @@
 // measures the frames with `by video measure`, the tool Arena's numbers were taken with, and
 // holds each step to its verb's own values (tools/src/beryl_tools/motion.py). Usage:
 //   node scripts/stepped.mjs <base-url> <fixtures-dir> <out-dir> [--tick <ms>] [--more]
-// The first moment (`moment`: a cast, its trigger and tokens) is played until the trigger is
-// done and every step of the suite's verbs in it is shot. With `--more`, the moments of `more`
-// that MORE names are played too, each to its recording's end, and of their steps of the verbs
-// MOVES names one of each kind is shot (`kindOf`), the first whose subject is still either side
-// of it and comes to rest in the window, as the tracker needs; the others are only timed. Each seat of a moment is played twice on
-// a page of its own: once to learn when each step begins and ends and where its subject (the
-// card or ability it is about) goes, and once to screenshot it, which the stage plays the same
-// to the bit because only its clock moves it. For each step shot it writes a folder
+// The first moment (`moment`: a cast, its trigger and tokens) is played until the trigger is done
+// and every step of the suite's verbs in it is shot. With `--more`, the moments of `more` that MORE
+// names are played too, each to its recording's end, and of their steps of the verbs MORE names for
+// each one of each kind is shot (`kindOf`), the first whose subject is still either side of it and
+// comes to rest in the window, as the tracker needs; the others are only timed. A step of an exempt
+// verb, or a life total's count, is only timed. Each seat of a moment is played twice on a page of
+// its own: once to learn when each step begins and ends and where its subject (the card or ability
+// it is about) goes, and once to screenshot it, which the stage plays the same to the bit because
+// only its clock moves it. For each step shot it writes a folder
 // `<out-dir>/<layout>/<play>/<n>-<verb>/` of frames from a few ticks before the step to a few
 // after, cropped to where its subject went and named by their stage time in ms as `by video
-// measure` reads a folder (`001017.000-yours.png`), where a play is the seat for the first
-// moment and `<seat>.<moment>` for the others; and `<out-dir>/<layout>/<play>/steps.json`,
-// every step taken with its act, stage times and, for one shot, its folder and where in its
-// frames its subject comes to rest. Nothing here reads the page's own time, so no frame depends
-// on the machine's speed. Exits non-zero if a moment does not play out, the two plays differ or
-// a page logs an error.
+// measure` reads a folder (`001017.000-yours.png`), where a play is the seat for the first moment
+// and `<seat>.<moment>` for the others; and `<out-dir>/<layout>/<play>/steps.json`, every step
+// taken with its act, case, turn and stage times and, for one shot, its folder and where in its
+// frames its subject comes to rest. Nothing here reads the page's own time, so no frame depends on the
+// machine's speed. Exits non-zero if a moment does not play out, the two plays differ or a page
+// logs an error.
 import { isDeepStrictEqual } from "node:util";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -51,8 +52,8 @@ const conventions = JSON.parse(
         "utf8",
     ),
 );
-/** The verbs a numbered exception exempts (data/ui-conventions.json): Beryl's own, which no
- * capture holds to Arena's, so none of their steps is shot (`by motion` lists them). */
+/** The verbs a numbered exception exempts (data/ui-conventions.json): a tap, which turns where
+ * it lies, so none of their steps is shot; each is timed as every step is. */
 const exempt = new Set(
     conventions.verbs
         .filter((verb) => "exempt" in verb)
@@ -70,11 +71,16 @@ const travels = new Set(
  * as the stack comes and goes, so a step's frames hold more than its subject moving: not
  * captured yet. */
 const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
-/** The moments of `more` played besides the first with `--more`, and the verbs whose steps are
- * taken there: cards changing zone. The changes on a card in place (`combat` and `place`, and
- * a scry's flips) are by-w8gv.21.41's. */
-const MORE = ["zones", "scry"];
-const MOVES = new Set(["fly", "vanish", "lift"]);
+/** The moments of `more` played besides the first with `--more`, each with the verbs whose
+ * steps are taken there: cards changing zone (`zones`, `scry`), and changes on a card where it
+ * lies and to players (`combat`, `place`). A scry's flips are a library card's, which the
+ * stage turns at once (SNAP), not the face-down permanent's flip its values are for. */
+const MORE = {
+    zones: new Set(["fly", "vanish", "lift"]),
+    scry: new Set(["fly", "vanish", "lift"]),
+    combat: new Set(["tap", "strike", "count"]),
+    place: new Set(["tap", "count", "flip"]),
+};
 /** How long the stage stands idle before the seat answers, in stage ms (verbs.mjs GAP). */
 const GAP = 250;
 /** The most answers the first moment takes (verbs.mjs ANSWERS). */
@@ -97,9 +103,11 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
     /** What a step is about, by the name the stage gives it: its card, or the ability; for a
      * look, the top one of the library cards it lifts (src/stage/table.ts handledAt), or none
      * where it lifts none, as for a look at a hand the seat does not see, or as it ends: the
-     * lift's motion is its cards coming off (by-w8gv.21.46 reads it). */
+     * lift's motion is its cards coming off (by-w8gv.21.46 reads it); a strike's source, and
+     * the card a tally is on. None for a count of life, which is about a player. */
     const subjectOf = (act, view) => {
         if (act.verb === "emerge") return `a${act.id}`;
+        if (act.verb === "strike") return String(act.source);
         if (act.verb === "lift" && act.span !== "begin") return null;
         if (act.verb === "lift") {
             const { zone, side, count } = act.handling;
@@ -111,7 +119,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
         }
         if (act.subject?.kind === "ability") return `a${act.subject.id}`;
         if (act.subject?.kind === "object") return String(act.subject.slot);
-        return act.object ? String(act.object.slot) : null;
+        const object = act.object ?? act.tally?.object;
+        return object ? String(object.slot) : null;
     };
     const stage = window.berylStage;
     const { clock } = stage;
@@ -129,7 +138,11 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
             open.set(e.step, steps.length);
             const { act } = e.step;
             const subject = subjectOf(act, e.table.view);
-            steps.push({ act, subject, from: at, to: at });
+            // Its case as the stage times it (src/stage/timing.ts caseOf), from the table it
+            // finds: a life total's rise or fall is not told by the step alone.
+            const found = window.berylCase(act, e.table.view) ?? null;
+            const turn = e.span.turn - origin;
+            steps.push({ act, subject, case: found, turn, from: at, to: at });
         } else if (open.has(e.step)) {
             steps[open.get(e.step)].to = at;
         }
@@ -239,12 +252,13 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
 }
 
 /** What tells the step `n` of `steps` from others of its verb, as far as which of them are
- * shot: what its case is read from (tools' motion.case_of: where it came from and goes, why,
- * what it is, which end of a span), whose it is for a flight (your own draw is held up and an
+ * shot: its case and what the case is read from (where it came from and goes, why, what it
+ * is, which end of a span), whose it is for a flight (your own draw is held up and an
  * opponent's is not), and whether a like step begins beside it (draws together, or one alone). */
 function kindOf(steps, n) {
-    const sort = (act) =>
+    const sort = ({ act, case: found }) =>
         JSON.stringify([
+            found,
             act.verb,
             act.from,
             act.object?.zone,
@@ -253,9 +267,9 @@ function kindOf(steps, n) {
             act.span,
             act.verb === "fly" ? act.object.controller : null,
         ]);
-    const own = sort(steps[n].act);
+    const own = sort(steps[n]);
     const beside = [steps[n - 1], steps[n + 1]].some(
-        (step) => step && sort(step.act) === own,
+        (step) => step && sort(step) === own,
     );
     return `${own}${beside ? " together" : " alone"}`;
 }
@@ -268,6 +282,11 @@ function framing(step, ticks, size, strict) {
     let last = ticks.findIndex((t) => t.at >= step.to);
     if (first < 0 || last < 0) return { unshot: "the walk ended first" };
     const { subject } = step;
+    if (step.act.verb === "count" && step.act.tally.kind === "life") {
+        return {
+            unshot: "a life total's change is drawn over its orb by the screen, not the stage",
+        };
+    }
     const seen = ticks
         .slice(Math.max(0, first - 1), last + 2)
         .map((t) => t.boxes[subject])
@@ -378,13 +397,23 @@ const endOf = async (fixture) =>
  * and named by its folder, and framed where it is shot: of the first moment every step of the
  * suite's verbs (`moves` null); of another, every step of `moves`' verbs, of which the first
  * of each kind `taken` (shared by a seat's plays) has not had shot is shot, where the tracker
- * can read it (`framing`), and the rest only timed. A step not shot says why. */
+ * can read it (`framing`), and the rest only timed. A step of an exempt verb (a tap, which
+ * turns where it lies) is only timed: the tracker follows a card that travels. A step not
+ * shot says why. */
 function choose(learned, size, moves, taken) {
     return learned.steps.flatMap((step, n) => {
         const verb = step.act.verb;
-        if (!verbs.includes(verb) || exempt.has(verb)) return [];
+        if (!verbs.includes(verb)) return [];
         if (moves && !moves.has(verb)) return [];
         const listed = { ...step, n, verb, folder: `${n}-${verb}` };
+        if (exempt.has(verb)) {
+            return [
+                {
+                    ...listed,
+                    unshot: "it turns where it lies, which the tracker does not read",
+                },
+            ];
+        }
         const kind = kindOf(learned.steps, n);
         if (moves && taken.has(kind)) return [listed];
         const framed = framing(step, learned.ticks, size, moves !== null);
@@ -398,10 +427,10 @@ for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
     for (const [seat, { whole }] of Object.entries(moment)) {
         const plays = [
             { name: seat, fixture: whole, moves: null },
-            ...(more ? MORE : []).map((name) => ({
+            ...Object.entries(more ? MORE : {}).map(([name, moves]) => ({
                 name: `${seat}.${name}`,
                 fixture: moments[name][seat],
-                moves: MOVES,
+                moves,
             })),
         ];
         const taken = new Set();
