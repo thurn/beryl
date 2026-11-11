@@ -26,6 +26,9 @@ import { PILES, onPile, pileLook } from "./pileLook";
 import { STAGE, fromMiddle, fromRight } from "./perspective";
 import type { Spotlight } from "./stackLayout";
 import { showcasePlace, stackPlace } from "./stackLayout";
+
+// beats.ts, held to its line count until the stage replaces it, takes Spotlight from here.
+export type { Spotlight } from "./stackLayout";
 import type { ZonePile } from "./zoneViews";
 import {
   attachments,

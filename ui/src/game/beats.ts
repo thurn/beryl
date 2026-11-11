@@ -21,8 +21,7 @@ import type {
 import { choiceOf, choiceSlots } from "./choices";
 import { pendingAttackers } from "./combat";
 import { withResolving } from "./decisions";
-import { liftsHandling, sameHandling } from "./layout";
-import { type Spotlight } from "./stackLayout";
+import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 import { FLIGHT_HOLD } from "./flight";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
