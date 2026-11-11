@@ -1,0 +1,455 @@
+//! Building a [`PlayerView`] from one player's [`Observation`].
+
+use beryl_engine::card::{Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Types};
+use beryl_engine::event::{Event, LossCause};
+use beryl_engine::layout::Queue;
+use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef, StackEntry};
+use beryl_engine::{
+    Ask, Decision, DecisionKind, GameTable, Layout, Observation, Outcome, Seat, SlotId, Small,
+    Zone, ZoneKey,
+};
+
+use super::{
+    CardHandling, CardType, Combat, CounterView, DecisionId, Facing, Keyword, ManaPool, ObjectView,
+    PaidCost, PlayerState, PlayerView, Players, PowerToughness, Side, StackItem, Status,
+    StopsSetting, TargetRef, TurnView, decision_view, game_events, halt_view, outcome_view,
+};
+
+/// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
+#[derive(Clone, Copy, Debug)]
+pub enum Moment<'a, L: Layout = Small> {
+    /// The viewer's decision `id` is open, asked by the resolution of the stack entry given,
+    /// if one asks it.
+    Deciding(DecisionId, &'a Decision<L>, Option<&'a StackEntry<L>>),
+    /// The viewer is halted ([`DecisionView::halt`](super::DecisionView::halt)) with decision `id`.
+    Halted(DecisionId),
+    /// The other player is deciding, in the resolution of the stack entry given if one asks
+    /// it.
+    Thinking {
+        resolving: Option<&'a StackEntry<L>>,
+        decision: Option<&'a Decision<L>>,
+    },
+    Playing,
+    Stopped,
+    /// The game is over; `cause`, why the loser lost, when the session saw it
+    /// ([`Event::Lose`]), and `hurt_by`, the source of the damage that last lowered their
+    /// life, if damage rather than a loss of life did.
+    Over {
+        outcome: Outcome,
+        cause: Option<LossCause<L>>,
+        hurt_by: Option<ObjectRef<L>>,
+    },
+}
+
+/// Builds the viewer's view of `obs`'s position (the position the open decision is made in,
+/// `beryl_engine::view`) at `moment`, with `events`, the engine's events since the previous view.
+/// Everything in it, events included, comes through `obs`.
+pub fn player_view<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    moment: Moment<'_, L>,
+    stops: StopsSetting,
+    events: &[Event<L>],
+) -> PlayerView {
+    let turn = obs.turn();
+    let mut objects = Vec::new();
+    let mut player_state = |p: Seat| {
+        let state = player_state(t, obs, p);
+        for slots in [&state.library, &state.graveyard] {
+            objects.extend(
+                slots
+                    .iter()
+                    .map(|&slot| object_view(t, obs, L::Slot::from_index(usize::from(slot)))),
+            );
+        }
+        // Unordered zones: their objects say where they are.
+        for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {
+            objects.extend(slots.iter().map(|slot| object_view(t, obs, slot)));
+        }
+        state
+    };
+    let viewer = obs.viewer();
+    let players = Players {
+        you: player_state(viewer),
+        opponent: player_state(viewer.opponent()),
+    };
+    objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
+    let mut stack: Vec<_> = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
+    objects.extend(
+        obs.stack()
+            .iter()
+            .filter_map(StackEntry::spell)
+            .map(|r| object_view(t, obs, r.slot)),
+    );
+    // A resolving spell's card stays on the stack until its resolution ends
+    // ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n): "As the final part of
+    // an instant or sorcery spell's resolution, the spell itself is put into its owner's
+    // graveyard").
+    let resolving = match moment {
+        Moment::Deciding(_, _, entry)
+        | Moment::Thinking {
+            resolving: entry, ..
+        } => entry,
+        _ => None,
+    };
+    if let Some(entry) = resolving
+        && let Some(r) = entry.spell()
+        && obs.object(r.slot).zone == Zone::Stack
+    {
+        objects.push(object_view(t, obs, r.slot));
+    }
+    // While the other player answers a question of its resolution, the entry stays on top of
+    // the viewer's stack: the viewer's own questions name it apart ([`DecisionView::resolving`]).
+    if let Moment::Thinking {
+        resolving: Some(entry),
+        ..
+    } = moment
+    {
+        stack.push(stack_item(t, obs, entry));
+    }
+    objects.sort_by_key(|o| o.slot);
+    let status = match moment {
+        Moment::Deciding(id, d, resolving) => {
+            debug_assert_eq!(d.player, viewer, "a view shows only its viewer's decision");
+            Status::Deciding {
+                decision: decision_view(t, obs, id, d, resolving, stops),
+            }
+        }
+        Moment::Halted(id) => Status::Deciding {
+            decision: halt_view(t, obs, id, stops),
+        },
+        Moment::Thinking { .. } => Status::Thinking,
+        Moment::Playing => Status::Playing,
+        Moment::Stopped => Status::Stopped,
+        Moment::Over { .. } => Status::Over {
+            outcome: outcome_view(t, obs, moment),
+        },
+    };
+    let handling = match moment {
+        Moment::Thinking {
+            decision: Some(d), ..
+        } if d.player != viewer => card_handling(obs, d),
+        _ => None,
+    };
+    PlayerView {
+        status,
+        handling,
+        pending_attackers: pending_attackers(moment),
+        turn: TurnView {
+            number: turn.number,
+            active: side(obs, turn.active),
+            step: turn.step.into(),
+            priority: side(obs, turn.priority),
+            starting: obs.starting_player().map(|p| side(obs, p)),
+            flip_winner: None,
+        },
+        players,
+        battlefield: slots(obs.battlefield().iter().copied()),
+        objects,
+        stack,
+        stops,
+        events: game_events(t, obs, events),
+        undone: false,
+        script: None,
+    }
+}
+
+pub(super) fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<u16>> {
+    let decision = match moment {
+        Moment::Deciding(_, d, _)
+        | Moment::Thinking {
+            decision: Some(d), ..
+        } => Some(d),
+        _ => None,
+    };
+    decision.and_then(|d| match d.ask {
+        Ask::AttackTarget { attackers } => Some(slots(attackers.iter())),
+        _ => None,
+    })
+}
+
+fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
+    let player = obs.player(p);
+    let [white, blue, black, red, green, colorless] = player.mana.amounts();
+    PlayerState {
+        life: player.life,
+        mana: ManaPool {
+            white,
+            blue,
+            black,
+            red,
+            green,
+            colorless,
+        },
+        lands_played: player.lands_played,
+        mulligans: player.mulligans,
+        mulligan: player.mulligan.into(),
+        library: slots(obs.library(p).iter().copied()),
+        graveyard: slots(obs.graveyard(p).iter().copied()),
+        emblems: player
+            .emblems
+            .iter()
+            .map(|&e| t.def(e).name.to_owned())
+            .collect(),
+    }
+}
+
+fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<CardHandling> {
+    let library = |player, count: Option<u8>| {
+        let size = obs.library(player).len();
+        let count = count.map(|n| n.min(u8::try_from(size).unwrap_or(u8::MAX)));
+        (size > 0 && count != Some(0)).then(|| CardHandling::Library {
+            side: side(obs, player),
+            count,
+            scry: matches!(d.ask, Ask::Scry { .. }).then_some(true),
+        })
+    };
+    let hand = |player| {
+        (!obs.zone(ZoneKey::Of(player, Zone::Hand)).is_empty()).then(|| CardHandling::Hand {
+            side: side(obs, player),
+        })
+    };
+    match d.ask {
+        Ask::Scry { count } | Ask::Take { count, .. } | Ask::Bottom { count } => {
+            library(d.player, Some(count))
+        }
+        Ask::Look {
+            player,
+            zone,
+            count,
+            ..
+        } => match zone {
+            Zone::Library => library(player, Some(count)),
+            Zone::Hand => hand(player),
+            _ => None,
+        },
+        Ask::Fateseal { player } => library(player, Some(1)),
+        Ask::ManifestDread => library(d.player, Some(2)),
+        Ask::Search { .. } => library(d.player, None),
+        Ask::PutBack { .. }
+        | Ask::DiscardBasicLand { .. }
+        | Ask::ExileCards {
+            zone: Zone::Hand, ..
+        } => hand(d.player),
+        _ => match d.kind {
+            DecisionKind::KeepOrMulligan | DecisionKind::PutOnBottom | DecisionKind::Discard => {
+                hand(d.player)
+            }
+            _ => None,
+        },
+    }
+}
+
+/// Player `p` as the viewer of `obs` sees them.
+pub(super) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
+    if p == obs.viewer() {
+        Side::You
+    } else {
+        Side::Opponent
+    }
+}
+
+/// Slots as the protocol numbers them.
+pub(super) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
+    slots.into_iter().map(SlotId::num).collect()
+}
+
+/// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
+/// permanent, the name of its card, which it turns face up with (CR 712.15a).
+pub(super) fn name<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+) -> Option<&'static str> {
+    let face = match obs.object(slot).face {
+        FaceIx::DOWN => FaceIx::FRONT,
+        face => face,
+    };
+    face_name(t, obs, slot, face)
+}
+
+/// The name of face `face` of the object in `slot`, if the viewer knows it: a copy's is the
+/// copied card's (CR 707.2), since a token copy is a token of that card.
+pub(super) fn face_name<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+    face: FaceIx,
+) -> Option<&'static str> {
+    Some(t.def(obs.card(slot)?).face_name(face))
+}
+
+fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
+    let o = obs.object(slot);
+    let flags = o.flags;
+    let on_battlefield = o.zone == Zone::Battlefield;
+    let derived = on_battlefield.then(|| obs.derived(slot));
+    let types = derived.map_or(Types::NONE, |d| d.types);
+    let creature = types.contains(Types::CREATURE);
+    let counters = [
+        CounterKind::PlusOne,
+        CounterKind::MinusOne,
+        CounterKind::Loyalty,
+        CounterKind::Time,
+        CounterKind::Story,
+        CounterKind::Chorus,
+    ]
+    .into_iter()
+    .filter_map(|kind| {
+        let count = o.counters.get(kind);
+        (count > 0).then(|| CounterView {
+            kind: kind.into(),
+            count,
+        })
+    })
+    .collect();
+    let some = |s: Option<L::Slot>| s.map(SlotId::num);
+    ObjectView {
+        slot: slot.num(),
+        zone: o.zone.into(),
+        owner: side(obs, o.owner),
+        controller: side(obs, obs.controller(slot)),
+        name: name(t, obs, slot).map(str::to_owned),
+        facing: if o.face == FaceIx::DOWN {
+            Facing::Down
+        } else {
+            Facing::Up
+        },
+        token: flags.has(ObjectFlags::TOKEN),
+        tapped: flags.has(ObjectFlags::TAPPED),
+        summoning_sick: creature && flags.has(ObjectFlags::SUMMONING_SICK),
+        damage: o.damage,
+        counters,
+        types: CardType::ALL
+            .iter()
+            .filter(|&&(bit, _)| types.contains(bit))
+            .map(|&(_, ty)| ty)
+            .collect(),
+        pt: derived.filter(|_| creature).map(|d| PowerToughness {
+            power: d.power,
+            toughness: d.toughness,
+        }),
+        keywords: derived.map_or_else(Vec::new, |d| {
+            Keyword::ALL
+                .iter()
+                .filter(|&&(bit, _)| d.keywords.contains(bit))
+                .map(|&(_, k)| k)
+                .collect()
+        }),
+        attached_to: some(o.attached_to),
+        exiled_by: if flags.has(ObjectFlags::EXILED_UNTIL) {
+            some(o.linked)
+        } else {
+            None
+        },
+        exiled_with: if flags.has(ObjectFlags::EXILED_WITH) {
+            some(o.linked)
+        } else {
+            None
+        },
+        combat: if flags.has(ObjectFlags::ATTACKING) {
+            let attacks_walker = flags.has(ObjectFlags::ATTACKS_PLANESWALKER);
+            let planeswalker = if attacks_walker { some(o.combat) } else { None };
+            Some(Combat::Attacking {
+                planeswalker,
+                target_departed: (attacks_walker && planeswalker.is_none()).then_some(true),
+                blocked: flags.has(ObjectFlags::BLOCKED),
+            })
+        } else if flags.has(ObjectFlags::BLOCKING) {
+            Some(Combat::Blocking {
+                attacker: some(o.combat),
+            })
+        } else {
+            None
+        },
+    }
+}
+
+/// Whether ability `index` of `list` is triggered, and how many abilities of its kind
+/// (triggered, or activated) come before it: the face's text says them in that order, so the
+/// UI finds its paragraph.
+pub(super) fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
+    // Triggered, or activated (mana abilities are written as activated ones are); the other
+    // kinds have no paragraph of their own to find.
+    let class = |a: &Ability| match a.kind {
+        AbilityKind::Triggered => Some(true),
+        AbilityKind::Activated | AbilityKind::Mana => Some(false),
+        _ => None,
+    };
+    let kind = list.get(usize::from(index)).and_then(class) == Some(true);
+    let nth = list
+        .iter()
+        .take(usize::from(index))
+        .filter(|a| class(a) == Some(kind))
+        .count();
+    (
+        kind,
+        u8::try_from(nth).expect("a face has fewer than 256 abilities"),
+    )
+}
+
+/// The costs the spell `e` was cast with: a flashback cost, which is an alternative cost
+/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)), or else the options of
+/// its face that were paid.
+fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>) -> Vec<PaidCost> {
+    if e.flashback {
+        return vec![PaidCost::Flashback];
+    }
+    e.costs
+        .paid(t.def(e.card).face(e.face))
+        .map(|option| match option {
+            CastingOption::Kicker { .. } => PaidCost::Kicker,
+            CastingOption::Offspring(_) => PaidCost::Offspring,
+            CastingOption::Impending { .. } => PaidCost::Impending,
+            CastingOption::Overload { .. } => PaidCost::Overload,
+            CastingOption::Evoke { .. } => PaidCost::Evoke,
+        })
+        .collect()
+}
+
+pub(super) fn stack_item<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    e: &StackEntry<L>,
+) -> StackItem {
+    let targets = e
+        .targets
+        .iter()
+        .map(|target| match (target.as_player(), target.as_object()) {
+            (Some(player), _) => TargetRef::Player {
+                player: side(obs, player),
+            },
+            (None, Some(o)) => TargetRef::Object { slot: o.slot.num() },
+            (None, None) => unreachable!("a target is a player or an object"),
+        })
+        .collect();
+    let source = e.object.map(|r| r.slot.num());
+    match e.ability {
+        None => StackItem::Spell {
+            slot: source.expect("a spell's card"),
+            targets,
+            x: e.x,
+            paid: paid_costs(t, e),
+        },
+        Some(ability) => {
+            let face = t.def(e.card).face(e.face);
+            let (list, index) = match ability {
+                FaceAbility::Own(i) => (face.abilities, i),
+                FaceAbility::Grant(i) => (face.grants, i),
+            };
+            let (kind, nth) = ability_order(list, index);
+            StackItem::Ability {
+                source,
+                ability: index,
+                granted: matches!(ability, FaceAbility::Grant(_)),
+                name: t.def(e.card).face_name(e.face).to_owned(),
+                triggered: kind,
+                waterbend: (face.ability(ability).cost.waterbend > 0).then_some(true),
+                nth,
+                controller: side(obs, e.controller),
+                targets,
+                x: e.x,
+            }
+        }
+    }
+}

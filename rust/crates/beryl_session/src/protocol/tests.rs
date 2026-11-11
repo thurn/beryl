@@ -1,6 +1,8 @@
 //! The protocol's unit tests.
 
-use super::*;
+use super::{candidates::cost_text, mana_text};
+use beryl_engine::card::{Cost, ManaCost};
+use beryl_engine::state::CounterKind;
 
 #[test]
 fn costs_read_as_printed() {
