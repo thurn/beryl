@@ -147,6 +147,11 @@ card command *args:
 cards *args:
     {{ by }} cards "$@"
 
+# Hold every Comprehensive Rules link and quotation in the tree to the rules page (network; --refresh)
+[group('data')]
+citations *args:
+    {{ by }} citations "$@"
+
 # Derive Arena's values and write docs/ui-conventions.md from data/ (--check)
 [group('data')]
 conventions *args:

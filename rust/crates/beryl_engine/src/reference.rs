@@ -163,8 +163,9 @@ type Units = Fixed<u8, UNITS>;
 /// are more than [`UNITS`].
 ///
 /// [CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a): "An activated ability is
-/// a mana ability if it meets all of the following criteria: it doesn't require a target, it
-/// could add mana to a player's mana pool when it resolves, and it's not a loyalty ability."
+/// a mana ability if it meets all of the following criteria: it doesn't require a target ...,
+/// it could add mana to a player's mana pool when it resolves, it's not a loyalty ability ...,
+/// and its cost and effect don't move any card to or from a library."
 /// [CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most

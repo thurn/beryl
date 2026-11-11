@@ -1133,9 +1133,9 @@ impl<L: Layout> Tree<L> {
     /// takes from the truth: the order of each library, which is public, and the cards the
     /// sight shows, every one for an omniscient world and those in hand for one that sees
     /// hands. The viewer's own view does not tell: a library shuffled on the way
-    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a): "To shuffle a
+    /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a
     /// library or a face-down pile of cards, randomize the cards within it so that no player
-    /// knows their order") is shuffled by the world's random streams, not the game's, and a
+    /// knows their order.") is shuffled by the world's random streams, not the game's, and a
     /// card the viewer does not know may land anywhere.
     fn keeps_to(&self, s: &State<L>, truth: &State<L>) -> bool {
         let shown = |slot: L::Slot| match self.family.sight {

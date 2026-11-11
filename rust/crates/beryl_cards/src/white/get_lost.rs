@@ -152,7 +152,7 @@ const SACRIFICE_A_MAP: Action = Action::activate(P1, MAP_NAME, 0);
 /// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "...that
 /// permanent's controller reveals the top card of their library. If a land card is revealed
 /// this way, that player puts that card into their hand. Otherwise, that player puts a +1/+1
-/// counter on that permanent and may put the revealed card into their graveyard." With
+/// counter on the exploring permanent and may put the revealed card into their graveyard." With
 /// nothing to reveal, no land is revealed, so the creature gets the counter.
 const fn counters(count: u8) -> Action {
     Action::assert(Assertion::Counters {

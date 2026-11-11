@@ -12,14 +12,15 @@ fixed in the same session. Newest first.
   events, which the UI animates and a "becomes untapped" trigger would follow,
   depended on slot numbers. The effect untaps them together
   ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap
-  a permanent, rotate it back to the upright position from a tapped position"),
-  so they now go in battlefield order (`State::in_game_order`). Found by the
-  audit of every walk of a set (by-w8gv.5.6); no scenario caught it, because the
-  three slot numberings compare positions, which are the same whichever land
-  untaps first, and the one scenario untapped two Plains. Prevention: a set
-  whose members an effect acts on one by one goes through `in_game_order`; and a
-  test of an order that only events show watches the events under every
-  numbering (`beryl_scenario::watch_with`), with cards that differ.
+  a permanent, rotate it back to the upright position from a sideways
+  position"), so they now go in battlefield order (`State::in_game_order`).
+  Found by the audit of every walk of a set (by-w8gv.5.6); no scenario caught
+  it, because the three slot numberings compare positions, which are the same
+  whichever land untaps first, and the one scenario untapped two Plains.
+  Prevention: a set whose members an effect acts on one by one goes through
+  `in_game_order`; and a test of an order that only events show watches the
+  events under every numbering (`beryl_scenario::watch_with`), with cards that
+  differ.
 
 - Three reads answered one rules question differently, depending on who asked: a
   filter's mana value left out a spell's X where the interpreter's counted it
@@ -187,7 +188,7 @@ fixed in the same session. Newest first.
 
 - A token copy of a transformed double-faced permanent (Fractured Identity on
   Jace, Telepath Unbound) took its front face's mana value, as the original
-  does, where CR 712.8e makes a copy of a back face 0, so mana value filters
+  does, where CR 712.6d makes a copy of a back face 0, so mana value filters
   such as Portable Hole's misjudged it. Found in review of b2d02dd. Prevention:
   derive a characteristic from one function of the object's copiable values
   (card, face up, token), not from the face alone, so each new way of creating

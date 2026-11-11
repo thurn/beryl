@@ -380,7 +380,7 @@ impl Ability {
     /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
     /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the
     /// land card type and a basic land type has the intrinsic ability '{T}: Add [mana
-    /// symbol],' even if the text box doesn't actually contain that text."
+    /// symbol],' even if the text box doesn't actually contain that text".
     pub const fn tap_for_mana(produces: ManaSet) -> Ability {
         Ability {
             kind: AbilityKind::Mana,

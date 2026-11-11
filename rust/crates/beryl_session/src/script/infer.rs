@@ -213,7 +213,7 @@ fn payer(event: &GameEvent) -> Option<Side> {
 /// What each `Mana` event's mana pays for, and which events take what a pool lost. A cost is
 /// paid as the last step of casting a spell or activating an ability, before either is
 /// announced here ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The
-/// player pays the total cost in any order"), so mana is spent on its player's next cast,
+/// player pays the total cost"), so mana is spent on its player's next cast,
 /// activation or payment in the script; with none, on the spell being cast as the view
 /// shows; else it is left in the pool.
 fn payments(events: &[GameEvent], after: &Table, making: bool, told: &mut [Told]) {

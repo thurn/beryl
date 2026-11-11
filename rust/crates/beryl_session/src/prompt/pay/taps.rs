@@ -6,7 +6,7 @@
 //! total cost. First, they pay all costs that don't involve random elements or moving objects
 //! from the library to a public zone, in any order." The engine asks a cost paid with
 //! permanents as a run of picks: a mana ability to activate
-//! ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "they then have a
+//! ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "the player then has a
 //! chance to activate mana abilities"), a permanent to tap, an end where mana pays the rest,
 //! and then the payment plan where plans differ. What a set of picks comes to is the
 //! engine's to say, so each is played ahead on a copy of the game.

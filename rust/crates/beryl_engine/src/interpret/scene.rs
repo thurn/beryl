@@ -83,7 +83,7 @@ pub(super) struct Known {
 pub(super) struct Registers<L: Layout> {
     /// The targets that were legal as the resolution began, by their places in the entry's
     /// list
-    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or
+    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
     /// ability specifies targets, it checks whether the targets are still legal" as it
     /// begins to resolve, and "Illegal targets, if any, won't be affected by parts of a
     /// resolving spell's effect for which they're illegal."

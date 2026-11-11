@@ -817,7 +817,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let sorcery = sorcery_window(s, player);
     let land_drop = sorcery && s.player(player).lands_played() < 1;
     // A transforming card's back face is never cast: "A double-faced spell is cast with its
-    // front face up by default" ([CR 712.11](https://yawgatog.com/resources/magic-rules/#R71211)).
+    // front face up by default" ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).
     // A land is played, not cast ([CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
     let castable = |face: &Face| {
         !face.transformed
@@ -1550,7 +1550,7 @@ pub(crate) fn standalone_options<L: Layout>(
 
 /// Exact sources the human can activate before paying Waterbend, even when a twin
 /// would make the same mana. [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g):
-/// "they then have a chance to activate mana abilities".
+/// "the player then has a chance to activate mana abilities".
 pub(crate) fn waterbend_mana_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,

@@ -2,8 +2,8 @@
 //!
 //! Its one purpose is the order of a player's waiting triggered abilities
 //! ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
-//! order, puts each triggered ability they control with a trigger condition that has been met
-//! on the stack in any order they choose"). The prompt lists them as they will resolve, first
+//! order, puts each triggered ability they control with a trigger condition that isn't
+//! another ability triggering on the stack in any order they choose"). The prompt lists them as they will resolve, first
 //! to last, and opens in the order the session itself would put them in
 //! ([`trigger_to_stack`]). The engine takes them as they go on the stack, so the picks run
 //! from the last to resolve up
@@ -158,8 +158,8 @@ fn resolving_order<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> V
 /// Which of the human's waiting triggers to put on the stack next, under the smart stops. Each
 /// pick goes on the stack above the ones before, so the first picked resolves last
 /// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
-/// order, puts each triggered ability they control with a trigger condition that has been
-/// met on the stack in any order they choose"): the one the session's order ([`resolves`])
+/// order, puts each triggered ability they control with a trigger condition that isn't
+/// another ability triggering on the stack in any order they choose"): the one the session's order ([`resolves`])
 /// has resolve last of those waiting.
 pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Choice {
     let (last, _) = (triggers(d).iter().enumerate())

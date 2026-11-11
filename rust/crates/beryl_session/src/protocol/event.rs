@@ -180,7 +180,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
 }
 
 /// The spell an [`Event::Cast`] put on the stack, as the stack showed it then. Its card is
-/// public on the stack ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a): "the
+/// public on the stack ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a): "a
 /// player first moves that card ... from where it is to the stack"), and `obs` names it while
 /// it stays public.
 fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -> StackItem {

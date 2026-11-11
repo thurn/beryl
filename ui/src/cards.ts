@@ -13,7 +13,7 @@ export type ImageVersion = keyof CardImages;
 export const cardEntry = (name: string) => cardRecords.find(name)?.card;
 
 /** The face a card named `name` is played with as a land: its first land face
- * ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)), as Sink into Stupor is
+ * ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129)), as Sink into Stupor is
  * played as Soporific Springs. */
 export const landFace = (name: string) =>
   cardEntry(name)?.faces.find((f) => /\bLand\b/.test(f.type_line));

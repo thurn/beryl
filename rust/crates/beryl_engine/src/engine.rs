@@ -466,7 +466,7 @@ fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
 }
 
 /// The first face of a card that is a land, which is the face it is played with
-/// ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)): "A player playing a
+/// ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
 fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {

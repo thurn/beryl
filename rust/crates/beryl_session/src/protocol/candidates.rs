@@ -184,7 +184,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
 }
 
 /// The name of the face of the card in `slot` it is played with as a land, if the viewer knows
-/// it: its first land face ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212):
+/// it: its first land face ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129):
 /// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a
 /// land before putting it onto the battlefield"), as Sink into Stupor plays as Soporific
 /// Springs.
@@ -286,7 +286,7 @@ fn color_words(colors: Colors) -> String {
 }
 
 /// The cost of activating ability `ability` of the object in `slot`, as its text reads
-/// ([CR 602.1a](https://yawgatog.com/resources/magic-rules/#R6021a): "Activated abilities
+/// ([CR 602.1](https://yawgatog.com/resources/magic-rules/#R6021): "Activated abilities
 /// have a cost and an effect. They are written as '[Cost]: [Effect.] [Activation
 /// instructions (if any).]'"), if the viewer knows the card. A loyalty ability's cost is its
 /// loyalty symbol ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)).

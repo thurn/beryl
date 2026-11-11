@@ -88,7 +88,7 @@ export function RulesText({ text }: { text: string }) {
 }
 
 /** A loyalty ability's cost ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)):
- * "+1", "−2" or "0" on the printed loyalty symbol, an arrow up, down or flat. */
+ * `+1`, `−2` or `0` on the printed loyalty symbol, an arrow up, down or flat. */
 export function LoyaltyCost({ cost }: { cost: string }) {
   const tone = cost.startsWith("+")
     ? "up"

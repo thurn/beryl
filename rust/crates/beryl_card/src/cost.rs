@@ -86,7 +86,7 @@ pub enum CastingOption {
     /// [CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a): "'Impending
     /// N--[cost]' means 'You may choose to pay [cost] rather than pay this spell's mana
     /// cost,' 'If you chose to pay this permanent's impending cost, it enters with N time
-    /// counters on it'".
+    /// counters on it,'".
     Impending { cost: ManaCost, counters: u8 },
     /// [CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a): "Overload [cost]"
     /// means "You may choose to pay [cost] rather than pay this spell's mana cost" and "If you

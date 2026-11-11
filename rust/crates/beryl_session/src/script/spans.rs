@@ -184,7 +184,7 @@ impl Builder<'_> {
     /// zone, or is the doing (`cause`) of the spell or ability that aims at it. An arrow so
     /// ended is not drawn again: what moved zones is a new object
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves
-    /// from one zone to another becomes a new object with no memory of, or relationship to,
+    /// from one zone to another becomes a new object with no memory of, or relation to,
     /// its previous existence"), and a spell that has done its work on its target is done
     /// pointing at it.
     pub(super) fn part(&mut self, subject: Subject, gone: bool, cause: Option<Subject>) {

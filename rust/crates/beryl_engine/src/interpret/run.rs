@@ -37,7 +37,7 @@ pub(super) struct Run<'c, 'a, L: Layout> {
 impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// Begins resolving the ability `ctx` was made for. Which of its targets are `legal` was
     /// settled as its resolution began, once for the whole effect
-    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or
+    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
     /// ability specifies targets, it checks whether the targets are still legal."
     pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>, legal: TargetPlaces) -> Self {
         let entry = &ctx.entry;

@@ -250,8 +250,8 @@ purposes! {
     /// "may put the revealed card into their graveyard."
     Explore = "explore" => YesNo,
     /// Whether to pay [`Prompt::cost`] so that an effect does not happen
-    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "[Effect] unless
-    /// [player] pays [cost]".
+    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "[Do something] unless
+    /// [a player does something else]".
     UnlessPays = "unless-pays" => YesNo,
     /// Whether to pay [`Prompt::count`] life so that the permanent the question is about
     /// does not enter tapped.
@@ -293,11 +293,11 @@ purposes! {
     /// Counters distributed among targets (CR 601.2d). No card asks it yet.
     DistributeCounters = "distribute-counters" => Divide,
     /// A mana cost paid by tapping sources or spending floating mana
-    /// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "they then have a
-    /// chance to activate mana abilities."
+    /// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "the player then has a
+    /// chance to activate mana abilities".
     Mana = "mana" => Pay,
     /// A crew cost ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)):
-    /// "Tap any number of untapped creatures you control with total power N or greater".
+    /// "Tap any number of other untapped creatures you control with total power N or greater".
     Crew = "crew" => Pay,
     /// A waterbend cost ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a)):
     /// "For each generic mana in that cost, you may tap an untapped artifact or creature you
@@ -309,8 +309,9 @@ purposes! {
     /// ([CR 508.1b](https://yawgatog.com/resources/magic-rules/#R5081b)): the player
     /// "announces which player, planeswalker, or battle each of the chosen creatures is
     /// attacking." A creature put onto the battlefield attacking is an aim alone
-    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "their controller
-    /// chooses which defending player, which planeswalker ... each one is attacking".
+    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "its controller
+    /// chooses which defending player, planeswalker a defending player controls, or battle a
+    /// defending player protects it's attacking".
     Attack = "attack" => Declare,
     /// The blockers and the attacker each blocks
     /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a)): "The defending

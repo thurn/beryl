@@ -1732,7 +1732,7 @@ static PRODIGY: CardDef = CardDef {
 
 static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
 
-/// [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): with its back face up, a
+/// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): with its back face up, a
 /// transforming permanent's mana value is still its front face's, but a token copying it
 /// with its back face up has mana value 0.
 #[test]

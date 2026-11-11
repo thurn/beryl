@@ -66,7 +66,7 @@ const IDENTITY: &str = names::FRACTURED_IDENTITY;
 const RAVELER: &str = names::TEFERI_TIME_RAVELER;
 const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
 const JACE: &str = names::JACE_VRYNS_PRODIGY;
-/// Jace, Vryn's Prodigy's back face (CR 712.8e).
+/// Jace, Vryn's Prodigy's back face (CR 712.6d).
 const TELEPATH: &str = "Jace, Telepath Unbound";
 
 const FIVE_LANDS: &[Permanent] = &[

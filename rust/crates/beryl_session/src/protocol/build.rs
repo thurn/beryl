@@ -85,7 +85,7 @@ pub fn player_view<L: Layout>(
     );
     // A resolving spell's card stays on the stack until its resolution ends
     // ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n): "As the final part of
-    // an instant or sorcery spell's resolution, the spell itself is put into its owner's
+    // an instant or sorcery spell's resolution, the spell is put into its owner's
     // graveyard").
     let resolving = match moment {
         Moment::Deciding(_, _, entry)
@@ -280,7 +280,7 @@ pub(crate) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
 }
 
 /// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
-/// permanent, the name of its card, which it turns face up with (CR 712.15a).
+/// permanent, the name of its card, which it turns face up with (CR 712.12a).
 pub(crate) fn name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,

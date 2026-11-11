@@ -15,11 +15,11 @@ export const emblemSlot = (side: Side, index: number) =>
 export const isEmblem = (slot: number) => slot < 0;
 
 /** Each player's emblems ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141): "An
- * emblem is a marker used to represent an object that has one or more abilities, but no other
+ * emblem is a marker used to represent an object that has one or more abilities, but usually no other
  * characteristics") as objects to draw: each a card, under its `emblemSlot`, in its player's
  * back row after their other permanents, where pointing at it shows it whole. The table draws
- * the command zone there ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "An
- * emblem is created in the command zone"). */
+ * the command zone there ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141): "Some
+ * effects put emblems into the command zone"). */
 export function emblemObjects(view: PlayerView): ObjectView[] {
   return (["opponent", "you"] as const).flatMap((side) =>
     view.players[side].emblems.map((name, i) => ({

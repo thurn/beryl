@@ -77,7 +77,7 @@ impl Zone {
 
     /// [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Graveyard, battlefield,
     /// stack, exile, ante, and command are public zones. ... Library and hand are hidden
-    /// zones."
+    /// zones".
     pub fn is_public(self) -> bool {
         matches!(
             self,

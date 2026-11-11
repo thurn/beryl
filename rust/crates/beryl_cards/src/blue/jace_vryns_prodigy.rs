@@ -53,7 +53,7 @@ pub static CARD: CardDef = CardDef {
             supertypes: Supertypes::LEGENDARY,
             types: Types::PLANESWALKER,
             subtypes: Subtypes::of(&[Subtype::Jace]),
-            // CR 712.8e: the back face has only its own characteristics. Its color indicator
+            // CR 712.6d: the back face has only its own characteristics. Its color indicator
             // makes it blue (CR 204.1).
             colors: Colors::BLUE,
             loyalty: Some(5),
@@ -167,7 +167,7 @@ fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 static MILL_FIVE: Effect = mill(TARGET_PLAYER, 5);
 
 const JACE: &str = names::JACE_VRYNS_PRODIGY;
-/// The back face's name, which the transformed permanent has (CR 712.8e).
+/// The back face's name, which the transformed permanent has (CR 712.6d).
 const TELEPATH: &str = "Jace, Telepath Unbound";
 const ISLAND: &str = names::ISLAND;
 const PLAINS: &str = names::PLAINS;

@@ -258,7 +258,7 @@ impl<L: Layout> State<L> {
     /// A player keeps their hand, with `to_bottom` of its cards still to put on the bottom of
     /// their library ([CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035)): "Once a
     /// player chooses not to take a mulligan, the remaining cards become that player's
-    /// opening hand."
+    /// opening hand".
     #[inline]
     pub fn keep_hand(&mut self, player: Seat, to_bottom: u8) {
         let p = self.player_mut(player);
@@ -283,8 +283,8 @@ impl<L: Layout> State<L> {
     }
 
     /// Gives a player an emblem
-    /// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "[Player] gets an
-    /// emblem with [ability]. This means that [player] puts an emblem with [ability] into
+    /// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "'[Player] gets an
+    /// emblem with [ability].' This means that [player] puts an emblem with [ability] into
     /// the command zone. The emblem is both owned and controlled by that player."
     #[inline]
     pub fn add_emblem(&mut self, player: Seat, card: L::Card) -> Result<(), Full> {

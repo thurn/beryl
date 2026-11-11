@@ -177,8 +177,9 @@ impl<L: Layout> Policy<'_, L> {
     /// `v` for a permanent spell, or 0 for a noncreature one whose targeted enters trigger
     /// would find nothing worth it: Portable Hole cast onto a board with no nonland permanent of
     /// mana value 2 or less exiles nothing, for the trigger is removed from the stack
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)): "If no legal targets
-    /// can be chosen, the ability is removed from the stack." A creature keeps its body.
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)): "If a choice is required when the
+    /// triggered ability goes on the stack but no legal choices can be made for it, ... the
+    /// ability is simply removed from the stack." A creature keeps its body.
     fn enters_worth(&self, f: &Face, info: CardInfo, v: i32) -> i32 {
         if f.types.intersects(Types::CREATURE) {
             return v;

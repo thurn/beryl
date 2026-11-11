@@ -518,7 +518,7 @@ fn in_time<L: Layout>(
     from: From,
 ) -> bool {
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
-    // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
+    // a land. It can't be cast as a spell." CR 712.8c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
     if face.types.intersects(Types::LAND) {
         return false;
@@ -957,7 +957,7 @@ pub(crate) fn priority_options<L: Layout>(
 /// a spell, a player first moves that card ... from where it is to the stack. It becomes the
 /// topmost object on the stack. ... and that player becomes its controller."
 ///
-/// [CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b): "A player casting a modal
+/// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting before putting it onto the
 /// stack."
 pub(crate) fn begin_cast<L: Layout>(
@@ -1261,8 +1261,8 @@ fn begin_payment<L: Layout>(
 /// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
 /// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
 /// one answer (§7.2). The human can also activate a mana ability
-/// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "they then have a
-/// chance to activate mana abilities." Empty when there is no choice to make.
+/// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "the player then has a
+/// chance to activate mana abilities". Empty when there is no choice to make.
 fn waterbend_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,

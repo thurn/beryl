@@ -30,7 +30,7 @@ fn manifest_dread<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// time they pay the spell's mana cost or the ability's activation cost." The trigger is the
 /// opponent's upkeep's alone
 /// ([CR 503.1a](https://yawgatog.com/resources/magic-rules/#R5031a)): "Any abilities that
-/// triggered during the untap step and any abilities that trigger at the beginning of the
+/// triggered during the untap step and any abilities that triggered at the beginning of the
 /// upkeep are put onto the stack before the active player gets priority".
 pub static CARD: CardDef = CardDef {
     name: names::ABHORRENT_OCULUS,

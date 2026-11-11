@@ -561,7 +561,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let top = self.state.library(player).last().copied();
         if let Some(slot) = top {
             self.reveal(slot);
-            // A card in a library has its front face's characteristics (CR 712.8a).
+            // A card in a library has its front face's characteristics (CR 712.6a).
             if self
                 .state
                 .copiable(slot)
@@ -744,7 +744,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
     /// control, as Jace, Vryn's Prodigy does. It returns as a new object
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
-    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)): "If a spell or
+    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
     /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
     /// enters the battlefield with its back face up." If it already left the battlefield, it
     /// isn't exiled, so it doesn't return.
@@ -1082,7 +1082,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Gives a player an emblem ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)):
-    /// "[Player] gets an emblem with [ability]. This means that [player] puts an emblem with
+    /// "'[Player] gets an emblem with [ability].' This means that [player] puts an emblem with
     /// [ability] into the command zone. The emblem is both owned and controlled by that
     /// player."
     pub fn create_emblem(&mut self, player: Seat, def: &'static CardDef) {

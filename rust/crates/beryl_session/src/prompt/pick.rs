@@ -155,10 +155,10 @@ enum Opens {
     Whether,
     /// Whether to answer with one of these alone in place of the picks the prompt takes: yes
     /// with one of them picked and nothing else, no otherwise
-    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "Some spells,
+    /// ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812): "Some spells,
     /// activated abilities, and triggered abilities read, '[Do something]. If [a player]
-    /// [does or doesn't], [effect].' or '[A player] may [do something]. If [that player]
-    /// [does or doesn't], [effect].'").
+    /// [does, doesn't, or can't], [effect].' Or '[A player] may [do something]. If [that
+    /// player] [does, doesn't, or can't], [effect].'").
     Instead(Vec<Subject>),
 }
 

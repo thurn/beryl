@@ -292,7 +292,7 @@ fn every_card_has_scenarios_and_they_pass() {
 
 /// The lands one effect untaps untap together
 /// ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)): "To untap a permanent,
-/// rotate it back to the upright position from a tapped position." Their untap events, which
+/// rotate it back to the upright position from a sideways position." Their untap events, which
 /// the UI animates and a "becomes untapped" trigger would follow, come in the order the lands
 /// entered the battlefield, whatever slots their cards are in and whichever was chosen first.
 /// The lands differ so that the events tell them apart, which positions never do.
@@ -498,7 +498,7 @@ fn a_search_that_finds_nothing_still_shuffles() {
 /// player gets priority there and, once the trigger has resolved, another cleanup step begins
 /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "If so, those
 /// state-based actions are performed, then those triggered abilities are put on the stack,
-/// then the player whose turn it is receives priority. ... Once the stack is empty and all
+/// then the active player gets priority. ... Once the stack is empty and all
 /// players pass in succession, another cleanup step begins." Not an oracle scenario: the Forge
 /// harness cannot script cleanup discards.
 #[test]

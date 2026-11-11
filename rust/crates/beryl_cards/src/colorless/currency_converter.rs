@@ -64,7 +64,7 @@ static LOOT: Effect = sequence(&[draw(YOU, 1), discard(YOU, 1)]);
 /// One of the cards exiled with this Converter, its controller's choice, goes to its owner's
 /// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a
 /// modal double-faced card has only its front face's characteristics
-/// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), so Sink into Stupor is
+/// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), so Sink into Stupor is
 /// a nonland card.
 fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let exiled = ctx.exiled_with_source();
@@ -77,7 +77,7 @@ fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         Prompt::new(Purpose::Choose).most(1),
     )?;
     let card = ctx.state().object_ref(slot);
-    // A card in exile has its front face's characteristics (CR 712.8a).
+    // A card in exile has its front face's characteristics (CR 712.6a).
     let face = ctx.state().copiable(slot).face(ctx.table());
     let land = face.types.contains(Types::LAND);
     ctx.move_to(card, Zone::Graveyard, Reason::Effect);

@@ -39,10 +39,10 @@ impl CardDef {
     }
 
     /// The name of the face at `face`, the name a spell or permanent with that face up has
-    /// ([CR 712.8f](https://yawgatog.com/resources/magic-rules/#R7128f)): "While a modal
+    /// ([CR 712.6e](https://yawgatog.com/resources/magic-rules/#R7126e)): "While a modal
     /// double-faced spell is on the stack or a modal double-faced permanent is on the
     /// battlefield, it has only the characteristics of the face that's up." The same holds of
-    /// a nonmodal one ([CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e)):
+    /// a nonmodal one ([CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d)):
     /// "While a nonmodal double-faced permanent has its back face up, it has only the
     /// characteristics of its back face." A face-down permanent has no name (CR 708.2a): the
     /// empty string.
@@ -83,7 +83,7 @@ impl FaceIx {
 pub struct Face {
     /// The name of a back face. A front face's name is its card's, [`CardDef::name`], which
     /// is the card's name wherever it is not a permanent or spell with another face up
-    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)): "While a
+    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)): "While a
     /// double-faced card is outside the game or in a zone other than the battlefield or
     /// stack, it has only the characteristics of its front face."
     pub name: &'static str,
@@ -102,9 +102,9 @@ pub struct Face {
     pub casting: &'static [CastingOption],
     /// The back face of a transforming double-faced card, which is never cast: "A
     /// double-faced spell is cast with its front face up by default"
-    /// ([CR 712.11](https://yawgatog.com/resources/magic-rules/#R71211)). Only a modal
+    /// ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)). Only a modal
     /// double-faced card lets its caster choose the face
-    /// ([CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b)).
+    /// ([CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b)).
     pub transformed: bool,
     /// "As an additional cost to cast this spell, exile N cards from your graveyard"
     /// (Abhorrent Oculus): N, or 0 for no such cost. It is paid with the rest of the total

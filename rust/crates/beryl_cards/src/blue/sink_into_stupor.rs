@@ -19,9 +19,9 @@ use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
-/// [CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b): "A player casting a modal
+/// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting"; only the instant can be, and
-/// [CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212): "A player playing a modal
+/// [CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129): "A player playing a modal
 /// double-faced card ... as a land chooses one of its faces that's a land ... It enters the
 /// battlefield with that face up."
 pub static CARD: CardDef = CardDef {

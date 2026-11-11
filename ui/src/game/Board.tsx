@@ -2780,9 +2780,9 @@ const promptCardWidth = (count: number) =>
   count <= 3 ? 210 : count === 4 ? 180 : 160;
 
 /** The order of simultaneous triggers ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b):
- * "If multiple players have triggered abilities that have triggered since the last time a
- * player received priority, each player, in APNAP order, puts triggered abilities they control
- * on the stack in any order they choose"), chosen as they will resolve: each trigger by its
+ * "If multiple abilities have triggered since the last time a
+ * player received priority, ... each player, in APNAP order, puts each triggered ability they
+ * control ... in any order they choose"), chosen as they will resolve: each trigger by its
  * source and the paragraph that says it, numbered as it is picked, 1 resolving first. Once all
  * but one are numbered, the picks put them on the stack from the last to resolve up, the first
  * going on unasked; each pick after the first waits through the targets of the one before. */

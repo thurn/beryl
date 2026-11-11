@@ -154,7 +154,7 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
 
 /// The targets of `entry` that are still legal as it begins to resolve, by their places in
 /// the entry's list
-/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If a spell or ability
+/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or ability
 /// specifies targets, it checks whether the targets are still legal." Found once: whether it
 /// resolves at all and what effect data may act on both read this.
 pub(crate) fn legal_targets<L: Layout>(
@@ -283,7 +283,7 @@ fn run<L: Layout>(
 /// control of the spell's controller." [CR 608.3c](https://yawgatog.com/resources/magic-rules/#R6083c):
 /// "If the object that's resolving is an Aura spell, it becomes a permanent and is put onto the
 /// battlefield under the control of the spell's controller attached to the player or object it
-/// was targeting." [CR 712.13](https://yawgatog.com/resources/magic-rules/#R71213): "a
+/// was targeting." [CR 712.10](https://yawgatog.com/resources/magic-rules/#R71210): "a
 /// resolving double-faced spell that becomes a permanent is put onto the battlefield with the
 /// same face up that was face up on the stack."
 fn enter_battlefield<L: Layout>(

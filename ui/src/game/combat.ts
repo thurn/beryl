@@ -67,7 +67,7 @@ export function aimAttacks(draft: Draft, target: number | null): Draft {
 
 /** The combat damage `side` stands to take from the creatures attacking them that `view`
  * shows unblocked, or undefined if none attacks them
- * ([CR 510.1a](https://yawgatog.com/resources/magic-rules/#R5101a)): "An unblocked creature
+ * ([CR 510.1b](https://yawgatog.com/resources/magic-rules/#R5101b)): "An unblocked creature
  * assigns its combat damage to the player, planeswalker, or battle it's attacking." The engine
  * has no trample or double strike, so a blocked creature deals the player none and each
  * deals its power once. */

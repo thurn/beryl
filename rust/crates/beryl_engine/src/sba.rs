@@ -227,7 +227,7 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
     }
 }
 
-/// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
+/// The name of the permanent in `slot`: its face up's (CR 712.6c, 712.6d).
 fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
     s.copiable(slot).name(t)
 }

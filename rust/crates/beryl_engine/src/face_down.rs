@@ -72,8 +72,8 @@ pub(crate) fn manifest<L: Layout>(
 /// mana cost is, pay that cost, then turn the permanent face up. ... (If the card representing
 /// that permanent isn't a creature card or it doesn't have a mana cost, it can't be turned
 /// face up this way.)" The card's characteristics are its front face's
-/// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), which is the face it
-/// turns up ([CR 712.15a](https://yawgatog.com/resources/magic-rules/#R71215a)): "If it's
+/// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), which is the face it
+/// turns up ([CR 712.12a](https://yawgatog.com/resources/magic-rules/#R71212a)): "If it's
 /// turned face up, it will have its front face up." No creature card in the cube costs {0},
 /// so a cost of nothing is no mana cost.
 fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<ManaCost> {

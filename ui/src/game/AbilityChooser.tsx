@@ -19,8 +19,8 @@ export interface AbilityChoice {
 
 /** A mana ability's paragraph: it adds mana ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a):
  * "An activated ability is a mana ability if it meets all of the following criteria: it doesn't
- * require a target, it could add mana to a player's mana pool when it resolves, and it's not a
- * loyalty ability"). */
+ * require a target ..., it could add mana to a player's mana pool when it resolves, it's not a
+ * loyalty ability ..., and its cost and effect don't move any card to or from a library"). */
 const MANA_ABILITY = /:\s*Add\b/;
 
 /** An activated ability's paragraph: a cost, then a colon
