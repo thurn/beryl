@@ -181,8 +181,8 @@ recordings cannot show is built from the motions and prompt shapes Beryl
 already has and listed there under "Not seen in Arena".
 
 Where you are unsure what Arena does, find another instance rather than ask;
-where the user's eye is wanted, proceed on Arena and file a bead labelled
-`human` saying what to look at. Never commit a recording, a shot or a
+where the user's eye might be wanted, proceed on Arena; never file a bead asking
+him to look at it. Never commit a recording, a shot or a
 filmstrip: they stay outside the tree.
 
 ## A worked example

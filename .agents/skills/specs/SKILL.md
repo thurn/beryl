@@ -307,7 +307,7 @@ what words, with which buttons, what is highlighted, and what moves where and
 for how long. Beryl differs only where UI Conventions lists a numbered
 exception; any other difference is a finding, cited with the recording id and
 time. Where the recordings show nothing, judge by the design philosophy in
-`.agents/skills/ui-review/SKILL.md`, and where the user's eye is wanted, proceed
-and file a bead labelled `human` saying what to look at. Report what each moment
+`.agents/skills/ui-review/SKILL.md`; never file a bead asking the user to look
+at something. Report what each moment
 shows from each seat, what you fixed or banked, which other cards' moments
 changed, and any moment you could not get and why.

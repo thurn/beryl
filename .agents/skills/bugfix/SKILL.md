@@ -18,8 +18,8 @@ The parent tracks all assigned reports, reviews that evidence, and handles bead
 closure and report archival. Use and extend `/specs` as needed.
 
 Nothing in this workflow waits for the user. Where a report leaves a real
-question, decide it (step 2), proceed, and file a bead labelled `human` saying
-what to look at. Nothing depends on that bead.
+question, decide it (step 2) and proceed. Never file a bead asking the user to
+look at something.
 
 MTG Arena is the reference for the UI's flow, motion, timing, table layout and
 wording (AGENTS.md, UI). Beryl differs from it only where
@@ -111,10 +111,8 @@ reproduces it.
    skill: a still or filmstrip settles it); UI Conventions; the nearest
    behavior Beryl already has. Take the interpretation that covers the whole
    complaint, not a narrower one that is easier to build, record it and its
-   evidence in the bead, and proceed. Then file one bead labelled `human` for
-   the run listing each question, the interpretation taken and the evidence
-   for it, so the user can overrule it with a new report. Nothing depends on
-   that bead.
+   evidence in the bead, and proceed. The user overrules it with a new report
+   if he disagrees.
 
 3. **Triage** each UI report by what it is about:
 

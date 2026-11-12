@@ -106,9 +106,9 @@ the release pinned in `data/rules-version.json`.
   `lane:<name>` label: one session works them in turn. Label mechanical beads
   (wiring, renames, boilerplate tests) `tier:light` to run them on Sonnet.
 - No plan, bead or skill has a step that waits for the user's approval (plan
-  K31). Where his judgement is wanted, proceed on a default and file a
-  non-blocking bead labelled `human` (`bd human list`). The one exception is the
-  count gate of K1 in `docs/project-50k.md`.
+  K31). Where his judgement might be wanted, proceed on a default and record the
+  choice in the bead you are working. Never file a bead asking him to look at
+  something. The one exception is the count gate of K1 in `docs/project-50k.md`.
 - `/enact <beads|epic|task>` runs work inline in one session;
   `/enact-plan <bead|plan|task>` runs it unattended across sessions. Most work
   uses neither.
@@ -264,7 +264,7 @@ the `arena-video` skill. A still or a filmstrip settles what prose cannot.
   Beryl already has, never a new look, and listed in UI Conventions under "Not
   seen in Arena".
 - Never wait on the user for a UI judgement. Proceed on Arena or the nearest
-  existing behavior, and file a bead labelled `human` saying what to look at.
+  existing behavior. Never file a bead asking him to look at it.
 
 ## Workflow
 
