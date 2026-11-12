@@ -5,9 +5,9 @@
 // for what stands around it, and hears the pointer. The prompt picked on the table is the
 // session's, drawn and answered through prompt.ts and PromptBar.tsx, as are a cost paid with
 // permanents, a declaration of attackers or blockers (Aim.tsx draws its line to the pointer),
-// the cards a prompt holds up to be sorted or picked and the triggers it has put in order
-// (Tray.tsx); the other shapes come with their own beads, and are answered over the table
-// until then.
+// the cards a prompt holds up to be sorted, picked or asked about and the triggers it has put
+// in order (Tray.tsx), and the ways to use a card, a catalog's entries and a division's
+// shares (Choose.tsx). What the session holds no state of is answered over the table.
 import {
   useCallback,
   useEffect,
@@ -20,6 +20,7 @@ import type { Board } from "../game/Board";
 import { Corner, UndoButton } from "../game/Corner";
 import { useStageWidth } from "../game/Stage";
 import { Aim } from "./Aim.tsx";
+import { Entries, Shares, Ways } from "./Choose.tsx";
 import { Controls, Hud } from "./Chrome.tsx";
 import type { ObjectView } from "../generated/protocol";
 import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
@@ -82,7 +83,8 @@ export function StageBoard({
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
   const { pay, suggest } = usePaying(asked);
   const press = prompts.press.bind(prompts);
-  const answers = { waiting, press, cancel, suggest };
+  const number = prompts.number.bind(prompts);
+  const answers = { waiting, press, cancel, suggest, number };
   // A prompt's keys answer it while nothing else takes them.
   usePromptKeys(asked, answers, !settings && !onSkip && !inert);
   // The keys that are not a prompt's: Escape closes the settings, the platform's undo takes
@@ -151,6 +153,20 @@ export function StageBoard({
           view={view}
           space={desktopTray()}
         />
+        <Ways
+          key={`ways-${width}`}
+          asked={asked}
+          prompts={prompts}
+          view={view}
+          space={desktopTray()}
+        />
+        <Entries
+          key={`entries-${width}`}
+          asked={asked}
+          prompts={prompts}
+          space={desktopTray()}
+        />
+        <Shares asked={asked} prompts={prompts} stage={stage} />
         <Controls
           stage={stage}
           prompts={prompts}

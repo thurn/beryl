@@ -1,0 +1,159 @@
+/* What a prompt answered off the table's cards draws over it (Choose.tsx), in the space a
+   layout holds a prompt's cards up in, over the tray's shade: the ways to use a card, each
+   the card or its ability over what the way is called, and a catalog's entries in a column.
+   Over the cards at rest and under what flies. */
+.stage-choose {
+  position: absolute;
+  z-index: 870;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+.stage-way {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.stage-way:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.stage-way-face {
+  position: relative;
+  display: block;
+  border-radius: 4.75% / 3.5%;
+  pointer-events: none;
+}
+.stage-way-face > * {
+  position: relative;
+}
+.stage-way:not(:disabled):is(:hover, :focus-visible) .stage-way-face {
+  box-shadow:
+    0 0 0 3px var(--gold),
+    0 0 26px rgb(233 173 74 / 55%);
+}
+.stage-way-says {
+  font: 600 18px / 1.2 var(--font-sans);
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+}
+.stage-entries ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stage-entry {
+  min-width: 260px;
+  height: 52px;
+  padding: 0 24px;
+  border: 1px solid rgb(233 173 74 / 55%);
+  border-radius: 26px;
+  background: rgb(33 31 28 / 88%);
+  color: var(--text);
+  font: 600 22px var(--font-sans);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.stage-entry:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--gold);
+}
+.stage-entry[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: rgb(233 173 74 / 26%);
+  box-shadow: 0 0 18px rgb(233 173 74 / 45%);
+}
+/* A recipient's share of a division (Choose.tsx), over its card where the stage rests it:
+   the count on the card's middle, the card's upper half the step that raises it and its
+   lower half the step that lowers it, each as large as a finger. Over the cards at rest and
+   the arrows to them, under what flies. */
+.stage-share {
+  position: absolute;
+  z-index: 880;
+  display: flex;
+  flex-direction: column;
+  width: max(40px, var(--frame));
+  height: max(80px, calc(var(--frame) * 1.4));
+  translate: -50% -50%;
+  font-size: max(15px, calc(var(--frame) * 0.2));
+}
+.stage-share > b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: 1.9em;
+  padding: 0.12em 0;
+  border-radius: 0.2em;
+  background: rgb(12 14 16 / 92%);
+  color: #fff;
+  font: 700 1em / 1.25 var(--font-sans);
+  text-align: center;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.stage-share-step {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0 0 0.95em;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 0.8em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 90%);
+  cursor: pointer;
+}
+.stage-share-step:last-child {
+  align-items: flex-start;
+  padding: 0.95em 0 0;
+}
+.stage-share-step:disabled {
+  cursor: default;
+  color: rgb(255 255 255 / 30%);
+}
+/* A number prompt's value in the dock (PromptBar.tsx), between the steps to the next number
+   offered below and above it, with what the number makes the cost. */
+.prompt-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.prompt-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 96px;
+  justify-content: center;
+  color: var(--text);
+  font: 600 20px var(--font-sans);
+}
+.prompt-value > b {
+  font-size: 26px;
+}
+.prompt-step {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgb(233 173 74 / 55%);
+  border-radius: 50%;
+  background: rgb(33 31 28 / 88%);
+  color: var(--text);
+  font: 700 22px / 1 var(--font-sans);
+  cursor: pointer;
+}
+.prompt-step:disabled {
+  cursor: default;
+  color: rgb(242 231 216 / 35%);
+}

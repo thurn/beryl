@@ -6,13 +6,17 @@
 // round one beside it; and the others stacked over, in the order they came. A cost paid with
 // permanents says after what it asks how much is still to pay, and its Auto Pay shows what
 // it would tap while the pointer is over it or a touch is held on it (UI Conventions,
-// "Paying with permanents").
+// "Paying with permanents"). A division says the same of what is still to give out. A number
+// is set by the two steps beside it, over the button that answers with it, as Arena sets an
+// X (`0VsYGs88NXA 55:32.0`). The ways to use a card are not buttons here: the card is shown
+// once for each (Choose.tsx).
 import {
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type ButtonHTMLAttributes,
+  type CSSProperties,
 } from "react";
 import {
   Button,
@@ -29,7 +33,7 @@ import type {
   PromptView,
   Side,
 } from "../generated/protocol";
-import type { Asked, Prompts } from "./prompt.ts";
+import { waysOf, type Asked, type Prompts } from "./prompt.ts";
 
 /** What the page's stage asks, as the screen draws it. */
 export const usePrompt = (prompts: Prompts) =>
@@ -44,6 +48,8 @@ interface Answers {
   cancel?: () => void;
   /** Shows or hides what the open payment's Auto Pay would tap (`usePaying`). */
   suggest?: (on: boolean) => void;
+  /** Sets the open number prompt's value. */
+  number?: (n: number) => void;
 }
 
 /** What a board shows of a cost paid with permanents: `pay`, for its `data-pay`, is `quiet`
@@ -65,6 +71,9 @@ export function usePaying({ prompt }: Asked) {
  * (stage.css), and wraps in the phone's pill, beside the prompt's other buttons
  * (mobile/phone.css). */
 const LONG = 40;
+
+/** How many letters the phone's pill has room for beside a prompt's other buttons. */
+const BESIDE = 20;
 
 /** How long a touch is held on Auto Pay before it shows what it would tap, in ms. */
 const HELD = 450;
@@ -117,16 +126,22 @@ function usePresses(
   };
 }
 
-/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay, as
- * the session wrote each. */
+/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay,
+ * or for a division how much is still to give out, as the session wrote each. */
 function Asks({ prompt: { title, state } }: { prompt: PromptView }) {
+  const left =
+    state?.shape === "pay"
+      ? state.left
+      : state?.shape === "divide"
+        ? `${state.left}`
+        : undefined;
   return (
     <>
       <RulesText text={title} />
-      {state?.shape === "pay" && (
+      {left !== undefined && (
         <span className="prompt-left">
           {" ("}
-          <RulesText text={state.left} />
+          <RulesText text={left} />
           {")"}
         </span>
       )}
@@ -134,9 +149,50 @@ function Asks({ prompt: { title, state } }: { prompt: PromptView }) {
   );
 }
 
+/** The number the open prompt is set to, between the steps to the next it offers below and
+ * above, with what the number means beside it (the cost an X makes). Nothing for any other
+ * prompt. A step with no number to go to cannot be pressed. */
+function Stepper({
+  prompt,
+  sending,
+  number,
+}: {
+  prompt: PromptView;
+  sending: boolean;
+  number?: (n: number) => void;
+}) {
+  const state = prompt.state;
+  if (state?.shape !== "number" || !number) return null;
+  const at = state.values.indexOf(state.value);
+  const step = (to: number | undefined, label: string, sign: string) => (
+    <button
+      type="button"
+      className="prompt-step"
+      aria-label={label}
+      disabled={sending || to === undefined}
+      onClick={() => to !== undefined && number(to)}
+    >
+      {sign}
+    </button>
+  );
+  return (
+    <div className="prompt-stepper" data-value={state.value}>
+      {step(state.values[at - 1], "Less", "−")}
+      <span className="prompt-value" role="status">
+        <b>{state.value}</b>
+        {state.detail && <RulesText text={state.detail} />}
+      </span>
+      {step(state.values[at + 1], "More", "+")}
+    </div>
+  );
+}
+
 /** A prompt's buttons by where they stand: the one put forward, the one that passes on to a
- * later stop, and the others in the order the session laid them out. */
-function standing(buttons: readonly PromptButton[]) {
+ * later stop, and the others in the order the session laid them out. The ways to use a card
+ * stand over the table, not here. */
+function standing(prompt: PromptView) {
+  const ways = waysOf(prompt);
+  const buttons = prompt.buttons.filter((button) => !ways.includes(button));
   const forward = buttons.find((button) => button.primary);
   const passOn = buttons.find((button) => button.id.kind === "passOn");
   const others = buttons.filter(
@@ -170,7 +226,7 @@ export function usePromptKeys(
       e.target instanceof Element &&
       e.target.closest("button, input, select, textarea, a");
     if (control) return;
-    const { forward, passOn } = standing(prompt.buttons);
+    const { forward, passOn } = standing(prompt);
     const button = e.shiftKey ? passOn : forward;
     if (!button?.enabled) return;
     e.preventDefault();
@@ -250,6 +306,7 @@ export function PromptDock({
   press,
   cancel,
   suggest,
+  number,
 }: { asked: Asked } & Answers) {
   const presses = usePresses(prompt, { press, suggest });
   if (!prompt) {
@@ -261,7 +318,7 @@ export function PromptDock({
       </Dock>
     ) : null;
   }
-  const { forward, passOn, others } = standing(prompt.buttons);
+  const { forward, passOn, others } = standing(prompt);
   const off = (button: PromptButton) => sending || !button.enabled;
   const takesBack = decision?.cancellable && cancel;
   return (
@@ -292,6 +349,7 @@ export function PromptDock({
           )}
         </DockButtons>
       )}
+      <Stepper prompt={prompt} sending={sending} number={number} />
       {forward && (
         <div className="turn-action">
           <TurnButton
@@ -327,7 +385,7 @@ export function PhonePromptDock({
       </div>
     ) : null;
   }
-  const { forward, passOn } = standing(prompt.buttons);
+  const { forward, passOn } = standing(prompt);
   if (!forward && !passOn) return null;
   return (
     <div className="phone-dock">
@@ -356,34 +414,42 @@ export function PhonePromptOver({
   press,
   cancel,
   suggest,
+  number,
   top,
 }: { asked: Asked; top: number } & Answers) {
   const presses = usePresses(prompt, { press, suggest });
   if (!prompt) return null;
-  const { others } = standing(prompt.buttons);
+  const { others } = standing(prompt);
   const takesBack = decision?.cancellable && cancel;
-  const more = others.length > 0 || Boolean(takesBack);
-  const long = prompt.title.length > LONG;
+  const steps = prompt.state?.shape === "number";
+  const more = others.length > 0 || Boolean(takesBack) || steps;
+  // Beside the prompt's other buttons a pill has less room.
+  const long = prompt.title.length > (more ? BESIDE : LONG);
+  const asks = (className: string, style?: CSSProperties) => (
+    <div
+      className={className}
+      role="status"
+      data-beside={(long && more) || undefined}
+      style={style}
+    >
+      <Asks prompt={prompt} />
+    </div>
+  );
   return (
     <>
-      {prompt.title && (
-        <div
-          className={long ? "phone-pill phone-pill-long" : "phone-pill"}
-          role="status"
-          data-beside={(long && more) || undefined}
+      {prompt.title &&
+        !steps &&
+        asks(
+          long ? "phone-pill phone-pill-long" : "phone-pill",
           // A pill of several lines stands on the strip as one line does.
-          style={
-            long ? { bottom: `calc(100% - ${top - 6}px)` } : { top: top - 30 }
-          }
-        >
-          <Asks prompt={prompt} />
-        </div>
-      )}
+          long ? { bottom: `calc(100% - ${top - 6}px)` } : { top: top - 30 },
+        )}
       {more && (
         <div
           className="phone-prompt-more"
           style={{ bottom: `calc(100% - ${top - 6}px)` }}
         >
+          <Stepper prompt={prompt} sending={sending} number={number} />
           {others.map((button) => (
             <Button
               key={keyOf(button)}
@@ -399,6 +465,8 @@ export function PhonePromptOver({
               {prompt.words.cancel}
             </Button>
           )}
+          {/* A number's steps are as wide as a pill's room: what it asks stands over them. */}
+          {steps && prompt.title && asks("phone-pill phone-pill-over")}
         </div>
       )}
     </>

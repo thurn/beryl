@@ -394,6 +394,56 @@
     },
     {
       "kind": "settled",
+      "name": "Choosing X",
+      "rule": "The value of X is set by a step down and a step up beside it, over the button that answers, which says the value under its label: \"Pay\" over \"X = 1\". Beside the value stands the whole cost it makes, and the permanents that would pay it are outlined as the value changes. Beryl has the single steps alone.",
+      "arena": {
+        "does": "Mind Twist's X stands under the spell between -5, - and +, +5, on a button that reads Pay over X = 0, with Cancel.",
+        "evidence": [
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "55:32.0"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "25:01.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Dividing among targets",
+      "rule": "Each target wears its share on its card, between a step that raises it and a step that lowers it, under the arrow to it; \"Submit\" answers once everything is given out. The prompt says after what it asks how much is still to give, as a cost paid with permanents says what is left.",
+      "arena": {
+        "does": "Fire Covenant's damage: an arrow from the spell to each target, a count on each between an arrow up and an arrow down, Submit and Cancel.",
+        "evidence": [
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "28:32.5"
+          },
+          {
+            "recording": "bJQDi6NIrZA",
+            "time": "21:42.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Choosing from a list",
+      "rule": "The entries stand in a column over the shaded table. A press lights an entry and \"Submit 1\" answers with it, where Arena takes a color at the press: no card asks for an entry yet, and the prompt is the one a longer list needs, a creature type or a card name.",
+      "arena": {
+        "does": "Mother of Runes' color: Choose One over Choose Color, and White, Blue, Black, Red and Green in a column, each taken at a click.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "45:18.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
       "name": "A countered spell",
       "rule": "It leaves before the spell that countered it.",
       "reports": [

@@ -18,11 +18,11 @@ import type {
 } from "../generated/protocol";
 import { abilityText, BLANK, useAbilityFace } from "../game/faces";
 import { DRAG_THRESHOLD } from "./pointer.ts";
-import { trayOf, type Asked, type Prompts } from "./prompt.ts";
+import { trayOf, waysOf, type Asked, type Prompts } from "./prompt.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
 
-/** The shade and the piles' boxes under the cards the open prompt holds up, or under the
- * triggers it has put in order, drawn in the stage's `layer` in the `space` its layout gives
+/** The shade and the piles' boxes under the cards the open prompt holds up, or under what it
+ * lists over the table (triggers in their order, the ways to use a card, a catalog), drawn in the stage's `layer` in the `space` its layout gives
  * a tray. Nothing while the open prompt holds nothing up. */
 export function TrayUnder({
   asked: { prompt },
@@ -35,8 +35,13 @@ export function TrayUnder({
 }) {
   const tray = trayOf(prompt);
   const state = prompt?.state;
-  // An order's row lies over the same shade (`OrderRow`).
-  if (!(tray || state?.shape === "order") || !layer) return null;
+  // An order's row lies over the same shade (`OrderRow`), as do the ways to use a card and
+  // a catalog's entries (Choose.tsx).
+  const listed =
+    state?.shape === "order" ||
+    state?.shape === "catalog" ||
+    waysOf(prompt).length > 0;
+  if (!(tray || listed) || !layer) return null;
   const piles = state?.shape === "split" ? state.piles : [];
   const boxes = tray ? laidOut(tray, space).boxes : [];
   return createPortal(

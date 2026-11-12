@@ -112,6 +112,26 @@ restore the old behavior.
   Treasure Cruise's Delve chooser opens before any land taps; Natural Order's
   lands send their mana, then "Sacrifice a green creature." opens (5UHzpVvUkfI
   47:31.0, RwKoGGUmw2k 39:26.0, RwKoGGUmw2k 1:07:02.25).
+- **Choosing X.** The value of X is set by a step down and a step up beside it,
+  over the button that answers, which says the value under its label: "Pay" over
+  "X = 1". Beside the value stands the whole cost it makes, and the permanents
+  that would pay it are outlined as the value changes. Beryl has the single
+  steps alone. Mind Twist's X stands under the spell between -5, - and +, +5, on
+  a button that reads Pay over X = 0, with Cancel (0VsYGs88NXA 55:32.0,
+  3sEoP_s4DQE 25:01.0).
+- **Dividing among targets.** Each target wears its share on its card, between a
+  step that raises it and a step that lowers it, under the arrow to it; "Submit"
+  answers once everything is given out. The prompt says after what it asks how
+  much is still to give, as a cost paid with permanents says what is left. Fire
+  Covenant's damage: an arrow from the spell to each target, a count on each
+  between an arrow up and an arrow down, Submit and Cancel (3sEoP_s4DQE 28:32.5,
+  bJQDi6NIrZA 21:42.5).
+- **Choosing from a list.** The entries stand in a column over the shaded table.
+  A press lights an entry and "Submit 1" answers with it, where Arena takes a
+  color at the press: no card asks for an entry yet, and the prompt is the one a
+  longer list needs, a creature type or a card name. Mother of Runes' color:
+  Choose One over Choose Color, and White, Blue, Black, Red and Green in a
+  column, each taken at a click (UrGalw_f35w 45:18.5).
 - **A countered spell.** It leaves before the spell that countered it (by-kxyq).
   The countered spell crumbles in place under the counterspell, which stays
   until the debris is gone and then fades, 0.5 to 0.9 s later (I3Te0m1bBFw

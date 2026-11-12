@@ -27,6 +27,13 @@
 // triggers, which the table has no node of: the screen draws them (Tray.tsx) and sends each
 // move through `drop`.
 //
+// A prompt answered by its buttons alone (a yes or no, a choice among a few answers) holds up
+// the cards it asks about in the same tray. The choice among the ways to use a card, which a
+// click on the card opens over a priority, shows the card once for each way instead
+// (Choose.tsx, `waysOf`): Arena's "Choose One". A number is set, a share of a division given
+// and an entry of a catalog chosen by controls the screen draws from the prompt's state
+// (PromptBar.tsx, Choose.tsx), which send what was pressed through `number` and `entry`.
+//
 // The stage is asked through this for what feeds it (feed.ts), so that no view's script
 // begins under an old prompt's marks, and its pointer has this for its one listener: the
 // chrome around the table hears through `listen` what the prompt had no use for.
@@ -38,6 +45,7 @@ import type {
   DecisionId,
   DecisionView,
   PlayerView,
+  PromptButton,
   PromptView,
 } from "../generated/protocol";
 import { isRevealed, type Name, type Point } from "./layout.ts";
@@ -79,23 +87,36 @@ export interface Asked {
 
 const IDLE: Asked = { sending: false, answered: false };
 
-/** The shapes the stage holds, of those the session holds the state of: objects picked where
- * they lie or from a tray, split between two piles or put in an order, a cost paid with
- * permanents, and attackers and blockers declared. */
-const HELD = new Set(["pick", "split", "order", "pay", "declare"]);
+/** The purposes the opening screen answers (screens/Opening.tsx), over a table that shows no
+ * dock: who plays first, and whether to keep a hand. */
+const OPENING = new Set(["play-or-draw", "mulligan"]);
 
-/** Whether the stage holds `prompt`. The other shapes come with their own beads, and are
- * answered over the table until then. */
+/** Whether the stage holds `prompt`: every shape the session holds the state of, but for
+ * what the opening screen asks. */
 export function onTable(prompt: PromptView) {
-  return prompt.state !== null && HELD.has(prompt.state.shape);
+  return prompt.state !== null && !OPENING.has(prompt.purpose);
 }
 
-/** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, or a
- * split's two piles, each laid out for as many cards as it must come to hold. */
+/** The ways to use a card that `prompt` offers, where it is the choice among them a click on
+ * the card opened: each is drawn as the card or its ability (Choose.tsx), not as a button of
+ * the bar. None for any other prompt. */
+export function waysOf(prompt: PromptView | undefined): PromptButton[] {
+  if (prompt?.state?.shape !== "mode" || prompt.purpose !== "act") return [];
+  return prompt.buttons.filter(({ id }) => id.kind === "option");
+}
+
+/** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, a
+ * split's two piles, each laid out for as many cards as it must come to hold, or the cards a
+ * yes or no or a choice among answers is about (the card whose ways are chosen among is
+ * shown once a way instead). */
 export function trayOf(prompt: PromptView | undefined): Tray | undefined {
   const state = prompt?.state;
   if (state?.shape === "pick" && state.tray.length > 0) {
     return { piles: [{ cards: state.tray }] };
+  }
+  const asks = state?.shape === "yesNo" || state?.shape === "mode";
+  if (asks && state.about.length > 0 && waysOf(prompt).length === 0) {
+    return { piles: [{ cards: state.about }] };
   }
   if (state?.shape !== "split") return undefined;
   return {
@@ -300,6 +321,17 @@ export class Prompts {
    * for what the stage has no node of, an order's waiting trigger. */
   drop(on: Subject, pile: number, at: number) {
     this.#click({ kind: "drop", on, pile, at });
+  }
+
+  /** Sets the open number prompt to `n`, or with `on`, gives that recipient of the open
+   * division the share `n`. */
+  number(n: number, on: Subject | null = null) {
+    this.#click({ kind: "number", n, on });
+  }
+
+  /** Chooses the entry at `index` of the open catalog. */
+  entry(index: number) {
+    this.#click({ kind: "entry", index });
   }
 
   /** A view played out, or the stage went idle: the prompt of a view newly shown opens. */

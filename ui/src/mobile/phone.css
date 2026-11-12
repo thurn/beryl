@@ -393,6 +393,16 @@ body.phone {
 .phone-pill-long[data-beside] {
   right: 116px;
 }
+/* What a number prompt asks stands over its steps, among the prompt's other buttons
+   (stage/PromptBar.tsx). */
+.phone-pill-over {
+  position: static;
+  align-self: flex-end;
+  translate: none;
+}
+.phone-prompt-more .prompt-value {
+  min-width: 0;
+}
 /* Every control in the menu is as large as a finger. */
 .phone-menu-sheet .button {
   min-height: 40px;

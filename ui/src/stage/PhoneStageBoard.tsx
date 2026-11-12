@@ -52,6 +52,7 @@ import {
   type PhonePile,
 } from "./PhoneChrome.tsx";
 import { pageStage } from "./playback.ts";
+import { Entries, Shares, Ways } from "./Choose.tsx";
 import { onTable } from "./prompt.ts";
 import {
   PhonePromptDock,
@@ -96,7 +97,8 @@ export function PhoneStageBoard({
   const asked = usePrompt(prompts);
   const { pay, suggest } = usePaying(asked);
   const press = prompts.press.bind(prompts);
-  const answers = { waiting, press, cancel, suggest };
+  const number = prompts.number.bind(prompts);
+  const answers = { waiting, press, cancel, suggest, number };
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
   const { table, counts, resting } = useSyncExternalStore(
@@ -111,8 +113,8 @@ export function PhoneStageBoard({
     () => viewport && table && phoneLayout(table, viewport).bands,
     [table, viewport],
   );
-  // What the stage does not yet draw the prompt of (a division of damage) keeps the old
-  // phone board's dock, which answers through the screen.
+  // What the session holds no state of (a payment among plans it cannot tell apart) keeps
+  // the old phone board's dock, which answers through the screen.
   const can = useMemo(() => interactions(view), [view]);
   const objects = useMemo(
     () => new Map(view.objects.map((o) => [o.slot, o])),
@@ -263,12 +265,26 @@ export function PhoneStageBoard({
         />
       )}
       {table && viewport && (
-        <OrderRow
-          asked={asked}
-          prompts={prompts}
-          view={view}
-          space={phoneTray(table, viewport)}
-        />
+        <>
+          <OrderRow
+            asked={asked}
+            prompts={prompts}
+            view={view}
+            space={phoneTray(table, viewport)}
+          />
+          <Ways
+            asked={asked}
+            prompts={prompts}
+            view={view}
+            space={phoneTray(table, viewport)}
+          />
+          <Entries
+            asked={asked}
+            prompts={prompts}
+            space={phoneTray(table, viewport)}
+          />
+          <Shares asked={asked} prompts={prompts} stage={stage} />
+        </>
       )}
       {bands && table && (
         <>
