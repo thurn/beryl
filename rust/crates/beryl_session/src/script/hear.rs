@@ -220,3 +220,78 @@ fn about_to_arrive<L: Layout>(events: &[Tagged<L>], place: StackIx, top: usize) 
         _ => None,
     })?
 }
+
+#[cfg(test)]
+mod tests {
+    use beryl_engine::card::FaceAbility;
+
+    use super::*;
+
+    fn ability() -> StackEntry {
+        StackEntry {
+            ability: Some(FaceAbility::own(0)),
+            ..StackEntry::default()
+        }
+    }
+
+    fn tagged(event: Event, cause: Tag) -> Tagged {
+        let tag = beryl_engine::event::Tag { cause };
+        Tagged { event, tag }
+    }
+
+    const A1: Subject = Subject::Ability { id: 1 };
+    const A2: Subject = Subject::Ability { id: 2 };
+    const A3: Subject = Subject::Ability { id: 3 };
+
+    /// A cause's place is read in the stack as it stands at its event: the entries above one
+    /// that leaves fall by a place, and the one resolving is named until it has left.
+    #[test]
+    fn a_place_names_the_entry_there_as_its_event_happens() {
+        let mut names = Names::default();
+        let arrives = |cause| {
+            let entry = ability();
+            tagged(Event::StackArrival { entry }, cause)
+        };
+        let effect = |place| Tag::Effect {
+            entry: StackIx(place),
+        };
+        let leaves = |place, cause| {
+            let entry = StackIx(place);
+            tagged(Event::StackDeparture { entry }, cause)
+        };
+        let said = names.follow(&[
+            arrives(Tag::Rules),
+            arrives(Tag::Rules),
+            // The lower one leaves from under the upper, which takes its place.
+            leaves(0, effect(1)),
+            leaves(0, effect(0)),
+        ]);
+        let told: Vec<_> = said.iter().map(|s| (s.cause.entry(), s.moved)).collect();
+        assert_eq!(
+            told,
+            [
+                (None, Some(A1)),
+                (None, Some(A2)),
+                (Some(A2), Some(A1)),
+                (Some(A2), Some(A2)),
+            ]
+        );
+        assert!(names.stack().is_empty());
+    }
+
+    /// What the events did not tell is taken from the engine's stack: an entry gone with no
+    /// departure is forgotten, and one there with no arrival gets a number never used before.
+    #[test]
+    fn names_agree_with_a_stack_the_events_did_not_tell() {
+        let mut names = Names::default();
+        let stack = [ability(), ability()];
+        names.agree(&stack);
+        assert_eq!(names.stack(), [A1, A2]);
+        // The same stack again changes nothing; a cast taken back leaves the first alone.
+        names.agree(&stack);
+        names.agree(&stack[..1]);
+        assert_eq!(names.stack(), [A1]);
+        names.agree(&stack);
+        assert_eq!(names.stack(), [A1, A3]);
+    }
+}
