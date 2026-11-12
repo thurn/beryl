@@ -337,12 +337,12 @@
     {
       "kind": "settled",
       "name": "Two items on the stack",
-      "rule": "The top one still gets its target arrow.",
+      "rule": "The top one still gets its target arrow. Each item beneath peeks out to the left of the one over it by a quarter of its width (a fifth past five items, as far as the room left of the stack allows), so a spell leaving from under another is seen as it goes.",
       "reports": [
         "by-i88"
       ],
       "arena": {
-        "does": "A cyan arc runs from the top item to its target, even when that is the one card under it; the top card sits a little right of and below the one beneath.",
+        "does": "A cyan arc runs from the top item to its target, even when that is the one card under it; the top card sits a little right of and below the one beneath, which shows about a third of its width beside it, and a countered spell crumbles in that strip.",
         "evidence": [
           {
             "recording": "I3Te0m1bBFw",
@@ -351,6 +351,10 @@
           {
             "recording": "IEXcjBn3BXk",
             "time": "51:34.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:35.3"
           },
           {
             "recording": "MnhyzykajXw",

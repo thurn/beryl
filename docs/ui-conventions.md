@@ -98,11 +98,15 @@ restore the old behavior.
   can attack get a cyan outline; a clicked attacker turns gold, the opponent's
   life total and the planeswalker glow, and an arrow follows the cursor to the
   planeswalker (SswBO8aOOgc 33:30.5).
-- **Two items on the stack.** The top one still gets its target arrow (by-i88).
-  A cyan arc runs from the top item to its target, even when that is the one
-  card under it; the top card sits a little right of and below the one beneath
-  (I3Te0m1bBFw 39:49.4, IEXcjBn3BXk 51:34.5, MnhyzykajXw 36:19.5, 5UHzpVvUkfI
-  58:15).
+- **Two items on the stack.** The top one still gets its target arrow. Each item
+  beneath peeks out to the left of the one over it by a quarter of its width (a
+  fifth past five items, as far as the room left of the stack allows), so a
+  spell leaving from under another is seen as it goes (by-i88). A cyan arc runs
+  from the top item to its target, even when that is the one card under it; the
+  top card sits a little right of and below the one beneath, which shows about a
+  third of its width beside it, and a countered spell crumbles in that strip
+  (I3Te0m1bBFw 39:49.4, IEXcjBn3BXk 51:34.5, IEXcjBn3BXk 51:35.3, MnhyzykajXw
+  36:19.5, 5UHzpVvUkfI 58:15).
 - **Additional costs.** A chooser that lowers the mana to pay (Delve) opens
   before mana taps; a sacrifice cost is chosen after the lands tap (by-jqd).
   Treasure Cruise's Delve chooser opens before any land taps; Natural Order's
