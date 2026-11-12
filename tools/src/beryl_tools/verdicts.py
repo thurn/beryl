@@ -564,7 +564,12 @@ def settle(
             if verdict:
                 found.append((str(r["check"]), str(r["lane"]), entry(failed, verdict)))
         for r in records:
-            if r["outcome"] == "fail" and not r.get("flaky") and tree:
+            if (
+                r["outcome"] == "fail"
+                and not r.get("flaky")
+                and not r.get("timeout")
+                and tree
+            ):
                 state[f"{script}\t{place}\t{r['check']}"] = {
                     k: r.get(k)
                     for k in ("time", "host", "commit", "tree", "lane", "seconds")

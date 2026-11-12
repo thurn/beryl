@@ -237,6 +237,15 @@ class Run:
             warn(e)
         return records
 
+    def timed_out(self, lanes: set[str]) -> None:
+        """Marks the failures logged so far in `lanes` as the deadline's (`checks.run_all`,
+        which reruns those lanes): a kill says nothing about a check, so none of them waits
+        for a verdict (verdicts.settle). The log on disk keeps them as they were."""
+        with self.lock:
+            for r in self.logged:
+                if r["lane"] in lanes and r["outcome"] == "fail":
+                    r["timeout"] = True
+
     def settle(self) -> list[str]:
         """The verdicts this run reached (verdicts.settle), a line each."""
         with self.lock:

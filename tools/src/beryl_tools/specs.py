@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import card_store, cards, paths, scryfall, system, warm
+from . import card_store, cards, checks, paths, scryfall, system, warm
 from . import nearest as nearest_cards
 from .shots import (
     UiError,
@@ -218,9 +218,9 @@ def warm_specs(port: int, slugs: list[str]) -> None:
     """Waits for the spec server to answer, then asks it for each of `slugs`' moments, which
     generates those cards' specs, so the first page after a start does not wait on them. A
     card not asked for is generated when its page first asks."""
-    deadline = time.monotonic() + 600
+    clock = checks.Clock()  # Load-adjusted, as shots.wait_for_server waits.
     for path in ["specs", *(f"specs/{s}" for s in slugs)]:
-        while time.monotonic() < deadline:
+        while clock.now() < 600:
             try:
                 with urllib.request.urlopen(
                     f"http://127.0.0.1:{port}/{path}", timeout=600

@@ -48,6 +48,20 @@ def test_a_hung_step_is_killed_at_the_deadline_with_its_descendants(
             assert gone(int(pid_file.read_text()))
 
 
+def test_a_lane_the_deadline_killed_reruns_once_with_a_fresh_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Slow the first time, as a build after a rebase is, and quick once it is warm.
+    monkeypatch.setenv("CHECK_DEADLINE_S", "2")
+    first = "test -e built || { touch built; sleep 600; }"
+    lane = checks.Lane("build").step("tests", ["sh", "-c", first], tmp_path)
+    assert checks.run_lanes([lane], "check", 60, strict=False) == 0
+    out = capsys.readouterr().out
+    assert "check build tests: TIMED OUT after" in out
+    assert "the deadline killed build; rerunning once with a fresh deadline" in out
+    assert "check: passed" in out
+
+
 def gone(pid: int) -> bool:
     """Whether `pid` has exited (a zombie has), waiting up to a minute for a killed process."""
     ends = time.monotonic() + 60

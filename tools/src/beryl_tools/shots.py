@@ -37,6 +37,8 @@ from pathlib import Path
 
 from . import checks, paths, selection, system, warm
 
+# Load-adjusted seconds (checks.Clock): a crowded machine stretches Vite's start well past a
+# minute of wall time, and a wall-clock wait failed runs that would pass on a quiet one.
 SERVER_TIMEOUT = 60.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
@@ -72,8 +74,8 @@ def port_free(port: int) -> bool:
 
 def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
     """Polls until Vite answers, it exits, or the timeout passes."""
-    deadline = time.monotonic() + SERVER_TIMEOUT
-    while time.monotonic() < deadline and server.poll() is None:
+    clock = checks.Clock()
+    while clock.now() < SERVER_TIMEOUT and server.poll() is None:
         try:
             with urllib.request.urlopen(url, timeout=2):
                 return True

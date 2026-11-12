@@ -146,6 +146,8 @@ class Outcome:
     excused: list[tuple[str, str]] = field(default_factory=list)
     # The step that failed the lane, when it is one a rerun can narrow (`Step.failed`).
     failure: Failure | None = None
+    # Whether the run's deadline killed a step of the lane (`run_all` reruns it once).
+    timed_out: bool = False
 
 
 class Steps:
@@ -311,6 +313,7 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
                 flaky,
                 excused,
                 failure,
+                timed_out=code is None,
             )
         rerun = " after a rerun" if len(flaky) > flakes else ""
         timings.append(f"{step.name} {clock.now() - t:.0f} s{rerun}")
@@ -343,21 +346,32 @@ def run_all(
 ) -> Report:
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
     many wall seconds in is killed (`Steps.wall_limit`)."""
-    steps = Steps(
-        float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)), wall_limit=wall_limit
-    )
+    deadline = float(os.environ.get("CHECK_DEADLINE_S", 2 * budget))
+    steps = Steps(deadline, wall_limit=wall_limit)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
-    with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
-        try:
-            outcomes = list(
-                pool.map(lambda lane: run_lane(lane, run, env, steps), lanes)
-            )
-        # Ctrl-C reaches only this process, not the steps' sessions.
-        except BaseException:
-            steps.stop()
-            raise
+    outcomes = play(lanes, run, env, steps)
+    # The deadline catches a hang, but it also kills lanes that a rebuild after a rebase or a
+    # crowded machine made slow, and a session's answer was to run the whole check again. The
+    # lanes it killed rerun once here instead, with a fresh deadline on the same clock: their
+    # builds are warm by now, so a slow lane finishes and a hung one hangs again and fails.
+    killed = [i for i, o in enumerate(outcomes) if o.timed_out]
+    # The wall limit counts from the run's start on the same clock, so a rerun keeps to it.
+    if killed and (wall_limit is None or wall_limit - steps.clock.wall() > 0):
+        names = {lanes[i].name for i in killed}
+        print(
+            f"{script}: the deadline killed {', '.join(sorted(names))}; rerunning once with a"
+            f" fresh deadline ({load_note()})"
+        )
+        run.timed_out(names)
+        steps = Steps(steps.clock.now() + deadline, steps.clock, wall_limit)
+        again = play([lanes[i] for i in killed], run, env, steps)
+        for i, o in zip(killed, again):
+            first = outcomes[i]
+            o.log = f"{first.log}\n--- rerun after the deadline ---\n{o.log}"
+            o.timings = [*first.timings, "rerun:", *o.timings]
+            outcomes[i] = o
     for o in sorted(outcomes, key=lambda o: not o.ok):
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
     for o in outcomes:
@@ -387,6 +401,19 @@ def run_all(
     code = 1 if failed or (over and strict) else 0
     clock = steps.clock
     return Report(code, outcomes, over, clock.loaded(), cold, clock.wall())
+
+
+def play(
+    lanes: list[Lane], run: runlog.Run, env: dict[str, str], steps: Steps
+) -> list[Outcome]:
+    """Runs the lanes in parallel, each a sequence of steps (`run_lane`)."""
+    with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
+        try:
+            return list(pool.map(lambda lane: run_lane(lane, run, env, steps), lanes))
+        # Ctrl-C reaches only this process, not the steps' sessions.
+        except BaseException:
+            steps.stop()
+            raise
 
 
 def load_note() -> str:
