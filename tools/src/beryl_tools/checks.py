@@ -1,8 +1,9 @@
 """The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
-on the staging tip (budget 300 s, 450 s on Windows, and a run over it fails). Both run lanes in parallel, each a
-sequence of timed steps, and print failed lanes last. A run has a hard deadline of twice its
-budget ($CHECK_DEADLINE_S overrides it): a step still running then is killed, with everything it
-started, and fails its lane.
+on the staging tip (budget 300 s, 450 s on Windows). Both run lanes in parallel, each a
+sequence of timed steps, and print failed lanes last. A run over its budget fails nothing: it
+files a bead to audit its slowest steps (budget.py). A run has a hard deadline, twice its budget
+and at least [`HANG_DEADLINE`] ($CHECK_DEADLINE_S overrides it), to catch a hang: a step still
+running then is killed, with everything it started, and fails its lane.
 
 Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work oversubscribes
 the machine (other sessions' checks, a game, `just ladder`), the clock runs slower, so a run
@@ -25,9 +26,7 @@ failed where it can name them: a pass on the rerun passes the lane and prints a 
 After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
 failing checks are quarantined or pending fails no lane.
 
-Slow CI bisects a failure that survives its rerun over the commits since master (bisect.py). A run
-over budget with nothing failed reruns once if the machine was loaded or the cache cold, and is
-excused if the rerun is over budget under load too.
+Slow CI bisects a failure that survives its rerun over the commits since master (bisect.py).
 """
 
 from __future__ import annotations
@@ -65,6 +64,7 @@ from . import (
     verdicts,
     warm,
 )
+from . import budget as budget_beads
 from .changes import branch_base, changed_paths, git, markdown_files, narrow
 from .clock import MAX_STRETCH, Clock, WallClock, stretch, took
 from .reruns import (
@@ -86,6 +86,8 @@ from .rust_tests import (
 )
 
 FAST_BUDGET = 60
+# The least deadline: a hang guard, not a budget, so a slow machine's steps finish.
+HANG_DEADLINE = 600
 # Windows runs the same lanes markedly slower (process start, file system, antivirus).
 SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
@@ -354,20 +356,19 @@ class Report:
     wall: float
 
 
-def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
-    return run_all(lanes, script, budget, strict).code
+def run_lanes(lanes: list[Lane], script: str, budget: int) -> int:
+    return run_all(lanes, script, budget).code
 
 
 def run_all(
     lanes: list[Lane],
     script: str,
     budget: int,
-    strict: bool,
     wall_limit: float | None = None,
 ) -> Report:
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
     many wall seconds in is killed (`Steps.wall_limit`)."""
-    deadline = float(os.environ.get("CHECK_DEADLINE_S", 2 * budget))
+    deadline = float(os.environ.get("CHECK_DEADLINE_S", max(2 * budget, HANG_DEADLINE)))
     steps = Steps(deadline, wall_limit=wall_limit)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
@@ -395,8 +396,9 @@ def run_all(
             outcomes[i] = o
     for o in sorted(outcomes, key=lambda o: not o.ok):
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
-    for o in outcomes:
-        print(f"{script}: {o.lane} {o.seconds:.0f} s ({', '.join(o.timings)})")
+    lines = [f"{o.lane} {o.seconds:.0f} s ({', '.join(o.timings)})" for o in outcomes]
+    for line in lines:
+        print(f"{script}: {line}")
     # Checks that failed once and passed on the rerun (`run_lane`), for whoever greps the log.
     for o in outcomes:
         for check in o.flaky:
@@ -412,14 +414,13 @@ def run_all(
         f"{script}: {'FAILED: ' + ' '.join(failed) if failed else 'passed'} in {took(steps.clock.wall(), elapsed)} (budget {budget} s)"
     )
     if over:
-        print(
-            f"{script}: over budget: speed up or delete the slowest step"
-            + (" (this fails slow CI)" if strict else "")
-        )
         # A run slowed by other work (a game, `just ladder` on every core) looks like a slow
         # step in every lane at once; the load says which it was before anyone bisects.
         print(f"{script}: {load_note()}")
-    code = 1 if failed or (over and strict) else 0
+        if not failed:
+            spent = took(steps.clock.wall(), elapsed)
+            print(budget_beads.report(script, budget, spent, lines, load_note()))
+    code = 1 if failed else 0
     clock = steps.clock
     return Report(code, outcomes, over, clock.loaded(), cold, clock.wall())
 
@@ -646,7 +647,7 @@ def fast(args: argparse.Namespace) -> int:
         f"check: {'every lane (no base)' if changed is None else f'{len(changed)} paths changed since {base[:8]}'}"
     )
     lanes = narrow(fast_lanes(changed), base, fast_lanes, lambda l: l.name)
-    return run_lanes(lanes, "check", FAST_BUDGET, strict=False)
+    return run_lanes(lanes, "check", FAST_BUDGET)
 
 
 def fast_lanes(changed: list[str] | None) -> list[Lane]:
@@ -726,37 +727,12 @@ def slow(args: argparse.Namespace) -> int:
 
 
 def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
-    """Slow CI on `lanes`, begun at `started` (time.monotonic). A run over budget with nothing
-    failed, on a loaded machine or a cold cache, reruns once; over budget under load again, it
-    is excused and files nothing. A failure that survived its rerun is bisected (bisect.py).
-    """
+    """Slow CI on `lanes`, begun at `started` (time.monotonic). A failure that survived its
+    rerun is bisected (bisect.py); a run over budget fails nothing (budget.py)."""
     from . import bisect  # It imports this module.
 
-    report = run_all(
-        lanes, "ci", budget, strict=True, wall_limit=bisect.time_left(started)
-    )
+    report = run_all(lanes, "ci", budget, wall_limit=bisect.time_left(started))
     failed = [o for o in report.outcomes if not o.ok]
-    if report.over and not failed and (report.loaded or report.cold):
-        why = "under load" if report.loaded else "on a cold cache"
-        if bisect.time_left(started) < report.wall:
-            print(f"excused: over budget {why}, with no time left to rerun")
-            return 0
-        print(f"ci: over budget {why}: rerunning the whole run once")
-        report = run_all(
-            lanes, "ci", budget, strict=True, wall_limit=bisect.time_left(started)
-        )
-        failed = [o for o in report.outcomes if not o.ok]
-        if report.over and not failed and report.loaded:
-            print("excused: over budget under load")
-            return 0
-        # by-5fnf: the rerun only confirms an overrun, and the first run passed every check.
-        # A rerun the load stretched into Enact's wall clock proves nothing either way.
-        if failed and report.loaded and all(o.walled for o in failed):
-            print(
-                f"excused: the rerun under load reached the wall limit"
-                f" ({', '.join(o.lane for o in failed)}); the first run passed every check"
-            )
-            return 0
     if failed:
         bisect.after(failed, started)
     return report.code

@@ -307,8 +307,8 @@ def make_room() -> None:
 
 def ensure(checkout: Path = REPO, tauri: bool = False) -> bool:
     """Gives the checkout a `rust/target`, with the Tauri CLI's target directory if `tauri`, and
-    an up-to-date `ui/node_modules`. Whether either was built cold, with nothing to clone: a run
-    over budget then reruns once (checks.py, `slow`)."""
+    an up-to-date `ui/node_modules`. Whether either was built cold, with nothing to clone.
+    """
     if not (checkout / "rust" / "target").exists():
         make_room()
     with locked():

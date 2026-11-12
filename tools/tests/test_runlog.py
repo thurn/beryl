@@ -37,7 +37,7 @@ def test_each_check_a_step_reports_is_logged_and_a_bare_step_is_one_check() -> N
         )
         .step("tsc", ["true"])
     )
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert checks.run_lanes([lane], "ci", 60) == 0
     records = logged()
     assert [(r["check"], r["outcome"]) for r in records] == [
         ("ui-test:drag a card", "pass"),
@@ -68,7 +68,7 @@ def test_a_step_that_fails_outside_its_checks_is_logged_as_failing() -> None:
         checks.Lane("b").step("fails", reports(failing, then="false")),
         checks.Lane("c").step("build", ["false"]).step("never", ["true"]),
     ]
-    assert checks.run_lanes(lanes, "check", 60, strict=False) == 1
+    assert checks.run_lanes(lanes, "check", 60) == 1
     outcomes = {(r["check"], r["outcome"]) for r in logged()}
     assert outcomes == {
         ("shots:board", "pass"),
@@ -85,7 +85,7 @@ def test_a_rerun_logs_its_own_results_on_the_same_tree(tmp_path: Path) -> None:
     lane = checks.Lane("ui-test").step(
         "ui-test", ["sh", "-c", once], tmp_path, rerun=checks.failed_titles
     )
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert checks.run_lanes([lane], "ci", 60) == 0
     records = logged()
     assert [(r["check"], r["outcome"]) for r in records] == [
         ("ui-test:scry", "fail"),
@@ -99,7 +99,7 @@ def test_a_log_that_cannot_be_written_fails_no_check(
 ) -> None:
     (own_cache / "ci").write_text("a file where the log's folder goes")
     lane = checks.Lane("repo").step("just", ["true"])
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 0
+    assert checks.run_lanes([lane], "check", 60) == 0
     assert "run log: not written" in capsys.readouterr().err
 
 

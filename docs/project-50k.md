@@ -354,8 +354,8 @@ scenario. All four are logged and judged the same way.
 
 - **After a merge.** `by ci` reruns the failed checks over the commits since
   `master` and ends its log with the checks, the culprit commit and each check's
-  record. Enact files that as the Steward bead. A run over budget on a loaded
-  machine or a cold cache reruns and files nothing.
+  record. Enact files that as the Steward bead. A run over budget fails nothing
+  and files a bead to audit its slowest steps.
 
 - **Pruning.** `just ci-report` prints each check's record over 30 days, and
   `just ci-report --prune` each check this rule acts on, with its numbers. A

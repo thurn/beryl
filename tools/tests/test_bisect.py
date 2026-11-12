@@ -90,7 +90,7 @@ def probes(tmp_path: Path) -> list[tuple[int, list[str]]]:
 
 def run(repo: Path, capsys: pytest.CaptureFixture[str]) -> list[str]:
     """Slow CI on the fake lane, failed and bisected; the log's lines."""
-    report = checks.run_all([lane(repo)], "ci", 60, strict=True)
+    report = checks.run_all([lane(repo)], "ci", 60)
     assert report.code == 1
     capsys.readouterr()
     bisect.after(report.outcomes, time.monotonic(), repo)
@@ -184,7 +184,7 @@ def test_a_probe_that_hangs_dies_at_the_deadline_and_keeps_its_range(
     monkeypatch.setattr(bisect, "time_left", lambda *args: 3.0)
     monkeypatch.setattr(bisect, "LEAST_PROBE", 0.0)
     monkeypatch.setenv("HANG", "1")
-    report = checks.run_all([lane(repo)], "ci", 60, strict=True)
+    report = checks.run_all([lane(repo)], "ci", 60)
     capsys.readouterr()
     bisect.after(report.outcomes, time.monotonic(), repo)
     lines = capsys.readouterr().out.splitlines()
@@ -210,83 +210,22 @@ def over_budget_lane() -> checks.Lane:
     return checks.Lane("slow").step("true", [sys.executable, "-c", "pass"])
 
 
-def test_over_budget_under_load_reruns_once_then_is_excused(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, deadline: None
-) -> None:
-    monkeypatch.setattr(os, "cpu_count", lambda: 18)
-    monkeypatch.setattr(checks.system, "loadavg", lambda: (40.0, 40.0, 40.0))
-    assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 0
-    out = capsys.readouterr().out
-    assert "ci: over budget under load: rerunning the whole run once" in out
-    assert out.count("ci: passed in") == 2
-    assert out.rstrip().endswith("excused: over budget under load")
-
-
-def test_over_budget_on_a_cold_cache_reruns_and_still_fails_when_quiet(
+def test_over_budget_passes_and_files_a_bead(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, deadline: None
 ) -> None:
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
     monkeypatch.setattr(checks.system, "loadavg", lambda: (2.0, 2.0, 2.0))
-    monkeypatch.setattr(checks.warm, "ensure", lambda: True)
-    cold = checks.Lane("build", warm=True).step("true", [sys.executable, "-c", "pass"])
-    assert checks.slow_run([cold], 0, time.monotonic()) == 1
-    out = capsys.readouterr().out
-    assert "ci: over budget on a cold cache: rerunning the whole run once" in out
-    assert "excused" not in out
-
-
-def test_over_budget_on_a_quiet_warm_machine_fails_without_a_rerun(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, deadline: None
-) -> None:
-    monkeypatch.setattr(os, "cpu_count", lambda: 18)
-    monkeypatch.setattr(checks.system, "loadavg", lambda: (2.0, 2.0, 2.0))
-    assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 1
-    out = capsys.readouterr().out
-    assert "rerunning" not in out and "excused" not in out
-
-
-def test_over_budget_under_load_with_no_time_to_rerun_is_excused(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, deadline: None
-) -> None:
-    monkeypatch.setattr(os, "cpu_count", lambda: 18)
-    monkeypatch.setattr(checks.system, "loadavg", lambda: (40.0, 40.0, 40.0))
-    # Time for the run, which asks first, and none left after it for a rerun.
-    left = iter([600.0])
-    monkeypatch.setattr(bisect, "time_left", lambda *args: next(left, 0.0))
-    assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 0
-    out = capsys.readouterr().out
-    assert "rerunning" not in out
-    assert "excused: over budget under load, with no time left to rerun" in out
-
-
-def test_a_rerun_under_load_cut_off_by_the_wall_limit_is_excused(
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    deadline: None,
-    tmp_path: Path,
-) -> None:
-    # by-5fnf: the first run passed over budget; its rerun ran into Enact's wall clock.
-    monkeypatch.setattr(os, "cpu_count", lambda: 18)
-    monkeypatch.setattr(checks.system, "loadavg", lambda: (40.0, 40.0, 40.0))
-    monkeypatch.setattr(bisect, "after", lambda *args: pytest.fail("bisected"))
-    # The first run's limit, the gate on rerunning, then the rerun's limit, all but spent.
-    left = iter([600.0, 600.0, 1.0])
-    monkeypatch.setattr(bisect, "time_left", lambda *args: next(left, 0.0))
-    # The step passes at once the first time and outlasts the wall limit the second.
-    count = tmp_path / "runs"
-    script = (
-        "import pathlib, sys, time; p = pathlib.Path(sys.argv[1]);"
-        " n = int(p.read_text()) if p.exists() else 0; p.write_text(str(n + 1));"
-        " time.sleep(30 * n)"
+    filed: list[str] = []
+    monkeypatch.setattr(
+        checks.budget_beads,
+        "report",
+        lambda script, *args: filed.append(script) or f"{script}: over budget: filed",
     )
-    lane = checks.Lane("slow").step("sleep", [sys.executable, "-c", script, str(count)])
-    started = time.monotonic()
-    assert checks.slow_run([lane], 0, started) == 0
-    assert time.monotonic() - started < 20
+    assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 0
     out = capsys.readouterr().out
-    assert "ci: over budget under load: rerunning the whole run once" in out
-    assert "the wall limit of 1 s before Enact's kill" in out
-    assert "excused: the rerun under load reached the wall limit (slow)" in out
+    assert filed == ["ci"]
+    assert out.count("ci: passed in") == 1
+    assert "ci: over budget: filed" in out
 
 
 def test_a_wall_limit_kill_on_a_quiet_machine_still_fails(

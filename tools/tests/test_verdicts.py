@@ -107,7 +107,7 @@ def test_a_check_that_passes_on_the_rerun_is_flaky(
     tmp_path: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lane = flaky("ui-test:scry", tmp_path)
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 0
+    assert checks.run_lanes([lane], "check", 60) == 0
     assert bd.verdicts("ui-test:scry") == ["flaky"]
     assert "verdict: ui-test ui-test:scry flaky" in capsys.readouterr().out
     issue = bd.issues[verdicts.bead_id("ui-test:scry")]
@@ -119,27 +119,27 @@ def test_a_check_that_passes_on_the_rerun_is_flaky(
 def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
     repo: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
+    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60) == 1
     write(repo, "ui/scripts/kept-table.mjs", "checks, fixed\n")
-    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60) == 0
     assert bd.verdicts("ui-test:drag") == ["stale"]
 
-    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
+    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60) == 1
     write(repo, "ui/src/Board.tsx", "board, fixed\n")
     write(repo, "docs/notes.md", "prose touches no side\n")
-    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60) == 0
     assert bd.verdicts("ui-test:drag") == ["stale", "catch"]
 
     # A pass with nothing changed since the failure: a flake no rerun saw.
-    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
-    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60) == 1
+    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60) == 0
     assert bd.verdicts("ui-test:drag") == ["stale", "catch", "flaky"]
     capsys.readouterr()
 
-    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
+    assert checks.run_lanes([one("ui-test:drag", False)], "check", 60) == 1
     write(repo, "ui/src/Board.tsx", "board, fixed twice\n")
     write(repo, "ui/scripts/kept-table.mjs", "checks, fixed twice\n")
-    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("ui-test:drag", True)], "check", 60) == 0
     assert bd.verdicts("ui-test:drag")[-1] == "mixed"
     assert "just verdict 'ui-test:drag' stale|catch" in capsys.readouterr().out
     args = argparse.Namespace(check="ui-test:drag", verdict="catch")
@@ -150,22 +150,22 @@ def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
 def test_a_pass_settles_only_failures_from_its_own_place(
     repo: Path, bd: FakeBd
 ) -> None:
-    assert checks.run_lanes([one("shots:board", False)], "check", 60, False) == 1
+    assert checks.run_lanes([one("shots:board", False)], "check", 60) == 1
     git(repo, "checkout", "-qb", "other")
     write(repo, "ui/src/Board.tsx", "board, elsewhere\n")
-    assert checks.run_lanes([one("shots:board", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("shots:board", True)], "check", 60) == 0
     git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "b")
     assert bd.verdicts("shots:board") == []
     git(repo, "checkout", "-q", "work")
     write(repo, "ui/shots.json", "{}\n")
-    assert checks.run_lanes([one("shots:board", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("shots:board", True)], "check", 60) == 0
     assert bd.verdicts("shots:board") == ["stale"]
 
 
 def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
     repo: Path, bd: FakeBd
 ) -> None:
-    assert checks.run_lanes([one("shots:board", False)], "ci", 60, True) == 1
+    assert checks.run_lanes([one("shots:board", False)], "ci", 60) == 1
     write(repo, "ui/src/Board.tsx", "board, repaired\n")
     git(repo, "add", "-A")
     git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fix")
@@ -176,7 +176,7 @@ def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
             "metadata": {"enact_commits": git(repo, "rev-parse", "HEAD")},
         },
     ]
-    assert checks.run_lanes([one("shots:board", True)], "ci", 60, True) == 0
+    assert checks.run_lanes([one("shots:board", True)], "ci", 60) == 0
     [entry] = bd.history(["shots:board"])["shots:board"]
     assert entry["verdict"] == "catch" and entry["steward"] == "by-steward"
     assert entry["fixed"] == git(repo, "rev-parse", "HEAD")
@@ -185,7 +185,7 @@ def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
 def test_a_steward_fix_is_judged_by_its_own_commits_alone(
     repo: Path, bd: FakeBd
 ) -> None:
-    assert checks.run_lanes([one("shots:board", False)], "ci", 60, True) == 1
+    assert checks.run_lanes([one("shots:board", False)], "ci", 60) == 1
     commit = ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm"]
     write(repo, "ui/src/Board.tsx", "board, someone else's feature\n")
     git(repo, "add", "-A")
@@ -195,7 +195,7 @@ def test_a_steward_fix_is_judged_by_its_own_commits_alone(
     git(repo, *commit, "fix")
     fix = git(repo, "rev-parse", "HEAD")
     bd.stewards = [{"id": "by-steward", "metadata": {"enact_commits": fix}}]
-    assert checks.run_lanes([one("shots:board", True)], "ci", 60, True) == 0
+    assert checks.run_lanes([one("shots:board", True)], "ci", 60) == 0
     [entry] = bd.history(["shots:board"])["shots:board"]
     # The range from the failure holds the feature too, which alone would read as mixed.
     assert entry["verdict"] == "stale" and entry["steward"] == "by-steward"
@@ -264,9 +264,9 @@ def test_two_flakes_in_seven_days_quarantine_a_check(
 ) -> None:
     flakes(bd, "ui-test:scry", 1, 8)
     lanes = [one("ui-test:scry", False)]
-    assert checks.run_lanes(lanes, "check", 60, strict=False) == 1
+    assert checks.run_lanes(lanes, "check", 60) == 1
     flakes(bd, "ui-test:scry", 2)
-    assert checks.run_lanes(lanes, "check", 60, strict=False) == 0
+    assert checks.run_lanes(lanes, "check", 60) == 0
     out = capsys.readouterr().out
     assert "quarantined: ui-test ui-test:scry" in out
     assert [r["outcome"] for r in logged()][-1] == "fail"
@@ -275,7 +275,7 @@ def test_two_flakes_in_seven_days_quarantine_a_check(
         "ui-test:drag", "fail", "false"
     )
     lane = checks.Lane("ui-test").step("ui-test", ["sh", "-c", f"{scry[2]}; {drag[2]}"])
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 1
+    assert checks.run_lanes([lane], "check", 60) == 1
     capsys.readouterr()
 
     assert runlog.report(report_args(quarantined=True)) == 0
@@ -302,7 +302,7 @@ def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeBd) -> None:
     lane = checks.Lane("app").step(
         "smoke", ["sh", "-c", f"exit {checks.CANNOT_RUN}"], rerun=checks.whole
     )
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 1
+    assert checks.run_lanes([lane], "check", 60) == 1
 
 
 def test_a_pending_check_is_logged_as_pending_and_fails_no_run(
@@ -310,9 +310,9 @@ def test_a_pending_check_is_logged_as_pending_and_fails_no_run(
 ) -> None:
     pending = verdicts.Pending("shots:flight", "flight_to_stack", "by-bank1")
     monkeypatch.setattr(verdicts, "PENDING", (pending,))
-    assert checks.run_lanes([one("shots:flight", False)], "check", 60, False) == 0
+    assert checks.run_lanes([one("shots:flight", False)], "check", 60) == 0
     assert "pending: shots shots:flight" in capsys.readouterr().out
-    assert checks.run_lanes([one("shots:flight", True)], "check", 60, False) == 0
+    assert checks.run_lanes([one("shots:flight", True)], "check", 60) == 0
     assert [r["outcome"] for r in logged()] == ["pending-fail", "pending-pass"]
     assert bd.issues == {}
     capsys.readouterr()
@@ -334,7 +334,7 @@ def test_verdicts_that_cannot_be_recorded_fail_no_run(
             return 1, "not json"
 
     monkeypatch.setattr(verdicts, "STORE", Broken())
-    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60, False) == 0
+    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
 
 
 def logged() -> list[dict[str, object]]:

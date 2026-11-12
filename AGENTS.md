@@ -362,9 +362,10 @@ The checks are split into "lanes", one per kind of file or test.
 
   Windows leaves `app`, `shots`, `ui-test`, `oracle`, `counts` and `mobile` to
   the Mac, and its fast check skips the browser checks and `motion` (see
-  `WINDOWS_SKIPS` in `checks.py`). A run that goes over budget fails. When that
-  happens, speed up, move or delete the slowest step instead of raising the
-  budget.
+  `WINDOWS_SKIPS` in `checks.py`). A run that goes over budget still passes, and
+  files a `check-budget` bead (`budget.py`) to speed up, move or delete its
+  slowest steps instead of raising the budget. The deadline, at least 600 s,
+  only catches a hang.
 
 - A UI bug fix adds the broken state as a fixture or spec moment, so the generic
   UI checks (overlap, off-screen, reachability, duplicate objects, page errors,

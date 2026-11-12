@@ -25,10 +25,10 @@ def test_only_lanes_that_build_warm_the_caches(
     warmed: list[bool] = []
     monkeypatch.setattr(checks.warm, "ensure", lambda: warmed.append(True))
     docs = checks.Lane("docs").step("true", ["true"])
-    assert checks.run_lanes([docs], "check", 60, strict=False) == 0
+    assert checks.run_lanes([docs], "check", 60) == 0
     assert warmed == []
     build = checks.Lane("build", warm=True).step("true", ["true"])
-    assert checks.run_lanes([docs, build], "check", 60, strict=False) == 0
+    assert checks.run_lanes([docs, build], "check", 60) == 0
     assert warmed == [True]
 
 
@@ -44,7 +44,7 @@ def test_a_hung_step_is_killed_at_the_deadline_with_its_descendants(
     )
     lane = checks.Lane("hang").step("sleep", ["sh", "-c", hang], tmp_path)
     started = time.monotonic()
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 1
+    assert checks.run_lanes([lane], "check", 60) == 1
     assert time.monotonic() - started < 300
     out = capsys.readouterr().out
     assert "check hang sleep: TIMED OUT after" in out
@@ -64,7 +64,7 @@ def test_a_lane_the_deadline_killed_reruns_once_with_a_fresh_deadline(
     monkeypatch.setenv("CHECK_DEADLINE_S", "2")
     first = "test -e built || { touch built; sleep 600; }"
     lane = checks.Lane("build").step("tests", ["sh", "-c", first], tmp_path)
-    assert checks.run_lanes([lane], "check", 60, strict=False) == 0
+    assert checks.run_lanes([lane], "check", 60) == 0
     out = capsys.readouterr().out
     assert "check build tests: TIMED OUT after" in out
     assert "the deadline killed build; rerunning once with a fresh deadline" in out
@@ -106,13 +106,13 @@ def test_the_crates_bake_in_no_build_paths() -> None:
     assert build_paths.baked_build_paths(build_paths.paths.RUST / "crates") == []
 
 
-def test_an_over_budget_run_reports_the_machine_load(
+def test_an_over_budget_run_passes_and_reports_the_machine_load(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(checks.system, "loadavg", lambda: (53.0, 45.2, 46.1))
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
     lane = checks.Lane("slow").step("true", [sys.executable, "-c", "pass"])
-    assert checks.run_lanes([lane], "ci", 0, strict=True) == 1
+    assert checks.run_lanes([lane], "ci", 0) == 0
     assert "ci: load average 53 45 46 on 18 cores" in capsys.readouterr().out
 
 
@@ -134,11 +134,11 @@ def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
     # The most load slows the clock to an eighth: 1.5 s of sleep is under a second of the
     # deadline and the budget, with room for a busy machine to start Python.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
-    assert checks.run_lanes([lane], "ci", 1, strict=True) == 0
+    assert checks.run_lanes([lane], "ci", 1) == 0
     assert "on the clock, the machine loaded" in capsys.readouterr().out
     # On a machine to itself the same step runs out of time.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (4.0, 4.0, 4.0))
-    assert checks.run_lanes([lane], "ci", 1, strict=True) == 1
+    assert checks.run_lanes([lane], "ci", 1) == 1
     assert "ci busy sleep: TIMED OUT after" in capsys.readouterr().out
 
 
@@ -189,7 +189,7 @@ def test_a_step_that_fails_once_reruns_its_failed_checks_and_passes(
     lane = checks.Lane("ui-test").step(
         "ui-test", flaky_step(), tmp_path, rerun=checks.failed_titles
     )
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert checks.run_lanes([lane], "ci", 60) == 0
     assert runs(tmp_path) == ["", "plays a land casts a spell"]
     out = capsys.readouterr().out
     assert "ci ui-test ui-test: FAILED (exit 1) after" in out
@@ -202,7 +202,7 @@ def test_a_step_that_cannot_name_its_checks_reruns_whole(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lane = checks.Lane("app").step("smoke", flaky_step(), tmp_path, rerun=checks.whole)
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 0
+    assert checks.run_lanes([lane], "ci", 60) == 0
     assert runs(tmp_path) == ["", ""]
     assert "\nflaky: app smoke\n" in capsys.readouterr().out
 
@@ -216,7 +216,7 @@ def test_a_step_that_fails_twice_fails_its_lane_showing_both_runs(
         tmp_path,
         rerun=checks.failed_titles,
     )
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 1
+    assert checks.run_lanes([lane], "ci", 60) == 1
     assert len(runs(tmp_path)) == 2
     out = capsys.readouterr().out
     assert out.count("FAILED: plays a land") == 2
@@ -234,11 +234,11 @@ def test_a_build_failure_or_a_static_check_is_not_rerun(
         tmp_path,
         rerun=checks.failed_tests,
     )
-    assert checks.run_lanes([build], "ci", 60, strict=True) == 1
+    assert checks.run_lanes([build], "ci", 60) == 1
     assert len(runs(tmp_path)) == 1
     (tmp_path / "runs").unlink()
     clippy = checks.Lane("rust").step("clippy", flaky_step(), tmp_path)
-    assert checks.run_lanes([clippy], "ci", 60, strict=True) == 1
+    assert checks.run_lanes([clippy], "ci", 60) == 1
     assert len(runs(tmp_path)) == 1
     assert "rerunning" not in capsys.readouterr().out
 
@@ -326,7 +326,7 @@ def test_a_rerun_that_misses_a_failed_check_is_no_flake(
         tmp_path,
         rerun=checks.failed_titles,
     )
-    assert checks.run_lanes([lane], "ci", 60, strict=True) == 1
+    assert checks.run_lanes([lane], "ci", 60) == 1
     out = capsys.readouterr().out
     assert "the rerun did not pass ui-test:casts a spell: the failure stands" in out
     assert "flaky:" not in out

@@ -6,8 +6,8 @@ master_branch = "master"
 [checks]
 fast = "uv run --quiet --project tools by check"
 slow = "uv run --quiet --project tools by ci"
-# A backstop behind `by ci`'s own deadline (twice its budget: 300 s, 450 s on Windows), which
-# names the step.
+# A backstop behind `by ci`'s own deadline (twice its budget, at least 600 s), which names
+# the step.
 slow_timeout = 1000
 
 [worktree]
