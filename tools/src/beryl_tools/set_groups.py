@@ -150,7 +150,7 @@ def extend(existing: list[Group], sets: Mapping[str, SetInfo]) -> list[Group]:
     new = sorted(
         (c for c in sets if c not in placed), key=lambda c: (sets[c].released, c)
     )
-    taken = {g.crate for g in groups}
+    taken: set[str] = {g.crate for g in groups}
 
     def opened(codes: list[str]) -> Group:
         group = Group(crate_name([sets[c].released[:4] for c in codes], taken), codes)

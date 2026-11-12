@@ -43,13 +43,14 @@ NAMES: tuple[str, ...] = (
 SUBTYPES: tuple[str, ...] = tuple(n for n in NAMES if n.endswith("-types"))[1:]
 # Scryfall asks clients to wait 50 to 100 ms between requests.
 PAUSE = 0.1
-QUANTITIES = (
+# Words before a counter's kind that say how many: "a", "three", "that many".
+QUANTITIES: tuple[str, ...] = tuple(
     "a an one two three four five six seven eight nine ten x that many twice another "
-    "additional no each all those"
-).split()
+    "additional no each all those".split()
+)
 # Words before "counter" that name no kind: "each kind of counter", "two different counters".
 NOT_KINDS: frozenset[str] = frozenset(QUANTITIES) | {"of", "had", "more", "different"}
-COUNTER = re.compile(
+COUNTER: re.Pattern[str] = re.compile(
     rf"\b(?:(?:{'|'.join(QUANTITIES)}|\d+) )+([+-]\d+/[+-]\d+|[a-z]+(?: [a-z]+)?) counters?\b"
 )
 COUNTER_RULE = (

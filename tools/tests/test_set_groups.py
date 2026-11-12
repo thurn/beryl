@@ -56,7 +56,11 @@ def test_regenerating_the_committed_groups_with_a_new_set_moves_none(
     path = tmp_path / "set-groups.json"
     path.write_bytes(set_groups.GROUPS.read_bytes())
     before = set_groups.SetGroups(set_groups.load(path)).crates
-    added = {"first_set": "zzz", "first_released": "2030-01-01", "name": "New Card"}
+    added: card_store.Json = {
+        "first_set": "zzz",
+        "first_released": "2030-01-01",
+        "name": "New Card",
+    }
     after = set_groups.SetGroups(
         set_groups.update(path, [*committed_cards(), added])
     ).crates
