@@ -170,6 +170,9 @@ pub struct Ability {
     /// For a Rust body: whether it may ask a player a question mid-resolution. Effect data
     /// says so itself; read [`Ability::asks`].
     may_pause: bool,
+    /// Whether its effect data needs something to do anything ([`Ability::needs`]), settled
+    /// as the effect is given: the engine asks of every activated ability at every priority.
+    needy: bool,
     body: Behavior,
     /// Triggered abilities: what they trigger on. Held by reference, as the body and the
     /// condition are: a [`Trigger`] names a filter and players, and an ability has 23 bytes
@@ -220,6 +223,7 @@ impl Ability {
             targets: &[],
             produces: ManaSet::NONE,
             may_pause: false,
+            needy: false,
             body: Behavior::Data(&Effect::NOTHING),
             trigger: None,
             condition: None,
@@ -433,9 +437,14 @@ impl Ability {
             Some(rule) => Some(rule),
             None => self.rule,
         };
+        let needy = match effect.needs() {
+            Some(objects) => !objects.needs_a_resolution(),
+            None => false,
+        };
         Ability {
             body: Behavior::Data(effect),
             rule,
+            needy,
             ..self
         }
     }
@@ -646,11 +655,8 @@ impl Ability {
     #[inline]
     pub const fn needs(&self) -> Option<Objects> {
         match self.body {
-            Behavior::Data(effect) => match effect.needs() {
-                Some(objects) if !objects.needs_a_resolution() => Some(objects),
-                _ => None,
-            },
-            Behavior::Custom(_) => None,
+            Behavior::Data(effect) if self.needy => effect.needs(),
+            _ => None,
         }
     }
 

@@ -34,7 +34,8 @@ fn a_card_counters_its_target_exactly_where_its_text_says_so() {
             }
         }
     }
-    // Both ways of knowing are in the pool.
+    // Every card of the pool that counters says so as data: none declares it beside a body.
     assert!(read.contains(&names::COUNTERSPELL), "{read:?}");
-    assert!(declared.contains(&names::MANA_DRAIN), "{declared:?}");
+    assert!(read.contains(&names::MANA_DRAIN), "{read:?}");
+    assert!(declared.is_empty(), "{declared:?}");
 }
