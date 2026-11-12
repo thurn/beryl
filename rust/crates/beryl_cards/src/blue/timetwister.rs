@@ -1,31 +1,9 @@
 //! Timetwister. {2}{U} Sorcery. "Each player shuffles their hand and graveyard into their
 //! library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)"
 
-use beryl_engine::card::{Ability, CardDef, Colors, Face, Flow, ManaCost, Types};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::{Layout, bodies};
-
-use beryl_engine::Zone;
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::TIMETWISTER,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::BLUE,
-        abilities: &[Ability::spell().custom(bodies!(twist))],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-fn twist<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    wheel(ctx);
-    Ok(())
-}
+use beryl_card::effect::build::{EACH_PLAYER, draw, sequence, shuffle_into};
+use beryl_card::{Ability, CardDef, Colors, Effect, Face, Objects, Types, Zone, card, mana};
 
 /// "Each player shuffles their hand and graveyard into their library, then draws seven
 /// cards." The cards go to their libraries together, each to its owner's
@@ -37,18 +15,25 @@ fn twist<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// makes any choices required, then the next player in turn order ... Then the actions happen
 /// simultaneously." No draw involves a choice, so the order changes nothing: a player who draws
 /// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
-pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
-    let s = ctx.state();
-    let players = s.players_in_turn_order(s.players());
-    let cards = s.in_zone(Zone::Hand) | s.in_zone(Zone::Graveyard);
-    ctx.move_all(cards, Zone::Library, Reason::Effect);
-    for p in players.clone() {
-        ctx.shuffle(p);
-    }
-    for p in players {
-        ctx.draw(p, 7);
-    }
-}
+static TWIST: Effect = sequence(&[
+    shuffle_into(
+        EACH_PLAYER,
+        Objects::CardsIn {
+            players: &EACH_PLAYER,
+            zones: &[Zone::Hand, Zone::Graveyard],
+        },
+    ),
+    draw(EACH_PLAYER, 7),
+]);
+
+pub static CARD: CardDef = card(
+    names::TIMETWISTER,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}"))
+        .types(Types::SORCERY)
+        .colors(Colors::BLUE)
+        .abilities(&[Ability::spell().effect(&TWIST)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

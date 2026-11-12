@@ -49,7 +49,7 @@ pub(crate) fn exile_until_this_leaves_instruction<L: Layout>(
     objects: Objects,
 ) -> Result<Outcome<L>, Full> {
     let permanents = run.permanents(objects);
-    run.remember(permanents);
+    run.remember(permanents)?;
     let mut left = permanents;
     while let Some(object) = run.next_permanent(&mut left) {
         let source = run.resolution().source();

@@ -1,31 +1,9 @@
 //! Stock Up. {2}{U} Sorcery. "Look at the top five cards of your library. Put two of them
 //! into your hand and the rest on the bottom of your library in any order."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::{Bitboard, Zone};
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::STOCK_UP,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::BLUE,
-        abilities: &[Ability::spell().custom(bodies!(stock_up)).pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-const LOOK: u8 = 5;
-
-const TAKE: u8 = 2;
+use beryl_card::effect::build::{YOU, dig};
+use beryl_card::{Ability, CardDef, Colors, Effect, Face, LibraryOrder, Taken, Types, card, mana};
 
 /// The two for the hand are chosen one at a time and go there together; with two or fewer
 /// cards left to choose from, they all go unasked. The rest go to the bottom one at a time,
@@ -34,34 +12,16 @@ const TAKE: u8 = 2;
 /// more cards in a specific position in a library at the same time, the owner of those cards
 /// may arrange them in any order." With fewer than five cards in the library, the player
 /// looks at them all.
-fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    let looked = ctx.top_of_library(you, LOOK);
-    ctx.look_at(you, looked);
-    let count = looked.count() as u8;
-    // One prompt: the cards for the hand, then the order of the rest on the bottom.
-    let arrange = Prompt::new(Purpose::Arrange).places(Place::Hand, Place::Bottom);
-    let mut taken = Bitboard::EMPTY;
-    if count <= TAKE {
-        taken = looked;
-    } else {
-        for take in (1..=TAKE).rev() {
-            let hand = arrange.count(count).most(take).part(Part::First);
-            let slot = ctx.choose_object(you, looked & !taken, hand)?;
-            taken.insert(slot);
-        }
-    }
-    ctx.move_all(taken, Zone::Hand, Reason::Effect);
-    let mut rest = looked & !taken;
-    while !rest.is_empty() {
-        let count = rest.count() as u8;
-        let bottom = arrange.count(count).part(Part::Second);
-        let slot = ctx.choose_object(you, rest, bottom)?;
-        ctx.put_library_card_on_bottom(ctx.state().object_ref(slot));
-        rest.remove(slot);
-    }
-    Ok(())
-}
+static STOCK_UP: Effect = dig(YOU, 5, Taken::Put(2), LibraryOrder::Any);
+
+pub static CARD: CardDef = card(
+    names::STOCK_UP,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}"))
+        .types(Types::SORCERY)
+        .colors(Colors::BLUE)
+        .abilities(&[Ability::spell().effect(&STOCK_UP)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

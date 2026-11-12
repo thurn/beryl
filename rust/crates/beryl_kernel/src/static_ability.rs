@@ -66,6 +66,7 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
         | Objects::TriggeredOn
         | Objects::ExiledWithThis
         | Objects::InZoneOf { .. }
+        | Objects::CardsIn { .. }
         | Objects::All { .. }
         | Objects::Paid(_) => {
             return Err(Unapplied::Affected);

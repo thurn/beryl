@@ -58,7 +58,7 @@ pub(crate) fn into_instruction<L: Layout>(
     zone: Zone,
 ) -> Result<Outcome<L>, Full> {
     let mut spells = run.scene().objects(objects);
-    run.remember(spells);
+    run.remember(spells)?;
     let mut countered = Bitboard::EMPTY;
     while let Some(spell) = top_spell(run.state(), spells) {
         spells.remove(spell.slot);

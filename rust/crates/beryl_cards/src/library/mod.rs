@@ -12,10 +12,16 @@ pub mod casting;
 pub mod choices;
 pub mod coins;
 pub mod continuous;
+pub mod costs;
 pub mod damage;
 pub mod delayed_triggers;
 pub mod emblems;
 pub mod keywords;
+#[expect(
+    clippy::module_inception,
+    reason = "the rules library's module for a library, CR 401"
+)]
+pub mod library;
 pub mod linked;
 pub mod mana;
 pub mod tokens;
@@ -33,6 +39,21 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         "actions::explore",
         names::GET_LOST,
         actions::explore::SCENARIOS,
+    ),
+    (
+        "actions::fateseal",
+        names::JACE_THE_MIND_SCULPTOR,
+        actions::fateseal::SCENARIOS,
+    ),
+    (
+        "actions::search",
+        names::WINDS_OF_ABANDON,
+        actions::search::SCENARIOS,
+    ),
+    (
+        "actions::shuffle",
+        names::TIMETWISTER,
+        actions::shuffle::SCENARIOS,
     ),
     (
         "actions::tap",
@@ -62,6 +83,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::TEFERI_TIME_RAVELER,
         continuous::SCENARIOS,
     ),
+    ("costs", names::THIRST_FOR_DISCOVERY, costs::SCENARIOS),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
     (
         "delayed_triggers",
@@ -73,6 +95,9 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::TEFERI_HERO_OF_DOMINARIA,
         emblems::SCENARIOS,
     ),
+    ("library", names::STOCK_UP, library::DIG),
+    ("library", names::JACE_THE_MIND_SCULPTOR, library::PUT_BACK),
+    ("library", names::SUBTLETY, library::TOP_OR_BOTTOM),
     (
         "keywords::flashback",
         names::SNAPCASTER_MAGE,

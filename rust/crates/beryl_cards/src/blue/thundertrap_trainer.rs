@@ -4,17 +4,12 @@
 //! You may reveal a noncreature, nonland card from among them and put it into your hand. Put
 //! the rest on the bottom of your library in a random order."
 
-use beryl_engine::Zone;
-use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Place, Prompt, Purpose, Subtype,
-    Subtypes, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{YOU, dig};
+use beryl_card::{
+    Ability, CardDef, CastingOption, Colors, Effect, Face, Filter, LibraryOrder, ManaCost, Subtype,
+    Subtypes, Taken, Trigger, Types, card, mana,
+};
 
 const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.union(Types::LAND)));
 
@@ -23,45 +18,27 @@ const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.u
 /// show that card to all players for a brief time", and the rest to the bottom in a random
 /// order ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's
 /// owner doesn't reveal the order in which the cards go into the library."
-fn dig<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    let mut rest = ctx.top_of_library(you, 4);
-    ctx.look_at(you, rest);
-    let spells = NONCREATURE_NONLAND.select(ctx.state(), ctx.table(), rest, you);
-    // The top four are looked at, for one card to put into the hand.
-    let look = Prompt::new(Purpose::Look)
-        .count(4)
-        .most(1)
-        .places(Place::Hand, Place::None);
-    if let Some(slot) = ctx.may_choose_object(you, spells, look)? {
-        ctx.reveal(slot);
-        ctx.move_to(ctx.state().object_ref(slot), Zone::Hand, Reason::Effect);
-        rest.remove(slot);
-    }
-    ctx.put_on_bottom_in_random_order(rest);
-    Ok(())
-}
+static DIG: Effect = dig(
+    YOU,
+    4,
+    Taken::MayReveal(NONCREATURE_NONLAND),
+    LibraryOrder::Random,
+);
 
-pub static CARD: CardDef = CardDef {
-    name: names::THUNDERTRAP_TRAINER,
-    faces: &[Face {
-        cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Otter, Subtype::Wizard]),
-        colors: Colors::BLUE,
-        power: Some(1),
-        toughness: Some(2),
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::THUNDERTRAP_TRAINER,
+    &[Face::EMPTY
+        .cost(mana("{1}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Otter, Subtype::Wizard]))
+        .colors(Colors::BLUE)
+        .power_toughness(1, 2)
+        .abilities(&[
             Ability::offspring(),
-            Ability::triggered(&Trigger::ENTERS)
-                .custom(bodies!(dig))
-                .pauses(),
-        ],
-        casting: &[CastingOption::Offspring(ManaCost::generic(4))],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            Ability::triggered(&Trigger::ENTERS).effect(&DIG),
+        ])
+        .casting(&[CastingOption::Offspring(ManaCost::generic(4))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

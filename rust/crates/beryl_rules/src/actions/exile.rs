@@ -30,7 +30,7 @@ pub(crate) fn instruction<L: Layout>(
     if objects.is_empty() {
         return Ok(Outcome::NOTHING);
     }
-    run.remember(objects);
+    run.remember(objects)?;
     exile(run.game(), objects)?;
     Ok(run.now_in(objects, Zone::Exile))
 }

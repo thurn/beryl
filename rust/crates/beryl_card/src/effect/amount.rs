@@ -29,6 +29,12 @@ pub enum Amount {
     /// ability that refers to a particular object still affects it even if the object
     /// changes characteristics."
     Carried,
+    /// "For each [of them] [player] controlled": how many of the permanents the instruction
+    /// before took from the battlefield these players controlled as it did, as "for each
+    /// creature exiled this way, its controller searches" counts for each controller
+    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "the effect uses
+    /// the object's last known information."
+    ThoseOf(Players),
     /// "The number of [objects]", "for each [object]".
     Count(&'static Objects),
     /// "[n] for each ...": `n` times an amount, as "you lose 2 life for each card in your
@@ -63,7 +69,7 @@ impl Amount {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Amount::Fixed(_) => false,
-            Amount::X | Amount::ThatMany | Amount::Carried => true,
+            Amount::X | Amount::ThatMany | Amount::Carried | Amount::ThoseOf(_) => true,
             Amount::Count(objects) => objects.needs_a_resolution(),
             Amount::Times(_, amount) => amount.needs_a_resolution(),
             Amount::Life(players) => players.needs_a_resolution(),
@@ -85,7 +91,7 @@ impl Amount {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => false,
             Amount::Count(objects) => objects.names_paid(),
             Amount::Times(_, amount) => amount.names_paid(),
-            Amount::Life(players) => players.names_paid(),
+            Amount::Life(players) | Amount::ThoseOf(players) => players.names_paid(),
             Amount::Most(players, amount) => players.names_paid() || amount.names_paid(),
             Amount::Power(objects)
             | Amount::Toughness(objects)

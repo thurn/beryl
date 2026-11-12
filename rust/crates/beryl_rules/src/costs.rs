@@ -3,24 +3,27 @@
 //! action [do something] is a cost, paid when the spell or ability resolves."
 //!
 //! The cost of a spell or an ability is paid as it is cast or activated, by the engine's
-//! casting steps. What is here is the cost an effect names, which a player pays or declines
-//! in the middle of a resolution. Mana is the one cost an effect names so far
-//! ([`Effect::Unless`]), so a cost here is a [`ManaCost`].
+//! casting steps. What is here is the cost an effect names ([`Effect::Unless`]), which a
+//! player pays or declines in the middle of a resolution: mana ([`may_pay`]), or the discard
+//! of a card ([`may_discard`]).
 
-use beryl_card::Effect;
+use beryl_card::{Chosen, Cost, CostAction, CostPart, Effect, Measure};
 
+use crate::actions::discard;
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, ManaCost, Part, Players, Prompt, Purpose, Stop};
 use crate::choices;
 use crate::decision::Opt;
 use crate::event::Event;
+use crate::filter::Evaluate;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::interpret::Run;
+use crate::interpret::{Run, no_primitive};
 use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
 use crate::resolution::Resolution;
+use crate::state::{Zone, ZoneKey};
 
 /// `player` pays `cost` or does not, as an effect offers
 /// ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812)): "[A player] may [do
@@ -92,6 +95,28 @@ pub fn pay<L: Layout>(
     Ok(())
 }
 
+/// `player` discards one of `cards`, cards in their hand, or does not, as an effect offers
+/// ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812)): "The action [do
+/// something] is a cost, paid when the spell or ability resolves." They are asked `prompt`,
+/// a yes or no about the cards, and on a yes choose which
+/// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)). With no such card they
+/// cannot pay and are not asked
+/// ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183)). Returns whether they
+/// discarded.
+pub fn may_discard<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    cards: Bitboard<L::Slot>,
+    prompt: Prompt,
+) -> Result<bool, Stop> {
+    if cards.is_empty() || !choices::yes_no(game, resolution, player, prompt, cards)? {
+        return Ok(false);
+    }
+    discard::discard_one_of(game, resolution, player, cards)?;
+    Ok(true)
+}
+
 /// Whether to pay so that an [`Effect::Unless`] does not happen.
 pub(crate) const UNLESS: Prompt = Prompt::new(Purpose::UnlessPays);
 
@@ -100,18 +125,67 @@ pub(crate) const UNLESS: Prompt = Prompt::new(Purpose::UnlessPays);
 /// thing as '[A player may do something else]. If [that player doesn't], [do something].'"
 /// With no such player, no one pays. The outcome is the effect's, or nothing when the cost
 /// was paid.
+///
+/// The cost is mana alone, or the discard of one card that a filter accepts for the player
+/// ("unless you discard a basic land card"); the definition check refuses any other.
 pub(crate) fn unless_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     effect: &'static Effect,
     player: Players,
-    cost: ManaCost,
+    cost: Cost,
 ) -> Flow {
-    let paid = match run.one(player) {
-        Some(player) => {
+    let paid = match (run.one(player), cost.parts()) {
+        (None, _) => false,
+        (Some(player), []) => {
             let (game, resolution) = run.resolving();
-            may_pay(game, resolution, player, cost, UNLESS)?
+            may_pay(game, resolution, player, cost.mana, UNLESS)?
         }
-        None => false,
+        (
+            Some(player),
+            [
+                CostPart::Chosen(
+                    CostAction::Discard,
+                    Chosen {
+                        zone: Zone::Hand,
+                        filter,
+                        other: false,
+                        measure: Measure::Count(1),
+                    },
+                ),
+            ],
+        ) if cost.mana.is_zero() => unless_discards(run, effect, player, *filter)?,
+        _ => no_primitive(&cost),
     };
     run.carry_out_or_nothing((!paid).then_some(effect))
+}
+
+/// The discard of an [`Effect::Unless`]: whether `player` discarded a card `filter` accepts
+/// so that `effect` does not happen.
+///
+/// Where the effect is itself a discard by that player, "discard two cards unless you
+/// discard a basic land card", the question is the discard's own, asked as one card
+/// instead of that many ([`Part::Instead`]); and with one card in hand both ways discard
+/// it, so nothing is asked and the effect's discard takes it.
+fn unless_discards<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    effect: &'static Effect,
+    player: Seat,
+    filter: crate::filter::Filter,
+) -> Result<bool, Stop> {
+    let instead_of = match *effect {
+        Effect::Discard { player: who, count } if run.one(who) == Some(player) => {
+            Some(run.scene().amount(count))
+        }
+        _ => None,
+    };
+    let (game, resolution) = run.resolving();
+    let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
+    if instead_of.is_some_and(|cards| cards > 0) && hand.count() == 1 {
+        return Ok(false);
+    }
+    let cards = filter.select(game.state, game.table, hand, player);
+    let instead = Prompt::new(Purpose::Discard)
+        .most(instead_of.unwrap_or(1))
+        .part(Part::Instead);
+    may_discard(game, resolution, player, cards, instead)
 }

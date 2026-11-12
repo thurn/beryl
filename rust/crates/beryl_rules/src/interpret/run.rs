@@ -9,21 +9,23 @@
 use beryl_card::{Effect, Objects, Players};
 
 use crate::actions::{
-    counter, destroy, discard, exile, explore, manifest_dread, mill, sacrifice, scry, tap,
-    transform,
+    counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill, sacrifice, scry,
+    search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow, Stop};
 use crate::effect::EffectCtx;
+use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, Table};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
+use crate::zones;
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
-use crate::{delayed_triggers, emblems, library, life, linked, mana, one_shot, tokens, zones};
+use crate::{delayed_triggers, emblems, layers, library, life, linked, mana, one_shot, tokens};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -170,6 +172,29 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::PutIntoLibrary { objects, position } => {
                 library::put_instruction(self, objects, position)?
             }
+            Effect::PutBack { player, count } => {
+                library::put_back_instruction(self, player, count)?
+            }
+            Effect::ShuffleInto { player, cards } => {
+                shuffle::into_instruction(self, player, cards)?
+            }
+            Effect::Dig {
+                player,
+                look,
+                take,
+                rest,
+            } => library::dig_instruction(self, player, look, take, rest)?,
+            Effect::Fateseal {
+                player,
+                library,
+                count,
+            } => fateseal::instruction(self, player, library, count)?,
+            Effect::Search {
+                player,
+                filter,
+                count,
+                found,
+            } => search::instruction(self, player, filter, count, found)?,
             Effect::Draw { player, count } => drawing::instruction(self, player, count)?,
             Effect::Discard { player, count } => discard::instruction(self, player, count)?,
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,
@@ -297,10 +322,18 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() != zone)
     }
 
-    /// Notes what is known of the targets among `leaving` before the effect moves them, for
-    /// the instructions after (CR 608.2h): "the effect uses the object's last known
-    /// information."
-    pub(crate) fn remember(&mut self, leaving: Bitboard<L::Slot>) {
+    /// Notes who controls each of `leaving`, and what is known of the targets among them,
+    /// before the effect moves them, for the instructions after (CR 608.2h): "the effect
+    /// uses the object's last known information."
+    ///
+    /// A controller is read through the layers, which an instruction before may have
+    /// changed, so they are brought up to date first, as the move itself would.
+    pub(crate) fn remember(&mut self, leaving: Bitboard<L::Slot>) -> Result<(), Full> {
+        let game = &mut self.ctx.game;
+        layers::refresh(game.state, game.table, game.sink)?;
+        let s = &*self.ctx.game.state;
+        self.registers.controlled =
+            Table::from_fn(|player| leaving.filter(|slot| s.controller(slot).index() == player));
         for (place, target) in placed(self.ctx.resolution.entry.targets.as_slice()) {
             let Some(object) = target.as_object() else {
                 continue;
@@ -313,6 +346,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 self.registers.noted.insert(place);
             }
         }
+        Ok(())
     }
 
     /// The outcome of an instruction that moved `permanents` off the battlefield: those that

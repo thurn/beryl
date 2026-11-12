@@ -1,42 +1,53 @@
 //! Time Spiral. {4}{U}{U} Sorcery. "Exile Time Spiral. Each player shuffles their hand and
 //! graveyard into their library, then draws seven cards. You untap up to six lands."
 
-use beryl_engine::Zone;
-use beryl_engine::card::{Ability, CardDef, Colors, Face, Flow, ManaCost, Types};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::{Layout, bodies};
-
-use crate::blue::timetwister::wheel;
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::TIME_SPIRAL,
-    faces: &[Face {
-        cost: ManaCost::new(4, [0, 2, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::BLUE,
-        abilities: &[Ability::spell().custom(bodies!(spiral)).pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{
+    EACH_PLAYER, THIS, YOU, draw, exile, sequence, shuffle_into, untap_up_to,
 };
-
-/// "You untap up to six lands."
-const LANDS: u8 = 6;
+use beryl_card::{
+    Ability, CardDef, Colors, Effect, Face, Filter, Objects, Types, Zone, card, mana,
+};
 
 /// The instructions in order ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
 /// Exiled first, Time Spiral is not shuffled away, and it is not put into a graveyard as the
 /// final part of its resolution (CR 608.2n): it is no longer on the stack.
 ///
-/// "Up to six lands" are any lands, whoever controls them
-/// ([`EffectCtx::untap_up_to_lands`]).
-fn spiral<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.move_to(ctx.source(), Zone::Exile, Reason::Exile);
-    wheel(ctx);
-    ctx.untap_up_to_lands(LANDS)
-}
+/// The hands and graveyards go to their libraries together, each card to its owner's
+/// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)), each library is shuffled
+/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)), and each player
+/// draws seven in turn order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)).
+///
+/// "Up to six lands" are any lands, whoever controls them.
+static SPIRAL: Effect = sequence(&[
+    exile(THIS),
+    shuffle_into(
+        EACH_PLAYER,
+        Objects::CardsIn {
+            players: &EACH_PLAYER,
+            zones: &[Zone::Hand, Zone::Graveyard],
+        },
+    ),
+    draw(EACH_PLAYER, 7),
+    untap_up_to(
+        YOU,
+        6,
+        Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Types(Types::LAND),
+        },
+    ),
+]);
+
+pub static CARD: CardDef = card(
+    names::TIME_SPIRAL,
+    &[Face::EMPTY
+        .cost(mana("{4}{U}{U}"))
+        .types(Types::SORCERY)
+        .colors(Colors::BLUE)
+        .abilities(&[Ability::spell().effect(&SPIRAL)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

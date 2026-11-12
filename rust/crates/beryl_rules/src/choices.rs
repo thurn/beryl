@@ -296,10 +296,15 @@ const MAY: Prompt = Prompt::new(Purpose::May);
 /// them there.
 const MAY_EXILE: Prompt = Prompt::new(Purpose::Move).places(Place::Exile, Place::None);
 
+/// The yes or no of an [`Effect::May`] whose effect is a search: "you may search your
+/// library".
+const MAY_SEARCH: Prompt = Prompt::new(Purpose::MaySearch);
+
 /// [`Effect::May`]: "[Player] may [effect]" (CR 608.2d). The player is asked as the effect
 /// is applied, and with no such player no one is. Where the effect is to exile cards the
 /// question is about them ([`Purpose::Move`]), and with none to exile there is nothing to
-/// ask. The outcome is the effect's, or nothing when it was declined.
+/// ask; where it is a search, the question is whether to search ([`Purpose::MaySearch`]).
+/// The outcome is the effect's, or nothing when it was declined.
 pub(crate) fn may_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
@@ -313,6 +318,7 @@ pub(crate) fn may_instruction<L: Layout>(
             }
             (MAY_EXILE, cards)
         }
+        Effect::Search { .. } => (MAY_SEARCH, Bitboard::EMPTY),
         _ => (MAY, Bitboard::EMPTY),
     };
     let agreed = match run.one(player) {

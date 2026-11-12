@@ -53,7 +53,7 @@ pub(crate) fn exile_instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Exile);
-    run.remember(cards);
+    run.remember(cards)?;
     let source = run.resolution().source();
     for slot in run.state().in_candidate_order(cards) {
         let card = run.state().object_ref(slot);

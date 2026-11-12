@@ -212,6 +212,19 @@ impl CostPart {
         )
     }
 
+    /// "Discard a [filter] card".
+    pub const fn discard(filter: Filter) -> CostPart {
+        CostPart::Chosen(
+            CostAction::Discard,
+            Chosen {
+                zone: Zone::Hand,
+                filter,
+                other: false,
+                measure: Measure::Count(1),
+            },
+        )
+    }
+
     /// "Reveal a [filter] card from your hand".
     pub const fn reveal(filter: Filter) -> CostPart {
         CostPart::Chosen(

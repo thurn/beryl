@@ -48,8 +48,8 @@ pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
 };
 pub use effect::{
-    Amount, CastTerms, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects,
-    Players, Recipients,
+    Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
+    LibraryPosition, Objects, Players, Recipients, Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone};

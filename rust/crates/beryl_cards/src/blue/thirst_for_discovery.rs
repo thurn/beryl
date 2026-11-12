@@ -1,28 +1,10 @@
 //! Thirst for Discovery. {2}{U} Instant. "Draw three cards. Then discard two cards unless you
 //! discard a basic land card."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Prompt, Purpose, Supertypes, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::{Layout, bodies};
-use beryl_engine::{Zone, ZoneKey};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::THIRST_FOR_DISCOVERY,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::BLUE,
-        abilities: &[Ability::spell()
-            .custom(bodies!(draw_three_discard))
-            .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{YOU, discard, draw, sequence, unless};
+use beryl_card::{
+    Ability, CardDef, Colors, Cost, CostPart, Effect, Face, Filter, Supertypes, Types, card, mana,
 };
 
 const BASIC_LAND: Filter = Filter::All(&[
@@ -41,20 +23,23 @@ const BASIC_LAND: Filter = Filter::All(&[
 /// notwithstanding ([CR 205.4c](https://yawgatog.com/resources/magic-rules/#R2054c)): "Any
 /// land that doesn't have this supertype is a nonbasic land, even if it has a basic land
 /// type."
-fn draw_three_discard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 3);
-    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
-    let basics = BASIC_LAND.select(ctx.state(), ctx.table(), hand, you);
-    // One prompt: a yes discards one of the basic lands in place of the two cards.
-    let instead = Prompt::new(Purpose::Discard).most(2).part(Part::Instead);
-    if !basics.is_empty() && hand.count() >= 2 && ctx.choose_yes_no(you, instead, basics)? {
-        ctx.discard_one_of(you, basics)?;
-        return Ok(());
-    }
-    ctx.discard_cards(you, 2)?;
-    Ok(())
-}
+static DRAW_THREE_DISCARD: Effect = sequence(&[
+    draw(YOU, 3),
+    unless(
+        &discard(YOU, 2),
+        YOU,
+        Cost::of_parts(&[CostPart::discard(BASIC_LAND)]),
+    ),
+]);
+
+pub static CARD: CardDef = card(
+    names::THIRST_FOR_DISCOVERY,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}"))
+        .types(Types::INSTANT)
+        .colors(Colors::BLUE)
+        .abilities(&[Ability::spell().effect(&DRAW_THREE_DISCARD)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

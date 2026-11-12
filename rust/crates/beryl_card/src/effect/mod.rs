@@ -30,18 +30,24 @@
 mod amount;
 pub mod build;
 mod condition;
+mod operands;
 mod reference;
+mod terms;
 
 pub use amount::Amount;
 pub use condition::{Comparison, Condition};
+pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
+pub use terms::{CastTerms, CopyException, Found, LibraryOrder, LibraryPosition, Taken};
 
 use crate::continuous::{Duration, Modification, RuleChange};
+use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
+use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
-use crate::mana::{ManaColor, ManaCost, ManaSet};
+use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
 use crate::target::Takes;
 
@@ -79,15 +85,21 @@ pub enum Effect {
         player: Players,
         effect: &'static Effect,
     },
-    /// "[Effect] unless [player] pays [cost]"
+    /// "[Effect] unless [player] pays [cost]", or "unless [player] [does something else]"
     /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the
     /// same thing as '[A player may do something else]. If [that player doesn't], [do
-    /// something].'" A player who cannot pay is not asked
-    /// ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183)).
+    /// something].'" What the player may do is a cost
+    /// ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812)): "The action [do
+    /// something] is a cost, paid when the spell or ability resolves." A player who cannot
+    /// pay is not asked ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183)).
+    ///
+    /// The engine takes two costs as an effect resolves: mana alone, and the discard of one
+    /// card from the player's hand that a filter accepts
+    /// ([`crate::Malformed::Cost`]).
     Unless {
         effect: &'static Effect,
         player: Players,
-        cost: ManaCost,
+        cost: Cost,
     },
     /// "Each [player] [effect]", where the effect differs by player: within it,
     /// [`Players::ThatPlayer`] is the player it is being done for. The players take their
@@ -174,6 +186,57 @@ pub enum Effect {
     PutIntoLibrary {
         objects: Objects,
         position: LibraryPosition,
+    },
+    /// "[Player] puts [count] cards from their hand on top of their library in any order",
+    /// of their choice, or their whole hand if it has fewer (CR 609.3)
+    /// ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "If an effect puts two
+    /// or more cards in a specific position in a library at the same time, the owner of
+    /// those cards may arrange them in any order."
+    PutBack { player: Players, count: Amount },
+    /// "[Player] shuffles [cards] into their library": the cards go to their owners'
+    /// libraries (CR 400.3) and each of the players shuffles
+    /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
+    /// library or a face-down pile of cards, randomize the cards within it so that no player
+    /// knows their order." A player shuffles though none of the cards were theirs
+    /// ([CR 701.24d](https://yawgatog.com/resources/magic-rules/#R70124d)).
+    ShuffleInto { player: Players, cards: Objects },
+    /// "[Player] looks at the top [look] cards of their library", takes some of them into
+    /// their hand ([`Taken`]) and puts "the rest on the bottom of their library" in an order
+    /// ([`LibraryOrder`]). Looking at cards of a library is an exception to
+    /// [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't look at
+    /// or change the order of cards in a library." With fewer cards in the library, the
+    /// player looks at them all (CR 609.3).
+    Dig {
+        player: Players,
+        look: Amount,
+        take: Taken,
+        rest: LibraryOrder,
+    },
+    /// "[Player] looks at the top [count] cards of [library]'s library and may put them on
+    /// the bottom of that library", as to fateseal, of any player's library
+    /// ([CR 701.29a](https://yawgatog.com/resources/magic-rules/#R70129a)): "To 'fateseal N'
+    /// means to look at the top N cards of an opponent's library, then put any number of them
+    /// on the bottom of that library in any order and the rest on top of that library in any
+    /// order." The engine fateseals one card ([`crate::Malformed::Fateseal`]).
+    Fateseal {
+        player: Players,
+        library: Players,
+        count: Amount,
+    },
+    /// "[Player] searches their library for [count] [filter] cards, [puts them somewhere],
+    /// then shuffles" ([`Found`] says where)
+    /// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)): "To search for a
+    /// card in a zone, look at all cards in that zone (even if it's a hidden zone) and find
+    /// a card that matches the given description." The player may find fewer, or none
+    /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)). The filter is
+    /// read for the player searching. A player told to search for no cards neither searches
+    /// nor shuffles: "for each creature exiled this way, its controller searches" has the
+    /// players it exiled none of do nothing.
+    Search {
+        player: Players,
+        filter: Filter,
+        count: Amount,
+        found: Found,
     },
     /// "[Player] draws [count] cards"
     /// ([CR 121.1](https://yawgatog.com/resources/magic-rules/#R1211)): "A player draws a
@@ -426,7 +489,15 @@ impl Effect {
             | Effect::UntapUpTo { .. }
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
-            | Effect::Choose { .. } => true,
+            | Effect::Choose { .. }
+            | Effect::PutBack { .. }
+            | Effect::Dig { .. }
+            | Effect::Fateseal { .. }
+            | Effect::Search { .. }
+            | Effect::PutIntoLibrary {
+                position: LibraryPosition::TopOrBottom,
+                ..
+            } => true,
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -461,6 +532,7 @@ impl Effect {
             | Effect::PutIntoLibrary { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
+            | Effect::ShuffleInto { .. }
             | Effect::Draw { .. }
             | Effect::Mill { .. }
             | Effect::GainLife { .. }
@@ -548,6 +620,11 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::Mill { .. }
             | Effect::Scry { .. }
+            | Effect::PutBack { .. }
+            | Effect::ShuffleInto { .. }
+            | Effect::Dig { .. }
+            | Effect::Fateseal { .. }
+            | Effect::Search { .. }
             | Effect::GainLife { .. }
             | Effect::LoseLife { .. }
             | Effect::CreateTokens { .. }
@@ -626,6 +703,9 @@ impl Effect {
     /// Whether it reads what a cost of its spell or ability took ([`Objects::Paid`]), which
     /// the engine does not keep: a card table refuses the definition.
     pub const fn names_paid(&self) -> bool {
+        if self.operands().names_paid() {
+            return true;
+        }
         match self {
             Effect::Sequence(effects) => {
                 let mut i = 0;
@@ -649,81 +729,10 @@ impl Effect {
                         None => false,
                     }
             }
-            Effect::May { player, effect }
-            | Effect::Unless { effect, player, .. }
-            | Effect::ForEachPlayer {
-                players: player,
-                effect,
-            } => player.names_paid() || effect.names_paid(),
-            Effect::Counter(objects)
-            | Effect::CounterInto {
-                spells: objects, ..
-            }
-            | Effect::Destroy(objects)
-            | Effect::Exile(objects)
-            | Effect::ExileUntilThisLeaves(objects)
-            | Effect::ExileLinked(objects)
-            | Effect::Sacrifice(objects)
-            | Effect::ReturnToHand(objects)
-            | Effect::PutIntoGraveyard(objects)
-            | Effect::ReturnTransformed(objects)
-            | Effect::PutIntoLibrary { objects, .. }
-            | Effect::Explore(objects)
-            | Effect::GainFlashback(objects)
-            | Effect::Modify { objects, .. } => objects.names_paid(),
-            Effect::PermitCast { player, cards, .. }
-            | Effect::LookAt { player, cards }
-            | Effect::Choose {
-                player,
-                among: cards,
-                ..
-            } => player.names_paid() || cards.names_paid(),
-            Effect::CreateAttackingTokens {
-                player,
-                count,
-                attacking,
-                ..
-            } => player.names_paid() || count.names_paid() || attacking.names_paid(),
-            Effect::DealDamage { to, amount } => to.names_paid() || amount.names_paid(),
-            Effect::MayCast { player, card, .. } => player.names_paid() || card.names_paid(),
-            Effect::ChangeRule { .. } => false,
-            Effect::UntapUpTo {
-                player,
-                count,
-                permanents,
-            } => player.names_paid() || count.names_paid() || permanents.names_paid(),
-            Effect::Delay { carrying, .. } => carrying.names_paid(),
-            Effect::Draw { player, count }
-            | Effect::Discard { player, count }
-            | Effect::Mill { player, count }
-            | Effect::Scry { player, count }
-            | Effect::GainLife {
-                player,
-                amount: count,
-            }
-            | Effect::LoseLife {
-                player,
-                amount: count,
-            }
-            | Effect::CreateTokens { player, count, .. }
-            | Effect::AddManaOfKind {
-                player,
-                amount: count,
-                ..
-            } => player.names_paid() || count.names_paid(),
-            Effect::CreateCopies {
-                player, of, count, ..
-            } => player.names_paid() || of.names_paid() || count.names_paid(),
-            Effect::AddCounters { objects, count, .. }
-            | Effect::RemoveCounters { objects, count, .. } => {
-                objects.names_paid() || count.names_paid()
-            }
-            Effect::AddMana { player, .. }
-            | Effect::GetEmblem { player, .. }
-            | Effect::ManifestDread(player)
-            | Effect::FlipCoin(player)
-            | Effect::WinGame(player)
-            | Effect::LoseGame(player) => player.names_paid(),
+            Effect::May { effect, .. }
+            | Effect::Unless { effect, .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.names_paid(),
+            _ => false,
         }
     }
 }
@@ -731,72 +740,4 @@ impl Effect {
 /// Whether `objects` is what was chosen for the `target`th instance of the word "target".
 const fn is_target(objects: Objects, target: SpecIx) -> bool {
     matches!(objects, Objects::Target(n) if n.get() == target.get())
-}
-
-/// Where in a library a card is put.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LibraryPosition {
-    /// "On top of".
-    Top,
-    /// "On the bottom of".
-    Bottom,
-    /// "Nth from the top", the top card being first
-    /// ([CR 401.7](https://yawgatog.com/resources/magic-rules/#R4017)): "If an effect causes
-    /// a player to put a card into a library 'Nth from the top,' and that library has fewer
-    /// than N cards in it, the player puts that card on the bottom of that library."
-    FromTop(u8),
-}
-
-/// What a permission to cast says of a spell cast by it ([`Effect::PermitCast`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct CastTerms {
-    /// "A spell cast this way costs {N} more to cast": a cost increase
-    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): the total cost is
-    /// the mana cost "plus all additional costs and cost increases". Generic mana.
-    pub costs_more: u8,
-    /// "If that spell would be put into your graveyard, exile it instead": a replacement
-    /// effect on the spell
-    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use
-    /// the word 'instead' are replacement effects."
-    pub exiled_instead: bool,
-}
-
-impl CastTerms {
-    /// A permission that says nothing more of the spell.
-    pub const PLAIN: CastTerms = CastTerms {
-        costs_more: 0,
-        exiled_instead: false,
-    };
-
-    /// These terms, with "a spell cast this way costs {`generic`} more to cast".
-    #[must_use]
-    pub const fn costing_more(self, generic: u8) -> CastTerms {
-        CastTerms {
-            costs_more: generic,
-            ..self
-        }
-    }
-
-    /// These terms, with "if that spell would be put into your graveyard, exile it instead".
-    #[must_use]
-    pub const fn exiled_instead(self) -> CastTerms {
-        CastTerms {
-            exiled_instead: true,
-            ..self
-        }
-    }
-}
-
-/// How a copy differs from what it copies
-/// ([CR 707.9](https://yawgatog.com/resources/magic-rules/#R7079)): "Copy effects may include
-/// modifications or exceptions to the copying process."
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CopyException {
-    /// An exact copy.
-    None,
-    /// "Except it's [power]/[toughness]"
-    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
-    /// modify a characteristic as part of the copying process. The final set of values for
-    /// that characteristic becomes part of the copiable values of the copy."
-    PowerToughness(i8, i8),
 }

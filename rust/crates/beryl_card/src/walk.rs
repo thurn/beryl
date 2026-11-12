@@ -5,7 +5,7 @@ use crate::ability::{Ability, Behavior};
 use crate::continuous::{Governed, LayerSpec, Modification};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
-use crate::effect::{Amount, Condition, Effect, Objects, Players, Recipients};
+use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::trigger::Subject;
 
@@ -141,6 +141,7 @@ impl Objects {
                 players.filters(visit);
                 filter.filters(visit);
             }
+            Objects::CardsIn { players, .. } => players.filters(visit),
         }
     }
 }
@@ -159,22 +160,13 @@ impl Players {
     }
 }
 
-impl Recipients {
-    fn filters(&self, visit: Visit) {
-        match self {
-            Recipients::Players(players) => players.filters(visit),
-            Recipients::Permanents(objects) => objects.filters(visit),
-        }
-    }
-}
-
 impl Amount {
     fn filters(&self, visit: Visit) {
         match self {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => {}
             Amount::Count(objects) => objects.filters(visit),
             Amount::Times(_, amount) => amount.filters(visit),
-            Amount::Life(players) => players.filters(visit),
+            Amount::Life(players) | Amount::ThoseOf(players) => players.filters(visit),
             Amount::Most(players, amount) => {
                 players.filters(visit);
                 amount.filters(visit);
@@ -214,6 +206,19 @@ impl Condition {
 
 impl Effect {
     fn filters(&self, visit: Visit) {
+        let operands = self.operands();
+        for players in [operands.players, operands.others].into_iter().flatten() {
+            players.filters(visit);
+        }
+        if let Some(objects) = operands.objects {
+            objects.filters(visit);
+        }
+        if let Some(amount) = operands.amount {
+            amount.filters(visit);
+        }
+        if let Some(filter) = operands.filter {
+            filter.filters(visit);
+        }
         match self {
             Effect::Sequence(effects) => {
                 for effect in *effects {
@@ -231,132 +236,11 @@ impl Effect {
                     otherwise.filters(visit);
                 }
             }
-            Effect::May { player, effect }
-            | Effect::Unless { effect, player, .. }
-            | Effect::ForEachPlayer {
-                players: player,
-                effect,
-            } => {
-                player.filters(visit);
-                effect.filters(visit);
-            }
-            _ => self.operands(visit),
-        }
-    }
-
-    /// The filters of one instruction's operands, where it holds no other instruction.
-    fn operands(&self, visit: Visit) {
-        let (players, objects, amount) = self.operand_set(visit);
-        if let Some(players) = players {
-            players.filters(visit);
-        }
-        if let Some(objects) = objects {
-            objects.filters(visit);
-        }
-        if let Some(amount) = amount {
-            amount.filters(visit);
-        }
-    }
-
-    /// One instruction's players, objects and amount: the most any has. What else one has
-    /// is walked in its arm.
-    fn operand_set(&self, visit: Visit) -> (Option<&Players>, Option<&Objects>, Option<&Amount>) {
-        match self {
-            // Those that hold others, which `filters` takes apart, and a rule change,
-            // whose rule is the ability's, walked with it (`Ability::rule`).
-            Effect::Sequence(_)
-            | Effect::If { .. }
-            | Effect::May { .. }
-            | Effect::Unless { .. }
-            | Effect::ForEachPlayer { .. }
-            | Effect::ChangeRule { .. } => (None, None, None),
-            Effect::Counter(objects)
-            | Effect::Destroy(objects)
-            | Effect::Exile(objects)
-            | Effect::ExileUntilThisLeaves(objects)
-            | Effect::ExileLinked(objects)
-            | Effect::Sacrifice(objects)
-            | Effect::ReturnToHand(objects)
-            | Effect::PutIntoGraveyard(objects)
-            | Effect::ReturnTransformed(objects)
-            | Effect::PutIntoLibrary { objects, .. }
-            | Effect::Explore(objects)
-            | Effect::GainFlashback(objects)
-            | Effect::CounterInto {
-                spells: objects, ..
-            } => (None, Some(objects), None),
-            Effect::DealDamage { to, amount } => {
-                to.filters(visit);
-                (None, None, Some(amount))
-            }
-            Effect::MayCast { player, card, .. }
-            | Effect::PermitCast {
-                player,
-                cards: card,
-                ..
-            }
-            | Effect::LookAt {
-                player,
-                cards: card,
-            }
-            | Effect::Choose {
-                player,
-                among: card,
-                ..
-            } => (Some(player), Some(card), None),
-            Effect::CreateAttackingTokens {
-                player,
-                count,
-                attacking,
-                ..
-            } => {
-                attacking.filters(visit);
-                (Some(player), None, Some(count))
-            }
-            Effect::Modify {
-                objects,
-                modification,
-                ..
-            } => {
-                modification.filters(visit);
-                (None, Some(objects), None)
-            }
-            Effect::Draw { player, count }
-            | Effect::Discard { player, count }
-            | Effect::Mill { player, count }
-            | Effect::Scry { player, count }
-            | Effect::GainLife {
-                player,
-                amount: count,
-            }
-            | Effect::LoseLife {
-                player,
-                amount: count,
-            }
-            | Effect::CreateTokens { player, count, .. }
-            | Effect::AddManaOfKind {
-                player,
-                amount: count,
-                ..
-            } => (Some(player), None, Some(count)),
-            Effect::CreateCopies {
-                player, of, count, ..
-            }
-            | Effect::UntapUpTo {
-                player,
-                count,
-                permanents: of,
-            } => (Some(player), Some(of), Some(count)),
-            Effect::AddCounters { objects, count, .. }
-            | Effect::RemoveCounters { objects, count, .. } => (None, Some(objects), Some(count)),
-            // The delayed ability is one of the face's, walked with them.
-            Effect::Delay { carrying, .. } => (None, None, Some(carrying)),
-            Effect::AddMana { player, .. }
-            | Effect::GetEmblem { player, .. }
-            | Effect::ManifestDread(player)
-            | Effect::FlipCoin(player)
-            | Effect::WinGame(player)
-            | Effect::LoseGame(player) => (Some(player), None, None),
+            Effect::May { effect, .. }
+            | Effect::Unless { effect, .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.filters(visit),
+            Effect::Modify { modification, .. } => modification.filters(visit),
+            _ => {}
         }
     }
 }

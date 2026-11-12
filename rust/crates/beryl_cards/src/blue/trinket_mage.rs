@@ -2,17 +2,12 @@
 //! search your library for an artifact card with mana value 1 or less, reveal that card, put
 //! it into your hand, then shuffle."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Prompt, Purpose, Subtype, Subtypes, Trigger,
-    Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Bitboard, Zone};
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{YOU, may, search};
+use beryl_card::{
+    Ability, CardDef, Colors, Effect, Face, Filter, Found, Subtype, Subtypes, Trigger, Types, card,
+    mana,
+};
 
 /// "An artifact card with mana value 1 or less".
 const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMost(1)]);
@@ -24,35 +19,18 @@ const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::Ma
 /// library ..., randomize the cards within it so that no player knows their order." The card
 /// found is revealed ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)):
 /// "To reveal a card, show that card to all players for a brief time."
-fn tutor<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    if !ctx.choose_yes_no(you, Prompt::new(Purpose::MaySearch), Bitboard::EMPTY)? {
-        return Ok(());
-    }
-    if let Some(slot) = ctx.search_library(you, TRINKET)? {
-        ctx.reveal(slot);
-        ctx.move_to(ctx.state().object_ref(slot), Zone::Hand, Reason::Effect);
-    }
-    ctx.shuffle(you);
-    Ok(())
-}
+static TUTOR: Effect = may(YOU, &search(YOU, TRINKET, Found::RevealToHand));
 
-pub static CARD: CardDef = CardDef {
-    name: names::TRINKET_MAGE,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human, Subtype::Wizard]),
-        colors: Colors::BLUE,
-        power: Some(2),
-        toughness: Some(2),
-        abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .custom(bodies!(tutor))
-            .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::TRINKET_MAGE,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
+        .colors(Colors::BLUE)
+        .power_toughness(2, 2)
+        .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&TUTOR)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

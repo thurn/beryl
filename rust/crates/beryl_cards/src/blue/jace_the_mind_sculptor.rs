@@ -7,39 +7,30 @@
 //! −12: Exile all cards from target player's library, then that player shuffles their hand
 //! into their library."
 
-use beryl_card::Effect;
-use beryl_card::effect::build::{TARGET, return_to_hand};
-use beryl_engine::Bitboard;
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-use beryl_engine::{Zone, ZoneKey};
-
 use crate::names;
+use beryl_card::effect::build::{
+    TARGET, TARGET_PLAYER, YOU, draw, exile, fateseal, put_back, return_to_hand, sequence,
+    shuffle_into,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Effect, Face, Filter, Objects, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Types, Zone, card, mana,
+};
 
-const TARGET_PLAYER: &[TargetSpec] = &[TargetSpec::one(TargetKind::Player, Filter::Any)];
+const A_PLAYER: &[TargetSpec] = &[TargetSpec::one(TargetKind::Player, Filter::Any)];
 
-pub static CARD: CardDef = CardDef {
-    name: names::JACE_THE_MIND_SCULPTOR,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 2, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::PLANESWALKER,
-        subtypes: Subtypes::of(&[Subtype::Jace]),
-        colors: Colors::BLUE,
-        loyalty: Some(3),
-        abilities: &[
-            Ability::loyalty(2)
-                .targeting(TARGET_PLAYER)
-                .custom(bodies!(fateseal))
-                .pauses(),
-            Ability::loyalty(0).custom(bodies!(brainstorm)).pauses(),
+pub static CARD: CardDef = card(
+    names::JACE_THE_MIND_SCULPTOR,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}{U}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::PLANESWALKER)
+        .subtypes(Subtypes::of(&[Subtype::Jace]))
+        .colors(Colors::BLUE)
+        .loyalty(3)
+        .abilities(&[
+            Ability::loyalty(2).targeting(A_PLAYER).effect(&FATESEAL),
+            Ability::loyalty(0).effect(&BRAINSTORM),
             Ability::loyalty(-1)
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
@@ -47,61 +38,23 @@ pub static CARD: CardDef = CardDef {
                 )])
                 .effect(&BOUNCE),
             Ability::loyalty(-12)
-                .targeting(TARGET_PLAYER)
-                .custom(bodies!(exile_library)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+                .targeting(A_PLAYER)
+                .effect(&EXILE_LIBRARY),
+        ])],
+);
 
 /// "+2: Look at the top card of target player's library. You may put that card on the
 /// bottom of that player's library." Looking shows the card to Jace's controller alone, an
 /// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
 /// look at or change the order of cards in a library." Moving it within the library is no
 /// zone change, so it stays the same object.
-fn fateseal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(player) = ctx.target_player(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let Some(top) = ctx.top_of_library(player, 1).sole() else {
-        return Ok(());
-    };
-    let top = ctx.state().object_ref(top);
-    let you = ctx.controller();
-    ctx.look_at(you, Bitboard::single(top.slot));
-    // A yes puts the card looked at on the bottom; a no leaves it on top.
-    let fateseal = Prompt::new(Purpose::Fateseal)
-        .count(1)
-        .places(Place::Bottom, Place::Top);
-    if ctx.choose_yes_no(you, fateseal, Bitboard::single(top.slot))? {
-        ctx.put_library_card_on_bottom(top);
-    }
-    Ok(())
-}
+static FATESEAL: Effect = fateseal(YOU, TARGET_PLAYER);
 
 /// "0: Draw three cards, then put two cards from your hand on top of your library in any
 /// order." Each card chosen goes on top of the one before, so the second is the top card.
 /// [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212): "If a player is instructed to
 /// draw multiple cards, that player performs that many individual card draws."
-fn brainstorm<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 3);
-    for count in (1..=2).rev() {
-        let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
-        if hand.is_empty() {
-            break;
-        }
-        let put_back = Prompt::new(Purpose::PutBack)
-            .most(count)
-            .places(Place::OnTop, Place::None)
-            .part(Part::First);
-        let card = ctx.choose_object(you, hand, put_back)?;
-        let card = ctx.state().object_ref(card);
-        ctx.move_to(card, Zone::Library, Reason::Effect);
-    }
-    Ok(())
-}
+static BRAINSTORM: Effect = sequence(&[draw(YOU, 3), put_back(YOU, 2)]);
 
 /// "−1: Return target creature to its owner's hand."
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
@@ -114,17 +67,21 @@ static BOUNCE: Effect = return_to_hand(TARGET);
 /// "To exile an object, move it to the exile zone from wherever it is." Then
 /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library
 /// ... randomize the cards within it so that no player knows their order."
-fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(player) = ctx.target_player(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let library = ctx.state().zone(ZoneKey::Of(player, Zone::Library));
-    ctx.move_all(library, Zone::Exile, Reason::Exile);
-    let hand = ctx.state().zone(ZoneKey::Of(player, Zone::Hand));
-    ctx.move_all(hand, Zone::Library, Reason::Effect);
-    ctx.shuffle(player);
-    Ok(())
-}
+static EXILE_LIBRARY: Effect = sequence(&[
+    exile(Objects::InZoneOf {
+        zone: Zone::Library,
+        players: &TARGET_PLAYER,
+        filter: Filter::Any,
+    }),
+    shuffle_into(
+        TARGET_PLAYER,
+        Objects::InZoneOf {
+            zone: Zone::Hand,
+            players: &TARGET_PLAYER,
+            filter: Filter::Any,
+        },
+    ),
+]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

@@ -46,7 +46,7 @@ pub(crate) fn instruction<L: Layout>(
     if permanents.is_empty() {
         return Ok(Outcome::NOTHING);
     }
-    run.remember(permanents);
+    run.remember(permanents)?;
     destroy_all(run.game(), permanents)?;
     Ok(run.left_the_battlefield(permanents))
 }

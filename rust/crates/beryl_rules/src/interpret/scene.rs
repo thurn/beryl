@@ -14,7 +14,7 @@ use crate::card::Castings;
 use crate::cast;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
-use crate::layout::{Conditions, Layout};
+use crate::layout::{Conditions, Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
     CountersHeld, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
@@ -83,7 +83,7 @@ pub(crate) struct Known<L: Layout> {
 }
 
 /// What a resolution keeps between its instructions.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct Registers<L: Layout> {
     /// The targets that were legal as the resolution began, by their places in the entry's
     /// list
@@ -100,6 +100,22 @@ pub(crate) struct Registers<L: Layout> {
     pub(crate) outcome: Outcome<L>,
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
     pub(crate) that_player: Option<Seat>,
+    /// The objects the last instruction to move any set out to move, by the player who
+    /// controlled each as it did ([`Amount::ThoseOf`], CR 608.2h).
+    pub(crate) controlled: PerPlayer<L, Bitboard<L::Slot>>,
+}
+
+impl<L: Layout> Default for Registers<L> {
+    fn default() -> Self {
+        Registers {
+            legal: TargetPlaces::default(),
+            noted: TargetPlaces::default(),
+            known: [Known::default(); TARGETS],
+            outcome: Outcome::default(),
+            that_player: None,
+            controlled: Table::filled(Bitboard::EMPTY),
+        }
+    }
 }
 
 /// What an expression is read against.
@@ -143,6 +159,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::ExiledWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
             | Objects::Paid(_) => None,
         };
         spec.into_iter()
@@ -214,6 +231,16 @@ impl<L: Layout> Scene<'_, L> {
                     within |= s.zone(ZoneKey::Of(player, zone));
                 }
                 filter.select_x(s, self.t, within, self.you(), self.x)
+            }
+            // CR 400.1: "Each player has their own library, hand, and graveyard."
+            Objects::CardsIn { players, zones } => {
+                let mut cards = Bitboard::EMPTY;
+                for player in s.players_in_seat_order(self.players(*players)) {
+                    for &zone in zones {
+                        cards |= s.zone(ZoneKey::Of(player, zone));
+                    }
+                }
+                cards
             }
             Objects::All { zone, filter } => {
                 let within = match zone {
@@ -343,6 +370,15 @@ impl<L: Layout> Scene<'_, L> {
             // CR 608.2h: settled once, as the effect that made the delayed ability was
             // applied.
             Amount::Carried => i32::from(self.subject.info.amount),
+            // Of those the instruction acted on, the ones each of the players controlled
+            // as it set out to (CR 608.2h).
+            Amount::ThoseOf(players) => {
+                let (who, those) = (self.players(players), self.registers.outcome.objects);
+                let theirs = |player: Seat| self.registers.controlled[player.index()] & those;
+                let each = self.s.players_in_seat_order(who);
+                each.map(|player| theirs(player).count().cast_signed())
+                    .sum()
+            }
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             // CR 119.1: a player's life total, which may be below zero.

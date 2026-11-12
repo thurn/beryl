@@ -8,14 +8,13 @@
 //! reference to an object that has since changed zones does nothing to it
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
-use crate::actions::{counter, destroy, discard, reveal, search, shuffle, tap};
+use crate::actions::{counter, destroy, discard};
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, CardDef, CastingKind, FaceAbility, Flow, ManaColor, ManaCost, Prompt,
-    RuleChange, Stop, Types,
+    RuleChange, Stop,
 };
 use crate::event::{Reason, Recipient, Sink, TokenEntry};
-use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -209,15 +208,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         discard::discard_cards(&mut self.game, &mut self.resolution, player, n)
     }
 
-    /// [`discard::discard_one_of`].
-    pub fn discard_one_of(
-        &mut self,
-        player: Seat,
-        cards: Bitboard<L::Slot>,
-    ) -> Result<Option<ObjectRef<L>>, Stop> {
-        discard::discard_one_of(&mut self.game, &mut self.resolution, player, cards)
-    }
-
     /// [`costs::may_pay`], asked as [`Effect::Unless`](beryl_card::Effect::Unless) asks.
     pub fn unless_pays(&mut self, player: Seat, cost: ManaCost) -> Result<bool, Stop> {
         costs::may_pay(
@@ -327,39 +317,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.check(r);
     }
 
-    /// [`library::put_into`] for a spell: on top of its owner's library, or on the bottom
-    /// unless `top`.
-    pub fn put_spell_into_library(&mut self, spell: ObjectRef<L>, top: bool) {
-        let place = if top { Place::Top } else { Place::Bottom };
-        let r = library::put_into(&mut self.game, spell, place);
-        self.check(r);
-    }
-
     /// [`library::put_into`], under `under` cards from the top.
     pub fn put_into_library(&mut self, object: ObjectRef<L>, under: u8) {
         let r = library::put_into(&mut self.game, object, Place::UnderTop(under));
         self.check(r);
-    }
-
-    /// [`zones::move_all`].
-    pub fn move_all(&mut self, objects: Bitboard<L::Slot>, to: Zone, reason: Reason) {
-        let r = zones::move_all(&mut self.game, objects, to, reason);
-        self.check(r);
-    }
-
-    /// [`shuffle::shuffle`].
-    pub fn shuffle(&mut self, player: Seat) {
-        shuffle::shuffle(&mut self.game, player);
-    }
-
-    /// [`reveal::reveal`].
-    pub fn reveal(&mut self, slot: L::Slot) {
-        reveal::reveal(&mut self.game, slot);
-    }
-
-    /// [`library::top`].
-    pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard<L::Slot> {
-        library::top(self.game.state, player, n)
     }
 
     /// [`zones::look_at`].
@@ -367,47 +328,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         zones::look_at(&mut self.game, player, cards);
     }
 
-    /// [`library::put_on_bottom_in_random_order`].
-    pub fn put_on_bottom_in_random_order(&mut self, cards: Bitboard<L::Slot>) {
-        let r = library::put_on_bottom_in_random_order(&mut self.game, cards);
-        self.check(r);
-    }
-
-    /// [`library::put_into`], on the bottom, for a card in a library: "You may put that
-    /// card on the bottom of that player's library."
-    pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
-        let r = library::put_into(&mut self.game, object, Place::Bottom);
-        self.check(r);
-    }
-
     /// [`destroy::destroy`].
     pub fn destroy(&mut self, object: ObjectRef<L>) {
         let r = destroy::destroy(&mut self.game, object);
-        self.check(r);
-    }
-
-    /// [`search::search_library_up_to`].
-    pub fn search_library_up_to(
-        &mut self,
-        player: Seat,
-        filter: Filter,
-        n: u8,
-    ) -> Result<Bitboard<L::Slot>, Stop> {
-        search::search_library_up_to(&mut self.game, &mut self.resolution, player, filter, n)
-    }
-
-    /// [`search::search_library`].
-    pub fn search_library(
-        &mut self,
-        player: Seat,
-        filter: Filter,
-    ) -> Result<Option<L::Slot>, Stop> {
-        search::search_library(&mut self.game, &mut self.resolution, player, filter)
-    }
-
-    /// [`zones::put_onto_battlefield_tapped`].
-    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard<L::Slot>) {
-        let r = zones::put_onto_battlefield_tapped(&mut self.game, cards);
         self.check(r);
     }
 
@@ -525,15 +448,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn delay(&mut self, ability: AbilityIx, amount: u8) {
         let r = delayed_triggers::create(&mut self.game, &self.resolution, ability, amount);
         self.check(r);
-    }
-
-    /// [`tap::untap_up_to`]: this ability's controller untaps up to `n` lands.
-    pub fn untap_up_to_lands(&mut self, n: u8) -> Flow {
-        let (s, you) = (&*self.game.state, self.controller());
-        let battlefield = s.in_zone(Zone::Battlefield);
-        let lands = Filter::Types(Types::LAND).select(s, self.game.table, battlefield, you);
-        tap::untap_up_to(&mut self.game, &mut self.resolution, you, lands, n)?;
-        Ok(())
     }
 
     /// [`coins::flip`], for this ability's source.

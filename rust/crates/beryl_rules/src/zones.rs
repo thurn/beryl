@@ -158,7 +158,7 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     if objects.is_empty() {
         return Ok(Outcome::NOTHING);
     }
-    run.remember(objects);
+    run.remember(objects)?;
     // A spell among them leaves the stack without resolving, and one that is exiled
     // instead has moved already.
     let rest = stack::unstack(run.game(), objects, Zone::Graveyard)?;
@@ -187,7 +187,7 @@ pub(crate) fn put_instruction<L: Layout>(
     if objects.is_empty() {
         return Ok(Outcome::NOTHING);
     }
-    run.remember(objects);
+    run.remember(objects)?;
     let game = run.game();
     let rest = stack::unstack(game, objects, to)?;
     let (reason, entry) = (Reason::Effect, Entry::default());

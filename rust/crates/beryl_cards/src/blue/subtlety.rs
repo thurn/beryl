@@ -3,17 +3,13 @@
 //! puts it on their choice of the top or bottom of their library. Evoke—Exile a blue card
 //! from your hand."
 
-use beryl_engine::Bitboard;
-use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, CostPart, Face, Flow, Keywords, ManaCost, Place,
-    Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, Zone, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, put_into_library};
+use beryl_card::{
+    Ability, CardDef, CastingOption, Colors, CostPart, Effect, Face, Filter, Keywords,
+    LibraryPosition, ManaCost, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types, Zone,
+    card, mana,
+};
 
 /// The spell leaves the stack without resolving, to the library of its owner, who chooses
 /// the end ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object
@@ -21,49 +17,35 @@ use crate::names;
 /// corresponding zone." The trigger resolves whether or not Subtlety is still there, as after
 /// evoke's sacrifice ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)): "Once
 /// activated or triggered, an ability exists on the stack independently of its source."
-fn tuck<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let owner = ctx.state().object(spell.slot).owner();
-    let top_or_bottom = Prompt::new(Purpose::TopOrBottom).places(Place::Top, Place::Bottom);
-    let top = ctx.choose_yes_no(owner, top_or_bottom, Bitboard::single(spell.slot))?;
-    ctx.put_spell_into_library(spell, top);
-    Ok(())
-}
+static TUCK: Effect = put_into_library(TARGET, LibraryPosition::TopOrBottom);
 
 /// Evoke's cost exiles a blue card from the hand rather than paying {2}{U}{U}
 /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)), and its sacrifice
 /// trigger enters alongside the tuck, both Subtlety's controller's to order
 /// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b)).
-pub static CARD: CardDef = CardDef {
-    name: names::SUBTLETY,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 2, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Elemental, Subtype::Incarnation]),
-        colors: Colors::BLUE,
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::FLASH.union(Keywords::FLYING),
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::SUBTLETY,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Elemental, Subtype::Incarnation]))
+        .colors(Colors::BLUE)
+        .power_toughness(3, 3)
+        .keywords(Keywords::FLASH.union(Keywords::FLYING))
+        .abilities(&[
             Ability::triggered(&Trigger::ENTERS)
-                .custom(bodies!(tuck))
+                .effect(&TUCK)
                 .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Spell,
                     Filter::Types(Types::CREATURE.union(Types::PLANESWALKER)),
-                )])
-                .pauses(),
+                )]),
             Ability::evoke(),
-        ],
-        casting: &[CastingOption::Evoke {
+        ])
+        .casting(&[CastingOption::Evoke {
             cost: ManaCost::NONE,
             parts: &[CostPart::exile(1, Zone::Hand, Filter::Colors(Colors::BLUE))],
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+        }])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

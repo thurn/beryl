@@ -62,6 +62,14 @@ pub enum Objects {
         players: &'static Players,
         filter: Filter,
     },
+    /// Every card in several zones of these players, as one set: "their hand and
+    /// graveyard". Zones each player has one of
+    /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has
+    /// their own library, hand, and graveyard." One zone is [`Objects::InZoneOf`].
+    CardsIn {
+        players: &'static Players,
+        zones: &'static [Zone],
+    },
     /// What paying the cost of the spell or ability did this to: "the sacrificed creature",
     /// "the exiled card", "the revealed card"
     /// ([CR 608.2k](https://yawgatog.com/resources/magic-rules/#R6082k)): "If an ability's
@@ -160,6 +168,7 @@ impl Objects {
             Objects::InZoneOf {
                 players, filter, ..
             } => players.needs_a_resolution() || filter.needs_a_resolution(),
+            Objects::CardsIn { players, .. } => players.needs_a_resolution(),
         }
     }
 }

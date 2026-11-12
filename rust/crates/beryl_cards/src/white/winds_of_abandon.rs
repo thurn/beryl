@@ -4,20 +4,14 @@
 //! {4}{W}{W} (You may cast this spell for its overload cost. If you do, change "target" in its
 //! text to "each.")"
 
-use beryl_engine::Zone;
-use beryl_engine::bitboard::Bitboard;
-use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Players, Supertypes, TargetKind,
-    TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::layout::{PerPlayer, Table};
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    EACH_PLAYER, TARGET, THAT_PLAYER, exile, for_each_player, sequence,
+};
+use beryl_card::{
+    Ability, Amount, CardDef, CastingOption, Colors, Effect, Face, Filter, Found, ManaCost,
+    Objects, Players, Supertypes, TargetKind, TargetSpec, Types, Zone, card, mana,
+};
 
 /// "Creature you don't control". Not "an opponent controls": a teammate's creature is one
 /// you don't control too
@@ -33,86 +27,65 @@ const BASIC_LANDS: Filter = Filter::All(&[
     Filter::Supertypes(Supertypes::BASIC),
 ]);
 
-/// Exiles `creatures` at once, then each player whose creatures were exiled searches for that
-/// many basic land cards ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a))
-/// and puts them onto the battlefield tapped, then shuffles
-/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)). A player may find
-/// fewer, or none from a library without basics
+/// "For each creature exiled this way, its controller searches their library for a basic
+/// land card. Those players put those cards onto the battlefield tapped, then shuffle": each
+/// player whose creatures were exiled searches for that many basic land cards
+/// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) and puts them onto the
+/// battlefield tapped, then shuffles
+/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)), in turn order
+/// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)). A player may find fewer,
+/// or none from a library without basics
 /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)): "that player isn't
 /// required to find some or all of those cards". Who searches is each creature's controller
-/// as it last existed on the battlefield: in exile it has none.
-fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard<L::Slot>) -> Flow {
-    let players = ctx.state().players_in_turn_order(ctx.state().players());
-    let mut controlled: PerPlayer<L, Bitboard<L::Slot>> = Table::filled(Bitboard::EMPTY);
-    for player in players.clone() {
-        controlled[player.index()] =
-            creatures.filter(|slot| ctx.state().controller(slot) == player);
-    }
-    ctx.move_all(creatures, Zone::Exile, Reason::Exile);
-    // In turn order (CR 101.4). The creatures are ones "you don't control", so with two
-    // players one player searches.
-    for player in players {
-        // A creature a replacement kept from exile was not "exiled this way".
-        let n = controlled[player.index()]
-            .filter(|slot| ctx.state().object(slot).zone() == Zone::Exile)
-            .count();
-        let Ok(n @ 1..) = u8::try_from(n) else {
-            continue;
-        };
-        let found = ctx.search_library_up_to(player, BASIC_LANDS, n)?;
-        ctx.put_onto_battlefield_tapped(found);
-        ctx.shuffle(player);
-    }
-    Ok(())
-}
+/// as it last existed on the battlefield: in exile it has none. A creature a replacement
+/// kept from exile was not "exiled this way".
+const FETCH: Effect = for_each_player(
+    EACH_PLAYER,
+    &Effect::Search {
+        player: THAT_PLAYER,
+        filter: BASIC_LANDS,
+        count: Amount::ThoseOf(THAT_PLAYER),
+        found: Found::OntoBattlefieldTapped,
+    },
+);
 
 /// "Exile target creature you don't control"
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    exile_and_fetch(ctx, Bitboard::single(creature.slot))
-}
+static EXILE_TARGET: Effect = sequence(&[exile(TARGET), FETCH]);
 
 /// Overloaded, "Exile each creature you don't control"
 /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)), with no target
-/// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)).
-fn exile_each<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let s = ctx.state();
-    let creatures = CREATURES_YOU_DONT_CONTROL.select(
-        s,
-        ctx.table(),
-        s.battlefield().iter().copied().collect(),
-        ctx.controller(),
-    );
-    exile_and_fetch(ctx, creatures)
-}
+/// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)). The creatures are
+/// exiled at once.
+static EXILE_EACH: Effect = sequence(&[
+    exile(Objects::All {
+        zone: Zone::Battlefield,
+        filter: CREATURES_YOU_DONT_CONTROL,
+    }),
+    FETCH,
+]);
 
-pub static CARD: CardDef = CardDef {
-    name: names::WINDS_OF_ABANDON,
-    faces: &[Face {
-        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::WHITE,
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::WINDS_OF_ABANDON,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}"))
+        .types(Types::SORCERY)
+        .colors(Colors::WHITE)
+        .abilities(&[
             Ability::spell()
-                .targeting(&[
-                    TargetSpec::one(TargetKind::Permanent, CREATURES_YOU_DONT_CONTROL).removal(),
-                ])
-                .custom(bodies!(exile_target))
-                .pauses(),
-            Ability::spell().custom(bodies!(exile_each)).pauses(),
-        ],
-        casting: &[CastingOption::overload(
+                .targeting(&[TargetSpec::one(
+                    TargetKind::Permanent,
+                    CREATURES_YOU_DONT_CONTROL,
+                )])
+                .effect(&EXILE_TARGET),
+            Ability::spell().effect(&EXILE_EACH),
+        ])
+        .casting(&[CastingOption::overload(
             ManaCost::new(4, [2, 0, 0, 0, 0, 0]),
             1,
-        )],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+        )])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

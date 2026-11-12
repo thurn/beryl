@@ -19,12 +19,14 @@
 //! ```
 
 use crate::continuous::{Duration, Modification, RuleChange};
+use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
-    Amount, CastTerms, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects,
-    Players, Recipients,
+    Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
+    LibraryPosition, Objects, Players, Recipients, Taken,
 };
+use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
 use crate::mana::{ManaColor, ManaCost, ManaSet};
@@ -139,8 +141,13 @@ pub const fn may(player: Players, effect: &'static Effect) -> Effect {
     Effect::May { player, effect }
 }
 
-/// [`Effect::Unless`]: "[effect] unless [player] pays [cost]".
+/// [`Effect::Unless`] of mana: "[effect] unless [player] pays [cost]".
 pub const fn unless_pays(effect: &'static Effect, player: Players, cost: ManaCost) -> Effect {
+    unless(effect, player, Cost::mana(cost))
+}
+
+/// [`Effect::Unless`]: "[effect] unless [player] [pays a cost]".
+pub const fn unless(effect: &'static Effect, player: Players, cost: Cost) -> Effect {
     Effect::Unless {
         effect,
         player,
@@ -237,6 +244,52 @@ pub const fn return_transformed(cards: Objects) -> Effect {
 /// [`Effect::PutIntoLibrary`]: "put [objects] into their owners' libraries [position]".
 pub const fn put_into_library(objects: Objects, position: LibraryPosition) -> Effect {
     Effect::PutIntoLibrary { objects, position }
+}
+
+/// [`Effect::PutBack`]: "[player] puts [count] cards from their hand on top of their library
+/// in any order".
+pub const fn put_back(player: Players, count: u8) -> Effect {
+    Effect::PutBack {
+        player,
+        count: Amount::Fixed(count),
+    }
+}
+
+/// [`Effect::ShuffleInto`]: "[player] shuffles [cards] into their library".
+pub const fn shuffle_into(player: Players, cards: Objects) -> Effect {
+    Effect::ShuffleInto { player, cards }
+}
+
+/// [`Effect::Dig`]: "[player] looks at the top [look] cards of their library", takes some
+/// into their hand and puts the rest on the bottom.
+pub const fn dig(player: Players, look: u8, take: Taken, rest: LibraryOrder) -> Effect {
+    Effect::Dig {
+        player,
+        look: Amount::Fixed(look),
+        take,
+        rest,
+    }
+}
+
+/// [`Effect::Fateseal`] of one card: "[player] looks at the top card of [library]'s library
+/// and may put it on the bottom of that library".
+pub const fn fateseal(player: Players, library: Players) -> Effect {
+    Effect::Fateseal {
+        player,
+        library,
+        count: Amount::Fixed(1),
+    }
+}
+
+/// [`Effect::Search`] for one card: "[player] searches their library for a [filter] card,
+/// [puts it somewhere], then shuffles".
+pub const fn search(player: Players, filter: Filter, found: Found) -> Effect {
+    Effect::Search {
+        player,
+        filter,
+        count: Amount::Fixed(1),
+        found,
+    }
 }
 
 /// [`Effect::Draw`]: "[player] draws [count] cards".

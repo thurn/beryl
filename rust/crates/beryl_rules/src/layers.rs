@@ -221,6 +221,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
                 | Objects::TriggeredOn
                 | Objects::ExiledWithThis
                 | Objects::InZoneOf { .. }
+                | Objects::CardsIn { .. }
                 | Objects::All { .. }
                 | Objects::Paid(_) => {
                     unreachable!("the card table refuses a static ability on any other set")
