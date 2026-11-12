@@ -123,18 +123,18 @@ impl<L: Layout> PartialEq for Stored<'_, L> {
         if !self.keyed && !other.keyed {
             return true;
         }
-        self.differing(other)
+        self.alike(other)
     }
 }
 
 impl<L: Layout> Eq for Stored<'_, L> {}
 
 impl<L: Layout> Stored<'_, L> {
-    /// The comparison with something stored about one of the two, out of line: the rare
-    /// path of what decides every pair of candidates.
+    /// Whether the stores hold the same about the two, where they hold something about
+    /// one: out of line, the rare path of what decides every pair of candidates.
     #[cold]
     #[inline(never)]
-    fn differing(&self, other: &Self) -> bool {
+    fn alike(&self, other: &Self) -> bool {
         let (s, o) = (self.state, other.state);
         s.memos(self.slot) == o.memos(other.slot)
             && s.counter_rows(self.slot) == o.counter_rows(other.slot)
