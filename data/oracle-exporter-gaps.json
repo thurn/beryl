@@ -22,5 +22,29 @@
     "card": "Teferi, Hero of Dominaria",
     "scenario": "generated 2: activate ability 0 on the battlefield",
     "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: untapping up to two lands when none is tapped"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Generated",
+    "scenario": "Generated 23",
+    "gap": "an alternative cost the cast declined, which XMage asks about while a card could pay it and the exporter does not track the hand: Subtlety's evoke with a blue card in hand"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Generated",
+    "scenario": "Generated 28",
+    "gap": "a payment pre-tapped by a mana ability's text that another untapped source also has: \"{T}: Add {W}\" taps Tundra instead of a Plains, leaving Jace, Vryn's Prodigy no blue"
+  },
+  {
+    "oracle": "forge",
+    "card": "Generated",
+    "scenario": "Generated 29",
+    "gap": "the harness counts a spell an opponent's casting restriction forbids as a choice: Snapcaster Mage's flash under Teferi, Time Raveler stops Forge in the declare attackers step"
+  },
+  {
+    "oracle": "forge",
+    "card": "Generated",
+    "scenario": "Generated 100",
+    "gap": "a payment Forge's AI makes from other sources than Beryl's, which the harness does not replay: Currency Converter paid with two Islands leaves Strip Mine untapped, a choice that stops Forge in the declare attackers step"
   }
 ]
