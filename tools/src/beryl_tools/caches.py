@@ -13,6 +13,9 @@ Low-disk mode: with less than [`LOW_DISK`] free on the cache's volume, the age f
 by-64fx: Arq's hourly snapshot keeps every deleted file that predates it for hours, while each
 worktree writes about 15 GB of rust/target, so the disk filled between nightlies. warm.py runs
 this before a new checkout's first clone, so it frees space without waiting for the nightly.
+
+Then, whatever the disk, the shared target is held to its budget, the builds unused longest
+going first (warm.py, `prune`): Enact's remove hook does so for each worktree it saves.
 """
 
 from __future__ import annotations
@@ -197,6 +200,10 @@ def run(
             out.write("prune-caches: a clone holds the shared target; left it\n")
         else:
             report(target, out, dry_run, "folders of the shared target")
+    if not dry_run and (cache / "target").is_dir():
+        with warm.try_locked() as held:
+            if held:
+                warm.prune(cache / "target")
     return 0
 
 

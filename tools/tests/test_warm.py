@@ -156,3 +156,67 @@ def test_saving_prunes_what_earlier_builds_left(
     cached = tmp_path / "cache" / "target"
     assert [p for p in kept if not (cached / p).exists()] == []
     assert [p for p in gone if (cached / p).exists()] == []
+
+
+DAY = 86400.0
+
+
+def test_saving_evicts_builds_unused_for_a_week_then_the_oldest_over_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    # Room for two of the three kilobyte builds below.
+    monkeypatch.setenv("BERYL_TARGET_BUDGET_GB", "2.5e-6")
+    tree = checkout(tmp_path / "tree", "lock-v1")
+    profile = tree / "rust" / "target" / "debug"
+    kb = "x" * 1000
+
+    def build(crate: str, days: float, text: str = kb) -> list[str]:
+        name = f"{crate}-{crate[0] * 16}"
+        return [
+            str(write(profile / "deps" / f"lib{name}.rlib", text, days * DAY)),
+            str(write(profile / "deps" / f"{name}.d", "", days * DAY)),
+            str(write(profile / ".fingerprint" / name / "lib", "", days * DAY)),
+        ]
+
+    # Small, so the budget does not need it gone: it has gone unused for over a week.
+    gone = build("abandoned", 8, text="")
+    # The least recently used: evicted to fit the budget.
+    gone += build("beryl_old", 2)
+    kept = build("cached", 1) + build("fresh", 0)
+    kept.append(str(write(profile / "incremental" / "fresh-0qkw" / "s-a" / "a.o")))
+    # The profile's own binary matches no build: each build overwrites it.
+    kept.append(str(write(profile / "beryl.exe", kb, 30 * DAY)))
+
+    warm.save(tree)
+    cached = tmp_path / "cache" / "target"
+    root = str(tree / "rust" / "target")
+    assert [p for p in kept if not Path(p.replace(root, str(cached))).exists()] == []
+    assert [p for p in gone if Path(p.replace(root, str(cached))).exists()] == []
+
+
+def test_the_budget_never_evicts_what_the_last_build_used(tmp_path: Path) -> None:
+    deps = tmp_path / "debug" / "deps"
+    write(deps / f"libserde-{'a' * 16}.rlib", "x" * 1000, age=60)
+    write(deps / f"libsyn-{'b' * 16}.rlib", "x" * 1000, age=2 * warm.RECENT)
+    assert warm.evict([deps], time.time(), limit=0) == (1, 1000)
+    assert (deps / f"libserde-{'a' * 16}.rlib").exists()
+    assert not (deps / f"libsyn-{'b' * 16}.rlib").exists()
+
+
+def test_the_remove_hook_removes_a_worktree_it_could_not_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tree = checkout(tmp_path / "tree", "lock-v1")
+    write(tree / "rust" / "target" / "debug" / "beryl", "binary")
+
+    def full_disk(checkout: Path) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(warm, "save", full_disk)
+    monkeypatch.setenv("ENACT_WORKTREE_PATH", str(tree))
+    # Not a repository: git lists no worktrees, as once it has dropped this one.
+    monkeypatch.setenv("ENACT_REPO", str(tmp_path / "repo"))
+    monkeypatch.delenv("ENACT_BRANCH", raising=False)
+    assert warm.remove_hook() == 0
+    assert not tree.exists()

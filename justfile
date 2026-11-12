@@ -307,7 +307,7 @@ coverage *args:
 nightly *args:
     {{ by }} nightly "$@"
 
-# Remove the cache folders of checkouts that are gone, unchanged for a day (--dry-run lists them); part of the nightly
+# Remove the cache folders of checkouts that are gone, unchanged for a day (--dry-run lists them), and prune the cached rust/target to its budget; part of the nightly
 [group('checks')]
 prune-caches *args:
     {{ by }} prune-caches "$@"

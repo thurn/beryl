@@ -22,12 +22,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # tools/src/beryl_tools/warm.py: the checkout is four up.
@@ -36,6 +38,18 @@ STAMP = ".beryl-lock"
 KEEP_NODE_MODULES = 3
 # The Tauri CLI's target directory inside rust/target (`paths.TAURI_TARGET`).
 TAURI = "tauri"
+# What a target's crate builds may hold (`BERYL_TARGET_BUDGET_GB` overrides it), and how long
+# one may go unused. Each worktree builds the workspace crates under new hashes, and nothing
+# removed the old ones: on 2026-11-11 the cache held 45 GB, of which the last build used 5.5,
+# and a copy of it in each Windows worktree filled the disk.
+BUDGET_GB = 15.0
+UNUSED_DAYS = 7
+DAY = 86400.0
+# A unit used this recently belongs to the build that just ran: the budget never evicts it.
+RECENT = 3600.0
+# `<crate>-<hash>` and what cargo names after it: `lib<crate>-<hash>.rlib`, `.d`, `.exe`,
+# an incremental unit's `<crate>-<hash>.<cgu>.<build>.rcgu.o`, a build/ or .fingerprint/ folder.
+UNIT_NAME: re.Pattern[str] = re.compile(r"^(?:lib)?(.+-[0-9a-f]{16})(?:\..+)?$")
 
 
 WINDOWS: bool = sys.platform == "win32"
@@ -353,10 +367,106 @@ def prune_sessions(incremental: Path) -> int:
     return pruned
 
 
+@dataclass
+class Unit:
+    """Artifacts of one crate build that go and stay together: its files in deps/ and its
+    build/ and .fingerprint/ folders, all named `<crate>-<hash>`, or one crate's incremental/
+    folder. `used` is when any file in it was last read or written."""
+
+    paths: list[Path] = field(default_factory=list)
+    size: int = 0
+    used: float = 0.0
+
+
+def usage(path: Path) -> tuple[int, float]:
+    """The bytes under `path` and the latest access or modification time of any file there.
+    Access times count because a build reads the dependencies it does not rebuild: Windows
+    and macOS keep them, to the hour or so. Where a volume does not, this is the last write.
+    """
+    stat = path.lstat()
+    if not path.is_dir() or path.is_symlink():
+        return stat.st_size, max(stat.st_atime, stat.st_mtime)
+    # Not the folder's own time: creating it, or a file in it, is no use of the files.
+    size, used, files = 0, 0.0, 0
+    folders = [path]
+    while folders:
+        # On Windows scandir's entries carry their times and sizes: no call per file.
+        with suppress(OSError), os.scandir(folders.pop()) as entries:
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    folders.append(Path(entry.path))
+                    continue
+                with suppress(OSError):
+                    s = entry.stat(follow_symlinks=False)
+                    size += s.st_size
+                    used = max(used, s.st_atime, s.st_mtime)
+                    files += 1
+    return size, used if files else stat.st_mtime
+
+
+def units(profiles: list[Path]) -> list[Unit]:
+    """The [`Unit`]s of each profile's deps/ folder in `profiles`, with their sizes and times.
+    Files that match no unit (the profile's own binaries, which each build overwrites) are
+    left out."""
+    found: dict[tuple[Path, str], Unit] = {}
+    for deps in profiles:
+        profile = deps.parent
+        for kind in ("deps", "build", ".fingerprint"):
+            folder = profile / kind
+            if folder.is_dir():
+                for entry in folder.iterdir():
+                    if match := UNIT_NAME.match(entry.name):
+                        key = (profile, match.group(1))
+                        found.setdefault(key, Unit()).paths.append(entry)
+        incremental = profile / "incremental"
+        if incremental.is_dir():
+            for crate in incremental.iterdir():
+                found[(profile, f"incremental/{crate.name}")] = Unit([crate])
+    for unit in found.values():
+        for path in unit.paths:
+            with suppress(OSError):
+                size, used = usage(path)
+                unit.size += size
+                unit.used = max(unit.used, used)
+    return list(found.values())
+
+
+def budget() -> int:
+    """The bytes a target's units may hold: `BERYL_TARGET_BUDGET_GB` gigabytes, else
+    [`BUDGET_GB`]."""
+    with suppress(ValueError):
+        return int(float(os.environ.get("BERYL_TARGET_BUDGET_GB", BUDGET_GB)) * 1e9)
+    return int(BUDGET_GB * 1e9)
+
+
+def evict(profiles: list[Path], now: float, limit: int) -> tuple[int, int]:
+    """Deletes the units unused for [`UNUSED_DAYS`], then the least recently used until the
+    rest fit in `limit` bytes, never one used within [`RECENT`] of `now`: the build that just
+    ran needs it. A unit still in use costs a rebuild of that crate, nothing worse. Returns the
+    units and bytes deleted."""
+    found = sorted(units(profiles), key=lambda u: u.used)
+    total = sum(u.size for u in found)
+    count = freed = 0
+    for unit in found:
+        idle = now - unit.used
+        if idle < UNUSED_DAYS * DAY and (total <= limit or idle < RECENT):
+            break  # Sorted by use: every later unit is as recent.
+        for path in unit.paths:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
+        total -= unit.size
+        freed += unit.size
+        count += 1
+    return count, freed
+
+
 def prune(target: Path) -> None:
-    """Deletes what earlier builds left in `target` and no builds use any more, so that the
-    cache, and the time to clone it, does not grow with every save. Best effort: it runs in
-    Enact's remove hook, which must not fail."""
+    """Deletes what earlier builds left in `target` and no builds use any more, then evicts
+    what has gone unused longest until the rest fits the budget, so that the cache, the disk
+    each worktree's copy takes and the time to clone it do not grow with every save. Best
+    effort: it runs in Enact's remove hook, which must not fail."""
     profiles = [*target.glob("*/deps"), *target.glob(f"{TAURI}/*/deps")]
     try:
         objects = sum(prune_objects(deps) for deps in profiles)
@@ -365,10 +475,15 @@ def prune(target: Path) -> None:
             for deps in profiles
             if deps.with_name("incremental").is_dir()
         )
+        limit = budget()
+        evicted, freed = evict(profiles, time.time(), limit)
     except (OSError, ValueError, IndexError) as error:
         log(f"could not prune {target}: {error}")
         return
-    log(f"pruned {objects} stale objects and {sessions} incremental sessions")
+    log(
+        f"pruned {objects} stale objects and {sessions} incremental sessions; evicted"
+        f" {evicted} unused builds ({freed / 1e9:.1f} GB) to fit {limit / 1e9:.0f} GB"
+    )
 
 
 def save(checkout: Path) -> None:
@@ -406,7 +521,12 @@ def remove_hook() -> int:
     repo: Path = Path(os.environ["ENACT_REPO"])
     branch = os.environ.get("ENACT_BRANCH", "")
     if path.is_dir():
-        save(path)
+        # A full disk fails the save (even the lock file): remove the worktree all the same,
+        # or its copy of rust/target stays behind and keeps the disk full.
+        try:
+            save(path)
+        except OSError as error:
+            log(f"could not save {path}'s caches: {error}")
 
     def git(*args: str) -> str:
         run = subprocess.run(
