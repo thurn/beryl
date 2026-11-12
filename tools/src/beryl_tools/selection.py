@@ -92,7 +92,11 @@ VERB_PREFIX = "verb:"
 # The shape suite, which `ui-test` runs after it: its script, its cases, the list of its checks,
 # and the prefix of their ids in the run log.
 SHAPE_SCRIPT = "ui/scripts/shapes.mjs"
-SHAPE_CASES = ("ui/scripts/shape-cases.mjs", "ui/scripts/shape-cases-table.mjs")
+SHAPE_CASES = (
+    "ui/scripts/shape-cases.mjs",
+    "ui/scripts/shape-cases-table.mjs",
+    "ui/scripts/shape-cases-panel.mjs",
+)
 SHAPES = "ui/shapes.json"
 SHAPE_PREFIX = "shape:"
 SHOTS = "ui/shots.json"

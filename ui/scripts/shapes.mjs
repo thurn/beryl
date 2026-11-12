@@ -26,7 +26,10 @@
 // is a case of the split: the cards a scry looks at, from the look to the library again.
 // A cost paid with permanents says how much is left as the session wrote it, and a
 // declaration draws a line from each creature to what the session has it aimed at; paying
-// with permanents and the combat line are their cases (shape-cases-table.mjs).
+// with permanents and the combat line are their cases (shape-cases-table.mjs). The ways to
+// use a card are buttons over the table, each named as the session names the way; a number,
+// a catalog's entries and a division's shares are held to the session's state, and set by
+// the steps and entries the screen draws (shape-cases-panel.mjs).
 //
 // The seat across the table is shown none of it: its fixture plays the same game on, and at
 // every tick the stage holds no mark and the dock no button, until the view that asks that
@@ -54,6 +57,7 @@ import {
     reach,
     scryFlight,
 } from "./shape-cases.mjs";
+import { panelOf, set, watching } from "./shape-cases-panel.mjs";
 import {
     combatLines,
     declared,
@@ -90,7 +94,7 @@ const LAYOUTS = {
     desktop: {
         query: "stage",
         windows: [{ width: 1600, height: 900 }],
-        dock: ".stage-prompt",
+        dock: ".stage-prompt, .stage-ways",
         title: ".stage-prompt .prompt-title",
         captions: true,
         handClicks: true,
@@ -109,7 +113,7 @@ const LAYOUTS = {
                     ]),
             ).values(),
         ],
-        dock: ".phone-dock, .phone-prompt-more",
+        dock: ".phone-dock, .phone-prompt-more, .stage-ways",
         // The prompt's own pill, not a scry's, which may still be passing over the table
         // (it outlasts its script: timing.ts, `passes`).
         title: ".phone-pill:not(.stage-notice-scry)",
@@ -181,6 +185,7 @@ function expected(held, layout) {
     const more = {
         up: heldUp(prompt),
         left: leftOf(prompt),
+        panel: panelOf(prompt),
         ...declared(prompt),
     };
     if (!prompt) return { title: "", buttons: [], marks: [], ...more };
@@ -224,6 +229,7 @@ const whole = (want) => ({
     busy: false,
     up: want.up,
     left: want.left,
+    panel: want.panel,
     lines: { page: want.lines, model: want.lines },
 });
 
@@ -257,12 +263,15 @@ function drawn({ dock, title, captions, arrow }) {
         }
         return copy.textContent.trim();
     };
+    const all = (selector) => [...document.querySelectorAll(selector)];
     const left = document.querySelector(`:is(${title}) .prompt-left`);
     const ours = (keys) =>
         keys.filter((key) => arrow && key?.startsWith(`${arrow} `)).sort();
-    const buttons = [...document.querySelectorAll(dock)].flatMap((part) =>
-        [...part.querySelectorAll("button")].map((button) => {
+    const buttons = all(dock).flatMap((part) =>
+        [...part.querySelectorAll("button:not(.prompt-step)")].map((button) => {
+            // The round button and a way to use a card are named, not worded.
             const passOn = button.classList.contains("pass-on-button");
+            const named = passOn || button.classList.contains("stage-way");
             const forward =
                 !passOn &&
                 (button.closest(".turn-action") !== null ||
@@ -271,7 +280,7 @@ function drawn({ dock, title, captions, arrow }) {
                 .closest(".turn-action")
                 ?.querySelector(".turn-caption");
             return {
-                label: passOn
+                label: named
                     ? button.getAttribute("aria-label")
                     : words(button),
                 enabled: !button.disabled,
@@ -356,6 +365,22 @@ function drawn({ dock, title, captions, arrow }) {
         busy: stage.shown.busy,
         up,
         left: left ? words(left).replace(/^\(|\)$/g, "") : "",
+        panel: {
+            value:
+                document.querySelector(".prompt-stepper")?.dataset.value ??
+                null,
+            entries: all(".stage-entry").map((entry) =>
+                entry.getAttribute("aria-pressed") === "true"
+                    ? `[${entry.textContent}]`
+                    : entry.textContent,
+            ),
+            shares: all(".stage-share")
+                .map(
+                    (s) =>
+                        `${s.dataset.share}=${s.querySelector("b").textContent}`,
+                )
+                .sort(),
+        },
         lines: {
             page: ours(
                 [...document.querySelectorAll(".stage-line")].map(
@@ -398,11 +423,13 @@ async function holds(page, layout, want, what) {
     }
 }
 
-/** In the page: lets what a click sent come back, and plays out all it led to. */
+/** In the page: lets what a click sent come back, and plays out all it led to; then a second
+ * more of stage time, in which a card let go where its click moved nothing glides home. */
 const settled = (limit) =>
-    new Promise((resolve) => setTimeout(resolve)).then(() =>
-        window.berylStage.settle(limit),
-    );
+    new Promise((resolve) => setTimeout(resolve)).then(() => {
+        window.berylStage.settle(limit);
+        window.berylStage.clock.advance(1000);
+    });
 
 const clicksSent = (page) =>
     page.evaluate(() =>
@@ -429,8 +456,9 @@ async function opened(context, watch, query, fixture, at = 1) {
 
 /** Answers the prompts of `fixture` on a page of its own by the recording's clicks, each made
  * with the pointer, and holds the screen to the session's state before the first and after
- * each. With `carry`, a card of the hand is carried out of it instead of clicked. */
-async function answer(context, watch, layout, fixture, carry) {
+ * each. With `carry`, a card of the hand is carried out of it instead of clicked; with
+ * `lines`, the recording is the declarations', whose lines are followed to the damage. */
+async function answer(context, watch, layout, fixture, carry, lines) {
     const { opens, clicks, at } = asked(await recorded(fixture));
     const { page, done } = await opened(
         context,
@@ -440,7 +468,7 @@ async function answer(context, watch, layout, fixture, carry) {
         at,
     );
     const paying = payingWithPermanents(page, layout.dock, TICK);
-    const combat = combatLines(page, TICK);
+    const combat = lines ? combatLines(page, TICK) : undefined;
     try {
         await holds(page, layout, expected(opens, layout), "as it opens");
         if (!layout.handClicks) {
@@ -471,6 +499,8 @@ async function answer(context, watch, layout, fixture, carry) {
                     .locator(layout.dock)
                     .getByRole("button", { name: label, exact: true })
                     .click();
+            } else if (click.kind === "number" || click.kind === "entry") {
+                await set(page, click, before);
             } else if (click.kind === "drop" && click.on.kind === "ability") {
                 // A waiting trigger: put first by a click, or carried to its place.
                 const item = page.locator(
@@ -524,7 +554,7 @@ async function answer(context, watch, layout, fixture, carry) {
                 await scryFlight(page, before, after, TICK);
             }
             if (answered) await paying.answered(before);
-            await combat.follow(before, answered);
+            await combat?.follow(before, answered);
             await page.evaluate(settled, SETTLE);
             await holds(page, layout, expected(after, layout), `after ${what}`);
             await paying.drawn(before, after);
@@ -561,45 +591,13 @@ async function answer(context, watch, layout, fixture, carry) {
             "the state each click was made on",
         );
         paying.done();
-        combat.done();
+        combat?.done();
         assert.deepEqual(await stageFaults(page), []);
         return clicks.map(({ before }) => before.prompt.purpose);
     } finally {
         await done();
         await page.close();
     }
-}
-
-/** In the page: plays the recording on from its first view to the next that asks its seat,
- * stepping the stage's clock, and returns what any tick before that view was shown held of a
- * prompt: the marks in the model and on the page, and the dock's buttons that could be
- * pressed. */
-async function watching({ tick, dock }) {
-    const stage = window.berylStage;
-    stage.clock.hold();
-    await window.berylFixture.invoke("choose", { request: {} });
-    await new Promise((resolve) => setTimeout(resolve));
-    const last = window.berylFixture.view();
-    const seen = [];
-    while (stage.shown.busy && stage.shown.view !== last) {
-        stage.clock.advance(tick);
-        if (stage.shown.view === last) break;
-        const marks = [
-            ...stage.marks().map(({ mark, on }) => `${mark} ${on}`),
-            ...[...document.querySelectorAll(".stage-mark")].map(
-                (mark) => `page ${mark.className}`,
-            ),
-        ];
-        const buttons = [...document.querySelectorAll(dock)]
-            .flatMap((part) => [...part.querySelectorAll("button")])
-            .filter((button) => !button.disabled)
-            .map((button) => button.textContent);
-        if (marks.length || buttons.length) {
-            seen.push({ at: stage.clock.now, marks, buttons });
-        }
-    }
-    stage.settle();
-    return { seen, done: stage.shown.view === last };
 }
 
 /** Watches `fixture` from the seat across the table on a page of its own, up to the first
@@ -628,6 +626,7 @@ async function watchIt(context, watch, layout, fixture) {
             ],
             up: heldUp(),
             left: "",
+            panel: panelOf(),
             ...declared(),
         };
         await holds(page, layout, waits, "as it opens");
@@ -734,6 +733,7 @@ for (const [shape, seats] of Object.entries(shapes)) {
                                 at,
                                 fixture,
                                 carry,
+                                shape === "declare",
                             );
                             assert.ok(
                                 cases.length > 0,

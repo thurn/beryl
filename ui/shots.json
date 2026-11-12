@@ -1020,6 +1020,104 @@
       "route": "/?phone&stage&fixture=shape-declare&at=25#/game",
       "width": 393,
       "height": 759
+    },
+    {
+      "name": "stage-yes-life",
+      "route": "/?stage&fixture=shape-yes&at=5#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-yes-life",
+      "route": "/?phone&stage&fixture=shape-yes&at=5#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-yes-fateseal",
+      "route": "/?stage&fixture=shape-yes&at=3#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-yes-fateseal",
+      "route": "/?phone&stage&fixture=shape-yes&at=3#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-yes-move",
+      "route": "/?stage&fixture=shape-yes&at=8#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-yes-move",
+      "route": "/?phone&stage&fixture=shape-yes&at=8#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-number",
+      "route": "/?stage&fixture=shape-number&at=2#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-number",
+      "route": "/?phone&stage&fixture=shape-number&at=2#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-mode-ways",
+      "route": "/?stage&fixture=shape-mode&at=1#/game",
+      "click": "[data-stage=\"5\"]",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-mode-ways",
+      "route": "/?phone&stage&fixture=shape-yes&at=1#/game",
+      "click": "[data-stage=\"5\"]",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-mode-offer",
+      "route": "/?stage&fixture=shape-mode&at=12#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-mode-offer",
+      "route": "/?phone&stage&fixture=shape-mode&at=12#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-catalog",
+      "route": "/?stage&fixture=shape-catalog&at=1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-catalog",
+      "route": "/?phone&stage&fixture=shape-catalog&at=1#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-divide",
+      "route": "/?stage&fixture=shape-divide&at=1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-divide",
+      "route": "/?phone&stage&fixture=shape-divide&at=1#/game",
+      "width": 393,
+      "height": 759
     }
   ]
 }

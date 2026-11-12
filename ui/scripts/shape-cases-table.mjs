@@ -8,10 +8,13 @@ import assert from "node:assert/strict";
 
 const named = (on) => (on.kind === "object" ? String(on.slot) : on.player);
 
-/** How much of the cost `prompt` pays is still to pay, as the session wrote it; nothing for
- * a prompt that pays none. */
-export const leftOf = (prompt) =>
-    prompt?.state?.shape === "pay" ? prompt.state.left : "";
+/** How much of the cost `prompt` pays is still to pay, as the session wrote it, or how much
+ * of what it divides is still to give out; nothing for a prompt of neither. */
+export function leftOf(prompt) {
+    const state = prompt?.state;
+    if (state?.shape === "divide") return String(state.left);
+    return state?.shape === "pay" ? state.left : "";
+}
 
 /** The line `prompt` draws from each attacker or blocker to what it is aimed at, and none
  * for a prompt that declares nothing: which lines, and each as the stage names it. */

@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Feed } from "../src/stage/feed.ts";
-import { Prompts } from "../src/stage/prompt.ts";
+import { Prompts, trayOf, waysOf } from "../src/stage/prompt.ts";
 import { move, object, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
@@ -201,13 +201,14 @@ test("a click the prompt had no use for goes on to who listens, and so does one 
 
 test("a prompt answered elsewhere is let be", () => {
     const { made, surface, prompts, sent, click } = prompted();
-    // A shape the stage does not draw yet, and one the session does not yet hold.
-    const number = pick(marked("eligible", 1), {
-        shape: "number",
-        state: { shape: "number", values: [0, 1], value: 0, detail: null },
+    // What the opening screen asks, and what the session holds no state of.
+    const keeps = pick(marked("eligible", 1), {
+        shape: "mode",
+        purpose: "mulligan",
+        state: { shape: "mode", about: [3] },
     });
     for (const [seq, prompt] of [
-        number,
+        keeps,
         { ...pick([]), state: null },
     ].entries()) {
         prompts.play(asking(prompt, seq + 1), { beats: [] });
@@ -219,6 +220,70 @@ test("a prompt answered elsewhere is let be", () => {
     assert.equal(sent.length, 0);
 });
 
+test("a prompt answered off the table's cards sends what its controls name", async () => {
+    const { made, prompts, sent, reply } = prompted();
+    const number = {
+        ...pick([]),
+        shape: "number",
+        purpose: "x",
+        state: { shape: "number", values: [1, 2], value: 1, detail: null },
+    };
+    prompts.play(asking(number));
+    made.clock.advance(0);
+    assert.equal(prompts.asked().prompt, number);
+    prompts.number(2);
+    assert.deepEqual(sent[0].click, { kind: "number", n: 2, on: null });
+    // The reply is the prompt's next state, whatever its shape: a division's share is a
+    // number on its recipient, and a catalog's entry is named by its place.
+    const on = { kind: "object", slot: 1 };
+    const shares = {
+        shape: "divide",
+        total: 2,
+        left: 1,
+        shares: [{ on, amount: 1 }],
+    };
+    await reply({
+        kind: "open",
+        prompt: { ...number, revision: 1, shape: "divide", state: shares },
+    });
+    prompts.number(2, on);
+    assert.deepEqual(sent[1].click, { kind: "number", n: 2, on });
+    assert.equal(sent[1].revision, 1);
+    const entries = {
+        shape: "catalog",
+        entries: ["White", "Blue"],
+        chosen: null,
+    };
+    await reply({
+        kind: "open",
+        prompt: { ...number, revision: 2, shape: "catalog", state: entries },
+    });
+    prompts.entry(1);
+    assert.deepEqual(sent[2].click, { kind: "entry", index: 1 });
+});
+
+test("the cards a question is about are held up, but for the card whose ways are chosen among", () => {
+    const asks = (shape, purpose, buttons = []) => ({
+        ...pick([]),
+        shape,
+        purpose,
+        buttons,
+        state: { shape, about: [3] },
+    });
+    assert.deepEqual(trayOf(asks("yesNo", "fateseal")), {
+        piles: [{ cards: [3] }],
+    });
+    assert.deepEqual(trayOf(asks("mode", "cast-offer")), {
+        piles: [{ cards: [3] }],
+    });
+    const way = { id: { kind: "option", index: 1 }, label: "Cast" };
+    const cancel = { id: { kind: "decline" }, label: "Cancel" };
+    const ways = asks("mode", "act", [way, cancel]);
+    assert.equal(trayOf(ways), undefined);
+    assert.deepEqual(waysOf(ways), [way]);
+    assert.deepEqual(waysOf(asks("mode", "cast-offer", [way])), []);
+});
+
 test("the choice a click opens over a priority is held, whatever its shape", async () => {
     const { made, surface, prompts, sent, reply, click } = prompted();
     prompts.play(asking(pick(marked("eligible", 1))));
@@ -227,8 +292,12 @@ test("the choice a click opens over a priority is held, whatever its shape", asy
     const ways = {
         ...pick([], { revision: 1 }),
         shape: "mode",
+        purpose: "act",
         state: { shape: "mode", about: [2] },
-        buttons: [{ id: { kind: "decline" }, label: "Cancel" }],
+        buttons: [
+            { id: { kind: "option", index: 1 }, label: "Tap for {U}" },
+            { id: { kind: "decline" }, label: "Cancel" },
+        ],
     };
     await reply({ kind: "open", prompt: ways });
     made.clock.advance(0);

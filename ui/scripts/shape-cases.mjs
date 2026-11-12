@@ -4,17 +4,29 @@
 // scry flight, a case of the split shape played tick by tick.
 import assert from "node:assert/strict";
 
-/** Whether the stage holds `prompt` (src/stage/prompt.ts `onTable`): where it does not, the
- * screen is held to show none of it. */
+/** Whether the stage holds `prompt` (src/stage/prompt.ts `onTable`): every prompt the session
+ * holds the state of, but for what the opening screen asks. Where it does not, the screen is
+ * held to show none of it. */
 export function onTable(prompt) {
-    return ["pick", "split", "order", "pay", "declare"].includes(
-        prompt.state?.shape,
+    return (
+        Boolean(prompt.state) &&
+        !["play-or-draw", "mulligan"].includes(prompt.purpose)
     );
 }
 
+/** The cards a yes or no or a choice among answers is about, which `prompt` holds up: none
+ * for the choice among the ways to use a card, which shows the card once a way instead
+ * (src/stage/prompt.ts `trayOf`). */
+const asksAbout = (prompt, state) =>
+    (state.shape === "yesNo" || state.shape === "mode") &&
+    prompt.purpose !== "act"
+        ? state.about
+        : [];
+
 /** What `prompt` holds up, as the session's state says it: a split's piles, each under its
- * name with its cards in their order; a pick's tray, in no order; an order's items, first
- * to resolve first. No card of them shows its back, and none is drawn twice. */
+ * name with its cards in their order; a pick's tray and the cards a question is about, in no
+ * order; an order's items, first to resolve first. No card of them shows its back, and none
+ * is drawn twice. */
 export function heldUp(prompt) {
     const state = (prompt && onTable(prompt) && prompt.state) || {};
     return {
@@ -22,8 +34,12 @@ export function heldUp(prompt) {
             state.shape === "split"
                 ? state.piles.map(({ label, cards }) => ({ label, cards }))
                 : [],
-        loose:
-            state.shape === "pick" ? [...state.tray].sort((a, b) => a - b) : [],
+        loose: (state.shape === "pick"
+            ? [...state.tray]
+            : state.shape
+              ? [...asksAbout(prompt, state)]
+              : []
+        ).sort((a, b) => a - b),
         order: state.shape === "order" ? state.items.map(({ id }) => id) : [],
         backs: 0,
         twice: 0,
