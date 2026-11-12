@@ -79,9 +79,9 @@ export const flatAt = (through: number) =>
 
 /** How a flight leaves the straight line between its ends: by `share` of that line where it
  * is farthest off it, `peak` of the way along (half way, if not said), leaning `lean`
- * degrees into the bow there and upright again as it lands. It bows `toward` the edge of the
- * table its card's controller sits at (1 down the stage, -1 up it): the outside of the
- * table, where it crosses the fewest cards. */
+ * degrees the way it travels there and upright again as it lands. It bows `toward` the edge
+ * of the table its card's controller sits at (1 down the stage, -1 up it): the outside of
+ * the table, where it crosses the fewest cards. */
 export interface Bow {
   share: number;
   peak?: number;
