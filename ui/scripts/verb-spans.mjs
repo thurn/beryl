@@ -137,7 +137,10 @@ export function spanSampler({ stage, clock, origin, layer, faults }) {
             };
         });
         const marked = stage.marks();
-        const elements = document.querySelectorAll(".stage-mark").length;
+        // Not those of the copy a raised hand card is drawn by (src/stage/raised.ts).
+        const elements = document.querySelectorAll(
+            ".stage-mark:not(.stage-raised-copy *)",
+        ).length;
         if (elements !== marked.length) {
             fault(`the page has ${elements} marks for ${marked.length}`);
         }

@@ -23,6 +23,106 @@ import {
 const cues = (page) =>
     page.evaluate(() => (window.berylSounds ?? []).map((s) => s.sound));
 
+const fieldCard = `[data-slot="${
+    views
+        .at(-2)
+        .objects.find(
+            (o) => o.zone === "battlefield" && !o.types.includes("land"),
+        ).slot
+}"]`;
+/** The card of your hand's fan that your permanents stand over least: a hand card rises only as
+ * far as it keeps clear of your back row (game/handLayout.ts `handLifts`). */
+const handCard = (page) =>
+    page.evaluate(() => {
+        const boxes = (selector) =>
+            [...document.querySelectorAll(selector)].map((e) => [
+                e,
+                e.getBoundingClientRect(),
+            ]);
+        const yours = boxes('.card-el[data-zone="battlefield"]')
+            .map(([, r]) => r)
+            .filter((r) => r.top > innerHeight / 2);
+        const under = (r) =>
+            yours.reduce(
+                (sum, p) =>
+                    sum +
+                    Math.max(
+                        0,
+                        Math.min(r.right, p.right) - Math.max(r.left, p.left),
+                    ),
+                0,
+            );
+        const [[least]] = boxes(
+            '.card-el-hand[data-slot][data-zone="hand"]',
+        ).sort((a, b) => under(a[1]) - under(b[1]));
+        return `[data-slot="${least.dataset.slot}"]`;
+    });
+for (const [title, hand] of [
+    ["a hand card", true],
+    ["a battlefield card", false],
+]) {
+    // Why no audit: what a hover moves, and that the card it raises keeps the pointer: a sweep of
+    // every card's box as the pointer rests.
+    await check(
+        `hovering ${title} moves no other card and starts no layout animation`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const target = hand ? await handCard(page) : fieldCard;
+            const still = await drawn(page);
+            const slot = await page.$eval(target, (e) => e.dataset.slot);
+            const box = await page.locator(target).boundingBox();
+            const at = { x: box.x + box.width / 2, y: box.y + 40 };
+            await page.mouse.move(at.x, at.y);
+            for (let t = 0; t < 20; t++) {
+                await page.clock.runFor(50);
+                // What the hover set off, committed by React (`committed`), as it stands now.
+                await committed(page);
+                const now = await drawn(page);
+                for (const [other, { box, animating }] of Object.entries(now)) {
+                    assert.ok(!animating, `slot ${other} animates its layout`);
+                    if (other === slot) continue;
+                    const moved = box.map((v, i) =>
+                        Math.abs(v - still[other].box[i]),
+                    );
+                    assert.ok(
+                        Math.max(...moved) <= 1,
+                        `slot ${other} moved by ${moved} at ${t * 50} ms`,
+                    );
+                }
+            }
+            const top = (await drawn(page))[slot].box[1];
+            if (hand) {
+                assert.ok(
+                    still[slot].box[1] - top > 40,
+                    `the hovered hand card, slot ${slot}, rises ${still[slot].box[1] - top} px`,
+                );
+            } else {
+                assert.equal(top, still[slot].box[1], "a field card stays");
+            }
+            // The card is drawn raised inside its element, which stays put: wherever the pointer
+            // found the card, it still finds it, so the hover holds rather than flickering.
+            const held = await page.locator(target).boundingBox();
+            for (const k of ["x", "y", "width", "height"]) {
+                assert.ok(
+                    Math.abs(held[k] - box[k]) <= 1,
+                    `the hovered card's element moved: ${k} ${box[k]} to ${held[k]}`,
+                );
+            }
+            assert.equal(
+                await page.evaluate(
+                    ({ x, y }) =>
+                        document.elementFromPoint(x, y)?.closest("[data-slot]")
+                            ?.dataset.slot,
+                    at,
+                ),
+                slot,
+                "the pointer is still over the hovered card",
+            );
+            assert.ok(await page.$(".inspect"), "the card is inspected");
+        },
+    );
+}
+
 // The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
 // fixture attaches across the table): an Aura one player controls on a permanent the other does.
 const attachedView = (await load("attached-across")).at(-1);

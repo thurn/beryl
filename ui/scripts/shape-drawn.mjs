@@ -58,7 +58,10 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
         const node = mark.parentElement;
         return node.dataset.stage ?? node.dataset.life ?? "?";
     };
-    const page = [...document.querySelectorAll(".stage-mark")].map((mark) => {
+    // Not those of the copy a raised hand card is drawn by (src/stage/raised.ts).
+    const page = [
+        ...document.querySelectorAll(".stage-mark:not(.stage-raised-copy *)"),
+    ].map((mark) => {
         const name = [...mark.classList]
             .find((c) => c.startsWith("stage-mark-"))
             .slice("stage-mark-".length);
@@ -124,9 +127,12 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
             .map(({ mark, on }) => `${mark} ${on}`)
             .sort(),
         // A mark at rest is whole.
-        coming: [...document.querySelectorAll(".stage-mark")].filter(
-            (mark) => mark.style.getPropertyValue("--shown") !== "1",
-        ).length,
+        coming: [
+            ...document.querySelectorAll(
+                ".stage-mark:not(.stage-raised-copy *)",
+            ),
+        ].filter((mark) => mark.style.getPropertyValue("--shown") !== "1")
+            .length,
         busy: stage.shown.busy,
         up,
         left: left ? words(left).replace(/^\(|\)$/g, "") : "",

@@ -22,6 +22,7 @@
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
+import { RaisedCopy } from "./raised.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import { dark, type Lit } from "./light.ts";
 import type { Shape } from "./lines.ts";
@@ -52,9 +53,11 @@ export class DomSurface implements Surface {
   /** Where the browser's pointer was last, in the window. */
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
+  readonly #raised: RaisedCopy;
 
   constructor(layer: HTMLElement) {
     this.#layer = layer;
+    this.#raised = new RaisedCopy(layer);
   }
 
   /** The node of what the stage names `name`, which its face is drawn into. */
@@ -102,26 +105,32 @@ export class DomSurface implements Surface {
   /** Draws the card of the node `name` raised out of the fan it lies in, and no other node's:
    * turned back upright from the `turn` degrees its pose leans it, `lift` straight up the
    * screen and a little larger, about the middle of its top edge (stage.css). With no name,
-   * none is raised. The node itself stays where the stage has it, so nothing else moves and
-   * the pointer that found the card keeps it: the one look of a node that follows the pointer
-   * and not the clock, as a held card's pose does (pointer.ts). */
+   * none is raised. The node itself stays where the stage has it, at its depth in the fan, so
+   * nothing else moves, the pointer that found the card keeps it and finds its neighbors in
+   * their strips; a copy draws it over the hand (raised.ts). It is the one look of a node that
+   * follows the pointer and not the clock, as a held card's pose does (pointer.ts). */
   raise(name?: Name, turn = 0, lift = 0) {
     for (const [other, node] of this.#nodes) {
       if (other === name) continue;
       if (!("raised" in node.dataset)) continue;
       delete node.dataset.raised;
-      for (const of of ["x", "y", "turn"]) {
+      for (const of of ["x", "y", "turn", "lift"]) {
         node.style.removeProperty(`--raise-${of}`);
       }
     }
     const node = name === undefined ? undefined : this.#nodes.get(name);
-    if (!node) return;
+    if (!node) {
+      this.#raised.show(undefined);
+      return;
+    }
     // Straight up the screen, in the turned node's own axes.
     const leaned = (turn * Math.PI) / 180;
     node.dataset.raised = "";
     node.style.setProperty("--raise-x", `${-lift * Math.sin(leaned)}px`);
     node.style.setProperty("--raise-y", `${-lift * Math.cos(leaned)}px`);
     node.style.setProperty("--raise-turn", `${-turn}deg`);
+    node.style.setProperty("--raise-lift", `${lift}px`);
+    this.#raised.show(node);
   }
 
   /** Tells `pointer` what the browser's pointer does on the nodes, by their names and in stage

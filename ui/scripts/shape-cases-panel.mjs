@@ -70,9 +70,12 @@ export async function watching({ tick, dock }) {
         if (stage.shown.view === last) break;
         const marks = [
             ...stage.marks().map(({ mark, on }) => `${mark} ${on}`),
-            ...[...document.querySelectorAll(".stage-mark")].map(
-                (mark) => `page ${mark.className}`,
-            ),
+            // Not those of the copy a raised hand card is drawn by (src/stage/raised.ts).
+            ...[
+                ...document.querySelectorAll(
+                    ".stage-mark:not(.stage-raised-copy *)",
+                ),
+            ].map((mark) => `page ${mark.className}`),
         ];
         const buttons = [
             ...[...document.querySelectorAll(dock)]

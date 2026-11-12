@@ -10,6 +10,7 @@ import {
     center,
     check,
     clicked,
+    committed,
     drawn,
     load,
     name,
@@ -30,6 +31,78 @@ await check("hovering a card shows it whole, with its artist", async (page) => {
         .getByText(`Illustrated by ${artist}`)
         .waitFor();
 });
+
+// Why no audit: which card of a fan each point of its strip reaches: a hit test along every card.
+await check(
+    "a click on the visible strip of each hand card acts on that card",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Each hand card's strip in the fan, at rest: where it is the card the pointer hits,
+        // as a row of points across the near edge.
+        const strips = await page.evaluate(() => {
+            const cards = [
+                ...document.querySelectorAll('.card-el-hand[data-zone="hand"]'),
+            ];
+            const y = innerHeight - 40;
+            const out = [];
+            for (const el of cards) {
+                const box = el.getBoundingClientRect();
+                const xs = [];
+                for (let x = Math.ceil(box.left); x < box.right; x += 2) {
+                    const hit = document.elementFromPoint(x, y);
+                    if (hit?.closest("[data-slot]") === el) xs.push(x);
+                }
+                out.push({ slot: Number(el.dataset.slot), xs, y });
+            }
+            return out.sort((a, b) => a.xs[0] - b.xs[0]);
+        });
+        assert.ok(strips.length >= 3, "a fan of cards");
+        // Every click is caught before the board hears of it, and the card it lands on noted.
+        await page.evaluate(() => {
+            window.hits = [];
+            for (const type of ["pointerdown", "pointerup", "click"]) {
+                window.addEventListener(
+                    type,
+                    (e) => {
+                        if (type === "pointerdown") {
+                            const el = e.target.closest?.("[data-slot]");
+                            window.hits.push(Number(el?.dataset.slot));
+                        }
+                        e.stopPropagation();
+                    },
+                    true,
+                );
+            }
+        });
+        const mid = ({ xs, y }) => ({ x: xs[xs.length >> 1], y });
+        for (const [i, strip] of strips.entries()) {
+            assert.ok(strip.xs.length > 4, `slot ${strip.slot} shows a strip`);
+            // With each neighbor raised, the edge of the strip next to it.
+            for (const n of [i - 1, i + 1]) {
+                const neighbor = strips[n];
+                if (!neighbor) continue;
+                const raised = mid(neighbor);
+                await page.mouse.move(raised.x, raised.y, { steps: 4 });
+                await page.clock.runFor(500);
+                await committed(page);
+                const x =
+                    n < i ? strip.xs[0] + 4 : strip.xs[strip.xs.length - 1] - 4;
+                await page.mouse.move(x, strip.y, { steps: 4 });
+                await page.clock.runFor(500);
+                // The hover moves on: the neighbor lowers once React commits it.
+                await committed(page);
+                await page.mouse.down();
+                await page.mouse.up();
+                const hits = await page.evaluate(() => window.hits);
+                assert.equal(
+                    hits.at(-1),
+                    strip.slot,
+                    `a click on slot ${strip.slot}'s strip beside raised slot ${neighbor.slot}`,
+                );
+            }
+        }
+    },
+);
 
 // A quiet table with a row of creatures a side: nothing on the stack, no combat.
 const quietViews = await load("combat-blockers");

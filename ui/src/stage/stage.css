@@ -20,17 +20,37 @@
 }
 /* The card of your hand the pointer is on (stage/dom.ts `raise`; UI Conventions, "Hover
    inspection"): everything in its node, each as large as the card, stands upright, higher and
-   a little larger (game/placement.ts `RAISE`), over the rest of the hand. The node keeps its
-   place and its size, so the pointer stays on it. It follows the pointer and no clock, so it
-   is there at once. */
-.stage-node[data-raised] {
-  z-index: 300 !important;
-}
-.stage-node[data-raised] > * {
+   a little larger (game/placement.ts `RAISE`). The node keeps its place, its size and its
+   depth in the fan, with its face unseen, so the pointer stays on it and finds its neighbors
+   in their strips; a copy the pointer passes through (stage/raised.ts) shows it over the rest
+   of the hand. It follows the pointer and no clock, so it is there at once. */
+.stage-node[data-raised] > *,
+.stage-raised-copy > * {
   transform-origin: 50% 0;
   translate: var(--raise-x) var(--raise-y);
   rotate: var(--raise-turn);
   scale: 1.06;
+}
+/* Its face lets the pointer through to its hit box: the card's frame where it lies in the fan,
+   reaching up as far as the card rises (game/CardLayer.tsx's `hand-hit`, 63:88). */
+.stage-node[data-raised] > * {
+  opacity: 0;
+  pointer-events: none !important;
+}
+.stage-node[data-raised]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(-1 * var(--raise-lift));
+  width: var(--frame);
+  height: calc(var(--frame) * 88 / 63 + var(--raise-lift));
+}
+.stage-raised-copy,
+.stage-raised-copy * {
+  pointer-events: none !important;
+}
+.stage-raised-copy {
+  z-index: 300 !important;
 }
 /* The word at the permanent that forbids a click (Refusal.tsx), centred under it. */
 .stage-timing-refusal {
