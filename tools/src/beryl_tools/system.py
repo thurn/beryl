@@ -203,18 +203,20 @@ def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
 
 
 def utility(command: list[str]) -> list[str]:
-    """`command` as one that runs below normal priority: at utility QoS on macOS, where the
-    CPU goes first to interactive work and checks (`nice` does not do that); through `by low`
-    on Windows. What the justfile's `low` does, for work `by` starts itself."""
+    """`command` as one that runs at low priority: at utility QoS on macOS, where the CPU
+    goes first to interactive work and checks (`nice` does not do that); at idle priority
+    through `by low` on Windows. The justfile's `low`, for work `by` starts itself."""
     if WINDOWS:
         return [sys.executable, "-m", "beryl_tools.cli", "low", "--", *command]
     return ["taskpolicy", "-c", "utility", *command]
 
 
 def low(args: argparse.Namespace) -> int:
-    """Runs a command below normal priority, which its children inherit, so other work gets
-    the CPU first; with `--awake`, keeping the machine from sleeping meanwhile. Windows' stand-in
-    for `taskpolicy -c utility` and `caffeinate -i`."""
+    """Runs a command at idle priority, which its children inherit, so it has every core the
+    rest of the machine leaves and nothing more: below normal priority, a search on every core
+    froze the desktop. With `--awake`, keeps the machine from sleeping meanwhile. Windows'
+    stand-in for `taskpolicy -c utility` and `caffeinate -i`, without EcoQoS, which would hold
+    the work to the efficiency cores at low clocks."""
     command = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
     if not command:
         print("low: no command", file=sys.stderr)
@@ -230,7 +232,7 @@ def low(args: argparse.Namespace) -> int:
     proc = subprocess.Popen(
         [which(command[0]), *command[1:]],
         # pyre-ignore[16]: Windows only
-        creationflags=subprocess.BELOW_NORMAL_PRIORITY_CLASS,
+        creationflags=subprocess.IDLE_PRIORITY_CLASS,
     )
     try:
         return proc.wait()

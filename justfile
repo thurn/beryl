@@ -19,7 +19,7 @@ search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C tar
 
 # Low priority for long compute: utility QoS, under which macOS gives interactive work and
 # checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
-# work at full priority. Windows has neither: `by low` starts the work below normal priority.
+# work at full priority. Windows has neither: `by low` starts the work at idle priority.
 
 by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
 low := if os() == "windows" { by_anywhere + " low --" } else { "taskpolicy -c utility" }
