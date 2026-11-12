@@ -95,6 +95,13 @@ pub struct Family {
     pub options: Options,
 }
 
+impl Family {
+    /// The policy this family uses to play out its leaves.
+    pub fn rollout_policy(self, t: &GameTable) -> RolloutPolicy {
+        RolloutPolicy::with_rules(t, self.knowledge, self.options.rules())
+    }
+}
+
 /// What a family adds to the plain search, each switchable on its own (epic by-7wl). None by
 /// default: a family named without them plays as it always has.
 // Independent switches by design, one a part of the family's name, each set or not by a rung.
@@ -387,7 +394,7 @@ impl<L: Layout> LongSearch<L> {
         let family = settings.family;
         Self {
             table: t.clone(),
-            policy: RolloutPolicy::with_rules(t, family.knowledge, family.options.rules()),
+            policy: family.rollout_policy(t),
             settings,
             seed,
             decision,

@@ -1,9 +1,11 @@
 //! The rollout loop and the answer sources it plays with.
 
 use beryl_engine::{
-    Answers, Choice, Decision, GameTable, Layout, Observation, Outcome, Scratch, State, Step,
-    apply_decided, next,
+    Answers, Choice, Decision, GameTable, Layout, Observation, Outcome, Replay, Scratch, State,
+    Step, apply, apply_decided, next,
 };
+
+use crate::mcts::smart;
 
 use super::{RolloutPolicy, Softmax};
 
@@ -65,10 +67,13 @@ pub fn soft_rollout_to<L: Layout>(
     soft: &mut Softmax<'_>,
     turn: u16,
 ) -> Option<Outcome> {
-    let mut inline = SoftInline { policy, t, soft };
-    play_out(s, t, x, &mut inline, turn, |inline, obs, d| {
-        inline.policy.choose_soft(inline.t, obs, d, inline.soft)
-    })
+    let mut inline = SoftInline {
+        policy,
+        t,
+        soft,
+        record: |_: Observation<'_, L>, _: &Decision<L>, _: Choice| {},
+    };
+    play_out(s, t, x, &mut inline, turn, SoftInline::choose)
 }
 
 /// [`soft_rollout_to`] to the end of the game.
@@ -80,6 +85,30 @@ pub fn soft_rollout<L: Layout>(
     soft: &mut Softmax<'_>,
 ) -> Outcome {
     soft_rollout_to(s, t, x, policy, soft, u16::MAX).expect("a game ends before turn 65535")
+}
+
+/// Plays the forced root choice of a search, then rolls out the game. Calls `record` for
+/// every policy answer, including those asked inline during resolution.
+pub fn soft_rollout_after<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    policy: &RolloutPolicy,
+    soft: &mut Softmax<'_>,
+    choice: Choice,
+    record: impl FnMut(Observation<'_, L>, &Decision<L>, Choice),
+) -> Outcome {
+    apply(s, t, x, &mut Replay, choice);
+    smart(s);
+    s.reseed(soft.rng.next_u64());
+    let mut inline = SoftInline {
+        policy,
+        t,
+        soft,
+        record,
+    };
+    play_out(s, t, x, &mut inline, u16::MAX, SoftInline::choose)
+        .expect("a game ends before turn 65535")
 }
 
 /// The rollout loop: `answers` answers inline, `choose` every decision `next` returns.
@@ -104,18 +133,32 @@ fn play_out<A: Answers<L>, L: Layout>(
 }
 
 /// [`Inline`] for a softmax rollout.
-struct SoftInline<'a, 'r> {
+struct SoftInline<'a, 'r, R> {
     policy: &'a RolloutPolicy,
     t: &'a GameTable,
     soft: &'a mut Softmax<'r>,
+    record: R,
 }
 
-impl<L: Layout> Answers<L> for SoftInline<'_, '_> {
+impl<R> SoftInline<'_, '_, R> {
+    fn choose<L: Layout>(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice
+    where
+        R: FnMut(Observation<'_, L>, &Decision<L>, Choice),
+    {
+        let choice = self.policy.choose_soft(self.t, obs, d, self.soft);
+        (self.record)(obs, d, choice);
+        choice
+    }
+}
+
+impl<L: Layout, R: FnMut(Observation<'_, L>, &Decision<L>, Choice)> Answers<L>
+    for SoftInline<'_, '_, R>
+{
     fn inline(&self) -> bool {
         true
     }
 
     fn answer(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Option<Choice> {
-        Some(self.policy.choose_soft(self.t, obs, d, self.soft))
+        Some(self.choose(obs, d))
     }
 }

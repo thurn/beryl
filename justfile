@@ -265,6 +265,12 @@ screen *args:
 blunders *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunders "$@"
 
+# Compare the champion's paired rollouts after two choices at one blunder-suite position
+[group('agents')]
+[no-cd]
+why *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- why "$@"
+
 # Compare the champion's and challenger's blunder suites (<challenger> --claims NAME,... [--vs NAME])
 [group('agents')]
 [no-cd]

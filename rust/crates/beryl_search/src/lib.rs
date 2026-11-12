@@ -22,12 +22,12 @@ pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
 pub use long::{
     ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
-    Options, Settings, TURN_DISCOUNT, WORLD_STEPS, guarded,
+    Options, ROLLOUT_TEMPERATURE, Settings, TURN_DISCOUNT, WORLD_STEPS, guarded,
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
     COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Rules, Softmax, rollout, rollout_to,
-    soft_rollout, soft_rollout_to,
+    soft_rollout, soft_rollout_after, soft_rollout_to,
 };
 pub use values::{CardInfo, CardValues, Knowledge};
 

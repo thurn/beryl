@@ -36,6 +36,15 @@ pub fn labels(t: &GameTable, s: &State, d: &Decision) -> Vec<String> {
     }
 }
 
+/// The same label for just the chosen candidate.
+pub fn label(t: &GameTable, s: &State, d: &Decision, c: Choice) -> String {
+    let index = usize::from(c.0);
+    match &d.candidates {
+        Candidates::Objects(_) => candidate(t, s, d.candidates.objects().nth(index).unwrap()),
+        Candidates::Options(o) => option(t, s, o.as_slice()[index]),
+    }
+}
+
 impl Transcript {
     /// A transcript of a game between the agents named for each seat.
     pub fn new(names: [&str; 2]) -> Transcript {

@@ -17,6 +17,8 @@
 //! - `beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]`
 //!   runs the blunder suite of `data/blunders.json` for an agent, the champion by default
 //!   ([`blunders`], `just blunders`).
+//! - `beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 2000]` compares the champion's
+//!   paired rollouts after two choices at a blunder-suite position ([`why`], `just why`).
 //! - `beryl_cli gate <challenger> --claims NAME,... [--vs NAME]` compares the suite's
 //!   results for two search families ([`gate`], `just gate`).
 //! - `beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M]
@@ -72,6 +74,7 @@ mod specs;
 mod tournament;
 mod transcript;
 mod walk;
+mod why;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -90,6 +93,7 @@ const USAGE: &str = "usage:
   beryl_cli positions sample [--count N] DIR
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
   beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
+  beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 2000]
   beryl_cli gate <challenger> --claims NAME,... [--vs NAME]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
@@ -138,6 +142,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "ladder" => ladder::main(rest),
         [command, rest @ ..] if command == "blunder-hunt" => hunt::main(rest),
         [command, rest @ ..] if command == "blunders" => blunders::main(rest),
+        [command, rest @ ..] if command == "why" => why::main(rest),
         [command, rest @ ..] if command == "screen" => screen::main(rest),
         [command, rest @ ..] if command == "positions" => positions::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),

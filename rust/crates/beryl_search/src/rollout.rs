@@ -38,7 +38,7 @@ use beryl_engine::{
 
 use crate::values::{CardValues, Knowledge};
 
-pub use play::{Inline, rollout, rollout_to, soft_rollout, soft_rollout_to};
+pub use play::{Inline, rollout, rollout_to, soft_rollout, soft_rollout_after, soft_rollout_to};
 pub(crate) use policy::Policy;
 
 /// The least value of a permanent worth a removal spell or ability.
