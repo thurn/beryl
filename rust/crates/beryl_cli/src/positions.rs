@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::game::{mirror, parse_work, seat_seeds};
 use crate::ladder::games_at_once;
-use crate::longthink::{cache, files};
+use crate::match_log::{cache, files};
 use crate::tournament::game_seed;
 use crate::transcript::Transcript;
 

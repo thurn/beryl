@@ -45,7 +45,7 @@ use crate::anchor_replay::{
 };
 use crate::game::{mirror, parse_work, seat_seeds};
 use crate::ladder::{games_at_once, resolve};
-use crate::longthink::game::Line;
+use crate::match_log::game::Line;
 
 /// A cost a game beyond which the screen's result is written beside the match's (§4.2).
 pub const COST_NOTED: f64 = 0.03;

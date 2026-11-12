@@ -30,11 +30,6 @@
 //!   and boards a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
-//! - `beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games
-//!   N]` starts the long-think arena or resumes it ([`longthink`], `just longthink`), and
-//!   supervises `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this
-//!   binary playing it, which `beryl_cli longthink-check-family <family>` asks whether it
-//!   can play a family.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
 //! - `beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]` replays an app game's replay
@@ -63,7 +58,7 @@ mod game;
 mod gate;
 mod hunt;
 mod ladder;
-mod longthink;
+mod match_log;
 mod panics;
 mod positions;
 mod review;
@@ -96,7 +91,6 @@ const USAGE: &str = "usage:
   beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 2000]
   beryl_cli gate <challenger> --claims NAME,... [--vs NAME]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
-  beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
@@ -133,7 +127,6 @@ fn main() -> ExitCode {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
         }
-        [command, rest @ ..] if command == "longthink" => longthink::main(rest),
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
         [command, rest @ ..] if command == "freeze-saves" => freeze::main(rest),
@@ -145,11 +138,6 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "why" => why::main(rest),
         [command, rest @ ..] if command == "screen" => screen::main(rest),
         [command, rest @ ..] if command == "positions" => positions::main(rest),
-        [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
-        [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
-            number(flag, n).and_then(|n| longthink::runner(Path::new(dir), Some(n)))
-        }
-        [command, family] if command == longthink::CHECK_FAMILY => longthink::check_family(family),
         [command] if command == "serve" => serve::serve(DEFAULT_PORT),
         [command, flag, port] if command == "serve" && flag == "--port" => {
             number(flag, port).and_then(serve::serve)

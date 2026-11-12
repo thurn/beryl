@@ -9,7 +9,7 @@ use beryl_session::corpus::today;
 
 use crate::blunders::{self, BUDGETS, Entry, EntryReport, Report, SEEDS};
 use crate::ladder::resolve;
-use crate::longthink::{cache, files};
+use crate::match_log::{cache, files};
 
 const USAGE: &str = "usage: beryl_cli gate <challenger family> --claims NAME,...|none \
                      [--vs CHAMPION FAMILY]";

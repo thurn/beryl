@@ -42,7 +42,7 @@ use serde::Serialize;
 
 use crate::game::{self, mirror, parse_work};
 use crate::ladder::resolve;
-use crate::longthink::rung_name;
+use crate::match_log::rung_name;
 use crate::transcript::labels;
 use crate::walk::{Walk, Walked};
 

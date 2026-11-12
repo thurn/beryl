@@ -5,7 +5,7 @@ budget ($CHECK_DEADLINE_S overrides it): a step still running then is killed, wi
 started, and fails its lane.
 
 Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work oversubscribes
-the machine (other sessions' checks, a game, `just longthink`), the clock runs slower, so a run
+the machine (other sessions' checks, a game, `just ladder`), the clock runs slower, so a run
 is held to what it would take on a machine to itself, and a hung step still dies. Slow CI also
 stops its steps on the wall clock before Enact's `slow_timeout` would kill it (bisect.time_left),
 so a run the load stretched past that still prints its lanes and names the step it cut off.
@@ -407,7 +407,7 @@ def run_all(
             f"{script}: over budget: speed up or delete the slowest step"
             + (" (this fails slow CI)" if strict else "")
         )
-        # A run slowed by other work (a game, `just longthink` at full power) looks like a slow
+        # A run slowed by other work (a game, `just ladder` on every core) looks like a slow
         # step in every lane at once; the load says which it was before anyone bisects.
         print(f"{script}: {load_note()}")
     code = 1 if failed or (over and strict) else 0

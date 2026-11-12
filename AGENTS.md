@@ -203,8 +203,8 @@ hours. `just tournament`, `just play` and `just review --agent` run at utility
 QoS (`taskpolicy -c utility`), so other sessions' checks get the CPU first:
 `nice` does not do that on macOS. They slow down while the machine is busy.
 Wardens rerun only the pairings that gate acceptance, never reported-only ones.
-`just longthink`, the long-think arena, is retired (`docs/ai-strategy.md` §8):
-it holds the machine for days, and the AI improves through the ladder's
+The long-think arena is retired and its command deleted (`docs/ai-strategy.md`
+§8): it held the machine for days, and the AI improves through the ladder's
 head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 
 ## Checks

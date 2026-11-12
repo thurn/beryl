@@ -24,7 +24,7 @@ search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C tar
 by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
 low := if os() == "windows" { by_anywhere + " low --" } else { "taskpolicy -c utility" }
 
-# The long-think arena's priority, kept awake.
+# Low priority, kept awake, for a blunder hunt that runs for hours.
 
 awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffeinate -i nice -n 10" }
 
@@ -287,12 +287,6 @@ gate *args:
 [no-cd]
 blunder-hunt *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunder-hunt "$@"
-
-# The long-think arena: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --add FAMILY, --games N, --power full|light)
-[group('agents')]
-[no-cd]
-longthink *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- longthink "$@"
 
 # The tools' tests
 [group('test')]

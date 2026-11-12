@@ -20,7 +20,7 @@ use beryl_engine::{
     Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step,
     apply, next, observe, view,
 };
-use beryl_search::{Agent, AgentDecision, Budget, LongSearch, Search, Settings, agent};
+use beryl_search::{Agent, AgentDecision, Search, Settings};
 use serde::{Deserialize, Serialize};
 
 use crate::game::seat_seeds;
@@ -167,22 +167,6 @@ impl Seated {
 pub type Build<'a> =
     dyn Fn(&GameTable, &Entrant, u64, AgentDecision) -> Result<Box<dyn Agent>, String> + 'a;
 
-/// The agents as the registry builds them; a search as [`LongSearch::resumed`] rebuilds it.
-pub fn build(
-    t: &GameTable,
-    e: &Entrant,
-    seed: u64,
-    from: AgentDecision,
-) -> Result<Box<dyn Agent>, String> {
-    match e {
-        Entrant::Search(settings) => Ok(Box::new(LongSearch::resumed(t, *settings, seed, from))),
-        Entrant::Fixed(name) => {
-            let info = agent(name).ok_or_else(|| format!("no agent is named {name:?}"))?;
-            Ok((info.new)(t, seed, Budget::DEFAULT))
-        }
-    }
-}
-
 /// How a game went.
 #[derive(Debug)]
 pub struct Played {
@@ -208,25 +192,24 @@ pub enum Stop {
     Failed(String),
 }
 
+impl fmt::Display for Stop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Stop::Differs {
+                decision,
+                logged,
+                now,
+            } => write!(f, "decision {decision}: answered {now}, logged {logged}"),
+            Stop::Reached(decision) => write!(f, "stopped before decision {decision}"),
+            Stop::Failed(e) => f.write_str(e),
+        }
+    }
+}
+
 impl From<String> for Stop {
     fn from(e: String) -> Self {
         Stop::Failed(e)
     }
-}
-
-/// Where each seat's search starts asking rather than taking the log: where its last logged
-/// line says a rebuilt agent must start, else at its first decision.
-pub fn resume_points(logged: &[Line]) -> [Resume; 2] {
-    [0, 1].map(|seat| {
-        Resume::At(
-            logged
-                .iter()
-                .rev()
-                .find(|l| l.seat == seat)
-                .and_then(|l| l.resume)
-                .unwrap_or(AgentDecision(0)),
-        )
-    })
 }
 
 /// What a game needs besides its log.

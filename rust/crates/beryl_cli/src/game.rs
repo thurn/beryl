@@ -54,7 +54,7 @@ pub fn agents(
     Ok([build(0)?, build(1)?])
 }
 
-/// A long-think entrant, named as longthink names them (`family@budget`, as
+/// A long-think entrant, named as the long-think arena named them (`family@budget`, as
 /// `pimc18/omniscient/rollout/tuned/anchor+mid@3M`), for a game from `seed`, searching on
 /// `threads`; none if `name` is not of that form.
 pub fn entrant(
@@ -79,7 +79,7 @@ pub fn entrant(
     Some(built)
 }
 
-/// A budget in engine steps, as longthink names it: 300k, 3M, 1G.
+/// A budget in engine steps, as the long-think arena named it: 300k, 3M, 1G.
 pub fn parse_work(s: &str) -> Option<u64> {
     let (digits, scale) = match s.as_bytes().last()? {
         b'k' => (&s[..s.len() - 1], 1_000),

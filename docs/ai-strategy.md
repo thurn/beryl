@@ -600,8 +600,9 @@ Engine speed is a multiplier on every rung.
 - **A lethal check of its own.** The planner's all-in attack is one.
 - **The Mac.** It plays no ladder games (§4.1).
 - **Hunts on a schedule** (§5).
-- **The long-think arena and round robins.** `just longthink` is retired;
-  `just tournament` remains for a quick table and decides nothing.
+- **The long-think arena and round robins.** The arena is retired and its
+  command deleted; `just tournament` remains for a quick table and decides
+  nothing.
 - **Learned value models, AlphaZero-style or R-NaD training.** Evaluation leaves
   lost by 180 to 260 Elo here. In Monolith, R-NaD learned nothing in 145,000
   self-play games and a learned value model was neutral or harmful (p = 0.002).

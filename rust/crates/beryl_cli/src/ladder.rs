@@ -18,7 +18,7 @@
 //!   with its 95% interval, the verdict and a ready `docs/ladder.md` row, and writes
 //!   `match.json` beside the games. The games go to `--out`, by default
 //!   `$BERYL_CACHE/ladder/<date>-<challenger>/`, laid out as a long-think run's
-//!   ([`crate::longthink`]): `games.jsonl`, `logs/<game>.jsonl` (each decision's answer, which
+//!   ([`crate::match_log`]): `games.jsonl`, `logs/<game>.jsonl` (each decision's answer, which
 //!   replays the game from its seed, as `anchor_replay::walk` does), `transcripts/<game>.txt`
 //!   and `decisions.jsonl` (each searched decision's root visits and means).
 //!
@@ -39,9 +39,9 @@ use beryl_engine::{GameTable, Outcome};
 use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, LongSearch, Settings};
 
 use crate::game::{mirror, parse_work};
-use crate::longthink::files::{self, Log};
-use crate::longthink::game::{self as arena, Entrant, Game, GameDecision, Line, Resume};
-use crate::longthink::{DecisionRecord, GameRecord, Verdict as GameVerdict, cache, rung_name};
+use crate::match_log::files::{self, Log};
+use crate::match_log::game::{self as arena, Entrant, Game, GameDecision, Line, Resume};
+use crate::match_log::{DecisionRecord, GameRecord, Verdict as GameVerdict, cache, rung_name};
 use crate::positions::start;
 use crate::tournament::game_seed;
 
@@ -400,7 +400,7 @@ fn play_one(
     };
     let key = key(g);
     let played = arena::play(t, &game, &build, &[], |_, _, _| Ok(()), |_, _, _| Ok(()))
-        .map_err(|stop| format!("{key} (seed {seed}): {stop:?}"))?;
+        .map_err(|stop| format!("{key} (seed {seed}): {stop}"))?;
     let mut log = String::new();
     for line in &played.lines {
         log += &serde_json::to_string(line).map_err(|e| e.to_string())?;

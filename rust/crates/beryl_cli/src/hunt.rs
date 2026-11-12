@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::anchor_replay::duel;
 use crate::game::{mirror, parse_work, seat_seeds};
-use crate::longthink::{cache, files};
+use crate::match_log::{cache, files};
 use crate::transcript::{Transcript, labels};
 
 const USAGE: &str = "usage: just blunder-hunt [--hours 6] [--seconds N] [--seed N] [--work 30M] [--threads N] [--out DIR]\n       just blunder-hunt --inspect CASE.json";

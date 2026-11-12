@@ -3,7 +3,7 @@
 A file over the limit is on `data/file-length-allowlist.json` with its length, the burn-down
 list of splits: a listed file may not grow, and the check fails when one is shorter than its
 entry (lower the number) or under the limit (remove the entry). Tests, generated and frozen
-code, the Playwright drivers, the expert system and the retired long-think code are exempt.
+code, the Playwright drivers, the expert system and the long-think searcher are exempt.
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ EXEMPT = (
     "ui/scripts/drive.mjs",
     "rust/crates/beryl_search/src/expert",
     "rust/crates/beryl_search/src/long.rs",
-    "rust/crates/beryl_cli/src/longthink",
 )
 # Tests live in `tests` directories (Rust's `tests/` and `src/tests`, tools/tests) or in
 # files named tests.rs.
