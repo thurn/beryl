@@ -298,7 +298,7 @@ def print_games(ledger: Path) -> None:
     days = [
         (today - timedelta(days=offset)).isoformat() for offset in range(13, -1, -1)
     ]
-    totals = dict.fromkeys(days, 0)
+    totals = {day: 0 for day in days}
     try:
         with ledger.open("rb") as lines:
             for line in lines:
