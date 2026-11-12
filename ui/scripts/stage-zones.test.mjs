@@ -7,7 +7,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
-import { CLOSES, HELD, TURN } from "../src/stage/tracks.ts";
+import {
+    CLOSES,
+    halfTurned,
+    HELD,
+    TURN,
+    TURNING,
+} from "../src/stage/tracks.ts";
 import { object, reach, row, stage, view } from "./stage-table.mjs";
 
 const vanish = (slot, why, to) => ({
@@ -113,6 +119,53 @@ test("what follows a card that leaves waits only for what closes up after it", (
             ["end", 1, 800],
         ],
     );
+});
+
+test("what a finished ability left room for closes up after the cut, and its beat waits", () => {
+    // A table whose permanents stand 100 lower while anything is on the stack, as a phone's
+    // rows keep clear of its band.
+    const banded = {
+        ...row,
+        rest(table) {
+            const out = row.rest(table);
+            if (table.view.stack.length === 0) return out;
+            for (const [name, lies] of out) {
+                if (lies.dress.zone !== "battlefield") continue;
+                const pose = { ...lies.pose, y: lies.pose.y + 100 };
+                out.set(name, { ...lies, pose });
+            }
+            return out;
+        },
+    };
+    const ability = { kind: "ability", source: 1, name: "Card 1", targets: [] };
+    const finish = {
+        act: {
+            verb: "vanish",
+            subject: { kind: "ability", id: 1 },
+            from: "stack",
+            why: "resolve",
+        },
+    };
+    const play = (timing) => {
+        const made = new ScriptStage({ layout: banded, timings: () => timing });
+        const reset = { reset: { abilities: [1] }, beats: [] };
+        made.play({ ...view([1]), stack: [ability] }, reset);
+        assert.equal(made.pose(1).y, 100);
+        made.play(view([1]), { beats: [[finish]] });
+        made.clock.advance(0);
+        return made;
+    };
+    // The ability is gone in the tick its step begins, and nothing else has moved yet.
+    const made = play({ ...SNAP, closes: 200 });
+    assert.equal(made.pose("a1"), null);
+    assert.equal(made.pose(1).y, 100);
+    // Then the row closes up, slowing into its place, and the beat is over when it has.
+    made.clock.advance(100);
+    assert.deepEqual([made.pose(1).y, made.shown.busy], [25, true]);
+    made.clock.advance(100);
+    assert.deepEqual([made.pose(1).y, made.shown.busy], [0, false]);
+    // With no motion, it is closed up at once.
+    assert.equal(play(SNAP).pose(1).y, 0);
 });
 
 test("a layout is told what is still leaving, and no longer once it has landed", () => {
@@ -256,6 +309,89 @@ for (const tick of [16, 100]) {
         assert.deepEqual(surface.dressed.slice(-2), ["5 back", "5 stack"]);
     });
 }
+
+test("a card that turns over on its way is edge-on as its face changes, and flat at its ends", () => {
+    const { stage: made } = stage({ fly: { duration: 400 } });
+    made.play(theirs());
+    const after = theirs();
+    after.objects[1] = theirCast.act.object;
+    after.stack = [theirCast.act.item];
+    made.play(after, { beats: [[theirCast]] });
+    const flat = (progress) => {
+        made.clock.advance(400 * progress - made.clock.now);
+        return Math.round(made.pose(5).flat * 1000) / 1000;
+    };
+    // Flat until it begins to turn; half its height shows a third of the way to edge-on and
+    // as far past it, where its face is up; and it lies flat again for the rest of its way.
+    assert.equal(flat(0), 1);
+    assert.equal(flat(TURN - TURNING), 1);
+    assert.deepEqual(
+        [flat(TURN - TURNING / 3), made.pose(5).face],
+        [0.5, "back"],
+    );
+    assert.deepEqual([flat(TURN), made.pose(5).face], [0, "front"]);
+    assert.deepEqual(
+        [flat(TURN + TURNING / 3), made.pose(5).face],
+        [0.5, "front"],
+    );
+    assert.equal(flat(TURN + TURNING), 1);
+    made.clock.advance(400);
+    assert.equal(made.pose(5).flat, undefined, "at rest nothing is said of it");
+});
+
+test("a card that lands the other way up the table turns over, and never spins round", () => {
+    // The opponent's hand faces them: its cards lie half a turn round, about their middles.
+    const facing = {
+        ...row,
+        rest(table) {
+            const out = row.rest(table);
+            for (const [name, lies] of out) {
+                if (lies.dress.zone !== "hand") continue;
+                const middle = row.middle(lies, lies.pose);
+                out.set(name, {
+                    ...lies,
+                    pose: halfTurned(lies.pose, middle, 180),
+                });
+            }
+            return out;
+        },
+    };
+    const made = new ScriptStage({
+        layout: facing,
+        timings: (act) => ({ ...SNAP, duration: act.verb === "fly" ? 400 : 0 }),
+    });
+    made.play(theirs());
+    const lies = made.shown.resting.get(5);
+    assert.equal(lies.pose.rotation, 180);
+    const from = row.middle(lies, { ...lies.pose, x: 0, y: 500, rotation: 0 });
+    const after = theirs();
+    after.objects[1] = theirCast.act.object;
+    after.stack = [theirCast.act.item];
+    made.play(after, { beats: [[theirCast]] });
+    // Its card's middle, wherever its corner is: about that corner it is turned half round
+    // while its back shows.
+    const middle = () => {
+        const pose = made.pose(5);
+        const upright = row.middle(made.shown.resting.get(5), pose);
+        const turned = pose.rotation === 180;
+        return {
+            x: turned ? 2 * pose.x - upright.x : upright.x,
+            y: turned ? 2 * pose.y - upright.y : upright.y,
+        };
+    };
+    let last = from;
+    for (let at = 0; at <= 400; at += 10) {
+        made.clock.advance(at - made.clock.now);
+        const pose = made.pose(5);
+        // Upside down while its back shows and upright once its face does: nothing between.
+        assert.equal(pose.rotation, pose.face === "back" ? 180 : 0, `at ${at}`);
+        const now = middle();
+        const moved = Math.hypot(now.x - last.x, now.y - last.y);
+        assert.ok(moved < 400, `its middle went ${moved} in a tick at ${at}`);
+        last = now;
+    }
+    assert.deepEqual(last, { x: 2050, y: 70 });
+});
 
 test("a card that only makes room, or whose face shows from the first, never turns", () => {
     const { stage: made } = stage({ fly: { duration: 400 } });

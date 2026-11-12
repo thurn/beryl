@@ -23,6 +23,10 @@ export interface Pose {
   depth: number;
   /** Which side of the card shows. */
   face: "front" | "back";
+  /** How much of its card's height shows as it turns over top over bottom, about the card's
+   * own middle: nothing said at rest, where it lies flat, and 0 as it is edge-on to the eye
+   * (tracks.ts `flatAt`). */
+  flat?: number;
 }
 
 /** How far over everything at rest a moving object is drawn (CardLayer's FLYING_Z). */
@@ -61,7 +65,8 @@ export const samePose = (a: Pose, b: Pose) =>
   a.turn === b.turn &&
   a.opacity === b.opacity &&
   a.depth === b.depth &&
-  a.face === b.face;
+  a.face === b.face &&
+  a.flat === b.flat;
 
 /** The CSS transform that draws a frame `frame` wide at `pose`, about its top-left corner:
  * moved, then scaled, turned and leaned, the order game/layout.ts places cards in. A pose's
@@ -73,3 +78,8 @@ export const transformOf = (pose: Pose, frame: number) =>
 /** The CSS `rotate` of the card inside a node at `pose`, which the skin's own quarter turn of a
  * tapped frame is added to (stage.css): none at rest. */
 export const turnOf = (pose: Pose) => (pose.turn ? `${pose.turn}deg` : "");
+
+/** The CSS `scale` of what is inside a node at `pose` as its card turns over, which narrows
+ * each about its own middle, the card's (stage.css): none while it lies flat. */
+export const flatOf = (pose: Pose) =>
+  pose.flat === undefined || pose.flat === 1 ? "" : `1 ${pose.flat}`;

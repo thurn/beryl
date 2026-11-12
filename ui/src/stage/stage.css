@@ -26,6 +26,12 @@
 .stage-node[data-turning] .card-slot > .card {
   rotate: var(--turn);
 }
+/* A card turning over on its way (stage/tracks.ts `flatAt`): the stage says how much of its
+   height shows, and everything in the node, each as large as the card, narrows to that about
+   its own middle. Only a node that is turning over carries the rule, as above. */
+.stage-node[data-turning-over] > * {
+  scale: var(--flat);
+}
 /* An effect on a node (stage/effects.ts, stage/dom.ts): an element of the stage's inside the
    node, as large as the node's card (a tapped card's node is its turned footprint) and so
    moved, sized and faded with it, under the face or over it. The stage writes how far through

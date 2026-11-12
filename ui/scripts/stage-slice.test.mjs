@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Feed } from "../src/stage/feed.ts";
 import { abilityName } from "../src/stage/layout.ts";
+import { BOWS } from "../src/stage/tracks.ts";
 import { object, stage, view } from "./stage-table.mjs";
 
 // The slice of by-w8gv.21.14, as the session cuts it (script/build.rs): a creature cast, it
@@ -132,10 +133,17 @@ test("a trigger lifts out of its source the same however its views are batched",
         [400 + 10, 10, 50],
         "it starts on its source",
     );
+    // Half way it is off the straight line by its bow, toward its controller's edge of the
+    // table: a quarter turn from the line, which runs 1590 across and 10 up.
+    const { share, peak } = BOWS.lifts;
+    const off =
+        share * Math.sin(Math.PI * 0.5 ** (Math.log(0.5) / Math.log(peak)));
+    const near = (pose) =>
+        [pose.x, pose.y, pose.width].map((n) => Math.round(n * 1e6) / 1e6);
     assert.deepEqual(
-        [at(150).x, at(150).y, at(150).width],
-        [410 + (2000 - 410) * 0.5, 5, 75],
-        "it is half way after half its time",
+        near(at(150)),
+        near({ x: 1205 + 10 * off, y: 5 + 1590 * off, width: 75 }),
+        "it is half way after half its time, off the line by its bow",
     );
     assert.equal(apart.at(-1)[0], 275);
     assert.equal(apart.length, 12);
@@ -165,6 +173,52 @@ test("a token appears at its place with no flight, and the ability is gone at on
     assert.equal(made.pose(TRIGGER), null);
     assert.equal(surface.log.at(-1), "remove a1");
     assert.equal(made.shown.busy, false);
+});
+
+test("the table opens for a token in its delay, and the token is seen as the delay ends", () => {
+    const { stage: made } = stage({
+        appear: { duration: 100, delay: 200, opens: true },
+    });
+    made.play(view([1, CREATURE]));
+    const told = [];
+    made.follow(({ edge, at }) => told.push([edge, at, made.clock.now]));
+    // The token takes the first place of its row: the two permanents make room for it.
+    const first = { ...create, act: { ...create.act, at: 0 } };
+    made.play(view([TOKEN, 1, CREATURE]), { beats: [[first]] });
+    const seen = () => [
+        made.pose(1).x,
+        made.pose(CREATURE).x,
+        made.pose(TOKEN).opacity,
+    ];
+    // Half way through the delay the row is most of the way there, slowing, and the token,
+    // which the table already holds, is not seen: its step has not begun.
+    made.clock.advance(100);
+    assert.deepEqual(seen(), [300, 700, 0]);
+    assert.deepEqual(told, []);
+    assert.equal(made.step.verb, "appear");
+    // As the delay ends the row has made room, and the token begins to show where it rests.
+    made.clock.advance(100);
+    assert.deepEqual(seen(), [400, 800, 0]);
+    assert.deepEqual(told, [["start", 200, 200]]);
+    made.clock.advance(50);
+    assert.deepEqual(seen(), [400, 800, 0.5]);
+    assert.equal(made.pose(TOKEN).x, 0);
+    made.clock.advance(50);
+    assert.deepEqual(told.at(-1), ["end", 300, 300]);
+    assert.equal(made.shown.busy, false);
+    // However the time is reached, each edge is told at its own time, in order.
+    const { stage: again } = stage({
+        appear: { duration: 100, delay: 200, opens: true },
+    });
+    again.play(view([1, CREATURE]));
+    const edges = [];
+    again.follow(({ edge, at }) => edges.push([edge, at]));
+    again.play(view([TOKEN, 1, CREATURE]), { beats: [[first]] });
+    again.settle();
+    assert.deepEqual(edges, [
+        ["start", 200],
+        ["end", 300],
+    ]);
 });
 
 test("a card that appears from another zone does not fly there", () => {

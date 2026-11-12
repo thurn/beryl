@@ -1066,7 +1066,7 @@
   "verbs": [
     {
       "name": "fly",
-      "shows": "A card travels from where it is to its new place, turning over on the way if its face changes, and flashes as it lands on the battlefield: a land played, a spell cast, a permanent spell resolving, a draw, a discard, an aura onto its permanent.",
+      "shows": "A card travels from where it is to its new place, and flashes as it lands on the battlefield: a land played, a spell cast, a permanent spell resolving, a draw, a discard, an aura onto its permanent. One whose face changes turns over on the way, top over bottom: it narrows to edge-on a little past half way and lands face up, and one that lay the other way up the table never spins round besides. A spell cast and a permanent resolving leave the straight line in a shallow arc that bows toward their controller's edge of the table, the permanent leaning a little into it.",
       "arena": {
         "does": "A played land glides from where it is released to its slot in about 0.4 s. The opponent's spell leaves their hand as a card back and is face up when it reaches the stack, about 0.4 s; the player's own flies from where it is released in about 0.35 s. A resolving permanent flies to its slot in about 0.6 s and the slot flashes. A drawn card flies large beside the library, holds about 0.2 s and drops into the hand, about 1.1 s in all; three are drawn a quarter second apart. A discard drops to the graveyard at hand size in about 0.2 s.",
         "evidence": [
@@ -1166,7 +1166,7 @@
     },
     {
       "name": "appear",
-      "shows": "A card comes to be at its place with no flight: a token, the opening hand, a card a look put in the graveyard.",
+      "shows": "A card comes to be at its place with no flight: a token, the opening hand, a card a look put in the graveyard. Its row makes room in its delay, so it shows at a place already open.",
       "arena": {
         "does": "A token appears whole with a short glow, a batch as one group. The opening hand and a mulligan's new hand are there at once.",
         "evidence": [
@@ -1222,7 +1222,7 @@
     },
     {
       "name": "vanish",
-      "shows": "A card or an ability goes from where it is with no flight, and a card is at its new place as it is gone: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving. Its step is its going alone; what it left room for closes up after, and where nothing does the next thing follows at once.",
+      "shows": "A card or an ability goes from where it is with no flight, and a card is at its new place as it is gone: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving. Its step is its going alone; what it left room for closes up after, as one move even where the going is a cut, and where nothing does the next thing follows at once.",
       "arena": {
         "does": "A destroyed permanent falls to ash in about 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a returned one glows and is gone; none flies to a pile or a hand. A countered spell crumbles on the stack. A resolved instant darkens and dissolves there, or shrinks into its graveyard. A finished ability is gone between two frames.",
         "evidence": [
@@ -1338,7 +1338,7 @@
     },
     {
       "name": "emerge",
-      "shows": "An ability lifts out of its source and goes on the stack. The source stays as it is.",
+      "shows": "An ability lifts out of its source and goes on the stack, along a shallow arc that bows toward its controller's edge of the table. The source stays as it is.",
       "arena": {
         "does": "A small copy of the card appears on the source and travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated ability does the same. Two triggers of one event leave 0.3 s apart. A dies trigger leaves before its source breaks up.",
         "evidence": [

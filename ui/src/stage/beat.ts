@@ -34,6 +34,14 @@ export interface Run extends Playing {
   turn: number;
   ease(progress: number): number;
   each?: number;
+  /** Its act is applied before it begins, `at` the stage time its delay does, and what makes
+   * room for it has done so `by` the time it begins, or by the time the first of the steps
+   * the table is then open for does: every token of a batch finds its row open
+   * (`Timing.opens`). */
+  opens?: { at: number; by: number };
+  /** How long what it left room for takes to close up after it (`Timing.closes`). */
+  closes?: number;
+  /** Its act is applied: it has begun, or its act went ahead of it (`opens`). */
   begun: boolean;
   /** It passes over the table (`Timing.passes`): it may outlast its beat and its script. */
   passes?: boolean;
@@ -75,7 +83,8 @@ export function under<T>(
  * with the last step that does not pass over the table (`Timing.passes`): one that does
  * holds the beat only until it has begun, and plays on over what follows; and a step that
  * has the table to itself (`Timing.alone`) waits until `passed`, the stage time by which
- * everything that passes over the table now is over. */
+ * everything that passes over the table now is over. The act of one that the table opens
+ * for (`Timing.opens`) is applied as its delay begins. */
 export function laid(
   beat: readonly ScriptStep[],
   played: number,
@@ -85,7 +94,9 @@ export function laid(
   whole: (act: Act) => number | undefined,
   passed = at,
 ): { steps: Run[]; end: number } {
-  let [from, turn, last, end] = [at, at, at, at];
+  let [from, turn, last, end, applied] = [at, at, at, at, at];
+  /** When the first of the steps whose acts went ahead, and that have yet to begin, does. */
+  let open = at;
   /** When each thing a step of the beat moves has come to rest. */
   const landed = new Map<Name, number>();
   const steps = beat.map((step, i): Run => {
@@ -100,6 +111,10 @@ export function laid(
       timing.alone ? passed : at,
     );
     from = Math.max(from, rested + timing.delay);
+    // Its act goes ahead of it no sooner than the act of the step before it.
+    const opens = timing.opens ? Math.max(applied, rested) : from;
+    applied = opens;
+    if (open <= opens) open = from;
     if (!timing.with) turn = own + timing.stagger;
     last = own;
     const to = from + timing.duration;
@@ -117,6 +132,8 @@ export function laid(
       step,
       ease: timing.ease,
       each: timing.each,
+      opens: opens < from ? { at: opens, by: open } : undefined,
+      closes: timing.closes,
       passes: timing.passes,
       begun: false,
       ended: false,

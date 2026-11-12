@@ -21,7 +21,7 @@ import type { Name, Point, Resting } from "./layout.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
-import { transformOf, turnOf, type Pose } from "./pose.ts";
+import { flatOf, transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
 
 /** The name a node's `data-stage` says. */
@@ -289,5 +289,9 @@ export class DomSurface implements Surface {
     const turn = turnOf(pose);
     style.setProperty("--turn", turn);
     node.toggleAttribute("data-turning", turn !== "");
+    // And narrowed as it turns over on its way, only while it does.
+    const flat = flatOf(pose);
+    style.setProperty("--flat", flat);
+    node.toggleAttribute("data-turning-over", flat !== "");
   }
 }

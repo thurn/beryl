@@ -2,6 +2,7 @@
 // step, given where it now rests, which a later step may have moved. Each is a function of
 // the poses it is made from and of progress alone, so a pose is the same however its stage
 // time is reached.
+import type { Run } from "./beat.ts";
 import type { Act } from "./table.ts";
 import type { On } from "./effects.ts";
 import { abilityName, type Name, type Point, type Resting } from "./layout.ts";
@@ -35,6 +36,13 @@ export interface Timing {
   /** It has the table to itself: it begins no sooner than everything passing over the table
    * has gone (beat.ts). A coin, which is not thrown under the turn's banner. */
   alone?: boolean;
+  /** What makes room for it does so in its delay: its act is applied as the delay begins
+   * (`Run.opens`), and it is first seen as the delay ends, where the table has opened for
+   * it. A token, which never shows over a neighbour still moving out of its way. */
+  opens?: boolean;
+  /** How long what it left room for takes to close up after it, in stage ms, where that is
+   * no share of its own time (`CLOSES`): it takes none, a cut. A finished ability. */
+  closes?: number;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -48,19 +56,138 @@ export const SNAP: Timing = {
 /** An entry's pose `progress` of the way along its track, resting at `rest`. */
 export type Path = (progress: number, rest: Pose) => Pose;
 
-/** How far through its flight a card that leaves face down and lands face up turns over:
- * Arena's opponent's spell is edge-on a little past half way (data/arena-motion.json, fly,
+/** How far through its flight a card that leaves face down and lands face up is edge-on to
+ * the eye: Arena's opponent's spell is, a little past half way (data/arena-motion.json, fly,
  * "opponent spell cast": 16:47.25 to 16:47.47 of 400 ms). */
 export const TURN = 0.55;
 
+/** How long a card that turns over on its way takes to come edge-on, and as long again to
+ * lie flat with its face up, as a share of its flight; before and after, it lies flat. An
+ * opponent's spell of 400 ms turns over in 88 (the motion review of fly, by-w8gv.21.47: a
+ * swap of back for face between two frames is no turn-over). */
+export const TURNING = 0.11;
+
+/** How much of its height a card that turns over on its way shows `through` of its flight
+ * (`Pose.flat`): it turns evenly, top over bottom, half a turn in all, as a card tossed
+ * across a table lands the other side up. */
+export const flatAt = (through: number) =>
+  Math.abs(
+    Math.cos(
+      (Math.PI / 2) * Math.min(2, Math.max(0, (through - TURN) / TURNING + 1)),
+    ),
+  );
+
+/** How a flight leaves the straight line between its ends: by `share` of that line where it
+ * is farthest off it, `peak` of the way along (half way, if not said), leaning `lean`
+ * degrees into the bow there and upright again as it lands. It bows `toward` the edge of the
+ * table its card's controller sits at (1 down the stage, -1 up it): the outside of the
+ * table, where it crosses the fewest cards. */
+export interface Bow {
+  share: number;
+  peak?: number;
+  lean?: number;
+  toward: number;
+}
+
+/** The bows of the flights that have one (the motion reviews of fly and emerge,
+ * by-w8gv.21.47: "a card cast from hand is a thrown object, and here it slides along a
+ * ruler line"): a spell thrown onto the stack, a permanent set down from it, which swings out
+ * and settles into its row, and an ability lifting out of its source, farthest a little past
+ * half way. Arena's own spell bows 0.29 of its line, and its ability's copy and its
+ * resolving permanent travel a curve (data/arena-motion.json, fly and emerge). */
+export const BOWS = {
+  cast: { share: 0.15 },
+  lands: { share: 0.1, lean: 2 },
+  lifts: { share: 0.12, peak: 0.6 },
+};
+
+/** How the flight of the step `act` bows, if it does, its card's controller sitting at the
+ * edge `toward`. */
+export function bowOf(act: Act, toward: number): Bow | undefined {
+  if (act.verb === "emerge") return { ...BOWS.lifts, toward };
+  if (act.verb !== "fly") return undefined;
+  if (act.object.zone === "stack") return { ...BOWS.cast, toward };
+  const lands = act.from === "stack" && act.object.zone === "battlefield";
+  return lands ? { ...BOWS.lands, toward } : undefined;
+}
+
+/** `pose`, which is `through` of the straight way from `from` to `to`, as far off that way
+ * as `bow` has it there: nothing at either end. */
+function bowed(
+  pose: Pose,
+  from: Pose,
+  to: Pose,
+  through: number,
+  bow: Bow,
+): Pose {
+  const [across, down] = [to.x - from.x, to.y - from.y];
+  // Of the two sides of the line, the one toward that edge of the table.
+  const side = across * bow.toward < 0 ? -1 : 1;
+  const sharpness = Math.log(0.5) / Math.log(bow.peak ?? 0.5);
+  const arch = Math.sin(Math.PI * Math.max(0, through) ** sharpness);
+  const off = side * bow.share * arch;
+  return {
+    ...pose,
+    x: pose.x - down * off,
+    y: pose.y + across * off,
+    // It leans the way it travels across the table.
+    rotation: pose.rotation + Math.sign(across) * (bow.lean ?? 0) * arch,
+  };
+}
+
+/** Whether two poses lie the opposite way up the table, nearer half a turn apart than none:
+ * an opponent's hand, which faces them, and the stack. */
+const opposed = (a: Pose, b: Pose) =>
+  Math.abs(((((a.rotation - b.rotation) % 360) + 540) % 360) - 180) > 90;
+
+/** `pose` with its card half a turn round in the table's plane about `middle`, the card's
+ * own middle: over the same place, the other way up. Of the two rotations that is, the one
+ * nearer `near`. */
+export function halfTurned(pose: Pose, middle: Point, near: number): Pose {
+  return {
+    ...pose,
+    x: 2 * middle.x - pose.x,
+    y: 2 * middle.y - pose.y,
+    rotation: pose.rotation + (near > pose.rotation ? 180 : -180),
+  };
+}
+
+/** What is said of a glide besides its ends. With `over`, its card leaves face down and
+ * lands face up, and turns over on the way (`flatAt`): `over` gives a pose half a turn round
+ * (`halfTurned`). With `bow`, it leaves the straight line. */
+export interface Flown {
+  over?: (pose: Pose, near: number) => Pose;
+  bow?: Bow;
+}
+
 /** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
- * is about, and at its resting depth for what makes room. With `turns`, it shows its back
- * until it is `TURN` of the way there. */
+ * is about, and at its resting depth for what makes room. One that turns over shows its back
+ * until it is edge-on, `TURN` of the way there. Where it lands the other way up the table
+ * than it left, the turn-over is all that brings it round: a card tossed top over bottom
+ * lands facing the other way, so it never spins in the table's plane besides. Until it is
+ * edge-on it is on its way to where it rests half a turn round, and from then it comes from
+ * where it was half a turn round; the two ways part by a hair, where nothing of it shows. */
 export const glide =
-  (start: Pose, ease: Timing["ease"], aloft: boolean, turns = false): Path =>
+  (
+    start: Pose,
+    ease: Timing["ease"],
+    aloft: boolean,
+    { over, bow }: Flown = {},
+  ): Path =>
   (progress, rest) => {
-    const pose = between(start, rest, ease(progress), aloft);
-    return turns && progress < TURN ? { ...pose, face: "back" } : pose;
+    const through = ease(progress);
+    const back = over !== undefined && progress < TURN;
+    const round = over !== undefined && opposed(start, rest);
+    const from = round && !back ? over(start, rest.rotation) : start;
+    const to = round && back ? over(rest, start.rotation) : rest;
+    const straight = between(from, to, through, aloft);
+    const pose = bow ? bowed(straight, from, to, through, bow) : straight;
+    if (!over) return pose;
+    return {
+      ...pose,
+      face: back ? "back" : pose.face,
+      flat: flatAt(progress),
+    };
   };
 
 /** What a card that showed its face at `before` is drawn as on its way to `after`, where it
@@ -117,6 +244,12 @@ export const roomIn = (
   to: number,
 ): [from: number, to: number] =>
   verb === "vanish" ? [to, to + Math.round(CLOSES * (to - from))] : [from, to];
+
+/** How long what a finished ability left room for takes to close up (the motion review of
+ * vanish, by-w8gv.21.47: a phone's rows, hands and piles closed its band of the table "in
+ * one frame"; "one move of about 200 to 250 ms, ease-out, starting on the frame after"). The
+ * ability itself is cut (UI Conventions, "A finished ability"). */
+export const CLOSED = 225;
 
 /** An entry that goes from sight where it was at `start`, and never travels: slowly at first,
  * while the effect that says how it leaves is seen on it (effects.ts), all at once at the
@@ -182,9 +315,12 @@ export const heldUp =
       ...between(start, up, ease(flying), false),
       depth: up.depth,
     };
-    return start.face === "back" && progress < HELD_TURN
-      ? { ...pose, face: "back" }
-      : pose;
+    if (start.face !== "back") return pose;
+    return {
+      ...pose,
+      face: progress < HELD_TURN ? "back" : pose.face,
+      flat: flatAt(flying),
+    };
   };
 
 /** How far a permanent turns as it taps, in degrees. */
@@ -401,6 +537,59 @@ export function litBy(act: Act): On | undefined {
   const { tally } = act;
   if (tally.kind === "life") return tally.player;
   return tally.kind === "pool" ? undefined : tally.object.slot;
+}
+
+/** A step as the track of what its change moves is made from (beat.ts `Run`). */
+type Moving = Pick<
+  Run,
+  "verb" | "from" | "to" | "ease" | "each" | "opens" | "closes" | "step"
+>;
+
+/** Whether what the change of the step `run`, applied at stage time `at`, moves travels to
+ * where it now rests: the step takes time, or what it left room for closes up after it. */
+export const carries = (run: Moving, at: number) =>
+  run.to > at || run.closes !== undefined;
+
+/** The track of the entry `name`, whose resting place the step `run`, applied at stage time
+ * `at`, moved from `before` to `resting`, it being at `start`; and what it is drawn as until
+ * that track turns it over. Only the card a `fly` is about, or a `count` (a number that
+ * lays its card elsewhere), travels over what rests, bowed if its flight is (`bowOf`) and
+ * turning over on the way if it lands face up from face down, `halfTurn` giving a pose half
+ * a turn round (`halfTurned`). What another verb's change moves goes there as what makes
+ * room does, when its verb has it go: over the step; once a card has turned (`WAITS`);
+ * after a card that left has gone, for `CLOSES` of its step or, after a cut, for the time
+ * the step says (`Timing.closes`); or before the step begins, where its act went ahead of it
+ * (`Timing.opens`), slowing into its place. A card a `lift` lets go to lie face down or out
+ * of sight shows the face it had until it is there. */
+export function carried(
+  run: Moving,
+  at: number,
+  [name, start, before, resting]: [Name, Pose, Resting, Resting],
+  table: Table,
+  halfTurn: NonNullable<Flown["over"]>,
+): [Track, Resting | undefined] {
+  const { verb, to: end } = run;
+  const kept = verb === "lift" ? shownUntil(before, resting) : undefined;
+  const toward = resting.object?.controller === "opponent" ? -1 : 1;
+  const about = verb === "fly" || verb === "count";
+  const flies = about && litBy(run.step.act) === name;
+  const turns = flies && start.face === "back" && resting.pose.face === "front";
+  const opens = run.opens !== undefined;
+  const [from, to] = opens
+    ? [at, run.opens!.by]
+    : run.closes !== undefined
+      ? [end, end + run.closes]
+      : roomIn(verb, at, end);
+  const ease = opens || run.closes !== undefined ? out : run.ease;
+  const pose = run.each
+    ? later(start, ease, ...shareOf(run, table, name))
+    : ((opens ? undefined : makingRoom(verb, start, ease, toward)) ??
+      glide(start, ease, flies, {
+        over: turns ? halfTurn : undefined,
+        bow: flies ? bowOf(run.step.act, toward) : undefined,
+      }));
+  const turn = turns ? TURN : kept && 1;
+  return [{ from, to, closes: to > end, pose, turn, own: flies }, kept];
 }
 
 /** What a step's act is about, if it is something on the table: its card, or the ability it

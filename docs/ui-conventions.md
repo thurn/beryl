@@ -380,49 +380,55 @@ curve, and each case's, are Beryl's own (exception 8): first set from Arena's
 medians, whose instances `data/arena-motion.json` keeps as reference (K27), and
 held to by `just motion`.
 
-- **fly.** A card travels from where it is to its new place, turning over on the
-  way if its face changes, and flashes as it lands on the battlefield: a land
-  played, a spell cast, a permanent spell resolving, a draw, a discard, an aura
-  onto its permanent. A played land glides from where it is released to its slot
-  in about 0.4 s. The opponent's spell leaves their hand as a card back and is
-  face up when it reaches the stack, about 0.4 s; the player's own flies from
-  where it is released in about 0.35 s. A resolving permanent flies to its slot
-  in about 0.6 s and the slot flashes. A drawn card flies large beside the
-  library, holds about 0.2 s and drops into the hand, about 1.1 s in all; three
-  are drawn a quarter second apart. A discard drops to the graveyard at hand
-  size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w
-  16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3,
-  UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI
-  1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle as it ends
-  (into the battlefield).
+- **fly.** A card travels from where it is to its new place, and flashes as it
+  lands on the battlefield: a land played, a spell cast, a permanent spell
+  resolving, a draw, a discard, an aura onto its permanent. One whose face
+  changes turns over on the way, top over bottom: it narrows to edge-on a little
+  past half way and lands face up, and one that lay the other way up the table
+  never spins round besides. A spell cast and a permanent resolving leave the
+  straight line in a shallow arc that bows toward their controller's edge of the
+  table, the permanent leaning a little into it. A played land glides from where
+  it is released to its slot in about 0.4 s. The opponent's spell leaves their
+  hand as a card back and is face up when it reaches the stack, about 0.4 s; the
+  player's own flies from where it is released in about 0.35 s. A resolving
+  permanent flies to its slot in about 0.6 s and the slot flashes. A drawn card
+  flies large beside the library, holds about 0.2 s and drops into the hand,
+  about 1.1 s in all; three are drawn a quarter second apart. A discard drops to
+  the graveyard at hand size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w
+  16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5,
+  UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE
+  39:04.3, 5UHzpVvUkfI 1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out.
+  Effects: settle as it ends (into the battlefield).
 - **appear.** A card comes to be at its place with no flight: a token, the
-  opening hand, a card a look put in the graveyard. A token appears whole with a
-  short glow, a batch as one group. The opening hand and a mulligan's new hand
-  are there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w
-  15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after
-  its cause, 33 ms apart, in place. Effects: glow as it begins (token).
+  opening hand, a card a look put in the graveyard. Its row makes room in its
+  delay, so it shows at a place already open. A token appears whole with a short
+  glow, a batch as one group. The opening hand and a mulligan's new hand are
+  there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w 15:48,
+  0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after its
+  cause, 33 ms apart, in place. Effects: glow as it begins (token).
 - **vanish.** A card or an ability goes from where it is with no flight, and a
   card is at its new place as it is gone: destroyed, exiled, sacrificed,
   countered, returned to a hand, or done resolving. Its step is its going alone;
-  what it left room for closes up after, and where nothing does the next thing
-  follows at once. A destroyed permanent falls to ash in about 1 s, an exiled
-  one becomes a vortex, a sacrificed one flashes, and a returned one glows and
-  is gone; none flies to a pile or a hand. A countered spell crumbles on the
-  stack. A resolved instant darkens and dissolves there, or shrinks into its
-  graveyard. A finished ability is gone between two frames (RwKoGGUmw2k 27:36.4,
-  IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w 19:28.5, 3sEoP_s4DQE
-  24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67, pE4XSNi-nZc 22:01.3,
-  IHPV6yRaFlk 39:46.9). Beryl: 395 ms, 260 ms after its cause, in place.
-  Effects: dissolve as it begins, dim as it begins (resolved instant or
-  sorcery), blanch as it begins (exiled), glow as it begins (bounced).
-- **emerge.** An ability lifts out of its source and goes on the stack. The
-  source stays as it is. A small copy of the card appears on the source and
-  travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated
-  ability does the same. Two triggers of one event leave 0.3 s apart. A dies
-  trigger leaves before its source breaks up (IEXcjBn3BXk 20:39.3, 5UHzpVvUkfI
-  19:48.5, 5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw 49:08.0,
-  I3Te0m1bBFw 26:56.75). Beryl: 300 ms, 190 ms after its cause, 300 ms apart,
-  ease-in.
+  what it left room for closes up after, as one move even where the going is a
+  cut, and where nothing does the next thing follows at once. A destroyed
+  permanent falls to ash in about 1 s, an exiled one becomes a vortex, a
+  sacrificed one flashes, and a returned one glows and is gone; none flies to a
+  pile or a hand. A countered spell crumbles on the stack. A resolved instant
+  darkens and dissolves there, or shrinks into its graveyard. A finished ability
+  is gone between two frames (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4,
+  5UHzpVvUkfI 26:06.7, UrGalw_f35w 19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw
+  39:50.0, WQiYBv23buw 29:15.67, pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9).
+  Beryl: 395 ms, 260 ms after its cause, in place. Effects: dissolve as it
+  begins, dim as it begins (resolved instant or sorcery), blanch as it begins
+  (exiled), glow as it begins (bounced).
+- **emerge.** An ability lifts out of its source and goes on the stack, along a
+  shallow arc that bows toward its controller's edge of the table. The source
+  stays as it is. A small copy of the card appears on the source and travels
+  along a curve to the stack, growing, in 0.25 to 0.35 s; an activated ability
+  does the same. Two triggers of one event leave 0.3 s apart. A dies trigger
+  leaves before its source breaks up (IEXcjBn3BXk 20:39.3, 5UHzpVvUkfI 19:48.5,
+  5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw 49:08.0, I3Te0m1bBFw
+  26:56.75). Beryl: 300 ms, 190 ms after its cause, 300 ms apart, ease-in.
 - **flip.** A card turns over where it lies: a double-faced card transforms, a
   face-down permanent turns face up (not seen: built as "A card turning face up"
   says). A transforming card is covered by an effect (a lava slab, a cocoon) for

@@ -16,6 +16,7 @@ import {
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import {
+  bowOf,
   depths,
   drawsToRead,
   fade,
@@ -274,7 +275,10 @@ function enters(
       const source = slot === undefined ? undefined : placed(slot);
       if (!ability || !source) return undefined;
       const start = layout.emerging(source.pose, ability.resting.pose);
-      return { name, track: own(glide(start, ease, true)) };
+      const mine = ability.resting.ability?.controller !== "opponent";
+      const toward = mine ? 1 : -1;
+      const bow = bowOf(act, toward);
+      return { name, track: own(glide(start, ease, true, { bow })) };
     }
     case "showcase": {
       // Its face comes to be seen in the Revealed Cards pile, growing where the layout

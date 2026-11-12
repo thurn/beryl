@@ -12,7 +12,7 @@ import type { Act } from "./table.ts";
 import type { Effect, Layer, On } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
-import { meets, STRIKE } from "./tracks.ts";
+import { CLOSED, meets, STRIKE } from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
  * verb in which nothing travels, which changes evenly. */
@@ -186,14 +186,18 @@ const NOTICES = { turn: "turn banner", scry: "scry pill", coin: "coin" };
  * single cards, so its data has no stagger for the case. */
 const BATCH_EXILE = 300;
 
+/** A finished ability's: a cut, after which what it left room for closes up. */
+const FINISHED: Timing = { ...SNAP, closes: CLOSED };
+
 /** The data's timing of the step `act`, which finds the table `table`: its case's, or its
  * verb's. An ability that has finished is no verb's median: it is removed at once (UI
- * Conventions, "A finished ability"; Arena's is gone between two frames). So is a card's name
+ * Conventions, "A finished ability"; Arena's is gone between two frames), and what it left
+ * room for then closes up. So is a card's name
  * learned where it lies in no one's sight (a look at your own library, which its prompt
  * shows): only a permanent turns over (UI Conventions, "A card turning face up"). `before`
  * is the act of the step before it in its beat. */
 export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
-  if (act.verb === "vanish" && act.subject.kind === "ability") return SNAP;
+  if (act.verb === "vanish" && act.subject.kind === "ability") return FINISHED;
   if (act.verb === "flip" && act.object.zone !== "battlefield") return SNAP;
   const found = caseOf(act, table);
   const own =
@@ -237,6 +241,12 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
   if (act.verb === "announce") {
     const coin = act.notice.kind === "coin";
     return { ...own, passes: !coin, alone: coin };
+  }
+  // A row opens for the permanent that appears in it before that is seen: it has made room
+  // by the end of the delay (Arena's token is whole in its own slot from its first frame,
+  // `UrGalw_f35w 17:38.63`). A hand dealt has no neighbours to move.
+  if (act.verb === "appear" && act.object.zone === "battlefield") {
+    return { ...own, opens: true };
   }
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };

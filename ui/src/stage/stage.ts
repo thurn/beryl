@@ -20,12 +20,14 @@
 // ability's source, an `appear` is there at once and only fades in, a card you draw is held up
 // on its way, a `tap` turns its permanent, a `strike` is its creature's lunge, and a `flip`
 // turns a permanent over where it lies. A card that leaves face down and lands face up turns
-// over on the way.
+// over on the way, and a spell cast, a permanent resolving and an ability lifting leave the
+// straight line in an arc (tracks.ts `glide`). The act of a step the table opens for, a
+// token's, is applied as its delay begins, so that its row has made room when it shows.
 //
 // One verb's subject does not go where the table has it as the step begins: what a `vanish`
 // takes goes from sight where it was, dressed as it was, and only as the step ends is it at
 // its new place, or no more (`#lay`, `#left`). What it leaves room for closes up after the
-// step, once it has gone, and the beat lasts until it has (tracks.ts CLOSES).
+// step, once it has gone, and the beat lasts until it has (tracks.ts CLOSES, CLOSED).
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
@@ -58,21 +60,16 @@ import type { Streak } from "./streaks.ts";
 import { apply, tabled, tableOf } from "./table.ts";
 import type { Act, Script, Step as ScriptStep, Table } from "./table.ts";
 import {
+  carried,
+  carries,
   dissolve,
-  glide,
+  halfTurned,
   home,
-  later,
-  litBy,
-  makingRoom,
-  roomIn,
-  shareOf,
-  shownUntil,
   moverOf,
   paying,
   subjectOf,
   closedBy,
   poseOn,
-  TURN,
   SNAP,
   turning,
   type Timing,
@@ -114,6 +111,8 @@ interface Playback {
   /** How many steps the beats before it held. */
   played: number;
   steps: Run[];
+  /** The steps whose act went ahead of them (`Run.opens`) and that have yet to begin. */
+  opened: Run[];
   /** When the beat under way is over: when its last motion is. */
   end: number;
 }
@@ -379,11 +378,34 @@ export class ScriptStage {
     return status?.kind === "deciding" && status.decision.kind !== "priority";
   }
 
-  /** When the next thing happens: a step of the beat under way begins, or the beat ends. */
+  /** When the next thing happens: something of the beat under way, or the beat ends. */
   #due() {
     const playback = this.#playback;
     if (!playback) return this.#at;
-    return playback.steps.find((s) => !s.begun)?.from ?? playback.end;
+    return this.#next(playback)?.[0] ?? playback.end;
+  }
+
+  /** What happens next in the beat under way, and when: a step that began ends; one whose
+   * act went ahead of it begins, and is told; or the next step's act is applied, which
+   * begins it unless it went ahead (`Run.opens`). Steps' acts are applied in the script's
+   * order: each changes the table the next one reads. Of what happens at one time, an end
+   * comes first. */
+  #next(playback: Playback) {
+    const { steps, opened } = playback;
+    const over = steps
+      .filter((s) => s.begun && !s.ended && !s.passes)
+      .reduce<Run | undefined>(
+        (a, b) => (a && a.to <= b.to ? a : b),
+        undefined,
+      );
+    const [seen] = opened;
+    const next = steps.find((s) => !s.begun);
+    const all: ([at: number, happens: () => void] | undefined)[] = [
+      over && [over.to, () => this.#end(over)],
+      seen && [seen.from, () => this.#tell(opened.shift()!, "start")],
+      next && [next.opens?.at ?? next.from, () => this.#begin(next)],
+    ];
+    return all.reduce((a, b) => (b && (!a || b[0] < a[0]) ? b : a), undefined);
   }
 
   /** Runs everything due up to `to`, each thing at its own time, then writes poses once. */
@@ -398,28 +420,16 @@ export class ScriptStage {
           beat: -1,
           played: 0,
           steps: [],
+          opened: [],
           end: this.#at,
         };
       }
       const playback = this.#playback;
-      // Steps begin in the script's order: each changes the table the next one reads. One
-      // that began ends first if its time comes no later than the next one's beginning.
-      const next = playback.steps.find((s) => !s.begun);
-      const over = playback.steps
-        .filter((s) => s.begun && !s.ended && !s.passes)
-        .reduce<Run | undefined>(
-          (a, b) => (a && a.to <= b.to ? a : b),
-          undefined,
-        );
-      if (over && over.to <= to && (!next || over.to <= next.from)) {
-        this.#pass(over.to);
-        this.#end(over);
-        continue;
-      }
-      if (next) {
-        if (next.from > to) break;
-        this.#pass(next.from);
-        this.#begin(next);
+      const due = this.#next(playback);
+      if (due) {
+        if (due[0] > to) break;
+        this.#pass(due[0]);
+        due[1]();
         continue;
       }
       // What closes up after a card that left is of its beat.
@@ -490,19 +500,23 @@ export class ScriptStage {
   }
 
   /** Begins a step at its own time: the table is as the step leaves it, and what its change
-   * moves glides to where it now rests for as long as the verb takes. */
+   * moves glides to where it now rests for as long as the verb takes. One whose act goes
+   * ahead of it (`Run.opens`) has it applied then, and what makes room for it glides until
+   * the step begins, which is when it is told and what it is about is first seen. */
   #begin(run: Run) {
+    const at = run.opens?.at ?? run.from;
     run.begun = true;
     run.found = this.#table!;
     if (run.verb === "announce" && run.to > run.from) {
       this.#over.notices.push(run);
     }
-    this.#tell(run, "start");
+    if (at < run.from) this.#playback!.opened.push(run);
+    else this.#tell(run, "start");
     const mover = moverOf(run.step.act);
     const moved = mover === undefined ? undefined : this.#entries.get(mover);
     const was = moved && {
       resting: moved.covered ?? moved.resting,
-      pose: this.#poseOf(mover!, moved, run.from),
+      pose: this.#poseOf(mover!, moved, at),
     };
     this.#set(apply(this.#table!, run.step.act, run.step.cause));
     this.#over.play(run.step.act, run.from, run.to, run.ease);
@@ -523,7 +537,7 @@ export class ScriptStage {
         pose: dissolve(start, run.ease),
       };
     }
-    this.#lay(run.from, run);
+    this.#lay(at, run);
     if (run.to > run.from) this.#enter(run, was);
     this.#affect(run, "start");
   }
@@ -637,7 +651,7 @@ export class ScriptStage {
       if (still && face && dress) continue;
       // What is on its own step's track goes on along it, to wherever it now rests.
       const flying = entry.track?.own && at < entry.track.to;
-      const moves = !still && !flying && run !== undefined && run.to > at;
+      const moves = !still && !flying && run !== undefined && carries(run, at);
       const start = moves ? this.#poseOf(name, entry, at) : undefined;
       // What did not change stays the very same, so that nothing drawn from it is drawn again.
       entry.resting = {
@@ -656,36 +670,15 @@ export class ScriptStage {
         this.#stale = true;
       }
       if (start) {
-        // Only the card a `fly` is about, or a `count` (a number that lays its card
-        // elsewhere), travels over what rests; what another verb's change moves goes there as
-        // what makes room does. It turns over on the way if it lands face up from face down.
-        // What makes room waits for a card to turn, or closes up after one has left (tracks.ts).
-        // A card a `lift` lets go to lie face down or out of sight shows the face it had
-        // until it is there.
-        const kept =
-          run!.verb === "lift" ? shownUntil(before, resting) : undefined;
-        const toward = resting.object?.controller === "opponent" ? -1 : 1;
-        const about = run!.verb === "fly" || run!.verb === "count";
-        const flies = about && litBy(run!.step.act) === name;
-        const turns =
-          flies && start.face === "back" && resting.pose.face === "front";
-        const [from, to] = roomIn(run!.verb, at, run!.to);
-        this.#fly(
-          name,
-          entry,
-          {
-            from,
-            to,
-            closes: to > run!.to,
-            pose: run!.each
-              ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
-              : (makingRoom(run!.verb, start, run!.ease, toward) ??
-                glide(start, run!.ease, flies, turns)),
-            turn: turns ? TURN : kept && 1,
-            own: flies,
-          },
-          kept,
+        const [track, kept] = carried(
+          run!,
+          at,
+          [name, start, before, resting],
+          this.#table!,
+          (pose, near) =>
+            halfTurned(pose, this.#layout.middle(entry.resting, pose), near),
         );
+        this.#fly(name, entry, track, kept);
       }
       entry.moved ||= !still;
     }

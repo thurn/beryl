@@ -25,6 +25,43 @@ const middleOf = (pose) => ({
     y: pose.y + pose.width / CARD_ASPECT / 2,
 });
 
+/** The middle of the card drawn at `pose`, turned about its corner as the stage draws it. */
+const turnedMiddle = (pose) => {
+    const turn = (pose.rotation * Math.PI) / 180;
+    const [across, down] = [pose.width / 2, pose.width / CARD_ASPECT / 2];
+    return {
+        x: pose.x + across * Math.cos(turn) - down * Math.sin(turn),
+        y: pose.y + across * Math.sin(turn) + down * Math.cos(turn),
+    };
+};
+/** Where the card at `pose` is against the straight line from where it is at `start` to
+ * where it is at `end`, by their middles: how far `along` it, and how far `off` it toward
+ * the bottom of the table, as shares of the line's length. */
+export function against(start, pose, end) {
+    const [a, p, b] = [start, pose, end].map(turnedMiddle);
+    const [across, down] = [b.x - a.x, b.y - a.y];
+    const length = across ** 2 + down ** 2;
+    const along = ((p.x - a.x) * across + (p.y - a.y) * down) / length;
+    const side = Math.sign(across) || 1;
+    const off = (side * ((p.y - a.y) * across - (p.x - a.x) * down)) / length;
+    return { along, off, level: Math.abs(across) > Math.abs(down) };
+}
+/** A flight of `seat`'s card half way: on its way from `start` to `end`, and off the
+ * straight line between them toward that player's edge of the table (src/stage/tracks.ts
+ * BOWS), where the line does not run up the table. */
+function bows(start, half, end, seat, what) {
+    const { along, off, level } = against(start, half, end);
+    assert.ok(along > 0 && along < 1, `${what}: half way it is on its way`);
+    assert.ok(Math.abs(off) > 0.04, `${what}: it flies a straight line`);
+    if (level) {
+        assert.equal(
+            off > 0,
+            seat === "yours",
+            `${what}: it bows toward the middle of the table`,
+        );
+    }
+}
+
 const placeOf = ({ x, y, width }) => ({ x, y, width });
 /** Whether two poses lie within a card's width of one another. */
 export const beside = (a, b) =>
@@ -163,8 +200,8 @@ export const CASES = {
     // place in your hand on the way, and cards drawn together begin one after another and
     // are not; the opponent's draw stays face down at its size. A card that leaves face down
     // for a place where its face shows (your draw, the opponent's spell, their discard) is
-    // still face down half way and face up as it lands. Your own spell returned to your hand
-    // flies there.
+    // still face down half way and face up as it lands, turning over on the way and never
+    // spinning round. Your own spell returned to your hand flies there.
     fly({ whole, zones, seat }) {
         const flights = whole.steps.filter((s) => s.verb === "fly");
         const [cast, resolve] = flights;
@@ -189,12 +226,9 @@ export const CASES = {
                 "it leaves from where it lay",
             );
             assert.equal(flight.at.to.zones[card], flight.act.object.zone);
-            const between = (a, b, c) => (a - b) * (c - b) < 0;
-            assert.ok(
-                between(start.y, half.y, end.y) ||
-                    between(start.x, half.x, end.x),
-                "half way through it is on its way",
-            );
+            // A spell thrown onto the stack and a permanent set down from it leave the
+            // straight line, toward their controller's edge of the table.
+            bows(start, half, end, seat, `${flight.act.from} flight`);
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
             assert.ok(end.depth < ALOFT, "it lands among what rests");
             assert.equal(end.opacity, 1);
@@ -277,6 +311,19 @@ export const CASES = {
                     read ? "front" : "back",
                     `${what}: its face half way`,
                 );
+                // It turns over, top over bottom: flat as it leaves, narrowing toward
+                // edge-on by half way where its back still shows, and flat as it lands.
+                assert.equal(start.flat ?? 1, 1, `${what}: it leaves flat`);
+                assert.equal(end.flat ?? 1, 1, `${what}: it lands flat`);
+                if (!read) {
+                    assert.ok(
+                        half.flat < 1,
+                        `${what}: it has not begun to turn`,
+                    );
+                    // And it never spins round in the table's plane besides.
+                    const spun = Math.abs(half.rotation - start.rotation);
+                    assert.ok(spun < 45, `${what}: it spun ${spun} degrees`);
+                }
             }
             if (route === "library>hand" && object.name === null) {
                 seen.hidden += 1;
@@ -331,7 +378,8 @@ export const CASES = {
     },
 
     // A trigger lifts out of its source: it begins small in the source's middle, wherever the
-    // source rests when the step begins, and ends on the stack; the source stays as it is.
+    // source rests when the step begins, and ends on the stack, along an arc that bows
+    // toward its controller's edge of the table; the source stays as it is.
     // The lift is the same whether the session sent the moment whole or cut it into views
     // (the most re-filed motion: 12 reports on by-w8gv.21, each another batching). Where the
     // battlefield makes room for the stack, the source glides to its new place meanwhile.
@@ -364,6 +412,8 @@ export const CASES = {
                 "it grows on its way",
             );
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
+            const mine = lift.act.item.controller === "you";
+            bows(start, half, end, mine ? "yours" : "theirs", "the lift");
             assert.equal(lift.at.to.zones[ability], "stack");
             const after = lift.at.to.poses[source];
             const next = run.steps[run.steps.indexOf(lift) + 1];
@@ -397,7 +447,8 @@ export const CASES = {
     },
 
     // A token is at its place from the first and comes to be seen there: no flight, and
-    // nothing moves but the battlefield making room. The tokens of a batch begin one after
+    // nothing moves but the battlefield making room, which it has done before the first
+    // token of the batch shows. The tokens of a batch begin one after
     // another, and an earlier one makes room for the next as the row does: sideways, and
     // where identical permanents stack and a row shrinks to fit, by less than a card any way.
     // Each is placed, by its sound, as it appears, in a halo under it that is fading by the
@@ -410,7 +461,12 @@ export const CASES = {
         const last = tokens.at(-1);
         for (const token of tokens) {
             const name = token.act.object.slot;
-            assert.equal(before(whole, token).poses[name], undefined);
+            // The table may hold it before its step begins, opening its row: unseen.
+            const early = before(whole, token).poses[name];
+            assert.ok(
+                !early || early.opacity === 0,
+                "it shows before its step",
+            );
             assert.deepEqual(effectsOn(token.at.to, name), ["glow under"]);
             const { progress } = token.at.to.effects[name][0];
             assert.ok(progress > 0 && progress < 1, `its glow at ${progress}`);
@@ -437,6 +493,20 @@ export const CASES = {
                 );
             }
             onlyMoved(whole, token, ["battlefield"]);
+        }
+        // The table has opened for the batch before its first token shows: from then on
+        // nothing but those tokens is anywhere but where the batch leaves it.
+        const batch = tokens.map((token) => `${token.act.object.slot}`);
+        const settled = last.at.to.poses;
+        for (const sample of tokens.flatMap((s) => Object.values(s.at))) {
+            for (const [other, pose] of Object.entries(sample.poses)) {
+                if (batch.includes(other)) continue;
+                assert.deepEqual(
+                    where(pose),
+                    where(settled[other]),
+                    `at ${sample.at} ms ${other} is still making room`,
+                );
+            }
         }
         // The last of them moves for none.
         const name = last.act.object.slot;
