@@ -1,12 +1,11 @@
 //! The end of a script: what the view's table has that the events did not tell. A view's
 //! derived state changes with no event (summoning sickness, power and toughness, a blocker's
-//! part in combat, a mana pool), a triggered ability with no target goes on the stack with
-//! none, and a cast taken back leaves none. Each difference left between the working table
-//! and the view's becomes a step here, so that the script replays to the view exactly (plan
-//! K24). The interpreter's causes will leave less for this to do (by-w8gv.21.5).
+//! part in combat, a mana pool), and a cast taken back leaves none. Each difference left
+//! between the working table and the view's becomes a step here, so that the script replays
+//! to the view exactly (plan K24). The stack's entries are told apart by the engine's names
+//! for them (`hear.rs`), which both tables carry.
 
-use super::build::{Builder, activator};
-use super::infer;
+use super::build::Builder;
 use super::moves::{COUNTERS, counted, set_counters};
 use super::table::Table;
 use super::{Act, Fact, Subject, Tally};
@@ -284,29 +283,29 @@ impl Builder<'_> {
     }
 
     /// The stack is the view's, entry by entry from the bottom: an entry the table has higher
-    /// up comes down to its place as the abilities under it leave, and one it lacks goes on.
-    /// An ability out of its place leaves and goes on again, as a new one: nothing else
-    /// reorders a stack.
+    /// up comes down to its place as the abilities under it leave, and one it lacks goes on:
+    /// an ability the views held back while its cost was paid, shown now.
     fn stack(&mut self) {
         let after = self.after;
         for (at, entry) in after.stack.iter().enumerate() {
+            let subject = entry.subject();
             let stack = &self.table.stack;
-            let found = (at..stack.len()).find(|&k| infer::same(&stack[k].item, &entry.item));
+            let found = (at..stack.len()).find(|&k| stack[k].subject() == subject);
             self.clear(at, found.unwrap_or(stack.len()));
             let item = entry.item.clone();
-            match (self.table.stack.get(at), &entry.item) {
-                (Some(now), _) if infer::same(&now.item, &item) => {
+            match (self.table.stack.get(at), &entry.item, entry.id) {
+                (Some(now), _, _) if now.subject() == subject => {
                     if now.item != item {
-                        let subject = now.subject();
                         let fact = Fact::Item { subject, item };
                         self.emit(Act::Set { fact }, None);
                     }
                 }
-                (_, StackItem::Ability { .. }) => {
-                    let cause = activator(&item);
-                    self.lift(item, cause);
+                (_, StackItem::Ability { .. }, Some(id)) => {
+                    let cause = self.lifter(id, &item);
+                    self.lift(id, item, cause);
                 }
-                (_, &StackItem::Spell { slot, .. }) => {
+                (_, StackItem::Ability { .. }, None) => {}
+                (_, &StackItem::Spell { slot, .. }, _) => {
                     if let Some(next) = after.objects.get(&slot) {
                         let from = self.table.objects.get(&slot).map(|o| o.zone);
                         self.arrive(from, next, Some(item));

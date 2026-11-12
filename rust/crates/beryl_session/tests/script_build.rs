@@ -51,7 +51,7 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
         text(&[
             "fly #256 (Portable Hole) hand>stack cast <- opponent",
             "tap #258 (Plains) <- opponent",
-            "& streak #258 > #256 white 1 <- opponent",
+            "& streak #258 > #256 white 1 <- #258",
         ])
     );
     assert_eq!(
@@ -59,7 +59,7 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
         text(&[
             "fly #256 (Portable Hole) hand>stack cast <- you",
             "tap #258 (Plains) <- you",
-            "& streak #258 > #256 white 1 <- you",
+            "& streak #258 > #256 white 1 <- #258",
         ])
     );
     // The first answers. Their Islands tap together, each sending its mana into the spell; the
@@ -73,11 +73,11 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
             "& +point hostile-target #1 > #256",
             "tap #0 (Island) <- you",
             "& tap #2 (Island) <- you",
-            "& streak #0 > #1 blue 1 <- you",
-            "& streak #2 > #1 blue 1 <- you",
+            "& streak #0 > #1 blue 1 <- #0",
+            "& streak #2 > #1 blue 1 <- #2",
             "-point hostile-target #1 > #256",
             "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
-            "& vanish #1 (Counterspell) stack>graveyard resolve",
+            "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
         ])
     );
     assert_eq!(
@@ -87,12 +87,12 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
             "& +point hostile-target #1 > #256",
             "tap #0 (Island) <- opponent",
             "& tap #2 (Island) <- opponent",
-            "& streak #0 > #1 blue 1 <- opponent",
-            "& streak #2 > #1 blue 1 <- opponent",
+            "& streak #0 > #1 blue 1 <- #0",
+            "& streak #2 > #1 blue 1 <- #2",
             "dwell #1",
             "-point hostile-target #1 > #256",
             "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
-            "& vanish #1 (Counterspell) stack>graveyard resolve",
+            "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
         ])
     );
 }
@@ -113,7 +113,7 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
             vec![
                 "appear #512 (Human Token) nowhere>battlefield created <- a1",
                 "-point source a1 > #0",
-                "vanish a1 stack>gone resolve",
+                "vanish a1 stack>gone resolve <- a1",
                 "count #0 (Adeline, Resplendent Cathar) pt 3/4",
             ],
         ),
@@ -122,19 +122,20 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
         assert_eq!(first, text(&lines), "script {n}");
         assert_eq!(second, text(&lines), "script {n}");
     }
-    // No event says a triggered ability with no target went on the stack: the view has it.
+    // The engine says a triggered ability with no target arrived on the stack, put there by
+    // its controller.
     let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, 5);
     assert_eq!(
         first,
         text(&[
-            "emerge a1 (Adeline, Resplendent Cathar, triggered) you from #0",
+            "emerge a1 (Adeline, Resplendent Cathar, triggered) you from #0 <- you",
             "& +point source a1 > #0",
         ])
     );
     assert_eq!(
         second,
         text(&[
-            "emerge a1 (Adeline, Resplendent Cathar, triggered) opponent from #0",
+            "emerge a1 (Adeline, Resplendent Cathar, triggered) opponent from #0 <- opponent",
             "& +point source a1 > #0",
         ])
     );
@@ -186,11 +187,11 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
     assert_eq!(
         first,
         text(&[
-            "announce coin you lost <- #1",
+            "announce coin you lost <- a1",
             "streak a1 > you damage 3 <- a1",
             "& count you life 17 <- a1",
             "-point source a1 > #1",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
             "set turn 3 you draw",
             "fly #0 (Island) library>hand draw",
             "set turn 3 you precombatMain",
@@ -200,11 +201,11 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
     assert_eq!(
         second,
         text(&[
-            "announce coin opponent lost <- #1",
+            "announce coin opponent lost <- a1",
             "streak a1 > opponent damage 3 <- a1",
             "& count opponent life 17 <- a1",
             "-point source a1 > #1",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
             "set turn 3 opponent draw",
             "fly #0 library>hand draw",
             "set turn 3 opponent precombatMain",
@@ -235,7 +236,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
             "-point source a1 > #1",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
             "set turn 2 opponent declareBlockers",
             "set turn 2 opponent combatDamage",
             "set turn 2 opponent endOfCombat",
@@ -264,7 +265,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
             "-point source a1 > #1",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
             "set turn 2 you declareBlockers",
             "set turn 2 you combatDamage",
             "set turn 2 you endOfCombat",
@@ -293,7 +294,7 @@ fn a_counter_counts() {
     let lines = [
         "count #2 (Staff of the Storyteller) story 1 <- a2",
         "-point source a2 > #2",
-        "vanish a2 stack>gone resolve",
+        "vanish a2 stack>gone resolve <- a2",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
@@ -312,7 +313,7 @@ fn a_plus_one_counter_counts_with_the_stats_it_changes() {
         "count #256 (Snapcaster Mage) plusOne 1 <- a1",
         "-point source a1 > #0",
         "& -point hostile-target a1 > #256",
-        "vanish a1 stack>gone resolve",
+        "vanish a1 stack>gone resolve <- a1",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
@@ -333,7 +334,7 @@ fn a_stolen_permanent_flies_to_its_new_side() {
             "-point hostile-target a1 > #256",
             "fly #256 (Mana Crypt) battlefield>battlefield you effect <- a1",
             "-point source a1 > #0",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
         ])
     );
     assert_eq!(
@@ -342,7 +343,7 @@ fn a_stolen_permanent_flies_to_its_new_side() {
             "-point hostile-target a1 > #256",
             "fly #256 (Mana Crypt) battlefield>battlefield opponent effect <- a1",
             "-point source a1 > #0",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
         ])
     );
 }
@@ -362,12 +363,12 @@ fn an_aura_flies_onto_its_permanent() {
             format!("fly #0 (Swift Reconfiguration) hand>stack cast at #259 <- {who}"),
             "& +point hostile-target #0 > #259".to_owned(),
             format!("tap #1 (Plains) <- {who}"),
-            format!("& streak #1 > #0 white 1 <- {who}"),
+            "& streak #1 > #0 white 1 <- #1".to_owned(),
         ]
     };
     let lands = [
         "-point hostile-target #0 > #259",
-        "fly #0 (Swift Reconfiguration) stack>battlefield on #259 resolve",
+        "fly #0 (Swift Reconfiguration) stack>battlefield on #259 resolve <- #0",
         "count #259 (Snapcaster Mage) pt",
     ];
     let mine: Vec<String> = cast("you")
@@ -397,7 +398,7 @@ fn a_sweepers_creatures_vanish_together() {
         "& vanish #512 battlefield>gone destroy <- #0",
         "& vanish #258 (Elite Spellbinder) battlefield>graveyard destroy <- #0",
         "& vanish #257 (Snapcaster Mage) battlefield>graveyard destroy <- #0",
-        "vanish #0 (Damn) stack>graveyard resolve",
+        "vanish #0 (Damn) stack>graveyard resolve <- #0",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
@@ -419,7 +420,7 @@ fn cards_drawn_and_discarded_fly_from_both_seats() {
         "& fly #3 (Counterspell) library>hand draw <- #2",
         "fly #7 (Portable Hole) hand>graveyard discard <- #2",
         "& fly #6 (Plains) hand>graveyard discard <- #2",
-        "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
+        "vanish #2 (Thirst for Discovery) stack>graveyard resolve <- #2",
     ];
     assert!(first.starts_with(&text(&lines)), "{first}");
     // The opponent's seat knows only the card it was shown, until the others are discarded.
@@ -430,7 +431,7 @@ fn cards_drawn_and_discarded_fly_from_both_seats() {
         "& fly #3 library>hand draw <- #2",
         "fly #7 (Portable Hole) hand>graveyard discard <- #2",
         "& fly #6 (Plains) hand>graveyard discard <- #2",
-        "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
+        "vanish #2 (Thirst for Discovery) stack>graveyard resolve <- #2",
     ];
     assert!(second.starts_with(&text(&lines)), "{second}");
 }
@@ -450,13 +451,13 @@ fn a_returned_spell_flies_for_its_owner_and_vanishes_for_the_other_seat() {
             "& +point hostile-target #258 > #1",
             "tap #256 (Plains) <- opponent",
             "& tap #257 (Island) <- opponent",
-            "& streak #256 > #258 white 1 <- opponent",
-            "& streak #257 > #258 blue 1 <- opponent",
+            "& streak #256 > #258 white 1 <- #256",
+            "& streak #257 > #258 blue 1 <- #257",
             "dwell #258",
             "-point hostile-target #258 > #1",
             "fly #1 (Thieving Skydiver) stack>hand effect <- #258",
             "fly #259 library>hand draw <- #258",
-            "vanish #258 (Reprieve) stack>graveyard resolve",
+            "vanish #258 (Reprieve) stack>graveyard resolve <- #258",
         ])
     );
     assert_eq!(
@@ -466,12 +467,12 @@ fn a_returned_spell_flies_for_its_owner_and_vanishes_for_the_other_seat() {
             "& +point hostile-target #258 > #1",
             "tap #256 (Plains) <- you",
             "& tap #257 (Island) <- you",
-            "& streak #256 > #258 white 1 <- you",
-            "& streak #257 > #258 blue 1 <- you",
+            "& streak #256 > #258 white 1 <- #256",
+            "& streak #257 > #258 blue 1 <- #257",
             "-point hostile-target #258 > #1",
             "vanish #1 (Thieving Skydiver) stack>hand effect <- #258",
             "fly #259 (Plains) library>hand draw <- #258",
-            "vanish #258 (Reprieve) stack>graveyard resolve",
+            "vanish #258 (Reprieve) stack>graveyard resolve <- #258",
         ])
     );
 }
@@ -486,7 +487,7 @@ fn an_exiled_permanent_vanishes() {
         "-point hostile-target a1 > #261",
         "vanish #261 (Snapcaster Mage) battlefield>exile exile <- a1",
         "-point source a1 > #2",
-        "vanish a1 stack>gone resolve",
+        "vanish a1 stack>gone resolve <- a1",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
@@ -506,11 +507,11 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "fly #0 (Oust) hand>stack cast at #256 <- you",
             "& +point hostile-target #0 > #256",
             "tap #2 (Plains) <- you",
-            "& streak #2 > #0 white 1 <- you",
+            "& streak #2 > #0 white 1 <- #2",
             "-point hostile-target #0 > #256",
             "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count opponent life 23 <- #0",
-            "vanish #0 (Oust) stack>graveyard resolve",
+            "vanish #0 (Oust) stack>graveyard resolve <- #0",
         ])
     );
     assert_eq!(
@@ -519,12 +520,12 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "fly #0 (Oust) hand>stack cast at #256 <- opponent",
             "& +point hostile-target #0 > #256",
             "tap #2 (Plains) <- opponent",
-            "& streak #2 > #0 white 1 <- opponent",
+            "& streak #2 > #0 white 1 <- #2",
             "dwell #0",
             "-point hostile-target #0 > #256",
             "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
             "count you life 23 <- #0",
-            "vanish #0 (Oust) stack>graveyard resolve",
+            "vanish #0 (Oust) stack>graveyard resolve <- #0",
         ])
     );
 }
@@ -550,7 +551,7 @@ fn a_face_down_permanent_flips() {
             "fly #2 (Snapcaster Mage, face down) library>battlefield effect <- a1",
             "fly #4 (Island) library>graveyard effect <- a1",
             "-point source a1 > #0",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
         ])
     );
     assert_eq!(
@@ -560,7 +561,7 @@ fn a_face_down_permanent_flips() {
             "fly #2 (face down) library>battlefield effect <- a1",
             "appear #4 (Island) library>graveyard effect <- a1",
             "-point source a1 > #0",
-            "vanish a1 stack>gone resolve",
+            "vanish a1 stack>gone resolve <- a1",
         ])
     );
     let [first, second] = script(names::ABHORRENT_OCULUS, name, 4);
@@ -599,9 +600,9 @@ fn a_shuffle_sets_the_library() {
             format!("tap #0 (Island) <- {who}"),
             format!("& tap #5 (Island) <- {who}"),
             format!("& tap #9 (Island) <- {who}"),
-            format!("& streak #0 > #1 blue 1 <- {who}"),
-            format!("& streak #5 > #1 blue 1 <- {who}"),
-            format!("& streak #9 > #1 blue 1 <- {who}"),
+            "& streak #0 > #1 blue 1 <- #0".to_owned(),
+            "& streak #5 > #1 blue 1 <- #5".to_owned(),
+            "& streak #9 > #1 blue 1 <- #9".to_owned(),
         ]
     };
     let draws = |slots: [u16; 7], card: Option<&str>| -> Vec<String> {
@@ -628,7 +629,7 @@ fn a_shuffle_sets_the_library() {
     expected.push("set opponent library 8 <- #1".to_owned());
     expected.extend(draws(own, Some("Plains")));
     expected.extend(draws(theirs, None));
-    expected.push("vanish #1 (Timetwister) stack>graveyard resolve".to_owned());
+    expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());
     assert_eq!(first, text(&expected));
     let mut expected = cast("opponent");
     expected.push("dwell #1".to_owned());
@@ -637,7 +638,7 @@ fn a_shuffle_sets_the_library() {
     expected.push("set you library 8 <- #1".to_owned());
     expected.extend(draws(own, None));
     expected.extend(draws(theirs, Some("Island")));
-    expected.push("vanish #1 (Timetwister) stack>graveyard resolve".to_owned());
+    expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());
     assert_eq!(second, text(&expected));
 }
 

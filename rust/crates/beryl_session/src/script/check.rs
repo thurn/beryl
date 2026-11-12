@@ -18,6 +18,11 @@
 //!   stack only with its spell on the table's stack, and an ability vanishes only from it. A
 //!   stage that starts over from a view holds what the view's table does (`Table::of`), so a
 //!   resolving spell or ability its view leaves out would have nothing to take away.
+//! - Every step names a cause that existed when it ran: a spell, ability or permanent a step
+//!   comes from is on the table as the step runs, or left it earlier in that beat (a spell's
+//!   last effect as it resolves, the mana of a permanent sacrificed for it). A cause that
+//!   left in a beat before, or that has yet to come, made nothing happen. A player always
+//!   is one of the game's.
 //!
 //! A thing *moves* in a step that takes it from its place: a `fly`, an `appear`, a `vanish`,
 //! and the `emerge` that puts an ability on the stack. Turning, tapping, striking and
@@ -26,7 +31,7 @@
 use std::fmt::{self, Display, Formatter};
 
 use super::replay::number;
-use super::{Act, Arrow, Mark, Script, Span, Subject, Table};
+use super::{Act, Arrow, Mark, Script, Span, Step, Subject, Table};
 use crate::protocol::{CardHandling, StackItem, ZoneName};
 
 /// An arrow, a mark or a lift that has begun and not ended.
@@ -170,6 +175,8 @@ struct Beat {
     /// Of `moved`, what went on the stack.
     landed: Vec<Subject>,
     ended: Vec<Open>,
+    /// What left the table.
+    left: Vec<Subject>,
 }
 
 /// The spans `script` leaves open, for the seat's next script to end, as a screen that shows
@@ -186,15 +193,28 @@ pub fn carried(mut table: Table, open: &[Open], script: &Script) -> Result<Vec<O
     for steps in &script.beats {
         let mut beat = Beat::default();
         for step in steps {
-            rule(&mut table, &mut open, &mut beat, &step.act)
-                .map_err(|e| format!("`{step}`: {e}"))?;
+            rule(&mut table, &mut open, &mut beat, step).map_err(|e| format!("`{step}`: {e}"))?;
         }
     }
     Ok(open)
 }
 
 /// Holds one step to the rules and plays it.
-fn rule(table: &mut Table, open: &mut Vec<Open>, beat: &mut Beat, act: &Act) -> Result<(), String> {
+fn rule(
+    table: &mut Table,
+    open: &mut Vec<Open>,
+    beat: &mut Beat,
+    step: &Step,
+) -> Result<(), String> {
+    let act = &step.act;
+    if let Some(cause) = step.cause
+        && !present(table, cause)
+        && !beat.left.contains(&cause)
+    {
+        return Err(format!(
+            "its cause {cause} is not on the table as it runs, and did not leave it in this beat"
+        ));
+    }
     match Open::of(act) {
         Some((Span::Begin, span)) => {
             if open.contains(&span) {
@@ -234,6 +254,9 @@ fn rule(table: &mut Table, open: &mut Vec<Open>, beat: &mut Beat, act: &Act) -> 
                 beat.moved.push(subject);
                 if lands {
                     beat.landed.push(subject);
+                }
+                if !present(table, subject) {
+                    beat.left.push(subject);
                 }
             }
         }

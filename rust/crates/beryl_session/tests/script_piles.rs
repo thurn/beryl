@@ -20,7 +20,7 @@ fn milled_cards_fly_to_the_graveyard_together() {
             format!("fly #2 {drawn}library>hand draw <- a1"),
             "-point source a1 > #0".to_owned(),
             format!("& -point hostile-target a1 > {at}"),
-            "vanish a1 stack>gone resolve".to_owned(),
+            "vanish a1 stack>gone resolve <- a1".to_owned(),
         ])
     };
     assert_eq!(first, lines("(Island) ", "opponent"));
@@ -38,8 +38,8 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
             "& +point hostile-target #4 > #261".to_owned(),
             format!("tap #3 (Island) <- {who}"),
             format!("& tap #5 (Island) <- {who}"),
-            format!("& streak #3 > #4 blue 1 <- {who}"),
-            format!("& streak #5 > #4 blue 1 <- {who}"),
+            "& streak #3 > #4 blue 1 <- #3".to_owned(),
+            "& streak #5 > #4 blue 1 <- #5".to_owned(),
         ];
         if who == "opponent" {
             lines.push("dwell #4".to_owned());
@@ -47,7 +47,7 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
         lines.extend([
             "-point hostile-target #4 > #261".to_owned(),
             "vanish #261 (Timetwister) stack>graveyard counter <- #4".to_owned(),
-            "& vanish #4 (Counterspell) stack>exile resolve".to_owned(),
+            "& vanish #4 (Counterspell) stack>exile resolve <- #4".to_owned(),
         ]);
         text(&lines)
     };
@@ -64,14 +64,15 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
         let mut lines = vec![format!(
             "fly #259 (Portable Hole) exile>stack cast <- {who}"
         )];
-        // The three lands tap together, and then each sends its mana.
+        // The three lands tap together, and then each sends its mana, which is its own
+        // ability's doing.
         let lands = [257, 258, 261];
         for (i, land) in lands.into_iter().enumerate() {
             let and = if i == 0 { "" } else { "& " };
             lines.push(format!("{and}tap #{land} (Plains) <- {who}"));
         }
         for land in lands {
-            lines.push(format!("& streak #{land} > #259 white 1 <- {who}"));
+            lines.push(format!("& streak #{land} > #259 white 1 <- #{land}"));
         }
         text(&lines)
     };
@@ -91,7 +92,7 @@ fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
     let own = [
         "set you library 5 <- a1",
         "-point source a1 > #4",
-        "vanish a1 stack>gone resolve",
+        "vanish a1 stack>gone resolve <- a1",
         // The searcher forgets the cards the shuffle hid again.
         "flip #2",
         "& flip #3",
@@ -102,7 +103,7 @@ fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
     let theirs = [
         "set opponent library 5 <- a1",
         "-point source a1 > #4",
-        "vanish a1 stack>gone resolve",
+        "vanish a1 stack>gone resolve <- a1",
     ];
     assert_eq!(first, text(&[&found[..], &own[..]].concat()));
     let look = ["-lift opponent library all"];
@@ -123,7 +124,7 @@ fn an_explored_card_is_held_up_whether_it_leaves_the_library_or_stays() {
         "showcase #261 (Oust) <- a1",
         "count #257 (Elite Spellbinder) plusOne 1 <- a1",
         "-point friendly-target a1 > #257",
-        "vanish a1 stack>gone resolve",
+        "vanish a1 stack>gone resolve <- a1",
     ]);
     assert_eq!(script(names::GET_LOST, name, 4), [stays.clone(), stays]);
 }
@@ -140,7 +141,7 @@ fn a_face_down_permanent_put_into_a_library_is_held_up_as_it_goes() {
             "vanish #0 (Snapcaster Mage) battlefield>library bottom effect <- #256".to_owned(),
             "& showcase #0 (Snapcaster Mage) <- #256".to_owned(),
             format!("count {gains} life 23 <- #256"),
-            "vanish #256 (Oust) stack>graveyard resolve".to_owned(),
+            "vanish #256 (Oust) stack>graveyard resolve <- #256".to_owned(),
         ])
     };
     assert_eq!(first, lines("you"));

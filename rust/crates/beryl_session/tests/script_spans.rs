@@ -1,15 +1,17 @@
 //! The arrows, lines, lifts and mana of the scripts the session builds (plan K23), and the
 //! rule invariants that hold them (K24): a hand-written expectation per verb for both seats,
 //! the sequences behind two themes of repeated bug reports, and for each invariant a
-//! hand-built script that breaks it.
+//! hand-built script that breaks it: the last two, a step whose cause was not there.
 
 mod common;
 
 use beryl_cards::{CARDS, SCENARIOS, names};
 use beryl_search::Budget;
-use beryl_session::protocol::{Candidate, Kind, ObjectView, StackItem, TargetRef, Why, ZoneName};
+use beryl_session::protocol::{
+    Candidate, Kind, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
+};
 use beryl_session::script::{
-    Act, Arrow, Follow, Open, Script, Span, Step, Subject, Table, carried,
+    Act, Arrow, Follow, Notice, Open, Script, Span, Step, Subject, Table, carried,
 };
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 use common::{script, scripts, text, views};
@@ -144,7 +146,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
             turn("combatDamage"),
             "strike #1 > #256 4".to_owned(),
             "& strike #256 > #1 3".to_owned(),
-            format!("emerge a2 (Sphinx of False Conclusions, triggered) {who} from #1"),
+            format!("emerge a2 (Sphinx of False Conclusions, triggered) {who} from #1 <- {who}"),
             "& +point source a2 > #1".to_owned(),
             "-point block #256 > #1".to_owned(),
             "& -point source a2 > #1".to_owned(),
@@ -244,7 +246,7 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
         "-point hostile-target a1 > #256",
         "& -point hostile-target #4 > #256",
         "vanish #256 (Snapcaster Mage) battlefield>hand effect <- #4",
-        "vanish #4 (Sink into Stupor) stack>graveyard resolve",
+        "vanish #4 (Sink into Stupor) stack>graveyard resolve <- #4",
     ]);
     assert_eq!(first, returned);
     assert_eq!(second, returned);
@@ -275,7 +277,7 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
             "& -point hostile-target #3 > #259",
             "vanish #259 (Counterspell) stack>hand effect <- #3",
             "fly #4 (Island) library>hand draw <- #3",
-            "vanish #3 (Reprieve) stack>graveyard resolve",
+            "vanish #3 (Reprieve) stack>graveyard resolve <- #3",
         ])
     );
     let [first, _] = steps(names::REPRIEVE, name, "target #3 > #259");
@@ -317,8 +319,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
             "& +point hostile-target #1 > #256".to_owned(),
             format!("tap #0 (Island) <- {who}"),
             format!("& tap #2 (Island) <- {who}"),
-            format!("& streak #0 > #1 blue 1 <- {who}"),
-            format!("& streak #2 > #1 blue 1 <- {who}"),
+            "& streak #0 > #1 blue 1 <- #0".to_owned(),
+            "& streak #2 > #1 blue 1 <- #2".to_owned(),
             // The cast is announced after its lands are tapped: what the pool paid follows.
             format!("streak {who} > #1 blue 1 <- {who}"),
             format!("& count {who} pool 0 <- {who}"),
@@ -330,7 +332,7 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
             [
                 "-point hostile-target #1 > #256",
                 "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
-                "& vanish #1 (Counterspell) stack>graveyard resolve",
+                "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
             ]
             .map(str::to_owned),
         );
@@ -353,9 +355,9 @@ fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
             "& +point hostile-target #1 > #258".to_owned(),
             format!("tap #0 (Island) <- {who}"),
             format!("& tap #512 (Treasure Token) <- {who}"),
-            format!("& streak #0 > #1 blue 1 <- {who}"),
+            "& streak #0 > #1 blue 1 <- #0".to_owned(),
             format!("vanish #512 battlefield>gone sacrifice <- {who}"),
-            format!("& streak #512 > #1 blue 1 <- {who}"),
+            "& streak #512 > #1 blue 1 <- #512".to_owned(),
         ])
     };
     assert_eq!(first, paid("you"));
@@ -540,6 +542,87 @@ fn taking_off_the_stack_what_it_does_not_hold_breaks_a_rule() {
         broken(&table, &[], &finish),
         "`vanish a9 stack>gone resolve`: a9 leaves the stack, which does not hold it"
     );
+}
+
+/// A coin's flip, as a step that names the ability `a1` its cause, and what a script says that
+/// has the step where no such ability is.
+fn flip() -> (Step, &'static str) {
+    let notice = Notice::Coin {
+        player: Side::You,
+        won: false,
+    };
+    let cause = Some(Subject::Ability { id: 1 });
+    let act = Act::Announce { notice };
+    let broken = "`announce coin you lost <- a1`: its cause a1 is not on the table as it runs, \
+                  and did not leave it in this beat";
+    (Step { act, cause }, broken)
+}
+
+/// The script that puts Adeline's trigger on the stack and the script that resolves it, with
+/// the table and the spans each plays over.
+fn trigger() -> [(Table, Vec<Open>, Script); 2] {
+    let name = "Adeline's Human arrives attacking";
+    let views = views(names::ADELINE_RESPLENDENT_CATHAR, name, |_, _, _| {});
+    let has = |s: &Script, lifts: bool| {
+        (s.beats.iter().flatten()).any(|step| match step.act {
+            Act::Emerge { id: 1, .. } => lifts,
+            Act::Vanish { subject, .. } => !lifts && subject == Subject::Ability { id: 1 },
+            _ => false,
+        })
+    };
+    // What the seat's screen shows and has open before each of its scripts.
+    let mut shown = (Table::of(&views[0][0]), Vec::new());
+    let mut found = Vec::new();
+    for seats in &views {
+        let script = seats[0].script.clone().unwrap();
+        if has(&script, found.is_empty()) {
+            found.push((shown.0.clone(), shown.1.clone(), script.clone()));
+        }
+        let open = carried(shown.0.clone(), &shown.1, &script).unwrap();
+        shown = (
+            beryl_session::script::replay(shown.0, &script).unwrap(),
+            open,
+        );
+    }
+    found
+        .try_into()
+        .expect("a script that lifts it and one that resolves it")
+}
+
+/// A step names a cause that existed when it ran: an ability that has yet to go on the stack
+/// made nothing happen.
+#[test]
+fn a_cause_yet_to_come_breaks_a_rule() {
+    let [(table, open, lift), _] = trigger();
+    assert!(carried(table.clone(), &open, &lift).is_ok());
+    let (flip, broke) = flip();
+    // In a beat before the one that puts the ability on the stack.
+    let mut early = lift.clone();
+    early.beats.insert(0, vec![flip.clone()]);
+    assert_eq!(broken(&table, &open, &early), broke);
+    // Once it is there, it may.
+    let mut after = lift;
+    after.beats.push(vec![flip]);
+    assert!(carried(table, &open, &after).is_ok());
+}
+
+/// And one that left the stack in a beat before made nothing happen either; in the beat it
+/// leaves in, it still may: the last of its effects, as it resolves.
+#[test]
+fn a_cause_that_is_gone_breaks_a_rule() {
+    let [_, (table, open, resolve)] = trigger();
+    let (flip, broke) = flip();
+    let leaves = |beat: &Vec<Step>| {
+        let gone = Subject::Ability { id: 1 };
+        (beat.iter()).any(|s| matches!(s.act, Act::Vanish { subject, .. } if subject == gone))
+    };
+    let at = resolve.beats.iter().position(leaves).unwrap();
+    let mut late = resolve.clone();
+    late.beats.insert(at + 1, vec![flip.clone()]);
+    assert_eq!(broken(&table, &open, &late), broke);
+    let mut last = resolve;
+    last.beats[at].push(flip);
+    assert!(carried(table, &open, &last).is_ok());
 }
 
 /// A view shown first that is not its seat's first starts over with a reset that names what

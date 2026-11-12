@@ -80,9 +80,17 @@ impl Table {
     /// differences, so that a spell is on the stack exactly while its card is, for both seats.
     /// On top is the spell or ability whose resolution asks the viewer, which a view leaves
     /// out of its list ([`crate::protocol::DecisionView::resolving`]) and keeps there while
-    /// the opponent is asked. And a spell whose card has left the stack is not on it, though
+    /// the opponent is asked: always, also when the list has another that reads the same (a
+    /// second trigger of one ability). And a spell whose card has left the stack is not on it, though
     /// its resolution goes on: a spell that exiles itself as it resolves.
     pub fn of(view: &PlayerView) -> Table {
+        Table::named(view, &[])
+    }
+
+    /// [`Table::of`], its abilities numbered as `names` says: the name of each entry of the
+    /// view's stack, bottom first, and then of the spell or ability whose resolution asks the
+    /// viewer ([`super::Heard::stack`]). An ability `names` has no number for stays unnumbered.
+    pub fn named(view: &PlayerView, names: &[Subject]) -> Table {
         let objects: BTreeMap<u16, ObjectView> =
             view.objects.iter().map(|o| (o.slot, o.clone())).collect();
         let resolving = match &view.status {
@@ -92,16 +100,20 @@ impl Table {
         let stack = view
             .stack
             .iter()
-            .chain(resolving.filter(|item| !view.stack.contains(item)))
-            .filter(|item| match item {
+            .chain(resolving)
+            .enumerate()
+            .filter(|(_, item)| match item {
                 StackItem::Spell { slot, .. } => {
                     objects.get(slot).is_some_and(|o| o.zone == ZoneName::Stack)
                 }
                 StackItem::Ability { .. } => true,
             })
-            .map(|item| Entry {
+            .map(|(at, item)| Entry {
                 item: item.clone(),
-                id: None,
+                id: match (item, names.get(at)) {
+                    (StackItem::Ability { .. }, Some(&Subject::Ability { id })) => Some(id),
+                    _ => None,
+                },
             })
             .collect();
         Table {

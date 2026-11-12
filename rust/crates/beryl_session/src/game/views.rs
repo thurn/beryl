@@ -8,8 +8,9 @@ use beryl_engine::{
 
 use crate::preview;
 use crate::protocol::{
-    Moment, PlayerView, Side, Status, hold_back_activation_being_paid, player_view,
+    Moment, PlayerView, Side, Status, heard, hold_back_activation_being_paid, player_view,
 };
+use crate::script::Subject;
 
 use super::{At, Boards, Game, Open, on_board};
 
@@ -63,6 +64,7 @@ impl Game {
             });
             *hurt_by = self.hurt_by[loser.index()];
         }
+        self.said = self.names.follow(&fresh);
         self.events = fresh;
         self.paused = paused;
         self.draw()
@@ -78,20 +80,20 @@ impl Game {
     pub(super) fn draw_for(&mut self, viewer: Seat) -> PlayerView {
         // A paused resolution's entry is still on top of the committed stack; the position
         // replayed to its question has taken it off.
-        let resolving = self
-            .board
-            .resolving()
-            .then(|| self.board.stack().pop())
-            .flatten();
+        let mut committed = self.board.stack();
+        let resolving = self.board.resolving().then(|| committed.pop()).flatten();
+        // Its place among the stack's entries, which it keeps until its resolution ends
+        // (`StackIx`).
+        let place = resolving.as_ref().map(|_| committed.len());
         let reviewing = self.reviewing();
-        let mut view = on_board!(&mut self.board, b => {
+        let (mut view, heard) = on_board!(&mut self.board, b => {
             // The session's decision, stack entry and events, in the game's layout.
             let decision = match &self.at {
                 At::Agent(d) | At::Human(_, Open::Decision(d)) => Some(d.relayout()),
                 _ => None,
             };
             let resolving = resolving.as_ref().map(Relayout::relayout);
-            let events: Vec<_> = self.events.iter().map(|e| e.event.relayout()).collect();
+            let events: Vec<Event<_>> = self.events.iter().map(|e| e.event.relayout()).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
                 (At::Human(id, Open::Decision(_)), Some(d)) if d.player == viewer => {
@@ -119,7 +121,22 @@ impl Game {
             let shown = view(&b.state, &self.table, &mut b.scratch);
             let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
+            // The stack as the engine's events name it: what the position shows, and the
+            // resolving entry where it was.
+            let below = place.unwrap_or(shown.stack().len()).min(shown.stack().len());
+            let (under, over) = shown.stack().split_at(below);
+            self.names.agree(under.iter().chain(&resolving).chain(over));
+            let mut names: Vec<Subject> = self.names.stack().to_vec();
+            if place.is_some() {
+                let asking = names.remove(below);
+                names.push(asking);
+            }
+            let held = view.stack.len();
             hold_back_activation_being_paid(&mut view, shown);
+            if view.stack.len() < held {
+                names.remove(view.stack.len());
+            }
+            let heard = heard(&self.table, obs, &events, &self.said, names);
             if let Some(d) = &decision
                 && d.player == viewer
             {
@@ -132,7 +149,7 @@ impl Game {
             }
             let asked = decision.as_ref().filter(|d| d.player == viewer);
             super::prompts::hold(&mut self.prompt, &mut view, &b.state, shown, &self.table, asked);
-            view
+            (view, heard)
         });
         view.turn.flip_winner = self.flip_winner.map(|p| {
             if p == viewer {
@@ -150,7 +167,7 @@ impl Game {
             };
             decision.undo_depth = u32::try_from(self.undo_depth()).unwrap_or(u32::MAX);
         }
-        view.script = Some(self.screens[viewer.index()].script(&view, resolving.is_some()));
+        view.script = Some(self.screens[viewer.index()].script(&view, &heard));
         view
     }
 }

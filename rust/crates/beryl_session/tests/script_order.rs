@@ -35,7 +35,7 @@ use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::CandidateIndex;
 use beryl_session::protocol::{Candidate, PlayerView, Side, StackItem, ZoneName};
 use beryl_session::script::{Act, Screen};
-use common::{script, text, views};
+use common::{script, text, views, views_heard};
 use play::{Casts, Play};
 
 /// A view's script as text.
@@ -75,15 +75,16 @@ fn arrows(script: &str) -> Vec<&str> {
 #[test]
 fn a_costs_mana_is_paid_before_its_cards_leave() {
     let name = "Abhorrent Oculus exiles six of seven graveyard cards as it's cast";
-    let views = views(names::ABHORRENT_OCULUS, name, |_, _, _| {});
+    let views = views_heard(names::ABHORRENT_OCULUS, name, |_, _, _| {});
     for (seat, who) in ["you", "opponent"].into_iter().enumerate() {
         let mut screen = Screen::default();
-        screen.script(&views[0][seat], false);
-        let mut cast = views[3][seat].clone();
-        cast.events = (views[1..=3].iter())
-            .flat_map(|seats| seats[seat].events.clone())
-            .collect();
-        let script = screen.script(&cast, false).to_string();
+        let (first, heard) = &views[0][seat];
+        screen.script(first, heard);
+        let (mut cast, mut heard) = views[3][seat].clone();
+        let joined = || views[1..=3].iter().map(|seats| &seats[seat]);
+        cast.events = joined().flat_map(|(view, _)| view.events.clone()).collect();
+        heard.causes = joined().flat_map(|(_, h)| h.causes.clone()).collect();
+        let script = screen.script(&cast, &heard).to_string();
         assert_eq!(
             script,
             text(&[
@@ -91,9 +92,9 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
                 format!("tap #1 (Island) <- {who}"),
                 format!("& tap #3 (Island) <- {who}"),
                 format!("& tap #8 (Island) <- {who}"),
-                format!("& streak #1 > #5 blue 1 <- {who}"),
-                format!("& streak #3 > #5 blue 1 <- {who}"),
-                format!("& streak #8 > #5 blue 1 <- {who}"),
+                "& streak #1 > #5 blue 1 <- #1".to_owned(),
+                "& streak #3 > #5 blue 1 <- #3".to_owned(),
+                "& streak #8 > #5 blue 1 <- #8".to_owned(),
                 format!("fly #6 (Jace, the Mind Sculptor) graveyard>exile exile <- {who}"),
                 format!("& fly #4 (Oust) graveyard>exile exile <- {who}"),
                 format!("& fly #10 (Portable Hole) graveyard>exile exile <- {who}"),
@@ -116,15 +117,18 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
 fn mana_paid_as_a_spell_resolves_streaks_into_it_before_it_leaves() {
     let name = "Mana Tithe: lands left after paying for the spell pay {1}";
     let [first, second] = script(names::MANA_TITHE, name, 3);
-    let paid = text(&[
-        "tap #6 (Plains) <- #257",
-        "& streak #6 > #257 white 1 <- #257",
-        "-point hostile-target #257 > #1",
-        "vanish #257 (Mana Tithe) stack>graveyard resolve",
-        "fly #1 (Jace, the Mind Sculptor) stack>battlefield resolve",
-    ]);
-    assert_eq!(first, paid);
-    assert_eq!(second, paid);
+    // The payer taps the land, and its mana is the land's own ability's.
+    let paid = |who: &str| {
+        text(&[
+            format!("tap #6 (Plains) <- {who}"),
+            "& streak #6 > #257 white 1 <- #6".to_owned(),
+            "-point hostile-target #257 > #1".to_owned(),
+            "vanish #257 (Mana Tithe) stack>graveyard resolve <- #257".to_owned(),
+            "fly #1 (Jace, the Mind Sculptor) stack>battlefield resolve <- #1".to_owned(),
+        ])
+    };
+    assert_eq!(first, paid("you"));
+    assert_eq!(second, paid("opponent"));
 }
 
 /// Two triggered abilities of one permanent are two things on the stage, each with its own
@@ -171,8 +175,8 @@ fn two_abilities_of_one_source_each_emerge_as_their_own() {
             text(&[
                 "appear #512 (Spirit Token) nowhere>battlefield created <- a1".to_owned(),
                 "-point source a1 > #2".to_owned(),
-                "vanish a1 stack>gone resolve".to_owned(),
-                format!("emerge a2 (Staff of the Storyteller, triggered) {who} from #2"),
+                "vanish a1 stack>gone resolve <- a1".to_owned(),
+                format!("emerge a2 (Staff of the Storyteller, triggered) {who} from #2 <- {who}"),
                 "& +point source a2 > #2".to_owned(),
             ])
         );

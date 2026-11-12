@@ -238,8 +238,13 @@ pub struct Game {
     stop: Arc<AtomicBool>,
     /// What each seat's screen last showed, which its next script starts from.
     screens: [crate::script::Screen; 2],
+    /// The engine's stack as its events have told it, each entry by the name both seats'
+    /// scripts call it.
+    names: crate::script::Names,
     /// The engine's events the latest view reported, each with its tag.
     events: Vec<Tagged<Large>>,
+    /// What each of `events` came from, in step with them.
+    said: Vec<crate::script::Said>,
     /// The events of the paused resolution the latest view was in, which it reported: the
     /// body executes them again as it goes on (architecture §7.3).
     paused: Vec<Tagged<Large>>,
@@ -402,7 +407,9 @@ impl Game {
             replay,
             stop: Arc::default(),
             screens: Default::default(),
+            names: crate::script::Names::default(),
             events: Vec::new(),
+            said: Vec::new(),
             paused: Vec::new(),
             hurt_by: [None; 2],
             before_cast: None,
@@ -614,6 +621,7 @@ impl Game {
         self.change_stops(stops);
         // Nothing happened since the previous view.
         self.events.clear();
+        self.said.clear();
         Ok(self.draw())
     }
 

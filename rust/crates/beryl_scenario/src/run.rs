@@ -1,7 +1,7 @@
 //! The strict runner: plays a scenario through `next` and `apply` only (architecture §17.1).
 
 use beryl_engine::card::{FaceIx, Types};
-use beryl_engine::event::Event;
+use beryl_engine::event::{Event, Tag};
 use beryl_engine::state::{ObjectFlags, ObjectRef};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
@@ -47,7 +47,7 @@ pub fn trace_with(
     scenario: &Scenario,
     slots: Slots,
 ) -> Result<Vec<Position>, Failure> {
-    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut |_, _| {})
+    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut |_, _, _| {})
 }
 
 /// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
@@ -58,7 +58,7 @@ pub fn visit(
     scenario: &Scenario,
     mut visit: impl FnMut(&GameTable, &State, &Decision),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, Slots::Dealt, &mut visit, &mut |_, _| {}).map(|_| ())
+    walk(cards, scenario, Slots::Dealt, &mut visit, &mut |_, _, _| {}).map(|_| ())
 }
 
 /// Runs a scenario like [`run`], showing `watch` the state each action begins from and the
@@ -80,15 +80,30 @@ pub fn watch_with(
     slots: Slots,
     mut watch: impl FnMut(&State, &[Event]),
 ) -> Result<(), Failure> {
+    let mut watch = |state: &State, events: &[Event], _: &[Tag]| watch(state, events);
     walk(cards, scenario, slots, &mut |_, _, _| {}, &mut watch).map(|_| ())
 }
+
+/// Runs a scenario like [`watch`], showing `watch` each event's tag too, in step with the
+/// events: for tests of what is built from what the events came from.
+pub fn watch_tagged(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    mut watch: impl FnMut(&State, &[Event], &[Tag]),
+) -> Result<(), Failure> {
+    walk(cards, scenario, Slots::Dealt, &mut |_, _, _| {}, &mut watch).map(|_| ())
+}
+
+/// What is shown the state each action begins from: the events since the action before, and
+/// each one's tag.
+type Watch<'a> = &'a mut dyn FnMut(&State, &[Event], &[Tag]);
 
 fn walk(
     cards: &'static CardTable,
     scenario: &Scenario,
     slots: Slots,
     visit: &mut dyn FnMut(&GameTable, &State, &Decision),
-    watch: &mut dyn FnMut(&State, &[Event]),
+    watch: Watch<'_>,
 ) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
         scenario: scenario.name,
@@ -105,11 +120,11 @@ fn walk(
         {
             visit(&runner.t, &runner.s, d);
         }
-        watch(&runner.s, runner.x.events.events());
+        watch(&runner.s, runner.x.events.events(), runner.x.events.tags());
         positions.push(runner.describe_position(&step));
         runner.act(action).map_err(|m| fail(Some(i), m))?;
     }
-    watch(&runner.s, runner.x.events.events());
+    watch(&runner.s, runner.x.events.events(), runner.x.events.tags());
     Ok(positions)
 }
 

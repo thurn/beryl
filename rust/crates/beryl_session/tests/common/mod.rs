@@ -2,10 +2,11 @@
 //! played through the engine, each seat's views fed to its screen as the session feeds them.
 
 use beryl_cards::{CARDS, SCENARIOS};
+use beryl_engine::event::Tagged;
 use beryl_engine::{Observation, Seat};
 use beryl_session::StopsSetting;
-use beryl_session::protocol::{Moment, PlayerView, player_view};
-use beryl_session::script::Screen;
+use beryl_session::protocol::{Moment, PlayerView, heard, player_view};
+use beryl_session::script::{Heard, Names, Screen};
 
 /// Each seat's views as `card`'s scenario named `name` plays, the first player's and then the
 /// second's, each with its script: the first is the reset its screen starts from, and view
@@ -16,8 +17,22 @@ use beryl_session::script::Screen;
 pub fn views(
     card: &str,
     name: &str,
-    mut tweak: impl FnMut(usize, u8, &mut PlayerView),
+    tweak: impl FnMut(usize, u8, &mut PlayerView),
 ) -> Vec<[PlayerView; 2]> {
+    let heard = views_heard(card, name, tweak);
+    heard
+        .into_iter()
+        .map(|seats| seats.map(|(view, _)| view))
+        .collect()
+}
+
+/// [`views`], each with what the engine said of its events and its stack: what its screen
+/// built its script from.
+pub fn views_heard(
+    card: &str,
+    name: &str,
+    mut tweak: impl FnMut(usize, u8, &mut PlayerView),
+) -> Vec<[(PlayerView, Heard); 2]> {
     let (_, scenarios) = SCENARIOS
         .iter()
         .find(|&&(c, _)| c == card)
@@ -34,17 +49,25 @@ pub fn views(
     })
     .unwrap_or_else(|e| panic!("{e:?}"));
     let mut screens: [Screen; 2] = Default::default();
+    // The stack by the names both seats' scripts call its entries, as a session follows it.
+    let mut names = Names::default();
     let mut views = Vec::new();
-    beryl_scenario::watch(&CARDS, scenario, |state, events| {
+    beryl_scenario::watch_tagged(&CARDS, scenario, |state, events, tags| {
         let decision = open
             .iter()
             .find(|(asked, _)| asked == state)
             .map(|(_, d)| d);
         let n = views.len();
+        let tagged: Vec<Tagged> = (events.iter().zip(tags))
+            .map(|(event, &tag)| Tagged { event: *event, tag })
+            .collect();
+        let said = names.follow(&tagged);
+        names.agree(state.stack());
         views.push([0, 1].map(|seat| {
+            let obs = Observation::new(state, Seat::new(seat));
             let mut view = player_view(
                 &table,
-                Observation::new(state, Seat::new(seat)),
+                obs,
                 Moment::Thinking {
                     resolving: None,
                     decision,
@@ -53,8 +76,9 @@ pub fn views(
                 events,
             );
             tweak(n, seat, &mut view);
-            view.script = Some(screens[usize::from(seat)].script(&view, false));
-            view
+            let heard = heard(&table, obs, events, &said, names.stack().to_vec());
+            view.script = Some(screens[usize::from(seat)].script(&view, &heard));
+            (view, heard)
         }));
     })
     .unwrap_or_else(|e| panic!("{e:?}"));

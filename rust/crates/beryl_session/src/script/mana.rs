@@ -1,16 +1,16 @@
 //! Mana in a script (plan K23; `manaMotes` in `ManaFlow.tsx`): a streak from what made it
 //! into the spell or ability it pays for, which changes no table, and a count of the pool for
-//! what is left there or spent from it. What each unit pays for is `infer.rs`'s guess.
+//! what is left there or spent from it. What each unit pays for is the engine's word: the
+//! entry its mana ability was activated to pay for (`hear.rs`).
 //!
 //! UI Conventions, "Mana into what it pays for": "Each tapped land glows and sends one streak
 //! of its color straight to the spell on the stack ... Mana does not stop at a pool" (Arena,
 //! `TbrYIs2juCw 33:32.45`).
 
 use super::build::Builder;
-use super::infer::{self, Pays, Told};
-use super::table::Entry;
+use super::hear::Cause;
 use super::{Act, Stream, Subject, Tally};
-use crate::protocol::{GameEvent, Mana, ManaPool, Side, StackItem};
+use crate::protocol::{Mana, ManaPool, Side};
 
 const COLORS: [Mana; 6] = [
     Mana::White,
@@ -32,56 +32,32 @@ fn amount(pool: &mut ManaPool, color: Mana) -> &mut u8 {
     }
 }
 
-/// Mana made before the ability it pays for is on the stack: its streak waits for the event
-/// that announces the ability.
-pub(super) struct Owed {
-    /// The index of that event.
-    event: usize,
-    from: Option<Subject>,
-    color: Mana,
-    amount: u8,
-    cause: Option<Subject>,
-}
-
 impl Builder<'_> {
     /// Mana is made: it streaks from `source` into what it pays for, or counts in its
-    /// player's pool.
+    /// player's pool. It pays for the spell or ability its mana ability was activated in the
+    /// payment of
+    /// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
+    /// activate an activated mana ability whenever they have priority, whenever they are
+    /// casting a spell or activating an ability that requires a mana payment, or whenever a
+    /// rule or effect asks for a mana payment"), if the table shows that; mana an effect adds,
+    /// or a mana ability activated with nothing to pay, stays in the pool.
     pub(super) fn mana(
         &mut self,
-        told: Told,
+        said: Cause,
         (player, source): (Side, Option<u16>),
         color: Mana,
         amount: u8,
-        cause: Option<Subject>,
     ) {
+        let cause = said.subject();
         // A source sacrificed for its mana has no place left on the table: its streak leaves
         // where it lay while it is going from there in the open beat, and comes from nowhere
         // otherwise.
         let from = source
             .filter(|slot| self.table.objects.contains_key(slot) || self.leaving(*slot))
             .map(|slot| Subject::Object { slot });
-        let events = self.events;
-        let to = match told.pays {
-            Pays::Pool => None,
-            Pays::Spell(slot) => self.on_stack(Subject::Object { slot }),
-            Pays::Top => self.table.stack.last().map(Entry::subject),
-            Pays::Event(event) => match &events[event] {
-                GameEvent::ResolutionPayment { item, .. } => self.paid_into(item),
-                GameEvent::Ability { item, .. } => {
-                    let Some(at) = self.making(item) else {
-                        self.owed.push(Owed {
-                            event,
-                            from,
-                            color,
-                            amount,
-                            cause,
-                        });
-                        return;
-                    };
-                    Some(self.table.stack[at].subject())
-                }
-                _ => None,
-            },
+        let to = match said {
+            Cause::Object { entry, .. } => entry.filter(|&entry| self.stacked(entry)),
+            _ => None,
         };
         match to {
             Some(to) => self.streak(from, to, color, amount, cause),
@@ -97,19 +73,6 @@ impl Builder<'_> {
                 beat.iter()
                     .any(|step| matches!(step.act, Act::Vanish { subject, .. } if subject == gone))
             })
-    }
-
-    fn on_stack(&self, subject: Subject) -> Option<Subject> {
-        let mut stack = self.table.stack.iter().map(Entry::subject);
-        stack.find(|&entry| entry == subject)
-    }
-
-    /// The resolving spell or ability `item` a payment names, as the table has it.
-    pub(super) fn paid_into(&self, item: &StackItem) -> Option<Subject> {
-        let mut stack = self.table.stack.iter().rev();
-        stack
-            .find(|entry| infer::same(&entry.item, item))
-            .map(Entry::subject)
     }
 
     fn streak(
@@ -131,22 +94,6 @@ impl Builder<'_> {
             },
             cause,
         );
-    }
-
-    /// The ability event `event` announces is on the stack as `to`: the mana made for it
-    /// streaks into it, in one beat.
-    pub(super) fn pay_owed(&mut self, event: usize, to: Subject) {
-        let (owed, rest) = std::mem::take(&mut self.owed)
-            .into_iter()
-            .partition(|owed| owed.event == event);
-        self.owed = rest;
-        let owed: Vec<Owed> = owed;
-        if !owed.is_empty() {
-            self.open = false;
-        }
-        for mana in owed {
-            self.streak(mana.from, to, mana.color, mana.amount, mana.cause);
-        }
     }
 
     /// Mana nothing in the script is paid with counts in its player's pool, as far as the

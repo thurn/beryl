@@ -18,8 +18,9 @@
 //!   the whole game, through every zone. Only a token's or a copy's slot is used again, and
 //!   only after a `vanish` step with no record has ended it: from an `appear` to that `vanish`
 //!   a slot is one thing, and the stage keeps one node for it.
-//! - An ability on the stack is a number its seat's scripts give it as it goes on the stack,
-//!   from 1 and never used again: a view's stack does not name its abilities.
+//! - An ability on the stack is a number the session gives it as the engine says it arrived
+//!   there ([`Names`]), from 1 and never used again, the same for both seats: a view's stack
+//!   does not name its abilities.
 //! - A player is a [`Side`].
 //!
 //! # The table and replay
@@ -85,9 +86,11 @@
 //! the script beside each view. The events become steps in order, played on the table as
 //! they are written (`build.rs`, `moves.rs`, `mana.rs`), each with the spans it ends and
 //! begins (`spans.rs`); what the view's table then has that no event told closes the script
-//! (`settle.rs`). What an event came from, which events happen
-//! together and which stack entry an event is about are guesses, all made in `infer.rs`
-//! (see Cause).
+//! (`settle.rs`). What an event came from, what its mana pays for and which stack entry it is
+//! about are the engine's word, which the session hands the screen beside the view
+//! ([`Heard`], see Cause): the builder follows the stack by the engine's arrivals and
+//! departures, and guesses none of it. Which events happen together is still read from
+//! their order, in `infer.rs` (by-w8gv.21.74).
 //!
 //! # Hidden information
 //!
@@ -107,9 +110,14 @@
 //! # Cause
 //!
 //! [`Step::cause`] names the spell, ability, permanent or player a step comes from; none is
-//! the rules of the game (a turn-based action, a state-based action). The session infers it
-//! from today's flat events, and will take it from the interpreter instead (plan K23), which
-//! changes no consumer.
+//! the rules of the game (a turn-based action, a state-based action). It is the engine's: the
+//! tag the engine keeps beside each event it records (plan K23,
+//! [`beryl_engine::event::Cause`]) says a player's own action (a cast, a cost, a trigger put
+//! on the stack), the effect of the resolving spell or ability, down to its leaving the
+//! stack, or the effect of an ability that never was on the stack, as a land's mana is. A
+//! step that shows an event has that event's cause, and the rule invariants hold every step
+//! to a cause that was there when it ran (`check.rs`). A step `settle.rs` writes for what no
+//! event told has none. The tags stay in the session: the stage reads the script alone.
 //!
 //! # Sound
 //!
@@ -122,12 +130,14 @@ mod attack;
 mod build;
 mod check;
 mod follow;
+mod hear;
 mod infer;
 mod mana;
 mod moves;
 mod replay;
 mod settle;
 mod spans;
+mod stack;
 mod table;
 mod text;
 mod verb;
@@ -141,6 +151,7 @@ pub(crate) use build::PLANTED;
 pub use build::Screen;
 pub use check::{Open, carried};
 pub use follow::Follow;
+pub use hear::{Cause, Heard, Move, Names, Said};
 pub use replay::{failure, replay};
 pub(crate) use spans::walkers;
 pub use table::{Entry, Piles, Table, Turn};

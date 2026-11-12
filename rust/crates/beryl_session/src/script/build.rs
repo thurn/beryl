@@ -1,16 +1,19 @@
 //! Builds a seat's script from the table it last showed, the view's events and the view's
 //! table (plan K23). The events are walked in order, each becoming the steps that show it,
 //! played on a working table as they are written; what the view's table then has that no
-//! event told (`settle.rs`) closes the script. What an event came from and which events
-//! happen together are taken as given from `infer.rs`, the one place that guesses.
+//! event told (`settle.rs`) closes the script. What an event came from, what mana pays for
+//! and which spell or ability on the stack an event is about are the engine's word
+//! ([`Heard`]); which events happen together is still read from their order (`infer.rs`).
 
 use std::collections::BTreeMap;
 
-use super::infer::{self, Origin, Show, TOLD, Told};
+use super::hear::{Cause, Heard, Move};
+use super::infer::{self, Told};
 use super::moves::{counted, set_counters};
+use super::spans;
+use super::stack::Held;
 use super::table::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check, replay};
-use super::{mana, spans};
 use crate::protocol::{
     CardType, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem, Step as TurnStep,
     TargetRef, Why, ZoneName,
@@ -22,8 +25,9 @@ use crate::protocol::{
 pub struct Screen {
     /// None before the seat's first view, and once forgotten.
     table: Option<Table>,
-    /// The number of the latest ability this seat's scripts put on the stack.
-    abilities: u32,
+    /// The abilities the engine said arrived on the stack that the seat's views have not
+    /// shown yet.
+    held: Vec<Held>,
     /// The cards the latest view had the seat looking at.
     looked: Vec<u16>,
     /// The arrows, lines and lifts its scripts have begun and not ended: the next script
@@ -42,22 +46,29 @@ impl Screen {
     }
 
     /// The script that takes the seat from the view it last showed to `view`, which is then
-    /// what it shows. `resolving`: the view is in the middle of a spell's or ability's
-    /// resolution, which is on top of its table's stack.
+    /// what it shows. `heard`: what the engine said of the view's events and of its stack.
     ///
     /// # Panics
     ///
     /// In a debug build, when the script does not replay to `view`'s table: the replay check
     /// (plan K24).
-    pub fn script(&mut self, view: &PlayerView, resolving: bool) -> Script {
-        let mut after = Table::of(view);
+    pub fn script(&mut self, view: &PlayerView, heard: &Heard) -> Script {
+        let mut after = Table::named(view, &heard.stack);
+        // An ability nothing named is told apart by its place, which no script's number is:
+        // a view whose stack the engine's events were not followed to.
+        for (at, entry) in after.stack.iter_mut().enumerate() {
+            let unnamed = matches!(entry.item, StackItem::Ability { .. }) && entry.id.is_none();
+            if unnamed {
+                entry.id = Some(u32::MAX - u32::try_from(at).unwrap_or(0));
+            }
+        }
         let script = match self.table.take() {
             None => self.reset(&mut after, view),
             Some(before) => {
                 #[cfg(debug_assertions)]
                 let shown = (before.clone(), self.spans.clone());
-                let told = infer::tell(&before, &after, view, resolving, &self.looked);
-                let mut builder = Builder::new(before, &after, view, self);
+                let told = infer::tell(&before, view, &self.looked);
+                let mut builder = Builder::new(before, &after, view, heard, self);
                 builder.lower(view.handling);
                 builder.walk(&told, infer::making(view));
                 builder.settle();
@@ -65,12 +76,11 @@ impl Screen {
                 let beats = builder.beats();
                 let Builder {
                     table,
-                    abilities,
                     spans,
                     broken,
+                    held,
                     ..
                 } = builder;
-                self.abilities = abilities;
                 #[allow(unused_mut)] // A test may plant a fault in it.
                 let mut script = Script { reset: None, beats };
                 #[cfg(test)]
@@ -81,7 +91,7 @@ impl Screen {
                 verify(shown, &script, &after, &spans);
                 // A release build starts the stage over rather than leave it out of step.
                 if table.shows(&after) {
-                    (self.spans, self.broken) = (spans, broken);
+                    (self.spans, self.broken, self.held) = (spans, broken, held);
                     after = table;
                     script
                 } else {
@@ -94,17 +104,11 @@ impl Screen {
         script
     }
 
-    /// Numbers the abilities on `table`'s stack for a script that starts over from it, and
-    /// begins at once the spans `view` calls for.
+    /// The script that starts over from `table`, saying the numbers of the abilities on its
+    /// stack and beginning at once the spans `view` calls for.
     fn reset(&mut self, table: &mut Table, view: &PlayerView) -> Script {
-        let mut abilities = Vec::new();
-        for entry in &mut table.stack {
-            if matches!(entry.item, StackItem::Ability { .. }) {
-                self.abilities += 1;
-                entry.id = Some(self.abilities);
-                abilities.push(self.abilities);
-            }
-        }
+        let abilities = table.stack.iter().filter_map(|e| e.id).collect();
+        self.held.clear();
         self.spans = spans::wanted(table, view.pending_attackers.as_deref().unwrap_or(&[]));
         self.spans
             .extend(view.handling.map(|handling| Open::Lift { handling }));
@@ -154,12 +158,15 @@ pub(super) struct Builder<'a> {
     /// The table of the view the script comes with.
     pub(super) after: &'a Table,
     pub(super) events: &'a [GameEvent],
+    /// What the engine said each event came from, in step with them.
+    pub(super) causes: Vec<Cause>,
+    pub(super) moves: &'a [(usize, Move)],
     pub(super) beats: Vec<Vec<Step>>,
     /// For each beat, the spans that end in a beat of their own before it.
     pub(super) ends: Vec<Vec<Step>>,
     /// Whether the next step joins the latest beat.
     pub(super) open: bool,
-    abilities: u32,
+    pub(super) held: Vec<Held>,
     /// The spans open as the steps so far leave them, and the arrows ended for good
     /// ([`Screen`]'s, carried through this script).
     pub(super) spans: Vec<Open>,
@@ -174,30 +181,37 @@ pub(super) struct Builder<'a> {
     /// combat as the view ends.
     pub(super) aimless: &'a [u16],
     pub(super) lines: Vec<Open>,
-    /// Mana waiting for the ability it pays for to be on the stack ([`mana::Owed`]).
-    pub(super) owed: Vec<mana::Owed>,
+    /// The players whose pools' losses have gone into what they paid for, and whether a
+    /// step ends in the script, which empties every pool.
+    drained: Vec<Side>,
+    empties: bool,
     /// Where the latest step that carries each object's record is: its beat and its place there.
     pub(super) touched: BTreeMap<u16, (usize, usize)>,
-    /// Abilities put on the stack ahead of the event that announces them.
-    early: Vec<u32>,
-    /// Abilities this script's events announced.
-    announced: Vec<u32>,
-    /// Counts held back until the ability they paid for is on the stack: the slot, the
-    /// counter, the change and its cause.
-    late: Vec<(u16, Counter, i16, Option<Subject>)>,
 }
 
 impl<'a> Builder<'a> {
-    fn new(table: Table, after: &'a Table, view: &'a PlayerView, screen: &Screen) -> Self {
+    fn new(
+        table: Table,
+        after: &'a Table,
+        view: &'a PlayerView,
+        heard: &'a Heard,
+        screen: &Screen,
+    ) -> Self {
         let aimless = view.pending_attackers.as_deref().unwrap_or(&[]);
+        // An event nothing was said of is the rules'.
+        let mut causes = heard.causes.clone();
+        causes.resize(view.events.len(), Cause::Rules);
+        let begins = |e: &GameEvent| matches!(e, GameEvent::StepBegins { .. });
         Builder {
             table,
             after,
             events: &view.events,
+            causes,
+            moves: &heard.moves,
             beats: Vec::new(),
             ends: Vec::new(),
             open: false,
-            abilities: screen.abilities,
+            held: screen.held.clone(),
             spans: screen.spans.clone(),
             broken: screen.broken.clone(),
             moved: Vec::new(),
@@ -206,11 +220,9 @@ impl<'a> Builder<'a> {
             ended: Vec::new(),
             aimless,
             lines: spans::combat(after, aimless),
-            owed: Vec::new(),
+            drained: Vec::new(),
+            empties: view.events.iter().any(begins),
             touched: BTreeMap::new(),
-            early: Vec::new(),
-            announced: Vec::new(),
-            late: Vec::new(),
         }
     }
 
@@ -262,113 +274,43 @@ impl<'a> Builder<'a> {
 
     /// `making`: the viewer is in the middle of a cast or activation no event announces yet.
     fn walk(&mut self, told: &[Told], making: bool) {
+        let mut moves = self.moves.iter().peekable();
         for i in infer::order(self.events) {
+            while let Some((_, arrives)) = moves.next_if(|(before, _)| *before <= i) {
+                self.stack_move(arrives);
+            }
             if !told[i].together {
                 self.open = false;
                 self.lift_ahead(i, told);
             }
             self.event(i, told[i]);
         }
-        self.pay_late();
+        for (_, leaves) in moves {
+            self.stack_move(leaves);
+        }
         if making && let Some(top) = self.table.stack.last().map(super::table::Entry::subject) {
             self.drain(Side::You, top, Some(Subject::Player { player: Side::You }));
         }
     }
 
-    /// Names what `origin` is as the next step is written.
-    fn cause(&self, origin: Origin) -> Option<Subject> {
-        match origin {
-            Origin::Rules => None,
-            Origin::Player(player) => Some(Subject::Player { player }),
-            Origin::Object(slot) => Some(Subject::Object { slot }),
-            Origin::Ability => self.resolving_ability().map(|id| Subject::Ability { id }),
-            Origin::Top => self.table.stack.last().map(super::table::Entry::subject),
+    /// Whether what `player`'s pool lost since the view before goes into what they now pay
+    /// for: the first of theirs in a script, with no step ending in it to empty the pool
+    /// ([CR 500.5](https://yawgatog.com/resources/magic-rules/#R5005): "As a step or phase
+    /// ends ... any unspent mana left in a player's mana pool empties"). The engine has no
+    /// event for mana spent.
+    pub(super) fn drains(&mut self, player: Side) -> bool {
+        let drains = !self.empties && !self.drained.contains(&player);
+        if drains {
+            self.drained.push(player);
         }
-    }
-
-    /// The ability on top of the stack, if one is and it is gone by the view's end: one still
-    /// there has not resolved, and the ability that did was never on this seat's table.
-    fn resolving_ability(&self) -> Option<u32> {
-        let id = self.table.stack.last()?.id?;
-        let stays = infer::pair(&self.table.stack, &self.after.stack).pop()?;
-        stays.is_none().then_some(id)
-    }
-
-    /// Which entries of the view's stack the table has already.
-    fn present(&self) -> Vec<bool> {
-        let mut present = vec![false; self.after.stack.len()];
-        for at in infer::pair(&self.table.stack, &self.after.stack)
-            .into_iter()
-            .flatten()
-        {
-            present[at] = true;
-        }
-        present
-    }
-
-    /// Puts the ability `item` on the stack, as a new one.
-    pub(super) fn lift(&mut self, item: StackItem, cause: Option<Subject>) -> u32 {
-        self.abilities += 1;
-        let id = self.abilities;
-        self.emit(Act::Emerge { id, item }, cause);
-        id
-    }
-
-    /// Puts on the stack, in a beat of their own, the abilities the view's stack has up to
-    /// its entry `through` that the table lacks: the events never say that a triggered
-    /// ability with no target went on the stack, and what goes on above one must find it
-    /// there.
-    pub(super) fn lift_through(&mut self, through: usize) {
-        let present = self.present();
-        let after = self.after;
-        let mut lifted = false;
-        for (entry, present) in after.stack.iter().zip(present).take(through + 1) {
-            if present || !matches!(entry.item, StackItem::Ability { .. }) {
-                continue;
-            }
-            if !lifted {
-                self.open = false;
-                lifted = true;
-            }
-            let id = self.lift(entry.item.clone(), activator(&entry.item));
-            self.early.push(id);
-        }
-        if lifted {
-            self.open = false;
-        }
-    }
-
-    /// Before the permanents that leave in the beat event `i` begins: the triggered
-    /// abilities that come out of them lift first.
-    fn lift_ahead(&mut self, i: usize, told: &[Told]) {
-        let after = self.after;
-        let leaving = (i..told.len())
-            .take_while(|&j| j == i || told[j].together)
-            .filter_map(|j| match self.events[j] {
-                GameEvent::ZoneChange {
-                    slot,
-                    from: ZoneName::Battlefield,
-                    to,
-                    ..
-                } if to != ZoneName::Battlefield => Some(slot),
-                _ => None,
-            });
-        let through = leaving
-            .filter_map(|slot| {
-                let present = self.present();
-                (0..after.stack.len())
-                    .rev()
-                    .find(|&at| !present[at] && infer::lifts_from(&after.stack[at].item, slot))
-            })
-            .max();
-        if let Some(through) = through {
-            self.lift_through(through);
-        }
+        drains
     }
 
     fn event(&mut self, i: usize, told: Told) {
-        let cause = self.cause(told.cause);
-        let still = told.show == Show::Still;
+        let said = self.causes[i];
+        self.unhold(said);
+        let cause = said.subject();
+        let still = told.still;
         let events = self.events;
         match &events[i] {
             &GameEvent::ZoneChange {
@@ -404,12 +346,12 @@ impl<'a> Builder<'a> {
                 slot,
                 counter,
                 amount,
-            } => self.counters(told, slot, counter, i16::from(amount), cause),
+            } => self.counters(slot, counter, i16::from(amount), cause),
             &GameEvent::CountersRemoved {
                 slot,
                 counter,
                 amount,
-            } => self.counters(told, slot, counter, -i16::from(amount), cause),
+            } => self.counters(slot, counter, -i16::from(amount), cause),
             &GameEvent::LifeGain { player, amount } => self.life(player, i16::from(amount), cause),
             &GameEvent::LifeLoss { player, amount } => {
                 self.life(player, -i16::from(amount), cause);
@@ -424,17 +366,8 @@ impl<'a> Builder<'a> {
                 slot,
                 item,
                 controller,
-            } => self.cast(told, *slot, *controller, item, cause),
-            GameEvent::Ability { item, .. } => {
-                let subject = self.announce(item, cause);
-                self.pay_owed(i, subject);
-                if let (true, Some(Subject::Player { player })) = (told.drains, activator(item)) {
-                    self.drain(player, subject, cause);
-                }
-                self.pay_late();
-                self.dwell(told, subject);
-            }
-            GameEvent::AbilityFinished => self.finish(cause),
+            } => self.cast(*slot, *controller, item, cause),
+            GameEvent::Ability { item, .. } => self.announce(item, said),
             GameEvent::Attack { attackers, .. } => self.attack(attackers, cause),
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
@@ -460,14 +393,19 @@ impl<'a> Builder<'a> {
                 source,
                 color,
                 amount,
-            } => self.mana(told, (player, source), color, amount, cause),
-            GameEvent::ResolutionPayment { player, item } => {
-                if let (true, Some(to)) = (told.drains, self.paid_into(item)) {
+            } => self.mana(said, (player, source), color, amount),
+            GameEvent::ResolutionPayment { player, .. } => {
+                let into = said.entry().filter(|&entry| self.stacked(entry));
+                if let (true, Some(to)) = (self.drains(*player), into) {
                     self.drain(*player, to, cause);
                 }
             }
-            // How the game ended is chrome.
-            GameEvent::TokensCreated { .. } | GameEvent::Lose { .. } | GameEvent::Win { .. } => {}
+            // An ability's departure says it finished ([`Move::Departure`]), and how the game
+            // ended is chrome.
+            GameEvent::AbilityFinished
+            | GameEvent::TokensCreated { .. }
+            | GameEvent::Lose { .. }
+            | GameEvent::Win { .. } => {}
         }
     }
 
@@ -477,14 +415,7 @@ impl<'a> Builder<'a> {
 
     /// The spell in `slot` is announced: as its cast completed it, if the table has it another
     /// way.
-    fn cast(
-        &mut self,
-        told: Told,
-        slot: u16,
-        controller: Side,
-        item: &StackItem,
-        cause: Option<Subject>,
-    ) {
+    fn cast(&mut self, slot: u16, controller: Side, item: &StackItem, cause: Option<Subject>) {
         let subject = Subject::Object { slot };
         let entry = self.table.stack.iter().find(|e| e.subject() == subject);
         let Some(entry) = entry else { return };
@@ -493,26 +424,10 @@ impl<'a> Builder<'a> {
             let fact = Fact::Item { subject, item };
             self.emit(Act::Set { fact }, cause);
         }
-        if told.drains {
+        if self.drains(controller) {
             self.drain(controller, subject, cause);
         }
-        self.dwell(told, subject);
-    }
-
-    /// The ability on top of the stack finished resolving and leaves it.
-    fn finish(&mut self, cause: Option<Subject>) {
-        if let Some(id) = self.resolving_ability() {
-            self.emit(
-                Act::Vanish {
-                    subject: Subject::Ability { id },
-                    from: ZoneName::Stack,
-                    why: Why::Resolve,
-                    object: None,
-                    at: None,
-                },
-                cause,
-            );
-        }
+        self.dwell(controller, subject);
     }
 
     fn gain_control(&mut self, slot: u16, player: Side, cause: Option<Subject>) {
@@ -543,9 +458,11 @@ impl<'a> Builder<'a> {
         self.emit(Act::Set { fact }, cause);
     }
 
-    /// The opponent's spell or ability is left to be read, in a beat of its own.
-    fn dwell(&mut self, told: Told, subject: Subject) {
-        if told.show == Show::Dwell {
+    /// The opponent's spell or ability, gone by the time the view shows, is left to be read,
+    /// in a beat of its own.
+    pub(super) fn dwell(&mut self, controller: Side, subject: Subject) {
+        let stays = self.after.stack.iter().any(|e| e.subject() == subject);
+        if controller == Side::Opponent && !stays {
             self.open = false;
             self.emit(Act::Dwell { subject }, None);
             self.open = false;
@@ -560,27 +477,7 @@ impl<'a> Builder<'a> {
             .cloned()
     }
 
-    /// The counts held back for the ability they paid for, now that it is on the stack, in a
-    /// beat of their own.
-    fn pay_late(&mut self) {
-        for (slot, counter, by, cause) in std::mem::take(&mut self.late) {
-            self.open = false;
-            self.counters(TOLD, slot, counter, by, cause);
-        }
-    }
-
-    fn counters(
-        &mut self,
-        told: Told,
-        slot: u16,
-        counter: Counter,
-        by: i16,
-        cause: Option<Subject>,
-    ) {
-        if told.show == Show::Late {
-            self.late.push((slot, counter, by, cause));
-            return;
-        }
+    fn counters(&mut self, slot: u16, counter: Counter, by: i16, cause: Option<Subject>) {
         let Some(mut object) = self.table.objects.get(&slot).cloned() else {
             return;
         };
@@ -682,50 +579,6 @@ impl<'a> Builder<'a> {
             let notice = Notice::Turn { active };
             self.emit(Act::Announce { notice }, None);
         }
-    }
-
-    /// Where on the table's stack the ability `item`, which an event has yet to announce,
-    /// already is: put there ahead of its event, or in the making on top.
-    pub(super) fn making(&self, item: &StackItem) -> Option<usize> {
-        let ahead = self.table.stack.iter().position(|e| {
-            e.id.is_some_and(|id| self.early.contains(&id)) && infer::same(&e.item, item)
-        });
-        ahead.or_else(|| {
-            let top = self.table.stack.last()?;
-            let fresh = top.id.is_some_and(|id| self.announced.contains(&id));
-            (!fresh && infer::same(&top.item, item)).then(|| self.table.stack.len() - 1)
-        })
-    }
-
-    /// The ability an event says was activated, or put on the stack with its targets: the
-    /// one the table has in the making, as it now is, or a new one.
-    fn announce(&mut self, item: &StackItem, cause: Option<Subject>) -> Subject {
-        if let Some(at) = self.making(item) {
-            let entry = &self.table.stack[at];
-            let subject = entry.subject();
-            self.early.retain(|&id| Some(id) != entry.id);
-            self.announced.extend(entry.id);
-            if entry.item != *item {
-                let item = item.clone();
-                self.emit(
-                    Act::Set {
-                        fact: Fact::Item { subject, item },
-                    },
-                    cause,
-                );
-            }
-            return subject;
-        }
-        let present = self.present();
-        let after = self.after;
-        let at = (0..after.stack.len())
-            .find(|&at| !present[at] && infer::same(&after.stack[at].item, item));
-        if let Some(below) = at.and_then(|at| at.checked_sub(1)) {
-            self.lift_through(below);
-        }
-        let id = self.lift(item.clone(), cause);
-        self.announced.push(id);
-        Subject::Ability { id }
     }
 }
 

@@ -10,6 +10,7 @@ use super::{
     Counter, Mana, Side, StackItem, Step, TargetRef, Why, ZoneName, side, slots, stack_item,
     stack_item_cast,
 };
+use crate::script::{Heard, Move, Said, Subject};
 
 /// One thing that happened (architecture §8.1), by public slot and relative to the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -312,11 +313,21 @@ pub(super) fn game_events<L: Layout>(
                 drawn.push(slot.num());
                 return None;
             }
+<<<<<<< HEAD
             // Said for whoever follows the stack through the events, which no view does yet:
             // a view shows the stack itself, and the blocks declared.
             if let Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } =
                 e
             {
+||||||| parent of b243260d (feat: scripts read causes and stack names from the engine)
+            // Said for whoever follows the stack through the events, which no view does yet:
+            // a view shows the stack itself.
+            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
+=======
+            // Said for whoever follows the stack through the events, which a seat's screen
+            // does ([`heard`]): a view shows the stack itself.
+            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
+>>>>>>> b243260d (feat: scripts read causes and stack names from the engine)
                 return None;
             }
             let mut event = game_event(t, obs, e);
@@ -326,6 +337,46 @@ pub(super) fn game_events<L: Layout>(
             Some(event)
         })
         .collect()
+}
+
+/// What the engine said of `events` beyond what [`game_events`] tells the viewer of `obs`
+/// (plan K23), for their screen to build its script from: what each of the view's events came
+/// from, as `said` has it of each of `events`, and the abilities that arrived on the stack
+/// and left it between them. `stack` names the entries of the view's stack
+/// ([`Heard::stack`]).
+pub fn heard<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    events: &[Event<L>],
+    said: &[Said],
+    stack: Vec<Subject>,
+) -> Heard {
+    let mut heard = Heard {
+        stack,
+        ..Heard::default()
+    };
+    for (event, said) in events.iter().zip(said) {
+        let cause = said.cause.of(|player| side(obs, player));
+        let before = heard.causes.len();
+        match (event, said.moved) {
+            (Event::StackArrival { entry }, Some(Subject::Ability { id })) => {
+                let item = stack_item(t, obs, entry);
+                heard
+                    .moves
+                    .push((before, Move::Arrival { id, item, cause }));
+            }
+            (Event::StackDeparture { .. }, Some(Subject::Ability { id })) => {
+                heard.moves.push((before, Move::Departure { id, cause }));
+            }
+            // A view's draw says its cards, and a spell arrives and leaves as its card moves.
+            (
+                Event::DrawCard { .. } | Event::StackArrival { .. } | Event::StackDeparture { .. },
+                _,
+            ) => {}
+            _ => heard.causes.push(cause),
+        }
+    }
+    heard
 }
 
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and

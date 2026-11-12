@@ -141,15 +141,12 @@ export function tabled(view: PlayerView): PlayerView {
   const { status } = view;
   const resolving =
     (status.kind === "deciding" && status.decision.resolving) || undefined;
-  const same = (item: StackItem) =>
-    JSON.stringify(item) === JSON.stringify(resolving);
   const on = (item: StackItem) =>
     item.kind === "ability" ||
     view.objects.some((o) => o.slot === item.slot && o.zone === "stack");
-  const listed =
-    resolving && !view.stack.some(same)
-      ? [...view.stack, resolving]
-      : view.stack;
+  // Always: an entry of the list that reads the same is another (a second trigger of one
+  // ability).
+  const listed = resolving ? [...view.stack, resolving] : view.stack;
   const stack = listed.filter(on);
   return stack.length === view.stack.length &&
     stack.every((item, i) => item === view.stack[i])

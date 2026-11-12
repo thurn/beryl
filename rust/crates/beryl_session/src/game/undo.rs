@@ -104,6 +104,7 @@ impl Game {
         self.board.drain_events();
         // The view says nothing happened: the cast never was.
         self.events.clear();
+        self.said.clear();
         Ok(self.draw())
     }
 
@@ -173,6 +174,7 @@ impl Game {
         self.at = At::Human(self.decision_id(), open);
         self.board.drain_events();
         self.events.clear();
+        self.said.clear();
         // The table goes back with the game: each seat's next script starts over.
         self.screens
             .iter_mut()
