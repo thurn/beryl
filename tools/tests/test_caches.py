@@ -1,10 +1,8 @@
 import io
 import os
-import shutil
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 
@@ -68,20 +66,14 @@ def test_no_live_checkouts_refuses_rather_than_removing_everything(
     assert live.exists()
 
 
-class Usage(NamedTuple):
-    total: int
-    used: int
-    free: int
-
-
 def low_disk_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, free: int
 ) -> dict[str, Path]:
-    """A cache whose volume has `free` bytes free (a faked `shutil.disk_usage`), with gone
+    """A cache whose volume has `free` bytes free (a faked `caches.free_space`), with gone
     checkouts' folders of several ages and a shared target, keyed by what each is."""
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
     monkeypatch.setattr(paths, "worktree_names", lambda: ["beryl"])
-    monkeypatch.setattr(shutil, "disk_usage", lambda _: Usage(10**12, 10**12, free))
+    monkeypatch.setattr(caches, "free_space", lambda _: free)
     target = tmp_path / "target"
     made = {
         "hours old": folder(tmp_path, "ui-shots", "by-x.1", days_old=2 / 24),

@@ -168,7 +168,7 @@ def test_saving_evicts_builds_unused_for_a_week_then_the_oldest_over_budget(
     # Room for two of the three kilobyte builds below.
     monkeypatch.setenv("BERYL_TARGET_BUDGET_GB", "2.5e-6")
     tree = checkout(tmp_path / "tree", "lock-v1")
-    profile = tree / "rust" / "target" / "debug"
+    profile: Path = tree / "rust" / "target" / "debug"
     kb = "x" * 1000
 
     def build(crate: str, days: float, text: str = kb) -> list[str]:
