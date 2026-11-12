@@ -18,8 +18,5 @@
       "theirs": "shape-order-theirs"
     }
   },
-  "layouts": [
-    "desktop",
-    "phone"
-  ]
+  "layouts": ["desktop", "phone"]
 }

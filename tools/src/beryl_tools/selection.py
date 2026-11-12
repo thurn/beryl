@@ -624,8 +624,7 @@ def choose(
     ):
         choice.add((c for c in universe if c.startswith(VERB_PREFIX)), "body")
     if lane == "ui-test" and any(
-        rewritten(p, changed, hunks_now)
-        for p in (SHAPE_SCRIPT, *SHAPE_CASES, SHAPES)
+        rewritten(p, changed, hunks_now) for p in (SHAPE_SCRIPT, *SHAPE_CASES, SHAPES)
     ):
         choice.add((c for c in universe if c.startswith(SHAPE_PREFIX)), "body")
     if lane == "shots" and SHOTS in changed:

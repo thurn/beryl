@@ -291,7 +291,7 @@ export class Prompts {
   }
 
   /** The tray held up, if it has piles to carry a card between and `name` is in one. */
-  #sorted(name: Name): Tray | undefined {
+  #piled(name: Name): Tray | undefined {
     const tray = this.#up;
     const piled = tray && tray.piles.length > 1;
     return piled &&
@@ -307,7 +307,7 @@ export class Prompts {
     if (!prompt || sending) return false;
     const resting = this.#stage.shown.resting.get(name);
     return (
-      (resting?.dress.zone === "hand" || this.#sorted(name) !== undefined) &&
+      (resting?.dress.zone === "hand" || this.#piled(name) !== undefined) &&
       prompt.marks.some(({ on }) => namedBy(on) === name)
     );
   }
@@ -329,15 +329,13 @@ export class Prompts {
   #dropped({ name, at }: Drop) {
     const rests = this.#stage.shown.resting.get(name);
     if (!rests || !this.#asked.prompt) return false;
-    const tray = this.#sorted(name);
+    const tray = this.#piled(name);
     const on = subjectOf(name);
-    if (tray) {
-      const landed = this.lands(tray, at);
-      if (!landed) return false;
-      this.#carried = this.#click({ kind: "drop", on, ...landed });
-    } else if (at.y < rests.pose.y) {
-      this.#carried = this.#click({ kind: "on", on });
-    }
+    const landed = tray && this.lands(tray, at);
+    if (tray ? !landed : at.y >= rests.pose.y) return false;
+    this.#carried = this.#click(
+      landed ? { kind: "drop", on, ...landed } : { kind: "on", on },
+    );
     return this.#carried;
   }
 

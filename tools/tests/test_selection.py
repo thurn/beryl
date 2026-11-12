@@ -424,6 +424,10 @@ def test_a_change_to_the_shape_suite_chooses_its_checks(repo: Path) -> None:
     assert choice.reasons == dict.fromkeys(SHAPE_CHECKS, "body")
     choice = selection.choose("ui-test", ["ui/shapes.json"], {}, universe, None, "")
     assert choice.reasons == dict.fromkeys(SHAPE_CHECKS, "body")
+    cases = selection.SHAPE_CASES[0]
+    code = {cases: [hunk(cases, 9, 9, ["a"], ["b"])]}
+    choice = selection.choose("ui-test", [cases], code, universe, None, "")
+    assert choice.reasons == dict.fromkeys(SHAPE_CHECKS, "body")
     # A change to the verb suite leaves them be.
     choice = selection.choose("ui-test", ["ui/verbs.json"], {}, universe, None, "")
     assert choice.reasons == dict.fromkeys(VERB_CHECKS, "body")
