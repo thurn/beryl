@@ -36,6 +36,7 @@ use beryl_session::Seat;
 use describe::reach;
 pub use describe::{Unreached, describe};
 pub use script::scripts;
+pub(crate) use script::text as script_text;
 #[cfg(test)]
 pub(crate) use start::FAULTS;
 pub use start::{Phase, start};

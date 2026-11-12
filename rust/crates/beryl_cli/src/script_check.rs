@@ -9,13 +9,22 @@
 //! Each check's result goes to the run log through the file `$BERYL_CHECK_RESULTS` names
 //! (`tools/src/beryl_tools/runlog.py`), one JSON line each. A failure prints `FAILED: <check>`
 //! with its panic, the line a rerun narrows to (`tools/src/beryl_tools/reruns.py`).
+//!
+//! `--dump <dir>` also writes every script as text under the directory, one file per moment
+//! and seat (`<card>/<moment>/<seat>.txt`) and per recording (`fixtures/<fixture>.txt`): two
+//! dumps, one from before a change to the builder and one from after, compared with `diff -r`,
+//! say which scripts the change changed.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+
+use beryl_session::GameUpdate;
+use beryl_session::ipc::{FixtureMessage, GAME_UPDATE};
 
 use crate::fixture::{self, Definition};
 use crate::specs::{self, View};
@@ -34,8 +43,13 @@ struct Check {
 
 /// Runs the checks: every one, or those `filters` name, each a check's id or what one begins
 /// with (`script:` optional): `counterspell` is every check of its spec, and
-/// `fixtures/stack-two` both seats of a recording. `fixtures` is the definitions file.
+/// `fixtures/stack-two` both seats of a recording. `fixtures` is the definitions file. With
+/// `--dump <dir>` first, the scripts of the checks run are written under `dir`.
 pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
+    let (dump, filters) = match filters {
+        [flag, dir, rest @ ..] if flag == "--dump" => (Some(Path::new(dir)), rest),
+        _ => (None, filters),
+    };
     if cfg!(not(debug_assertions)) {
         return Err("script-check needs a debug build: the script checks are assertions".into());
     }
@@ -50,7 +64,14 @@ pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
         .filter(|s| group_wanted(&filters, &s.slug))
         .collect();
     moments(&chosen, &filters, &mut checks);
-    recordings(&fixture::definitions(fixtures)?, &filters, &mut checks);
+    let definitions = fixture::definitions(fixtures)?;
+    let recorded = recordings(&definitions, &filters, &mut checks);
+    if let Some(dir) = dump {
+        dump_moments(dir, &chosen, &filters)?;
+        for (name, text) in recorded {
+            write(&dir.join(FIXTURES).join(format!("{name}.txt")), &text)?;
+        }
+    }
     let unwatched = crate::panics::unwatched();
     if !unwatched.is_empty() {
         // A session that panicked before its first view: which moment's, nothing can say.
@@ -100,10 +121,15 @@ fn moments(chosen: &[&specs::Spec], filters: &[&str], checks: &mut BTreeMap<Stri
     }
 }
 
-/// Each fixture recorded, on as many threads as the machine has cores.
-fn recordings(definitions: &[Definition], filters: &[&str], checks: &mut BTreeMap<String, Check>) {
+/// Each fixture recorded, on as many threads as the machine has cores: the scripts of each
+/// that could be, as text, by its name.
+fn recordings(
+    definitions: &[Definition],
+    filters: &[&str],
+    checks: &mut BTreeMap<String, Check>,
+) -> Vec<(String, String)> {
     if !group_wanted(filters, FIXTURES) {
-        return;
+        return Vec::new();
     }
     let chosen: Vec<(String, &Definition)> = definitions
         .iter()
@@ -125,22 +151,76 @@ fn recordings(definitions: &[Definition], filters: &[&str], checks: &mut BTreeMa
             scope.spawn(|| {
                 while let Some((id, def)) = chosen.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let started = Instant::now();
-                    let failure = fixture::record(def).err();
+                    let recorded = fixture::record(def);
                     let seconds = started.elapsed().as_secs_f64();
+                    let scripts = recorded.as_deref().ok().map(scripts);
                     let mut done = done
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    done.push((id.clone(), seconds, failure));
+                    done.push((id.clone(), def.name(), seconds, recorded.err(), scripts));
                 }
             });
         }
     });
-    for (id, seconds, failure) in done
+    let mut texts = Vec::new();
+    for (id, name, seconds, failure, scripts) in done
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
     {
         add(checks, id, seconds, failure);
+        texts.extend(scripts.map(|text| (name.to_owned(), text)));
     }
+    texts
+}
+
+/// The script of each view a recording sent, as text, headed by the view's number.
+fn scripts(messages: &[FixtureMessage]) -> String {
+    let views = messages.iter().filter_map(|message| match message {
+        FixtureMessage::Event { event, payload } if event == GAME_UPDATE => {
+            serde_json::from_value::<GameUpdate>(payload.clone()).ok()
+        }
+        _ => None,
+    });
+    let mut text = String::new();
+    for (n, update) in views.enumerate() {
+        let _ = writeln!(text, "-- view {}", n + 1);
+        if let Some(script) = &update.view.script {
+            for line in script.to_string().lines() {
+                let _ = writeln!(text, "  {line}");
+            }
+        }
+    }
+    text
+}
+
+/// Writes under `dir` the scripts of each kept moment of `chosen` that `filters` take, from
+/// each seat.
+fn dump_moments(
+    dir: &Path,
+    chosen: &[&'static specs::Spec],
+    filters: &[&str],
+) -> Result<(), String> {
+    for spec in chosen {
+        for moment in spec.moments() {
+            for view in View::ALL {
+                let id = format!("{}/{}/{}", spec.slug, moment.name, view.name());
+                if wanted(filters, &id) {
+                    let text = specs::script_text(moment, view)
+                        .unwrap_or_else(|unreached| format!("{unreached}\n"));
+                    write(&dir.join(format!("{id}.txt")), &text)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write(path: &Path, text: &str) -> Result<(), String> {
+    let said = |e| format!("{}: {e}", path.display());
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(said)?;
+    }
+    std::fs::write(path, text).map_err(said)
 }
 
 /// Logs each check, prints each failure, and fails if one did.

@@ -95,7 +95,7 @@ const USAGE: &str = "usage:
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
-  beryl_cli script-check <definitions.json> [check...]
+  beryl_cli script-check <definitions.json> [--dump DIR] [check...]
   beryl_cli specs-describe [--views] <card> [moment]
   beryl_cli specs-script <card> [moment]
   beryl_cli blunder-hunt [--hours 6] [--out DIR] [--seed N] [--inspect CASE.json]
