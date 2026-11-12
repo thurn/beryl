@@ -69,14 +69,28 @@ export interface Glint {
   ring: number;
 }
 
-/** Everything lit at stage time `now`. `dots` are sparks, six numbers each: where, how wide,
- * and its color. */
+/** What one layer of light holds at stage time `now`. `dots` are sparks, six numbers each:
+ * where, how wide, and its color. */
 export interface Scene {
   now: number;
   ribbons: Ribbon[];
   glints: Glint[];
   dots: number[];
 }
+
+/** Everything lit at a stage time, in the two layers it is painted in. A line of combat and
+ * the marks of combat lie on the table, `under` the cards and the step's banner: one passes
+ * behind a creature that stands in its way, and is never read as that creature's. An arrow at
+ * a target and the line to a source are `over` everything at rest and under what flies: an
+ * arrow's head lies on the face of what it is aimed at. */
+export interface Lit {
+  under: Scene;
+  over: Scene;
+}
+
+/** The layer a line is painted in. */
+export const layerOf = (arrow: Arrow): keyof Lit =>
+  arrow === "attack" || arrow === "block" ? "under" : "over";
 
 /** A line the stage holds, as the light is drawn from it: the whole way it runs (lines.ts
  * `wayOf`), how its ends lie, how far it is drawn in and how far drained, and the stage time
@@ -381,17 +395,25 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
   burst(scene.dots, tip, age - 60, "ember", 7, reach.middle.x, 0.7 * k);
 }
 
+/** A layer with nothing lit. */
+export const dark = (now: number): Scene => ({
+  now,
+  ribbons: [],
+  glints: [],
+  dots: [],
+});
+
 /** Everything lit at stage time `now`: the stage's lines and its creatures in combat. */
 export function lightOf(
   now: number,
   lines: readonly LitLine[],
   fighters: readonly Fighter[],
-): Scene {
-  const scene: Scene = { now, ribbons: [], glints: [], dots: [] };
+): Lit {
+  const lit: Lit = { under: dark(now), over: dark(now) };
   // The marks of combat lie under the lines that meet them.
-  for (const fighter of fighters) fighterLight(scene, fighter, now);
-  for (const line of lines) lineLight(scene, line, now);
-  return scene;
+  for (const fighter of fighters) fighterLight(lit.under, fighter, now);
+  for (const line of lines) lineLight(lit[layerOf(line.arrow)], line, now);
+  return lit;
 }
 
 /** The trace a declaration pulls toward the pointer (Aim.tsx): a beam from each of `from`

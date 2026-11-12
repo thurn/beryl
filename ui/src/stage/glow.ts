@@ -1,6 +1,8 @@
-// The painter of the stage's light (light.ts): one canvas over the card layer, as large as
-// it, which WebGL draws a scene on each time the stage writes one. It only paints: what is
-// lit, where and how brightly is the scene's, worked out from stage time.
+// The painter of one layer of the stage's light (light.ts): a canvas in the card layer, as
+// large as it, under the cards or over them, which WebGL draws a scene on each time the stage
+// writes one. A canvas lies at the one depth its style gives it, as any element does, so the
+// light under the cards and the light over them are two. It only paints: what is lit, where
+// and how brightly is the scene's, worked out from stage time.
 //
 // A ribbon is a strip of triangles along its curve, its look a fragment shader's: across it a
 // hot core a little off its middle, as a ribbon lit from one side, a band of its color with
@@ -166,8 +168,9 @@ export class Glow {
   #stale = true;
   #blank = true;
 
-  /** A painter over `layer`, if the browser has WebGL to give it. */
-  static on(layer: HTMLElement): Glow | undefined {
+  /** A painter on `layer`, `under` its cards or `over` them, if the browser has WebGL to
+   * give it. */
+  static on(layer: HTMLElement, where: "under" | "over"): Glow | undefined {
     const canvas = layer.ownerDocument.createElement("canvas");
     const gl = canvas.getContext("webgl", {
       alpha: true,
@@ -176,7 +179,7 @@ export class Glow {
     });
     if (!gl) return undefined;
     try {
-      return new Glow(layer, canvas, gl);
+      return new Glow(layer, canvas, gl, where);
     } catch {
       return undefined;
     }
@@ -186,6 +189,7 @@ export class Glow {
     layer: HTMLElement,
     canvas: HTMLCanvasElement,
     gl: WebGLRenderingContext,
+    where: "under" | "over",
   ) {
     this.#layer = layer;
     this.#canvas = canvas;
@@ -203,7 +207,7 @@ export class Glow {
     );
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    canvas.className = "stage-lights";
+    canvas.className = `stage-lights stage-lights-${where}`;
     canvas.setAttribute("aria-hidden", "true");
     canvas.addEventListener("webglcontextlost", () => {
       this.lost = true;

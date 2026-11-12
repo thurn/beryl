@@ -239,9 +239,12 @@
   z-index: 0;
 }
 /* Where the browser paints the lines as light (stage/dom.ts `data-light`; stage/light.ts,
-   stage/glow.ts), on a canvas over everything at rest and under what flies, the paths are
-   the record of what is drawn and are not painted; nor are the marks of combat a card's face
-   would wear, which the light draws from where the stage has the card. */
+   stage/glow.ts), it is on two canvases at the depths of the two drawings: an arrow at a
+   target and the line to a source over everything at rest and under what flies, and the
+   lines and marks of combat on the table, under every card and the step's banner. The paths
+   of a layer that is painted are the record of what is drawn and are not painted
+   themselves; nor are the marks of combat a card's face would wear, which the light draws
+   from where the stage has the card. */
 .stage-lights {
   position: absolute;
   left: 0;
@@ -251,10 +254,14 @@
   height: 100%;
   pointer-events: none;
 }
-.card-layer[data-light] .stage-line {
+.stage-lights-under {
+  z-index: 0;
+}
+.card-layer[data-light~="over"] .stage-lines-over .stage-line,
+.card-layer[data-light~="under"] .stage-lines-under .stage-line {
   visibility: hidden;
 }
-.card-layer[data-light] .combat-marker {
+.card-layer[data-light~="under"] .combat-marker {
   display: none;
 }
 .stage-line {

@@ -15,7 +15,7 @@ import {
   type On,
 } from "./effects.ts";
 import type { Name, Resting } from "./layout.ts";
-import { lightOf, type Fighter, type LitLine, type Scene } from "./light.ts";
+import { lightOf, type Fighter, type Lit, type LitLine } from "./light.ts";
 import { shapeOf, wayOf, type Reach } from "./lines.ts";
 import type { NoticeSurface } from "./shown.ts";
 import {
@@ -29,11 +29,11 @@ import { Streaks, type Streak, type StreakSurface } from "./streaks.ts";
 import type { Act } from "./table.ts";
 import { litBy, SNAP } from "./tracks.ts";
 
-/** Where all of it is drawn. One that paints light is given the scene of it each tick, and
+/** Where all of it is drawn. One that paints light is given all that is lit each tick, and
  * none once the stage no longer draws on it. */
 export interface OverlaySurface
   extends EffectSurface, SpanSurface, StreakSurface, NoticeSurface {
-  light?(scene?: Scene): void;
+  light?(lit?: Lit): void;
 }
 
 /** What the stage holds at rest, by name. */
@@ -117,7 +117,7 @@ export class Overlay {
   /** Everything lit at stage time `now` (light.ts): the `lines` held then, and the marks of
    * the creatures among `held` that attack or block. A creature's mark begins as the stage
    * first draws it in combat, which is when the view that says so is shown. */
-  light(now: number, lines: readonly Line[], held: Held): Scene {
+  light(now: number, lines: readonly Line[], held: Held): Lit {
     const lit = lines.flatMap((line): LitLine[] => {
       const [a, b] = [this.#reach(line.from, now), this.#reach(line.to, now)];
       const way = line.shape && a && b ? wayOf(line.arrow, a, b) : null;

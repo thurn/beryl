@@ -5,7 +5,7 @@
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lightOf, widthOf } from "../src/stage/light.ts";
+import { lightOf as layered, widthOf } from "../src/stage/light.ts";
 import { wayOf } from "../src/stage/lines.ts";
 import { move, object, recorder, stage, view } from "./stage-table.mjs";
 
@@ -17,6 +17,15 @@ const card = (x, y, toward = -1) => ({
     toward,
     ahead: 100 / 6,
 });
+/** Everything lit, whichever layer it is painted in. */
+const lightOf = (...given) => {
+    const { under, over } = layered(...given);
+    return {
+        ribbons: [...under.ribbons, ...over.ribbons],
+        glints: [...under.glints, ...over.glints],
+        dots: [...under.dots, ...over.dots],
+    };
+};
 const slot = (n) => ({ kind: "object", slot: n });
 const point = (span, arrow, from, to) => ({
     act: { verb: "point", span, arrow, from, to },
@@ -162,6 +171,37 @@ test("a blocker has a gold crescent under the edge that faces its attacker", () 
     assert.deepEqual(glint.up, { x: 0, y: 1 });
 });
 
+test("combat is lit under the cards, and an arrow and a source's line over them", () => {
+    const [spell, target] = [card(1000, 300), card(0, 0, 1)];
+    const [blocker, attacker] = [card(400, 0, 1), card(400, 500)];
+    const { under, over } = layered(
+        1000,
+        [
+            line("hostile-target", spell, target),
+            line("source", spell, attacker),
+            line("block", blocker, attacker),
+            line("attack", attacker, target),
+        ],
+        [
+            { reach: attacker, fights: "attacks", since: 1000 },
+            { reach: blocker, fights: "blocks", since: 1000 },
+        ],
+    );
+    assert.deepEqual(
+        over.ribbons.map((ribbon) => ribbon.cut),
+        ["arrow", "thread"],
+    );
+    assert.deepEqual(
+        under.ribbons.map((ribbon) => ribbon.tone),
+        ["gold", "ember"],
+    );
+    assert.deepEqual(
+        under.glints.map((glint) => glint.kind).filter((k) => k !== "flash"),
+        ["wedge", "crescent"],
+    );
+    assert.ok(over.glints.every((glint) => glint.kind === "flash"));
+});
+
 test("each cut of ribbon comes to a point where it ends", () => {
     for (const cut of ["arrow", "beam", "thread"]) {
         assert.equal(widthOf(cut, 7, 400, 400), 0, `${cut}'s head`);
@@ -232,22 +272,22 @@ test("a creature's mark of combat begins as the stage first draws it fighting", 
     made.mount(surface);
     // What fights as the stage starts over has fought since before it: no pop.
     made.play(fighting(attacks));
-    assert.equal(scenes.at(-1).glints.length, 1);
-    assert.ok(Math.abs(scenes.at(-1).glints[0].size.y - 100 / 6) < 1e-9);
+    assert.equal(scenes.at(-1).under.glints.length, 1);
+    assert.ok(Math.abs(scenes.at(-1).under.glints[0].size.y - 100 / 6) < 1e-9);
     // One that begins to fight under the stage's eye pops from that tick.
     made.play(view([1, 2]));
-    assert.deepEqual(scenes.at(-1).glints, []);
+    assert.deepEqual(scenes.at(-1).under.glints, []);
     made.clock.advance(500);
     made.play(fighting(attacks), { beats: [] });
     made.clock.advance(0);
-    assert.equal(scenes.at(-1).glints[0].size.y, 0);
+    assert.equal(scenes.at(-1).under.glints[0].size.y, 0);
     made.clock.advance(1000);
-    assert.equal(scenes.at(-1).glints[0].warm, 0);
+    assert.equal(scenes.at(-1).under.glints[0].warm, 0);
     // Blocked, it turns gold from the tick that shows it so.
     made.play(fighting({ ...attacks, blocked: true }), { beats: [] });
     made.clock.advance(0);
     made.clock.advance(80);
-    assert.equal(scenes.at(-1).glints[0].warm, 0.5);
+    assert.equal(scenes.at(-1).under.glints[0].warm, 0.5);
     // The stage taken off its surface paints no more on it.
     made.unmount(surface);
     assert.equal(scenes.at(-1), undefined);

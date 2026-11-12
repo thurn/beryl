@@ -11,10 +11,10 @@
 // begins it to the step that ends it: over everything at rest and under what flies, or for a
 // line of combat on the table, under the cards. The stage writes its shape in stage pixels
 // each tick. Where the browser has WebGL the lines and the marks of combat are painted as
-// light instead (light.ts, glow.ts), on a canvas of the layer's own; the paths stay on the
-// page as the record of what is drawn, which the checks read, and are not painted, and the
-// layer says so (`data-light`) for the styles that hide them and the marks a card's face
-// would wear. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
+// light instead (light.ts, glow.ts), on two canvases of the layer's own, at the depths of
+// the two drawings; the paths stay on the page as the record of what is drawn, which the
+// checks read, and are not painted, and the layer says which of the two are painted
+// (`data-light`) for the styles that hide them and the marks a card's face would wear. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
 // far through an announcement is (shown.ts) is a number on the layer's parent, which the
 // chrome's banners are drawn in. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
@@ -23,7 +23,7 @@ import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
 import type { Name, Point, Resting } from "./layout.ts";
-import type { Ribbon, Scene } from "./light.ts";
+import { dark, type Lit, type Ribbon } from "./light.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
@@ -42,9 +42,10 @@ export class DomSurface implements Surface {
    * the table, for the lines of combat. */
   readonly #drawings: { over?: SVGSVGElement; under?: SVGSVGElement } = {};
   readonly #lines = new Map<string, SVGPathElement>();
-  /** What paints the light: none yet, or `null` where the browser has none to give. */
-  #glow: Glow | null | undefined;
-  #scene: Scene | undefined;
+  /** What paints each layer of light: none yet, or `null` where the browser has none to
+   * give. */
+  readonly #glow: { under?: Glow | null; over?: Glow | null } = {};
+  #lit: Lit | undefined;
   /** The trace a declaration pulls toward the pointer (Aim.tsx), which is no part of the
    * stage's scene. */
   #aim: readonly Ribbon[] = [];
@@ -226,12 +227,15 @@ export class DomSurface implements Surface {
     if (path.getAttribute("d") !== d) path.setAttribute("d", d);
   }
 
-  /** Paints `scene`; with none, the stage no longer draws here, and the painter goes. */
-  light(scene?: Scene) {
-    this.#scene = scene;
-    if (scene) return this.#paint();
-    this.#glow?.gone();
-    this.#glow = undefined;
+  /** Paints all that is `lit`; with none, the stage no longer draws here, and the painters
+   * go. */
+  light(lit?: Lit) {
+    this.#lit = lit;
+    if (lit) return this.#paint();
+    for (const where of ["under", "over"] as const) {
+      this.#glow[where]?.gone();
+      delete this.#glow[where];
+    }
     delete this.#layer.dataset.light;
   }
 
@@ -242,26 +246,34 @@ export class DomSurface implements Surface {
   }
 
   #paint() {
-    const drawn = this.#scene ?? { now: 0, ribbons: [], glints: [], dots: [] };
     // With reduced motion asked for, light stands still: nothing runs along it or flies off.
     const still = this.#layer.ownerDocument.defaultView?.matchMedia?.(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    const scene = still ? { ...drawn, now: 0, dots: [] } : drawn;
-    const ribbons = [...scene.ribbons, ...this.#aim];
-    const lit = ribbons.length + scene.glints.length + scene.dots.length > 0;
-    // A painter is made with the first light there is to paint.
-    if (this.#glow === undefined && lit) {
-      this.#glow = Glow.on(this.#layer) ?? null;
-      if (this.#glow) this.#layer.dataset.light = "";
+    for (const where of ["under", "over"] as const) {
+      const drawn = this.#lit?.[where] ?? dark(0);
+      const scene = still ? { ...drawn, now: 0, dots: [] } : drawn;
+      // The pointer's trace lies on the table, as the line the aim will draw does.
+      const ribbons =
+        where === "under" ? [...scene.ribbons, ...this.#aim] : scene.ribbons;
+      const lit = ribbons.length + scene.glints.length + scene.dots.length > 0;
+      // A painter is made with the first light there is to paint in its layer.
+      if (this.#glow[where] === undefined && lit) {
+        this.#glow[where] = Glow.on(this.#layer, where) ?? null;
+      }
+      // A context the browser took back paints nothing: the paths are drawn again.
+      if (this.#glow[where]?.lost) {
+        this.#glow[where].gone();
+        this.#glow[where] = null;
+      }
+      this.#glow[where]?.paint({ ...scene, ribbons });
     }
-    // A context the browser took back paints nothing: the paths are drawn again.
-    if (this.#glow?.lost) {
-      this.#glow.gone();
-      this.#glow = null;
-      delete this.#layer.dataset.light;
-    }
-    this.#glow?.paint({ ...scene, ribbons });
+    // Which layers are painted, for the styles that hide what the paint stands for.
+    const painted = (["under", "over"] as const).filter(
+      (where) => this.#glow[where],
+    );
+    if (painted.length === 0) delete this.#layer.dataset.light;
+    else this.#layer.dataset.light = painted.join(" ");
   }
 
   streak(key: string, look?: string, shape?: StreakShape | null) {
