@@ -532,6 +532,35 @@ mod tests {
 
     /// Generating a spec plays every moment from both seats: a moment is kept only once it
     /// reaches a live decision from each.
+    /// A stand-in pays for the viewer while the spell that asks resolves: every view they
+    /// watch meanwhile keeps that spell on the stack, where its card still lies.
+    #[test]
+    fn a_spell_that_asks_a_stand_in_stays_on_the_watched_stack() {
+        use beryl_session::protocol::{StackItem, ZoneName};
+        let (_, moment) = find("mana-tithe", "the-controller-pays-1").expect("the moment");
+        let (_, views) = describe::trace(moment, View::Yours).expect("the moment plays");
+        let mut watched = 0;
+        for view in &views {
+            if matches!(view.status, Status::Deciding { .. }) {
+                continue;
+            }
+            for card in view.objects.iter().filter(|o| o.zone == ZoneName::Stack) {
+                watched += 1;
+                assert!(
+                    view.stack.iter().any(
+                        |item| matches!(item, StackItem::Spell { slot, .. } if *slot == card.slot)
+                    ),
+                    "turn {} {:?}: {:?} lies on the stack, which lists {:?}",
+                    view.turn.number,
+                    view.turn.step,
+                    card.name,
+                    view.stack
+                );
+            }
+        }
+        assert!(watched > 0, "no view shows a spell on the stack");
+    }
+
     #[test]
     fn moments_are_named_uniquely() {
         let specs = sample();
