@@ -35,7 +35,12 @@ pub struct Screen {
     /// ends them.
     spans: Vec<Open>,
     /// The arrows ended for good while their spell or ability is still on the stack, by
-    /// their ends ([`Builder::part`]).
+    /// their ends ([`Builder::part`]): no guess, but what a later view's stack cannot say,
+    /// its targets naming slots alone. One is the engine's word that the target is a new
+    /// object, a zone change told of it
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves
+    /// from one zone to another becomes a new object"); the other is staging, a spell or
+    /// ability done with its target pointing at it no more.
     broken: Vec<(Subject, Subject)>,
     /// The attackers whose target the latest view had still to be chosen
     /// ([`PlayerView::pending_attackers`]).
