@@ -11,14 +11,17 @@
 //! given, and the engine asks no pick with one answer (architecture §7.2).
 //!
 //! The prompt opens with the least share on each recipient, sets a share at a click that
-//! names its number, and confirms once nothing is left to give.
+//! names its number, and confirms once nothing is left to give. Each recipient is marked as
+//! the target it is, the viewer's own apart from another's, so the screen draws the arrow to
+//! it that the spell will have once it is cast (UI Conventions, exception 4).
 
+use beryl_engine::Layout;
 use beryl_engine::card::{Part, Purpose};
 
-use super::held::{Clicked, Run, Step, Want, button};
-use super::{ButtonId, Click, PromptView, ShapeView, Share};
-use crate::protocol::{Candidate, DecisionView};
-use crate::script::Subject;
+use super::held::{Clicked, Run, Step, Table, Want, button};
+use super::{ButtonId, Click, Marked, PromptView, ShapeView, Share};
+use crate::protocol::{Candidate, DecisionView, Side};
+use crate::script::{Mark, Subject};
 
 /// The state of a prompt of the divide shape.
 #[derive(Clone, Debug)]
@@ -30,6 +33,8 @@ pub(crate) struct Divide {
     least: u8,
     /// Each recipient and its share, in the order the engine asks for them.
     shares: Vec<(u16, u8)>,
+    /// The recipients the viewer controls.
+    friendly: Vec<u16>,
     confirm: String,
 }
 
@@ -37,8 +42,14 @@ impl Divide {
     /// The state the divide prompt for `purpose` of `decision` opens in. What there is to
     /// give out is read from the shares the first recipient is offered: the most it may take
     /// leaves each of the others the least.
-    pub(crate) fn open(purpose: Purpose, decision: &DecisionView) -> Option<Divide> {
+    pub(crate) fn open<L: Layout>(
+        table: &Table<'_, L>,
+        purpose: Purpose,
+        decision: &DecisionView,
+    ) -> Option<Divide> {
         let prompt = &decision.prompt;
+        let yours =
+            |slot: &u16| (table.object(*slot)).is_some_and(|object| object.controller == Side::You);
         let offered = (decision.candidates.iter()).filter_map(|c| match c.option {
             Candidate::Number { n } => Some(n),
             _ => None,
@@ -50,6 +61,7 @@ impl Divide {
             total: most.saturating_add(least.saturating_mul(others)),
             least,
             shares: prompt.about.iter().map(|&slot| (slot, least)).collect(),
+            friendly: prompt.about.iter().copied().filter(yours).collect(),
             confirm: prompt.words.confirm.clone(),
         })
     }
@@ -94,10 +106,19 @@ impl Divide {
         )
     }
 
-    /// Writes the state into `view`. Nothing is marked: each share says its recipient.
+    /// Writes the state into `view`: each recipient marked as a target, and its share.
     pub(crate) fn show(&self, view: &mut PromptView) {
         let given = self.left() == 0;
-        view.marks = Vec::new();
+        view.marks = (self.shares.iter())
+            .map(|&(slot, _)| Marked {
+                on: Subject::Object { slot },
+                mark: if self.friendly.contains(&slot) {
+                    Mark::FriendlyTarget
+                } else {
+                    Mark::HostileTarget
+                },
+            })
+            .collect();
         view.buttons = vec![button(ButtonId::Confirm, &self.confirm, given, given)];
         view.state = Some(ShapeView::Divide {
             total: self.total,

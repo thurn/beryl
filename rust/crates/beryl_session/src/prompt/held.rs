@@ -96,7 +96,7 @@ impl Held {
             ShapeName::Number => Shaped::Number(Number::open(purpose, decision)?),
             ShapeName::Mode => Shaped::Mode(Mode::open(purpose, decision)),
             ShapeName::Catalog => Shaped::Catalog(Catalog::open(purpose, decision)?),
-            ShapeName::Divide => Shaped::Divide(Divide::open(purpose, decision)?),
+            ShapeName::Divide => Shaped::Divide(Divide::open(&table, purpose, decision)?),
             ShapeName::Pay => Shaped::Pay(Box::new(Pay::open(&table, purpose, decision)?)),
             ShapeName::Declare => Shaped::Declare(Declare::open(&table, purpose, decision)?),
         };

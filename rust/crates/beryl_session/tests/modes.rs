@@ -130,7 +130,7 @@ fn an_x_is_set_and_then_paid() {
         "number x: Select a value for X.\n\
          number 1 of 1 2 ({{2}}{{U}})\n\
          suggested {}\n\
-         confirm[Pay]*\n",
+         confirm[Pay | X = 1]*\n",
         cards(&three),
     );
     assert_eq!(play.prompt(), one);
@@ -138,7 +138,7 @@ fn an_x_is_set_and_then_paid() {
         "number x: Select a value for X.\n\
          number 2 of 1 2 ({{3}}{{U}})\n\
          suggested {}\n\
-         confirm[Pay]*\n",
+         confirm[Pay | X = 2]*\n",
         cards(&islands),
     );
     let set = |n: u8| Click::Number { n, on: None };

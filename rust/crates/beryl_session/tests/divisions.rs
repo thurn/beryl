@@ -25,7 +25,7 @@ use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
 use beryl_session::script::Subject;
-use play::{Play, asked, card, position};
+use play::{Play, asked, card, cards, position};
 
 const CONFIRM: Click = Click::Button {
     button: ButtonId::Confirm,
@@ -226,8 +226,9 @@ fn numbers(from: u8, to: u8, prompt: Prompt) -> Decision {
 
 /// An amount divided among recipients, which no card asks yet, from decisions built here:
 /// five damage among three creatures. Each opens with one, a click that names a number sets
-/// a share within what is left, and the button confirms once all is given out. The picks are
-/// a number for each recipient in turn but the last.
+/// a share within what is left, and the button confirms once all is given out. Each is marked
+/// as a target of the opponent's throughout. The picks are a number for each recipient in turn
+/// but the last.
 #[test]
 fn an_amount_is_divided_among_recipients() {
     let (table, state) = position(&RECIPIENTS);
@@ -250,11 +251,14 @@ fn an_amount_is_divided_among_recipients() {
         panic!("three recipients");
     };
     let state_of = |held: &Held| held.view().to_string();
+    // Each recipient is the opponent's, and marked as the target it is.
+    let aimed = cards(&[a, b, c]);
     assert_eq!(
         state_of(&held),
         format!(
             "divide divide-damage: Distribute damage.\n\
              divide 5, 2 left: #{a}=1 #{b}=1 #{c}=1\n\
+             hostile-target {aimed}\n\
              confirm(Submit)\n"
         )
     );
@@ -275,6 +279,7 @@ fn an_amount_is_divided_among_recipients() {
         format!(
             "divide divide-damage: Distribute damage.\n\
              divide 5, 0 left: #{a}=3 #{b}=1 #{c}=1\n\
+             hostile-target {aimed}\n\
              confirm[Submit]*\n"
         )
     );
@@ -301,6 +306,7 @@ fn an_amount_is_divided_among_recipients() {
         format!(
             "divide divide-damage: Distribute damage.\n\
              divide 5, 1 left: #{a}=2 #{b}=1 #{c}=1\n\
+             hostile-target {aimed}\n\
              confirm(Submit)\n"
         )
     );
@@ -313,6 +319,7 @@ fn an_amount_is_divided_among_recipients() {
         format!(
             "divide divide-damage: Distribute damage.\n\
              divide 5, 0 left: #{a}=2 #{b}=2 #{c}=1\n\
+             hostile-target {aimed}\n\
              confirm[Submit]*\n"
         )
     );

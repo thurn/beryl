@@ -4,7 +4,7 @@
 //! ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has a
 //! variable cost that will be paid as it's being cast (such as an {X} in its mana cost; see
 //! rule 107.3), the player announces the value of that variable"). The prompt opens at the
-//! least value and says what each makes the spell cost
+//! least value, says the value under its button, and says what each makes the spell cost
 //! ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "The total cost is the
 //! mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
 //! cost increases, and minus all cost reductions"), with what the engine's default payment of
@@ -12,8 +12,9 @@
 
 use beryl_engine::card::Purpose;
 
-use super::held::{Clicked, Run, Step, button};
-use super::{ButtonId, Click, Marked, PromptView, ShapeView};
+use super::held::{Clicked, Run, Step};
+use super::wording::X_VALUE;
+use super::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeView};
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::{Mark, Subject};
 
@@ -95,7 +96,14 @@ impl Number {
                 mark: Mark::Suggested,
             })
             .collect();
-        view.buttons = vec![button(ButtonId::Confirm, &self.confirm, true, true)];
+        // The button says the value it answers with under its label.
+        view.buttons = vec![PromptButton {
+            id: ButtonId::Confirm,
+            label: self.confirm.clone(),
+            caption: X_VALUE.replace("{n}", &value.n.to_string()),
+            enabled: true,
+            primary: true,
+        }];
         view.state = Some(ShapeView::Number {
             values: self.values.iter().map(|value| value.n).collect(),
             value: value.n,

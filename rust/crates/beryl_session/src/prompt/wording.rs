@@ -499,6 +499,10 @@ pub(crate) enum PassLeads {
     NextTurn,
 }
 
+/// What the button that pays for an X says under its label: the value set, `{n}`. Arena's
+/// reads "Pay" over "X = 0" (`0VsYGs88NXA 55:32.0`).
+pub(crate) const X_VALUE: &str = "X = {n}";
+
 /// The pass button's label and the caption under it, by where passing leads and whether the
 /// turn is the viewer's (`yours`).
 ///
