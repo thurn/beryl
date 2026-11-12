@@ -218,7 +218,7 @@ impl<L: Layout> State<L> {
         let mut cards: L::Deck<L::Card> = Default::default();
         for &slot in slots {
             // A library never holds more than its owner's deck slots.
-            let _ = cards.push(self.object(slot).card);
+            cards.push_bounded(self.object(slot).card);
         }
         rng.shuffle(cards.as_mut_slice());
         for (&slot, &card) in slots.iter().zip(cards.iter()) {

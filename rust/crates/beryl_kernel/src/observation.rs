@@ -208,7 +208,7 @@ impl<'a, L: Layout> Observation<'a, L> {
             let mut remainder: L::Deck<L::Card> = Default::default();
             for card in t.deck(player) {
                 // A deck never holds more cards than the layout has slots for (State::deal).
-                let _ = remainder.push(card);
+                remainder.push_bounded(card);
             }
             let mut unknown: L::Deck<L::Slot> = Default::default();
             for i in 0..t.deck_len(player) {
@@ -220,7 +220,8 @@ impl<'a, L: Layout> Observation<'a, L> {
                         .expect("a known card not in its deck");
                     remainder.remove(at);
                 } else {
-                    let _ = unknown.push(slot);
+                    // One of the deck's slots, of which the layout has no more than these.
+                    unknown.push_bounded(slot);
                 }
             }
             rng.shuffle(remainder.as_mut_slice());

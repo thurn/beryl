@@ -137,10 +137,9 @@ fn advance<const STEPS: bool, L: Layout>(
     let mut settled = false;
     loop {
         let unchanged = std::mem::take(&mut settled);
-        if let Some(outcome) = s.outcome() {
+        if let Some(outcome) = layers::over_or_refreshed(s, t, &mut x.events) {
             return Some(Step::Over(outcome));
         }
-        layers::refresh(s, t, &mut x.events);
         if combat::in_combat(s.turn().step()) {
             combat::prune(s);
         }
@@ -171,9 +170,7 @@ fn advance<const STEPS: bool, L: Layout>(
                 // CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
                 if s.triggers().is_empty() {
-                    if turn::begin_turn(s, t, &mut x.events).is_err() {
-                        stall(s, StallReason::Capacity);
-                    }
+                    stall_if_full(turn::begin_turn(s, t, &mut x.events), s);
                     continue;
                 }
             }
@@ -181,9 +178,10 @@ fn advance<const STEPS: bool, L: Layout>(
         if passes_silently(s) {
             x.counts.silent += 1;
             let passes = s.turn().passes();
-            if perform_priority(s, t, x, a, s.turn().priority(), Opt::Pass).is_err() {
-                stall(s, StallReason::Capacity);
-            }
+            stall_if_full(
+                perform_priority(s, t, x, a, s.turn().priority(), Opt::Pass),
+                s,
+            );
             settled = handed_over(s, passes);
             continue;
         }
@@ -201,7 +199,7 @@ fn advance<const STEPS: bool, L: Layout>(
         if silent {
             x.counts.silent += 1;
             let passes = s.turn().passes();
-            perform_or_stall(s, t, x, a, &d, Choice(0));
+            stall_if_full(perform(s, t, x, a, &d, Choice(0)), s);
             // A priority decision's first candidate is passing.
             settled = priority && handed_over(s, passes);
             continue;
@@ -243,13 +241,15 @@ pub fn apply<L: Layout>(
     c: Choice,
 ) {
     debug_assert!(s.outcome().is_none(), "apply after the game ended");
-    layers::refresh(s, t, &mut x.events);
+    if layers::refresh(s, t, &mut x.events).is_err() {
+        return stall(s, StallReason::Capacity);
+    }
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
     match decision(s, t, &mut x.events) {
         Ok(d) => {
             debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
-            perform_or_stall(s, t, x, a, &d, c);
+            stall_if_full(perform(s, t, x, a, &d, c), s);
         }
         Err(Full) => stall(s, StallReason::Capacity),
     }
@@ -268,7 +268,9 @@ pub fn apply_decided<L: Layout>(
     c: Choice,
 ) {
     debug_assert!(s.outcome().is_none(), "apply after the game ended");
-    layers::refresh(s, t, &mut x.events);
+    if layers::refresh(s, t, &mut x.events).is_err() {
+        return stall(s, StallReason::Capacity);
+    }
     #[cfg(debug_assertions)]
     {
         assert_sound(s, t, x);
@@ -278,7 +280,7 @@ pub fn apply_decided<L: Layout>(
         debug_assert_eq!(built.as_ref(), Ok(d), "a decision other than the open one");
     }
     debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
-    perform_or_stall(s, t, x, a, d, c);
+    stall_if_full(perform(s, t, x, a, d, c), s);
     x.settle_counts();
 }
 
@@ -287,15 +289,9 @@ fn stall<L: Layout>(s: &mut State<L>, reason: StallReason) {
     s.end_game(Outcome::Stalled(reason));
 }
 
-fn perform_or_stall<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    x: &mut Scratch<L>,
-    a: &mut dyn Answers<L>,
-    d: &Decision<L>,
-    c: Choice,
-) {
-    if perform(s, t, x, a, d, c).is_err() {
+/// Ends the game stalled if `done` ran out of a capacity (§12.3).
+fn stall_if_full<L: Layout>(done: Result<(), Full>, s: &mut State<L>) {
+    if done.is_err() {
         stall(s, StallReason::Capacity);
     }
 }

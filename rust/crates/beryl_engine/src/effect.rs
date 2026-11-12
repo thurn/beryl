@@ -111,7 +111,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Ends the body: a stall if a capacity ran out, and a layer refresh for what follows.
     pub(crate) fn finish(self) -> Result<(), Full> {
-        layers::refresh(self.state, self.table, self.sink);
+        layers::refresh(self.state, self.table, self.sink)?;
         if self.full { Err(Full) } else { Ok(()) }
     }
 
@@ -296,7 +296,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let plans = self.checked(r);
         let mut opts: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
-            let _ = opts.push(Opt::Plan(index::<L>(i)));
+            self.check(opts.push(Opt::Plan(index::<L>(i))));
         }
         let Opt::Plan(i) = self.ask_options(
             player,
@@ -641,10 +641,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         while left.count() > 1 {
             let slot = self.choose_object(player, left, scry.part(Part::Second))?;
             left.remove(slot);
-            let _ = order.push(slot);
+            self.check(order.push(slot));
         }
         if let Some(slot) = left.sole() {
-            let _ = order.push(slot);
+            self.check(order.push(slot));
         }
         for &slot in order.iter().rev() {
             let r = self.state.reorder_library(slot, Place::Top);
@@ -970,7 +970,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             // ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
             // controller of the spell or ability follows its instructions in the order
             // written").
-            let opts = crate::combat::attack_targets(self.state);
+            let opts = self.checked(crate::combat::attack_targets(self.state));
             let Opt::Defender(walker) = self.ask_options(
                 you,
                 DecisionKind::AttackTarget,

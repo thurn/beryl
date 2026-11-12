@@ -151,6 +151,7 @@ impl<T: Clone + std::fmt::Debug, const N: usize> std::fmt::Debug for Fixed<T, N>
 #[cfg(test)]
 mod tests {
     use super::{Fixed, Full};
+    use crate::layout::Queue;
 
     #[test]
     fn push_past_capacity_is_an_error_not_a_panic() {
@@ -159,6 +160,23 @@ mod tests {
         assert_eq!(v.push(2), Ok(()));
         assert_eq!(v.push(3), Err(Full));
         assert_eq!(v.as_slice(), &[1, 2]);
+    }
+
+    #[test]
+    fn a_push_if_there_is_room_says_when_there_was_none() {
+        let mut v: Fixed<u8, 1> = Fixed::new();
+        assert!(v.push_if_room(1));
+        assert!(!v.push_if_room(2));
+        assert_eq!(v.as_slice(), &[1]);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "argued never to fill")]
+    fn a_wrong_argument_that_a_list_cannot_fill_panics_in_a_debug_build() {
+        let mut v: Fixed<u8, 1> = Fixed::new();
+        v.push_bounded(1);
+        v.push_bounded(2);
     }
 
     #[test]

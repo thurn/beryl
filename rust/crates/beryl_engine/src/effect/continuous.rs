@@ -23,7 +23,8 @@ impl<L: Layout> EffectCtx<'_, L> {
         let source = self.entry.card;
         let pushed = self.state.start_effect(source, affected, payload, duration);
         self.check(pushed);
-        layers::refresh(self.state, self.table, self.sink);
+        let refreshed = layers::refresh(self.state, self.table, self.sink);
+        self.check(refreshed);
     }
 
     /// Starts one continuous effect from this ability that changes each of `permanents` in a
@@ -41,7 +42,8 @@ impl<L: Layout> EffectCtx<'_, L> {
         let source = self.entry.card;
         let pushed = (self.state).start_effect_on_set(source, permanents, change, duration);
         self.check(pushed);
-        layers::refresh(self.state, self.table, self.sink);
+        let refreshed = layers::refresh(self.state, self.table, self.sink);
+        self.check(refreshed);
     }
 
     /// This ability's controller gains control of a permanent

@@ -129,6 +129,13 @@ fn face_abilities(
         .map(|(i, a)| (AbilityIx::new(i as u8), a))
 }
 
+/// A count of objects as the amount a trigger carries, which is a byte: past 255, which
+/// only a layout of more slots than [`crate::Small`] can count, it is 255 and never the
+/// count's low byte.
+fn counted(count: u32) -> u8 {
+    u8::try_from(count).unwrap_or(u8::MAX)
+}
+
 /// Whether a trigger of a source controlled by `you` fires on `e`, and with what.
 fn fires<L: Layout>(
     s: &State<L>,
@@ -159,7 +166,7 @@ fn fires<L: Layout>(
             Some(info(Some(s.object_ref(this?)), you, 0))
         }
         (Trigger::YouAttack, Event::Attack { player, attackers }) if player == you => {
-            Some(info(None, you, attackers.count() as u8))
+            Some(info(None, you, counted(attackers.count())))
         }
         (
             Trigger::CombatDamageToPlayer,
@@ -184,7 +191,7 @@ fn fires<L: Layout>(
                         && s.derived(slot).types.intersects(types)
                 })
                 .count();
-            (matching > 0).then(|| info(None, you, matching as u8))
+            (matching > 0).then(|| info(None, you, counted(matching)))
         }
         (
             Trigger::YouCast,
@@ -323,8 +330,8 @@ pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L
         }
         // The waiting triggers never exceed the capacity of these lists, and the layout's
         // index names every one.
-        let _ = firsts.push(*tr);
-        let _ = kept.push(index::<L>(i));
+        firsts.push_bounded(*tr);
+        kept.push_bounded(index::<L>(i));
     }
     Some((player, kept))
 }

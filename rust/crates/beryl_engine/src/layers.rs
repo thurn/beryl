@@ -7,41 +7,112 @@ use crate::card::{
     AbilityKind, Affected, CastingKind, Colors, Modification, Rules, StaticCondition, Subtypes,
     Types,
 };
+use crate::decision::{Outcome, StallReason};
 use crate::event::{Sink, kind};
 use crate::filter;
+use crate::fixed::Full;
 use crate::ids::CardId;
-use crate::layout::{Layout, PerSeat, Queue};
-use crate::state::{Affects, CounterKind, Derived, GrantRef, LayerChange, State, Zone};
+use crate::layout::{Layout, PerSeat, Queue, index};
+use crate::state::{Affects, CounterKind, Derived, GrantRef, LayerChange, LockedIn, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
-/// One continuous effect to apply in this recompute.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-struct Apply<C: CardId> {
+/// What one continuous effect changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Target<L: Layout> {
+    /// The permanent at this battlefield position. The layout's index names every position
+    /// of its battlefield, however many permanents that holds.
+    Position(L::Index),
+    /// Each permanent the effect locked in as it began that is still the object it was
+    /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
+    /// it affects is determined when that continuous effect begins. After that point, the
+    /// set won't change."
+    Set(LockedIn<L>),
+}
+
+/// One continuous effect to apply in this recompute, whatever the number of permanents it
+/// changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct Apply<L: Layout> {
     layer: u8,
     timestamp: u16,
     /// Static abilities on one object share its timestamp; their order on the card breaks
     /// the tie.
     order: u8,
-    /// The battlefield index of the permanent it affects.
-    target: u8,
+    target: Target<L>,
     /// The game index of the effect's source card, which a granted ability is printed on.
-    source: C,
-    change: Option<LayerChange>,
+    source: L::Card,
+    change: LayerChange,
 }
 
-/// The effects one recompute applies. A list longer than its capacity would need more
-/// effects than the cards can create at once.
-type Applying<L> = <L as Layout>::Queue<Apply<<L as Layout>::Card>, 192>;
+impl<L: Layout> Apply<L> {
+    /// Where it comes among the effects
+    /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)): "Within a layer or
+    /// sublayer, determining which order effects are applied in is usually done using a
+    /// timestamp system." Static abilities of permanents that share a timestamp apply in
+    /// the order of the permanents they change. An effect on a set needs no such order: it
+    /// has a timestamp of its own, and one change to each member commutes.
+    fn key(&self) -> (u8, u16, u8, u16) {
+        let position: u16 = match self.target {
+            Target::Position(i) => i.into(),
+            Target::Set(_) => 0,
+        };
+        (self.layer, self.timestamp, self.order, position)
+    }
+}
+
+/// Filler for the list's unused places: a change that changes nothing.
+impl<L: Layout> Default for Apply<L> {
+    fn default() -> Self {
+        Apply {
+            layer: 0,
+            timestamp: 0,
+            order: 0,
+            target: Target::Position(L::Index::default()),
+            source: L::Card::FIRST,
+            change: LayerChange::ModifyPt(0, 0),
+        }
+    }
+}
+
+/// The effects one recompute applies: one entry for each effect of the Effects store
+/// ([`crate::state::EFFECTS`], 64 in a fixed layout) and one for each static ability of a
+/// permanent that changes characteristics. A fixed layout's list can fill, with more such
+/// abilities on the battlefield than are left of its 192 places; the recompute then reports
+/// [`Full`] and the game stalls into a layout whose list grows.
+type Applying<L> = <L as Layout>::Queue<Apply<L>, 192>;
 
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
-pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) {
+///
+/// [`Full`] if an effect that applies had no place in the list of them: the results are
+/// stored without it, so nothing reads a stale one before the caller stalls the game, as it
+/// must.
+pub(crate) fn refresh<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
     if s.is_derived_stale() {
         sink.work.layer_recomputes += 1;
-        recompute(s, t);
+        return recompute(s, t);
     }
+    Ok(())
+}
+
+/// The game's outcome if it is over, and if it is not, [`refresh`] for what the engine's
+/// loop reads next. A recompute with no room for an effect ends the game stalled, as any
+/// capacity that runs out does, so the game is then over.
+pub(crate) fn over_or_refreshed<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Option<Outcome> {
+    if s.outcome().is_none() && refresh(s, t, sink).is_err() {
+        s.end_game(Outcome::Stalled(StallReason::Capacity));
+    }
+    s.outcome()
 }
 
 /// The kinds of event the permanents on the battlefield have triggered abilities for. A
@@ -100,14 +171,18 @@ pub(crate) fn counters_matter<L: Layout>(
 /// the results, with what each face-down permanent's controller now sees, as the
 /// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]), and with them the rules
 /// the permanents' static abilities change for each player ([`player_rules`]).
-fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
+///
+/// [`Full`] if the list of effects had no place for one: the results are stored all the
+/// same, lacking that effect, for a caller that ends the game.
+fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
-        return;
+        return Ok(());
     };
     let listening = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
+    let mut listed = Ok(());
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         let o = *s.object(slot);
@@ -143,32 +218,38 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             };
             if let (true, Some(target)) = (applies, target) {
                 crate::coverage::hit(ability);
-                // A list longer than its capacity would need more effects than the cards
-                // can create at once.
                 // No static ability of the cards changes control. One that did would name
                 // its source's controller as layer 2 has it, not as the permanent entered.
                 debug_assert_ne!(spec.modification, Modification::Control);
                 let change = LayerChange::resolve(spec.modification, s.base_controller(slot));
-                let _ = list.get_or_insert_with(Default::default).push(Apply {
+                let pushed = list.get_or_insert_with(Default::default).push(Apply {
                     layer: change.layer() as u8,
                     timestamp: o.timestamp(),
                     order: n as u8,
-                    target: target as u8,
+                    target: Target::Position(index::<L>(target)),
                     source: what.record(t).0,
-                    change: Some(change),
+                    change,
                 });
+                listed = listed.and(pushed);
             }
         }
     }
-    resolved_effects(&s, &mut list);
+    listed = listed.and(resolved_effects(&s, &mut list));
     let len = s.battlefield().len();
     if let Some(list) = &mut list {
-        list.as_mut_slice()
-            .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
+        list.as_mut_slice().sort_unstable_by_key(Apply::key);
         for a in list.iter() {
-            let Some(change) = a.change else { continue };
-            let i = usize::from(a.target);
-            apply(s.results(), i, a.source, change);
+            match a.target {
+                Target::Position(i) => apply(s.results(), i.into(), a.source, a.change),
+                Target::Set(set) => {
+                    let members = s.locked_in(set);
+                    for i in 0..len {
+                        if members.contains(s.battlefield()[i]) {
+                            apply(s.results(), i, a.source, a.change);
+                        }
+                    }
+                }
+            }
         }
     }
     // Layer 7c: counters modify power and toughness
@@ -190,51 +271,51 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         [Rules::NONE; _]
     };
     s.finish(listening, rules);
+    listed
 }
 
 /// Lists the continuous effects of resolved spells and abilities that change a permanent
 /// on the battlefield now, for [`recompute`] to apply with the static abilities' in layer
 /// and timestamp order. The kernel has ended those on objects that left their zone.
+///
+/// An effect is one entry, whether it changes one permanent or a set of them: the list is
+/// as long as the effects are many, whatever the size of a set. [`Full`] if one had no
+/// place.
 #[inline]
-fn resolved_effects<L: Layout>(s: &Rederive<'_, L>, list: &mut Option<Applying<L>>) {
+fn resolved_effects<L: Layout>(
+    s: &Rederive<'_, L>,
+    list: &mut Option<Applying<L>>,
+) -> Result<(), Full> {
+    let mut listed = Ok(());
     for (e, change) in s.layer_effects() {
-        let effect = |target: usize| Apply {
-            layer: change.layer() as u8,
-            timestamp: e.timestamp,
-            order: 0,
-            target: target as u8,
-            source: e.source,
-            change: Some(change),
-        };
-        match e.affected {
+        let target = match e.affected {
             Affects::Object { slot, .. } => {
                 if s.object(slot).zone() != Zone::Battlefield {
                     continue;
                 }
-                if let Some(target) = s.battlefield_position(slot) {
-                    let _ = list
-                        .get_or_insert_with(Default::default)
-                        .push(effect(target));
-                }
+                let Some(position) = s.battlefield_position(slot) else {
+                    continue;
+                };
+                Target::Position(index::<L>(position))
             }
-            // One effect on each permanent it locked in that is still the object it was
-            // ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c): "the set of
-            // objects it affects is determined when that continuous effect begins. After
-            // that point, the set won't change."), all with its one timestamp.
-            Affects::Set(set) => {
-                let members = s.locked_in(set);
-                for target in 0..s.battlefield().len() {
-                    if members.contains(s.battlefield()[target]) {
-                        let _ = list
-                            .get_or_insert_with(Default::default)
-                            .push(effect(target));
-                    }
-                }
-            }
+            // One effect on the permanents it locked in, with its one timestamp
+            // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)); the members
+            // are read as it applies.
+            Affects::Set(set) => Target::Set(set),
             // A player is affected by a rule change alone.
-            Affects::Player(_) => {}
-        }
+            Affects::Player(_) => continue,
+        };
+        let pushed = list.get_or_insert_with(Default::default).push(Apply {
+            layer: change.layer() as u8,
+            timestamp: e.timestamp,
+            order: 0,
+            target,
+            source: e.source,
+            change,
+        });
+        listed = listed.and(pushed);
     }
+    listed
 }
 
 /// The rules the permanents' static abilities change for each player, by seat

@@ -89,8 +89,7 @@ pub(crate) fn mana_ability<L: Layout>(
             color,
             mana.amount,
         );
-        layers::refresh(s, t, sink);
-        return Ok(());
+        return layers::refresh(s, t, sink);
     }
     let mut ctx = EffectCtx::new(s, t, sink, &activation(), ability);
     ctx.mana = color;

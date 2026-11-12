@@ -37,7 +37,7 @@ pub(crate) fn begin_turn<L: Layout>(
     // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
     s.expire(Duration::UntilYourNextTurn(active));
-    layers::refresh(s, t, sink);
+    layers::refresh(s, t, sink)?;
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began.
     s.reset_permanents_for_turn(active);
@@ -130,7 +130,7 @@ pub(crate) fn end_step<L: Layout>(
         }
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
         TurnStep::DeclareBlockers => {
-            layers::refresh(s, t, sink);
+            layers::refresh(s, t, sink)?;
             if combat::first_strike_step(s) {
                 TurnStep::FirstStrikeDamage
             } else {

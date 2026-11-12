@@ -827,7 +827,7 @@ impl Game {
 
     /// The open decision as it stands, without advancing past a silent pass.
     pub fn current(&mut self) -> Decision {
-        crate::layers::refresh(&mut self.s, &self.t, &mut self.x.events);
+        crate::layers::refresh(&mut self.s, &self.t, &mut self.x.events).unwrap();
         crate::engine::decision(&self.s, &self.t, &mut self.x.events).unwrap()
     }
 

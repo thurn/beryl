@@ -13,6 +13,7 @@ mod payment;
 mod replay;
 mod rules;
 mod trackers;
+mod widths;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 

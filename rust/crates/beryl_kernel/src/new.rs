@@ -71,7 +71,7 @@ impl<L: Layout> State<L> {
             let mut cards: L::Deck<L::Card> = Default::default();
             for card in t.deck(player) {
                 // The deck was just found to fit.
-                let _ = cards.push(card);
+                cards.push_bounded(card);
             }
             s.rng.shuffle.shuffle(cards.as_mut_slice());
             for (i, &card) in cards.iter().enumerate() {
@@ -83,7 +83,8 @@ impl<L: Layout> State<L> {
                     base_controller: player,
                     ..Object::EMPTY
                 };
-                let _ = s.zones.library[player.index()].push(slot);
+                // A slot for each card of the deck, which was just found to fit.
+                s.zones.library[player.index()].push_bounded(slot);
                 s.zones.members[player.index()][Zone::Library as usize].insert(slot);
             }
         }

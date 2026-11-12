@@ -69,7 +69,8 @@ pub(crate) fn declare<L: Layout>(
 /// differs: a hand mulliganed again is shuffled away whole, bottomed cards included, and the
 /// bottomed cards are hidden either way.
 fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
-    let hand = s.hand_size(player) as u8;
+    // More cards than a byte counts are more than any number of mulligans.
+    let hand = u8::try_from(s.hand_size(player)).unwrap_or(u8::MAX);
     s.keep_hand(player, s.player(player).mulligans().min(hand));
 }
 

@@ -34,7 +34,7 @@ pub(crate) fn check<L: Layout>(
     if check_losses(s, sink) {
         return Ok(true);
     }
-    layers::refresh(s, t, sink);
+    layers::refresh(s, t, sink)?;
     let (graveyard, tokens, legendary) = doomed(s);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && !legends {

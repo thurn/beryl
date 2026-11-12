@@ -422,7 +422,7 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
 
 /// The permanent's power and toughness after continuous effects, as they are now.
 fn size(t: &GameTable, s: &mut State, x: &mut Scratch, slot: Slot) -> (i8, i8) {
-    crate::layers::refresh(s, t, &mut x.events);
+    crate::layers::refresh(s, t, &mut x.events).unwrap();
     (s.derived(slot).power, s.derived(slot).toughness)
 }
 

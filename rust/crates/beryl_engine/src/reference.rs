@@ -71,7 +71,11 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
 fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
     let mut fresh = s.clone();
     fresh.forget_derived();
-    layers::refresh(&mut fresh, t, &mut Sink::default());
+    // A recompute with no room for an effect stalls the game, which is then replayed in a
+    // larger layout: there is no result to hold it to.
+    if layers::refresh(&mut fresh, t, &mut Sink::default()).is_err() {
+        return Ok(());
+    }
     for ((slot, was), (_, now)) in s.permanents().zip(fresh.permanents()) {
         check(
             now == was,
@@ -253,7 +257,7 @@ fn reference_pays(units: &[u8], cost: ManaCost) -> bool {
     let mut symbols = Units::new();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
-            let _ = symbols.push(1u8 << k);
+            symbols.push_bounded(1u8 << k);
         }
     }
     let mut paying = [None; UNITS];

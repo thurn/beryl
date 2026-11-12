@@ -30,6 +30,25 @@ pub trait Queue<T: Item>: Clone + Debug + Default + Eq + Hash + Send + Sync {
     fn as_slice(&self) -> &[T];
     fn as_mut_slice(&mut self) -> &mut [T];
     fn push(&mut self, item: T) -> Result<(), Full>;
+
+    /// Pushes onto a list that cannot be full, by an argument the caller's comment makes.
+    /// A debug build checks the argument and panics on a wrong one, so the scenarios and
+    /// `just fuzz` trip on it. A list with no such argument propagates [`Full`]: rules code
+    /// never throws a failed push away (the `discarded-push` check).
+    #[inline]
+    #[track_caller]
+    fn push_bounded(&mut self, item: T) {
+        let pushed = self.push(item);
+        debug_assert!(pushed.is_ok(), "a list argued never to fill is full");
+    }
+
+    /// Pushes if there is room, and says whether there was: for a list a heuristic samples,
+    /// where what does not fit is not considered. Never for what a rule reads.
+    #[inline]
+    fn push_if_room(&mut self, item: T) -> bool {
+        self.push(item).is_ok()
+    }
+
     /// Inserts at `index`, shifting later items up.
     fn insert(&mut self, index: usize, item: T) -> Result<(), Full>;
     fn pop(&mut self) -> Option<T>;

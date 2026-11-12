@@ -60,6 +60,7 @@ struct Class<L: Layout = Small> {
 
 impl<L: Layout> Class<L> {
     fn count(&self) -> u8 {
+        debug_assert!(self.members.count() <= 255, "a class past its room");
         self.members.count() as u8
     }
 
@@ -651,9 +652,7 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> L::Queue
     let mut later: L::Queue<Later<L>, 32> = Default::default();
     let mut add = |l: Later<L>| {
         if !later.iter().any(|&x| x == l) {
-            // Past a fixed layout's capacity, the rest are not considered: a heuristic, not a
-            // rule.
-            let _ = later.push(l);
+            later.push_if_room(l); // A heuristic: what a fixed layout has no room for is left.
         }
     };
     // Each cost is kept once, and `still_payable` reads the list as a set: no order shows.
@@ -747,10 +746,10 @@ impl<L: Layout> Ahead<L> {
         if let Some(i) = self.later.iter().position(|&x| x == l) {
             let n = &mut self.copies.as_mut_slice()[i];
             *n = n.saturating_add(1);
-        } else if self.later.push(l).is_ok() {
-            let _ = self.copies.push(1);
+        } else if self.later.push_if_room(l) {
+            // Past a fixed layout's capacity, the rest are not considered: a heuristic.
+            self.copies.push_bounded(1); // One for each of `later`, in a list as long.
         }
-        // Past a fixed layout's capacity, the rest are not considered: a heuristic, not a rule.
     }
 }
 
@@ -830,7 +829,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     // the cards.
     let mut hand: L::Queue<L::Slot, 64> = Default::default();
     for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
-        let _ = hand.push(slot);
+        hand.push_bounded(slot); // Their own cards: no more than a fixed layout's deck.
     }
     hand.as_mut_slice()
         .sort_by_key(|&slot| s.copiable(slot).key());
@@ -848,7 +847,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
                 && let ManaFace::Plain { kinds, amount, .. } = t.facts(card, f).mana
                 && !ahead.lands.iter().any(|&l| l == (kinds, amount))
             {
-                let _ = ahead.lands.push((kinds, amount));
+                ahead.lands.push_if_room((kinds, amount)); // A heuristic's sample.
             }
             for a in face.abilities {
                 if a.kind == AbilityKind::Activated && a.cost.discard_self && activatable(a) {
@@ -955,7 +954,7 @@ impl<L: Layout> Lookahead<'_, L> {
         }
         let mut used: L::Queue<u8, 32> = Default::default();
         for _ in self.later {
-            let _ = used.push(0);
+            used.push_bounded(0); // One for each of `later`, in a list as long.
         }
         let mut best = (0, 0);
         let mut checks = TOGETHER_CHECKS;
@@ -1184,10 +1183,10 @@ fn looking_ahead<L: Layout>(
     let ahead = ahead(s, t, player);
     let mut creatures: Taps<L> = Table::filled(0);
     for (i, c) in sources.classes().iter().enumerate() {
-        creatures[i] = c
+        let creatures_of = c
             .members
-            .filter(|m| s.derived(m).types.intersects(Types::CREATURE))
-            .count() as u8;
+            .filter(|m| s.derived(m).types.intersects(Types::CREATURE));
+        creatures[i] = u8::try_from(creatures_of.count()).unwrap_or(u8::MAX);
     }
     let mut best: L::Queue<Outlook, 64> = Default::default();
     for k in kept.iter() {
@@ -1263,12 +1262,13 @@ pub(crate) fn pay<L: Layout>(
             for (j, &slot) in tapped.iter().enumerate() {
                 let later = (tapped.len() - j - 1) as u32;
                 let here = (rest - later).min(u32::from(c.amount));
-                units.push((c.kinds, Some(slot), here as u8))?;
+                units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
                 rest -= here;
             }
         }
     }
-    let kinds = assign::<L>(cost, units.as_slice());
+    let mut kinds = Default::default();
+    assign::<L>(cost, units.as_slice(), &mut kinds)?;
     for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
         let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
         if let Some(slot) = source {
@@ -1344,30 +1344,31 @@ fn augment<S: SlotId>(
 }
 
 /// Assigns the colored and colorless symbols of `cost` to units, each unit `(kinds, _, n)`
-/// paying `n` symbols of one kind: the kind each unit is spent as, or `None` where it pays
-/// only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
+/// paying `n` symbols of one kind. `kinds` gets the kind each unit is spent as, or `None` where
+/// it pays only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
 fn assign<L: Layout>(
     cost: ManaCost,
     units: &[(u8, Option<L::Slot>, u8)],
-) -> L::Queue<Option<usize>, 64> {
+    kinds: &mut L::Queue<Option<usize>, 64>,
+) -> Result<(), Full> {
     let mut symbols: L::Queue<usize, 64> = Default::default();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
-            let _ = symbols.push(k);
+            symbols.push(k)?;
         }
     }
     // A unit of several mana pays as many symbols, all of one kind: split it into slots.
     let mut slots: L::Queue<usize, 64> = Default::default();
     for (u, &(_, _, n)) in units.iter().enumerate() {
         for _ in 0..n {
-            let _ = slots.push(u);
+            slots.push(u)?;
         }
     }
     let mut owner: L::Queue<Option<usize>, 64> = Default::default();
     let mut seen: L::Queue<bool, 64> = Default::default();
     for _ in 0..slots.len() {
-        let _ = owner.push(None);
-        let _ = seen.push(false);
+        owner.push(None)?;
+        seen.push(false)?;
     }
     for sym in 0..symbols.len() {
         seen.as_mut_slice().fill(false);
@@ -1381,16 +1382,15 @@ fn assign<L: Layout>(
         );
         debug_assert!(matched, "a plan the solver accepted pays every symbol");
     }
-    let mut kinds: L::Queue<Option<usize>, 64> = Default::default();
     for u in 0..units.len() {
         let kind = slots
             .iter()
             .zip(owner.iter())
             .find(|&(&slot_unit, o)| slot_unit == u && o.is_some())
             .map(|(_, o)| symbols.as_slice()[o.unwrap()]);
-        let _ = kinds.push(kind);
+        kinds.push(kind)?;
     }
-    kinds
+    Ok(())
 }
 
 /// Activates a source's mana ability for one kind of mana: taps it and adds the mana.

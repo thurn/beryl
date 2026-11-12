@@ -1,7 +1,7 @@
 {
   "rust/crates/beryl_engine/src/cast.rs": 1739,
   "rust/crates/beryl_engine/src/effect.rs": 1115,
-  "rust/crates/beryl_engine/src/engine.rs": 830,
+  "rust/crates/beryl_engine/src/engine.rs": 826,
   "rust/crates/beryl_engine/src/mana.rs": 1585,
   "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/game/Board.tsx": 3082,

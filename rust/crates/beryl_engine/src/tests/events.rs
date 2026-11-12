@@ -529,7 +529,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 }
 
 /// A slot holding `name` in the player's library or hand.
-fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
+pub(super) fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
     // Copies of a card are alike, so any of them does.
     let cards =
         s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand));
@@ -1295,7 +1295,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
     assert!(d.subtypes.contains(Subtype::Vehicle));
@@ -1306,12 +1306,12 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     s.board().attach(aura, land);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let subtypes = s.derived(land).subtypes;
     assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
@@ -1335,7 +1335,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
         ctx.destroy(r);
@@ -1357,7 +1357,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     });
     let token = token.sole().unwrap();
     s.board().attach(aura, token);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
     decide_with(&t, &mut s, &mut x);
@@ -1531,7 +1531,7 @@ fn a_permanent_with_something_attached_is_not_interchangeable_with_its_twin() {
     let mut x = Scratch::new();
     let ([first, second], attachment) = twins(&t, &mut s, &mut x, p);
     s.board().attach(attachment, first);
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
 }
@@ -2070,7 +2070,7 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
     assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
     let mut x = Scratch::new();
-    crate::layers::refresh(&mut s, &t, &mut x.events);
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut copy = None;
     with_ctx(&t, &mut s, &mut x, prodigy, |ctx| {
         let values = ctx.state().copiable(prodigy);

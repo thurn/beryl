@@ -13,7 +13,7 @@ use crate::event::{self, Recipient, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
-use crate::state::{ObjectFlags, ObjectRef, Pending, State, TurnStep};
+use crate::state::{BATTLEFIELD, ObjectFlags, ObjectRef, Pending, State, TurnStep};
 use crate::table::GameTable;
 
 /// The defending player ([CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062)):
@@ -120,7 +120,7 @@ pub(crate) fn attack_decision<L: Layout>(
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
-        list = attack_targets(s);
+        list = attack_targets(s)?;
         (s.turn().active(), DecisionKind::AttackTarget, Part::Aim)
     };
     Ok(Decision {
@@ -134,17 +134,17 @@ pub(crate) fn attack_decision<L: Layout>(
 }
 
 /// What a creature can attack: the defending player, then each planeswalker they control.
-pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> L::Queue<Opt<L>, 64> {
+/// [`Full`] if the planeswalkers are more than a fixed layout's list of options holds.
+pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let defending = defender(s);
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
-    // No player controls 63 planeswalkers.
-    let _ = list.push(Opt::Defender(None));
+    list.push(Opt::Defender(None))?;
     for &slot in s.battlefield() {
         if s.controller(slot) == defending && s.derived(slot).types.contains(Types::PLANESWALKER) {
-            let _ = list.push(Opt::Defender(Some(slot)));
+            list.push(Opt::Defender(Some(slot)))?;
         }
     }
-    list
+    Ok(list)
 }
 
 /// Applies one pick of the attack declaration.
@@ -620,12 +620,14 @@ fn division<L: Layout>(
     s: &State<L>,
     attacker: L::Slot,
     lethal_to: Bitboard<L::Slot>,
-) -> L::Queue<(L::Slot, u8), 128> {
-    let mut out: L::Queue<(L::Slot, u8), 128> = Default::default();
+) -> L::Queue<(L::Slot, u8), BATTLEFIELD> {
+    // An entry for a blocker at most, and each blocker is a permanent: the list is as long
+    // as a fixed layout's battlefield, so every push below has room.
+    let mut out: L::Queue<(L::Slot, u8), BATTLEFIELD> = Default::default();
     let blockers = blockers_of(s, attacker);
     let mut left = power(s, attacker);
     if let Some(blocker) = blockers.sole() {
-        let _ = out.push((blocker, left));
+        out.push_bounded((blocker, left));
         return out;
     }
     let killed = blockers & lethal_to;
@@ -638,7 +640,7 @@ fn division<L: Layout>(
     for b in entered(killed) {
         let n = lethal(s, b).min(left);
         left -= n;
-        let _ = out.push((b, n));
+        out.push_bounded((b, n));
     }
     if let Some(first) = out.as_mut_slice().first_mut() {
         first.1 += left;
@@ -648,7 +650,7 @@ fn division<L: Layout>(
         let n = (lethal(s, b) - 1).min(left);
         left -= n;
         if n > 0 {
-            let _ = out.push((b, n));
+            out.push_bounded((b, n));
         }
     }
     out

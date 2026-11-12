@@ -89,7 +89,7 @@ pub(crate) fn settle<L: Layout>(
     sink: &mut Sink<L>,
     e: Event<L>,
 ) -> Result<(), Full> {
-    layers::refresh(s, t, sink);
+    layers::refresh(s, t, sink)?;
     trigger::match_event(s, t, &e)?;
     sink.push(e);
     Ok(())
@@ -157,7 +157,7 @@ pub(crate) fn move_batch_to<L: Layout>(
     reason: Reason,
     entry: Entry<L>,
 ) -> Result<(), Full> {
-    layers::refresh(s, t, sink);
+    layers::refresh(s, t, sink)?;
     let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
     for &slot in s.in_game_order(t, objects)?.as_slice() {
@@ -206,7 +206,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         }
         sink.push(changed(s.object_ref(slot), from, dest));
     }
-    layers::refresh(s, t, sink);
+    layers::refresh(s, t, sink)?;
     for &(slot, from, dest, _) in moves.iter() {
         trigger::match_event(s, t, &changed(s.object_ref(slot), from, dest))?;
     }

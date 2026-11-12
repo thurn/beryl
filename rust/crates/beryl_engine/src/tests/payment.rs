@@ -384,7 +384,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         }
         g.s.board().set_mana(g.me, pool);
         let pool = pool.amounts();
-        crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default());
+        crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
         let cost = ManaCost::new(
             rng.below(4) as u8,
             [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],

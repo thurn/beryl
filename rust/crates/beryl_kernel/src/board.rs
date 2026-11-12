@@ -414,7 +414,8 @@ impl Board<'_, Small> {
             let mut slots = self.0.zones.library[p];
             let mut cards: <Small as Layout>::Deck<CardIx> = Fixed::new();
             for &slot in &slots {
-                let _ = cards.push(self.0.object(slot).card);
+                // A card for each slot of the library, in a list as long as a library.
+                cards.push_bounded(self.0.object(slot).card);
             }
             order(slots.as_mut_slice());
             for (&slot, &card) in slots.iter().zip(cards.iter()) {

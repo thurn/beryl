@@ -6,6 +6,33 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A continuous effect on a locked-in set was applied to only some of its
+  members, or to none, once the set was large (CR 611.2c, 613.7). The layers
+  listed one entry for each permanent an effect changed, in a list of 192, and
+  threw away the push that did not fit: three +1/+1 effects on 120 creatures
+  left them 3/3 and 4/4 where each should be 5/5, with no stall into `Large`.
+  The comment beside the push argued the list could not fill, which was true
+  until an effect could change more than one object. Found by the milestone 4
+  audit (by-w8gv.8.1) before any card made such a set; fixed in by-w8gv.8.3,
+  where an effect is one entry whatever it changes and a full list stalls the
+  game. Prevention: never bind a fallible push to `_`. A list whose bound is
+  argued takes `Queue::push_bounded`, which checks the argument in debug builds,
+  so the scenarios and `just fuzz` trip on a wrong one; any other propagates
+  `Full`. The `discarded-push` check keeps `let _ = ....push(` out of the
+  kernel, the rules and the cards.
+
+- A continuous effect on a permanent past the 256th on the battlefield changed
+  another permanent instead (CR 613.1). The layers kept an effect's battlefield
+  position in a `u8` and narrowed it with `as`, and `Large` holds more
+  permanents than a byte numbers: +3/+3 on the permanent at position 300 went to
+  the one at position 44. Triggers that count attackers or created tokens
+  narrowed the count the same way, so 300 attackers read as 44. Found by the
+  milestone 4 audit (by-w8gv.8.1); fixed in by-w8gv.8.3. Prevention: a position
+  or a count that grows with the layout has the layout's index type
+  (`L::Index`), never a byte, and is converted with `index` or `try_from`, which
+  cannot narrow in silence. A count that must fit a byte saturates and says so.
+  `as` is for an enum's discriminant or a number a constant bounds.
+
 - Two objects of one card were offered as one candidate when they differed only
   in what another record of the state said of them: a permanent that exiled a
   card until it leaves and its twin that exiled none
@@ -33,6 +60,8 @@ fixed in the same session. Newest first.
   query's rustdoc alone; renaming two slots through the `Relayout` walk and
   comparing the states would hold every field without a list, and was not built
   (by-w8gv.8.2 says why).
+
+||||||| parent of 51be9f58 (fix: layers and counts hold past a layout's widths)
 
 - Two objects of one card were offered as one candidate while different
   continuous effects were on them, whenever the effects came to the same layer

@@ -186,7 +186,12 @@
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
 //! A store that fills returns [`fixed::Full`] and the game stalls into `Large`
-//! (`docs/rules-coverage.md`, principle 3). A locked-in set is 32 bytes, so the sets are a
+//! (`docs/rules-coverage.md`, principle 3). So does every other list of a fixed layout: no
+//! push's result is thrown away. A list that cannot fill says why in a comment and takes
+//! [`layout::Queue::push_bounded`], which checks the argument in debug builds; a list a
+//! heuristic samples takes [`layout::Queue::push_if_room`]; the `discarded-push` check in
+//! the `names` lane refuses a push whose result is bound to `_` in the kernel,
+//! `beryl_engine` and `beryl_cards` outside their tests. A locked-in set is 32 bytes, so the sets are a
 //! table of their own and never part of an entry. Counter kinds cannot be fields of each of
 //! 255 objects, so all but the three hot kinds are a keyed table.
 //!
