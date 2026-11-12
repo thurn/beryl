@@ -270,7 +270,7 @@ screen *args:
 blunders *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunders "$@"
 
-# Compare the champion's paired rollouts after two choices at one blunder-suite position
+# Compare paired rollouts and search branches at a blunder-suite position ([--family FAMILY] [--tree --work 3M --seed 0])
 [group('agents')]
 [no-cd]
 why *args:

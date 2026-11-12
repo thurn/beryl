@@ -22,7 +22,8 @@ pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
 pub use long::{
     ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
-    Options, ROLLOUT_TEMPERATURE, Settings, TURN_DISCOUNT, WORLD_STEPS, guarded,
+    Options, ROLLOUT_TEMPERATURE, Settings, TURN_DISCOUNT, TreeReport, Visits, WORLD_STEPS,
+    guarded, value as outcome_value,
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{

@@ -65,6 +65,10 @@ use crate::rollout::{RolloutPolicy, Rules, Softmax, soft_rollout, soft_rollout_t
 use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, ExpertAgent, Search, Sight, Widen};
 
+mod trace;
+use trace::{Capture, Trace};
+pub use trace::{TreeReport, Visits};
+
 /// How the search treats what it cannot see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Method {
@@ -885,12 +889,13 @@ impl Widen for LongSearch<Small> {
     }
 }
 
-impl<L: Layout> Agent<L> for LongSearch<L> {
-    /// The candidate visited most across the trees, of equals the best by mean; with
-    /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], the guarded default
-    /// answer unless it is clearly beaten. A decision with one
-    /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+impl<L: Layout> LongSearch<L> {
+    fn choose_traced(
+        &mut self,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        capture: Option<&mut Capture<L>>,
+    ) -> Choice {
         let decision = self.decision;
         self.decision = decision.next();
         self.last = None;
@@ -918,7 +923,13 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
         let guards = |b: Choice| {
             default.is_some_and(|g| guarded(&self.table, &self.policy, obs, d, g, b, options))
         };
+        if let Some(capture) = capture.as_ref() {
+            capture.start(&mut trees);
+        }
         let (iterations, work, checked) = self.grow(&mut trees, default, guards);
+        if let Some(capture) = capture {
+            capture.finish(&mut trees);
+        }
         let (visits, rewards) = totals(&trees);
         let best = Choice(self.pick(&trees) as u16);
         let means = crate::mcts::tree_means(visits.len(), root_stats(&trees));
@@ -952,6 +963,16 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             });
         }
         choice
+    }
+}
+
+impl<L: Layout> Agent<L> for LongSearch<L> {
+    /// The candidate visited most across the trees, of equals the best by mean; with
+    /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], the guarded default
+    /// answer unless it is clearly beaten. A decision with one
+    /// candidate is never searched, nor is passing with one's own object on top of the stack.
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+        self.choose_traced(obs, d, None)
     }
 
     fn last_search(&self) -> Option<&Search> {
@@ -1037,6 +1058,8 @@ struct Tree<L: Layout> {
     allowed: Option<[usize; 2]>,
     /// The turn its first root was asked in, from which a finished game's turns count.
     origin: u16,
+    /// Optional diagnostic counts of the decisions seen in the iteration's actual world.
+    trace: Option<Box<Trace<L>>>,
 }
 
 impl<L: Layout> Tree<L> {
@@ -1068,6 +1091,7 @@ impl<L: Layout> Tree<L> {
             extra: 0,
             allowed: None,
             origin: 0,
+            trace: None,
         };
         tree.origin = tree.state.turn().number();
         if !resample {
@@ -1248,12 +1272,13 @@ impl<L: Layout> Tree<L> {
             } else {
                 keys(&s, &d, self.known, self.viewer)
             };
+            let policy_only = !at_root && self.family.options.mid && answered_by_policy(&d);
             let (child, choice) = match self.allowed {
                 Some(pair) if at_root => {
                     let (child, Choice(i)) = self.select(node, &pair.map(|i| keys[i]), d.player);
                     (child, Choice(pair[usize::from(i)] as u16))
                 }
-                _ if !at_root && self.family.options.mid && answered_by_policy(&d) => {
+                _ if policy_only => {
                     let c = policy.choose(t, Observation::new(&s, d.player), &d);
                     (self.only(node, keys[usize::from(c.0)], d.player), c)
                 }
@@ -1261,6 +1286,13 @@ impl<L: Layout> Tree<L> {
             };
             if at_root {
                 self.root_keys = keys;
+            }
+            if let Some(trace) = self.trace.as_mut() {
+                if at_root {
+                    trace.enter(choice);
+                } else {
+                    trace.advance(t, &s, &d, choice, policy_only);
+                }
             }
             path[depth] = child;
             depth += 1;
@@ -1280,6 +1312,13 @@ impl<L: Layout> Tree<L> {
                 }
             }
         };
+        if let Some(trace) = self.trace.as_mut() {
+            trace.score(if self.decision.player == Seat::P0 {
+                value
+            } else {
+                1.0 - value
+            });
+        }
         for &n in &path[..depth] {
             let n = &mut self.nodes[n as usize];
             n.visits += 1;
@@ -1495,7 +1534,7 @@ fn answered_by_policy<L: Layout>(d: &Decision<L>) -> bool {
 /// A finished game's score for the first seat, `turns` turns after the tree's first root: a
 /// win 1 and a loss 0, discounted toward an even game by [`TURN_DISCOUNT`] each turn; a draw
 /// or a stall 0.5.
-fn value(outcome: Outcome, turns: u16) -> f64 {
+pub fn value(outcome: Outcome, turns: u16) -> f64 {
     let p0 = match outcome {
         Outcome::Win(Seat::P0) => 1.0,
         Outcome::Win(_) => 0.0,
