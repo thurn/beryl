@@ -18,12 +18,14 @@
 //! ]);
 //! ```
 
-use crate::continuous::{Duration, Modification};
+use crate::continuous::{Duration, Modification, RuleChange};
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
+    Recipients,
 };
+use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 
@@ -76,6 +78,11 @@ pub const THAT_MANY: Amount = Amount::ThatMany;
 
 /// "If you do": [`Condition::Did`].
 pub const IF_YOU_DO: Condition = Condition::Did;
+
+/// "If you win the flip": [`Condition::WonFlip`].
+pub const IF_YOU_WIN_THE_FLIP: Condition = Condition::WonFlip;
+/// "If you lose the flip": not [`Condition::WonFlip`].
+pub const IF_YOU_LOSE_THE_FLIP: Condition = Condition::Not(&Condition::WonFlip);
 
 /// "If there is a [object]", as "if you control an artifact": at least one of `objects`.
 pub const fn exists(objects: &'static Objects) -> Condition {
@@ -137,6 +144,15 @@ pub const fn counter(objects: Objects) -> Effect {
     Effect::Counter(objects)
 }
 
+/// [`Effect::CounterInto`] exile: "counter [spell]. If that spell is countered this way, exile
+/// it instead of putting it into its owner's graveyard."
+pub const fn counter_and_exile(spells: Objects) -> Effect {
+    Effect::CounterInto {
+        spells,
+        zone: Zone::Exile,
+    }
+}
+
 /// [`Effect::Destroy`]: "destroy [permanents]".
 pub const fn destroy(objects: Objects) -> Effect {
     Effect::Destroy(objects)
@@ -196,6 +212,24 @@ pub const fn scry(player: Players, count: u8) -> Effect {
     Effect::Scry {
         player,
         count: Amount::Fixed(count),
+    }
+}
+
+/// [`Effect::Explore`]: "[permanents] explore".
+pub const fn explore(permanents: Objects) -> Effect {
+    Effect::Explore(permanents)
+}
+
+/// [`Effect::FlipCoin`]: "[player] flips a coin".
+pub const fn flip_coin(player: Players) -> Effect {
+    Effect::FlipCoin(player)
+}
+
+/// [`Effect::DealDamage`] to players: "this deals [amount] damage to [player]".
+pub const fn deal_damage_to(player: Players, amount: u8) -> Effect {
+    Effect::DealDamage {
+        to: Recipients::Players(player),
+        amount: Amount::Fixed(amount),
     }
 }
 
@@ -264,6 +298,20 @@ pub const fn modify(objects: Objects, modification: Modification, duration: Dura
         objects,
         modification,
         duration,
+    }
+}
+
+/// [`Effect::ChangeRule`]: "[rule change] [duration]".
+pub const fn change_rule(rule: &'static RuleChange, duration: Duration) -> Effect {
+    Effect::ChangeRule { rule, duration }
+}
+
+/// [`Effect::MayCast`] for nothing: "[player] may cast [card] without paying its mana cost".
+pub const fn may_cast_free(player: Players, card: Objects) -> Effect {
+    Effect::MayCast {
+        player,
+        card,
+        free: true,
     }
 }
 

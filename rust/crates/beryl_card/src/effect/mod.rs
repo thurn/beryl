@@ -34,11 +34,12 @@ mod reference;
 
 pub use amount::Amount;
 pub use condition::{Comparison, Condition};
-pub use reference::{Objects, Players};
+pub use reference::{Objects, Players, Recipients};
 
-use crate::continuous::{Duration, Modification};
+use crate::continuous::{Duration, Modification, RuleChange};
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
+use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::Takes;
@@ -101,6 +102,12 @@ pub enum Effect {
     /// or ability means to cancel it, removing it from the stack. It doesn't resolve and none
     /// of its effects occur. A countered spell is put into its owner's graveyard."
     Counter(Objects),
+    /// "Counter [spell]. If that spell is countered this way, [put it into a zone] instead of
+    /// putting it into its owner's graveyard": the second sentence changes where the first
+    /// puts it ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "later text
+    /// on the card may modify the meaning of earlier text". The engine puts a countered spell
+    /// into exile and nowhere else ([`crate::Malformed::Countered`]).
+    CounterInto { spells: Objects, zone: Zone },
     /// "Destroy [permanents]"
     /// ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)): "To destroy a
     /// permanent, move it from the battlefield to its owner's graveyard."
@@ -151,6 +158,25 @@ pub enum Effect {
     /// means to look at the top N cards of your library, then put any number of them on the
     /// bottom of your library in any order and the rest on top of your library in any order."
     Scry { player: Players, count: Amount },
+    /// "[Permanents] explore"
+    /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "that permanent's
+    /// controller reveals the top card of their library. If a land card is revealed this
+    /// way, that player puts that card into their hand. Otherwise, that player puts a +1/+1
+    /// counter on the exploring permanent and may put the revealed card into their
+    /// graveyard."
+    Explore(Objects),
+    /// "[Player] flips a coin"
+    /// ([CR 705.1](https://yawgatog.com/resources/magic-rules/#R7051)): "To flip a coin for an
+    /// object that cares whether a player wins or loses the flip, the affected player flips
+    /// the coin and calls 'heads' or 'tails.'" Whether they won is what
+    /// [`Condition::WonFlip`] then reads.
+    FlipCoin(Players),
+    /// "This deals [amount] damage to [recipients]", to each of them
+    /// ([CR 120.1](https://yawgatog.com/resources/magic-rules/#R1201)): "Objects can deal
+    /// damage to creatures, planeswalkers, battles, and players." The source is the object
+    /// the ability is on, or the spell
+    /// ([CR 120.2b](https://yawgatog.com/resources/magic-rules/#R1202b)).
+    DealDamage { to: Recipients, amount: Amount },
     /// "[Player] gains [amount] life"
     /// ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "If an effect causes
     /// a player to gain life or lose life, that player's life total is adjusted accordingly."
@@ -214,6 +240,28 @@ pub enum Effect {
         modification: Modification,
         duration: Duration,
     },
+    /// "[Rule change] [duration]": a continuous effect from a resolving spell or ability that
+    /// changes a rule of the game for the players it names
+    /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
+    /// effects affect game rules rather than objects." An ability starts at most one, which
+    /// is its [`crate::Ability::rule`].
+    ChangeRule {
+        rule: &'static RuleChange,
+        duration: Duration,
+    },
+    /// "[Player] may cast [card]", and with `free`, "without paying its mana cost"
+    /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): "If an effect
+    /// specifically instructs or allows a player to cast a spell during resolution, they do
+    /// so by following the steps in rules 601.2a-i, except no player receives priority after
+    /// it's cast." The player decides as the effect finishes, so this is the effect's last
+    /// instruction, and it offers one card. Without its mana cost the card is cast for an
+    /// alternative cost
+    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
+    MayCast {
+        player: Players,
+        card: Objects,
+        free: bool,
+    },
     /// "[Player] wins the game"
     /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
     /// state that a player wins the game."
@@ -233,13 +281,16 @@ impl Effect {
     /// spell or ability offers any choices other than choices already made as part of
     /// casting the spell, activating the ability, or otherwise putting the spell or ability
     /// on the stack, the player announces these while applying the effect." The kind of mana
-    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing.
+    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing, and
+    /// whether to cast a card an [`Effect::MayCast`] offers is the engine's to ask once the
+    /// effect has finished.
     pub const fn asks(&self) -> bool {
         match *self {
             Effect::May { .. }
             | Effect::Unless { .. }
             | Effect::Discard { .. }
-            | Effect::Scry { .. } => true,
+            | Effect::Scry { .. }
+            | Effect::Explore(_) => true,
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -261,6 +312,7 @@ impl Effect {
             }
             Effect::ForEachPlayer { effect, .. } => effect.asks(),
             Effect::Counter(_)
+            | Effect::CounterInto { .. }
             | Effect::Destroy(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
@@ -277,6 +329,10 @@ impl Effect {
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
             | Effect::Modify { .. }
+            | Effect::FlipCoin(_)
+            | Effect::DealDamage { .. }
+            | Effect::ChangeRule { .. }
+            | Effect::MayCast { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_) => false,
         }
@@ -315,7 +371,10 @@ impl Effect {
             | Effect::PutIntoLibrary { objects, .. } => {
                 matches!(how, Takes::Removal) && is_target(objects, target)
             }
-            Effect::Counter(objects) => matches!(how, Takes::Counter) && is_target(objects, target),
+            Effect::Counter(objects)
+            | Effect::CounterInto {
+                spells: objects, ..
+            } => matches!(how, Takes::Counter) && is_target(objects, target),
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -350,8 +409,42 @@ impl Effect {
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
             | Effect::Modify { .. }
+            | Effect::Explore(_)
+            | Effect::FlipCoin(_)
+            | Effect::DealDamage { .. }
+            | Effect::ChangeRule { .. }
+            | Effect::MayCast { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_) => false,
+        }
+    }
+
+    /// The rule change this starts as it resolves ([`Effect::ChangeRule`]), whichever of its
+    /// instructions does: what its ability names to the game ([`crate::Ability::rule`]).
+    pub const fn starts(&self) -> Option<&'static RuleChange> {
+        match *self {
+            Effect::ChangeRule { rule, .. } => Some(rule),
+            Effect::Sequence(effects) => {
+                let mut i = 0;
+                while i < effects.len() {
+                    if let Some(rule) = effects[i].starts() {
+                        return Some(rule);
+                    }
+                    i += 1;
+                }
+                None
+            }
+            Effect::If {
+                then, otherwise, ..
+            } => match (then.starts(), otherwise) {
+                (Some(rule), _) => Some(rule),
+                (None, Some(otherwise)) => otherwise.starts(),
+                (None, None) => None,
+            },
+            Effect::May { effect, .. }
+            | Effect::Unless { effect, .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.starts(),
+            _ => None,
         }
     }
 }
@@ -390,13 +483,20 @@ impl Effect {
                 effect,
             } => player.names_paid() || effect.names_paid(),
             Effect::Counter(objects)
+            | Effect::CounterInto {
+                spells: objects, ..
+            }
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
             | Effect::PutIntoLibrary { objects, .. }
+            | Effect::Explore(objects)
             | Effect::Modify { objects, .. } => objects.names_paid(),
+            Effect::DealDamage { to, amount } => to.names_paid() || amount.names_paid(),
+            Effect::MayCast { player, card, .. } => player.names_paid() || card.names_paid(),
+            Effect::ChangeRule { .. } => false,
             Effect::Draw { player, count }
             | Effect::Discard { player, count }
             | Effect::Mill { player, count }
@@ -419,9 +519,10 @@ impl Effect {
             | Effect::RemoveCounters { objects, count, .. } => {
                 objects.names_paid() || count.names_paid()
             }
-            Effect::AddMana { player, .. } | Effect::WinGame(player) | Effect::LoseGame(player) => {
-                player.names_paid()
-            }
+            Effect::AddMana { player, .. }
+            | Effect::FlipCoin(player)
+            | Effect::WinGame(player)
+            | Effect::LoseGame(player) => player.names_paid(),
         }
     }
 }

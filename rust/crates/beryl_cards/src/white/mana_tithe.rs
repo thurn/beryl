@@ -1,45 +1,28 @@
 //! Mana Tithe. {W} Instant. "Counter target spell unless its controller pays {1}."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::MANA_TITHE,
-    faces: &[Face {
-        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::WHITE,
-        abilities: &[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
-            .custom(bodies!(counter_unless_pays_one))
-            .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, counter, unless_pays};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, ManaCost, TargetKind, TargetSpec, Types, card, mana,
 };
 
 /// [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "[Do something] unless
 /// [a player does something else]" means "[A player may do something else]. If [that player
 /// doesn't], [do something]." A controller who can't pay is never asked.
-fn counter_unless_pays_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let Some(controller) = ctx.spell_controller(spell) else {
-        return Ok(());
-    };
-    if !ctx.unless_pays(controller, ManaCost::generic(1))? {
-        ctx.counter(spell, false);
-    }
-    Ok(())
-}
+pub static CARD: CardDef = card(
+    names::MANA_TITHE,
+    &[Face::EMPTY
+        .cost(mana("{W}"))
+        .types(Types::INSTANT)
+        .colors(Colors::WHITE)
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .effect(&unless_pays(
+                &counter(TARGET),
+                ITS_CONTROLLER,
+                ManaCost::generic(1),
+            ))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

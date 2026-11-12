@@ -8,7 +8,7 @@
 
 use beryl_card::{Effect, Objects, Players};
 
-use crate::actions::{counter, destroy, discard, exile, mill, sacrifice, scry};
+use crate::actions::{counter, destroy, discard, exile, explore, mill, sacrifice, scry};
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow};
 use crate::effect::EffectCtx;
@@ -18,8 +18,8 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
-use crate::{choices, continuous, costs, counters, drawing, ending, library, life, mana};
-use crate::{one_shot, tokens, zones};
+use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
+use crate::{library, life, mana, one_shot, tokens, zones};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -127,6 +127,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 return self.for_each_player(players, effect);
             }
             Effect::Counter(objects) => counter::instruction(self, objects)?,
+            Effect::CounterInto { spells, zone } => counter::into_instruction(self, spells, zone)?,
             Effect::Destroy(objects) => destroy::instruction(self, objects)?,
             Effect::Exile(objects) => exile::instruction(self, objects)?,
             Effect::ExileUntilThisLeaves(objects) => {
@@ -141,6 +142,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Discard { player, count } => discard::instruction(self, player, count)?,
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,
             Effect::Scry { player, count } => scry::instruction(self, player, count)?,
+            Effect::Explore(objects) => explore::instruction(self, objects)?,
+            Effect::FlipCoin(players) => coins::instruction(self, players)?,
+            Effect::DealDamage { to, amount } => damage::instruction(self, to, amount)?,
             Effect::GainLife { player, amount } => life::gain_instruction(self, player, amount)?,
             Effect::LoseLife { player, amount } => life::lose_instruction(self, player, amount)?,
             Effect::CreateTokens {
@@ -170,6 +174,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 modification,
                 duration,
             } => continuous::instruction(self, objects, modification, duration)?,
+            Effect::ChangeRule { rule, duration } => {
+                continuous::change_rule_instruction(self, rule, duration)?
+            }
+            Effect::MayCast { player, card, free } => {
+                casting::may_cast_instruction(self, player, card, free)
+            }
             Effect::WinGame(players) => ending::win_instruction(self, players),
             Effect::LoseGame(players) => ending::lose_instruction(self, players),
         };

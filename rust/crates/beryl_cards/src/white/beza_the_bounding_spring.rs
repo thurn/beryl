@@ -4,95 +4,88 @@
 //! opponent controls more creatures than you. Draw a card if an opponent has more cards in
 //! hand than you."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Supertypes, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
-use beryl_engine::{Layout, bodies};
-use beryl_engine::{Seat, State, Zone, ZoneKey};
-
 use crate::names;
 use crate::tokens::TREASURE;
+use beryl_card::effect::build::{
+    EACH_OPPONENT, YOU, create_tokens, draw, gain_life, if_then, sequence,
+};
+use beryl_card::{
+    Ability, Amount, CardDef, Colors, Comparison, Condition, Effect, Face, Filter, Objects,
+    Players, Subtype, Subtypes, Supertypes, Trigger, Types, Zone, card, mana,
+};
 
 /// The Fish token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
 pub const FISH_TOKEN: &str = "Fish Token";
 
 /// The Fish token: a 1/1 blue Fish creature token.
-pub static FISH: CardDef = CardDef {
-    name: FISH_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Fish]),
-        colors: Colors::BLUE,
-        power: Some(1),
-        toughness: Some(1),
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static FISH: CardDef = card(
+    FISH_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Fish]))
+        .colors(Colors::BLUE)
+        .power_toughness(1, 1)],
+);
 
-/// How many permanents of `types` `player` controls.
-fn controls<L: Layout>(s: &State<L>, player: Seat, types: Types) -> usize {
-    s.battlefield()
-        .iter()
-        .filter(|&&slot| s.controller(slot) == player && s.derived(slot).types.intersects(types))
-        .count()
+/// "An opponent has more [of an amount] than you": the most any of them has, against yours
+/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022): "In a two-player game, a
+/// player's opponent is the other player"). A tie is not "more".
+const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
+    Condition::Compare(
+        Amount::Most(EACH_OPPONENT, amount),
+        Comparison::MoreThan,
+        *amount,
+    )
 }
+
+/// "Lands you control".
+const LANDS: Amount = Amount::Count(&Objects::All {
+    zone: Zone::Battlefield,
+    filter: Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&Players::You)]),
+});
+const LIFE: Amount = Amount::Life(YOU);
+/// "Creatures you control".
+const CREATURES: Amount = Amount::Count(&Objects::All {
+    zone: Zone::Battlefield,
+    filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+});
+const CARDS_IN_HAND: Amount = Amount::Count(&Objects::All {
+    zone: Zone::Hand,
+    filter: Filter::Whose(&Players::You),
+});
 
 /// The four sentences in order, each comparison made as its sentence is applied, on
 /// resolution ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect
 /// requires information from the game (such as the number of creatures on the battlefield),
 /// the answer is determined only once, when the effect is applied." The "if"s are not right
 /// after the trigger condition, so none is an intervening "if" (CR 603.4): the ability always
-/// triggers. A tie is not "more".
-fn compare<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    if an_opponent_has_more(ctx.state(), you, |s, p| controls(s, p, Types::LAND)) {
-        ctx.create_tokens(&TREASURE, 1, TokenEntry::default());
-    }
-    if an_opponent_has_more(ctx.state(), you, |s, p| s.player(p).life()) {
-        ctx.gain_life(you, 4);
-    }
-    if an_opponent_has_more(ctx.state(), you, |s, p| controls(s, p, Types::CREATURE)) {
-        ctx.create_tokens(&FISH, 2, TokenEntry::default());
-    }
-    if an_opponent_has_more(ctx.state(), you, |s, p| {
-        s.zone(ZoneKey::Of(p, Zone::Hand)).count()
-    }) {
-        ctx.draw(you, 1);
-    }
-    Ok(())
-}
+/// triggers.
+static COMPARE: Effect = sequence(&[
+    if_then(
+        an_opponent_has_more(&LANDS),
+        &create_tokens(YOU, &TREASURE, 1),
+    ),
+    if_then(an_opponent_has_more(&LIFE), &gain_life(YOU, 4)),
+    if_then(
+        an_opponent_has_more(&CREATURES),
+        &create_tokens(YOU, &FISH, 2),
+    ),
+    if_then(an_opponent_has_more(&CARDS_IN_HAND), &draw(YOU, 1)),
+]);
 
-/// Whether "an opponent" has more than `you` of what `count` counts: any one of them
-/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022): "In a two-player game, a
-/// player's opponent is the other player").
-fn an_opponent_has_more<L: Layout, N: PartialOrd>(
-    s: &State<L>,
-    you: Seat,
-    count: impl Fn(&State<L>, Seat) -> N,
-) -> bool {
-    s.opponents_of(you)
-        .any(|them| count(s, them) > count(s, you))
-}
-
-pub static CARD: CardDef = CardDef {
-    name: names::BEZA_THE_BOUNDING_SPRING,
-    faces: &[Face {
-        cost: ManaCost::new(2, [2, 0, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Elemental, Subtype::Elk]),
-        colors: Colors::WHITE,
-        power: Some(4),
-        toughness: Some(5),
-        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(compare))],
-        ..Face::EMPTY
-    }],
-    tokens: &[&TREASURE, &FISH],
-};
+pub static CARD: CardDef = card(
+    names::BEZA_THE_BOUNDING_SPRING,
+    &[Face::EMPTY
+        .cost(mana("{2}{W}{W}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Elemental, Subtype::Elk]))
+        .colors(Colors::WHITE)
+        .power_toughness(4, 5)
+        .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&COMPARE)])],
+)
+.creating(&[&TREASURE, &FISH]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

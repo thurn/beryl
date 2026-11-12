@@ -447,7 +447,8 @@ impl Ability {
     }
 
     /// What it does as it resolves, as effect data. Of a replacement ability, what happens
-    /// instead of the event it replaces.
+    /// instead of the event it replaces. A rule change the effect starts
+    /// ([`Effect::ChangeRule`]) becomes the ability's ([`Ability::rule`]).
     #[must_use]
     pub const fn effect(self, effect: &'static Effect) -> Ability {
         assert!(
@@ -455,8 +456,14 @@ impl Ability {
             "a static ability has no effect to carry out, and a mana ability's is what it \
              produces"
         );
+        // The rule change its effect starts is the one the game numbers for it.
+        let rule = match effect.starts() {
+            Some(rule) => Some(rule),
+            None => self.rule,
+        };
         Ability {
             body: Behavior::Data(effect),
+            rule,
             ..self
         }
     }

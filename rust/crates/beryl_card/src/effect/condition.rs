@@ -31,6 +31,19 @@ pub enum Condition {
     /// "If it entered this turn", "as long as this entered this turn": there is such an
     /// object, and every one is a permanent that entered the battlefield this turn.
     EnteredThisTurn(Objects),
+    /// "If it's a token", and with [`Condition::Not`], "if it isn't a token": there is such
+    /// an object, and every one is a token
+    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "Some effects put
+    /// tokens onto the battlefield." Of the permanent whose leaving the battlefield
+    /// triggered the ability, as it last was there
+    /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
+    /// triggers look back in time."
+    Token(Objects),
+    /// "If you win the flip", and with [`Condition::Not`], "if you lose the flip": the
+    /// instruction before was a coin flip ([`crate::Effect::FlipCoin`]) and the player won it
+    /// ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "If the call matches
+    /// the result, the player wins the flip. Otherwise, the player loses the flip."
+    WonFlip,
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -47,7 +60,7 @@ impl Condition {
     /// paid.
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
-            Condition::Did => true,
+            Condition::Did | Condition::WonFlip => true,
             Condition::Paid(_) | Condition::Custom(_) => false,
             Condition::Compare(left, _, right) => {
                 left.needs_a_resolution() || right.needs_a_resolution()
@@ -55,7 +68,9 @@ impl Condition {
             Condition::Is(objects, filter) => {
                 objects.needs_a_resolution() || filter.needs_a_resolution()
             }
-            Condition::EnteredThisTurn(objects) => objects.needs_a_resolution(),
+            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
+                objects.needs_a_resolution()
+            }
             Condition::Not(condition) => condition.needs_a_resolution(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -76,9 +91,13 @@ impl Condition {
     /// Rust, which names nothing of the vocabulary.
     pub const fn names_paid(&self) -> bool {
         match self {
-            Condition::Did | Condition::Paid(_) | Condition::Custom(_) => false,
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Custom(_) => {
+                false
+            }
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
-            Condition::Is(objects, _) | Condition::EnteredThisTurn(objects) => objects.names_paid(),
+            Condition::Is(objects, _)
+            | Condition::EnteredThisTurn(objects)
+            | Condition::Token(objects) => objects.names_paid(),
             Condition::Not(condition) => condition.names_paid(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -124,9 +143,10 @@ pub enum Comparison {
 }
 
 impl Comparison {
-    /// Whether `left` is this to `right`: 3 is [`Comparison::AtLeast`] 2.
+    /// Whether `left` is this to `right`: 3 is [`Comparison::AtLeast`] 2. The amounts are as
+    /// wide as any the game counts, a life total among them.
     #[inline]
-    pub const fn holds(self, left: u8, right: u8) -> bool {
+    pub const fn holds(self, left: i32, right: i32) -> bool {
         match self {
             Comparison::AtLeast => left >= right,
             Comparison::AtMost => left <= right,

@@ -2,63 +2,35 @@
 //! Whenever this creature attacks, draw a card, then discard a card. When this creature dies,
 //! if it isn't a token, create a token that's a copy of it."
 
-use beryl_engine::GameTable;
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
-use beryl_engine::query::Copiable;
-use beryl_engine::state::{PendingTrigger, State};
-use beryl_engine::{Layout, bodies, conditions};
-
 use crate::names;
-
-/// "Draw a card, then discard a card."
-fn loot<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 1);
-    ctx.discard_a_card(you)?;
-    Ok(())
-}
-
-/// "If it isn't a token", as it last existed on the battlefield
-/// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
-/// triggers look back in time."
-fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
-    !tr.info.lki.token
-}
-
-/// "Create a token that's a copy of it": its copiable values are its card's
-/// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
-fn copy_of_it<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let dead = Copiable::of_card(ctx.trigger().lki.card);
-    ctx.create_tokens_of(dead, 1, TokenEntry::default());
-    Ok(())
-}
-
-pub static CARD: CardDef = CardDef {
-    name: names::SPHINX_OF_FALSE_CONCLUSIONS,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 2, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Sphinx, Subtype::Illusion]),
-        colors: Colors::BLUE,
-        power: Some(4),
-        toughness: Some(2),
-        keywords: Keywords::FLASH.union(Keywords::FLYING),
-        abilities: &[
-            Ability::triggered(&Trigger::ATTACKS)
-                .custom(bodies!(loot))
-                .pauses(),
-            Ability::triggered(&Trigger::DIES)
-                .custom(bodies!(copy_of_it))
-                .only_if(conditions!(not_a_token)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{THIS, YOU, create_copy, discard, draw, sequence};
+use beryl_card::{
+    Ability, CardDef, Colors, Condition, Face, Keywords, Subtype, Subtypes, Trigger, Types, card,
+    mana,
 };
+
+pub static CARD: CardDef = card(
+    names::SPHINX_OF_FALSE_CONCLUSIONS,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Sphinx, Subtype::Illusion]))
+        .colors(Colors::BLUE)
+        .power_toughness(4, 2)
+        .keywords(Keywords::FLASH.union(Keywords::FLYING))
+        .abilities(&[
+            // "Draw a card, then discard a card."
+            Ability::triggered(&Trigger::ATTACKS)
+                .effect(&sequence(&[draw(YOU, 1), discard(YOU, 1)])),
+            // "If it isn't a token", as it last existed on the battlefield
+            // ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some
+            // zone-change triggers look back in time." The copy's copiable values are its
+            // card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
+            Ability::triggered(&Trigger::DIES)
+                .only_if(&Condition::Not(&Condition::Token(THIS)))
+                .effect(&create_copy(YOU, THIS)),
+        ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

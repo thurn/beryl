@@ -5,7 +5,7 @@ use crate::ability::{Ability, Behavior};
 use crate::continuous::{Governed, LayerSpec, Modification};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
-use crate::effect::{Amount, Condition, Effect, Objects, Players};
+use crate::effect::{Amount, Condition, Effect, Objects, Players, Recipients};
 use crate::filter::Filter;
 use crate::trigger::Subject;
 
@@ -156,6 +156,11 @@ impl Amount {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany => {}
             Amount::Count(objects) => objects.filters(visit),
             Amount::Times(_, amount) => amount.filters(visit),
+            Amount::Life(players) => players.filters(visit),
+            Amount::Most(players, amount) => {
+                players.filters(visit);
+                amount.filters(visit);
+            }
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)
@@ -167,7 +172,7 @@ impl Amount {
 impl Condition {
     fn filters(&self, visit: Visit) {
         match self {
-            Condition::Did | Condition::Paid(_) | Condition::Custom(_) => {}
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Custom(_) => {}
             Condition::Compare(left, _, right) => {
                 left.filters(visit);
                 right.filters(visit);
@@ -176,7 +181,9 @@ impl Condition {
                 objects.filters(visit);
                 filter.filters(visit);
             }
-            Condition::EnteredThisTurn(objects) => objects.filters(visit),
+            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
+                objects.filters(visit);
+            }
             Condition::Not(condition) => condition.filters(visit),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 for condition in *conditions {
@@ -221,7 +228,24 @@ impl Effect {
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
-            | Effect::PutIntoLibrary { objects, .. } => objects.filters(visit),
+            | Effect::PutIntoLibrary { objects, .. }
+            | Effect::Explore(objects)
+            | Effect::CounterInto {
+                spells: objects, ..
+            } => objects.filters(visit),
+            Effect::DealDamage { to, amount } => {
+                match to {
+                    Recipients::Players(players) => players.filters(visit),
+                    Recipients::Permanents(objects) => objects.filters(visit),
+                }
+                amount.filters(visit);
+            }
+            Effect::MayCast { player, card, .. } => {
+                player.filters(visit);
+                card.filters(visit);
+            }
+            // Its rule is the ability's, walked with it (`Ability::rule`).
+            Effect::ChangeRule { .. } => {}
             Effect::Modify {
                 objects,
                 modification,
@@ -268,7 +292,10 @@ impl Effect {
                 objects.filters(visit);
                 count.filters(visit);
             }
-            Effect::AddMana { player, .. } | Effect::WinGame(player) | Effect::LoseGame(player) => {
+            Effect::AddMana { player, .. }
+            | Effect::FlipCoin(player)
+            | Effect::WinGame(player)
+            | Effect::LoseGame(player) => {
                 player.filters(visit);
             }
         }

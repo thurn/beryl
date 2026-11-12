@@ -1,29 +1,10 @@
 //! No More Lies. {W}{U} Instant. "Counter target spell unless its controller pays {3}. If that
 //! spell is countered this way, exile it instead of putting it into its owner's graveyard."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::NO_MORE_LIES,
-    faces: &[Face {
-        cost: ManaCost::new(0, [1, 1, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::WHITE.union(Colors::BLUE),
-        abilities: &[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
-            .custom(bodies!(counter_unless_pays_three))
-            .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, counter_and_exile, unless_pays};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, ManaCost, TargetKind, TargetSpec, Types, card, mana,
 };
 
 /// "Unless" as [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a) reads it. The
@@ -32,18 +13,20 @@ pub static CARD: CardDef = CardDef {
 /// may modify the meaning of earlier text (for example, ... 'Counter target spell. If that
 /// spell is countered this way, put it on top of its owner's library instead of into its
 /// owner's graveyard.')", so the countered spell goes straight to exile.
-fn counter_unless_pays_three<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let Some(controller) = ctx.spell_controller(spell) else {
-        return Ok(());
-    };
-    if !ctx.unless_pays(controller, ManaCost::generic(3))? {
-        ctx.counter(spell, true);
-    }
-    Ok(())
-}
+pub static CARD: CardDef = card(
+    names::NO_MORE_LIES,
+    &[Face::EMPTY
+        .cost(mana("{W}{U}"))
+        .types(Types::INSTANT)
+        .colors(Colors::WHITE.union(Colors::BLUE))
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .effect(&unless_pays(
+                &counter_and_exile(TARGET),
+                ITS_CONTROLLER,
+                ManaCost::generic(3),
+            ))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

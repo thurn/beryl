@@ -6,62 +6,46 @@
 //! Soporific Springs. Land. "As this land enters, you may pay 3 life. If you don't, it enters
 //! tapped. {T}: Add {U}."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaColor, ManaCost, ManaSet, Players, Replacement,
-    TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, return_to_hand};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, ManaColor, ManaSet, Players, Replacement, TargetKind,
+    TargetSpec, Types, card, mana,
+};
 
 /// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting"; only the instant can be, and
 /// [CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129): "A player playing a modal
 /// double-faced card ... as a land chooses one of its faces that's a land ... It enters the
 /// battlefield with that face up."
-pub static CARD: CardDef = CardDef {
-    name: names::SINK_INTO_STUPOR,
-    faces: &[
-        Face {
-            cost: ManaCost::new(1, [0, 2, 0, 0, 0, 0]),
-            types: Types::INSTANT,
-            colors: Colors::BLUE,
-            abilities: &[Ability::spell()
+///
+/// A spell returned to its owner's hand leaves the stack without resolving; a permanent
+/// leaves the battlefield.
+pub static CARD: CardDef = card(
+    names::SINK_INTO_STUPOR,
+    &[
+        Face::EMPTY
+            .cost(mana("{1}{U}{U}"))
+            .types(Types::INSTANT)
+            .colors(Colors::BLUE)
+            .abilities(&[Ability::spell()
                 .targeting(&[TargetSpec::one(
                     TargetKind::SpellOrPermanent,
                     Filter::All(&[
                         Filter::Whose(&Players::EachOpponent),
                         Filter::Not(&Filter::Types(Types::LAND)),
                     ]),
-                )
-                .removal()])
-                .custom(bodies!(bounce))],
-            ..Face::EMPTY
-        },
-        Face {
-            name: "Soporific Springs",
-            types: Types::LAND,
-            abilities: &[
+                )])
+                .effect(&return_to_hand(TARGET))]),
+        Face::EMPTY
+            .named("Soporific Springs")
+            .types(Types::LAND)
+            .abilities(&[
                 Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
                 Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-            ],
-            ..Face::EMPTY
-        },
+            ]),
     ],
-    tokens: &[],
-};
-
-/// A spell returned to its owner's hand leaves the stack without resolving; a permanent
-/// leaves the battlefield.
-fn bounce<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.return_to_hand(target);
-    }
-    Ok(())
-}
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

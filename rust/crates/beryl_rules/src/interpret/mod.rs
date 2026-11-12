@@ -155,7 +155,7 @@ pub(crate) fn without_a_scene<L: Layout>(
         Condition::Compare(left, comparison, right) => {
             let you = s.controller(slot);
             let (left, right) = (own_amount(s, you, left)?, own_amount(s, you, right)?);
-            Some(comparison.holds(left, right))
+            Some(comparison.holds(i32::from(left), i32::from(right)))
         }
         _ => None,
     }

@@ -1,30 +1,12 @@
 //! Mana Crypt. {0} Artifact. "At the beginning of your upkeep, flip a coin. If you lose the
 //! flip, Mana Crypt deals 3 damage to you. {T}: Add {C}{C}."
 
-use beryl_card::Players;
-use beryl_engine::TurnStep;
-use beryl_engine::card::{Ability, CardDef, Face, Flow, ManaColor, ManaSet, Trigger, Types};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Recipient;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::MANA_CRYPT,
-    faces: &[Face {
-        types: Types::ARTIFACT,
-        abilities: &[
-            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You))
-                .custom(bodies!(flip)),
-            Ability::tap_for_mana(ManaSet {
-                colors: 1 << ManaColor::Colorless as u8,
-                amount: 2,
-            }),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{
+    IF_YOU_LOSE_THE_FLIP, YOU, deal_damage_to, flip_coin, if_then, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, Face, ManaColor, ManaSet, Players, Trigger, TurnStep, Types, card,
 };
 
 /// [CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052): "If the call matches the
@@ -32,13 +14,19 @@ pub static CARD: CardDef = CardDef {
 /// noncombat damage from Mana Crypt, which makes its controller lose that much life
 /// ([CR 120.3a](https://yawgatog.com/resources/magic-rules/#R1203a)): "Damage dealt to a
 /// player by a source without infect causes that player to lose that much life."
-fn flip<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    if !ctx.flip_coin(you) {
-        ctx.deal_damage(Recipient::Player(you), 3);
-    }
-    Ok(())
-}
+pub static CARD: CardDef = card(
+    names::MANA_CRYPT,
+    &[Face::EMPTY.types(Types::ARTIFACT).abilities(&[
+        Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&sequence(&[
+            flip_coin(YOU),
+            if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),
+        ])),
+        Ability::tap_for_mana(ManaSet {
+            colors: 1 << ManaColor::Colorless as u8,
+            amount: 2,
+        }),
+    ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

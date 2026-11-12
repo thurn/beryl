@@ -3,55 +3,41 @@
 //! it was kicked, gain control of target artifact with mana value X or less. If that artifact
 //! is an Equipment, attach it to this creature."
 
-use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::{self, EffectCtx};
-use beryl_engine::filter::Filter;
-use beryl_engine::state::{Duration, TargetPlace};
-use beryl_engine::{Layout, bodies, conditions};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, modify};
+use beryl_card::{
+    Ability, CardDef, CastingKind, CastingOption, Colors, Condition, Duration, Face, Filter,
+    Keywords, ManaCost, Modification, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    card, mana,
+};
 
-/// "Gain control of target artifact": for as long as the effect lasts, which it doesn't say,
-/// so indefinitely ([CR 611.2b](https://yawgatog.com/resources/magic-rules/#R6112b)). No
-/// Equipment is among the cards, so attaching never comes up.
-fn steal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(artifact) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.gain_control(artifact, Duration::Indefinite);
-    }
-    Ok(())
-}
-
-pub static CARD: CardDef = CardDef {
-    name: names::THIEVING_SKYDIVER,
-    faces: &[Face {
-        cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Merfolk, Subtype::Rogue]),
-        colors: Colors::BLUE,
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::FLYING,
-        abilities: &[
-            // X is the kicker's (CR 107.3m), the trigger's own.
+pub static CARD: CardDef = card(
+    names::THIEVING_SKYDIVER,
+    &[Face::EMPTY
+        .cost(mana("{1}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Merfolk, Subtype::Rogue]))
+        .colors(Colors::BLUE)
+        .power_toughness(2, 1)
+        .keywords(Keywords::FLYING)
+        .abilities(&[
+            // X is the kicker's (CR 107.3m), the trigger's own. "Gain control of target
+            // artifact": for as long as the effect lasts, which it doesn't say, so
+            // indefinitely ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
+            // No Equipment is among the cards, so attaching never comes up.
             Ability::triggered(&Trigger::ENTERS)
-                .custom(bodies!(steal))
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
                 )])
-                .only_if(conditions!(effect::kicked)),
-        ],
-        casting: &[CastingOption::Kicker {
+                .only_if(&Condition::Paid(CastingKind::Kicker))
+                .effect(&modify(TARGET, Modification::Control, Duration::Indefinite)),
+        ])
+        .casting(&[CastingOption::Kicker {
             cost: ManaCost::X,
             min_x: 1,
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+        }])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

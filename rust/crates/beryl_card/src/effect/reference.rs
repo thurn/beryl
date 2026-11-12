@@ -100,6 +100,27 @@ pub enum Players {
     ThatPlayer,
 }
 
+/// What damage is dealt to
+/// ([CR 120.1](https://yawgatog.com/resources/magic-rules/#R1201)): "Objects can deal damage
+/// to creatures, planeswalkers, battles, and players."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Recipients {
+    /// "To you", "to each opponent", "to that player".
+    Players(Players),
+    /// "To target creature", "to each creature": the permanents among them.
+    Permanents(Objects),
+}
+
+impl Recipients {
+    /// Whether it reads what a cost took ([`Objects::Paid`]).
+    pub const fn names_paid(&self) -> bool {
+        match self {
+            Recipients::Players(players) => players.names_paid(),
+            Recipients::Permanents(objects) => objects.names_paid(),
+        }
+    }
+}
+
 impl Objects {
     /// Whether this means something only a resolving spell or ability has: its targets, or
     /// what an instruction before acted on. An expression that does can be read for a

@@ -1,7 +1,7 @@
 //! Amounts: how many, or how much.
 
 use crate::counter::CounterKind;
-use crate::effect::Objects;
+use crate::effect::{Objects, Players};
 
 /// A number an instruction uses, read as the instruction is reached
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
@@ -39,6 +39,15 @@ pub enum Amount {
     ManaValue(Objects),
     /// "The number of [kind] counters on [objects]".
     Counters(Objects, CounterKind),
+    /// "Your life total", "their life total"
+    /// ([CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)): "Each player begins
+    /// the game with a starting life total of 20." Of several players, their total.
+    Life(Players),
+    /// The most any of the players has of an amount, as "an opponent controls more lands
+    /// than you" holds the most lands any opponent controls against yours. The amount is
+    /// read for each of them in your place: its "you" is that player. Zero with no such
+    /// player.
+    Most(Players, &'static Amount),
 }
 
 impl Amount {
@@ -50,6 +59,10 @@ impl Amount {
             Amount::X | Amount::ThatMany => true,
             Amount::Count(objects) => objects.needs_a_resolution(),
             Amount::Times(_, amount) => amount.needs_a_resolution(),
+            Amount::Life(players) => players.needs_a_resolution(),
+            Amount::Most(players, amount) => {
+                players.needs_a_resolution() || amount.needs_a_resolution()
+            }
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)
@@ -65,6 +78,8 @@ impl Amount {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany => false,
             Amount::Count(objects) => objects.names_paid(),
             Amount::Times(_, amount) => amount.names_paid(),
+            Amount::Life(players) => players.names_paid(),
+            Amount::Most(players, amount) => players.names_paid() || amount.names_paid(),
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)

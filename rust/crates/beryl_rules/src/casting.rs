@@ -6,9 +6,13 @@
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
 
+use beryl_card::{Objects, Players};
+
+use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
 use crate::state::{
@@ -112,4 +116,25 @@ pub(crate) fn begin_on_spell<L: Layout>(
         s.start_effect(source, goes, Duration::Indefinite)?;
     }
     Ok(())
+}
+
+/// [`Effect::MayCast`](beryl_card::Effect::MayCast): "[Player] may cast [card]", without
+/// paying its mana cost when `free` (CR 608.2g): the card is offered as the effect finishes
+/// ([`offer`]). It offers one card, the first of several in the order the game lists them.
+/// The outcome is the card offered.
+pub(crate) fn may_cast_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    player: Players,
+    card: Objects,
+    free: bool,
+) -> Outcome<L> {
+    let cards = run.scene().objects(card);
+    let s = run.state();
+    let (Some(player), Some(slot)) = (run.one(player), s.in_candidate_order(cards).next()) else {
+        return Outcome::NOTHING;
+    };
+    let card = s.object_ref(slot);
+    let (_, resolution) = run.resolving();
+    offer(resolution, card, player, free);
+    Outcome::acted_on(Bitboard::single(slot))
 }

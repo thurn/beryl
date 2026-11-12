@@ -170,7 +170,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// [`counter::counter`].
     pub fn counter(&mut self, spell: ObjectRef<L>, exile: bool) -> bool {
-        let r = counter::counter(&mut self.game, spell, exile);
+        let to = if exile { Zone::Exile } else { Zone::Graveyard };
+        let r = counter::counter(&mut self.game, spell, to);
         self.checked(r)
     }
 

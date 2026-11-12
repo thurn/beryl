@@ -1,42 +1,28 @@
 //! Strip Mine. Land. "{T}: Add {C}. {T}, Sacrifice Strip Mine: Destroy target land."
 
-use beryl_engine::card::{
-    Ability, CardDef, Cost, CostPart, Face, Flow, ManaColor, ManaSet, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::STRIP_MINE,
-    faces: &[Face {
-        types: Types::LAND,
-        abilities: &[
-            Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
-            Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
-                .targeting(&[
-                    TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::LAND)).removal(),
-                ])
-                .custom(bodies!(destroy_land)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{TARGET, destroy};
+use beryl_card::{
+    Ability, CardDef, Cost, CostPart, Face, Filter, ManaColor, ManaSet, TargetKind, TargetSpec,
+    Types, card,
 };
 
-/// Not a mana ability: it has a target
+/// The second ability is not a mana ability: it has a target
 /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)), so it uses the stack.
 /// [CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a): "To destroy a permanent,
 /// move it from the battlefield to its owner's graveyard."
-fn destroy_land<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(land) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.destroy(land);
-    }
-    Ok(())
-}
+pub static CARD: CardDef = card(
+    names::STRIP_MINE,
+    &[Face::EMPTY.types(Types::LAND).abilities(&[
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
+        Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::LAND),
+            )])
+            .effect(&destroy(TARGET)),
+    ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

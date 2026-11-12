@@ -1,13 +1,14 @@
 //! Explore ([CR 701.44](https://yawgatog.com/resources/magic-rules/#R70144)).
 
-use beryl_card::prompt;
+use beryl_card::{Objects, prompt};
 
 use super::reveal::reveal;
 use crate::bitboard::Bitboard;
-use crate::card::{Flow, Prompt, Purpose, Types};
+use crate::card::{Flow, Prompt, Purpose, Stop, Types};
 use crate::choices;
 use crate::event::Reason;
 use crate::game::Game;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
 use crate::state::{CounterKind, ObjectRef, Zone};
@@ -61,4 +62,20 @@ pub fn explore<L: Layout>(
         zones::move_to(game, card, Zone::Graveyard, Reason::Effect)?;
     }
     Ok(())
+}
+
+/// [`Effect::Explore`](beryl_card::Effect::Explore): "[Permanents] explore" (CR 701.44a),
+/// each in the order they entered the battlefield. The outcome is the permanents that
+/// explored.
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Stop> {
+    let permanents = run.permanents(objects);
+    let mut left = permanents;
+    while let Some(object) = run.next_permanent(&mut left) {
+        let (game, resolution) = run.resolving();
+        explore(game, resolution, object)?;
+    }
+    Ok(Outcome::acted_on(permanents))
 }

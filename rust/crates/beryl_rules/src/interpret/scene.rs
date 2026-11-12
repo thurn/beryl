@@ -16,8 +16,8 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{
-    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Tracker, Zone,
-    ZoneKey, placed,
+    CountersHeld, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
+    Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -276,6 +276,25 @@ impl<L: Layout> Scene<'_, L> {
         here + self.moved(objects).map(known).sum::<i32>()
     }
 
+    /// The value of `amount` read with `player` in the place of "you" ([`Amount::Most`]):
+    /// against this scene, as that player's.
+    fn value_for(&self, player: Seat, amount: Amount) -> i32 {
+        let subject = PendingTrigger {
+            controller: player,
+            ..*self.subject
+        };
+        let theirs = Scene {
+            s: self.s,
+            t: self.t,
+            subject: &subject,
+            costs: self.costs,
+            x: self.x,
+            targets: self.targets,
+            registers: self.registers,
+        };
+        theirs.value(amount)
+    }
+
     /// The value of `amount` before it is used, which may be below zero.
     fn value(&self, amount: Amount) -> i32 {
         match amount {
@@ -284,6 +303,19 @@ impl<L: Layout> Scene<'_, L> {
             Amount::ThatMany => i32::from(self.registers.outcome.number),
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
+            // CR 119.1: a player's life total, which may be below zero.
+            Amount::Life(players) => {
+                let who = self.players(players);
+                let players = self.s.players_in_seat_order(who);
+                players.map(|p| i32::from(self.s.player(p).life())).sum()
+            }
+            Amount::Most(players, amount) => {
+                let who = self.players(players);
+                let each = self.s.players_in_seat_order(who);
+                each.map(|player| self.value_for(player, *amount))
+                    .max()
+                    .unwrap_or(0)
+            }
             Amount::Power(objects) => self.total(
                 objects,
                 |scene, slot| i32::from(scene.s.power(scene.t, slot)),
@@ -320,9 +352,12 @@ impl<L: Layout> Scene<'_, L> {
         match *condition {
             Condition::Did => self.registers.outcome.did,
             Condition::Paid(kind) => self.paid(kind),
+            // Each side is never less than zero (CR 107.1b).
             Condition::Compare(left, comparison, right) => {
-                comparison.holds(self.amount(left), self.amount(right))
+                comparison.holds(self.value(left).max(0), self.value(right).max(0))
             }
+            Condition::WonFlip => self.registers.outcome.did,
+            Condition::Token(names) => self.is_a_token(names),
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds
                 // no characteristics), so "if it was a [filter]" cannot be asked of one yet.
@@ -350,6 +385,20 @@ impl<L: Layout> Scene<'_, L> {
                 conditions.of::<L>()(self.s, self.t, self.subject)
             }
         }
+    }
+
+    /// Whether there is an object `names` names and every one is a token. The ability's own
+    /// source that has left the battlefield is read as it last was there, which an ability
+    /// that triggered on its leaving kept
+    /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
+    /// triggers look back in time."
+    fn is_a_token(&self, names: Objects) -> bool {
+        let objects = self.objects(names);
+        if objects.is_empty() && names == Objects::This {
+            return self.subject.info.lki.token;
+        }
+        !objects.is_empty()
+            && objects.all(|slot| self.s.object(slot).flags().has(ObjectFlags::TOKEN))
     }
 
     fn passing(&self, objects: Bitboard<L::Slot>, filter: Filter) -> Bitboard<L::Slot> {

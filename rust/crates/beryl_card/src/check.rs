@@ -11,8 +11,9 @@
 use crate::ability::{Ability, AbilityKind, Behavior};
 use crate::continuous::{LayerSpec, Modification};
 use crate::definition::{CardDef, Face};
-use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Players};
+use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Players, Recipients};
 use crate::filter::Filter;
+use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::target::TargetKind;
 
@@ -42,6 +43,9 @@ pub enum Malformed {
     /// ability whose effect is data, which says what it takes itself
     /// ([`Ability::takes_target`]).
     Declared,
+    /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
+    /// puts a countered spell instead of its owner's graveyard.
+    Countered,
 }
 
 impl Malformed {
@@ -59,6 +63,7 @@ impl Malformed {
             Malformed::Declared => {
                 "a target of effect data declares what it takes: the data says so itself"
             }
+            Malformed::Countered => "a countered spell is put somewhere other than exile",
         }
     }
 }
@@ -204,7 +209,22 @@ impl Scope<'_> {
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
-            | Effect::PutIntoLibrary { objects, .. } => self.objects(objects),
+            | Effect::PutIntoLibrary { objects, .. }
+            | Effect::Explore(objects) => self.objects(objects),
+            Effect::CounterInto { spells, zone } => match zone {
+                Zone::Exile => self.objects(spells),
+                _ => Err(Malformed::Countered),
+            },
+            Effect::DealDamage { to, amount } => {
+                let to = match to {
+                    Recipients::Players(players) => self.players(players),
+                    Recipients::Permanents(objects) => self.objects(objects),
+                };
+                both(to, self.amount(amount))
+            }
+            Effect::MayCast { player, card, .. } => both(self.players(player), self.objects(card)),
+            // The rule it starts is the ability's own (`Ability::effect`).
+            Effect::ChangeRule { .. } => Ok(()),
             Effect::Draw { player, count }
             | Effect::Discard { player, count }
             | Effect::Mill { player, count }
@@ -251,7 +271,9 @@ impl Scope<'_> {
                 modification,
                 ..
             } => both(self.objects(objects), self.modification(modification)),
-            Effect::WinGame(player) | Effect::LoseGame(player) => self.players(player),
+            Effect::FlipCoin(player) | Effect::WinGame(player) | Effect::LoseGame(player) => {
+                self.players(player)
+            }
         }
     }
 
@@ -304,6 +326,8 @@ impl Scope<'_> {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany => Ok(()),
             Amount::Count(objects) => self.objects(objects),
             Amount::Times(_, amount) => self.amount(amount),
+            Amount::Life(players) => self.players(players),
+            Amount::Most(players, amount) => both(self.players(players), self.amount(amount)),
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)
@@ -324,7 +348,7 @@ impl Scope<'_> {
 
     const fn condition(self, condition: &Condition) -> Checked {
         match condition {
-            Condition::Did | Condition::Custom(_) => Ok(()),
+            Condition::Did | Condition::WonFlip | Condition::Custom(_) => Ok(()),
             Condition::Paid(kind) => {
                 let casting = self.face.casting;
                 let mut i = 0;
@@ -338,7 +362,9 @@ impl Scope<'_> {
             }
             Condition::Compare(left, _, right) => both(self.amount(left), self.amount(right)),
             Condition::Is(objects, filter) => both(self.objects(objects), self.filter(filter)),
-            Condition::EnteredThisTurn(objects) => self.objects(objects),
+            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
+                self.objects(objects)
+            }
             Condition::Not(condition) => self.condition(condition),
             Condition::All(conditions) | Condition::Any(conditions) => self.conditions(conditions),
         }
@@ -377,7 +403,8 @@ mod tests {
     use super::*;
     use crate::cost::CastingKind;
     use crate::effect::build::{
-        TARGET, TARGET_PLAYER, THAT_PLAYER, YOU, add_mana, destroy, draw, for_each_player, if_then,
+        TARGET, TARGET_PLAYER, THAT_PLAYER, YOU, add_mana, counter_and_exile, deal_damage_to,
+        destroy, draw, explore, for_each_player, if_then, may_cast_free,
     };
     use crate::mana::{ManaColor, ManaSet};
     use crate::target::TargetSpec;
@@ -475,6 +502,42 @@ mod tests {
             .targeting(&[A_CREATURE.removal()])
             .effect(&destroy(TARGET))];
         assert_eq!(checked(DECLARED), Err(Malformed::Declared));
+    }
+
+    #[test]
+    fn a_countered_spell_put_anywhere_but_exile_is_refused() {
+        const A_SPELL: TargetSpec = TargetSpec::one(TargetKind::Spell, Filter::Any);
+        const REMAND: &[Ability] =
+            &[Ability::spell()
+                .targeting(&[A_SPELL])
+                .effect(&Effect::CounterInto {
+                    spells: TARGET,
+                    zone: Zone::Hand,
+                })];
+        const DISSIPATE: &[Ability] = &[Ability::spell()
+            .targeting(&[A_SPELL])
+            .effect(&counter_and_exile(TARGET))];
+        assert_eq!(checked(REMAND), Err(Malformed::Countered));
+        assert_eq!(checked(DISSIPATE), Ok(()));
+    }
+
+    /// The operands of the entries a card port added are walked as any other's.
+    #[test]
+    fn the_operands_of_every_entry_are_checked() {
+        const DAMAGE: &[Ability] = &[Ability::spell().effect(&deal_damage_to(TARGET_PLAYER, 3))];
+        const EXPLORE: &[Ability] = &[Ability::spell().effect(&explore(TARGET))];
+        const CAST: &[Ability] = &[Ability::spell().effect(&may_cast_free(YOU, TARGET))];
+        const MOST: &[Ability] = &[Ability::spell().effect(&Effect::Draw {
+            player: YOU,
+            count: Amount::Most(TARGET_PLAYER, &Amount::Life(YOU)),
+        })];
+        const A_TOKEN: &[Ability] = &[Ability::spell().effect(&if_then(
+            Condition::Not(&Condition::Token(TARGET)),
+            &draw(YOU, 1),
+        ))];
+        for abilities in [DAMAGE, EXPLORE, CAST, MOST, A_TOKEN] {
+            assert_eq!(checked(abilities), Err(Malformed::Target));
+        }
     }
 
     /// In a card's `static` this panic is the build failure.

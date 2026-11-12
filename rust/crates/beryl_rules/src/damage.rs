@@ -1,8 +1,12 @@
 //! Damage ([CR 120](https://yawgatog.com/resources/magic-rules/#R120)).
 
+use beryl_card::{Amount, Recipients};
+
+use crate::bitboard::Bitboard;
 use crate::event::Recipient;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::state::ObjectRef;
 
@@ -40,4 +44,41 @@ pub fn deal<L: Layout>(
         }
     };
     game.settle(e)
+}
+
+/// [`Effect::DealDamage`](beryl_card::Effect::DealDamage): "This deals [amount] damage to
+/// [recipients]": noncombat damage from the source of what is resolving
+/// ([CR 120.2b](https://yawgatog.com/resources/magic-rules/#R1202b)), to each of the players
+/// in turn order or each of the permanents in the order they entered the battlefield. The
+/// outcome is the permanents dealt damage, and how much was dealt in all.
+///
+/// # Panics
+///
+/// For an emblem's ability, which has no source.
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    to: Recipients,
+    amount: Amount,
+) -> Result<Outcome<L>, Full> {
+    let amount = run.scene().amount(amount);
+    let source = run.resolution().source();
+    let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
+    match to {
+        Recipients::Players(players) => {
+            for player in run.in_turn_order(players) {
+                deal(run.game(), source, Recipient::Player(player), amount, false)?;
+                dealt += u32::from(amount);
+            }
+        }
+        Recipients::Permanents(objects) => {
+            damaged = run.permanents(objects);
+            let mut left = damaged;
+            while let Some(permanent) = run.next_permanent(&mut left) {
+                let to = Recipient::Permanent(permanent);
+                deal(run.game(), source, to, amount, false)?;
+                dealt += u32::from(amount);
+            }
+        }
+    }
+    Ok(Outcome::of(damaged, dealt))
 }

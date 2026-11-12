@@ -9,6 +9,7 @@ use crate::event::Event;
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layers;
 use crate::layout::Layout;
@@ -114,11 +115,18 @@ pub(crate) fn instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     // "You" in what it says is the ability's controller as it resolves.
     let you = run.resolution().entry.controller;
-    let duration = match duration {
-        beryl_card::Duration::EndOfTurn => Duration::EndOfTurn,
-        beryl_card::Duration::UntilYourNextTurn => Duration::UntilYourNextTurn(you),
-        beryl_card::Duration::Indefinite => Duration::Indefinite,
-    };
+    let duration = lasting(duration, you);
+    let permanents = run.permanents(objects);
+    // "Gain control of": each permanent's own effect, which says it has a new controller
+    // (CR 302.6).
+    if modification == Modification::Control {
+        let mut left = permanents;
+        while let Some(permanent) = run.next_permanent(&mut left) {
+            let (game, resolution) = run.resolving();
+            gain_control(game, resolution, permanent, duration)?;
+        }
+        return Ok(Outcome::acted_on(permanents));
+    }
     // The card table refuses an effect that sets a power to an amount.
     let Some(change) = LayerChange::resolve(modification, you) else {
         no_primitive(&modification)
@@ -126,8 +134,30 @@ pub(crate) fn instruction<L: Layout>(
     // One effect, with one timestamp, on the set as it is now
     // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an
     // earlier timestamp is applied before an effect with a later timestamp.").
-    let permanents = run.permanents(objects);
     let (game, resolution) = run.resolving();
     start_on_set(game, resolution, permanents, change, duration)?;
     Ok(Outcome::acted_on(permanents))
+}
+
+/// A duration as a card says it, for an effect `you` control
+/// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
+fn lasting(duration: beryl_card::Duration, you: Seat) -> Duration {
+    match duration {
+        beryl_card::Duration::EndOfTurn => Duration::EndOfTurn,
+        beryl_card::Duration::UntilYourNextTurn => Duration::UntilYourNextTurn(you),
+        beryl_card::Duration::Indefinite => Duration::Indefinite,
+    }
+}
+
+/// [`Effect::ChangeRule`](beryl_card::Effect::ChangeRule): "[Rule change] [duration]"
+/// (CR 613.11): [`change_rule`], for as long as the card says. The outcome is that it did.
+pub(crate) fn change_rule_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    rule: &'static RuleChange,
+    duration: beryl_card::Duration,
+) -> Result<Outcome<L>, Full> {
+    let duration = lasting(duration, run.resolution().entry.controller);
+    let (game, resolution) = run.resolving();
+    change_rule(game, resolution, rule, duration)?;
+    Ok(Outcome::of(Bitboard::EMPTY, 1))
 }

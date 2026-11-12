@@ -3,15 +3,14 @@
 //! a card, then discard a card. If there are four or more chorus counters on Malcolm, you may
 //! cast the discarded card without paying its mana cost."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Supertypes,
-    Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::state::CounterKind;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    THIS, THOSE, YOU, add_counters, discard, draw, if_then, may_cast_free, sequence,
+};
+use beryl_card::{
+    Ability, Amount, CardDef, Colors, Comparison, Condition, CounterKind, Effect, Face, Keywords,
+    Subtype, Subtypes, Supertypes, Trigger, Types, card, mana,
+};
 
 /// The counter, the loot, and the offer to cast the discarded card as the ability finishes
 /// resolving ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). Without its
@@ -23,46 +22,34 @@ use crate::names;
 /// resolved, his last-known chorus count would decide
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)); the engine keeps no
 /// counters in last-known information, so the cast is then not offered.
-fn chorus<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    let malcolm = ctx.source();
-    ctx.add_counters(malcolm, CounterKind::Chorus, 1);
-    ctx.draw(you, 1);
-    let discarded = ctx.discard_a_card(you)?;
-    let s = ctx.state();
-    let chorus = if s.is_current(malcolm) {
-        s.counters_of(malcolm.slot, CounterKind::Chorus)
-    } else {
-        0
-    };
-    if let Some(card) = discarded
-        && chorus >= 4
-    {
-        ctx.offer_cast(card, you, true);
-    }
-    Ok(())
-}
+static CHORUS: Effect = sequence(&[
+    add_counters(THIS, CounterKind::Chorus, 1),
+    draw(YOU, 1),
+    discard(YOU, 1),
+    if_then(
+        Condition::Compare(
+            Amount::Counters(THIS, CounterKind::Chorus),
+            Comparison::AtLeast,
+            Amount::Fixed(4),
+        ),
+        &may_cast_free(YOU, THOSE),
+    ),
+]);
 
-pub static CARD: CardDef = CardDef {
-    name: names::MALCOLM_ALLURING_SCOUNDREL,
-    faces: &[Face {
-        cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Siren, Subtype::Pirate]),
-        colors: Colors::BLUE,
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::FLASH.union(Keywords::FLYING),
-        abilities: &[
-            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER)
-                .custom(bodies!(chorus))
-                .pauses(),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::MALCOLM_ALLURING_SCOUNDREL,
+    &[Face::EMPTY
+        .cost(mana("{1}{U}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Siren, Subtype::Pirate]))
+        .colors(Colors::BLUE)
+        .power_toughness(2, 1)
+        .keywords(Keywords::FLASH.union(Keywords::FLYING))
+        .abilities(&[
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&CHORUS),
+        ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

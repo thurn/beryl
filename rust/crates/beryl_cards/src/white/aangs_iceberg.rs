@@ -6,65 +6,42 @@
 //! Waterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend
 //! cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, Keywords, ManaCost, TargetKind,
-    TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::{TargetPlace, Zone};
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    IF_YOU_DO, TARGET, THIS, YOU, exile_until_this_leaves, if_then, sacrifice, scry, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Cost, CostPart, Face, Filter, Keywords, ManaCost, TargetKind,
+    TargetSpec, Trigger, Types, card, mana,
+};
 
-pub static CARD: CardDef = CardDef {
-    name: names::AANGS_ICEBERG,
-    faces: &[Face {
-        cost: ManaCost::new(2, [1, 0, 0, 0, 0, 0]),
-        types: Types::ENCHANTMENT,
-        colors: Colors::WHITE,
-        keywords: Keywords::FLASH,
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::AANGS_ICEBERG,
+    &[Face::EMPTY
+        .cost(mana("{2}{W}"))
+        .types(Types::ENCHANTMENT)
+        .colors(Colors::WHITE)
+        .keywords(Keywords::FLASH)
+        .abilities(&[
+            // "Exile up to one other target nonland permanent until this enchantment leaves
+            // the battlefield" ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)).
+            // If the Iceberg has already left by the time this resolves, the permanent isn't
+            // exiled ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
             Ability::triggered(&Trigger::ENTERS)
-                .custom(bodies!(exile_until_this_leaves))
                 .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )
-                .other()
-                .removal()]),
-            Ability::activated(Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)]))
-                .custom(bodies!(sacrifice_and_scry))
-                .pauses(),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-/// "Exile up to one other target nonland permanent until this enchantment leaves the
-/// battlefield" ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). If the
-/// Iceberg has already left by the time this resolves, the permanent isn't exiled
-/// ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(permanent) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.exile_until_source_leaves(permanent);
-    }
-    Ok(())
-}
-
-/// "Sacrifice this enchantment. If you do, scry 2." Its controller can sacrifice it only if
-/// it is still on the battlefield ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)).
-fn sacrifice_and_scry<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let iceberg = ctx.source();
-    if !ctx.state().is_current(iceberg)
-        || ctx.state().object(iceberg.slot).zone() != Zone::Battlefield
-    {
-        return Ok(());
-    }
-    ctx.sacrifice(iceberg);
-    ctx.scry(ctx.controller(), 2)
-}
+                .other()])
+                .effect(&exile_until_this_leaves(TARGET)),
+            // "Sacrifice this enchantment. If you do, scry 2." Its controller can sacrifice
+            // it only if it is still on the battlefield
+            // ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)).
+            Ability::activated(Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)])).effect(
+                &sequence(&[sacrifice(THIS), if_then(IF_YOU_DO, &scry(YOU, 2))]),
+            ),
+        ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

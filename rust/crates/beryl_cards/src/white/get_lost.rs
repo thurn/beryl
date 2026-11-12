@@ -1,29 +1,32 @@
-//! Get Lost. {1}{W}{W} Instant. "Destroy target creature, enchantment, or planeswalker. Its
+//! Get Lost. {1}{W} Instant. "Destroy target creature, enchantment, or planeswalker. Its
 //! controller creates two Map tokens."
 //!
 //! Map: Token Artifact — Map. "{1}, {T}, Sacrifice this token: Target creature you control
 //! explores. Activate only as a sorcery."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Players, Subtype, Subtypes,
-    TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    ITS_CONTROLLER, TARGET, create_tokens, destroy, explore, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Cost, CostPart, Face, Filter, ManaCost, Players, Subtype, Subtypes,
+    TargetKind, TargetSpec, Types, card, mana,
+};
 
-pub static CARD: CardDef = CardDef {
-    name: names::GET_LOST,
-    faces: &[Face {
-        // {1}{W}.
-        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::WHITE,
-        abilities: &[Ability::spell()
+/// "Its controller" is the permanent's controller as it was destroyed
+/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
+/// information from the game ..., the answer is determined only once, when the effect is
+/// applied. If the effect requires information from a specific object, ... the effect uses
+/// the current information of that object if it's in the public zone it was expected to be
+/// in; if it's no longer in that zone, ... the effect uses the object's last known
+/// information."
+pub static CARD: CardDef = card(
+    names::GET_LOST,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}"))
+        .types(Types::INSTANT)
+        .colors(Colors::WHITE)
+        .abilities(&[Ability::spell()
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Types(
@@ -31,27 +34,28 @@ pub static CARD: CardDef = CardDef {
                         .union(Types::ENCHANTMENT)
                         .union(Types::PLANESWALKER),
                 ),
-            )
-            .removal()])
-            .custom(bodies!(destroy_and_map))],
-        ..Face::EMPTY
-    }],
-    tokens: &[&MAP],
-};
+            )])
+            .effect(&sequence(&[
+                destroy(TARGET),
+                create_tokens(ITS_CONTROLLER, &MAP, 2),
+            ]))])],
+)
+.creating(&[&MAP]);
+
+/// The Map token's name: its subtype plus the word "Token" (CR 111.4).
+pub const MAP_TOKEN: &str = "Map Token";
 
 /// The predefined Map token
 /// ([CR 111.10s](https://yawgatog.com/resources/magic-rules/#R11110s)): "A Map token is a
 /// colorless Map artifact token with "{1}, {T}, Sacrifice this token: Target creature you
 /// control explores. Activate only as a sorcery.""
-/// The Map token's name: its subtype plus the word "Token" (CR 111.4).
-pub const MAP_TOKEN: &str = "Map Token";
-
-pub static MAP: CardDef = CardDef {
-    name: MAP_TOKEN,
-    faces: &[Face {
-        types: Types::ARTIFACT,
-        subtypes: Subtypes::of(&[Subtype::Map]),
-        abilities: &[Ability::activated(Cost::of(
+/// Explore is [CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a).
+pub static MAP: CardDef = card(
+    MAP_TOKEN,
+    &[Face::EMPTY
+        .types(Types::ARTIFACT)
+        .subtypes(Subtypes::of(&[Subtype::Map]))
+        .abilities(&[Ability::activated(Cost::of(
             ManaCost::generic(1),
             &[CostPart::TAP, CostPart::SACRIFICE],
         ))
@@ -60,37 +64,8 @@ pub static MAP: CardDef = CardDef {
             Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
         )])
         .as_a_sorcery()
-        .custom(bodies!(explore))
-        .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-/// "Its controller" is the permanent's controller as it was destroyed, read before it leaves
-/// the battlefield ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an
-/// effect requires information from the game ..., the answer is determined only once, when
-/// the effect is applied. If the effect requires information from a specific object, ... the
-/// effect uses the current information of that object if it's in the public zone it was
-/// expected to be in; if it's no longer in that zone, ... the effect uses the object's last
-/// known information."
-fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(permanent) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let controller = ctx.state().controller(permanent.slot);
-    ctx.destroy(permanent);
-    ctx.create_tokens_for(controller, &MAP, 2, TokenEntry::default());
-    Ok(())
-}
-
-/// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)).
-fn explore<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(creature) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    ctx.explore(creature)
-}
+        .effect(&explore(TARGET))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

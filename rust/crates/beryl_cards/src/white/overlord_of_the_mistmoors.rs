@@ -4,71 +4,58 @@
 //! step, remove a time counter from it.) Whenever this permanent enters or attacks, create two
 //! 2/1 white Insect creature tokens with flying."
 
-use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{YOU, create_tokens};
+use beryl_card::{
+    Ability, CardDef, CastingOption, Colors, Effect, Face, Keywords, Subtype, Subtypes, Trigger,
+    Types, card, mana,
+};
 
 /// The Insect token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
 /// its subtype plus the word "Token".
 pub const INSECT_TOKEN: &str = "Insect Token";
 
 /// The Insect token: a 2/1 white Insect creature token with flying.
-pub static INSECT: CardDef = CardDef {
-    name: INSECT_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Insect]),
-        colors: Colors::WHITE,
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::FLYING,
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static INSECT: CardDef = card(
+    INSECT_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Insect]))
+        .colors(Colors::WHITE)
+        .power_toughness(2, 1)
+        .keywords(Keywords::FLYING)],
+);
 
 /// "Create two 2/1 white Insect creature tokens with flying": one event
 /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
-fn two_insects<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens(&INSECT, 2, TokenEntry::default());
-    Ok(())
-}
+static TWO_INSECTS: Effect = create_tokens(YOU, &INSECT, 2);
 
 /// Impending is four abilities
 /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)): the alternative cost,
 /// the time counters it enters with (both in the casting option), "isn't a creature" while it
 /// has one, and the end-step countdown.
-pub static CARD: CardDef = CardDef {
-    name: names::OVERLORD_OF_THE_MISTMOORS,
-    faces: &[Face {
-        cost: ManaCost::new(5, [2, 0, 0, 0, 0, 0]),
-        types: Types::ENCHANTMENT.union(Types::CREATURE),
-        subtypes: Subtypes::of(&[Subtype::Avatar, Subtype::Horror]),
-        colors: Colors::WHITE,
-        power: Some(6),
-        toughness: Some(6),
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::OVERLORD_OF_THE_MISTMOORS,
+    &[Face::EMPTY
+        .cost(mana("{5}{W}{W}"))
+        .types(Types::ENCHANTMENT.union(Types::CREATURE))
+        .subtypes(Subtypes::of(&[Subtype::Avatar, Subtype::Horror]))
+        .colors(Colors::WHITE)
+        .power_toughness(6, 6)
+        .abilities(&[
             Ability::impending(),
             Ability::impending_countdown(),
-            Ability::triggered(&Trigger::ENTERS).custom(bodies!(two_insects)),
+            Ability::triggered(&Trigger::ENTERS).effect(&TWO_INSECTS),
             Ability::triggered(&Trigger::ATTACKS)
-                .custom(bodies!(two_insects))
+                .effect(&TWO_INSECTS)
                 .in_paragraph_before(),
-        ],
-        casting: &[CastingOption::Impending {
-            cost: ManaCost::new(2, [2, 0, 0, 0, 0, 0]),
+        ])
+        .casting(&[CastingOption::Impending {
+            cost: mana("{2}{W}{W}"),
             counters: 4,
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[&INSECT],
-};
+        }])],
+)
+.creating(&[&INSECT]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

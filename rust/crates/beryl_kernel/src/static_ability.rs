@@ -159,8 +159,10 @@ fn reads(condition: &Condition) -> bool {
         Condition::Not(condition) => reads(condition),
         Condition::All(conditions) | Condition::Any(conditions) => conditions.iter().all(reads),
         Condition::Did
+        | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::Token(_)
         | Condition::Custom(_) => false,
     }
 }
@@ -199,14 +201,16 @@ pub fn holds<L: Layout>(s: &State<L>, slot: L::Slot, condition: &Condition) -> b
         // CR 702.33d: a permanent remembers each kind of cost its spell paid.
         Condition::Paid(kind) => s.paid(slot, *kind),
         Condition::Compare(left, comparison, right) => {
-            comparison.holds(amount(left), amount(right))
+            comparison.holds(i32::from(amount(left)), i32::from(amount(right)))
         }
         Condition::Not(condition) => !holds(s, slot, condition),
         Condition::All(conditions) => conditions.iter().all(|c| holds(s, slot, c)),
         Condition::Any(conditions) => conditions.iter().any(|c| holds(s, slot, c)),
         Condition::Did
+        | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::Token(_)
         | Condition::Custom(_) => {
             unreachable!("the card table refuses a static ability with this condition")
         }
@@ -227,8 +231,10 @@ pub fn reads_counters(condition: &Condition, kind: CounterKind) -> bool {
         }
         Condition::Paid(_)
         | Condition::Did
+        | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::Token(_)
         | Condition::Custom(_) => false,
     }
 }

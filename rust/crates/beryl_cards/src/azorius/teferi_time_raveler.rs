@@ -5,23 +5,13 @@
 //! −3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw a
 //! card."
 
-use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
-use beryl_card::{Governed, Players, RuleChange, When};
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Supertypes, TargetKind,
-    TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::Duration;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, YOU, change_rule, draw, return_to_hand, sequence};
+use beryl_card::{
+    Ability, CardDef, Colors, Duration, Face, Filter, Governed, Players, RuleChange, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Types, When, card, mana,
+};
 
-/// Planeswalkers' loyalty abilities ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)):
-/// "A player may activate a loyalty ability of a permanent they control any time they have
-/// priority and the stack is empty during a main phase of their turn, but only if no player
-/// has previously activated a loyalty ability of that permanent that turn."
 /// "Each opponent can cast spells only any time they could cast a sorcery."
 static ONLY_AS_SORCERIES: RuleChange = RuleChange {
     players: Players::EachOpponent,
@@ -30,30 +20,40 @@ static ONLY_AS_SORCERIES: RuleChange = RuleChange {
 };
 
 /// "You may cast sorcery spells as though they had flash."
+/// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means 'You may
+/// play this card any time you could cast an instant.'" A change to a rule for one player
+/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects
+/// affect game rules rather than objects.").
 static SORCERIES_AS_FLASH: RuleChange = RuleChange {
     players: Players::You,
     what: Governed::CastSpells(Filter::Types(Types::SORCERY)),
     when: When::AsInstant,
 };
 
-pub static CARD: CardDef = CardDef {
-    name: names::TEFERI_TIME_RAVELER,
-    faces: &[Face {
-        cost: ManaCost::new(1, [1, 1, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::PLANESWALKER,
-        subtypes: Subtypes::of(&[Subtype::Teferi]),
-        colors: Colors::WHITE.union(Colors::BLUE),
-        loyalty: Some(4),
-        abilities: &[
+/// Planeswalkers' loyalty abilities ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)):
+/// "A player may activate a loyalty ability of a permanent they control any time they have
+/// priority and the stack is empty during a main phase of their turn, but only if no player
+/// has previously activated a loyalty ability of that permanent that turn."
+pub static CARD: CardDef = card(
+    names::TEFERI_TIME_RAVELER,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}{U}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::PLANESWALKER)
+        .subtypes(Subtypes::of(&[Subtype::Teferi]))
+        .colors(Colors::WHITE.union(Colors::BLUE))
+        .loyalty(4)
+        .abilities(&[
             // A prohibition the casting machine reads: a "can't" beats a "can"
             // ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)), so even a
             // spell with flash waits for sorcery timing.
             Ability::rule_change(&ONLY_AS_SORCERIES),
-            // The rule change its effect starts, which the game numbers.
-            Ability::loyalty(1)
-                .starting(&SORCERIES_AS_FLASH)
-                .custom(bodies!(sorceries_as_flash)),
+            // "+1: Until your next turn, you may cast sorcery spells as though they had
+            // flash." It ends as its controller's next turn begins.
+            Ability::loyalty(1).effect(&change_rule(
+                &SORCERIES_AS_FLASH,
+                Duration::UntilYourNextTurn,
+            )),
             // "−3: Return up to one target artifact, creature, or enchantment to its owner's
             // hand. Draw a card." With no target chosen it still draws; with its one target
             // illegal, it doesn't resolve at all
@@ -68,22 +68,8 @@ pub static CARD: CardDef = CardDef {
                     ),
                 )])
                 .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-/// "+1: Until your next turn, you may cast sorcery spells as though they had flash."
-/// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means 'You may
-/// play this card any time you could cast an instant.'" A change to a rule for one player
-/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects
-/// affect game rules rather than objects."), which ends as their next turn begins.
-fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(you));
-    Ok(())
-}
+        ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

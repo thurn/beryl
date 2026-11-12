@@ -4,20 +4,16 @@
 //! +1: Target player mills two cards. Draw a card.
 //! −8: Draw seven cards. Then if your library has no cards in it, you win the game."
 
-use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, mill, sequence, win_game};
-use beryl_card::{Amount, Comparison, Condition, Effect, Objects, Players, Zone};
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, Replacement, Subtype, Subtypes, Supertypes,
-    TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, if_then, mill, sequence, win_game};
+use beryl_card::{
+    Ability, Amount, CardDef, Colors, Comparison, Condition, Effect, Face, Filter, Objects,
+    Players, Replacement, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types, Zone, card,
+    mana,
+};
 
-/// "While your library has no cards in it".
-static LIBRARY_IS_EMPTY: Condition = Condition::Compare(
+/// "While your library has no cards in it", "if your library has no cards in it".
+const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
     Amount::Count(&Objects::All {
         zone: Zone::Library,
         filter: Filter::Whose(&Players::You),
@@ -29,16 +25,16 @@ static LIBRARY_IS_EMPTY: Condition = Condition::Compare(
 /// "You win the game".
 static YOU_WIN: Effect = win_game(YOU);
 
-pub static CARD: CardDef = CardDef {
-    name: names::JACE_WIELDER_OF_MYSTERIES,
-    faces: &[Face {
-        cost: ManaCost::new(1, [0, 3, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::PLANESWALKER,
-        subtypes: Subtypes::of(&[Subtype::Jace]),
-        colors: Colors::BLUE,
-        loyalty: Some(4),
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::JACE_WIELDER_OF_MYSTERIES,
+    &[Face::EMPTY
+        .cost(mana("{1}{U}{U}{U}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::PLANESWALKER)
+        .subtypes(Subtypes::of(&[Subtype::Jace]))
+        .colors(Colors::BLUE)
+        .loyalty(4)
+        .abilities(&[
             // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
             // "Effects that use the word 'instead' are replacement effects." The draw
             // machinery offers it each draw, an empty library or not (CR 614.11).
@@ -48,12 +44,9 @@ pub static CARD: CardDef = CardDef {
             Ability::loyalty(1)
                 .targeting(&[TargetSpec::one(TargetKind::Player, Filter::Any)])
                 .effect(&MILL_TWO_AND_DRAW),
-            Ability::loyalty(-8).custom(bodies!(draw_seven)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            Ability::loyalty(-8).effect(&DRAW_SEVEN),
+        ])],
+);
 
 /// "+1: Target player mills two cards. Draw a card." In order
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)), so milling himself
@@ -69,14 +62,7 @@ static MILL_TWO_AND_DRAW: Effect = sequence(&[mill(TARGET_PLAYER, 2), draw(YOU, 
 /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)), by when the game is
 /// over ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
 /// state that a player wins the game."
-fn draw_seven<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 7);
-    if ctx.state().library(you).is_empty() {
-        ctx.win_game(you);
-    }
-    Ok(())
-}
+static DRAW_SEVEN: Effect = sequence(&[draw(YOU, 7), if_then(LIBRARY_IS_EMPTY, &YOU_WIN)]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
