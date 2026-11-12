@@ -32,7 +32,7 @@ import type { Surface } from "./stage.ts";
 
 /** The name a node's `data-stage` says. */
 const named = (said: string): Name =>
-  /^\d/.test(said) ? Number(said) : (said as Name);
+  /^-?\d/.test(said) ? Number(said) : (said as Name);
 
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;
