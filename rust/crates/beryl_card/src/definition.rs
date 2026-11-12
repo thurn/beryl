@@ -215,7 +215,20 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
 /// # Panics
 ///
 /// As the definition compiles, if it says what no game could carry out
-/// ([`CardDef::check`]): a build failure in the card's own file.
+/// ([`CardDef::check`]): a build failure in the card's own file. This one adds mana as a
+/// spell resolves, which only a mana ability does:
+///
+/// ```compile_fail
+/// use beryl_card::effect::build::{YOU, add_mana};
+/// use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Types, card};
+///
+/// pub static CARD: CardDef = card(
+///     "Dark Ritual",
+///     &[Face::EMPTY
+///         .types(Types::INSTANT)
+///         .abilities(&[Ability::spell().effect(&add_mana(YOU, ManaSet::one(ManaColor::Black)))])],
+/// );
+/// ```
 pub const fn card(name: &'static str, faces: &'static [Face]) -> CardDef {
     let card = CardDef {
         name,
