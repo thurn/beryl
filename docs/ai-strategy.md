@@ -1,11 +1,12 @@
 # AI Strategy
 
-*The plan, as of 2026-11-08, for Beryl's AI opponent: what it must be, which
+*The plan, as of 2026-11-11, for Beryl's AI opponent: what it must be, which
 agent we start from, and how each change to it earns its place. It replaces the
-2026-11-05 plan, which asked how search scales and what limits it; the
-long-think arena answered that ([longthink-run-003.md](longthink-run-003.md)),
-and five games against humans showed what it did not measure
-([incidents/](incidents/)).*
+2026-11-08 plan. That plan's first two rungs failed at the blunder suite and no
+match was ever played; §2 says why. The ladder now keeps greedy's answer where
+greedy is right and repairs the rollout policy where it is wrong. It runs on one
+machine, Cygnus, and is written for small models to execute: every step names
+its command and its pass condition.*
 
 ## 1. Goal
 
@@ -18,62 +19,97 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
   on turn two is sometimes right, and Reprieve on an Oust the opponent can
   recast was sound ([incident](incidents/2026-11-08-reprieve-on-oust.md)). A
   play no strong player would make under any reading is not, whatever the game's
-  result:
-  - Oust on its own Rogue token
-    ([Deep Seer](incidents/2026-11-06-deep-seer-misplays.md));
-  - Snapcaster Mage in its own main phase, flashing back a Counterspell it could
-    never pay for
-    ([Snapcaster](incidents/2026-11-07-snapcaster-and-jace-wielder.md));
-  - Trinket Mage's search offered a free Mana Crypt and took nothing
-    ([Trinket Mage](incidents/2026-11-07-trinket-mage-declines-crypt.md));
-  - the Spirit token held back when attacking Jace, Wielder of Mysteries with
-    everything killed the opponent's only quick win (Snapcaster incident).
+  result. Humans have caught four kinds (§5 lists all 20):
+  - **Acting at the first window instead of the last.** Snapcaster Mage and
+    Subtlety cast in its own main phase, Staff of the Storyteller in the
+    opponent's upkeep, Jace looting before its own draw.
+  - **Declining something free.** Trinket Mage's search taking nothing, Teferi's
+    untap taking no land, a safe attack not made.
+  - **Spending a card on nothing.** Subtlety evoked with no spell to target,
+    Oust on its own token.
+  - **Attacking into blockers that win the fight.**
 - **Blunders weigh more than strength.** We will trade some Elo for the last of
-  them, and we hold the line hardest where search is least reliable: positions
-  the agent rates as nearly won or nearly lost, where every move looks the same
-  to its rollouts and noise chooses.
-- **General by data, not by code.** Per-card knowledge is allowed as table
-  entries (`values.rs`: a value, a flag) that the policy and search read
-  generically. Card-specific code paths are not: the expert is 3,200 lines for
-  29 cards, and the Legacy decks will have hundreds.
+  them.
+- **General by data, not by code.** A policy rule reads what a card's definition
+  says (its types, keywords, costs, targets) and the game's state. It never
+  names a card. Per-card numbers survive only as table entries (`values.rs`),
+  the overlay of plan K9 ([project-50k.md](project-50k.md)).
+- **The bar.** The WU Control mirror is the only testbed until a human finds a
+  new blunder in fewer than one game in five. Then the ladder moves to the first
+  Legacy deck.
 
 ## 2. What we learned
 
-From run-003 (2,777 games over 54 hours) and the incidents:
+### 2.1 From run-003
 
-- **Full rollouts win.** Leaves cut off and evaluated by
-  `beryl_search::evaluate` trailed full rollouts by 180 to 260 Elo at every
-  budget, and sat at the frozen expert's level. The general evaluator the old
-  plan was built on is not a leaf yet.
-- **Budget pays, less and less.** Each ×3 of engine steps a decision gained +23
-  to +57 Elo, flattening past 10M to 30M. The 90M entrants were within noise of
-  30M.
-- **Hidden information costs little at length.** The omniscient twins led the
-  fair searches by +65 to +160 Elo at 1M to 10M, and by nothing measurable at
-  30M.
-- **Hand-tuned card values beat 17lands win rates** by about 90 Elo, at every
-  budget.
-- **Fewer worlds, deeper trees.** PIMC with 18 worlds rated +356 at 30M, 72
-  worlds +262 and 288 worlds +295, within wide intervals.
+2,777 games over 54 hours ([longthink-run-003.md](longthink-run-003.md)):
+
+- **Full rollouts win.** Evaluation leaves trailed them by 180 to 260 Elo at
+  every budget.
+- **Budget pays, less and less.** Each ×3 of engine steps gained +23 to +57 Elo,
+  flattening past 10M to 30M.
+- **Hidden information costs little at length.** The omniscient twins led by +65
+  to +160 Elo at 1M to 10M, and by nothing measurable at 30M.
+- **Hand-tuned card values beat 17lands win rates** by about 90 Elo.
+- **Fewer worlds, deeper trees.** 18 worlds rated +356 at 30M against +262 for
+  72, within wide intervals.
 - **Most moves are coin flips by the search's own estimate.** The chosen move
-  led the runner-up's mean by under 0.01 in 62% of the leader's decisions and
-  under 0.02 in 73%. Every incident blunder was one of these ties, settled by
-  visit counts, which is noise. Visits can even overrule the means: Jace,
-  Wielder led by 0.015 and lost on visits.
-- **The rollout policy is where the blunders start.** The search prices a move
-  by games the greedy policy plays out, so what greedy cannot do the search
-  cannot value: holding a flash creature, milling oneself with Jace, Wielder,
-  casting Mana Crypt, or a Mana Crypt in hand that the tree casts badly and the
-  rollouts never cast. Fixes there are a line each.
-- **The anchor works where it applies.** Playing greedy's answer unless the
-  search leads it clearly (`Options::anchor`, epic by-7wl) stopped the Oust and
-  costs about 0.005 a game by the search's estimate. It guards only priority
-  casts; three of the five incidents fell outside it.
-- **Round robins and the arena cannot answer today's questions.** After 54 hours
-  the arena's intervals were ±60 to ±80 Elo, and a 600-game head-to-head
-  (by-7wl.8) was dropped as powerless against an effect of half a percent. The
-  questions left are small effects between two agents, which take a different
-  design.
+  led the runner-up by under 0.01 in 62% of decisions.
+- **The anchor works where it applies.** Playing greedy's pass unless the search
+  clearly wants to cast (`Options::anchor`) stopped the Oust for about 0.005 a
+  game.
+
+### 2.2 From the first two rungs and the review of 2026-11-11
+
+- **The champion's judgement is the rollout policy's.** 30M steps buy about
+  52,000 rollouts a decision, which is about 720 a tree over 72 trees. The tree
+  has a node for every priority, attacker and target decision, so 720 rollouts
+  reach four or five decisions deep: less than a turn. A move's value is, to a
+  close approximation, how often greedy wins after it.
+- **Greedy has no clock.** `Policy::action` (`rollout/policy.rs`) scores a cast
+  or an activation the same in upkeep, a main phase, combat and an end step, on
+  either player's turn. Only counterspells wait. So the search cannot price
+  waiting, in a matchup that is mostly waiting.
+- **Greedy alone gets 11 of the 20 suite positions right.** The champion,
+  searching 30M steps on top of greedy, is fixed on 2
+  (`just blunders greedy --seeds 1`, 2026-11-11; greedy is deterministic, so one
+  run decides). The 20 entries split three ways:
+
+| Where the fault is                                         | Entries | What repairs it                    |
+| ---------------------------------------------------------- | ------- | ---------------------------------- |
+| Greedy is right; the search loses it in a near-tie         | 8       | The root keeps greedy's answer     |
+| Greedy is right; the search clearly prefers the wrong play | 3       | The rollouts after the move (§6.4) |
+| Greedy's own answer is wrong                               | 9       | A policy rule (§6.2 to §6.4)       |
+
+- **The search throws away answers its own policy had.** With rewards this
+  close, 30M steps cannot tell a free land untap from none, so noise chooses.
+  The anchor exists for this and covers only a cast against greedy's pass.
+- **A root rule is only as good as greedy at that kind of decision.**
+  - Rung 1 (means over visits) changed no move on any suite entry.
+  - Rung 2 (the guard) fixed the two entries where greedy is right, the declined
+    Mana Crypt and Beza's attack after Winds of Abandon. It made the Jace,
+    Wielder entry worse, because greedy's own attack target is wrong there.
+- **Six of greedy's nine wrong answers are timing.** The others are an evoke
+  with no target, an attack target and an attack into two blockers.
+- **Two policy faults were read from the code and are not yet confirmed by a
+  test.** The rung that claims one writes the failing test first (§6).
+  - A choice of lands to untap is scored by each land's value with no check of
+    who controls it (`rollout.rs`, `DecisionKind::ChooseUpTo`). Teferi, Hero of
+    Dominaria's untap offers both players' lands, so a rollout may untap the
+    opponent's. That would explain Teferi's +1 scoring 0.025 to 0.04 below a
+    pass. Greedy took its own land at both suite positions, so this is not
+    shown.
+  - `Policy::block` never adds a second blocker to an attacker and chumps only
+    when the player would die, never to save a planeswalker. An attack that two
+    blockers punish looks safe to it.
+- **Two incidents ended "cause not found".** Each is a policy fault that also
+  costs strength in every game. Finding them needs a tool that shows what the
+  rollouts do after each candidate (`just why`, §4.7).
+- **The process produced nothing in three days.** No match was played and no row
+  was written, while the suite grew from 4 entries to 20. Rung 2 fixed two
+  entries, re-opened none and cost 0.006 a game on the screen. It was closed
+  unpromoted because its bead asked for both of its claimed entries where the
+  plan asked for one. A bead may not tighten the gate (§4.3).
 
 ## 3. The champion
 
@@ -81,317 +117,423 @@ The ladder improves one agent, the **champion**. The app's Deep Searcher is
 always the current champion, and a promotion is a change to it.
 
 The starting champion is Deep Searcher as it ships:
-`pimc72/hidden/rollout/tuned/anchor@30M` (`beryl_search::AGENTS`).
+`pimc72/hidden/rollout/tuned/anchor@30M` (`beryl_search::DEEP_SEARCHER`).
 
-| Axis      | Setting                                                   |
-| --------- | --------------------------------------------------------- |
-| Method    | PIMC, 72 worlds dealt from what it can see, a tree each   |
-| Sight     | Hidden                                                    |
-| Leaf      | Softmax rollout to the end of the game, temperature 10    |
-| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)               |
-| Options   | `anchor`: greedy's answer unless the search leads clearly |
-| Scores    | Turn discount 0.98: win sooner, lose later                |
-| Budget    | 30M engine steps a decision, on every core                |
+| Axis      | Setting                                                 |
+| --------- | ------------------------------------------------------- |
+| Method    | PIMC, 72 worlds dealt from what it can see, a tree each |
+| Sight     | Hidden                                                  |
+| Leaf      | Softmax rollout to the end of the game, temperature 10  |
+| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)             |
+| Options   | `anchor`: greedy's pass unless the search leads clearly |
+| Rules     | None yet. Each policy rung adds one (§6)                |
+| Scores    | Turn discount 0.98: win sooner, lose later              |
+| Budget    | 30M engine steps a decision, on every core              |
 
-Why this one and not run-003's best fair entrant (18 worlds, +356): it is what
-humans have played, every incident was measured against it, and the 18-world
-twin's lead is within noise. "Fewer worlds" is the cheapest rung on the ladder
-(§6), not an assumption.
+Every change is a named part of the family's name, so any past champion can be
+played again from the current build: `…/tuned/anchor+guard+hold` is the champion
+after the first two rungs. The audit (§4.5) depends on this.
 
-Yardsticks, never candidates: `expert-frozen` (the fixed bar of the old plan,
-pinned by a test), `greedy` (the rollout policy as a player) and Deep Seer (the
-champion's omniscient twin, an upper reference for what search could know).
+Yardsticks, never candidates: `expert-frozen`, `greedy` (the rollout policy as a
+player) and Deep Seer (the omniscient twin).
 
 ## 4. The ladder
 
-One challenger at a time plays the champion. The challenger differs in one thing
-we can name. It is promoted only by a pre-registered bar, and the match's result
-is recorded whether it passes or not.
+One challenger at a time plays the champion. It differs in one named thing. It
+is promoted by the gate below and by nothing else.
 
-### 4.1 The match
+### 4.1 Where it runs, and who runs it
+
+- **Cygnus only.** Every suite, screen, match and audit runs on Cygnus, the
+  Windows PC (i7-12700F, 20 threads, `BERYL_CACHE=D:\beryl-cache`). The Mac
+  plays no ladder games. The position set is at
+  `D:\beryl-cache\ladder\positions` (216 positions).
+- **One lane.** Every bead of the ladder carries `lane:ladder`. One session
+  works them in order; no two matches ever run at once.
+- **Small models.** A bead's steps are numbered, each with its command and what
+  to do on each outcome. A step that is not written is not done. Where a step
+  fails in a way the bead does not cover, the session writes what happened in
+  the bead's notes, closes the bead as failed and goes on to the next. It never
+  waits for a person and never files a bead asking one to look.
+- **Long commands run in the background.** The `just` recipes named here run at
+  low priority by themselves. Nothing else heavy runs beside a match.
+
+### 4.2 A rung is two beads
+
+- **Build.** Adds the change as an option that is off by default, with its
+  tests, and pushes it. The champion's moves do not change. Its bead names the
+  files, the exact rule and the tests.
+- **Gate.** Runs §4.3 on the pushed build and records the result. It depends on
+  the build bead. It is mechanical, so it is labeled `tier:light`.
+
+### 4.3 The gate
+
+The gate bead runs these steps in order. `CHALLENGER` is the family the build
+bead named; `CLAIMS` is the comma-separated list of suite entries it claims.
+
+1. **Audit check.** If §4.5 says an audit is due, run it first.
+2. **Suite.** `just gate CHALLENGER --claims CLAIMS`. It runs the suite (§5) for
+   the champion and the challenger and prints `GATE: PASS` or `GATE: FAIL`. The
+   gate passes when all three hold:
+   - at least one claimed entry is open for the champion and fixed for the
+     challenger;
+   - no entry fixed for the champion is open for the challenger;
+   - no entry passes 4 or more fewer of its 10 runs than it did for the
+     champion.
+3. **On `GATE: FAIL`:** copy the printed table into the bead's notes, add a row
+   to `docs/ladder.md` with the verdict `failed at the suite`, close the bead as
+   failed. Play no match. Go on to the next rung.
+4. **Match.** On `GATE: PASS`, play the match of the rung's kind (§4.4). A root
+   rung first runs the screen and writes its cost a game in the bead's notes;
+   the cost stops nothing.
+5. **On the test accepting the bar:** promote (§4.6).
+6. **On a rejection or the cap:** add the row with the score and the verdict,
+   leave the champion as it is, close the bead as failed.
+
+A bead's claims list says which entries the rung expects to fix. Fixing any one
+of them passes the first condition. A search rung claims none (`--claims none`),
+and its gate is the second and third conditions alone. No bead may ask for more
+than §4.3 does.
+
+### 4.4 The match and the bars
 
 - **Paired seeds, seats swapped.** Every seed is played twice, each agent in
-  each seat (`beryl_cli tournament --paired`). The unit of evidence is the
-  seed's pair: swept, split or lost. A seed on which both agents play the same
-  moves splits 1–1 and carries no information, which is right: it is a seed the
-  change did not touch.
-- **Curated start positions.** Most games start from a fixed set of mid-game
-  positions rather than the shuffle, to take the openings' luck out of the
-  variance: positions cut at the start of a turn, before the draw, from seeded
-  champion games, kept where the champion's own estimate from each seat lies
-  within 0.45 to 0.55, then a sample read by a human. The hidden cards are
-  reshuffled by the game's seed below what either player knows. A fifth of each
-  match still starts from the shuffle, so mulligans and openings stay tested.
-  The first match measures what the positions buy, comparing the spread of
-  paired scores from positions against the shuffle; if they buy nothing, they
-  go.
-- **The proxy budget.** Matches run at 3M engine steps a decision, one thread a
-  game, a game a hardware thread at a time (18 on the Mac, 20 on the Windows
-  machine): roughly 20 to 30 s of wall clock a game. Run-003's families kept
-  their order from 3M to 30M, which is the assumption the confirmation step
-  checks.
-- **Confirmation at 10M.** A challenger that passes at 3M plays 400 games at 10M
-  (about 8 hours). Its Wilson 95% interval must clear 50%. A pass is shipped at
-  30M.
-- **The shipped budget** stays 30M. It rises to 90M only when a budget rung (§6)
-  shows strong evidence, since run-003 saw little past 30M.
+  each seat. The unit of evidence is the pair: swept, split or lost.
+- **Curated start positions.** Four pairs in five start from the position set,
+  the fifth from the shuffle. The first match's report gives the spread of pair
+  scores from each; the gate bead of the first rung copies that line into
+  `docs/ladder.md`, with the hours the match took.
+- **A sequential test** ends the match as soon as the evidence is in, and a cap
+  ends it undecided. The bar is the rung's kind, fixed in its bead:
 
-### 4.2 The bars
+| Rung kind | Budget | Bar                                         | Command                                            |
+| --------- | ------ | ------------------------------------------- | -------------------------------------------------- |
+| Root      | 3M     | Not weaker: −25 Elo against 0, α = β = 0.05 | `just ladder CHALLENGER --work 3M --bar plausible` |
+| Policy    | 1M     | Not weaker: −25 Elo against 0, α = β = 0.05 | `just ladder CHALLENGER --work 1M --bar plausible` |
+| Search    | 3M     | Stronger: 0 against +30 Elo, α = β = 0.05   | `just ladder CHALLENGER --work 3M --bar stronger`  |
 
-A sequential test (SPRT, as Stockfish's fishtest) ends each match as soon as the
-evidence is in, and a cap ends it undecided. The bars are set before a match and
-never moved during one.
+All three add `--positions D:\beryl-cache\ladder\positions --cap 2000`.
 
-- **Stronger.** SPRT between "no gain" and "+50 Elo" at α = β = 0.001, and the
-  suite (§5) re-opens no fixed entry. Promoted when the test accepts the gain: a
-  challenger no stronger than the champion passes one match in a thousand. About
-  700 games end it either way at +50 Elo, or about 5 hours at 3M. Cap: 2,000
-  games (an overnight run). A challenger worth +25 Elo will usually hit the cap;
-  it is not promoted, and its score is kept for the record. +25 Elo at this
-  confidence costs about 2,700 games, which is more than one night, and the
-  gains we have seen are not that small when they are real.
+- **Why 1M for policy rungs.** A policy rule changes what every rollout plays at
+  any budget, so its effect should not depend on the budget as a root rule's
+  does. About 1,100 games decide it. The first match measures how long that
+  takes on Cygnus and its gate bead writes the hours into `docs/ladder.md`.
+- **Why 3M for root and search rungs.** A root rule fires on margins that shrink
+  as the budget grows, and worlds, depth and expansion order trade against the
+  budget, so both are measured nearer the shipped one. Run-003's families kept
+  their order from 3M to 30M.
+- **Why +30 at 0.05.** The old bar (+50 Elo at 0.001) sent a real +25 Elo gain
+  to the cap. Four of those are +100 Elo. A challenger no stronger than the
+  champion now passes one match in twenty; the audit is the second check.
+- **No confirmation per rung.** The suite already runs at the shipped budget,
+  and the audit confirms the champion as a whole.
+- **The screen** is for a root rung, which changes few moves:
+  `just screen CHALLENGER D:\beryl-cache\ladder\champion-2026-11-10`. If a
+  promotion has changed the champion since that directory was played, first play
+  a new one:
+  `just ladder CHAMPION --vs CHAMPION --cap 20 --out D:\beryl-cache\ladder\champion-DATE`.
+  A policy or search rung changes every rollout, so the screen's count of
+  differing moves means little there and those rungs skip it.
 
-- **More plausible at the same strength.** For a challenger that fixes blunders,
-  two conditions:
+### 4.5 The audit
 
-  1. The blunder suite (§5): it fixes at least one open entry its rung claimed
-     and re-opens no fixed one.
-  2. The match shows it is not weaker: SPRT between "−25 Elo" and "no change" at
-     α = β = 0.05, accepting "no change". About 1,100 games, or 8 hours at 3M.
-     Cap 2,000.
+A check that gains measured at 1M and 3M hold at 10M.
 
-  The lower confidence is deliberate: we would trade a little strength for a
-  blunder, and most such changes touch few moves a game, so the match's power is
-  low by construction.
+- **Due** when `docs/ladder.md` shows at least one `pass` row since its last
+  `audit` row, and that row (or, with none, the first `pass` row) is seven or
+  more days old.
+- **Run:**
+  `just ladder CHAMPION --vs LAST --work 10M --bar audit --cap 400 --positions D:\beryl-cache\ladder\positions`,
+  where `LAST` is the family named in the last `audit` row, or the starting
+  champion of §3 when there is none. It plays all 400 games and prints the score
+  with its 95% interval.
+- **Passed** when the interval's upper end is 50% or more. Add an `audit` row
+  naming the champion's family.
+- **Failed** when the whole interval is below 50%. Then, newest first, play each
+  promotion since the last audit against the champion before it:
+  `just ladder AFTER --vs BEFORE --work 10M --bar audit --cap 200`. Unset the
+  first one that scores below 45% (change `DEEP_SEARCHER` back, push), add its
+  row with the verdict `reverted by audit`, and stop there. Add the `audit` row.
 
-- **A screen before the match.** A challenger that changes few moves is first
-  replayed over the champion's last match games: at each decision where it would
-  choose differently, both candidates are searched again from fresh seeds with
-  the whole budget split between them (`LongSearch::duel`, as
-  `beryl_cli anchor-replay --recheck` does) and the cost is summed by the
-  search's own estimate. A screen showing a cost above 0.03 a game does not stop
-  the match, but it is written down beside the result. The screen costs minutes;
-  the match hours.
+### 4.6 The record and a promotion
 
-### 4.3 The record
+- `docs/ladder.md`, created by the first gate bead, is the log: a line
+  `Champion:` naming the current champion's family, then one row a match or
+  audit, newest first, as `just ladder` prints it: date, challenger, champion,
+  budget, games, score, Elo interval, verdict, the suite's open and fixed counts
+  after it, and the human games since the last promotion. A match's verdict is
+  `pass`, `fail` or `undecided`; a rung stopped by the gate is
+  `failed at the suite`; an audit is `audit`.
+- The bead's notes hold the command lines, the seed and the printed result.
+- Logs, transcripts and position files are never committed.
+- **To promote:** in a worktree, set `DEEP_SEARCHER`'s options in
+  `rust/crates/beryl_search/src/lib.rs` to the challenger's and name the gate
+  bead in its doc comment; update §3's table here; put the family on the log's
+  `Champion:` line and add the row. Run `just blunders` once more on the shipped
+  agent and put its counts in the row. Push with `enact push`.
+- **A promoted policy rule changes what rollouts play.** If the push's slow CI
+  fails `counts` or `rollouts_never_change`, that is reason 1 of
+  `rust/crates/beryl_bench/count-gate.toml`: update the pinned rollouts and the
+  bar in the same change, with the old and new counts in the commit body.
 
-- Every match is a bead labeled `lane:ladder`, holding its pre-registered bar,
-  the command line, the seed, and the result in its notes. One lane, so matches
-  run one at a time and never share the machine.
-- `docs/ladder.md`, created with the first match, is the log: one row a match
-  (date, challenger, champion, budget, games, score, Elo interval, verdict, and
-  the suite's open and fixed counts after it), newest first, and the current
-  champion at the top. Logs, transcripts and position files are never committed.
-- A promotion changes the registry's Deep Searcher and its doc comment names the
-  match.
+### 4.7 Tools to build first
 
-### 4.4 What we build
+Each is its own bead in the lane, before the rung that needs it (by-97g.17 to
+by-97g.21).
 
-Each is its own bead; name the files.
-
-- `just ladder <challenger> [--vs <champion>] [--work 3M] [--cap N]`: a paired
-  match from the position set with the SPRT, printing a row for `ladder.md`.
-  Builds on `beryl_cli tournament --paired` (`tournament.rs`), long-think
-  entrant names (`game.rs`, `family@budget` with options) and a trinomial SPRT
-  over paired seeds. Runs at utility QoS as `just tournament` does.
-- The position set: cut by a `beryl_cli positions` from seeded champion games
-  into the save format (`beryl_session::save`, which the frozen corpus already
-  migrates), with each file's source seed and turn, under
-  `$BERYL_CACHE/ladder/positions`. A fixed seed rebuilds it.
-- `just blunders [agent]`: the suite (§5).
-- The screen: `beryl_cli anchor-replay`'s `--recheck`, generalized from "the
-  anchor's answer" to "another entrant's answer".
+- **Rules.** The policy takes a set of named rules (`hold`, `waste`, `combat`),
+  each a part of the family's name after the options, each off by default. With
+  none set, greedy plays exactly as today.
+- **`just gate CHALLENGER --claims A,B [--vs CHAMPION]`.** The suite for both
+  agents and the verdict of §4.3, exit code 0 on a pass.
+- **Bars.** `--bar stronger` becomes 0 against +30 Elo at α = β = 0.05.
+  `--bar audit` plays to the cap with no early stop and prints the score's 95%
+  interval.
+- **`just why ENTRY --a LABEL --b LABEL`.** For one suite entry and two of its
+  candidates: the same worlds and seeds played out after each by the champion's
+  rollouts; each one's win rate; the events of the next two turns counted per
+  thousand rollouts after each, sorted by how much they differ; and three
+  transcripts each way where the two ended differently. It answers "what do the
+  rollouts do that makes this look good".
+- **A games ledger.** The app appends a line for every finished game to a file
+  it never rotates (date, build, agent, result), and a bug report carries the
+  count of games finished against that champion. The measure of §5 needs it.
+  This bead is the app's, outside the lane.
 
 ## 5. The blunder suite
 
-A regression gate built from every blunder a human has caught.
+A ledger of every blunder a human has caught, and the gate's first condition.
 
-- **An entry** is a position (an incident's replay file and a decision's log
-  index, `docs/incidents/*.replay.json`), the forbidden choices and, where one
-  exists, the required choice. The list is `data/blunders.json`, each entry
-  citing its incident. The first entries:
-  - Deep Seer, turn 14: Oust on its own token is forbidden.
-  - Snapcaster, turn 12: Snapcaster Mage in the agent's own main phase is
-    forbidden.
-  - Snapcaster, turn 16: attacking Jace, Wielder of Mysteries with both
-    creatures is required.
-  - Trinket Mage, turn 7: taking Mana Crypt is required.
-- **The check** builds the agent from the game's seed as the app did, searches
-  the position at the proxy budget and at the shipped budget, from five seeds
-  each, and fails on any forbidden play or any missed required one. It runs
-  before every match, for both bars.
-- **Open and fixed.** The champion made every play the suite forbids, so a new
-  entry fails for it by construction. An entry is *open* while the current
-  champion fails it at any seed or budget, and *fixed* once it passes at all of
-  them; the suite's report says which is which. The suite is a ledger of known
-  blunders, not a score the champion is expected to clear: at any time some
-  entries are open, and those are what the next rungs are for. The gate reads
-  the ledger. A plausibility promotion fixes at least one open entry its rung
-  claimed and re-opens none; a strength promotion re-opens none. A fixed entry
-  re-opening is the regression the suite exists to catch, whatever the Elo
-  beside it.
-- **Growth changes no past verdict.** A match's statistics are about Elo and
-  never read the suite, and a promotion was judged by the suite as it stood when
-  its bar was registered: an entry added while a match runs is reported with the
-  result, not made a condition of it. So a new entry re-decides nothing. It says
-  the current champion has a blunder we did not know of, which every promotion
-  before it also said. A plausibility promotion is relative, better than the
-  last champion on what we knew, never a certificate.
-- **Every new entry has a rung.** Its write-up names the class of the blunder,
-  not only the position: Snapcaster Mage in its own main phase is "a flash
-  creature cast at sorcery speed", and a Samurai token made in the agent's own
-  turn instead of at the opponent's end step (by-s0t) is the same class. A new
-  entry joins the rung that covers its class or opens a new rung, whose bar
-  claims it. The fix must address the class. A table entry that moves one card's
-  value in one spot passes the entry and leaves the class, and the human's next
-  games find the class again; entries caught after a fix landed are that fix's
-  held-out test.
-- **The measure over time is entries opened per human game.** Discovery comes
-  from humans playing the champion, so the suite grows with play, and the log
-  records with each promotion the suite's open and fixed counts and the human
-  games played since the last one. Progress is open entries closing and new ones
-  arriving more slowly. A champion that opens an entry every few games is not
-  plausible yet, whatever its Elo.
-- **Cost grows with the ledger.** An entry costs about a minute and a half at
-  both budgets and five seeds. Past about 30 entries, every entry runs at the
-  proxy budget, and the shipped budget runs only on the entries a rung claims
-  and on any whose state changed at the proxy budget.
-- **The human's games.** After each promotion, a human plays a few games against
-  the new champion. Any play they would call wrong goes through the bug button
-  (⌘B), whose report carries the replay and the agent's own searches, gets an
-  incident write-up, and becomes a suite entry. A replay-reviewed incident takes
-  an hour of `just review --agent recorded`; the suite entry takes a line.
+- **An entry** is a position (an incident's replay or a rebuilt board), the
+  forbidden choices and, where one exists, the required choice. The list is
+  `data/blunders.json`; each entry cites its incident and names its class.
+- **The check** (`just blunders`) builds the agent as the app did and searches
+  the position at 3M and at 30M from five seeds each: 10 runs an entry. A run
+  passes when it makes no forbidden choice and every required one.
+- **Fixed and open.** An entry is *fixed* when all 10 runs pass and *open*
+  otherwise. The champion made every play the suite forbids, so some entries are
+  always open; those are what the rungs are for.
+- **Greedy's own answer is recorded for every entry.**
+  `just blunders greedy --seeds 1` takes seconds. Where greedy passes, the
+  search lost a good answer and a root rule may keep it. Where greedy fails,
+  only a policy rule can fix it. An incident's write-up says which.
+- **The entries, by the rung that claims them** (§6):
+
+| Entry                              | Class                                  | Greedy | Rung     |
+| ---------------------------------- | -------------------------------------- | ------ | -------- |
+| `decline-mana-crypt`               | A free find declined                   | right  | `guard`  |
+| `decline-both-teferi-untaps`       | A free untap declined                  | right  | `guard`  |
+| `decline-second-teferi-untap`      | A free untap declined                  | right  | `guard`  |
+| `discard-emperor-over-spare-crypt` | A spell discarded over surplus mana    | right  | `guard`  |
+| `skip-beza-after-winds`            | A free attack not made                 | right  | `guard`  |
+| `snapcaster-sorcery-speed`         | Flash creature at sorcery speed        | wrong  | `hold`   |
+| `subtlety-main-phase-empty-stack`  | Flash creature at sorcery speed        | right  | `hold`   |
+| `subtlety-before-own-draw`         | Flash creature before the draw         | wrong  | `hold`   |
+| `staff-in-upkeep`                  | Activation that spends held mana early | wrong  | `hold`   |
+| `staff-before-combat-damage`       | Activation that spends held mana early | wrong  | `hold`   |
+| `jace-loots-before-draw`           | Activation before the draw             | wrong  | `hold`   |
+| `samurai-into-jace`                | Instant-speed loyalty spent at once    | wrong  | `hold`   |
+| `evoke-subtlety-no-target`         | Evoke with no target                   | wrong  | `waste`  |
+| `evoke-subtlety-empty-stack-hunt`  | Evoke with no target                   | right  | `waste`  |
+| `skip-teferi-plus-one`             | A free loyalty ability skipped         | right  | `waste`  |
+| `spare-jace-wielder`               | Attack leaves a lethal walker alive    | wrong  | `combat` |
+| `beza-trinket-into-blockers`       | Attack into blockers that win          | wrong  | `combat` |
+| `manifest-into-samurai`            | Attack into blockers that win          | right  | `combat` |
+| `spirits-stay-home`                | A free attack not made                 | right  | `combat` |
+| `oust-own-token`                   | Removal on its own permanent           | right  | none     |
+
+Greedy is right at `subtlety-main-phase-empty-stack` and
+`evoke-subtlety-empty-stack-hunt` only because it prefers another spell there;
+it would make both plays with that spell gone. `oust-own-token` is what the
+anchor was built for.
+
+- **A fix addresses the class.** A table entry that moves one card's value in
+  one spot passes the entry and leaves the class, and the next games find it
+  again. Each policy rule ships with a test over every card in the pool that has
+  the property the rule reads (every card with flash, every evoke cost), not
+  only the card in the incident.
+- **Growth changes no past verdict.** A promotion was judged by the suite as it
+  stood when its gate ran.
+- **New entries come from two places.**
+  - *A human's game.* A play they would call wrong goes through the bug button
+    (⌘B), gets an incident write-up and becomes an entry with a class. A new
+    class joins the rung that covers it or opens a new rung.
+  - *The match's own games.* After a promotion, the gate bead reads 20 of the
+    new champion's match transcripts for the classes that rung claimed and notes
+    each sighting. A new position of a class a human has already confirmed, in a
+    game that started from the shuffle, is added as an entry (at most three a
+    rung), as that fix's held-out test. A play of a class no human has confirmed
+    is not added and no bead is filed for it; one line in the gate bead's notes
+    records it.
+  - No machine time is scheduled for hunting. `just blunder-hunt` remains for a
+    machine that would otherwise sit idle.
+- **The measure is entries opened per human game**, from the games ledger
+  (§4.7). The mirror is done when it is under one in five (§1). A champion that
+  opens an entry every game is not plausible yet, whatever its Elo.
+- **Cost.** An entry takes about 45 seconds a suite run on Cygnus (20 entries in
+  15 minutes). Past about 40 entries, every entry runs at 3M and only claimed
+  entries and those whose state changed run at 30M.
 - **Drift.** A replay from before an engine change may stop reproducing its
-  position (`just review` fails on it, as the Snapcaster replay's old undo did).
-  An entry that no longer replays is rebuilt or retired with a note, never
-  silently skipped. The first four entries' replays had drifted before the suite
-  existed: f3f4baeb changed which lands a payment taps, so their games go
-  elsewhere on every later build. They are rebuilt boards
-  (`data/blunders/*.json`): the game at the blunder turn's first priority, cut
-  on cae2787d, the last build that replayed them, with the record's answers from
-  there.
+  position. An entry that no longer replays is rebuilt as a board
+  (`data/blunders/*.json`) or retired with a note, never silently skipped; the
+  suite fails on it until then.
 
-## 6. The first rungs
+## 6. The rungs
 
-Ten challengers, in the order we would play them. Each names its change, its
-evidence, whether it aims at strength (S) or blunders (B), and what would make
-us drop it. Each is one setting (`Options`, `Settings`) or one table entry away
-from the champion, so a loser is dropped by not setting it.
+In order. First the root keeps what greedy already gets right, which is built
+and cheap. Then the policy rules, which fix greedy's own wrong answers and make
+every rollout sounder. Then the search rungs, which pay more once rollouts are
+sound.
 
-01. **Means over visits at near-ties** (B, S). `leader` (`long.rs`) and `Mcts`
-    play the most visited candidate. Play the best tree-averaged mean
-    (`Search::means`) instead when the two differ, or the most visited unless
-    another's mean leads it by more than the noise across trees. Evidence: Jace,
-    Wielder led by 0.015 and lost on visits; the Searcher mulligan showed the
-    vote and the expectation disagree at 9% of hidden decisions. Cost: one
-    function. Drop it if the match loses: a losing candidate's mean within a
-    tree rests on few visits, which is the case for the vote.
+| Order | Rung     | Kind   | Challenger (the champion's family, plus) | Claims | Beads (build, gate)  |
+| ----- | -------- | ------ | ---------------------------------------- | ------ | -------------------- |
+| 1     | `guard`  | Root   | `+guard`                                 | 5      | by-97g.22, by-97g.23 |
+| 2     | `hold`   | Policy | `+hold`                                  | 7      | by-97g.24, by-97g.25 |
+| 3     | `waste`  | Policy | `+waste`                                 | 3      | by-97g.26, by-97g.27 |
+| 4     | `combat` | Policy | `+combat`                                | 4      | by-97g.28, by-97g.29 |
+| 5     | `mid`    | Search | `+mid`                                   | none   | built, by-97g.9      |
+| 6     | Worlds   | Search | `pimc18` in place of `pimc72`            | none   | none, by-97g.10      |
+| 7     | `order`  | Search | `+order`                                 | none   | by-97g.12, by-97g.30 |
 
-02. **Anchor at combat and finds** (B). `guarded` covers only a priority
-    decision where greedy passes and the search casts. Extend it to `Attacker`
-    and `AttackTarget` at near-ties, and to a search's find (`ChooseUpTo` under
-    `Purpose::Search`), where a card to hand is never worse than nothing.
-    Evidence: the Spirit held back and the Crypt declined, both outside the
-    anchor. Risk: by-7wl.1 put a broad anchor at 0.04 to 0.07 a game by the
-    search's biased estimate; the screen and the match measure it properly.
+A rung that fails leaves its option unset and the next rung plays the same
+champion.
 
-03. **Decided positions default to greedy** (B). Where the root's estimate is
-    above 0.9 or below 0.1, widen the anchor to every decision kind and raise
-    its margin. Evidence: 45% of the leader's decisions at 10M came in such
-    positions; the turn discount lifted seed agreement there from 60% to 78%,
-    against 90% in contested positions, so a fifth of these moves still turn on
-    noise. A human closing out a won game makes the obvious play; so should the
-    champion.
+### 6.1 `guard`: the root keeps greedy's answer where greedy is right
 
-04. **Rollout common sense, from card data** (B, S). One challenger bundling
-    four table-and-policy fixes, each a line or two in `rollout.rs` and
-    `values.rs`, each checked by the suite on its own:
+`guarded` (`long.rs`) holds greedy's answer unless the search leads it clearly
+(by 0.02 and by two standard errors across the trees). With `guard` it holds at:
 
-    - a creature with flash waits in its controller's main phase and is cast at
-      the opponent's end step (read from `Keywords`, not a card name);
-    - Jace, Wielder of Mysteries's +1 is `FRIENDLY`, and the card is valued as
-      the expert's `appraise` does when its controller's library is short;
-    - Mana Crypt is castable while short of lands, as the expert's `CRYPT_LANDS`
-      says, and the tree and the rollouts agree on it (a never-cast card is
-      pruned from the tree too);
-    - a counterspell or Reprieve answers only a spell its caster cannot recast
-      this turn, read from their untapped mana.
+1. **An attacker** (`DecisionKind::Attacker`), as the option does today.
+2. **Any `ChooseUpTo`**: a find, lands to untap. Today it holds only at a
+   library search's find.
+3. **A discard**: a `ChooseObject` among cards in the player's own hand.
+4. **A play greedy scores as a pass.** At a priority decision, when the search
+   wants a cast or an activation that `Policy::action` scores 0 or less,
+   greedy's answer stands, whatever greedy plays instead. Today the anchor holds
+   only a cast against greedy's pass. This is how every later policy rule
+   reaches the champion's own moves: a play the rule holds scores 0.
 
-    The suite tests each fix; the match tests the bundle; a loss is bisected.
+It no longer holds at an attack's target (`DecisionKind::AttackTarget`), where
+greedy is wrong until `combat`.
 
-05. **Greedy answers mid-resolution choices below the root** (S, B).
-    `Options::mid` exists and was never measured head-to-head. Evidence: Jace's
-    0 scored 0.498 against the +2's 0.782 because its put-back was a tree node
-    of random children; in the Deep Seer re-search, `mid` changed 16 of 62
-    moves.
+### 6.2 `hold`: act at the last window
 
-06. **18 worlds** (S). `Method::Pimc { worlds: 18 }`. Evidence: +356 against
-    +262 at 30M in run-003. Cost: a number. If it wins, rung 7 must answer the
-    mulligan incident's "18 worlds are few".
+With the rule set, a cast or an activation at instant speed scores as a pass
+until the opponent's end step.
 
-07. **Once-a-game draws over many worlds** (B, S). Mulligans, and any decision
-    whose value is mostly its world (the trees scored Keep 0.000 or above 0.95),
-    searched by `Method::Ismcts` or 288 worlds at the same budget, the rest of
-    the game as before.
+- **Instant speed** is any cast or activation offered when it is not the
+  player's own main phase with an empty stack. In that main phase it is a spell
+  that is an instant or has flash, or an activated ability with no loyalty cost.
+- **It is not held** in exactly these cases:
+  1. It is the opponent's end step.
+  2. An opponent's spell is on top of the stack and the play's first target can
+     be a spell (for a permanent spell, its targeted enters ability).
+  3. It is the opponent's turn and a creature is attacking.
+  4. It is the player's own combat and the play has a target.
+  5. It is the player's own end step and their hand holds more than seven cards.
+  6. It draws (`CardInfo::draws`), in the player's own main phase with an empty
+     stack.
+- The list is closed. A hold that is debatable is acceptable; the suite and the
+  match judge the rule as a whole.
+- The turn and step come from the observation, as `Expert::timing`
+  (`expert/mod.rs`) reads them.
 
-08. **Children tried in greedy's order** (S). `Tree::select` plays each new
-    child once in random order before UCB1 compares them, so a node's mean
-    averages its exploration. Order expansion by the rollout policy's scores, so
-    the sensible options are tried first and a wide choice is priced by its best
-    answers. This is `mid` for the decisions `mid` leaves to the tree.
+### 6.3 `waste`: spend nothing on nothing
 
-09. **Turn discount 0.95** (B). The discount is 0.98 by the agreement
-    measurement alone: 0.95 agreed in 80% and 90% of positions against 78% and
-    77%, at a cost in close games nobody measured. The ladder measures it.
+With the rule set:
 
-10. **The budget rung** (S). Champion at 90M against itself at 30M, 300 paired
-    games at those budgets, about a day. Run only when the cheaper rungs are
-    exhausted or the engine has sped up enough that 90M costs what 30M does
-    today.
+1. **Evoke needs a target.** A creature cast for its evoke cost is scored by its
+   targeted enters abilities, as a noncreature permanent already is
+   (`Policy::enters_worth`): with nothing worth targeting it scores 0.
+2. **A choice among permanents takes only its own.** In a `ChooseUpTo` that is
+   neither a library search nor a scry, an object an opponent controls is never
+   taken. The test comes first: over 200 seeded rollout decisions that offer
+   Teferi's untap with tapped lands on both sides, count how often the softmax
+   policy takes an opponent's land. If it never does, the reading in §2.2 was
+   wrong: say so in the bead and leave this part out.
+
+Before building, the bead runs `just why skip-teferi-plus-one` and writes the
+top differing events into its notes: that entry is why part 2 is suspected.
+
+### 6.4 `combat`: fights the rollouts get wrong
+
+Greedy is right at two of this rung's entries and the search clearly prefers the
+wrong play, so the fault is in what the rollouts do after the attack. The build
+bead first runs `just why` on `beza-trinket-into-blockers`,
+`manifest-into-samurai` and `spirits-stay-home` and writes the top differing
+events into its notes. With the rule set:
+
+1. **Finish a planeswalker.** An attack target that the attackers able to attack
+   safely can kill outright scores above any it cannot
+   (`Policy::walker_target`). `guarded` then holds at an attack's target too.
+2. **Two blockers.** A second blocker joins an attacker when the first cannot
+   kill it and together they do (`Policy::block`).
+3. **Chump for a planeswalker** when the unblocked damage at it is at least its
+   loyalty and it is worth more than the blocker.
+4. **An attack two blockers punish is not safe** (`Policy::safe_attack`).
+
+This build bead needs judgement that the others do not: what `just why` shows
+may not be what is listed. It is not labeled `tier:light`.
+
+### 6.5 The search rungs
+
+- **`mid`.** Greedy answers the questions asked while casting or resolving below
+  the root (`Options::mid`, built, never matched).
+- **Worlds.** 18 worlds in place of 72: four times the rollouts a tree.
+- **`order`.** A node's children are first tried in the order greedy scores them
+  instead of at random, so a wide choice is priced by its best answers.
 
 ## 7. Speed
 
-Engine speed is a multiplier on every rung: strength rose with steps up to 10M
-to 30M, and the ladder's cost is wall clock.
+Engine speed is a multiplier on every rung.
 
 - The cube rollout benchmark and `count-gate.toml` stay the measure
   ([benchmarking.md](benchmarking.md)).
 - A speed-up that keeps every answer (`rollouts_never_change` pinned) changes no
-  move, so it needs no ladder match: it ships on the fast check.
-- A speed-up that moves answers is a challenger like any other.
+  move, so it needs no match.
+- A policy rule's code runs only when its rule is set, out of line, so the
+  benchmark's count does not move until a promotion (§4.6).
 
 ## 8. Not now
 
-- **The long-think arena is retired.** `just longthink` and its runner stay
-  buildable, and run-003's data stays the record of how search scales. No new
-  run unless a question needs many families rated at once.
-- **Round robins.** `just tournament` remains for a quick table; nothing is
-  decided by one.
+- **Other root-choice rules.** Means over visits (old rung 1) changed nothing.
+  Greedy in decided positions (old rung 3) and a turn discount of 0.95 (old rung
+  9\) are parked until the policy rungs are played: a default is only as good as
+  greedy, and greedy is about to change.
+- **Once-a-game draws over many worlds and the 90M budget rung** (old rungs 7
+  and 10): after the seven rungs above.
+- **A second deck.** The mirror is the only testbed until §1's bar is met. The
+  timing rule rests on dominance (the same play is available later at no loss),
+  which does not depend on the deck; greedy's card values and combat rules do,
+  and will need the first Legacy deck to test them.
+- **Combo decks.** A combo turn is 10 to 20 linked decisions. A tree under a
+  turn deep and a policy that scores one card at a time cannot sequence it. It
+  needs a turn planner that this plan does not have.
+- **The Mac.** It plays no ladder games (§4.1).
+- **Hunts on a schedule** (§5).
+- **The long-think arena and round robins.** `just longthink` is retired;
+  `just tournament` remains for a quick table and decides nothing.
 - **Learned value models, AlphaZero-style or R-NaD training.** Evaluation leaves
-  lost by 180 to 260 Elo here, and the record elsewhere stands. In Monolith, our
-  Netrunner prototype, R-NaD learned nothing in 145,000 self-play games, and a
-  learned value model was neutral as a correction to the evaluator and harmful
-  on one side (p = 0.002), trained on games from a bot that always made the
-  obvious play. In netrunner-rs, 0 of 6 AlphaZero-style runs were promoted, and
-  a well-calibrated value head made search worse. Good calibration is not
-  evidence.
-- **Evaluation leaves**, until something changes what run-003 measured. The
-  17lands card values it measured are gone with the cube.
-- **ISMCTS beyond rung 7.** PIMC with few worlds led it in the hidden game.
-- **Card-specific code.** Table entries only (§1).
-- **Decks beyond the WU Control mirror.** The project's target is now Legacy
-  constructed, but the engine covers only the mirror's cards
-  ([rules-coverage.md](rules-coverage.md)), so the mirror stays the ladder's
-  testbed. The ladder moves to Legacy metagame decks as the engine covers them,
-  and the position set grows a family per deck.
+  lost by 180 to 260 Elo here. In Monolith, R-NaD learned nothing in 145,000
+  self-play games and a learned value model was neutral or harmful (p = 0.002).
+  In netrunner-rs, 0 of 6 AlphaZero-style runs were promoted.
+- **Card-specific code.** Rules read definitions; numbers are table entries
+  (§1).
 
 ## 9. Open questions
 
-- Do curated start positions cut the variance of paired scores enough to pay for
-  building them, against paired seeds from the shuffle alone?
-- Does a gain at 3M transfer to 30M for changes to the root choice (rungs 1 to
-  3), which fire on margins that shrink as the budget grows?
-- How far can the anchor widen before the champion plays greedy's game? The
-  rungs 2 and 3 matches put a number on it.
-- What does a plausibility promotion cost in Elo over a year of them? The log
+- How long does a 1,100-game match at 1M take on Cygnus? The first gate bead
+  measures it.
+- Do the start positions cut the spread of pair scores against the shuffle? The
+  first match's report says; if they buy nothing, they go.
+- Does a policy gain at 1M hold at 10M? The first audit says.
+- Does a fixed entry stay fixed from run to run? An entry is fixed at 10 of 10,
+  so one unlucky run re-opens it and fails a gate. If that happens to a rung
+  whose change cannot have touched the entry, the gate needs a rerun rule.
+- Why does the search prefer holding two fliers back from an empty board, and an
+  attack into a blocker that kills the attacker? `just why` on those entries
+  says, in the `combat` rung.
+- How much of greedy's combat can rules repair before the tree must search
+  blocks itself?
+- What does a plausibility promotion cost in Elo over a month of them? The log
   answers that, if every match is recorded.
