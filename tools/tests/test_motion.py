@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import json
 import random
 from collections.abc import Callable
@@ -243,11 +244,17 @@ CARD_W, CARD_H = 30, 42
 
 
 def flight(
-    ease: Callable[[float], float], scale_from: float, length: float = 0.75
+    ease: Callable[[float], float],
+    scale_from: float,
+    length: float = 0.75,
+    travel: tuple[float, float] = (160, -60),
+    copy: bool = True,
+    plate: bool = False,
 ) -> Clip:
-    """Frames of one card crossing a noisy table in 0.45 s from 0.1 s, eased by `ease` and
-    growing (or shrinking) from `scale_from` of its size to it. A growing one is a copy, as an
-    emerging ability is: it is not there before it leaves."""
+    """Frames of one card crossing a noisy table by `travel` pixels in 0.45 s from 0.1 s, eased
+    by `ease` and growing (or shrinking) from `scale_from` of its size to it; with `plate`,
+    the table bare beside them. A growing one is a `copy`, as an emerging ability is: it is not
+    there before it leaves."""
     rng = random.Random(3)
     table = [rng.randint(30, 100) for _ in range(WIDTH * HEIGHT)]
     times = [n / FPS for n in range(round(length * FPS) + 1)]
@@ -255,18 +262,19 @@ def flight(
     for t in times:
         p = ease(min(1.0, max(0.0, (t - 0.1) / 0.45)))
         pixels = list(table)
-        if scale_from < 1 and t < 0.1:
+        if copy and scale_from < 1 and t < 0.1:
             frames.append(bytes(pixels))
             continue
         scale = scale_from + (1 - scale_from) * p
         w, h = round(CARD_W * scale), round(CARD_H * scale)
-        cx, cy = 40 + 160 * p, 100 - 60 * p
+        cx, cy = 40 + travel[0] * p, 100 + travel[1] * p
         left, top = round(cx - w / 2), round(cy - h / 2)
         for y in range(max(0, top), min(HEIGHT, top + h)):
             for x in range(max(0, left), min(WIDTH, left + w)):
                 pixels[y * WIDTH + x] = 200
         frames.append(bytes(pixels))
-    return Clip(WIDTH, HEIGHT, times, frames, (WIDTH, HEIGHT))
+    bare = bytes(table) if plate else None
+    return Clip(WIDTH, HEIGHT, times, frames, (WIDTH, HEIGHT), plate=bare)
 
 
 def bezier(x1: float, y1: float, x2: float, y2: float) -> Callable[[float], float]:
@@ -302,6 +310,44 @@ def test_the_tracker_tells_how_a_flight_eases_whether_it_grows_or_shrinks(
     assert found.travels and found.failure is None
     assert found.curve == curve, found.half
     assert found.start == pytest.approx(scale_from, rel=0.25)
+
+
+def test_over_a_plate_a_card_is_followed_where_its_path_overlaps_its_ends() -> None:
+    """A card lifted off a pile, as an opponent's library card is (by-w8gv.21.46): growing
+    to its size from 0.7 of it, it rises less than its height, so it covers where it lay and
+    where it rests most of the way and the first and last frames leave only slivers of it.
+    Against a plate it is whole in every frame."""
+
+    def lift(plate: bool) -> Clip:
+        return flight(
+            bezier(0, 0, 0.58, 1), 0.7, travel=(6, -36), copy=False, plate=plate
+        )
+
+    assert motion.seen(lift(False)).curve is None
+    found = motion.seen(lift(True))
+    assert found.travels and found.failure is None
+    assert found.curve == "ease-out", found.half
+    assert found.start == pytest.approx(0.7, rel=0.1)
+
+
+def test_over_a_plate_a_card_changing_where_it_landed_has_stopped() -> None:
+    """An effect that pulses on a card once it lands, to the clip's end, blends its edge with
+    the table: its box shifts a pixel and back, and every one of its pixels changes, without
+    it moving."""
+    clip = flight(bezier(0, 0, 0.58, 1), 1.0, plate=True)
+    assert clip.plate is not None
+    landed = round(0.6 * FPS)
+    frames = list(clip.frames[:landed])
+    for n, frame in enumerate(clip.frames[landed:]):
+        lit = bytes(215 if v == 200 else v for v in frame)
+        if n % 2:
+            top = lit.index(215) // WIDTH
+            row = slice(top * WIDTH, (top + 1) * WIDTH)
+            lit = lit[: row.start] + clip.plate[row] + lit[row.stop :]
+        frames.append(lit)
+    found = motion.seen(dataclasses.replace(clip, frames=frames))
+    assert found.travels and found.failure is None
+    assert found.curve == "ease-out", found.half
 
 
 def test_a_card_that_comes_to_be_in_place_does_not_travel() -> None:

@@ -9,8 +9,8 @@ where it rests, as a share of the chord's length, with the side of the screen it
 card thrown in an arc bows up.
 
 Turn and squash are read from the mover's own pixels, where they make a solid card: the mover
-in a frame is what differs from both the clip's first and last frames, and a solid rectangle's
-second moments give its long and short sides and which way the long one points. A card's turn
+in a frame is what differs from both the clip's first and last frames (from its plate, where
+it has one: video_measure.py), and a solid rectangle's second moments give its long and short sides and which way the long one points. A card's turn
 is how far its long side has turned from where it points at rest, clockwise on screen; its
 squash is its short side over its long one as a multiple of that at rest: 1 as it rests, less
 as it turns over about its long side (a face turning in flight passes near 0), more as it tips
@@ -34,7 +34,7 @@ from .video_measure import (
     Clip,
     _rest,
     blobs,
-    differ,
+    still,
 )
 
 # A bow under this share of the chord is a straight path: a pixel or two of the tracker's.
@@ -103,7 +103,7 @@ def origin(clip: Clip, card: Card, threshold: int = THRESHOLD) -> Blob | None:
     around where the card was first seen moving. None where nothing its size shows there, as
     for a card that comes off a pile or from outside the crop."""
     left = card.blobs[0]
-    found = _rest(clip, differ(clip.frames[-1], clip.frames[0], threshold), left)
+    found = _rest(clip, still(clip, clip.frames[0], threshold), left)
     if found is None or not 2 / 3 < found.size / left.size < 3 / 2:
         return None
     return found
@@ -160,16 +160,20 @@ def _turned(degrees: float) -> float:
 
 
 def mover(clip: Clip, index: int, box: Blob, threshold: int) -> list[bytes]:
-    """The rows of `box` in frame `index`, 1 where it differs from both the clip's first and
-    last frames by more than `threshold`."""
-    first, last, frame = clip.frames[0], clip.frames[-1], clip.frames[index]
+    """The rows of `box` in frame `index`, 1 where it differs by more than `threshold` from
+    the clip's plate, or without one, from both its first and last frames (as
+    video_measure.moving)."""
+    frame = clip.frames[index]
+    others = (
+        [clip.plate] if clip.plate is not None else [clip.frames[0], clip.frames[-1]]
+    )
     rows: list[bytes] = []
     for y in range(box.y0, box.y1):
         at = slice(y * clip.width + box.x0, y * clip.width + box.x1)
         rows.append(
             bytes(
-                abs(v - a) > threshold and abs(v - b) > threshold
-                for v, a, b in zip(frame[at], first[at], last[at])
+                all(abs(v - o) > threshold for o in near)
+                for v, *near in zip(frame[at], *(o[at] for o in others))
             )
         )
     return rows
@@ -177,14 +181,18 @@ def mover(clip: Clip, index: int, box: Blob, threshold: int) -> list[bytes]:
 
 def resting(clip: Clip, card: Card, threshold: int) -> tuple[list[bytes], Blob] | None:
     """The card at rest, as rows of its box and the box: where the clip's last frame differs
-    from its first, about where the tracker found it at rest. The tracker's own box of it
-    reaches only a little past where the card was last seen moving, which cuts a card that
+    from its first, or where the frame it comes to rest in differs from the plate (as
+    video_measure.still), about where the tracker found it at rest. The tracker's own box of
+    it reaches only a little past where the card was last seen moving, which cuts a card that
     lands fast, so the whole of what changed there is taken, half a card around."""
     rest = card.rest
     reach = round(rest.size / 2)
     x0, y0 = max(0, rest.x0 - reach), max(0, rest.y0 - reach)
     x1, y1 = min(clip.width, rest.x1 + reach), min(clip.height, rest.y1 + reach)
-    first, last = clip.frames[0], clip.frames[-1]
+    if clip.plate is None:
+        first, last = clip.frames[0], clip.frames[-1]
+    else:
+        first, last = clip.plate, clip.frames[clip.times.index(card.end)]
     window = bytearray(clip.width * clip.height)
     for y in range(y0, y1):
         at = slice(y * clip.width + x0, y * clip.width + x1)

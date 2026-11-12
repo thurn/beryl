@@ -22,6 +22,20 @@ const DRAWS: &[&str] = &[
     ISLAND, PLAINS, ISLAND, PLAINS,
 ];
 
+/// What the first seat scries with: Aang's Iceberg and the lands to activate it.
+const ICEBERG: &[Permanent] = &[Permanent::new(AANGS_ICEBERG), PLAINS_, PLAINS_, ISLAND_];
+
+/// The first seat's table for a scry of two with Aang's Iceberg, named `name`.
+const fn scry(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, ICEBERG)
+        .hand(P0, &[COUNTERSPELL])
+        .library(P0, &[COUNTERSPELL, ISLAND, PLAINS, ISLAND])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+}
+
 /// Boards for the verb suite.
 pub(super) const VERBS: &[Scenario] = &[
     // Cards changing zone, every way the first seat's decks can show: it draws for its turn;
@@ -150,21 +164,14 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
         ]),
     // The first seat scries two with Aang's Iceberg and puts one of them on the bottom.
-    Scenario::new("verbs-scry")
-        .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
-            P0,
-            &[Permanent::new(AANGS_ICEBERG), PLAINS_, PLAINS_, ISLAND_],
-        )
-        .hand(P0, &[COUNTERSPELL])
-        .library(P0, &[COUNTERSPELL, ISLAND, PLAINS, ISLAND])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
-        .library(P1, LANDS)
-        .actions(&[
-            Action::activate(P0, AANGS_ICEBERG, 1),
-            choose(P0, DecisionKind::ChooseUpTo, ISLAND),
-            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
-        ]),
+    scry("verbs-scry").actions(&[
+        Action::activate(P0, AANGS_ICEBERG, 1),
+        choose(P0, DecisionKind::ChooseUpTo, ISLAND),
+        Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+    ]),
+    // The same scry left open: the first seat looks at its two cards and has yet to choose,
+    // so a recording stops while the look lasts (the stepped capture's lift).
+    scry("verbs-look").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
     // Combat damage every way, and what follows it: the first seat attacks with Trinket Mage,
     // which Beza blocks and kills, taking its damage; with Snapcaster Mage, which strikes the
     // player; and with Elite Spellbinder, which strikes The Wandering Emperor. In their turn

@@ -5,16 +5,20 @@ use beryl_session::{PlayerView, Seat, Status};
 use serde_json::json;
 
 /// Where a recording stops: the human's first decision of a kind, or first halt
-/// (`DecisionView::halt`), from a turn on, or the end of the game.
+/// (`DecisionView::halt`), or first view of the opponent handling cards while their decision
+/// is open (`PlayerView::handling`: looking at their library), from a turn on, or the end of
+/// the game.
 #[derive(Debug, PartialEq)]
 pub(super) enum Until {
     First { kind: Kind, seat: Seat, turn: u16 },
     Halt { seat: Seat, turn: u16 },
+    Handling { seat: Seat, turn: u16 },
     GameOver,
 }
 
 impl Until {
-    /// Parses "first <kind> decision for seat <n>" or "first halt for seat <n>", optionally
+    /// Parses "first <kind> decision for seat <n>", "first halt for seat <n>" or "first
+    /// handling for seat <n>", optionally
     /// followed by "from turn <t>", with the kind as the protocol names it ("target",
     /// "chooseUpTo"), or "game over". A decision of a kind is the engine's, never a halt.
     pub(super) fn parse(text: &str) -> Result<Until, String> {
@@ -45,16 +49,23 @@ impl Until {
                 turn,
                 seat: seat(n)?,
             }),
+            ["first", "handling", "for", "seat", n] => Ok(Until::Handling {
+                turn,
+                seat: seat(n)?,
+            }),
             _ => Err(format!(
                 "{text:?}: expected \"first <kind> decision for seat <n> [from turn <t>]\", \
-                 \"first halt for seat <n> [from turn <t>]\" or \"game over\""
+                 \"first halt for seat <n> [from turn <t>]\", \"first handling for seat <n> \
+                 [from turn <t>]\" or \"game over\""
             )),
         }
     }
 
     pub(super) fn seat(&self) -> Seat {
         match self {
-            Until::First { seat, .. } | Until::Halt { seat, .. } => *seat,
+            Until::First { seat, .. } | Until::Halt { seat, .. } | Until::Handling { seat, .. } => {
+                *seat
+            }
             Until::GameOver => Seat::P0,
         }
     }
@@ -71,6 +82,7 @@ impl Until {
             Until::Halt { turn, .. } => {
                 view.turn.number >= *turn && decision.is_some_and(|d| d.halt)
             }
+            Until::Handling { turn, .. } => view.turn.number >= *turn && view.handling.is_some(),
             Until::GameOver => matches!(view.status, Status::Over { .. }),
         }
     }

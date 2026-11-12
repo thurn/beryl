@@ -12,11 +12,14 @@ verb as its values say.
 - The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moments (ui/verbs.json)
   on the stage in stepped stage time: the first (a cast, its trigger and tokens), every step of
   the suite's verbs screenshotted at every tick; and with `--more` the moments of cards
-  changing zone (`zones` and `scry`: fly, vanish and lift) and of changes on a card where it
-  lies and to players (`combat` and `place`: tap, strike, count and flip), every step of those
-  verbs timed and the first of each kind (a case, whose flight it is, alone or among like
-  steps) screenshotted, its subject drawn alone. A step's case is the page's
-  (src/stage/timing.ts caseOf), read from the table the step found, as the stage times it. Each step is held to its verb's values (its case's, where the case has its own):
+  changing zone (`zones` and `scry`: fly, vanish and lift; `look`, a scry's look left open, so
+  that the opponent's lifted card rests) and of changes on a card where it lies and to players
+  (`combat` and `place`: tap, strike, count and flip), every step of those verbs timed and the
+  first of each kind (a case, whose flight it is, alone or among like steps) screenshotted,
+  its subject drawn alone, with a plate of the table with no node drawn, which the tracker
+  finds the subject against: whole in every frame, however much of its path overlaps where it
+  lay or rests (a card lifted off a pile and growing as it goes; by-w8gv.21.46). A step's
+  case is the page's (src/stage/timing.ts caseOf), read from the table the step found, as the stage times it. Each step is held to its verb's values (its case's, where the case has its own):
   how long it played and, in a batch of like steps, how far apart they began, by the step's own
   start and end in stage time; and for a step screenshotted, whether its subject travels and
   how its progress is eased, by what `by video measure` (video_measure.py) reads of its frames
@@ -438,7 +441,9 @@ def seen(clip: video_measure.Clip, landing: tuple[float, float] | None = None) -
     """What the tracker finds of one step's frames, following only what comes to rest over
     `landing` (working pixels) when given. A step whose subject the tracker sees no motion
     of, such as a card coming to be in place within a tick, did not travel; nor did one that
-    moved less than its own size."""
+    moved less than its own size, where it is smaller: a card that grows as it goes (lifted
+    off an opponent's library, which lies small and far) travels by its size as it left.
+    """
     try:
         card = video_measure.measure(clip, landing=landing)[0]
     except video_measure.Unmeasurable as error:
@@ -446,7 +451,8 @@ def seen(clip: video_measure.Clip, landing: tuple[float, float] | None = None) -
             return Seen(travels=False)
         far = any(distance(t[0], t[-1]) >= max(b.size for b in t) for t in error.moved)
         return Seen(travels=far, failure=str(error))
-    if distance(card.blobs[0], card.blobs[-1]) < card.rest.size:
+    smallest = min(card.blobs[0].size, card.rest.size)
+    if distance(card.blobs[0], card.blobs[-1]) < smallest:
         return Seen(travels=False, peak=round(card.peak[0], 3))
     return Seen(
         travels=True,

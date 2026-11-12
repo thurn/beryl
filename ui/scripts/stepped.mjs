@@ -15,12 +15,13 @@
 // only its clock moves it. For each step shot it writes a folder
 // `<out-dir>/<layout>/<play>/<n>-<verb>/` of frames from a few ticks before the step to a few
 // after, cropped to where its subject went and named by their stage time in ms as `by video
-// measure` reads a folder (`001017.000-yours.png`), where a play is the seat for the first moment
-// and `<seat>.<moment>` for the others; and `<out-dir>/<layout>/<play>/steps.json`, every step
-// taken with its act, case, turn and stage times and, for one shot, its folder and where in its
-// frames its subject comes to rest. Nothing here reads the page's own time, so no frame depends on the
-// machine's speed. Exits non-zero if a moment does not play out, the two plays differ or a page
-// logs an error.
+// measure` reads a folder (`001017.000-yours.png`), its subject drawn alone, with the plate
+// (`plate.png`: the first frame with no node drawn, which the tracker finds the subject against),
+// where a play is the seat for the first moment and `<seat>.<moment>` for the others; and
+// `<out-dir>/<layout>/<play>/steps.json`, every step taken with its act, case, turn and stage times
+// and, for one shot, its folder and where in its frames its subject comes to rest. Nothing here
+// reads the page's own time, so no frame depends on the machine's speed. Exits non-zero if a moment
+// does not play out, the two plays differ or a page logs an error.
 import { isDeepStrictEqual } from "node:util";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -78,6 +79,7 @@ const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
 const MORE = {
     zones: new Set(["fly", "vanish", "lift"]),
     scry: new Set(["fly", "vanish", "lift"]),
+    look: new Set(["lift"]),
     combat: new Set(["tap", "strike", "count"]),
     place: new Set(["tap", "count", "flip"]),
 };
@@ -95,15 +97,15 @@ const MARGIN = 0.3;
  * until an ability has come onto the stack and gone, and `edge` ticks after; or with `whole`,
  * for all of its `answers`, to the recording's end. Before each tick whose number is in
  * `shoot` (pairs of a tick's number and the subjects shot then) it draws each subject alone
- * and waits on `window.berylShoot(number, time, subject)`. Returns every step the stage told
- * of, with its subject and its stage times from the first tick, each tick's time and the box
- * on the page of every node drawn then, and what the stage shows at the end, as verbs.mjs's
- * walk tells it (`shows`). */
+ * and waits on `window.berylShoot(number, time, subject)`; for a subject of null, the plate, it
+ * hides every node. Returns every step the stage told of, with its subject and its stage times from
+ * the first tick, each tick's time and the box on the page of every node drawn then, and what the
+ * stage shows at the end, as verbs.mjs's walk tells it (`shows`). */
 async function walk({ tick, gap, answers, edge, shoot, whole }) {
     /** What a step is about, by the name the stage gives it: its card, or the ability; for a
      * look, the top one of the library cards it lifts (src/stage/table.ts handledAt), or none
      * where it lifts none, as for a look at a hand the seat does not see, or as it ends: the
-     * lift's motion is its cards coming off (by-w8gv.21.46 reads it); a strike's source, and
+     * lift's motion is its cards coming off (the look moment shoots it); a strike's source, and
      * the card a tally is on. None for a count of life, which is about a player. */
     const subjectOf = (act, view) => {
         if (act.verb === "emerge") return `a${act.id}`;
@@ -205,7 +207,10 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
         }
         const at = clock.now - origin;
         for (const subject of wanted.get(ticks.length) ?? []) {
-            alone.textContent = `.stage-node:not([data-stage="${subject}"]) { visibility: hidden; }`;
+            alone.textContent =
+                subject === null
+                    ? ".stage-node { visibility: hidden; }"
+                    : `.stage-node:not([data-stage="${subject}"]) { visibility: hidden; }`;
             await window.berylShoot(ticks.length, at, subject);
         }
         alone.textContent = "";
@@ -464,10 +469,19 @@ for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
                 await second.page.exposeFunction(
                     "berylShoot",
                     async (tick, at, subject) => {
-                        const file = `${at.toFixed(3).padStart(10, "0")}-${seat}.png`;
+                        // The plate, every node hidden, at a step's first tick: what the
+                        // tracker finds its subject against (video_measure.py, PLATE).
+                        const file =
+                            subject === null
+                                ? "plate.png"
+                                : `${at.toFixed(3).padStart(10, "0")}-${seat}.png`;
                         const here = shots
                             .get(tick)
-                            .filter((capture) => capture.subject === subject);
+                            .filter((capture) =>
+                                subject === null
+                                    ? capture.ticks[0] === tick
+                                    : capture.subject === subject,
+                            );
                         for (const capture of here) {
                             // CSS animations run on the page's time, not the stage's (a
                             // counter's glow pulses so): they are stopped, so that only the
@@ -482,7 +496,12 @@ for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
                 );
                 const shoot = [...shots].map(([tick, here]) => [
                     tick,
-                    [...new Set(here.map((capture) => capture.subject))],
+                    [
+                        ...(here.some((capture) => capture.ticks[0] === tick)
+                            ? [null]
+                            : []),
+                        ...new Set(here.map((capture) => capture.subject)),
+                    ],
                 ]);
                 const shot = await play(second.page, end, shoot);
                 if (!isDeepStrictEqual(shot, learned)) {

@@ -169,6 +169,11 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             if let Some(action) = boards::lock(&progress).next.iter().flatten().next() {
                 return Err(format!("the board's {action:?} was never taken"));
             }
+            if !deciding && !ended {
+                // It ends as the human watches (`first handling`): a replay releases views
+                // only on an answer, so one plays it on to the end.
+                messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
+            }
             return Ok(messages);
         }
         if ended {
@@ -310,6 +315,13 @@ mod tests {
             Ok(Until::Halt {
                 seat: Seat::P1,
                 turn: 4,
+            })
+        );
+        assert_eq!(
+            Until::parse("first handling for seat 1"),
+            Ok(Until::Handling {
+                seat: Seat::P1,
+                turn: 0,
             })
         );
         assert!(Until::parse("game over from turn 3").is_err());

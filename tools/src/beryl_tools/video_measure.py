@@ -16,6 +16,12 @@ card's motion runs from the last frame before its track to the first frame after
 at rest is where the last frame differs from the first, around the place it landed; its peak
 is the largest of its boxes in flight, as a multiple of that.
 
+A folder may hold a plate (PLATE): the table without the mover, as a capture of Beryl's stage
+shoots it (ui/scripts/stepped.mjs), whose frames draw one mover alone. The mover is then what
+differs from the plate, whole in every frame however much of its path overlaps where it lay or
+rests (a card coming off a pile, growing): it moves in the frames whose box is unlike both its
+first and last, and rests in the first frame after those.
+
 Arena's table is animated and busy. When the clip shows a different number of movers from the
 cards asked for, or a card is moving at either end, the command says so and exits non-zero
 with no numbers: crop closer, move the span, or read that motion from a filmstrip instead.
@@ -25,6 +31,7 @@ Measurements are in seconds on the clip's clock; positions are fractions of the 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 import re
@@ -49,6 +56,9 @@ GAP = 3
 SPECK = 0.0005
 # A track whose largest blob is under this share of the largest track's is the table moving.
 MINOR = 0.15
+# The share of its size a card's box may shift by over a plate and it still be where it lay or
+# rests: an effect lightening it there blends its edges with the table.
+STILL = 0.05
 # A blob changed over this share of its box is solid: a card, not a glow.
 SOLID = 0.6
 # A blob thinner than this, in working pixels, is an edge of a card, never a whole one.
@@ -58,6 +68,8 @@ WORK_WIDTH = 480
 # Path samples the table prints for each card; JSON has every frame.
 SAMPLES = 8
 IMAGES = (".png", ".jpg", ".jpeg")
+# The file in a folder of frames that is its plate: the table without the mover.
+PLATE = "plate.png"
 RUN: re.Pattern[bytes] = re.compile(rb"\x01+")
 PTS: re.Pattern[bytes] = re.compile(rb"Parsed_showinfo.*?pts_time:\s*(-?[0-9.]+)")
 
@@ -75,6 +87,7 @@ class Unmeasurable(Exception):
 class Clip:
     """Gray frames, `width` by `height` bytes each, and where they sit on the table: working
     pixel (x, y) is source pixel (left + x * scale, top + y * scale) of a `table` sized frame.
+    `plate`, where the clip has one, is the table with the mover not drawn, sized as a frame.
     """
 
     width: int
@@ -85,6 +98,7 @@ class Clip:
     left: float = 0.0
     top: float = 0.0
     scale: float = 1.0
+    plate: bytes | None = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +170,22 @@ def differ_both(frame: bytes, first: bytes, last: bytes, threshold: int) -> byte
             for x, a, b in zip(frame, first, last)
         ]
     )
+
+
+def moving(clip: Clip, frame: bytes, threshold: int) -> bytes:
+    """1 where the mover is in `frame`: where it differs from the plate, or without one, from
+    both the clip's first and last frames."""
+    if clip.plate is not None:
+        return differ(frame, clip.plate, threshold)
+    return differ_both(frame, clip.frames[0], clip.frames[-1], threshold)
+
+
+def still(clip: Clip, frame: bytes, threshold: int) -> bytes:
+    """1 where a card at rest in `frame` shows: where it differs from the plate, or without
+    one, where the clip's last frame differs from its first (the frames it rests in)."""
+    if clip.plate is not None:
+        return differ(frame, clip.plate, threshold)
+    return differ(clip.frames[-1], clip.frames[0], threshold)
 
 
 def blobs(mask: bytes, width: int, height: int, gap: int = GAP) -> list[Blob]:
@@ -260,14 +290,16 @@ def measure(
     """
     if len(clip.frames) < 3:
         raise Unmeasurable(f"{len(clip.frames)} frames: a clip needs at least 3")
-    first, last = clip.frames[0], clip.frames[-1]
     speck: int = max(4, round(SPECK * clip.width * clip.height))
 
     def found(mask: bytes) -> list[Blob]:
         return [b for b in blobs(mask, clip.width, clip.height) if b.pixels >= speck]
 
-    seen = [found(differ_both(f, first, last, threshold)) for f in clip.frames]
-    tracks = [_body(clip, t) for t in track(seen) if len(t) >= 2]
+    seen = [found(moving(clip, f, threshold)) for f in clip.frames]
+    tracked = track(seen)
+    if clip.plate is not None:
+        tracked = [_moved(t) for t in _pieces(tracked)]
+    tracks = [_body(clip, t) for t in tracked if len(t) >= 2]
     if landing is not None:
         x, y = landing
         tracks = [
@@ -288,12 +320,12 @@ def measure(
             moved,
         )
     tracks.sort(key=lambda t: t[0][0])
-    change = differ(last, first, threshold)
     measured: list[Card] = []
     for n, t in enumerate(tracks, 1):
         begin, end = t[0][0], t[-1][0]
         # The first and last frames are the references, so a card moving between them and
-        # their neighbors would look still: two still frames are needed at either end.
+        # their neighbors would look still: two still frames are needed at either end (and
+        # over a plate, a frame either side to show where it lay and rests).
         if begin <= 1:
             raise Unmeasurable(
                 f"card {n} is moving in the first frame: start earlier", moved
@@ -303,7 +335,7 @@ def measure(
                 f"card {n} is moving in the last frame: end later", moved
             )
         landed = t[-1][1]
-        rest = _rest(clip, change, landed)
+        rest = _rest(clip, still(clip, clip.frames[end + 1], threshold), landed)
         if rest is None:
             raise Unmeasurable(f"card {n} is not at rest in the last frame", moved)
         if not 2 / 3 < rest.size / landed.size < 3 / 2:
@@ -323,6 +355,45 @@ def measure(
             )
         )
     return measured
+
+
+def _pieces(tracks: list[list[tuple[int, Blob]]]) -> list[list[tuple[int, Blob]]]:
+    """Tracks over a plate joined where their boxes touch in a frame they share: the pieces
+    of one card, which shows only slivers as it turns edge-on, each frame's joined into one
+    box. Something else that changes beside it (a pile's count) lies apart from it."""
+    root: list[int] = list(range(len(tracks)))
+
+    def find(k: int) -> int:
+        while root[k] != k:
+            root[k] = root[root[k]]
+            k = root[k]
+        return k
+
+    for a, b in itertools.combinations(range(len(tracks)), 2):
+        boxes = dict(tracks[b])
+        if any(i in boxes and blob.joins(boxes[i], GAP) for i, blob in tracks[a]):
+            root[find(b)] = find(a)
+    joined: dict[int, dict[int, Blob]] = {}
+    for k, t in enumerate(tracks):
+        frames = joined.setdefault(find(k), {})
+        for i, blob in t:
+            frames[i] = frames[i].union(blob) if i in frames else blob
+    return [sorted(frames.items()) for frames in joined.values()]
+
+
+def _moved(t: list[tuple[int, Blob]]) -> list[tuple[int, Blob]]:
+    """A track over a plate, which follows its card at rest too, cut to the frames it moves
+    in: those whose box is unlike both its first and its last, as without a plate. A card that
+    changes as it lies (an effect lightening it once it lands) shifts its box's edges a little,
+    which is not motion; a thing that only appears or goes moves in none."""
+
+    def near(a: Blob, b: Blob) -> bool:
+        edges = (a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1)
+        return max(abs(e) for e in edges) <= STILL * min(a.size, b.size)
+
+    first, last = t[0][1], t[-1][1]
+    away = [k for k, (_, b) in enumerate(t) if not near(b, first) and not near(b, last)]
+    return t[away[0] : away[-1] + 1] if away else []
 
 
 def _body(clip: Clip, t: list[tuple[int, Blob]]) -> list[tuple[int, Blob]]:
@@ -553,7 +624,7 @@ def read_folder(
     width: int,
     window: tuple[float, float] | None,
 ) -> Clip:
-    """A folder's frames, within `window` (seconds) if given."""
+    """A folder's frames, within `window` (seconds) if given, and its plate if it has one."""
     files = frame_files(folder, pattern)
     if window:
         files = [(t, p) for t, p in files if window[0] <= t <= window[1]]
@@ -570,7 +641,9 @@ def read_folder(
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         frames = list(pool.map(one, [p for _, p in files]))
-    return Clip(w, h, [t for t, _ in files], frames, table, box[0], box[1], box[2] / w)
+    plate = one(folder / PLATE) if (folder / PLATE).exists() else None
+    times = [t for t, _ in files]
+    return Clip(w, h, times, frames, table, box[0], box[1], box[2] / w, plate)
 
 
 def overlay(clip: Clip, moved: list[tuple[list[Blob], Blob | None]], name: str) -> Path:
