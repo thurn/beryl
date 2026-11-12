@@ -5,6 +5,8 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright";
 
+import { takeSlot } from "./slots.mjs";
+
 /** The engine of the app's webview on this platform, as `by` names it (`BERYL_BROWSER`):
  * WebKit (WKWebView, macOS) unless Chromium (WebView2, Windows). */
 export const launch = () =>
@@ -134,14 +136,19 @@ export async function coverage(page) {
 }
 
 /** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default `limit`) at a time, each on
- * its own browser context. Awaiting a hand-off waits for a free worker, not for the task, so a
- * script reads on while its pages play; `drain` waits for every task. A task must not throw. */
+ * its own browser context and holding one of the machine's browser slots (slots.mjs) while it
+ * runs. Awaiting a hand-off waits for a free worker and slot, not for the task, so a script
+ * reads on while its pages play; `drain` waits for every task. A task must not throw. */
 export function workers(limit = 4) {
     limit = Number(process.env.BERYL_UI_WORKERS) || limit;
     const running = new Set();
     const run = async (task) => {
         while (running.size >= limit) await Promise.race(running);
-        const done = task().finally(() => running.delete(done));
+        const release = await takeSlot();
+        const done = task().finally(() => {
+            release();
+            running.delete(done);
+        });
         running.add(done);
     };
     run.drain = () => Promise.all(running);

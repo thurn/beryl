@@ -94,6 +94,8 @@ def browser_env(browser: str = BROWSER) -> dict[str, str]:
         **os.environ,
         "PLAYWRIGHT_BROWSERS_PATH": str(paths.cache_root() / "playwright"),
         "BERYL_BROWSER": browser,
+        # The machine's browser pages, which every run shares (ui/scripts/slots.mjs).
+        "BERYL_BROWSER_SLOTS_DIR": str(paths.cache_root() / "browser-slots"),
     }
     # A no-op once it is there.
     install = subprocess.run(
