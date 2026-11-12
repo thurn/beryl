@@ -1,10 +1,10 @@
 //! Mana Crypt. {0} Artifact. "At the beginning of your upkeep, flip a coin. If you lose the
 //! flip, Mana Crypt deals 3 damage to you. {T}: Add {C}{C}."
 
+use beryl_card::Players;
 use beryl_engine::card::{Ability, CardDef, Face, Flow, ManaColor, ManaSet, Trigger, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Recipient;
-use beryl_engine::filter::Whose;
 use beryl_engine::{Layout, bodies};
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
@@ -16,7 +16,10 @@ pub static CARD: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(Trigger::Step(TurnStep::Upkeep, Whose::You), bodies!(flip)),
+            Ability::triggered(
+                &Trigger::step(TurnStep::Upkeep, Players::You),
+                bodies!(flip),
+            ),
             Ability::tap_for_mana(ManaSet {
                 colors: 1 << ManaColor::Colorless as u8,
                 amount: 2,

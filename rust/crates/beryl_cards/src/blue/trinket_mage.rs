@@ -49,7 +49,7 @@ pub static CARD: CardDef = CardDef {
         toughness: Some(2),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::Enters, bodies!(tutor))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(tutor))
         }],
         ..Face::EMPTY
     }],

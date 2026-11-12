@@ -11,7 +11,7 @@ use crate::continuous::{
 use crate::cost::{CastingKind, Cost};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
-use crate::filter::{Filter, Whose};
+use crate::filter::Filter;
 use crate::ids::TurnStep;
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
@@ -89,6 +89,9 @@ const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
     duration: Duration::EndOfTurn,
 };
 
+/// "At the beginning of your end step", for [`Ability::impending_countdown`].
+const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);
+
 /// The most mana of one kind [`Ability::tap_for_mana`] makes.
 const MOST_MANA: usize = 3;
 
@@ -143,8 +146,10 @@ pub struct Ability {
     /// says so itself; read [`Ability::asks`].
     pub may_pause: bool,
     pub body: Behavior,
-    /// Triggered abilities: the event they trigger on.
-    pub trigger: Trigger,
+    /// Triggered abilities: what they trigger on. Held by reference, as the body and the
+    /// condition are: a [`Trigger`] names a filter and players, and an ability has 13 bytes
+    /// to spare before it is 256.
+    pub trigger: Option<&'static Trigger>,
     /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
     /// and again as it resolves
     /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
@@ -202,7 +207,7 @@ impl Ability {
         produces: ManaSet::NONE,
         may_pause: false,
         body: Behavior::Data(&Effect::NOTHING),
-        trigger: Trigger::None,
+        trigger: None,
         condition: None,
         replacement: Replacement::None,
         layer: None,
@@ -212,10 +217,10 @@ impl Ability {
     };
 
     /// A triggered ability.
-    pub const fn triggered(trigger: Trigger, body: Behavior) -> Ability {
+    pub const fn triggered(trigger: &'static Trigger, body: Behavior) -> Ability {
         Ability {
             kind: AbilityKind::Triggered,
-            trigger,
+            trigger: Some(trigger),
             body,
             ..Ability::NONE
         }
@@ -283,7 +288,7 @@ impl Ability {
         Ability {
             condition: Some(&Condition::Paid(CastingKind::Offspring)),
             ..Ability::triggered(
-                Trigger::Enters,
+                &Trigger::ENTERS,
                 Behavior::Data(&Effect::CreateCopies {
                     player: Players::You,
                     of: Objects::This,
@@ -320,7 +325,7 @@ impl Ability {
                 ),
             ])),
             ..Ability::triggered(
-                Trigger::Step(TurnStep::End, Whose::You),
+                &YOUR_END_STEP,
                 Behavior::Data(&Effect::RemoveCounters {
                     objects: Objects::This,
                     kind: CounterKind::Time,
@@ -338,7 +343,7 @@ impl Ability {
         Ability {
             condition: Some(&Condition::Paid(CastingKind::Evoke)),
             ..Ability::triggered(
-                Trigger::Enters,
+                &Trigger::ENTERS,
                 Behavior::Data(&Effect::Sacrifice(Objects::This)),
             )
         }

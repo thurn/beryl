@@ -6,15 +6,15 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed,
-    Face, FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part,
+    Ability, AbilityIx, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Face,
+    FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Players,
     Prompt, Purpose, Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec,
     Trigger, Types,
 };
 use crate::damage;
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
-use crate::filter::{Evaluate, Filter, Whose};
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
@@ -48,7 +48,7 @@ static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(Trigger::Enters, bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -102,7 +102,7 @@ static CRYPT_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(
-            Trigger::Step(TurnStep::Upkeep, Whose::You),
+            &Trigger::step(TurnStep::Upkeep, Players::You),
             bodies!(crypt_flip),
         )],
         ..Face::EMPTY
@@ -115,7 +115,7 @@ static WATCHER: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(
-            Trigger::Step(TurnStep::Upkeep, Whose::AnOpponent),
+            &Trigger::step(TurnStep::Upkeep, Players::EachOpponent),
             bodies!(gain_one),
         )],
         ..Face::EMPTY
@@ -128,7 +128,7 @@ static ENDER: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(
-            Trigger::Step(TurnStep::End, Whose::You),
+            &Trigger::step(TurnStep::End, Players::You),
             bodies!(draw_one),
         )],
         ..Face::EMPTY
@@ -153,9 +153,9 @@ static DRAIN_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(Trigger::Enters, bodies!(drain_delay)),
+            Ability::triggered(&Trigger::ENTERS, bodies!(drain_delay)),
             Ability::triggered(
-                Trigger::Delayed(Delayed::YourNextMainPhase),
+                &Trigger::main_phase(Players::You).next(),
                 bodies!(drain_mana),
             ),
         ],
@@ -173,7 +173,7 @@ static EMBLEM: CardDef = CardDef {
     name: "Test Emblem",
     faces: &[Face {
         abilities: &[Ability::triggered(
-            Trigger::YouCast,
+            &Trigger::casts(Players::You, Filter::Any),
             bodies!(opponent_loses_one),
         )],
         ..Face::EMPTY
@@ -190,7 +190,7 @@ static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(Trigger::Enters, bodies!(get_emblem))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(get_emblem))],
         ..Face::EMPTY
     }],
     tokens: &[&EMBLEM],
@@ -227,7 +227,7 @@ static SPHINX: CardDef = CardDef {
         toughness: Some(3),
         abilities: &[Ability {
             condition: Some(conditions!(not_a_token)),
-            ..Ability::triggered(Trigger::Dies, bodies!(copy_the_dead))
+            ..Ability::triggered(&Trigger::DIES, bodies!(copy_the_dead))
         }],
         ..Face::EMPTY
     }],
@@ -241,7 +241,7 @@ static TRAINER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability::triggered(Trigger::Enters, bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -254,8 +254,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(Trigger::Attacks, bodies!(gain_one)),
-            Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(draw_one)),
+            Ability::triggered(&Trigger::ATTACKS, bodies!(gain_one)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, bodies!(draw_one)),
         ],
         ..Face::EMPTY
     }],
@@ -299,7 +299,7 @@ static ADELINE: CardDef = CardDef {
                 condition: StaticCondition::Always,
                 modification: Modification::PowerIsCreaturesYouControl,
             }),
-            Ability::triggered(Trigger::YouAttack, bodies!(human_attacking)),
+            Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking)),
         ],
         ..Face::EMPTY
     }],
@@ -345,7 +345,7 @@ static OVERLORD: CardDef = CardDef {
                 condition: StaticCondition::HasCounter(CounterKind::Time),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
-            Ability::triggered(Trigger::Enters, bodies!(two_insects)),
+            Ability::triggered(&Trigger::ENTERS, bodies!(two_insects)),
         ],
         ..Face::EMPTY
     }],
@@ -370,13 +370,10 @@ static STAFF: CardDef = CardDef {
         types: Types::ARTIFACT,
         abilities: &[
             Ability::triggered(
-                Trigger::YouCreateTokens(Types::CREATURE),
+                &Trigger::creates_tokens(Players::You, Filter::Types(Types::CREATURE)),
                 bodies!(story_counter),
             ),
-            Ability::triggered(
-                Trigger::Delayed(Delayed::YourNextMainPhase),
-                bodies!(two_maps),
-            ),
+            Ability::triggered(&Trigger::main_phase(Players::You).next(), bodies!(two_maps)),
         ],
         ..Face::EMPTY
     }],
@@ -451,7 +448,7 @@ static ICEBERG: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::triggered(
-            Trigger::Enters,
+            &Trigger::ENTERS,
             bodies!(exile_an_opposing_creature),
         )],
         ..Face::EMPTY
@@ -576,7 +573,7 @@ fn decide_with(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
 
 /// Puts waiting triggers on the stack and passes until both are empty, returning the
 /// decision reached.
-fn resolve_all(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
+pub(super) fn resolve_all(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
     loop {
         let d = decide_with(t, s, x);
         if s.stack().is_empty() && s.triggers().is_empty() {
@@ -1800,7 +1797,7 @@ static CATHAR: CardDef = CardDef {
         toughness: Some(1),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::YouAttack, bodies!(cathar_human))
+            ..Ability::triggered(&Trigger::attack(Players::You), bodies!(cathar_human))
         }],
         ..Face::EMPTY
     }],
@@ -1912,7 +1909,7 @@ static THIEF: CardDef = CardDef {
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
             )],
             condition: Some(conditions!(crate::effect::kicked)),
-            ..Ability::triggered(Trigger::Enters, bodies!(steal_target))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(steal_target))
         }],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,

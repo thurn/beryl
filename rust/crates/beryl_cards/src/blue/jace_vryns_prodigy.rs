@@ -11,7 +11,7 @@
 //! −9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
 
 use beryl_card::effect::build::{TARGET, TARGET_PLAYER, mill, modify};
-use beryl_card::{Duration, Effect};
+use beryl_card::{Duration, Effect, Players};
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification,
     Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
@@ -106,7 +106,10 @@ pub static EMBLEM: CardDef = CardDef {
                 TargetKind::Player,
                 Filter::Whose(Whose::AnOpponent),
             )],
-            ..Ability::triggered(Trigger::YouCast, Behavior::Data(&MILL_FIVE))
+            ..Ability::triggered(
+                &Trigger::casts(Players::You, Filter::Any),
+                Behavior::Data(&MILL_FIVE),
+            )
         }],
         ..Face::EMPTY
     }],

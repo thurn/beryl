@@ -3,12 +3,13 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs,
-    Rule, Rules, Trigger,
+    Rule, Rules,
 };
 
 use crate::event::kind;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
+use crate::listener::{self, Listener, Unmatched};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
 #[derive(Debug)]
@@ -56,6 +57,13 @@ pub type Decklist = [(u8, &'static str)];
 pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
+    /// A card of the game, or a token or emblem one makes, has a triggered ability the engine
+    /// has no code to match ([`listener::listens_to`]): it would never trigger, so no game
+    /// is played with it.
+    Trigger {
+        card: &'static str,
+        unmatched: Unmatched,
+    },
 }
 
 /// The cards one game can contain, under dense game-local indices: what `State` stores for
@@ -79,6 +87,12 @@ pub struct GameTable {
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
+    /// Every triggered ability of the game's cards under the kind of event it listens to:
+    /// each card's in turn, in the order its faces list them.
+    listeners: Vec<Listener>,
+    /// Per game index, where its listeners start in `listeners`, and after the last where
+    /// they end.
+    listeners_from: Vec<u32>,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
     /// Per game index, the [`Rule`]s any of its faces, or face down, has.
@@ -178,7 +192,19 @@ impl GameTable {
             CardIx::try_from_index(last).unwrap_or_default(),
             LargeCardIx::try_from_index(last).unwrap_or_default(),
         );
-        let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
+        let mut listeners = Vec::new();
+        let mut listeners_from = Vec::with_capacity(defs.len() + 1);
+        let mut listens = Vec::with_capacity(defs.len());
+        for def in &defs {
+            let of = listener::of(def).map_err(|unmatched| TableError::Trigger {
+                card: def.name,
+                unmatched,
+            })?;
+            listens.push(of.iter().fold(rule_change(def), |mask, l| mask | l.kind));
+            listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
+            listeners.extend(of);
+        }
+        listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
             d.faces
@@ -212,6 +238,8 @@ impl GameTable {
             decks: indices,
             listens,
             listens_any,
+            listeners,
+            listeners_from,
             faces,
             rules,
             face_down_copy,
@@ -254,6 +282,24 @@ impl GameTable {
     #[inline]
     pub(crate) fn listens(&self, card: impl CardId) -> u16 {
         self.listens[card.index()]
+    }
+
+    /// The triggered abilities of the face `face` of the card at `card` that listen to events
+    /// of `kind`, in the order the face lists them: what an event of that kind is matched
+    /// against, and nothing else of the face is read. A face-down permanent's face has none
+    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)).
+    #[inline]
+    pub fn listeners(
+        &self,
+        card: impl CardId,
+        face: FaceIx,
+        kind: u16,
+    ) -> impl Iterator<Item = &Listener> {
+        let from = self.listeners_from[card.index()] as usize;
+        let to = self.listeners_from[card.index() + 1] as usize;
+        self.listeners[from..to]
+            .iter()
+            .filter(move |l| l.kind & kind != 0 && l.face == face)
     }
 
     /// The facts of the face `face` of the card at `card`: found once per game for its first
@@ -411,30 +457,15 @@ impl FaceFacts {
     }
 }
 
-/// The event kinds a card's triggered abilities listen to, on any face, and
-/// [`kind::RULE_CHANGE`] if a static ability of any face changes a rule for players.
-fn listens(def: &CardDef) -> u16 {
-    let mut mask = 0;
-    for face in def.faces {
-        for ability in face.abilities {
-            if ability.kind == AbilityKind::Static && ability.rule.whose().is_some() {
-                mask |= kind::RULE_CHANGE;
-            }
-            mask |= match ability.trigger {
-                Trigger::None | Trigger::Delayed(_) => 0,
-                Trigger::Enters => kind::ENTERS,
-                Trigger::Dies => kind::DIES,
-                Trigger::Attacks | Trigger::YouAttack => kind::ATTACK,
-                Trigger::CombatDamageToPlayer => kind::DAMAGE,
-                Trigger::Step(..) => kind::STEP,
-                Trigger::YouCreateTokens(_) => kind::TOKENS,
-                Trigger::YouCast => kind::CAST,
-                Trigger::YouDiscard => kind::DISCARD,
-                Trigger::YouDraw => kind::DRAW,
-            };
-        }
-    }
-    mask
+/// [`kind::RULE_CHANGE`] if a static ability of any face of a card changes a rule for
+/// players, the bit of its listener mask no event has.
+fn rule_change(def: &CardDef) -> u16 {
+    let changes = def
+        .faces
+        .iter()
+        .flat_map(|face| face.abilities)
+        .any(|ability| ability.kind == AbilityKind::Static && ability.rule.whose().is_some());
+    if changes { kind::RULE_CHANGE } else { 0 }
 }
 
 /// What a face makes as a source, found once per game ([`GameTable::facts`]) for the
@@ -510,6 +541,11 @@ pub fn is_sacrificed(a: &Ability) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use beryl_card::{
+        Behavior, Effect, Filter, ManaColor, ManaSet, Players, Subject, Trigger, TriggerEvent,
+        TurnStep, Types,
+    };
+
     use super::*;
 
     static ALPHA: CardDef = CardDef {
@@ -580,6 +616,89 @@ mod tests {
             t.may_have_rules(walker).common(Rules::OF_PLAYERS),
             Rules::NONE.with(Rule::OpponentsCastAsSorceries)
         );
+    }
+
+    /// "When this enters" and "at the beginning of your upkeep" on the front, "whenever you
+    /// draw a card" on the back.
+    static HERALD: CardDef = CardDef {
+        name: "Herald",
+        faces: &[
+            Face {
+                abilities: &[
+                    Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
+                    Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+                    Ability::triggered(
+                        &Trigger::step(TurnStep::Upkeep, Players::You),
+                        Behavior::Data(&Effect::NOTHING),
+                    ),
+                    Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
+                ],
+                ..Face::EMPTY
+            },
+            Face {
+                abilities: &[Ability::triggered(
+                    &Trigger::draws(Players::You),
+                    Behavior::Data(&Effect::NOTHING),
+                )],
+                ..Face::EMPTY
+            },
+        ],
+        tokens: &[],
+    };
+    /// "Whenever another creature enters", which the engine has no code to match, on a
+    /// token a card makes.
+    static GREETER: CardDef = CardDef {
+        name: "Greeter",
+        faces: &[Face {
+            abilities: &[Ability::triggered(
+                &Trigger::of(
+                    TriggerEvent::Enters,
+                    Subject::A(Filter::Types(Types::CREATURE)),
+                ),
+                Behavior::Data(&Effect::NOTHING),
+            )],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static HOST: CardDef = CardDef {
+        name: "Host",
+        faces: &[],
+        tokens: &[&GREETER],
+    };
+    static TRIGGERS: CardTable = CardTable::new(&[&ALPHA, &HERALD, &GREETER, &HOST]);
+
+    #[test]
+    fn an_event_reads_only_the_listeners_of_its_kind_on_the_face_that_is_up() {
+        let t = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], &[(1, "Herald")]]).unwrap();
+        let (alpha, herald) = (CardIx::from_index(0), CardIx::from_index(1));
+        let listening = |card, face, kind| -> Vec<u8> {
+            t.listeners(card, face, kind)
+                .map(|l| l.ability.get())
+                .collect()
+        };
+        assert_eq!(t.listens(herald), kind::ENTERS | kind::STEP | kind::DRAW);
+        assert_eq!(t.listens_any(), t.listens(herald));
+        assert_eq!(listening(herald, FaceIx::FRONT, kind::ENTERS), [0, 3]);
+        assert_eq!(listening(herald, FaceIx::FRONT, kind::STEP), [2]);
+        assert_eq!(listening(herald, FaceIx::FRONT, kind::DRAW), [0u8; 0]);
+        assert_eq!(listening(herald, FaceIx::BACK, kind::DRAW), [0]);
+        assert_eq!(listening(herald, FaceIx::DOWN, kind::ENTERS), [0u8; 0]);
+        assert_eq!(listening(alpha, FaceIx::FRONT, kind::ENTERS), [0u8; 0]);
+    }
+
+    /// A trigger no code matches would never trigger: the table is not built, whether the
+    /// card is in a deck or is a token a deck's card makes.
+    #[test]
+    fn a_table_refuses_a_trigger_the_engine_cannot_match() {
+        let refused = TableError::Trigger {
+            card: "Greeter",
+            unmatched: Unmatched::Subject,
+        };
+        for deck in [&[(1, "Greeter")], &[(1, "Host")]] {
+            let table = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], deck]);
+            assert_eq!(table.err(), Some(refused.clone()));
+        }
     }
 
     #[test]

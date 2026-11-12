@@ -157,7 +157,7 @@ pub struct State<L: Layout = Small> {
     /// The abilities that have triggered and wait to be put on the stack.
     pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
-    /// ability's [`beryl_card::Trigger::Delayed`] names.
+    /// ability's [`beryl_card::Trigger`], a delayed one, names.
     pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.

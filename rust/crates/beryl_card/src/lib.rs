@@ -51,4 +51,4 @@ pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
-pub use trigger::{Delayed, Trigger};
+pub use trigger::{Subject, Trigger, TriggerEvent};

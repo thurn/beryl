@@ -2,11 +2,11 @@
 //! exile six cards from your graveyard. Flying. At the beginning of each opponent's upkeep,
 //! manifest dread."
 
+use beryl_card::Players;
 use beryl_engine::card::{
     Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Whose;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
@@ -45,7 +45,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             may_pause: true,
             ..Ability::triggered(
-                Trigger::Step(TurnStep::Upkeep, Whose::AnOpponent),
+                &Trigger::step(TurnStep::Upkeep, Players::EachOpponent),
                 bodies!(manifest_dread),
             )
         }],

@@ -4,7 +4,7 @@ use std::cell::Cell;
 
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ObjectAbility, Replacement, TargetKind, TargetSpec, Trigger, Types,
+    ObjectAbility, Replacement, TargetKind, TargetSpec, TriggerEvent, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -190,7 +190,7 @@ impl<L: Layout> Policy<'_, L> {
             .iter()
             .filter(|a| {
                 a.kind == AbilityKind::Triggered
-                    && a.trigger == Trigger::Enters
+                    && a.trigger.is_some_and(|t| t.is_this(TriggerEvent::Enters))
                     && !a.targets.is_empty()
             })
             .fold(v, |v, a| {

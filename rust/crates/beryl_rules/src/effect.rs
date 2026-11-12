@@ -996,8 +996,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Creates a delayed triggered ability: the ability at `ability` on this ability's card,
-    /// triggering once at the moment its [`crate::card::Trigger::Delayed`] names, controlled
-    /// by this ability's controller, carrying `amount`
+    /// triggering once at the step its delayed [`crate::card::Trigger`] names, controlled by
+    /// this ability's controller, carrying `amount`
     /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
     pub fn delay(&mut self, ability: AbilityIx, amount: u8) {
         let trigger = PendingTrigger {

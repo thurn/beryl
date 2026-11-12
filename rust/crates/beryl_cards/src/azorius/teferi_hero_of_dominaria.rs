@@ -6,10 +6,10 @@
 //! controls.'"
 
 use beryl_card::effect::build::{TARGET, exile, put_into_library};
-use beryl_card::{Effect, LibraryPosition};
+use beryl_card::{Effect, LibraryPosition, Players};
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Colors, Cost, Delayed, Face, Flow,
-    ManaCost, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
@@ -58,7 +58,7 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 may_pause: true,
                 ..Ability::triggered(
-                    Trigger::Delayed(Delayed::NextEndStep),
+                    &Trigger::step(TurnStep::End, Players::EachPlayer).next(),
                     bodies!(untap_two_lands),
                 )
             },
@@ -79,7 +79,7 @@ pub static EMBLEM: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Whose(Whose::AnOpponent),
             )],
-            ..Ability::triggered(Trigger::YouDraw, Behavior::Data(&EXILE_TARGET))
+            ..Ability::triggered(&Trigger::draws(Players::You), Behavior::Data(&EXILE_TARGET))
         }],
         ..Face::EMPTY
     }],

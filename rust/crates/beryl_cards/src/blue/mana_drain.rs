@@ -1,10 +1,11 @@
 //! Mana Drain. {U}{U} Instant. "Counter target spell. At the beginning of your next main phase,
 //! add an amount of {C} equal to that spell's mana value."
 
+use beryl_card::Players;
 use beryl_engine::card::ManaColor as Color;
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CardDef, Colors, Delayed, Face, Flow, ManaColor, ManaCost,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityIx, AbilityKind, CardDef, Colors, Face, Flow, ManaColor, ManaCost, TargetKind,
+    TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -29,7 +30,7 @@ pub static CARD: CardDef = CardDef {
                 ..Ability::NONE
             },
             Ability::triggered(
-                Trigger::Delayed(Delayed::YourNextMainPhase),
+                &Trigger::main_phase(Players::You).next(),
                 bodies!(add_colorless),
             ),
         ],

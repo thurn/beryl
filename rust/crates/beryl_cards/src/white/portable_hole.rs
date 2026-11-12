@@ -33,7 +33,7 @@ pub static CARD: CardDef = CardDef {
                 ]),
             )],
             ..Ability::triggered(
-                Trigger::Enters,
+                &Trigger::ENTERS,
                 Behavior::Data(&exile_until_this_leaves(TARGET)),
             )
         }],

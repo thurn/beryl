@@ -58,7 +58,7 @@ pub static CARD: CardDef = CardDef {
         keywords: Keywords::FLASH.union(Keywords::FLYING),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(chorus))
+            ..Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, bodies!(chorus))
         }],
         ..Face::EMPTY
     }],

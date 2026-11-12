@@ -12,10 +12,12 @@ use beryl_cards::names::{
 };
 use beryl_cards::tokens::TREASURE;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Trigger, Types,
+    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Players,
+    Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
+use beryl_engine::filter::Filter;
 use beryl_engine::state::{EFFECTS, ObjectFlags, Pending};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Observation, Opt, State,
@@ -314,7 +316,8 @@ const fn chorus(name: &'static str) -> CardDef {
 }
 
 /// A chorus's ability: "Whenever you cast a spell, nothing happens."
-const VOICE: Ability = Ability::triggered(Trigger::YouCast, bodies!(silence));
+const VOICE: Ability =
+    Ability::triggered(&Trigger::casts(Players::You, Filter::Any), bodies!(silence));
 
 #[allow(clippy::unnecessary_wraps)] // a body's signature
 fn silence<L: Layout>(_: &mut EffectCtx<'_, L>) -> Flow {
@@ -437,7 +440,7 @@ static HOARD: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,
         colors: Colors::NONE,
-        abilities: &[Ability::triggered(Trigger::Enters, bodies!(hoard))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(hoard))],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE],

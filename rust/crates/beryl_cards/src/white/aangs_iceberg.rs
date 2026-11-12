@@ -35,7 +35,7 @@ pub static CARD: CardDef = CardDef {
                 )
                 .other()
                 .removal()],
-                ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
+                ..Ability::triggered(&Trigger::ENTERS, bodies!(exile_until_this_leaves))
             },
             Ability {
                 kind: AbilityKind::Activated,

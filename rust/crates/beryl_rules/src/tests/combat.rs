@@ -3,7 +3,7 @@
 
 use super::begin;
 use crate::card::{
-    Ability, CardDef, Face, Flow, Keywords, ObjectAbility, Part, Prompt, Purpose, Subtype,
+    Ability, CardDef, Face, Flow, Keywords, ObjectAbility, Part, Players, Prompt, Purpose, Subtype,
     Subtypes, Trigger, Types,
 };
 use crate::effect::EffectCtx;
@@ -75,8 +75,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(Trigger::Attacks, bodies!(gain_one)),
-            Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(gain_ten)),
+            Ability::triggered(&Trigger::ATTACKS, bodies!(gain_one)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, bodies!(gain_ten)),
         ],
         ..Face::EMPTY
     }],
@@ -90,7 +90,7 @@ static RECRUIT: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(Trigger::Attacks, bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ATTACKS, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -116,7 +116,10 @@ static CAPTAIN: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(Trigger::YouAttack, bodies!(recruit))],
+        abilities: &[Ability::triggered(
+            &Trigger::attack(Players::You),
+            bodies!(recruit),
+        )],
         ..Face::EMPTY
     }],
     tokens: &[&RECRUIT],

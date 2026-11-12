@@ -170,11 +170,19 @@ impl ReplayFile {
         });
         let [a, b] = decks;
         let decks = [a?, b?];
-        let table = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(
-            |TableError::UnknownCard(name)| SessionError::UnknownCard {
-                name: name.to_owned(),
-            },
-        )?;
+        let table =
+            GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(|error| {
+                match error {
+                    TableError::UnknownCard(name) => SessionError::UnknownCard {
+                        name: name.to_owned(),
+                    },
+                    TableError::Trigger { card, unmatched } => SessionError::Deck {
+                        reason: format!(
+                            "{card} has a trigger the engine cannot match: {unmatched:?}"
+                        ),
+                    },
+                }
+            })?;
         let profile = with_stops(
             beryl_engine::Profile::SMART,
             self.stops,

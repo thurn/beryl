@@ -7,7 +7,7 @@
 //! [`State::board`] is the one way in (the crate's contract, "The board door"). Rules code
 //! and card bodies never open it: a search for `.board()` finds whoever does.
 
-use beryl_card::{FaceIx, Trigger};
+use beryl_card::FaceIx;
 
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
@@ -66,7 +66,7 @@ impl<L: Layout> State<L> {
         }
         if let Some(d) = self.triggers.as_slice().iter().find(|d| {
             let ability = &t.def(d.card).face(d.face).abilities[d.ability.index()];
-            matches!(ability.trigger, Trigger::Delayed(_))
+            ability.trigger.is_some_and(|trigger| trigger.delayed)
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.card).name));
         }

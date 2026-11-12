@@ -9,7 +9,9 @@
 //! action, so each script replays as written, and the dump adds the final snapshot (§17.2)
 //! for the oracles to compare. A seed whose script the runner refuses is skipped.
 
-use beryl_engine::card::{AbilityKind, Face, ObjectAbility, Subtype, Supertypes, Trigger, Types};
+use beryl_engine::card::{
+    AbilityKind, Face, ObjectAbility, Subtype, Supertypes, TriggerEvent, Types,
+};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{DecisionKind, Step, TurnStep, Zone, ZoneKey};
 use beryl_scenario::{Action, Live, P0, Permanent, Pick, PlayerSetup, Scenario};
@@ -85,8 +87,11 @@ impl Pools {
 /// starts there with it done, so such a trigger would go off in an oracle alone.
 fn triggers_before_main(face: &Face) -> bool {
     face.abilities.iter().any(|a| {
-        matches!(a.trigger, Trigger::Step(step, _)
-            if (step as u8) < TurnStep::PrecombatMain as u8)
+        a.trigger.is_some_and(|trigger| {
+            !trigger.delayed
+                && matches!(trigger.event, TriggerEvent::Step(step)
+                    if (step as u8) < TurnStep::PrecombatMain as u8)
+        })
     })
 }
 

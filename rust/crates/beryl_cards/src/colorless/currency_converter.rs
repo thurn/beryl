@@ -3,8 +3,8 @@
 //! with this artifact into its owner's graveyard. If it's a land card, create a Treasure
 //! token. If it's a nonland card, create a 2/2 black Rogue creature token."
 
-use beryl_card::Effect;
 use beryl_card::effect::build::{YOU, discard, draw, sequence};
+use beryl_card::{Effect, Players};
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Place,
     Prompt, Purpose, Subtype, Subtypes, Trigger, Types,
@@ -97,7 +97,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::YouDiscard, bodies!(exile_discarded))
+                ..Ability::triggered(&Trigger::discards(Players::You), bodies!(exile_discarded))
             },
             Ability {
                 kind: AbilityKind::Activated,

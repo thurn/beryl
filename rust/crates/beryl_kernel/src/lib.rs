@@ -323,6 +323,7 @@
 //! | the turn's reset | Effects: the store's length read twice a turn. Trackers: eight words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same eight words, in place of two flags on every permanent |
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "does this rule apply" ([`State::rule_applies`]) | for a player, their two sets of rules joined and one AND, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
+//! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
 //! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::kind::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
@@ -619,6 +620,7 @@ pub mod ids;
 pub mod invariants;
 mod knowledge;
 pub mod layout;
+pub mod listener;
 pub mod memos;
 pub mod mutate;
 mod new;

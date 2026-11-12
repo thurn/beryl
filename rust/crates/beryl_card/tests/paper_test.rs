@@ -6,11 +6,13 @@
 //! Printed characteristics are generated from Scryfall (plan K2), so a subtype today's
 //! `Subtype` lacks is left out; what is under test is the abilities.
 
-use beryl_card::effect::build::{TARGET, YOU, create_tokens, destroy, draw, sequence};
+use beryl_card::effect::build::{
+    EACH_OPPONENT, EACH_PLAYER, TARGET, YOU, create_tokens, destroy, draw, sequence,
+};
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Colors, Cost, Effect, Face, Filter, Keywords,
-    Objects, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, TurnStep, Types, Whose, Zone,
-    mana,
+    Objects, Subject, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep,
+    Types, Whose, Zone, mana,
 };
 
 /// Fire Nation Warship {3}, Artifact — Vehicle 4/4. "Reach / When this Vehicle dies, create a
@@ -25,7 +27,10 @@ static FIRE_NATION_WARSHIP: CardDef = CardDef {
         toughness: Some(4),
         keywords: Keywords::REACH,
         abilities: &[
-            Ability::triggered(Trigger::Dies, Behavior::Data(&create_tokens(YOU, &CLUE, 1))),
+            Ability::triggered(
+                &Trigger::DIES,
+                Behavior::Data(&create_tokens(YOU, &CLUE, 1)),
+            ),
             Ability::crew(2),
         ],
         ..Face::EMPTY
@@ -88,9 +93,9 @@ static DEMONIC_LORE: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         colors: Colors::BLACK,
         abilities: &[
-            Ability::triggered(Trigger::Enters, Behavior::Data(&draw(YOU, 3))),
+            Ability::triggered(&Trigger::ENTERS, Behavior::Data(&draw(YOU, 3))),
             Ability::triggered(
-                Trigger::Step(TurnStep::End, Whose::You),
+                &Trigger::step(TurnStep::End, YOU),
                 Behavior::Data(&Effect::LoseLife {
                     player: YOU,
                     amount: Amount::Times(2, &Amount::Count(&CARDS_IN_YOUR_HAND)),
@@ -137,6 +142,74 @@ static FUGITIVE_WIZARD: CardDef = CardDef {
     }],
     tokens: &[],
 };
+
+/// The triggers of the paper test's misfits. Of its 60 cards, 17 asked for a `Trigger` entry,
+/// nearly all an event that existed with another subject or player. A trigger is now an
+/// event, a subject and players, so those whose event the engine raises are said with
+/// entries that exist, each under its card and its words.
+///
+/// Not here, though the engine raises the event, for want of an entry elsewhere in the
+/// vocabulary: "your commander attacks" (We Ride at Dawn: a commander `Filter`), "this
+/// creature or another Ally you control enters" (Kazandu Blademaster: a `Filter` for an
+/// object other than this one), "you cast a spell other than your first spell each turn"
+/// (Arcbound Tracker: a count of this turn's spells) and "you cast an artifact or creature
+/// spell using mana produced by" this (Barracks of the Thousand: where spent mana came from).
+/// The rest wait for an event the engine does not raise for triggers: a lore counter put on
+/// a Saga, leaving the battlefield other than by dying, a sacrifice, blocking, being turned
+/// face up, a card put into a graveyard from a library, becoming a target, a crime.
+const TRIGGERS: [(&str, &str, Trigger); 8] = [
+    (
+        "Speed, Young Avenger",
+        "Whenever you cast a noncreature spell",
+        Trigger::casts(YOU, Filter::Not(&Filter::Types(Types::CREATURE))),
+    ),
+    ("Arcbound Tracker", "When it dies", Trigger::DIES),
+    (
+        "Horned Stoneseeker",
+        "When this creature enters",
+        Trigger::ENTERS,
+    ),
+    (
+        "Spiritual Sanctuary",
+        "At the beginning of each player's upkeep",
+        Trigger::step(TurnStep::Upkeep, EACH_PLAYER),
+    ),
+    // Frog is a subtype `Subtype` lacks, left out as the printed ones are.
+    (
+        "Grolnok, the Omnivore",
+        "Whenever a Frog you control attacks",
+        Trigger::of(
+            TriggerEvent::Attacks,
+            Subject::A(Filter::All(&[
+                Filter::Types(Types::CREATURE),
+                Filter::Whose(Whose::You),
+            ])),
+        ),
+    ),
+    (
+        "Thousand Moons Smithy",
+        "When Thousand Moons Smithy enters",
+        Trigger::ENTERS,
+    ),
+    (
+        "Thousand Moons Smithy",
+        "At the beginning of your first main phase",
+        Trigger::step(TurnStep::PrecombatMain, YOU),
+    ),
+    (
+        "Taurean Mauler",
+        "Whenever an opponent casts a spell",
+        Trigger::casts(EACH_OPPONENT, Filter::Any),
+    ),
+];
+
+/// A printed trigger is no delayed one: an effect makes those (CR 603.7).
+#[test]
+fn the_misfits_triggers_are_printed_ones() {
+    for (card, words, trigger) in TRIGGERS {
+        assert!(!trigger.delayed, "{card}: {words}");
+    }
+}
 
 #[test]
 fn the_cards_that_fit_are_written_wholly_as_data() {

@@ -43,7 +43,7 @@ pub static CARD: CardDef = CardDef {
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
             )],
             condition: Some(conditions!(effect::kicked)),
-            ..Ability::triggered(Trigger::Enters, bodies!(steal))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(steal))
         }],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,

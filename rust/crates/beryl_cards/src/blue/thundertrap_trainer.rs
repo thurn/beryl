@@ -56,7 +56,7 @@ pub static CARD: CardDef = CardDef {
             Ability::offspring(),
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::Enters, bodies!(dig))
+                ..Ability::triggered(&Trigger::ENTERS, bodies!(dig))
             },
         ],
         casting: &[CastingOption::Offspring(ManaCost::generic(4))],

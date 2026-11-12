@@ -90,7 +90,7 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         power: Some(4),
         toughness: Some(5),
-        abilities: &[Ability::triggered(Trigger::Enters, bodies!(compare))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(compare))],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE, &FISH],

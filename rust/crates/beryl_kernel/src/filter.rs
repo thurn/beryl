@@ -95,8 +95,8 @@ impl Evaluate for Filter {
 }
 
 /// Whether `player` is the one `whose` means, read for `you`. Every reading of a [`Whose`]
-/// comes here: the controller or owner of an object ([`Filter::Whose`]), a player a target
-/// may choose, and the player whose step begins.
+/// comes here: the controller or owner of an object ([`Filter::Whose`]) and a player a
+/// target may choose.
 #[inline]
 pub fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
     match whose {

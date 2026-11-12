@@ -54,7 +54,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::Types(Types::CREATURE.union(Types::PLANESWALKER)),
                 )],
                 may_pause: true,
-                ..Ability::triggered(Trigger::Enters, bodies!(tuck))
+                ..Ability::triggered(&Trigger::ENTERS, bodies!(tuck))
             },
             Ability::evoke(),
         ],

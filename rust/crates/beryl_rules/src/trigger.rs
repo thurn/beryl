@@ -5,14 +5,16 @@ use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CastingKind, Delayed, Face, FaceAbility, FaceIx, Trigger, Types,
+    Ability, AbilityIx, CastingKind, Face, FaceAbility, FaceIx, Subject, Trigger, TriggerEvent,
+    Types,
 };
-use crate::event::{Event, Reason, Recipient, Sink, kind};
-use crate::filter;
+use crate::event::{Event, Recipient, Sink, kind};
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, index};
+use crate::listener::is_for;
 use crate::query::Copiable;
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
@@ -35,10 +37,15 @@ pub(crate) fn ability(
     &t.def(card).face(face).abilities[ability.index()]
 }
 
-/// Matches an executed event against every triggered ability that could listen to it: the
-/// permanents on the battlefield and the players' emblems
+/// Matches an executed event against every triggered ability that listens to its kind: those
+/// of the permanents on the battlefield and of the players' emblems
 /// ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144): "Abilities of emblems
 /// function in the command zone"), then the delayed triggers waiting for a step.
+///
+/// The game's table has each card's triggered abilities under the kind of event they listen
+/// to ([`GameTable::listeners`]), so an event reads only those of its kind, and where no
+/// card of the game has one the whole check is an AND
+/// ([`GameTable::listens_any`]).
 ///
 /// [CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032): "Whenever a game event or
 /// game state matches a triggered ability's trigger event, that ability automatically
@@ -72,10 +79,10 @@ pub(crate) fn match_event<L: Layout>(
                 let source = s.object_ref(slot);
                 let controller = s.controller(slot);
                 let (card, face) = what.record(t);
-                for (a, ability) in face_abilities(t, card, face) {
-                    if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
-                        for _ in 0..times(ability.trigger, e) {
-                            enqueue(s, t, Some(source), card, face, a, controller, info)?;
+                for l in t.listeners(card, face, k) {
+                    if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+                        for _ in 0..times(e) {
+                            enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
                         }
                     }
                 }
@@ -88,10 +95,10 @@ pub(crate) fn match_event<L: Layout>(
                 if Copiable::<L>::of_card(card).may_listen(t) & k == 0 {
                     continue;
                 }
-                for (a, ability) in face_abilities(t, card, FaceIx::FRONT) {
-                    if let Some(info) = fires(s, ability.trigger, None, player, e) {
-                        for _ in 0..times(ability.trigger, e) {
-                            enqueue(s, t, None, card, FaceIx::FRONT, a, player, info)?;
+                for l in t.listeners(card, FaceIx::FRONT, k) {
+                    if let Some(info) = fires(s, t, l.trigger, None, player, e) {
+                        for _ in 0..times(e) {
+                            enqueue(s, t, None, card, FaceIx::FRONT, l.ability, player, info)?;
                         }
                     }
                 }
@@ -109,24 +116,11 @@ pub(crate) fn match_event<L: Layout>(
 /// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
 /// only once each time its trigger event occurs. However, it can trigger repeatedly if one
 /// event contains multiple occurrences."
-fn times<L: Layout>(trigger: Trigger, e: &Event<L>) -> u8 {
-    match (trigger, e.clone()) {
-        (Trigger::YouDraw, Event::Draw { cards, .. }) => cards,
+fn times<L: Layout>(e: &Event<L>) -> u8 {
+    match *e {
+        Event::Draw { cards, .. } => cards,
         _ => 1,
     }
-}
-
-fn face_abilities(
-    t: &GameTable,
-    card: impl CardId,
-    face: FaceIx,
-) -> impl Iterator<Item = (AbilityIx, &'static Ability)> {
-    t.def(card)
-        .face(face)
-        .abilities
-        .iter()
-        .enumerate()
-        .map(|(i, a)| (AbilityIx::new(i as u8), a))
 }
 
 /// A count of objects as the amount a trigger carries, which is a byte: past 255, which
@@ -136,80 +130,131 @@ fn counted(count: u32) -> u8 {
     u8::try_from(count).unwrap_or(u8::MAX)
 }
 
-/// Whether a trigger of a source controlled by `you` fires on `e`, and with what.
+/// Whether a trigger waiting for the beginning of a step or phase waits for `step`
+/// ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)): "When a phase or step
+/// begins, any abilities that trigger 'at the beginning of' that phase or step trigger."
+fn begins(event: TriggerEvent, step: TurnStep) -> bool {
+    match event {
+        TriggerEvent::Step(at) => at == step,
+        // CR 505.1: "There are two main phases in a turn."
+        TriggerEvent::MainPhase => {
+            matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
+        }
+        _ => false,
+    }
+}
+
+/// Whether a trigger of a source controlled by `you` fires on `e`, an event of the kind it
+/// listens to, and with what: the event's object if it is the trigger's subject, the
+/// event's player if the trigger is for them, and an amount.
+///
+/// Each kind of event says what it is about, and the subject and the players are read the
+/// same way for every one ([`about`], [`how_many`], [`is_for`]). The card table has refused
+/// every trigger this would not match ([`crate::listener::listens_to`]).
 fn fires<L: Layout>(
     s: &State<L>,
-    trigger: Trigger,
+    t: &GameTable,
+    trigger: &Trigger,
     this: Option<L::Slot>,
     you: Seat,
     e: &Event<L>,
 ) -> Option<TriggerInfo<L>> {
-    let is_this = |r: ObjectRef<L>| this == Some(r.slot) && s.is_current(r);
     let info = |object: Option<ObjectRef<L>>, player: Seat, amount: u8| TriggerInfo {
         object,
         player,
         amount,
         lki: Lki::default(),
     };
-    match (trigger, e.clone()) {
+    let whose = |player: Seat| is_for(trigger.whose, player, you);
+    let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, object);
+    match (trigger.event, e) {
         // The amount is the X its spell was cast with
         // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
         // that object as it resolved had a value of X chosen for any of its costs, the value
         // of X for that ability is the same as the value of X for that spell".
-        (Trigger::Enters, Event::ZoneChange { object, .. }) if is_this(object) => {
+        (TriggerEvent::Enters, &Event::ZoneChange { object, .. }) if about(object) => {
             Some(info(Some(object), you, s.x_of(object.slot)))
         }
-        (Trigger::Attacks, Event::Attack { attackers, .. })
+        (TriggerEvent::Attacks, Event::Attack { attackers, .. })
             if this.is_some_and(|slot| attackers.contains(slot)) =>
         {
             Some(info(Some(s.object_ref(this?)), you, 0))
         }
-        (Trigger::YouAttack, Event::Attack { player, attackers }) if player == you => {
-            Some(info(None, you, counted(attackers.count())))
+        (TriggerEvent::PlayerAttacks, &Event::Attack { player, attackers }) if whose(player) => {
+            let attacking = how_many(s, t, trigger.subject, attackers, you);
+            (attacking > 0).then(|| info(None, player, counted(attacking)))
         }
         (
-            Trigger::CombatDamageToPlayer,
-            Event::Damage {
+            TriggerEvent::DealsCombatDamageToPlayer,
+            &Event::Damage {
                 source,
                 to: Recipient::Player(player),
                 amount,
                 combat: true,
             },
-        ) if is_this(source) => Some(info(Some(source), player, amount)),
-        (Trigger::Step(step, whose), Event::StepBegins { step: now, active })
-            if step == now && filter::is_whose(whose, active, you) =>
-        {
+        ) if whose(player) && about(source) => Some(info(Some(source), player, amount)),
+        (event, &Event::StepBegins { step, active }) if begins(event, step) && whose(active) => {
             Some(info(None, active, 0))
         }
-        (Trigger::YouCreateTokens(types), Event::TokensCreated { controller, tokens })
-            if controller == you =>
+        (TriggerEvent::CreatesTokens, &Event::TokensCreated { controller, tokens })
+            if whose(controller) =>
         {
-            let matching = tokens
-                .filter(|slot| {
-                    s.object(slot).zone() == Zone::Battlefield
-                        && s.derived(slot).types.intersects(types)
-                })
-                .count();
-            (matching > 0).then(|| info(None, you, counted(matching)))
+            let matching = how_many(s, t, trigger.subject, tokens, you);
+            (matching > 0).then(|| info(None, controller, counted(matching)))
         }
         (
-            Trigger::YouCast,
-            Event::Cast {
+            TriggerEvent::Casts,
+            &Event::Cast {
                 spell, controller, ..
             },
-        ) if controller == you => Some(info(Some(spell), you, 0)),
-        (
-            Trigger::YouDiscard,
-            Event::ZoneChange {
-                object,
-                reason: Reason::Discard,
-                ..
-            },
-        ) if s.object(object.slot).owner() == you => Some(info(Some(object), you, 0)),
-        (Trigger::YouDraw, Event::Draw { player, .. }) if player == you => Some(info(None, you, 0)),
+        ) if whose(controller) && about(spell) => Some(info(Some(spell), controller, 0)),
+        (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
+            let discarder = s.object(object.slot).owner();
+            (whose(discarder) && about(object)).then(|| info(Some(object), discarder, 0))
+        }
+        (TriggerEvent::Draws, &Event::Draw { player, .. }) if whose(player) => {
+            Some(info(None, player, 0))
+        }
         _ => None,
     }
+}
+
+/// Whether `object`, which an event is about, is a trigger's subject: the object its
+/// ability is on, or one its filter accepts as it is now, read for the ability's controller.
+fn about<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    subject: Subject,
+    this: Option<L::Slot>,
+    you: Seat,
+    object: ObjectRef<L>,
+) -> bool {
+    match subject {
+        Subject::This => this == Some(object.slot) && s.is_current(object),
+        Subject::A(Filter::Any) => true,
+        Subject::A(filter) => s.is_current(object) && filter.matches(s, t, object.slot, you),
+    }
+}
+
+/// How many of `objects`, the set an event is about, a trigger's subject accepts: those on
+/// the battlefield its filter accepts, read for the ability's controller. "One or more"
+/// triggers once, with the number.
+fn how_many<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    subject: Subject,
+    objects: Bitboard<L::Slot>,
+    you: Seat,
+) -> u32 {
+    let Subject::A(filter) = subject else {
+        unreachable!("the card table refuses a set of objects that is this one");
+    };
+    objects
+        .filter(|slot| {
+            s.object(slot).zone() == Zone::Battlefield && filter.matches(s, t, slot, you)
+        })
+        .count()
 }
 
 /// Matches the leaves-the-battlefield abilities of a permanent about to move, which look
@@ -235,16 +280,24 @@ pub(crate) fn match_leaving<L: Layout>(
     }
     let source = s.object_ref(slot);
     let (card, face) = what.record(t);
-    for (a, ability) in face_abilities(t, card, face) {
-        if ability.trigger == Trigger::Dies {
-            let info = TriggerInfo {
-                object: Some(source),
-                player: lki.controller,
-                amount: 0,
-                lki,
-            };
-            enqueue(s, t, Some(source), card, face, a, lki.controller, info)?;
-        }
+    // Each is "when this dies": the table has no other under the kind.
+    for l in t.listeners(card, face, kind::DIES) {
+        let info = TriggerInfo {
+            object: Some(source),
+            player: lki.controller,
+            amount: 0,
+            lki,
+        };
+        enqueue(
+            s,
+            t,
+            Some(source),
+            card,
+            face,
+            l.ability,
+            lki.controller,
+            info,
+        )?;
     }
     Ok(())
 }
@@ -301,11 +354,9 @@ fn fire_delayed<L: Layout>(
     active: Seat,
 ) -> Result<(), Full> {
     s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger {
-        Trigger::Delayed(Delayed::YourNextMainPhase) => {
-            matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
-                && active == d.controller
+        Some(trigger) if trigger.delayed => {
+            begins(trigger.event, step) && is_for(trigger.whose, active, d.controller)
         }
-        Trigger::Delayed(Delayed::NextEndStep) => step == TurnStep::End,
         _ => unreachable!("a delayed trigger's ability is a delayed one"),
     })
 }
@@ -415,7 +466,9 @@ pub(crate) fn put_on_stack<L: Layout>(
 ) -> Result<(), Full> {
     let tr = s.take_trigger(index.into());
     // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
-    let entering = ability(t, tr.card, tr.face, tr.ability).trigger == Trigger::Enters;
+    let entering = ability(t, tr.card, tr.face, tr.ability)
+        .trigger
+        .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
     s.put_on_stack(StackEntry {
         object: tr.source,
         controller: tr.controller,

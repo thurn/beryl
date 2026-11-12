@@ -51,11 +51,11 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::Attacks, bodies!(loot))
+                ..Ability::triggered(&Trigger::ATTACKS, bodies!(loot))
             },
             Ability {
                 condition: Some(conditions!(not_a_token)),
-                ..Ability::triggered(Trigger::Dies, bodies!(copy_of_it))
+                ..Ability::triggered(&Trigger::DIES, bodies!(copy_of_it))
             },
         ],
         ..Face::EMPTY

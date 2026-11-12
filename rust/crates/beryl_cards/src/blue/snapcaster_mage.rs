@@ -50,7 +50,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::Whose(Whose::You),
                 ]),
             )],
-            ..Ability::triggered(Trigger::Enters, bodies!(grant))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(grant))
         }],
         ..Face::EMPTY
     }],

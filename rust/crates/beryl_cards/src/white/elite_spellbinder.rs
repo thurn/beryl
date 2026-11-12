@@ -60,7 +60,7 @@ pub static CARD: CardDef = CardDef {
                 Filter::Whose(Whose::AnOpponent),
             )],
             may_pause: true,
-            ..Ability::triggered(Trigger::Enters, bodies!(spellbind))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(spellbind))
         }],
         ..Face::EMPTY
     }],

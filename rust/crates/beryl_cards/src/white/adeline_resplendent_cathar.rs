@@ -3,6 +3,7 @@
 //! attack, for each opponent, create a 1/1 white Human creature token that's tapped and
 //! attacking that player or a planeswalker they control."
 
+use beryl_card::Players;
 use beryl_engine::card::{
     Ability, Affected, CardDef, Colors, Face, Flow, Keywords, LayerSpec, ManaCost, Modification,
     StaticCondition, Subtype, Subtypes, Supertypes, Trigger, Types,
@@ -67,7 +68,7 @@ pub static CARD: CardDef = CardDef {
             }),
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::YouAttack, bodies!(human_attacking))
+                ..Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking))
             },
         ],
         ..Face::EMPTY

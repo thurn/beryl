@@ -657,7 +657,7 @@ pub(crate) static STINGER: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(Whose::AnOpponent)]),
             )],
-            ..Ability::triggered(Trigger::Enters, bodies!(destroy_target))
+            ..Ability::triggered(&Trigger::ENTERS, bodies!(destroy_target))
         }],
         ..Face::EMPTY
     }],
