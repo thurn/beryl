@@ -137,23 +137,23 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
 The ladder improves one agent, the **champion**. The app's Deep Searcher is
 always the current champion, and a promotion is a change to it.
 
-The starting champion is Deep Searcher as it ships:
-`pimc72/hidden/rollout/tuned/anchor@30M` (`beryl_search::DEEP_SEARCHER`).
+Deep Searcher ships as `pimc72/hidden/rollout/tuned/anchor+guard@30M`
+(`beryl_search::DEEP_SEARCHER`). The starting champion was
+`pimc72/hidden/rollout/tuned/anchor@30M`.
 
-| Axis      | Setting                                                 |
-| --------- | ------------------------------------------------------- |
-| Method    | PIMC, 72 worlds dealt from what it can see, a tree each |
-| Sight     | Hidden                                                  |
-| Leaf      | Softmax rollout to the end of the game, temperature 10  |
-| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)             |
-| Options   | `anchor`: greedy's pass unless the search leads clearly |
-| Rules     | None yet. Each policy rung adds one (§6)                |
-| Scores    | Turn discount 0.98: win sooner, lose later              |
-| Budget    | 30M engine steps a decision, on every core              |
+| Axis      | Setting                                                                            |
+| --------- | ---------------------------------------------------------------------------------- |
+| Method    | PIMC, 72 worlds dealt from what it can see, a tree each                            |
+| Sight     | Hidden                                                                             |
+| Leaf      | Softmax rollout to the end of the game, temperature 10                             |
+| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)                                        |
+| Options   | `anchor+guard`: greedy's answer at the choices in §6.1 unless search leads clearly |
+| Rules     | None yet. Each policy rung adds one (§6)                                           |
+| Scores    | Turn discount 0.98: win sooner, lose later                                         |
+| Budget    | 30M engine steps a decision, on every core                                         |
 
 Every change is a named part of the family's name, so any past champion can be
-played again from the current build: `…/tuned/anchor+guard+hold` is the champion
-after the first two rungs. The audit (§4.5) depends on this.
+played again from the current build. The audit (§4.5) depends on this.
 
 Yardsticks, never candidates: `expert-frozen`, `greedy` (the rollout policy as a
 player), Deep Seer (the omniscient twin) and the champion anchored to the expert

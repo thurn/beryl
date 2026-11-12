@@ -353,9 +353,9 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
     )
 }
 
-/// `pimc72/hidden/rollout/tuned/anchor@30M`: Deep Seer without the cheat, from the long-think
-/// arena's strongest fair family in run-003 (72 worlds dealt from what it can see), anchored
-/// as Deep Seer is. 30M engine steps a decision whatever `budget` says, on every core.
+/// `pimc72/hidden/rollout/tuned/anchor+guard@30M`: 72 worlds dealt from what the searcher
+/// can see, with the anchor and guard enabled. 30M engine steps a decision whatever
+/// `budget` says, on every core.
 ///
 /// The ladder's champion (docs/ai-strategy.md §3): always the current best fair agent, so a
 /// promotion changes [`DEEP_SEARCHER`], and its comment names the match that made it.
@@ -365,15 +365,24 @@ fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent
 
 /// The Deep Searcher's family, the ladder's champion, which `beryl_cli ladder` plays at the
 /// proxy budget unless told otherwise (docs/ai-strategy.md §4).
+/// Rung 1 (by-97g.23) promoted guard after it scored 52.4% over 574 games at 3M steps.
 pub const DEEP_SEARCHER: Family = Family {
     method: Method::Pimc { worlds: 72 },
     sight: Sight::Hidden,
     leaf: Leaf::Rollout,
     knowledge: Knowledge::Tuned,
-    options: ANCHORED,
+    options: Options {
+        anchor: true,
+        guard: true,
+        mid: false,
+        means: false,
+        hold: false,
+        waste: false,
+        combat: false,
+    },
 };
 
-/// The options of the deep searches offered: the anchor alone.
+/// Deep Seer's options: the anchor alone.
 const ANCHORED: Options = Options {
     anchor: true,
     guard: false,

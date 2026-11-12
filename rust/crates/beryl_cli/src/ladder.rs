@@ -670,7 +670,7 @@ mod tests {
         );
         assert_eq!(
             resolve(&DEEP_SEARCHER.to_string(), 3_000_000).unwrap(),
-            "pimc72/hidden/rollout/tuned/anchor@3M"
+            "pimc72/hidden/rollout/tuned/anchor+guard@3M"
         );
         assert_eq!(
             resolve("pimc18/hidden/rollout/tuned@10M", 3_000_000).unwrap(),
