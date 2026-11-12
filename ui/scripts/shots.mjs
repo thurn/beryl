@@ -91,8 +91,12 @@ async function capture(browser, shot) {
         // One selector, or several clicked in turn; then the pointer leaves, so that no card
         // it rests on is inspected over the table.
         const clicks = [shot.click ?? []].flat();
-        for (const selector of clicks) {
-            await page.click(selector);
+        for (const click of clicks) {
+            // A selector, or one with the point of its element to click: a card that shows
+            // only its top edge has its middle off the screen.
+            const { selector, position } =
+                typeof click === "string" ? { selector: click } : click;
+            await page.click(selector, { position });
             await settle(page);
         }
         if (clicks.length > 1) {
