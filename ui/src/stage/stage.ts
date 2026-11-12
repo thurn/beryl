@@ -62,6 +62,7 @@ import type { Act, Script, Step as ScriptStep, Table } from "./table.ts";
 import {
   carried,
   carries,
+  piled,
   dissolve,
   halfTurned,
   home,
@@ -98,6 +99,8 @@ interface Entry {
   moved: boolean;
   /** The `vanish` taking it from where `resting` still has it, until that step ends. */
   leaving?: Run;
+  /** The `fly` taking it to a pile, until that step ends: the pile shows the top it had. */
+  landing?: Run;
   /** What it is drawn as while it has yet to turn over on its way (`Track.turn`): as it
    * rests, but for its back. */
   covered?: Resting;
@@ -239,7 +242,7 @@ export class ScriptStage {
     for (const entry of this.#entries.values()) {
       entry.moved ||= entry.track !== undefined;
       entry.track = undefined;
-      entry.leaving = undefined;
+      entry.leaving = entry.landing = undefined;
     }
     let table = tableOf(view, script?.reset);
     // A reset's steps are only the spans to show, begun at once.
@@ -471,7 +474,7 @@ export class ScriptStage {
   #end(run: Run) {
     run.ended = true;
     this.#stale ||= run.verb === "announce" || run.verb === "count";
-    if (run.verb === "vanish") this.#left(run);
+    if (run.verb === "vanish" || run.verb === "fly") this.#left(run);
     if (run.verb === "announce") this.#over.over(this.#surface, run);
     this.#tell(run, "end");
     this.#affect(run, "end");
@@ -528,6 +531,7 @@ export class ScriptStage {
       entry.leaving = undefined;
       entry.track = undefined;
     }
+    if (entry) entry.landing = piled(run) && run.to > at ? run : undefined;
     if (entry && run.verb === "vanish" && run.to > run.from) {
       const start = this.#poseOf(subject!, entry, run.from);
       entry.leaving = run;
@@ -551,13 +555,17 @@ export class ScriptStage {
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
-   * began, with no flight, or is no more. */
+   * began, with no flight, or is no more. Or the `fly` `run` is, which took a card to a pile:
+   * it has landed, and is the pile's top. */
   #left(run: Run) {
-    const entry = [...this.#entries.values()].find((e) => e.leaving === run);
+    const entries = [...this.#entries.values()];
+    const entry = entries.find((e) => e.leaving === run || e.landing === run);
     if (!entry) return;
-    entry.leaving = undefined;
-    entry.track = undefined;
-    entry.moved = true;
+    if (entry.leaving) {
+      entry.track = undefined;
+      entry.moved = true;
+    }
+    entry.leaving = entry.landing = undefined;
     this.#lay(run.to);
   }
 
@@ -619,11 +627,12 @@ export class ScriptStage {
    * no longer does, and each entry's resting place. An entry whose place moved glides there
    * over the `run` that moved it, from wherever it is, aloft if the run is about it; with no
    * run, or one that takes no time, it is there at once, unless a glide still under way
-   * carries it. The layout is told what is still leaving: it has yet to arrive. */
+   * carries it. The layout is told what is still leaving, or flying to a pile: it has yet to
+   * arrive. */
   #lay(at: number, run?: Run) {
     const leaving = new Set<Name>();
     for (const [name, entry] of this.#entries)
-      if (entry.leaving) leaving.add(name);
+      if (entry.leaving || entry.landing) leaving.add(name);
     const rest = this.#layout.rest(this.#table!, leaving);
     for (const [name, entry] of [...this.#entries]) {
       if (rest.has(name) || entry.leaving) continue;

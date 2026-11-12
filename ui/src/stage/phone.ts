@@ -225,11 +225,14 @@ function rest(
     if (out.has(object.slot) || object.zone === "stack") continue;
     const pile = pileOf(object.zone);
     // A pile's top is the last card that has arrived: one still leaving for it is seen
-    // where it was, and the pile shows the top it had until that one lands.
+    // where it was, and the pile shows the top it had until that one lands. One on its way
+    // there shows as a top will, over it.
     const arrived = view.players[object.owner][pile].filter(
       (slot) => !leaving?.has(slot),
     );
-    const top = object.zone === pile && arrived.at(-1) === object.slot;
+    const top =
+      object.zone === pile &&
+      (arrived.at(-1) === object.slot || leaving?.has(object.slot) === true);
     const back = pile === "library";
     out.set(object.slot, {
       object,

@@ -525,6 +525,12 @@ export const turnedOver =
     };
   };
 
+/** Whether the step `run` flies its card to a pile: a library, a graveyard or exile. Until
+ * it lands, the pile shows the top it had (stage.ts `Entry.landing`). */
+export const piled = ({ step: { act } }: Pick<Run, "step">) =>
+  act.verb === "fly" &&
+  ["library", "graveyard", "exile"].includes(act.object.zone);
+
 /** What a step's act moves, if that is something on the table: the creature that strikes,
  * or else what the act is about. */
 export const moverOf = (act: Act): Name | undefined =>

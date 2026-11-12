@@ -197,6 +197,54 @@ test("a layout is told what is still leaving, and no longer once it has landed",
     assert.deepEqual(told, [[], [2], [2, 3], [3], [], []]);
 });
 
+test("a layout is told of a card flying to a pile until it lands: the pile keeps its top", () => {
+    const telling = () => {
+        const told = [];
+        const made = new ScriptStage({
+            layout: {
+                ...row,
+                // A graveyard's cards lie in one place, as a library's do.
+                rest(table, leaving) {
+                    told.push([...leaving]);
+                    const out = row.rest(table);
+                    for (const card of table.view.objects) {
+                        if (card.zone !== "graveyard") continue;
+                        const lies = out.get(1);
+                        const pose = { ...lies.pose, x: 3000, y: 0 };
+                        out.set(card.slot, { ...lies, object: card, pose });
+                    }
+                    return out;
+                },
+            },
+            timings: (act) => ({
+                ...SNAP,
+                duration: act.verb === "fly" ? 400 : 0,
+            }),
+        });
+        return { made, told };
+    };
+    const flight = (slot, from, zone) => ({
+        act: { verb: "fly", from, why: "discard", object: object(slot, zone) },
+    });
+    // A discard: told as it begins, and the table is laid out again as it lands.
+    const { made, told } = telling();
+    made.play(view([1], [2]));
+    const after = view([1]);
+    after.objects.push(object(2, "graveyard"));
+    after.players.you.graveyard = [2];
+    made.play(after, { beats: [[flight(2, "hand", "graveyard")]] });
+    made.settle();
+    assert.deepEqual(told, [[], [2], [], []]);
+    // A card that flies to no pile lands where the table has had it all along.
+    const other = telling();
+    other.made.play(view([1], [2]));
+    other.made.play(view([1, 2]), {
+        beats: [[flight(2, "hand", "battlefield")]],
+    });
+    other.made.settle();
+    assert.deepEqual(other.told, [[], [], []]);
+});
+
 test("a token that ceases to exist keeps its node until its vanish is over", () => {
     const { stage: made, surface } = stage({ vanish: { duration: 400 } });
     const table = view([1, 7]);
