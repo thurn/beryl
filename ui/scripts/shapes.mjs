@@ -455,10 +455,30 @@ async function opened(context, watch, query, fixture, at = 1) {
     return { page, done };
 }
 
+/** The key that presses a button of the desktop's dock for a player with no control
+ * in focus (src/stage/PromptBar.tsx usePromptKeys): Space for the one put forward, Shift with
+ * it for the one that passes on; none for any other, or for a way to use a card, which stands
+ * over the table. The focus is taken off whatever the last click left it on. */
+async function keyOf(page, prompt, click) {
+    const pressed = prompt.buttons.find(
+        (button) => JSON.stringify(button.id) === JSON.stringify(click.button),
+    );
+    const key = pressed.primary
+        ? "Space"
+        : pressed.id.kind === "passOn" && "Shift+Space";
+    const stands = await page
+        .locator(".stage-prompt")
+        .getByRole("button", { name: pressed.label, exact: true })
+        .count();
+    if (!key || !stands) return null;
+    await page.evaluate(() => document.activeElement?.blur());
+    return key;
+}
+
 /** Answers the prompts of `fixture` on a page of its own by the recording's clicks, each made
  * with the pointer, and holds the screen to the session's state before the first and after
- * each. With `carry`, a card of the hand is carried out of it instead of clicked. Every line
- * a declaration draws is followed to the damage. */
+ * each. With `carry`, a card of the hand is carried out of it instead of clicked, and a button
+ * that has a key is pressed by it. Every line a declaration draws is followed to the damage. */
 async function answer(context, watch, layout, fixture, carry) {
     const { opens, clicks, at } = asked(await recorded(fixture));
     const { page, done } = await opened(
@@ -496,10 +516,12 @@ async function answer(context, watch, layout, fixture, carry) {
                         JSON.stringify(button.id) ===
                         JSON.stringify(click.button),
                 );
-                await page
+                const button = page
                     .locator(layout.dock)
-                    .getByRole("button", { name: label, exact: true })
-                    .click();
+                    .getByRole("button", { name: label, exact: true });
+                const key = carry && (await keyOf(page, before.prompt, click));
+                if (key) await page.keyboard.press(key);
+                else await button.click();
             } else if (click.kind === "number" || click.kind === "entry") {
                 await set(page, click, before);
             } else if (click.kind === "drop" && click.on.kind === "ability") {

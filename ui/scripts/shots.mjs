@@ -104,6 +104,14 @@ async function capture(browser, shot) {
             await page.hover(shot.hover);
             await settle(page);
         }
+        // What the shot is of, where no audit of the screen would miss it: the card a
+        // pointer rests on shown whole beside the table, a viewer opened.
+        if (
+            shot.expect &&
+            !(await page.locator(shot.expect).first().isVisible())
+        ) {
+            errors.push(`not on screen: ${shot.expect}`);
+        }
         const path = join(out, `${shot.name}.png`);
         // A comparison crops what `compare` selects side by side, rather than the whole page.
         if (shot.compare) {

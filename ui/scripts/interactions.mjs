@@ -234,9 +234,16 @@ async function pause(page) {
     }
 }
 
+/** Whether the run is forced onto the stage (`by ui-test --stage`, plan K25): every page draws
+ * the stage's board, and only the checks that say they are the stage's too run. */
+const STAGED = Boolean(process.env.BERYL_STAGE);
+
 /** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches and its
  * fonts have loaded, alongside other checks (capture.mjs' workers): awaiting it waits only for
- * a free worker. The page's fixtures come from `fixtures`, not from what Vite serves. The
+ * a free worker. A check with `stage` holds a property of a screen that outlives the old board
+ * (the start screen, the settings, the log, a key, a result), which runs on the stage too and
+ * stays at the cut-over, where every check without it goes with the old board; `stage` says
+ * why no generic audit can express the property (plan K20). The page's fixtures come from `fixtures`, not from what Vite serves. The
  * page runs on Playwright's fake clock, paused once the page is ready so that a check cannot
  * race the wall clock; `clock: "off"` leaves the browser's own, and says why. */
 async function check(
@@ -252,9 +259,11 @@ async function check(
         init,
         phone = false,
         clock = "paused",
+        stage,
     } = {},
 ) {
     if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
+    if (STAGED && !stage && !process.env.BERYL_STAGE_EVERY) return;
     ran += 1;
     await queue(async () => {
         // A page whose boot lost one of its modules to the network (Windows now and then
@@ -502,7 +511,10 @@ await check(
     },
     // Off: it reloads and navigates the testing pages, waiting on their requests and their
     // stubbed EventSource's timer as a browser would; it measures no motion.
-    { clock: "off" },
+    {
+        stage: "a draft and a count kept across a reload, and a page's scroll: no screen a shot settles on shows them",
+        clock: "off",
+    },
 );
 
 /** The `cancel` commands the page has sent. */
@@ -605,36 +617,47 @@ await check(
         );
         assert.notEqual(ring, "none", "the focused turn button shows a ring");
     },
+    {
+        stage: "which control a key reaches, and its ring while it has the focus",
+    },
 );
 
-await check("Escape closes the settings", async (page) => {
-    await page.clock.runFor(2000);
-    await page.getByRole("button", { name: "Settings" }).click();
-    const panel = page.locator(".settings");
-    await panel.waitFor();
-    await page.keyboard.press("Escape");
-    assert.equal(await panel.count(), 0, "closed");
-});
+await check(
+    "Escape closes the settings",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.getByRole("button", { name: "Settings" }).click();
+        const panel = page.locator(".settings");
+        await panel.waitFor();
+        await page.keyboard.press("Escape");
+        assert.equal(await panel.count(), 0, "closed");
+    },
+    { stage: "a key's effect on an open panel" },
+);
 
-await check("dragging across the table selects no text", async (page) => {
-    await page.clock.runFor(2000);
-    const selected = () =>
-        page.evaluate(() => window.getSelection()?.toString() ?? "");
-    // From the far corner, over the log and the table, to the near corner.
-    await page.mouse.move(60, 90);
-    await page.mouse.down();
-    await page.mouse.move(1580, 880, { steps: 25 });
-    await page.mouse.up();
-    assert.equal(await selected(), "", "nothing selected by a drag");
-    // A hand card picked up, carried over the log and put back.
-    const box = await page.locator(card).boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + 40);
-    await page.mouse.down();
-    await page.mouse.move(60, 300, { steps: 15 });
-    await page.mouse.move(box.x + box.width / 2, 880, { steps: 15 });
-    await page.mouse.up();
-    assert.equal(await selected(), "", "nothing selected by a card's drag");
-});
+await check(
+    "dragging across the table selects no text",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const selected = () =>
+            page.evaluate(() => window.getSelection()?.toString() ?? "");
+        // From the far corner, over the log and the table, to the near corner.
+        await page.mouse.move(60, 90);
+        await page.mouse.down();
+        await page.mouse.move(1580, 880, { steps: 25 });
+        await page.mouse.up();
+        assert.equal(await selected(), "", "nothing selected by a drag");
+        // A hand card picked up, carried over the log and put back.
+        const box = await page.locator(card).boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + 40);
+        await page.mouse.down();
+        await page.mouse.move(60, 300, { steps: 15 });
+        await page.mouse.move(box.x + box.width / 2, 880, { steps: 15 });
+        await page.mouse.up();
+        assert.equal(await selected(), "", "nothing selected by a card's drag");
+    },
+    { stage: "what a drag leaves selected: a gesture's side effect" },
+);
 
 await check(
     "a click on the visible strip of each hand card acts on that card",
@@ -702,17 +725,26 @@ await check(
             }
         }
     },
+    {
+        stage: "which card of a fan each point of its strip reaches: a hit test along every card",
+    },
 );
 
-await check("hovering a card shows it whole, with its artist", async (page) => {
-    await page.clock.runFor(2000);
-    await page.hover(card);
-    const { artist } = (await cardRecords(FIXTURE)).cards[name];
-    await page
-        .locator(".inspect")
-        .getByText(`Illustrated by ${artist}`)
-        .waitFor();
-});
+await check(
+    "hovering a card shows it whole, with its artist",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.hover(card);
+        const { artist } = (await cardRecords(FIXTURE)).cards[name];
+        await page
+            .locator(".inspect")
+            .getByText(`Illustrated by ${artist}`)
+            .waitFor();
+    },
+    {
+        stage: "which card the pointer's inspector shows, and its artist's line",
+    },
+);
 
 /** Where every card is drawn, by slot: the box of what its element draws (a raised hand card
  * rises inside its element, which a copy over the hand shows), and whether a layout animation
@@ -872,6 +904,7 @@ for (const viewport of [
             at: quiet + 1,
             ready: `[data-slot="${creatures(quietViews[quiet], "you")[0].slot}"]`,
             viewport,
+            stage: "where a row stands between the table's middle and the stack: a measure of the layout, which the screen audits hold only to its view and to overlap",
         },
     );
 }
@@ -889,7 +922,12 @@ await check(
             `each turn is headed once: ${await page.locator(".game-log").textContent()}`,
         );
     },
-    { fixture: "opponent-turn", at: 22, ready: ".game-log-toggle" },
+    {
+        stage: "a history told twice is a heading twice in a list, no fault of any screen",
+        fixture: "opponent-turn",
+        at: 22,
+        ready: ".game-log-toggle",
+    },
 );
 
 // The log names what an ability did and to what: an activation its source, its loyalty cost
@@ -1016,6 +1054,7 @@ await check(
                 document.head.append(style),
             );
         },
+        stage: "where a list is scrolled to once an ancestor that hid it shows",
     },
 );
 
@@ -1741,6 +1780,7 @@ await check(
         fixture: "combat-blockers",
         at: blockersViews.length,
         ready: `[data-slot="${standing[0].slot}"]`,
+        stage: "a blocker's place by its attacker's: a measure between two cards",
     },
 );
 
@@ -1770,6 +1810,7 @@ await check(
         fixture: "combat-blockers",
         at: blockersViews.length,
         ready: `[data-slot="${standing[0].slot}"]`,
+        stage: "what lies on top at each plaque: a hit test between cards, which may overlap one another",
     },
 );
 
@@ -1833,6 +1874,7 @@ await check(
         fixture: "combat-blockers",
         at: blockersViews.length,
         ready: `[data-slot="${faceDown[0].slot}"]`,
+        stage: "a face-down card's frame beside a face-up one's of its row: a comparison of sizes",
     },
 );
 
@@ -1935,7 +1977,10 @@ await check(
             `.inspect[aria-label="${exiled.name}, inspected"]`,
         );
     },
-    beneathRun,
+    {
+        ...beneathRun,
+        stage: "where a tucked card peeks out, that its strip takes the pointer, and what hovering it shows",
+    },
 );
 
 // The first slot is a valid exile host, just like any other battlefield slot.
@@ -2892,7 +2937,12 @@ await check(
             await page.clock.runFor(1000);
         }
     },
-    { ...pileRun, fixture: "known-library", at: 1 },
+    {
+        stage: "which cards a viewer lists, of those its player knows",
+        ...pileRun,
+        fixture: "known-library",
+        at: 1,
+    },
 );
 
 const overlaps = (a, b) =>
@@ -2922,7 +2972,11 @@ for (const viewport of [
                 }
             }
         },
-        { ...pileRun, viewport },
+        {
+            stage: "a pile against the hand's fan: cards against cards, which the audit of controls leaves alone",
+            ...pileRun,
+            viewport,
+        },
     );
 }
 
@@ -2996,6 +3050,7 @@ for (const viewport of [
             at: pilesCrowded.length,
             ready: "[data-pile=exile][data-side=opponent]",
             viewport,
+            stage: "every layer of a pile against every permanent, at four windows: cards against cards",
         },
     );
 }
@@ -3079,7 +3134,10 @@ await check(
         }
         assert.deepEqual(await chosen(page), [], "browsing answers nothing");
     },
-    pileRun,
+    {
+        ...pileRun,
+        stage: "a viewer's list against its pile, and each way to close it",
+    },
 );
 
 await check(
@@ -3091,7 +3149,11 @@ await check(
         assert.equal(await dialog.locator("[data-viewer-slot]").count(), 0);
         await dialog.getByRole("button", { name: "Close" }).click();
     },
-    { ...pileRun, reducedMotion: "reduce" },
+    {
+        stage: "what a viewer says of a pile with nothing known in it",
+        ...pileRun,
+        reducedMotion: "reduce",
+    },
 );
 
 // The production recorder must catch deliberate duplicates in viewer and
@@ -3384,7 +3446,12 @@ for (const count of [1, 10, 11]) {
             await dialog.getByRole("button", { name: "Close" }).click();
             assert.equal(await original.isVisible(), true);
         },
-        { ...pileRun, fixture, viewport: { width: 1180, height: 820 } },
+        {
+            stage: "a deep pile's fan, and its viewer scrolled to its last card",
+            ...pileRun,
+            fixture,
+            viewport: { width: 1180, height: 820 },
+        },
     );
 }
 
@@ -3599,6 +3666,7 @@ for (const phone of [false, true]) {
             ready: ".card-loyalty",
             phone,
             viewport: phone ? { width: 390, height: 844 } : undefined,
+            stage: "where a number sits in its glyph: a proportion inside one mark",
         },
     );
 }
@@ -6962,7 +7030,12 @@ if (wanted(staffChain)) {
                 .locator(".inspect .inspect-marks .mark-plusOne")
                 .waitFor();
         },
-        { fixture: "marks", at: marks.length, ready: ".card-counters" },
+        {
+            stage: "what the inspector says of the card under the pointer",
+            fixture: "marks",
+            at: marks.length,
+            ready: ".card-counters",
+        },
     );
 }
 
@@ -7034,7 +7107,10 @@ await check(
         await page.mouse.move(box.x + box.width / 2, box.y + box.height - 12);
         await page.getByLabel(`${knownCard.name}, inspected`).waitFor();
     },
-    exileRun,
+    {
+        ...exileRun,
+        stage: "which of the opponent's cards the viewer knows: the screen audits read the viewer's own hand alone",
+    },
 );
 
 // Tokens, piles of identical permanents and stolen permanents: the `tokens` fixture holds two
@@ -7100,7 +7176,10 @@ await check(
             .getByText(`Owner: ${thief.owner === "you" ? "You" : "Opponent"}`)
             .waitFor();
     },
-    tokenRun,
+    {
+        ...tokenRun,
+        stage: "a frame and an edge against who made and who owns each permanent, which the screen audits do not read",
+    },
 );
 
 await check(
@@ -7224,7 +7303,10 @@ await check(
             targeted: [2],
         });
     },
-    tokenRun,
+    {
+        ...tokenRun,
+        stage: "how the layout groups copies, over views written for each difference",
+    },
 );
 
 // Every object an open decision offers something for has an element a player can see and point
@@ -7340,6 +7422,7 @@ for (const fixture of recorded) {
             at: last + 1,
             ready: ".table",
             reducedMotion: "reduce",
+            stage: "that every object a decision offers takes the pointer where it lies: a hit test of each, in every recording",
         },
     );
 }
@@ -7376,6 +7459,7 @@ await check(
             { session, stops: { fullControl: true, ...smart } },
         ]);
     },
+    { stage: "what a setting sends: a command, which no screen shows" },
 );
 
 await check(
@@ -7408,6 +7492,7 @@ await check(
             "upkeep",
         ]);
     },
+    { stage: "what a click on a stop sends, and the stops that take none" },
 );
 
 await check(
@@ -7424,6 +7509,7 @@ await check(
             assert.equal(await stop.locator(".tip").innerText(), expected);
         }
     },
+    { stage: "the words of a tip, by seat" },
 );
 
 await check(
@@ -7443,6 +7529,7 @@ await check(
             .click();
         assert.equal((await ring())[0], "none");
     },
+    { stage: "a ring that depends on how the focus came" },
 );
 
 // `mana-floating` stops at the human's priority in their main phase with Mana Crypt's {C}
@@ -7517,6 +7604,7 @@ for (const { fixture, at, budget } of WORD_BUDGETS) {
             at: at ?? (await load(fixture)).length,
             ready: ".table",
             reducedMotion: "reduce",
+            stage: "a count of the words standing on the table, held to a budget",
         },
     );
 }
@@ -7797,7 +7885,10 @@ await check(
             }
         }
     },
-    crowdedRun(crowdedAt),
+    {
+        ...crowdedRun(crowdedAt),
+        stage: "what each hover moves and where its inspector stands: a sweep of the pointer",
+    },
 );
 
 /** A prompt of `shape` for `purpose` in place of `prompt`, the record's other fields empty
@@ -7976,7 +8067,10 @@ await check(
         assert.ok(near - far <= 48, `${near - far} px between the rows`);
         assert.deepEqual(await cutText(page), [], "no name is cut");
     },
-    crowdedRun(crowdedAt),
+    {
+        ...crowdedRun(crowdedAt),
+        stage: "the least size a plaque is read at on the desktop, and the room between two rows",
+    },
 );
 
 /** What lies over the opponent's hand, a permanent or a land, of what `by` matches: at each one's
@@ -8160,7 +8254,11 @@ await check(
             );
         }
     },
-    { ...crowdedRun(crowdedAt), fixture: "crowded-eight" },
+    {
+        stage: "the hand's cards, at rest and raised, against a button: cards the audit of controls does not weigh",
+        ...crowdedRun(crowdedAt),
+        fixture: "crowded-eight",
+    },
 );
 
 // The opponent holding nine cards: their fan's outer backs, which its turn lifts, still show.
@@ -8250,7 +8348,10 @@ for (const [title, run] of [
                 );
             }
         },
-        run,
+        {
+            ...run,
+            stage: "what a tip, the log and a raised card cover: states only the pointer enters",
+        },
     );
 }
 
@@ -8330,6 +8431,7 @@ await check(
         ready: ".card-el-held",
         reducedMotion: "reduce",
         viewport: { width: 1280, height: 800 },
+        stage: "bare points at a window's edges, and how much of each hand shows there against 16:9",
     },
 );
 
@@ -8400,6 +8502,7 @@ await check(
     {
         ...crowdedRun(crowdedAt),
         fixture: "crowded-graveyard",
+        stage: "a fade that follows a scroll",
     },
 );
 
@@ -9508,6 +9611,7 @@ await check(
         fixture: "arrow-ability",
         at: (await load("arrow-ability")).length,
         ready: ".stack-item",
+        stage: "the shape of a frame's corners: skin no audit measures",
     },
 );
 
@@ -10471,7 +10575,12 @@ await check(
         await page.waitForURL(/#\/game$/);
         assert.equal((await startCalls(page)).length, 1);
     },
-    { at: 0, hash: "#/", ready: ".start-agent input:checked" },
+    {
+        stage: "a key on the start screen, and the command it sends",
+        at: 0,
+        hash: "#/",
+        ready: ".start-agent input:checked",
+    },
 );
 await check(
     "Enter with a game in progress returns to it",
@@ -10481,7 +10590,12 @@ await check(
         await page.waitForURL(/#\/game$/);
         assert.equal((await startCalls(page)).length, 0, "no new game");
     },
-    { at: 50, hash: "#/", ready: ".start-agent input:checked" },
+    {
+        stage: "a key on the start screen with a game under way, and that it sends none",
+        at: 50,
+        hash: "#/",
+        ready: ".start-agent input:checked",
+    },
 );
 await check(
     "the start screen remembers the last opponent across a reload",
@@ -10502,7 +10616,12 @@ await check(
         await page.waitForSelector(".start-agent input:checked");
         assert.equal(await checked(), other, "the last opponent is picked");
     },
-    { at: 0, hash: "#/", ready: ".start-agent input:checked" },
+    {
+        stage: "a choice kept across a reload",
+        at: 0,
+        hash: "#/",
+        ready: ".start-agent input:checked",
+    },
 );
 
 // The end of a game (`game-over`, under full control): Beza, the Bounding Spring attacks a
@@ -10627,7 +10746,12 @@ for (const [reason, title, description, by] of [
                 .click();
             await result.waitFor();
         },
-        { ...overAt, fixture, at: overViews.length },
+        {
+            stage: "the result's words and card for each way a game ends, over views written for each",
+            ...overAt,
+            fixture,
+            at: overViews.length,
+        },
     );
 }
 
@@ -10666,7 +10790,10 @@ await check(
         );
         assert.equal(await page.locator(".settings").count(), 0, "closed");
     },
-    overAt,
+    {
+        ...overAt,
+        stage: "a question asked in place, and the command its answer sends",
+    },
 );
 
 await check(
@@ -10695,7 +10822,7 @@ await check(
         }
         assert.deepEqual(await commands(), ["concede", "start_game"]);
     },
-    overAt,
+    { ...overAt, stage: "two commands in their order, behind a question" },
 );
 
 // A launched app with no game in progress resumes the newest unfinished one saved
@@ -10736,6 +10863,7 @@ await check(
         at: lastPass + 1,
         hash: "#/",
         ready: ".start-agent input:checked",
+        stage: "the commands one click sends when the game was resumed at launch",
     },
 );
 
@@ -10885,7 +11013,8 @@ await check(
     {
         fixture: "arrow-player",
         at: (await load("arrow-player")).length,
-        ready: ".board-arrows",
+        ready: STAGED ? "[data-life]" : ".board-arrows",
+        stage: "a frame cancelled while a bug report holds the page: the page's own clock, which no screen shows",
     },
 );
 
@@ -10911,7 +11040,8 @@ await check(
     {
         fixture: "arrow-player",
         at: (await load("arrow-player")).length,
-        ready: ".board-arrows",
+        ready: STAGED ? "[data-life]" : ".board-arrows",
+        stage: "a frame asked for between two holds of a bug report: the page's own clock, which no screen shows",
     },
 );
 
@@ -11218,7 +11348,10 @@ for (const next of ["player", "object", "attack"]) {
 await queue.drain();
 await browser.close();
 // A run of every check plays views and answers: none sounding means the sounds are unwired.
+// On the stage a view's sounds follow its script's steps, which the verb suite holds
+// (verbs.mjs soundsFollowSteps).
 if (
+    !STAGED &&
     filters.length === 0 &&
     !chosenTitles &&
     (sounded.views === 0 || sounded.heard === 0)
