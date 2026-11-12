@@ -5,6 +5,7 @@
 // it is aimed at), and two of the five themes the bug reports repeated, each a case played
 // on the one recording of its shape: paying with permanents, and the combat line.
 import assert from "node:assert/strict";
+import { cross } from "./shape-cases-lines.mjs";
 
 const named = (on) => (on.kind === "object" ? String(on.slot) : on.player);
 
@@ -101,6 +102,8 @@ function looks({ slots, mark }) {
  *   after what the prompt asks, is held of every state by the suite.)
  * - by-szrn, by-tyf: the payment is a prompt the player reviews, with the proposal shown on
  *   Auto Pay and a pick taken back by a click on it: one taken back stands upright again.
+ * - a touch held on Auto Pay shows its proposal as the pointer over it does, and accepts
+ *   nothing as it is let go.
  * - by-x45, by-hmfq: Auto Pay proposes no creature or artifact for a waterbend cost, and
  *   cannot be pressed while the lands cannot pay what is left.
  * Returns what the state showed of the theme, for the check to hold the recording whole. */
@@ -184,6 +187,21 @@ async function payment(page, dock, before, after) {
         }
         await page.mouse.move(2, 2);
         await page.waitForSelector('[data-pay="quiet"]');
+        // A touch held on Auto Pay shows the same, and let go it accepts nothing: the
+        // click that ends a hold is no press (src/stage/PromptBar.tsx usePresses). The hold
+        // is the page's own timer, and the proposal showing is what says it ran out.
+        const button = page
+            .locator(dock)
+            .getByRole("button", { name: auto.label, exact: true });
+        const sent = () =>
+            page.evaluate(() => window.berylFixture.calls.length);
+        const had = await sent();
+        await button.dispatchEvent("pointerdown", { pointerType: "touch" });
+        await page.waitForSelector('[data-pay="suggesting"]');
+        await button.dispatchEvent("pointerup", { pointerType: "touch" });
+        await button.dispatchEvent("click", { detail: 1 });
+        await page.waitForSelector('[data-pay="quiet"]');
+        assert.equal(await sent(), had, `${what}: a held touch let go`);
     }
     return {
         [prompt.purpose]: true,
@@ -197,8 +215,8 @@ async function payment(page, dock, before, after) {
 /** In the page: plays out what a click led to a tick at a time, and returns what each tick
  * showed: whether combat's damage has begun (a creature has struck, or the table is past the
  * steps that declare), how far each permanent of `slots` lies turned from upright, in degrees, and of
- * each line of `keys` whether the model holds it and whether the page draws it as the
- * element it was first drawn as (`window.berylLinesHeld`, which the first call makes of the
+ * each line of `keys` whether the model holds it, where the page draws its two ends and
+ * whether it draws it as the element it was first drawn as (`window.berylLinesHeld`, which the first call makes of the
  * lines then drawn). */
 async function ticked({ tick, slots, keys }) {
     const stage = window.berylStage;
@@ -222,11 +240,24 @@ async function ticked({ tick, slots, keys }) {
                 const lying = stage.shown.resting.get(slot)?.object?.tapped;
                 return (stage.pose(slot)?.turn ?? NaN) + (lying ? 90 : 0);
             }),
-            lines: keys.map((key) => ({
-                key,
-                model: model.has(key),
-                same: held.get(key) !== null && drawn(key) === held.get(key),
-            })),
+            lines: keys.map((key) => {
+                const numbers = (
+                    drawn(key)
+                        ?.getAttribute("d")
+                        ?.match(/-?[\d.]+/g) ?? []
+                ).map(Number);
+                const point = (i) => ({
+                    x: numbers.at(i),
+                    y: numbers.at(i + 1),
+                });
+                return {
+                    key,
+                    model: model.has(key),
+                    same:
+                        held.get(key) !== null && drawn(key) === held.get(key),
+                    ends: [point(0), point(-2)],
+                };
+            }),
         };
     };
     const seen = [sample()];
@@ -287,7 +318,8 @@ export function payingWithPermanents(page, dock, tick) {
  * it. A line is drawn as its creature is aimed (the suite holds every state's lines to the
  * session's pairs), and from then to the damage it is one line: the element the click drew,
  * never taken off the page and drawn again as the declaration is confirmed, as the other
- * player answers it or as priority passes. One of these watches a page: `follow` plays out
+ * player answers it or as priority passes. As the damage comes, no line of the attack
+ * crosses another. One of these watches a page: `follow` plays out
  * what each click led to, and `done` says the lines it watched were all seen to the damage. */
 export function combatLines(page, tick) {
     /** The lines watched, and whether each has been seen to the damage. */
@@ -307,6 +339,20 @@ export function combatLines(page, tick) {
                 .map(([key]) => key);
             if (!answered || keys.length === 0) return;
             const seen = await page.evaluate(ticked, { tick, slots: [], keys });
+            // As the damage comes the attackers stand in the order of what they attack
+            // (src/game/battlefield.ts permanentRow), so no line of theirs crosses another.
+            const last = seen.findLast((sample) => !sample.damage);
+            const attacks = (last?.lines ?? []).filter(({ key }) =>
+                key.startsWith("attack "),
+            );
+            for (const [i, one] of attacks.entries()) {
+                for (const other of attacks.slice(i + 1)) {
+                    assert.ok(
+                        !cross(one.ends, other.ends),
+                        `the lines ${one.key} and ${other.key} cross at ${last.at} ms`,
+                    );
+                }
+            }
             for (const [i, key] of keys.entries()) {
                 for (const sample of seen) {
                     if (sample.damage) {

@@ -110,6 +110,62 @@ export const reach = (page, name) =>
 
 const node = (name) => `[data-stage="${name}"]`;
 
+/** Holds that the card `name`, which a click is about to be made on, is the one its pile of
+ * identical permanents shows: the session offers one of the twins, and that one lies over
+ * the others where the pointer comes down on it and, where the layout counts a pile, wears
+ * the count. Returns whether it lies in a pile, which is twins lying over one another:
+ * nothing is held of one that does not. */
+export async function topOfPile(page, name, what) {
+    const pile = await page.evaluate((name) => {
+        const node = document.querySelector(`[data-stage="${name}"]`);
+        // A player is in no pile.
+        if (!node) return null;
+        const box = node.getBoundingClientRect();
+        const over = (other) => {
+            const b = other.getBoundingClientRect();
+            const [w, h] = [
+                Math.min(box.right, b.right) - Math.max(box.left, b.left),
+                Math.min(box.bottom, b.bottom) - Math.max(box.top, b.top),
+            ];
+            return w > 0 && h > 0 && w * h > (box.width * box.height) / 2;
+        };
+        const twins = [
+            ...document.querySelectorAll(
+                '[data-stage][data-zone="battlefield"]',
+            ),
+        ].filter(
+            (other) =>
+                other.dataset.card === node.dataset.card &&
+                other.classList.contains("card-el-you") ===
+                    node.classList.contains("card-el-you") &&
+                over(other),
+        );
+        if (twins.length < 2) return null;
+        const counts = twins.filter((twin) =>
+            twin.querySelector(".card-count"),
+        );
+        const hit = document
+            .elementFromPoint(
+                box.left + box.width / 2,
+                box.top + box.height / 2,
+            )
+            ?.closest("[data-stage]");
+        return {
+            counted: counts.map((twin) => twin.dataset.stage),
+            count: counts[0]?.querySelector(".card-count").textContent,
+            twins: twins.length,
+            top: hit?.dataset.stage,
+        };
+    }, name);
+    if (!pile) return false;
+    assert.equal(pile.top, name, `${what}: the twin on top`);
+    if (pile.count !== undefined) {
+        assert.deepEqual(pile.counted, [name], `${what}: the twin counted`);
+        assert.equal(pile.count, `×${pile.twins}`, `${what}: the pile's count`);
+    }
+    return true;
+}
+
 /** The depth the layouts hold a tray's cards up from (src/stage/desktop.ts TRAY_DEPTH,
  * phone.ts DEPTH.tray): over everything at rest. */
 const HELD_UP = 850;
