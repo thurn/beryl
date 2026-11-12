@@ -265,6 +265,12 @@ screen *args:
 blunders *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunders "$@"
 
+# Compare the champion's and challenger's blunder suites (<challenger> --claims NAME,... [--vs NAME])
+[group('agents')]
+[no-cd]
+gate *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- gate "$@"
+
 # Discover candidate blunders for later LLM review; six hours by default (--hours 6, --out DIR, --seed N, --inspect CASE.json)
 [group('agents')]
 [no-cd]

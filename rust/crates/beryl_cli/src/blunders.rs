@@ -57,6 +57,9 @@ pub use entries::{Entry, Rebuilt, Source, entries};
 const USAGE: &str = "usage: beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] \
                      [--only NAME,...] [--json FILE]";
 
+pub const BUDGETS: [u64; 2] = [3_000_000, 30_000_000];
+pub const SEEDS: u32 = 5;
+
 /// The repository, whose `data/` and `docs/` the entries name files in: above this crate
 /// when run under cargo, else the nearest directory up from here that holds the suite.
 fn root() -> PathBuf {
@@ -361,8 +364,8 @@ pub fn table(r: &Report) -> String {
 
 pub fn main(args: &[String]) -> Result<(), String> {
     let mut agent = None;
-    let mut budgets = vec![3_000_000, 30_000_000];
-    let mut seeds = 5;
+    let mut budgets = BUDGETS.to_vec();
+    let mut seeds = SEEDS;
     let mut only: Option<Vec<String>> = None;
     let mut json = None;
     let mut args = args.iter();

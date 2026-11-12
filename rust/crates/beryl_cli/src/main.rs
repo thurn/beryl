@@ -17,6 +17,8 @@
 //! - `beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]`
 //!   runs the blunder suite of `data/blunders.json` for an agent, the champion by default
 //!   ([`blunders`], `just blunders`).
+//! - `beryl_cli gate <challenger> --claims NAME,... [--vs NAME]` compares the suite's
+//!   results for two search families ([`gate`], `just gate`).
 //! - `beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M]
 //!   [--games N]` replays the champion's match games, asks a challenger each of the
 //!   champion's decisions and re-searches where they differ ([`screen`], `just screen`).
@@ -56,6 +58,7 @@ mod evalfit;
 mod fixture;
 mod freeze;
 mod game;
+mod gate;
 mod hunt;
 mod ladder;
 mod longthink;
@@ -87,6 +90,7 @@ const USAGE: &str = "usage:
   beryl_cli positions sample [--count N] DIR
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
   beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
+  beryl_cli gate <challenger> --claims NAME,... [--vs NAME]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
@@ -109,6 +113,18 @@ const SPECS_PORT: u16 = 1422;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let [command, rest @ ..] = args.as_slice()
+        && command == "gate"
+    {
+        return match gate::main(rest) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(error) => {
+                eprintln!("beryl_cli: {error}");
+                ExitCode::from(2)
+            }
+        };
+    }
     let result = match args.as_slice() {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
