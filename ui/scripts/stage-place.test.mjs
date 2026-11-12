@@ -9,7 +9,8 @@ import { lifeChange } from "../src/stage/notices.ts";
 import { ALOFT } from "../src/stage/pose.ts";
 import {
     FLIP,
-    GONE,
+    CLOSES,
+    roomIn,
     makingRoom,
     meets,
     STRIKE,
@@ -110,12 +111,12 @@ test("what makes room for a tapped card waits for its turn, then steps past", ()
     assert.equal(whole(theirs((1 + TURNED) / 2, rest).y), -45);
     const closing = makingRoom("tap", lying(430, 0), even, 1);
     assert.equal(whole(closing((1 + TURNED) / 2, rest).y), 10);
-    // After a card that leaves, the row waits and closes up straight; other verbs wait
-    // for nothing.
-    const after = makingRoom("vanish", lying(600, 0), even, 1);
-    assert.deepEqual(at(after(GONE, rest)), at(lying(600, 0)));
-    assert.equal(after((1 + GONE) / 2, rest).y, 0);
+    // Other verbs wait for nothing within the step: a row closes up after a card that
+    // leaves once its step is over, and for any other through the step.
+    assert.equal(makingRoom("vanish", lying(600, 0), even, 1), undefined);
     assert.equal(makingRoom("fly", lying(600, 0), even, 1), undefined);
+    assert.deepEqual(roomIn("vanish", 100, 600), [600, 600 + 500 * CLOSES]);
+    assert.deepEqual(roomIn("fly", 100, 600), [100, 600]);
 });
 
 test("an untap turns it back the other way, and a card that lay so already does not turn", () => {

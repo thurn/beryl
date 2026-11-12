@@ -33,7 +33,7 @@ const ORB = { width: 272 / 1.045, height: 116 / 1.045 };
 
 /** No order of arrival is kept yet: a hand lies in its cards' slot order. */
 const NO_ORDER: ReadonlyMap<number, number> = new Map();
-const NONE: ReadonlySet<number> = new Set();
+const NONE: ReadonlySet<Name> = new Set();
 
 /** How much of its source's width an ability is as it lifts out of it (Board.tsx's
  * triggerOrigin). */
@@ -119,14 +119,18 @@ export interface Around {
 function rest(
   { view, abilities, handled }: Table,
   { hold, logOpen }: Around,
+  leaving: ReadonlySet<Name> = NONE,
 ): Map<Name, Resting> {
+  // A card still leaving for a pile is off it as a borrowed one is: the pile lies as it did,
+  // its top showing, and the card has its place on it for when it lands.
   const placements = layout(
     view,
     hold,
     logOpen,
     {},
     NO_ORDER,
-    NONE,
+    // An ability's name is no card's slot.
+    leaving as ReadonlySet<number>,
     zonePiles(view, NO_ORDER),
     handled ?? [],
   );
@@ -232,7 +236,7 @@ const CHEVRON = 2 / 12;
 /** The table as the desktop lays it out, on the stage as wide as it now is (game/Stage.tsx),
  * with what stands `around` it. */
 export const desktopWith = (around: Around): StageLayout => ({
-  rest: (table) => rest(table, around),
+  rest: (table, leaving) => rest(table, around, leaving),
   anchors,
   emerging,
   drawn,

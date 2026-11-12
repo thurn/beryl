@@ -1144,7 +1144,7 @@
     },
     {
       "name": "vanish",
-      "shows": "A card or an ability goes from where it is with no flight, and a card is then at its new place: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving.",
+      "shows": "A card or an ability goes from where it is with no flight, and a card is at its new place as it is gone: destroyed, exiled, sacrificed, countered, returned to a hand, or done resolving. Its step is its going alone; what it left room for closes up after, and where nothing does the next thing follows at once.",
       "arena": {
         "does": "A destroyed permanent falls to ash in about 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a returned one glows and is gone; none flies to a pile or a hand. A countered spell crumbles on the stack. A resolved instant darkens and dissolves there, or shrinks into its graveyard. A finished ability is gone between two frames.",
         "evidence": [
@@ -1187,44 +1187,44 @@
         ]
       },
       "values": {
-        "duration": 565,
+        "duration": 395,
         "delay": 260,
         "stagger": null,
         "curve": "none"
       },
       "cases": {
         "destroyed": {
-          "duration": 965,
+          "duration": 675,
           "delay": 140,
           "stagger": null,
           "curve": "none"
         },
         "countered": {
-          "duration": 910,
+          "duration": 635,
           "delay": 260,
           "stagger": null,
           "curve": "none"
         },
         "resolved instant or sorcery": {
-          "duration": 500,
+          "duration": 350,
           "delay": null,
           "stagger": null,
           "curve": "none"
         },
         "exiled": {
-          "duration": 600,
+          "duration": 420,
           "delay": 680,
           "stagger": null,
           "curve": "none"
         },
         "bounced": {
-          "duration": 370,
+          "duration": 300,
           "delay": null,
           "stagger": null,
           "curve": "none"
         },
         "sacrificed": {
-          "duration": 530,
+          "duration": 370,
           "delay": null,
           "stagger": null,
           "curve": "none"

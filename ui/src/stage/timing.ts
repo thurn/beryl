@@ -11,7 +11,7 @@ import type { Act, PlayerView } from "../generated/protocol";
 import type { Effect, Layer } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
-import { GONE, meets, STRIKE } from "./tracks.ts";
+import { meets, STRIKE } from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
  * verb in which nothing travels, which changes evenly. */
@@ -235,9 +235,9 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     return { ...own, duration, each: own.duration };
   }
   // What follows a countered spell in its beat, the spell that countered it, waits until it
-  // is gone (UI Conventions, "A countered spell": "It leaves before the spell that countered
-  // it").
-  if (found === "countered") return { ...own, stagger: GONE * own.duration };
+  // is gone, which is as its step ends (UI Conventions, "A countered spell": "It leaves
+  // before the spell that countered it").
+  if (found === "countered") return { ...own, stagger: own.duration };
   return found === "exiled" ? { ...own, stagger: BATCH_EXILE } : own;
 }
 

@@ -139,8 +139,9 @@ export const CASES = {
 
     // A card exiled under its host rests tucked under it once it has gone from where it lay
     // (UI Conventions, exception 6). Nothing makes room for a card that leaves until it has
-    // gone: half way through the step of a card that leaves alone, all else is where it lay
-    // (Arena's row closes up after, 3sEoP_s4DQE 24:49.6).
+    // gone: half way through the step of a card that leaves alone, and as that step ends, all
+    // else is where it lay but for what lies where it lands (Arena's row closes up after,
+    // 3sEoP_s4DQE 24:49.6).
     vanish({ piles, zones }) {
         for (const run of [zones, piles]) {
             const left = run.steps.filter(
@@ -164,17 +165,24 @@ export const CASES = {
             );
             assert.ok(alone.length > 0, "no card left alone");
             for (const gone of alone) {
-                const half = gone.at.middle;
-                if (!half) continue;
-                const was = before(run, gone).poses;
-                for (const [name, pose] of Object.entries(was)) {
-                    if (Number(name) === gone.act.subject.slot) continue;
-                    if (!half.poses[name]) continue;
-                    assert.deepEqual(
-                        where(half.poses[name]),
-                        where(pose),
-                        `${name} made room half way through the vanish at ${gone.from} ms`,
-                    );
+                // As it began: a step that ended as it began has by then put its own card
+                // on its pile.
+                const was = (gone.at.from ?? before(run, gone)).poses;
+                const into = gone.act.object?.zone;
+                for (const when of ["middle", "to"]) {
+                    const sample = gone.at[when];
+                    if (!sample) continue;
+                    for (const [name, pose] of Object.entries(was)) {
+                        if (Number(name) === gone.act.subject.slot) continue;
+                        if (!sample.poses[name]) continue;
+                        if (when === "to" && sample.zones[name] === into)
+                            continue;
+                        assert.deepEqual(
+                            where(sample.poses[name]),
+                            where(pose),
+                            `${name} made room by the ${when} of the vanish at ${gone.from} ms`,
+                        );
+                    }
                 }
             }
         }

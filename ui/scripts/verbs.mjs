@@ -243,6 +243,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     sample = () => {
         const poses = {};
         const zones = {};
+        const looks = {};
         const marks = {};
         const effects = {};
         const { resting, table, counts } = stage.shown;
@@ -250,6 +251,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
             const pose = stage.pose(name);
             poses[name] = pose;
             zones[name] = dress.zone;
+            looks[name] = dress.rim ? "rim" : dress.look;
             const lit = stage.effect(name);
             if (lit.length) effects[name] = lit;
             // What a permanent's face is drawn from, where a step changes it in place.
@@ -296,10 +298,22 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
             const was = found.view.players[tally.player].life;
             return [{ player: tally.player, life: tally.life, was }];
         });
+        // Each graveyard's top: the last of its cards to have landed there, which one still
+        // going from sight where it was has not.
+        const tops = Object.fromEntries(
+            SIDES.map((side) => [
+                side,
+                table.players[side].graveyard.findLast(
+                    (slot) => resting.get(slot)?.dress.zone === "graveyard",
+                ),
+            ]),
+        );
         return {
             at: clock.now - origin,
             poses,
             zones,
+            looks,
+            tops,
             marks,
             effects,
             life,
@@ -325,14 +339,31 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     /** Walks the clock through every step the stage has to play, until `over`. */
     const follow = async (answer, over) => {
         while (!over()) {
-            const before = sample();
+            let before = sample();
             clock.advance(0);
+            // What a card left room for closes up after its step, while no step plays.
+            let closed = false;
+            while (!stage.step && stage.shown.busy) {
+                await reach(clock.now + 1);
+                closed = true;
+            }
             const step = stage.step;
             if (!step) break;
             const { index, verb, from, to } = step;
             const at = {};
             if (clock.now < from) await reach(from);
             if (clock.now === from) at.from = sample();
+            // It is closed up in the tick that begins the next step, which has moved
+            // nothing yet: before that step, everything lay as it does as it begins.
+            if (closed && at.from) {
+                const poses = Object.fromEntries(
+                    Object.keys(before.poses).map((name) => [
+                        name,
+                        at.from.poses[name] ?? before.poses[name],
+                    ]),
+                );
+                before = { ...before, poses };
+            }
             const middle = (from + to) / 2;
             if (clock.now < middle) {
                 await reach(middle);

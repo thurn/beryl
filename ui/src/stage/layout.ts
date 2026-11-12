@@ -86,8 +86,11 @@ export interface Anchors {
 }
 
 export interface StageLayout {
-  /** Everything the table draws, by name: its objects, and the abilities on its stack. */
-  rest(table: Table): Map<Name, Resting>;
+  /** Everything the table draws, by name: its objects, and the abilities on its stack. What
+   * is `leaving` the table has where it goes, but it is still seen where it was (a `vanish`
+   * under way): nothing else rests as if it had arrived, so a pile it goes to shows the top
+   * it had. */
+  rest(table: Table, leaving?: ReadonlySet<Name>): Map<Name, Resting>;
   anchors(table: PlayerView): Anchors;
   /** Where an ability starts as it lifts out of its source, which is drawn at `source`: a
    * small copy on it, which then travels to `rest`, its place on the stack. */

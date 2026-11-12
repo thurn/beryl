@@ -353,18 +353,19 @@ held to by `just motion`.
   15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after
   its cause, 33 ms apart, in place. Effects: glow as it begins (token).
 - **vanish.** A card or an ability goes from where it is with no flight, and a
-  card is then at its new place: destroyed, exiled, sacrificed, countered,
-  returned to a hand, or done resolving. A destroyed permanent falls to ash in
-  about 1 s, an exiled one becomes a vortex, a sacrificed one flashes, and a
-  returned one glows and is gone; none flies to a pile or a hand. A countered
-  spell crumbles on the stack. A resolved instant darkens and dissolves there,
-  or shrinks into its graveyard. A finished ability is gone between two frames
-  (RwKoGGUmw2k 27:36.4, IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w
-  19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67,
-  pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9). Beryl: 565 ms, 260 ms after its
-  cause, in place. Effects: dissolve as it begins, dim as it begins (resolved
-  instant or sorcery), blanch as it begins (exiled), glow as it begins
-  (bounced).
+  card is at its new place as it is gone: destroyed, exiled, sacrificed,
+  countered, returned to a hand, or done resolving. Its step is its going alone;
+  what it left room for closes up after, and where nothing does the next thing
+  follows at once. A destroyed permanent falls to ash in about 1 s, an exiled
+  one becomes a vortex, a sacrificed one flashes, and a returned one glows and
+  is gone; none flies to a pile or a hand. A countered spell crumbles on the
+  stack. A resolved instant darkens and dissolves there, or shrinks into its
+  graveyard. A finished ability is gone between two frames (RwKoGGUmw2k 27:36.4,
+  IEXcjBn3BXk 22:25.4, 5UHzpVvUkfI 26:06.7, UrGalw_f35w 19:28.5, 3sEoP_s4DQE
+  24:49.4, I3Te0m1bBFw 39:50.0, WQiYBv23buw 29:15.67, pE4XSNi-nZc 22:01.3,
+  IHPV6yRaFlk 39:46.9). Beryl: 395 ms, 260 ms after its cause, in place.
+  Effects: dissolve as it begins, dim as it begins (resolved instant or
+  sorcery), blanch as it begins (exiled), glow as it begins (bounced).
 - **emerge.** An ability lifts out of its source and goes on the stack. The
   source stays as it is. A small copy of the card appears on the source and
   travels along a curve to the stack, growing, in 0.25 to 0.35 s; an activated

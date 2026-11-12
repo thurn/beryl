@@ -141,6 +141,10 @@ export function sounded(run, sound, at, what, delay = 0) {
 
 /** What each verb's check asks of the moment as `seat` saw it: `whole`, a run of the fixture
  * that holds it in one view, and `cut`, one of the fixture that cuts it at each priority. */
+/** Whether a card dressed with `look` shows: under its pile's top it is hidden, or only its
+ * paper edge is drawn. A card of a graveyard you may play shows beside your hand instead. */
+const shows = (look) => look !== "hidden" && look !== "rim";
+
 /** How a card that is not broken up leaves, by where it goes and why (`vanish`). */
 const LEAVES = {
     exile: "blanch over",
@@ -454,9 +458,12 @@ export const CASES = {
     // where it lay, dressed as it was and never aloft, and only as its step ends is it in its
     // new zone, with no flight; a token is then no more. How it goes says what became of it:
     // what is destroyed, countered or sacrificed darkens and breaks up for as long as it takes
-    // to leave, a spell that resolved only darkens, what goes to exile is lost in light, and
-    // what goes back to a hand leaves in a halo; nothing of any stays on a card at its new
-    // place. Every way of leaving is seen: a
+    // to leave, which is its whole step, a spell that resolved only darkens, what goes to
+    // exile is lost in light, and what goes back to a hand leaves in a halo; nothing of any
+    // stays on a card at its new place. The graveyard it goes to shows the top it had until
+    // it lands, and then it (the motion review of vanish, by-w8gv.21.48: a phone's pile showed
+    // none, and so did the desktop's when two cards left for it together). Every way of
+    // leaving is seen: a
     // spell countered and spells resolved, a creature and a token destroyed, a permanent
     // exiled and one sacrificed, and the opponent's spell returned to their hand.
     vanish({ whole, script, zones, scry, seat }) {
@@ -527,12 +534,19 @@ export const CASES = {
                         [LEAVES[kind] ?? "dissolve over"],
                         `${what}: how it goes`,
                     );
+                    const top = sample.tops[object?.owner];
+                    if (object?.zone === "graveyard" && top !== undefined) {
+                        assert.ok(
+                            shows(sample.looks[top]),
+                            `${what}: its graveyard's top, ${top}, does not show`,
+                        );
+                    }
                 }
-                // What lasts while it leaves is over by the time it is gone, before its
-                // step is; a halo has its own time.
+                // What lasts while it leaves lasts as long as its step, which is over as it
+                // is gone; a halo has its own time.
                 if (gone.at.middle && kind !== "returned") {
                     const [{ progress }] = gone.at.middle.effects[name];
-                    assert.ok(progress > 0.5 && progress < 1, what);
+                    assert.ok(Math.abs(progress - 0.5) < 1e-9, what);
                 }
                 if (gone.at.from) {
                     assert.equal(gone.at.from.poses[name].opacity, lay.opacity);
@@ -553,6 +567,10 @@ export const CASES = {
                         `${what}: it is at its new place`,
                     );
                     assert.deepEqual(effectsOn(after, name), [], what);
+                    if (object.zone === "graveyard") {
+                        assert.equal(after.tops[object.owner], name, what);
+                        assert.ok(shows(after.looks[name]), what);
+                    }
                 } else {
                     assert.equal(after.poses[name], undefined, what);
                 }

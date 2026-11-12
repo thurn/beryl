@@ -86,7 +86,11 @@ function fanned(spot: Spot, depth: number, face: Pose["face"]): Pose {
 const pileOf = (zone: ObjectView["zone"]) =>
   zone === "library" ? "library" : "graveyard";
 
-function rest({ view, abilities, handled }: Table, viewport: Viewport) {
+function rest(
+  { view, abilities, handled }: Table,
+  viewport: Viewport,
+  leaving?: ReadonlySet<Name>,
+) {
   const { bands, cards, stack } = phoneLayout(view, viewport);
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out = new Map<Name, Resting>();
@@ -171,8 +175,12 @@ function rest({ view, abilities, handled }: Table, viewport: Viewport) {
   for (const object of view.objects) {
     if (out.has(object.slot) || object.zone === "stack") continue;
     const pile = pileOf(object.zone);
-    const order = view.players[object.owner][pile];
-    const top = object.zone === pile && order.at(-1) === object.slot;
+    // A pile's top is the last card that has arrived: one still leaving for it is seen
+    // where it was, and the pile shows the top it had until that one lands.
+    const arrived = view.players[object.owner][pile].filter(
+      (slot) => !leaving?.has(slot),
+    );
+    const top = object.zone === pile && arrived.at(-1) === object.slot;
     const back = pile === "library";
     out.set(object.slot, {
       object,
@@ -238,7 +246,7 @@ function anchors(view: PlayerView, viewport: Viewport): Anchors {
 /** The table as a phone lays it out, on a board the size of `viewport`. An ability lifts out
  * of its source as the desktop's does. */
 export const phone = (viewport: Viewport): StageLayout => ({
-  rest: (table) => rest(table, viewport),
+  rest: (table, leaving) => rest(table, viewport, leaving),
   anchors: (view) => anchors(view, viewport),
   emerging,
   drawn,

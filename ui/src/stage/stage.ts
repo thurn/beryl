@@ -24,8 +24,8 @@
 //
 // One verb's subject does not go where the table has it as the step begins: what a `vanish`
 // takes goes from sight where it was, dressed as it was, and only as the step ends is it at
-// its new place, or no more (`#lay`, `#left`). What it leaves room for closes up once it has
-// gone, late in the step (tracks.ts GONE).
+// its new place, or no more (`#lay`, `#left`). What it leaves room for closes up after the
+// step, once it has gone, and the beat lasts until it has (tracks.ts CLOSES).
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
@@ -69,16 +69,17 @@ import { apply, tabled, tableOf, type Table } from "./table.ts";
 import {
   dissolve,
   glide,
-  GONE,
   later,
   litBy,
   makingRoom,
+  roomIn,
   shareOf,
   moverOf,
   PAYING,
   QUARTER,
   subjectOf,
-  along,
+  closedBy,
+  poseOn,
   TURN,
   SNAP,
   turning,
@@ -182,7 +183,7 @@ export class ScriptStage {
       pose: (name) => this.pose(name),
       lifted: (name) => {
         const entry = this.#entries.get(name)!;
-        this.#lifted = { name, from: poseAt(entry, this.clock.now) };
+        this.#lifted = { name, from: poseOn(entry, this.clock.now) };
         entry.track = undefined;
         this.#draw(name, entry);
       },
@@ -221,8 +222,7 @@ export class ScriptStage {
     this.#write(this.clock.now);
   }
 
-  /** Takes every node off the surface it draws on, `surface` if given, and draws on none: the
-   * model plays on. */
+  /** Takes every node off the surface it draws on (`surface`, if given): the model plays on. */
   unmount(surface = this.#surface) {
     if (!surface || surface !== this.#surface) return;
     for (const name of this.#entries.keys()) surface.remove(name);
@@ -434,6 +434,8 @@ export class ScriptStage {
         this.#begin(next);
         continue;
       }
+      // What closes up after a card that left is of its beat.
+      playback.end = closedBy(this.#entries.values(), playback.end);
       if (playback.end > to) break;
       // The beat is over, at its own end and not at this tick's: what follows begins there.
       this.#at = playback.end;
@@ -516,11 +518,11 @@ export class ScriptStage {
   }
 
   /** Begins the effects the step `run` has at this `edge` of it, on what they are on if the
-   * stage holds that: one that lasts its step, for as long as its subject is seen in it. Time
-   * passed over (`skip`) begins none. */
+   * stage holds that: one that lasts its step, for as long as the step. Time passed over
+   * (`skip`) begins none. */
   #affect(run: Run, edge: Edge["edge"]) {
     if (this.#skipping) return;
-    const seen = (run.verb === "vanish" ? GONE : 1) * (run.to - run.from);
+    const seen = run.to - run.from;
     const at = edge === "start" ? run.from : run.to;
     const begun = this.effects(run.step.act, run.found!.view);
     const held = (name: Name) => this.#entries.has(name);
@@ -593,9 +595,12 @@ export class ScriptStage {
    * no longer does, and each entry's resting place. An entry whose place moved glides there
    * over the `run` that moved it, from wherever it is, aloft if the run is about it; with no
    * run, or one that takes no time, it is there at once, unless a glide still under way
-   * carries it. */
+   * carries it. The layout is told what is still leaving: it has yet to arrive. */
   #lay(at: number, run?: Run) {
-    const rest = this.#layout.rest(this.#table!);
+    const leaving = new Set<Name>();
+    for (const [name, entry] of this.#entries)
+      if (entry.leaving) leaving.add(name);
+    const rest = this.#layout.rest(this.#table!, leaving);
     for (const [name, entry] of [...this.#entries]) {
       if (rest.has(name) || entry.leaving) continue;
       this.#surface?.remove(name);
@@ -645,15 +650,17 @@ export class ScriptStage {
         // Only the card a `fly` is about, or a `count` (a number that lays its card
         // elsewhere), travels over what rests; what another verb's change moves goes there as
         // what makes room does. It turns over on the way if it lands face up from face down.
-        // What makes room for a card that leaves, or one that taps, waits (tracks.ts).
+        // What makes room waits for a card to turn, or closes up after one has left (tracks.ts).
         const toward = resting.object?.controller === "opponent" ? -1 : 1;
         const about = run!.verb === "fly" || run!.verb === "count";
         const flies = about && litBy(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
+        const [from, to] = roomIn(run!.verb, at, run!.to);
         this.#fly(name, entry, {
-          from: at,
-          to: run!.to,
+          from,
+          to,
+          closes: to > run!.to,
           pose: run!.each
             ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
             : (makingRoom(run!.verb, start, run!.ease, toward) ??
@@ -729,7 +736,7 @@ export class ScriptStage {
     const pose =
       held?.name === name && this.#lifted
         ? heldPose(this.#lifted.from, held.start, held.at)
-        : poseAt(entry, at);
+        : poseOn(entry, at);
     const { object, dress } = entry.resting;
     const turns = dress.zone === "battlefield" && object?.tapped === false;
     const turned = turns ? this.#spans.turned(name, at) : 0;
@@ -788,11 +795,4 @@ export class ScriptStage {
     this.#watching = [];
     for (const resolve of watching) resolve();
   }
-}
-
-/** Where an entry is at stage time `at`: on its track while one runs, else at rest. */
-function poseAt(entry: Entry, at: number): Pose {
-  const track = entry.track;
-  if (!track || at >= track.to) return entry.resting.pose;
-  return track.pose(along(track, at), entry.resting.pose);
 }

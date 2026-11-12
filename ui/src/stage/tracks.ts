@@ -62,19 +62,32 @@ export const fade =
   (ease: Timing["ease"]): Path =>
   (progress, rest) => ({ ...rest, opacity: rest.opacity * ease(progress) });
 
-/** How far through its step a card that leaves has gone from sight: what it leaves room for
- * closes up only then, in the rest of the step. Arena's row closes up after the permanent
- * that left it is gone (3sEoP_s4DQE 24:49.6 to 24:49.8, a creature returned to its hand). */
-export const GONE = 0.7;
+/** How long what a card that leaves made room for takes to close up once it has gone, as a
+ * share of the step that took it. The step is the card's going and no more: as it ends the
+ * card is at its new place, and only what then has room to close up moves after it, so that
+ * nothing waits where nothing does (the motion review of vanish, by-w8gv.21.48). Arena's row
+ * closes up after the permanent that left it is gone (3sEoP_s4DQE 24:49.6 to 24:49.8, a
+ * creature returned to its hand). */
+export const CLOSES = 0.4;
+
+/** When what only makes room in a step of `verb`, from `from` to `to`, goes to where it
+ * rests: over the step, or once a card that leaves has gone, for `CLOSES` of its step, in
+ * whole milliseconds. */
+export const roomIn = (
+  verb: Act["verb"],
+  from: number,
+  to: number,
+): [from: number, to: number] =>
+  verb === "vanish" ? [to, to + Math.round(CLOSES * (to - from))] : [from, to];
 
 /** An entry that goes from sight where it was at `start`, and never travels: slowly at first,
  * while the effect that says how it leaves is seen on it (effects.ts), all at once at the
- * last, and gone at `GONE` of its step. */
+ * last, and gone as its step ends. */
 export const dissolve =
   (start: Pose, ease: Timing["ease"]): Path =>
   (progress) => ({
     ...start,
-    opacity: start.opacity * (1 - ease(Math.min(1, progress / GONE)) ** 2),
+    opacity: start.opacity * (1 - ease(progress) ** 2),
   });
 
 /** The glide of an entry that was at `start` and stays there until `from` of its step, then
@@ -167,9 +180,9 @@ export const turned =
 export const NEAR = 0.5;
 
 /** How far through a step of these verbs what only makes room begins to move: once a card
- * that leaves has gone, and once one that taps has turned. */
+ * that taps has turned. What makes room for a card that leaves moves after its step
+ * (`roomIn`). */
 const WAITS: Partial<Record<Act["verb"], number>> = {
-  vanish: GONE,
   tap: TURNED,
 };
 
@@ -369,6 +382,9 @@ export interface Track {
   /** The track of the step that is about it. A later step that moves where it rests does
    * not take it over: it ends there instead. */
   own?: boolean;
+  /** It closes up after the step that moved it has ended (`roomIn`): that step's beat is
+   * not over until it is where it rests. */
+  closes?: boolean;
   /** A card let go where its drop was taken, kept there with no end of its own until what the
    * drop did has played: a step that moves it starts from there, and otherwise it glides home
    * when the script is over. */
@@ -382,3 +398,23 @@ export const along = (track: Track, at: number) =>
 /** Whether `track` has yet to turn its card face up at stage time `at`. */
 export const turning = (track: Track | undefined, at: number) =>
   track?.turn !== undefined && at < track.to && along(track, at) < track.turn;
+
+/** Where what is on `track`, or on none, and rests at `resting` is at stage time `at`: on its
+ * track while one runs, else at rest. */
+export function poseOn(
+  { track, resting }: { track?: Track; resting: { pose: Pose } },
+  at: number,
+): Pose {
+  if (!track || at >= track.to) return resting.pose;
+  return track.pose(along(track, at), resting.pose);
+}
+
+/** When a beat that would end at `end` is over, with `entries` on their tracks: no sooner
+ * than the last of them closing up after one of its steps is where it rests. */
+export function closedBy(entries: Iterable<{ track?: Track }>, end: number) {
+  let last = end;
+  for (const { track } of entries) {
+    if (track?.closes) last = Math.max(last, track.to);
+  }
+  return last;
+}

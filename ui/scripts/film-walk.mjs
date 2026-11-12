@@ -237,7 +237,8 @@ export async function walk({
             // Over once an ability has come onto the stack and gone, as verbs.mjs's walk is.
             finished ||= !whole && lifted && !abilities;
             if (finished) after += 1;
-            idle = stage.step ? 0 : idle + took;
+            // No step plays while what a card left room for closes up after its step.
+            idle = stage.step || stage.shown.busy ? 0 : idle + took;
         }
     }
     // The marks, from the script written by hand (written-marks.mjs, which the caller gave

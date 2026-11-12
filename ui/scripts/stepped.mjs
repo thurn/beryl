@@ -247,7 +247,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
             // a whole recording, once its last answer has played out.
             finished ||= !whole && lifted && !abilities;
             if (finished) after += 1;
-            idle = stage.step ? 0 : idle + took;
+            // No step plays while what a card left room for closes up after its step.
+            idle = stage.step || stage.shown.busy ? 0 : idle + took;
         }
     }
     // The marks, from the script written by hand (written-marks.mjs), each beat a script of

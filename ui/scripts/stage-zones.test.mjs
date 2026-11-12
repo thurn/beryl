@@ -1,13 +1,14 @@
 // Cards changing zone on the stage, with no browser (`npm test`): what a `vanish` takes goes
-// from sight where it was and is only then at its new place, what it leaves room for waits
-// until it has gone, a card that leaves face down
+// from sight where it was and is at its new place as its step ends, what it leaves room for
+// closes up after, in time the beat has only then, a card that leaves face down
 // turns over on its way, your draw is held up to be read, and the cards the opponent looks at
 // lift for as long as the look lasts. The same in a browser, from both seats, is verbs.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
-import { GONE, HELD, TURN } from "../src/stage/tracks.ts";
-import { object, reach, stage, view } from "./stage-table.mjs";
+import { ScriptStage, SNAP } from "../src/stage/stage.ts";
+import { CLOSES, HELD, TURN } from "../src/stage/tracks.ts";
+import { object, reach, row, stage, view } from "./stage-table.mjs";
 
 const vanish = (slot, why, to) => ({
     act: {
@@ -35,20 +36,14 @@ for (const tick of [16, 100, 1000]) {
         // The table has it gone already, but the row closes up only once it has gone.
         assert.deepEqual(made.shown.table.battlefield, [1, 3]);
         reach(made.clock, 200, tick);
-        if (made.clock.now === 200) {
-            assert.equal(made.pose(2).x, 400);
-            assert.equal(made.pose(2).y, 0);
-            assert.equal(made.pose(2).opacity, 1 - (0.5 / GONE) ** 2);
-            assert.equal(made.pose(3).x, 800);
-        }
-        reach(made.clock, 340, tick);
-        if (made.clock.now === 340) {
-            assert.equal(made.pose(2).opacity, 0);
-            assert.equal(made.pose(3).x, 600);
-            assert.ok(made.pose(3).depth < 900, "what makes room is not aloft");
-        }
+        assert.equal(made.pose(2).x, 400);
+        assert.equal(made.pose(2).y, 0);
+        assert.equal(made.pose(2).opacity, 1 - 0.5 ** 2);
+        assert.equal(made.pose(3).x, 800);
         reach(made.clock, 400, tick);
-        // At the step's end it is in the hand, with no flight.
+        // As the step ends it is gone from there and in the hand, with no flight, and the
+        // row has yet to move.
+        assert.equal(made.step, null);
         assert.deepEqual(
             {
                 x: made.pose(2).x,
@@ -58,11 +53,96 @@ for (const tick of [16, 100, 1000]) {
             { x: 0, y: 500, opacity: 1 },
         );
         assert.equal(made.shown.resting.get(2).dress.zone, "hand");
+        assert.deepEqual(surface.dressed.slice(-1), ["2 hand"]);
+        assert.equal(made.pose(3).x, 800);
+        assert.equal(made.shown.busy, true);
+        // The row closes up in the time after, which is the beat's too.
+        const closing = 400 * CLOSES;
+        reach(made.clock, 400 + closing / 2, tick);
+        assert.equal(made.pose(3).x, 600);
+        assert.ok(made.pose(3).depth < 900, "what makes room is not aloft");
+        reach(made.clock, 400 + closing - 1, tick);
+        assert.equal(made.shown.busy, true);
+        reach(made.clock, 400 + closing, tick);
         assert.equal(made.pose(3).x, 400);
         assert.equal(made.shown.busy, false);
-        assert.deepEqual(surface.dressed.slice(-1), ["2 hand"]);
     });
 }
+
+/** When each step of `beats` began and ended on a stage showing `table`, each vanish taking
+ * 400 ms: `[edge, slot, at]`. */
+function edgesOf(table, beats) {
+    const { stage: made } = stage({ vanish: { duration: 400 } });
+    made.play(table);
+    const edges = [];
+    made.follow(({ edge, step, at }) =>
+        edges.push([edge, step.act.subject.slot, at]),
+    );
+    made.play(table, { beats });
+    made.settle();
+    return edges;
+}
+
+test("what follows a card that leaves waits only for what closes up after it", () => {
+    const grave = (slot) => vanish(slot, "destroy", object(slot, "graveyard"));
+    // The last of its row leaves room for nothing: the next beat begins as it is gone.
+    assert.deepEqual(edgesOf(view([1, 2, 3]), [[grave(3)], [grave(2)]]), [
+        ["start", 3, 0],
+        ["end", 3, 400],
+        ["start", 2, 400],
+        ["end", 2, 800],
+    ]);
+    // The first leaves room the row closes up in, and the next beat begins after that.
+    const closed = 400 + 400 * CLOSES;
+    assert.deepEqual(edgesOf(view([1, 2, 3]), [[grave(1)], [grave(3)]]), [
+        ["start", 1, 0],
+        ["end", 1, 400],
+        ["start", 3, closed],
+        ["end", 3, closed + 400],
+    ]);
+    // Two that leave together: the second would have closed up after the first, and goes
+    // where it lay instead, so nothing closes up and nothing is waited for.
+    assert.deepEqual(
+        edgesOf(view([1, 2, 3]), [[grave(2), grave(3)], [grave(1)]]),
+        [
+            ["start", 2, 0],
+            ["start", 3, 0],
+            ["end", 2, 400],
+            ["end", 3, 400],
+            ["start", 1, 400],
+            ["end", 1, 800],
+        ],
+    );
+});
+
+test("a layout is told what is still leaving, and no longer once it has landed", () => {
+    const told = [];
+    const made = new ScriptStage({
+        layout: {
+            ...row,
+            rest(table, leaving) {
+                told.push([...leaving]);
+                return row.rest(table);
+            },
+        },
+        timings: (act) => ({
+            ...SNAP,
+            duration: act.verb === "vanish" ? 400 : 0,
+        }),
+    });
+    made.play(view([1, 2, 3]));
+    made.play(view([1]), {
+        beats: [
+            [
+                vanish(2, "destroy", object(2, "graveyard")),
+                vanish(3, "destroy", object(3, "graveyard")),
+            ],
+        ],
+    });
+    made.settle();
+    // The first view, each step's beginning, each one's end, and the view at the last.
+    assert.deepEqual(told, [[], [2], [2, 3], [3], [], []]);
+});
 
 test("a token that ceases to exist keeps its node until its vanish is over", () => {
     const { stage: made, surface } = stage({ vanish: { duration: 400 } });
@@ -70,10 +150,12 @@ test("a token that ceases to exist keeps its node until its vanish is over", () 
     table.objects[1].token = true;
     made.play(table);
     made.play(view([1]), { beats: [[vanish(7, "destroy")]] });
-    made.clock.advance(399);
+    made.clock.advance(200);
+    assert.equal(made.pose(7).opacity, 0.75);
+    made.clock.advance(199);
     assert.ok(surface.nodes.has(7));
     assert.equal(made.pose(7).x, 400);
-    assert.equal(made.pose(7).opacity, 0);
+    assert.ok(made.pose(7).opacity < 0.01, "it is all but gone");
     assert.equal(surface.log.at(-1), "make 7");
     made.clock.advance(1);
     assert.equal(made.pose(7), null);
