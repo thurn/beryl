@@ -31,10 +31,10 @@ class FakeBd(verdicts.Beads):
             assert isinstance(comments, list)
             comments.append({"id": str(uuid.uuid4()), "text": args[3]})
             return 0, ""
-        if args[0] == "show":
-            ids = [a for a in args[1:] if not a.startswith("--")]
-            found = [self.issues[i] for i in ids if i in self.issues]
-            return (0 if len(found) == len(ids) else 1), json.dumps(found)
+        if args == ("export",):
+            return 0, "\n".join(
+                json.dumps({"id": bead, **issue}) for bead, issue in self.issues.items()
+            )
         if args[:3] == ("list", "--label", "ci-check"):
             return 0, json.dumps(list(self.issues.values()))
         if args[:3] == ("list", "--label", "role:steward"):

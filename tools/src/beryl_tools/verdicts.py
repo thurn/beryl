@@ -524,18 +524,23 @@ class Beads:
         return run.returncode, run.stdout
 
     def history(self, checks: Iterable[str]) -> dict[str, list[Entry]]:
-        """Each check's verdicts, for the checks that have a bead."""
-        ids = sorted({bead_id(c) for c in checks})
+        """Each check's verdicts, for the checks that have a bead. One `bd export` reads every
+        bead with its comments in about two seconds, however many are asked for; `bd show`
+        reopens the database for each bead it shows, about a second apiece on a quiet machine,
+        so a hundred timed out under load and the caller judged with no verdicts at all.
+        """
+        wanted = {bead_id(c) for c in checks}
+        if not wanted:
+            return {}
+        _, out = self.bd("export")
         found: dict[str, list[Entry]] = {}
-        for i in range(0, len(ids), 100):
-            # Exits 1 when an id has no bead, still printing the ones that do.
-            _, out = self.bd("show", *ids[i : i + 100], "--json", "--include-comments")
-            issues = parse_json(out)
-            for issue in issues if isinstance(issues, list) else []:
-                if isinstance(issue, dict):
-                    found[str(issue.get("title"))] = entries(
-                        issue.get("comments") or []
-                    )
+        for line in out.splitlines():
+            try:
+                issue = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(issue, dict) and issue.get("id") in wanted:
+                found[str(issue.get("title"))] = entries(issue.get("comments") or [])
         return found
 
     def checks(self) -> list[str]:
