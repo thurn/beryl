@@ -184,7 +184,7 @@
       "kind": "exception",
       "number": 8,
       "name": "Motion is Beryl's own",
-      "rule": "Arena settles what a motion shows and when: what changed, who did it, where it went, what happens in what order, what holds still while it plays, where the eye is led. How it looks on Beryl's cards (path, easing, duration, depth, rotation, effects, how a batch and its neighbours move) is designed for them, starting from Arena's clip and numbers but never copying them: \"animations are not only about duration\", and \"independent aesthetic judgement is needed here, our cards do not work the same way\". A verb is done when the independent motion review passes it (the `motion-review` skill: a fresh reviewer scores a fixed rubric on films from `just motion --film`); `just motion` holds the stage to the verb's own values below.",
+      "rule": "Arena settles what a motion shows and when: what changed, who did it, where it went, what happens in what order, what holds still while it plays, where the eye is led. How it looks on Beryl's cards (path, easing, duration, depth, rotation, effects, how a batch and its neighbours move) is designed for them, starting from Arena's clip and numbers but never copying them: \"animations are not only about duration\", and \"independent aesthetic judgement is needed here, our cards do not work the same way\". `just motion` holds the stage to the verb's own values below. No review by an agent gates a verb (2026-11-12, of the motion reviews: \"I am really not finding that these are delivering useful results\"): the judgement is the user's, through his bug reports, and the `motion-review` skill runs only when he asks.",
       "reports": [
         "by-w8gv.21.42"
       ],

@@ -271,9 +271,9 @@ the `arena-video` skill. A still or a filmstrip settles what prose cannot.
 - Motion follows Arena in what it shows and when: what changed, who did it,
   where it went, in what order, what holds still. How it looks on Beryl's cards
   (path, easing, duration, depth, effects, how a batch moves) is designed for
-  them, starting from Arena's clip and numbers but never copying them, and a
-  verb is done when the independent motion review passes it (UI Conventions,
-  exception 8; the `motion-review` skill, on films from `just motion --film`).
+  them, starting from Arena's clip and numbers but never copying them (UI
+  Conventions, exception 8). No review gates a verb: `just motion` holds it to
+  its own values, and the `motion-review` skill runs only when the user asks.
 - Beryl keeps its own skin: colors, type, icon drawings and frames, and full
   cards that tap.
 - Beryl differs from Arena only where [UI Conventions](docs/ui-conventions.md)

@@ -1,14 +1,13 @@
 """`by motion`: the stage held to each verb's own values in `data/ui-conventions.json`, with
 Arena's numbers beside them as reference and no verdict (docs/project-50k.md, K27; UI
 Conventions, "Motion is Beryl's own"). How a motion looks on Beryl's cards is designed for them
-and judged by the independent motion review, never by how near it comes to Arena's numbers
-(`data/arena-motion.json`). This is a regression guard: it fails when the stage stops playing a
+and never judged by how near it comes to Arena's numbers (`data/arena-motion.json`). This is a regression guard: it fails when the stage stops playing a
 verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
   summary of its instances.
-- `by motion --film <verb> [case]` films a verb for the independent motion review, which
-  decides when a verb is done: motion_film.py.
+- `by motion --film <verb> [case]` films a verb for the independent motion review, which runs
+  when the user asks and gates nothing: motion_film.py.
 - The stepped capture: ui/scripts/stepped.mjs plays the verb suite's moments (ui/verbs.json)
   on the stage in stepped stage time: the first (a cast, its trigger and tokens), every step of
   the suite's verbs screenshotted at every tick; and with `--more` the moments of cards
