@@ -190,9 +190,12 @@ fn write_out(file: &str, source: Result<String, String>) {
     std::fs::write(env_path("OUT_DIR").join(file), source).expect("OUT_DIR is writable");
 }
 
-/// `to` as a path from the directory `from`, both absolute, with `/` between its parts;
-/// `to` itself where they share no root, as on two drives.
+/// `to` as a path from the directory `from`, with `/` between its parts; `to` itself where
+/// they share no root, as on two drives. Both are resolved first: the compiler follows the
+/// `..` of the result through the real directories, so a link on the way would mislead it.
 fn relative(from: &Path, to: &Path) -> String {
+    let resolved = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let (from, to) = (resolved(from), resolved(to));
     let (from, to): (Vec<_>, Vec<_>) = (from.components().collect(), to.components().collect());
     let shared = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
     if shared == 0 {
