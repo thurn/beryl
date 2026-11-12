@@ -22,7 +22,7 @@ export const EDGE = 3;
  * advancing it in ticks of `tick`: the seat answers once the stage has stood idle for `gap`,
  * until an ability has come onto the stack and gone and `edge` ticks after, or with `whole`,
  * for all of its `answers`: to the recording's end, which the view the stage then shows tells
- * (`shows`). Before each tick whose number is in `shoot` it waits on
+ * (`shows`); and with `written`, the marks of the script written by hand after it. Before each tick whose number is in `shoot` it waits on
  * `window.berylShoot(number, time)`. Returns every step the stage told of, with its subject,
  * its stage times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
  * with what changed since the tick before: the box on the page and the pose as the stage has
@@ -39,7 +39,16 @@ export const EDGE = 3;
  * `performance.now` reads them, and the page is given turns of its own before each tick is
  * read, as it has between two frames, in which React draws without ever running out of
  * time. A moment in which a choice opens needs it to play the same twice. */
-export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
+export async function walk({
+    tick,
+    gap,
+    answers,
+    edge,
+    shoot,
+    whole,
+    paced,
+    written,
+}) {
     /** What a step is about, by the name the stage gives it: its card, or the ability; for a
      * look, the top one of the library cards it lifts, or none where it lifts none
      * (stepped.mjs's `subjectOf`); a strike's source, and the card a tally is on. None for a
@@ -57,9 +66,20 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
         }
         if (act.subject?.kind === "ability") return `a${act.subject.id}`;
         if (act.subject?.kind === "object") return String(act.subject.slot);
+        if (act.verb === "mark") return named(act.on);
         const object = act.object ?? act.tally?.object;
         return object ? String(object.slot) : null;
     };
+    /** What a script's subject is on the page: a node's name, or a player's side. */
+    const named = (subject) =>
+        subject.kind === "object"
+            ? String(subject.slot)
+            : subject.kind === "ability"
+              ? `a${subject.id}`
+              : subject.player;
+    /** The two things an arrow or line is between, which a film of it is framed on. */
+    const endsOf = (act) =>
+        act.verb === "point" ? { ends: [named(act.from), named(act.to)] } : {};
     const stage = window.berylStage;
     const { clock } = stage;
     const live = window.berylTimers;
@@ -83,6 +103,7 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
             steps.push({
                 act,
                 subject: subjectOf(act, e.table.view),
+                ...endsOf(act),
                 case: window.berylCase(act, e.table.view) ?? null,
                 from: at,
                 to: at,
@@ -217,6 +238,27 @@ export async function walk({ tick, gap, answers, edge, shoot, whole, paced }) {
             finished ||= !whole && lifted && !abilities;
             if (finished) after += 1;
             idle = stage.step ? 0 : idle + took;
+        }
+    }
+    // The marks, from the script written by hand (written-marks.mjs, which the caller gave
+    // the page), each beat a script of its own over the table the moment leaves, once what
+    // is left of it has played out.
+    if (written) {
+        // What plays out unseen meanwhile is no step of this walk's.
+        const seen = steps.length;
+        stage.settle();
+        steps.length = seen;
+        const view = stage.shown.view;
+        for (const beat of window.berylWrittenMarks(view).beats) {
+            stage.play(view, { beats: [beat] });
+            for (let idle = 0; idle < gap;) {
+                const took =
+                    Math.round(ticks.length * tick) -
+                    Math.round((ticks.length - 1) * tick);
+                clock.advance(took);
+                await sample();
+                idle = stage.step ? 0 : idle + took;
+            }
         }
     }
     unfollow();

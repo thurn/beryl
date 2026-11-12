@@ -73,7 +73,14 @@ INTERACTIONS = "ui/scripts/interactions.mjs"
 # The verb suite, which `ui-test` runs beside interactions.mjs: its script, its cases, the list
 # of its checks, and the prefix of their ids in the run log (the lane's others are `ui-test:<title>`).
 VERB_SCRIPT = "ui/scripts/verbs.mjs"
-VERB_CASES = ("ui/scripts/verb-cases.mjs", "ui/scripts/verb-cases-place.mjs")
+VERB_CASES = (
+    "ui/scripts/verb-cases.mjs",
+    "ui/scripts/verb-cases-place.mjs",
+    "ui/scripts/verb-cases-piles.mjs",
+    "ui/scripts/verb-cases-spans.mjs",
+    "ui/scripts/verb-spans.mjs",
+    "ui/scripts/written-marks.mjs",
+)
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"
 SHOTS = "ui/shots.json"

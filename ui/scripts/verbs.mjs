@@ -28,6 +28,9 @@ import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 import { CASES as ZONES, complete } from "./verb-cases.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
 import { CASES as PILES } from "./verb-cases-piles.mjs";
+import { CASES as SPANS } from "./verb-cases-spans.mjs";
+import { install as installSpans } from "./verb-spans.mjs";
+import { install as installMarks } from "./written-marks.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -101,7 +104,7 @@ const MIDDLE = 450;
  * stage told (`stage.follow`) with the sounds that step asks for (src/audio/steps.ts), and
  * the sounds the page was asked for meanwhile (`window.berylSounds`), all in stage time; and
  * where the two halves of the table meet. */
-async function walk({ tick, gap, answers, middle, whole }) {
+async function walk({ tick, gap, answers, middle, whole, written }) {
     const stage = window.berylStage;
     const { clock } = stage;
     clock.hold();
@@ -116,6 +119,8 @@ async function walk({ tick, gap, answers, middle, whole }) {
     const extra = [];
     let sample;
     let changes;
+    const ticks = [];
+    let spans;
     const reach = async (time) => {
         while (clock.now < time) {
             const next = Math.min(
@@ -124,6 +129,7 @@ async function walk({ tick, gap, answers, middle, whole }) {
                 ...[...wanted].filter((at) => at > clock.now),
             );
             clock.advance(next - clock.now);
+            ticks.push(spans());
             if (wanted.delete(clock.now) && clock.now < time) {
                 const taken = sample();
                 if (taken.counting.length) taken.changes = await changes();
@@ -230,9 +236,10 @@ async function walk({ tick, gap, answers, middle, whole }) {
         }
         return null;
     };
+    const SIDES = ["you", "opponent"];
+    spans = window.berylSpanSampler({ stage, clock, origin, layer, faults });
     let lifted = false;
     let done = false;
-    const SIDES = ["you", "opponent"];
     sample = () => {
         const poses = {};
         const zones = {};
@@ -315,11 +322,9 @@ async function walk({ tick, gap, answers, middle, whole }) {
         );
     };
     const steps = [];
-    for (let answer = 0; answer < answers && !done; answer++) {
-        await window.berylFixture.invoke("choose", { request: {} });
-        // The transport hands the views on in a microtask.
-        await new Promise((resolve) => setTimeout(resolve));
-        while (!done) {
+    /** Walks the clock through every step the stage has to play, until `over`. */
+    const follow = async (answer, over) => {
+        while (!over()) {
             const before = sample();
             clock.advance(0);
             const step = stage.step;
@@ -349,7 +354,30 @@ async function walk({ tick, gap, answers, middle, whole }) {
                 at,
             });
         }
+    };
+    for (let answer = 0; answer < answers && !done; answer++) {
+        await window.berylFixture.invoke("choose", { request: {} });
+        // The transport hands the views on in a microtask.
+        await new Promise((resolve) => setTimeout(resolve));
+        await follow(answer, () => done);
         if (!done) await reach(clock.now + gap);
+    }
+    // The marks, from the script written by hand (written-marks.mjs), played over the table
+    // the moment leaves.
+    let wrote;
+    if (written) {
+        stage.settle();
+        const view = stage.shown.view;
+        const { beats, ...on } = window.berylWrittenMarks(view);
+        wrote = { from: clock.now - origin, before: sample().poses, ...on };
+        // Each beat is a script of its own, as a prompt's marks would come: the stage stands
+        // idle between them with the marks drawn.
+        for (const beat of beats) {
+            stage.play(view, { beats: [beat] });
+            await follow(answers, () => false);
+            await reach(clock.now + gap);
+        }
+        wrote.after = sample().poses;
     }
     unfollow();
     const shown = stage.shown.view;
@@ -359,6 +387,8 @@ async function walk({ tick, gap, answers, middle, whole }) {
     return {
         steps,
         extra,
+        ticks,
+        written: wrote,
         faults,
         done: done || (whole && !stage.shown.busy),
         shows: shown && [shown.turn.number, shown.turn.step, shown.status],
@@ -425,11 +455,18 @@ function soundsFollowSteps(run) {
 const CASES = Object.fromEntries(
     verbs.map((verb) => [
         verb,
-        (runs) => [ZONES, PLACE, PILES].forEach((cases) => cases[verb]?.(runs)),
+        (runs) =>
+            [ZONES, PLACE, PILES, SPANS].forEach((cases) =>
+                cases[verb]?.(runs),
+            ),
     ]),
 );
 assert.deepEqual(
-    [...new Set([...Object.keys(ZONES), ...Object.keys(PLACE)])].sort(),
+    [
+        ...new Set(
+            [ZONES, PLACE, SPANS].flatMap((cases) => Object.keys(cases)),
+        ),
+    ].sort(),
     [...verbs].sort(),
     "ui/verbs.json and the cases",
 );
@@ -467,10 +504,11 @@ async function open(size) {
 
 /** Plays `fixture` from its first view on the stage of a page of its own in `context`, asked
  * for by `query`, which `watch` is shown first and returns what to do before the page closes,
- * in ticks of `tick`, to its `end` if given one (`ending`); and checks what holds of every run: the page drew what the model said,
+ * in ticks of `tick`, to its `end` if given one (`ending`), and with `written` the marks of a
+ * script written by hand after it; and checks what holds of every run: the page drew what the model said,
  * nothing but the stage's clock moved a node, its sounds were its steps', and the old
  * playback and card layer took no part. */
-async function play(context, watch, query, fixture, tick, end) {
+async function play(context, watch, query, fixture, tick, end, written) {
     const page = await context.newPage();
     const done = await watch(page);
     let hung = false;
@@ -482,12 +520,15 @@ async function play(context, watch, query, fixture, tick, end) {
             () => window.berylStage && document.querySelector(".stage-node"),
         );
         await page.evaluate(() => document.fonts.ready.then(() => {}));
+        await installSpans(page);
+        if (written) await installMarks(page);
         const run = await page.evaluate(walk, {
             tick,
             gap: GAP,
             answers: end?.answers ?? ANSWERS,
             middle: MIDDLE,
             whole: end !== undefined,
+            written,
         });
         assert.deepEqual(
             run.faults.slice(0, 5),
@@ -527,7 +568,10 @@ async function play(context, watch, query, fixture, tick, end) {
  * among `script`'s in order. */
 function inOrder(run, script) {
     let at = 0;
-    for (const step of run.steps) {
+    const recorded = run.steps.filter(
+        (step) => !run.written || step.from < run.written.from,
+    );
+    for (const step of recorded) {
         const found = script.findIndex(
             (act, i) =>
                 i >= at && JSON.stringify(act) === JSON.stringify(step.act),
@@ -604,6 +648,7 @@ for (const verb of verbs) {
                                         name in more
                                             ? await ending(played[name])
                                             : undefined,
+                                        verb === "mark",
                                     ),
                                 );
                             }

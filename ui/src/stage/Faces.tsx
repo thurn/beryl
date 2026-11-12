@@ -15,7 +15,8 @@ import type { DomSurface } from "./dom.ts";
 import type { Dress, StackAbility } from "./layout.ts";
 import type { ScriptStage } from "./stage.ts";
 
-/** No prompt marks a card yet (the marks of script/verb.rs come with the prompt shapes). */
+/** The skin's own highlights mark no card here: a mark of script/verb.rs is the stage's, an
+ * element of its own on the node with its one look (spans.ts, stage.css). */
 const UNMARKED: CardState = {};
 
 const Face = memo(function Face({

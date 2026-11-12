@@ -5,11 +5,18 @@
 // stage's own inside it, under or over the face, and how far through it is a number the stage
 // writes on the node each tick: its look is a rule of stage.css read from that number, never a
 // CSS animation. An effect on a player is drawn the same way in the element of their life
-// total, which the chrome around the table draws. The elements keep the names the old board gave its
+// total, which the chrome around the table draws. A mark (spans.ts) is drawn as an effect
+// is, an element inside what it is on with its look in stage.css, for as long as its span is
+// open. An arrow or line is one path in a drawing of the layer's own, from the step that
+// begins it to the step that ends it: over everything at rest and under what flies, or for a
+// line of combat on the table, under the cards. The stage writes its shape in stage pixels
+// each tick. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
+import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import type { Name, Point, Resting } from "./layout.ts";
+import type { Shape } from "./lines.ts";
 import type { Pointer, Under } from "./pointer.ts";
 import { transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
@@ -21,6 +28,11 @@ const named = (said: string): Name =>
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;
   readonly #nodes = new Map<Name, HTMLElement>();
+  /** The drawings the lines are paths of, each made with its first: one over everything at
+   * rest, for an arrow at a target and the line to a source, and one under the cards, on
+   * the table, for the lines of combat. */
+  readonly #drawings: { over?: SVGSVGElement; under?: SVGSVGElement } = {};
+  readonly #lines = new Map<string, SVGPathElement>();
   /** Where the browser's pointer was last, in the window. */
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
@@ -160,14 +172,70 @@ export class DomSurface implements Surface {
     this.#repoint?.();
   }
 
+  /** The element of what the stage names `on`: its node, or a player's life total, which is
+   * the chrome's (`data-life`), beside the card layer. */
+  #on(on: On) {
+    return on === "you" || on === "opponent"
+      ? this.#layer.ownerDocument.querySelector<HTMLElement>(
+          `[data-life="${on}"]`,
+        )
+      : this.#nodes.get(on);
+  }
+
+  line(key: string, arrow?: Arrow, shape?: Shape | null) {
+    let path = this.#lines.get(key);
+    if (arrow === undefined) {
+      path?.remove();
+      this.#lines.delete(key);
+      return;
+    }
+    if (!path) {
+      const document = this.#layer.ownerDocument;
+      const svg = "http://www.w3.org/2000/svg";
+      const where = arrow === "attack" || arrow === "block" ? "under" : "over";
+      let drawing = this.#drawings[where];
+      if (!drawing?.isConnected) {
+        drawing = document.createElementNS(svg, "svg");
+        drawing.setAttribute("class", `stage-lines stage-lines-${where}`);
+        drawing.setAttribute("aria-hidden", "true");
+        this.#layer.append(drawing);
+        this.#drawings[where] = drawing;
+      }
+      path = document.createElementNS(svg, "path");
+      path.setAttribute("class", `stage-line stage-line-${arrow}`);
+      path.dataset.line = key;
+      this.#lines.set(key, path);
+      drawing.append(path);
+    }
+    const d = shape?.d ?? "";
+    if (path.getAttribute("d") !== d) path.setAttribute("d", d);
+  }
+
+  mark(on: On, mark: Mark, shown?: number) {
+    const node = this.#on(on);
+    if (!node) return;
+    const drawn = node.querySelector<HTMLElement>(
+      `:scope > .stage-mark-${mark}`,
+    );
+    if (shown === undefined) {
+      drawn?.remove();
+      return;
+    }
+    const made = drawn ?? document.createElement("div");
+    if (!drawn) {
+      made.className = `stage-mark stage-mark-${mark}`;
+      made.setAttribute("aria-hidden", "true");
+      node.append(made);
+    }
+    // How far it has come to its look, which is drawn from that number alone.
+    const through = String(shown);
+    if (made.style.getPropertyValue("--shown") !== through) {
+      made.style.setProperty("--shown", through);
+    }
+  }
+
   effect(on: On, { name, layer }: Omit<Drawn, "progress">, progress?: number) {
-    // A player's life total is the chrome's (`data-life`), beside the card layer.
-    const node =
-      on === "you" || on === "opponent"
-        ? this.#layer.ownerDocument.querySelector<HTMLElement>(
-            `[data-life="${on}"]`,
-          )
-        : this.#nodes.get(on);
+    const node = this.#on(on);
     if (!node) return;
     const drawn = node.querySelector(`:scope > .stage-effect-${name}`);
     if (progress === undefined) {

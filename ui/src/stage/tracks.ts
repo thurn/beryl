@@ -23,6 +23,12 @@ export interface Timing {
    * for the first. The blow a creature deals back to the one that strikes it, and the life a
    * strike takes. */
   with?: boolean;
+  /** It is drawn between these, at rest: it begins its delay no sooner than the steps of its
+   * beat that move them have ended (beat.ts). An arrow from a spell on its way to the stack. */
+  after?: readonly Name[];
+  /** For a step that ends a span: it begins no sooner than this long after the span has
+   * come in whole (beat.ts). An arrow whose spell resolves at once is still read. */
+  hold?: number;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -129,6 +135,13 @@ export const heldUp =
       ? { ...pose, face: "back" }
       : pose;
   };
+
+/** How far a permanent turns as it taps, in degrees. */
+export const QUARTER = 90;
+
+/** How far over where it rests a permanent picked to pay a cost is drawn (spans.ts): over
+ * every permanent, whose rows it reaches across as it lies turned, and under the stack. */
+export const PAYING = 200;
 
 /** How much of its step a permanent that taps or untaps turns in. It turns where it lies, and
  * only then do it and its row go to where they now rest, the tapped apart from the untapped

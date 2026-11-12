@@ -101,4 +101,8 @@ export interface StageLayout {
   /** Half the width and half the height of the card `resting` is dressed as, as it lies at
    * `pose`: how far it reaches from its middle, which a strike at it stops by. */
   half(resting: Resting, pose: Pose): Point;
+  /** How far past its frame the tip of the chevron an attacker wears is, in its card's
+   * widths, where the line to what it attacks starts: nothing in a layout whose attackers
+   * wear none. */
+  chevron: number;
 }

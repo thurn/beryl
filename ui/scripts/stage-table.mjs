@@ -28,6 +28,7 @@ export const view = (battlefield, hand = [], more = {}) => ({
         opponent: { life: 20, library: [], graveyard: [] },
     },
     turn: { number: 1, active: "you", step: "precombatMain" },
+    status: { kind: "playing" },
     ...more,
 });
 
@@ -110,23 +111,45 @@ export const row = {
         y: source.y + 10,
         width: source.width / 2,
     }),
+    // An attacker's chevron stands a sixth of its width past its edge.
+    chevron: 1 / 6,
     // A drawn card is held up 300 above where it will lie, at twice its width.
     drawn: (rest) => ({ ...rest, y: rest.y - 300, width: rest.width * 2 }),
 };
 
 /** A surface that records what the stage did to it: the nodes it made and removed (`log`),
- * how it dressed each, as its zone or as a card back (`dressed`), each node's pose, and how
- * far through each effect drawn on a node is, by `<node> <effect> <layer>` (`effects`). */
+ * how it dressed each, as its zone or as a card back (`dressed`), each node's pose, how far
+ * through each effect drawn on a node is, by `<node> <effect> <layer>` (`effects`), the path
+ * of each line drawn, by its key (`lines`), how far each mark has come in, by `<node>
+ * <mark>` (`marks`), and each line and mark made and taken away, in order (`spans`). */
 export function recorder() {
     const log = [];
     const dressed = [];
     const nodes = new Map();
     const effects = new Map();
+    const lines = new Map();
+    const marks = new Map();
+    const spans = [];
+    /** Sets or deletes `key` of `drawn`, and logs it as made or taken away. */
+    const span = (drawn, key, value) => {
+        if (value === undefined) {
+            if (drawn.delete(key)) spans.push(`- ${key}`);
+            return;
+        }
+        if (!drawn.has(key)) spans.push(`+ ${key}`);
+        drawn.set(key, value);
+    };
     return {
         log,
         dressed,
         nodes,
         effects,
+        lines,
+        marks,
+        spans,
+        line: (key, arrow, shape) =>
+            span(lines, key, arrow && (shape?.d ?? null)),
+        mark: (on, mark, shown) => span(marks, `${on} ${mark}`, shown),
         effect(on, { name, layer }, progress) {
             const drawn = `${on} ${name} ${layer}`;
             if (progress === undefined) effects.delete(drawn);
@@ -136,8 +159,10 @@ export function recorder() {
         remove(slot) {
             nodes.delete(slot);
             // What was drawn on a node goes with it.
-            for (const drawn of [...effects.keys()]) {
-                if (drawn.startsWith(`${slot} `)) effects.delete(drawn);
+            for (const drawn of [effects, marks]) {
+                for (const key of [...drawn.keys()]) {
+                    if (key.startsWith(`${slot} `)) drawn.delete(key);
+                }
             }
             log.push(`remove ${slot}`);
         },

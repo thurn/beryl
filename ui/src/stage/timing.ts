@@ -10,6 +10,7 @@ import conventions from "../../../data/ui-conventions.json";
 import type { Act, PlayerView } from "../generated/protocol";
 import type { Effect, Layer } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
+import { namedBy } from "./spans.ts";
 import { GONE, meets, STRIKE } from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
@@ -129,6 +130,35 @@ export function caseOf(act: Act, found?: PlayerView): string | undefined {
         default:
           return undefined;
       }
+    case "point":
+      if (act.span === "end") {
+        return act.arrow === "source" ? "source line end" : "end";
+      }
+      switch (act.arrow) {
+        case "source":
+          return "source line";
+        case "attack":
+          return "attack line";
+        case "block":
+          return "block line";
+        default: {
+          // At another spell or ability on the stack, its arrow loops over the two (UI
+          // Conventions, "Two items on the stack").
+          const stacked =
+            act.to.kind === "ability" ||
+            (act.to.kind === "object" &&
+              found?.stack.some(
+                (item) =>
+                  item.kind === "spell" && namedBy(act.to) === item.slot,
+              ));
+          return stacked ? "stack arrow" : "target arrow";
+        }
+      }
+    case "mark":
+      if (act.span === "end") return "end";
+      return act.mark === "friendly-target" || act.mark === "hostile-target"
+        ? "target"
+        : act.mark;
     default:
       return undefined;
   }
@@ -153,6 +183,35 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     (found === undefined ? undefined : cases.get(act.verb)?.get(found)) ??
     verbs.get(act.verb) ??
     SNAP;
+  // An arrow or a line is no turn of its beat: it goes with the step that calls for it and
+  // holds up none after it. Its end is a cut, the data's cases of no time, as Arena cuts its
+  // own (data/arena-motion.json, point: "It is cut, not faded, when it ends"). An arrow or a
+  // line of combat is drawn between things at rest: it waits for the spell or ability it
+  // leaves to land. The line from an ability to its source does not: it stretches as the
+  // ability lifts. The marks of one beat come up together, their delay after its turn comes.
+  if (act.verb === "point" || act.verb === "mark") {
+    // What says "this, at that" is read before it goes: its end waits until it has stood
+    // whole for the end's delay, and then nothing waits between its going and what it
+    // pointed at moving (UI Conventions, Verbs, point). The line to a source says only where
+    // an ability came from, which its lift has shown: its end waits its own delay from the
+    // beat's start, the ability staying that moment after what it did, and the two then go
+    // together.
+    const led = act.verb === "point";
+    if (act.span === "end") {
+      const read = led && act.arrow !== "source";
+      return read
+        ? { ...own, delay: 0, hold: own.delay, with: true }
+        : { ...own, with: led };
+    }
+    const waits = led && act.arrow !== "source";
+    const after = waits
+      ? [act.from, act.to].flatMap((end) => {
+          const name = namedBy(end);
+          return name === "you" || name === "opponent" ? [] : [name];
+        })
+      : [];
+    return { ...own, with: led, after };
+  }
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };
   // The life a strike takes from a player goes as its blow lands on them, not its own delay

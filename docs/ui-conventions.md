@@ -437,16 +437,35 @@ held to by `just motion`.
   cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
-  attacker to what it attacks, from a blocker to its attacker. A cyan arc runs
-  from a spell or ability to its target until it resolves. A thin line joins an
-  ability to its source from the frame it lifts. A thin gold line runs from a
-  blocker to its attacker until combat damage is done. An attacker has no line
-  to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5,
-  IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk
-  25:52.5). Beryl: 33 ms, 170 ms after its cause, in place.
+  attacker to what it attacks, from a blocker to its attacker. An arrow at a
+  target is a bowed arc with a head, drawn out of its spell or ability once that
+  has landed on the stack. It comes onto a card from the open table in front of
+  it, never along its row, and its head lies on the card's face; at a player it
+  goes over the top onto their life total; between two things that all but touch
+  it goes round their side. One at the stack item its own lies over leaves the
+  side of its own item and comes round into the end of the other's strip, its
+  head on the table beside the stack, pointing at that item's name. The line to
+  a source is the same arc, thin and faint with no head, and stretches as the
+  ability lifts. A line of combat is thin and straight, from the tip of the
+  attacker's chevron or from a blocker's edge. Each is one line for as long as
+  it lasts, drawn every moment from where its two ends are, and is cut as the
+  step that ends it begins, which waits until an arrow or a line of combat has
+  stood whole for its end's delay: one whose spell resolves at once is still
+  read. An ability and the line to its source stay a moment after what the
+  ability did, and go in one tick. A line of combat lies on the table, under the
+  cards and the step's banner. A cyan arc runs from a spell or ability to its
+  target until it resolves. A thin line joins an ability to its source from the
+  frame it lifts. A thin gold line runs from a blocker to its attacker until
+  combat damage is done. An attacker has no line to the player, only its chevron
+  (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5, IEXcjBn3BXk 20:39.3, IEXcjBn3BXk
+  22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk 25:52.5). Beryl: 66 ms, 0 ms after its
+  cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
-  the step that begins it to the step that ends it. Beryl: 50 ms, 125 ms after
-  its cause, 0 ms apart, in place.
+  the step that begins it to the step that ends it. The light of what may be
+  picked comes up over a moment, on all of it at once. Every other mark is there
+  in the tick its step begins, so that one which takes another's place on a card
+  swaps with it, and each is gone as the step that ends it begins. Beryl: 0 ms,
+  0 ms after its cause, 0 ms apart, in place.
 - **lift.** Cards the opponent is handling come away from their pile, face down,
   from the step that begins the look to the step that ends it. Cards the
   opponent scries come off their library face down at its size and lie beside it

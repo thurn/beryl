@@ -39,6 +39,7 @@ import {
     TICK,
     walk,
 } from "./film-walk.mjs";
+import { install as installMarks } from "./written-marks.mjs";
 
 const args = process.argv.slice(2);
 /** Takes the flag `name` and its value out of the arguments; its value, or undefined. */
@@ -118,11 +119,23 @@ const tickAt = (ticks, at) => {
 };
 
 /** The box a subject of `step` has at tick `t` of `film` (a `reel`): its card's or ability's,
- * or a player's life total, for a count of life. */
+ * or a player's life total, for a count of life or a mark on a player; for an arrow or line,
+ * the box about both the things it is between. */
 function boxOf(step, film, t, orbs) {
     const player = step.act.tally?.kind === "life" && step.act.tally.player;
     if (player) return orbs[player] ?? null;
-    return step.subject === null ? null : film.box(step.subject, t);
+    const of = (name) => orbs[name] ?? film.box(name, t);
+    if (step.ends) {
+        const ends = step.ends.map(of).filter(Boolean);
+        if (!ends.length) return null;
+        return [
+            Math.min(...ends.map((b) => b[0])),
+            Math.min(...ends.map((b) => b[1])),
+            Math.max(...ends.map((b) => b[2])),
+            Math.max(...ends.map((b) => b[3])),
+        ];
+    }
+    return step.subject === null ? null : of(step.subject);
 }
 
 /** The window around `boxes` with `pad` about them, on whole pixels within `size`. */
@@ -530,8 +543,12 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                 })),
                 size,
             });
-            const play = (page, shoot) =>
-                page.evaluate(walk, {
+            // No recording draws a mark: its film is of the script written by hand, played
+            // after the suite's first moment.
+            const written = verb === "mark";
+            const play = async (page, shoot) => {
+                if (written) await installMarks(page);
+                return page.evaluate(walk, {
                     tick: TICK,
                     gap: GAP,
                     answers: end?.answers ?? ANSWERS,
@@ -539,7 +556,9 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                     shoot,
                     whole: moment.whole,
                     paced: true,
+                    written,
                 });
+            };
             try {
                 const first = await open();
                 let learned;

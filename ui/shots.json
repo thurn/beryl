@@ -439,6 +439,42 @@
       "height": 900
     },
     {
+      "name": "stage-arrow-ability",
+      "route": "/?stage&fixture=arrow-ability#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-arrow-player",
+      "route": "/?stage&fixture=arrow-player#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-arrow-stacked",
+      "route": "/?stage&fixture=arrow-stacked#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-attack-lines",
+      "route": "/?stage&fixture=combat-double-block&at=14#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-blockers",
+      "route": "/?phone&stage&fixture=combat-blockers#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stage-arrow-ability",
+      "route": "/?phone&stage&fixture=arrow-ability#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
       "name": "stage-game-over",
       "route": "/?stage&fixture=game-over#/game",
       "width": 1600,

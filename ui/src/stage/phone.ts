@@ -244,4 +244,6 @@ export const phone = (viewport: Viewport): StageLayout => ({
   drawn,
   middle,
   half,
+  // The phone's scans wear no combat marks (mobile/faces.tsx).
+  chevron: 0,
 });

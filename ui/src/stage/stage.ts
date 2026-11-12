@@ -34,7 +34,9 @@
 //
 // What follows a step besides motion (a sound) is told its beginning and its end the same way
 // (`follow`): inside the tick, in the order of their stage times, each with its own time. A
-// step also begins its verb's effects on what it is about, played on this clock (effects.ts).
+// step also begins its verb's effects on what it is about, played on this clock (effects.ts),
+// and a `point` or `mark` step begins or ends an arrow, a line or a mark, which the stage
+// holds between the two and draws each tick from where its ends are (spans.ts, lines.ts).
 //
 // One pose is not the clock's: a card the pointer holds (pointer.ts). What the pointer does
 // enters the model as data, and the held card's pose is computed from it here like any other,
@@ -47,14 +49,23 @@ import type {
   ScriptStep,
   Verb,
 } from "../generated/protocol";
+import { laid, type Edge, type Playing, type Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { awaited, entering } from "./enter.ts";
-import { Effects, type Effect, type EffectSurface } from "./effects.ts";
+import {
+  Effects,
+  type Effect,
+  type EffectSurface,
+  type On,
+} from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
+import type { Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
-import { apply, tableOf, type Table } from "./table.ts";
+import { reachOfCard, reachOfLife, shapeOf, type Reach } from "./lines.ts";
+import { Spans, type Line, type Marked, type SpanSurface } from "./spans.ts";
+import { apply, tabled, tableOf, type Table } from "./table.ts";
 import {
   dissolve,
   glide,
@@ -64,6 +75,8 @@ import {
   makingRoom,
   shareOf,
   moverOf,
+  PAYING,
+  QUARTER,
   subjectOf,
   along,
   TURN,
@@ -73,70 +86,19 @@ import {
   type Track,
 } from "./tracks.ts";
 
+export type { Edge, Playing } from "./beat.ts";
+export type { Counting, Shown } from "./shown.ts";
 export { SNAP, type Timing } from "./tracks.ts";
 
 /** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
-export interface Surface extends EffectSurface {
+export interface Surface extends EffectSurface, SpanSurface {
   make(name: Name): void;
   remove(name: Name): void;
   /** Dresses the node for where its object or ability now rests. */
   dress(name: Name, resting: Resting): void;
   /** Writes the node's pose, its frame `frame` wide. */
   draw(name: Name, pose: Pose, frame: number): void;
-}
-
-/** What the stage shows now, for what is drawn from it besides poses (faces, the chrome): a
- * new one whenever a record, a dress or the table changes, a script has played out, or the
- * stage starts or stops playing, and never for motion alone. */
-export interface Shown {
-  /** The table as the steps so far have left it. */
-  table: PlayerView | undefined;
-  resting: ReadonlyMap<Name, Resting>;
-  /** The view last shown whole, its script played out: the one the prompt and the chrome
-   * around the table are drawn from. */
-  view: PlayerView | undefined;
-  /** Something given to `play` has not played out. */
-  busy: boolean;
-  /** The announcements passing over the table: the `announce` steps under way, in the order
-   * they began. The banners around the table show for as long as their step is here, on the
-   * stage's time. */
-  notices: readonly ScriptStep[];
-  /** The numbers changing now: the `count` steps under way, in the order they began, each
-   * with the table it found. What shows that a number changed (the change beside a life
-   * total) shows for as long as its step is here. */
-  counts: readonly Counting[];
-}
-
-/** A `count` step under way, and the table as it found it. */
-export interface Counting {
-  step: ScriptStep;
-  found?: Table;
-}
-
-/** The step playing now: its place in its script counting every step, its verb, its start
- * and end in stage milliseconds, and the step itself. */
-export interface Playing {
-  index: number;
-  verb: Verb;
-  from: number;
-  to: number;
-  step: ScriptStep;
-}
-
-/** A step beginning or ending, for what follows steps besides motion (`ScriptStage.follow`). */
-export interface Edge {
-  edge: "start" | "end";
-  /** The stage time it happens at, whenever the tick that finds it runs. */
-  at: number;
-  /** The step's own start and end, in stage time, and when its turn in its beat came: it
-   * begins its delay after, or as an earlier step of its beat does, whichever is later. */
-  span: Readonly<Pick<Run, "from" | "to" | "turn">>;
-  step: ScriptStep;
-  /** The table as the step found it, before its act. */
-  table: Table;
-  /** The steps of its beat before it, in order. */
-  earlier: readonly ScriptStep[];
 }
 
 interface Entry {
@@ -149,18 +111,6 @@ interface Entry {
   /** What it is drawn as while it has yet to turn over on its way (`Track.turn`): as it
    * rests, but for its back. */
   covered?: Resting;
-}
-
-/** One step of the beat under way. */
-interface Run extends Playing {
-  /** When its turn in its beat came, which its delay counts from (`Timing`). */
-  turn: number;
-  ease(progress: number): number;
-  each?: number;
-  begun: boolean;
-  /** The table as the step found it, once it has begun. */
-  found?: Table;
-  ended: boolean;
 }
 
 interface Playback {
@@ -182,6 +132,7 @@ export class ScriptStage {
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
   readonly #effects = new Effects();
+  readonly #spans = new Spans();
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
@@ -275,6 +226,7 @@ export class ScriptStage {
   unmount(surface = this.#surface) {
     if (!surface || surface !== this.#surface) return;
     for (const name of this.#entries.keys()) surface.remove(name);
+    this.#spans.erase(surface);
     this.#surface = undefined;
   }
 
@@ -292,6 +244,7 @@ export class ScriptStage {
     this.#queue = [];
     this.#playback = undefined;
     this.#effects.clear(this.#surface);
+    this.#spans.clear(this.#surface);
     // What was in flight is where it rests, whether or not the view moves that.
     for (const entry of this.#entries.values()) {
       entry.moved ||= entry.track !== undefined;
@@ -300,8 +253,10 @@ export class ScriptStage {
     }
     let table = tableOf(view, script?.reset);
     // A reset's steps are only the spans to show, begun at once.
-    for (const step of script?.beats.flat() ?? [])
-      table = apply(table, step.act);
+    for (const { act } of script?.beats.flat() ?? []) {
+      table = apply(table, act);
+      this.#span(act, -Infinity, -Infinity);
+    }
     this.#set(table);
     this.#view = view;
     this.#lay(this.clock.now);
@@ -360,6 +315,30 @@ export class ScriptStage {
   pose(name: Name): Pose | null {
     const entry = this.#entries.get(name);
     return entry ? this.#poseOf(name, entry, this.clock.now) : null;
+  }
+
+  /** The arrows and lines the stage holds, each as it is drawn at `clock.now` (spans.ts): from
+   * where the model has its two ends, never from the page. The line from an ability to its
+   * source is hidden while the view shown asks the player something other than priority (UI
+   * Conventions, "A line from an ability to its source"). */
+  lines(now = this.clock.now): Line[] {
+    const status = this.#busy ? undefined : this.#view?.status;
+    const asked = status?.kind === "deciding" && status.decision.kind;
+    const prompt =
+      asked !== undefined && asked !== false && asked !== "priority";
+    return this.#spans.lines(
+      now,
+      (arrow) => prompt && arrow === "source",
+      ({ arrow, from, to, shown }) => {
+        const [a, b] = [this.#reach(from, now), this.#reach(to, now)];
+        return a && b ? shapeOf(arrow, a, b, shown) : null;
+      },
+    );
+  }
+
+  /** The marks the stage holds at `clock.now`, on `on` or on anything. */
+  marks(on?: On): Marked[] {
+    return this.#spans.marks(this.clock.now, on);
   }
 
   /** The effects under way at `clock.now` on `name`, each as far through as it is. */
@@ -472,7 +451,7 @@ export class ScriptStage {
           );
           entry.moved = true;
         }
-        this.#set({ ...this.#table!, view: playback.view });
+        this.#set({ ...this.#table!, view: tabled(playback.view) });
         this.#view = playback.view;
         this.#lay(this.#at);
       }
@@ -481,36 +460,23 @@ export class ScriptStage {
     if (!this.#busy) this.#release();
   }
 
-  /** Lays out the next beat's steps in time from where the last beat ended. */
+  /** Lays out the next beat's steps in time from where the last beat ended (beat.ts). */
   #beat(playback: Playback) {
     playback.played += playback.steps.length;
     playback.beat += 1;
-    let [from, turn, last] = [this.#at, this.#at, this.#at];
-    // Each step is timed by the table it will find; one played `with` the last begins by it.
-    let table = this.#table!;
-    playback.steps = playback.beats[playback.beat]!.map((step, i, beat) => {
-      const timing = this.timings(step.act, table.view, beat[i - 1]?.act);
-      table = apply(table, step.act);
-      const own = timing.with ? last : turn;
-      from = Math.max(from, (timing.with ? from : own) + timing.delay);
-      if (!timing.with) turn = own + timing.stagger;
-      last = own;
-      return {
-        index: playback.played + i,
-        verb: step.act.verb,
-        turn: own,
-        from,
-        to: from + timing.duration,
-        step,
-        ease: timing.ease,
-        each: timing.each,
-        begun: false,
-        ended: false,
-      };
-    });
+    const beat = playback.beats[playback.beat]!;
+    const { steps } = laid(
+      beat,
+      playback.played,
+      this.#at,
+      this.#table!,
+      this.timings,
+      (act) => this.#spans.whole(act),
+    );
     const rests = (name: Name) => this.#entries.get(name)?.resting;
-    awaited(playback.steps, this.#layout, this.#table!.view, rests);
-    playback.end = Math.max(this.#at, ...playback.steps.map((run) => run.to));
+    awaited(steps, this.#layout, this.#table!.view, rests);
+    const end = Math.max(this.#at, ...steps.map((run) => run.to));
+    Object.assign(playback, { steps, end });
   }
 
   /** Begins a step at its own time: the table is as the step leaves it, and what its change
@@ -526,6 +492,7 @@ export class ScriptStage {
       pose: this.#poseOf(mover!, moved, run.from),
     };
     this.#set(apply(this.#table!, run.step.act));
+    this.#span(run.step.act, run.from, run.to, run.ease);
     // A step about what an earlier one is still taking from sight finds it gone already.
     const subject = subjectOf(run.step.act);
     const entry =
@@ -634,6 +601,7 @@ export class ScriptStage {
       this.#surface?.remove(name);
       this.#entries.delete(name);
       this.#effects.gone(name);
+      this.#spans.gone(name);
       this.pointer.gone(name);
       this.#stale = true;
     }
@@ -719,6 +687,7 @@ export class ScriptStage {
   /** Writes the pose at stage time `now` of every entry that moved or is moving, and tells
    * those who draw from `shown` if it changed. */
   #write(now: number) {
+    const stirred = this.#spans.stirred(now);
     for (const [name, entry] of this.#entries) {
       // It has turned over, or what was turning it is no longer its track.
       if (entry.covered && !turning(entry.track, now)) {
@@ -727,12 +696,13 @@ export class ScriptStage {
         entry.moved = true;
         this.#stale = true;
       }
-      if (!entry.moved && !entry.track) continue;
+      if (!entry.moved && !entry.track && !stirred.has(name)) continue;
       this.#draw(name, entry, now);
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
     this.#effects.write(this.#surface, now);
+    this.#spans.write(this.#surface, now, this.lines(now));
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;
@@ -752,12 +722,40 @@ export class ScriptStage {
     for (const listener of [...this.#listeners]) listener();
   }
 
-  /** Where an entry is at stage time `at`: where the pointer holds it, if it does. */
+  /** Where an entry is at stage time `at`: where the pointer holds it, if it does; and turned
+   * as a mark on it turns it, an untapped permanent picked to pay a cost (spans.ts). */
   #poseOf(name: Name, entry: Entry, at: number): Pose {
     const held = this.pointer.held;
-    return held?.name === name && this.#lifted
-      ? heldPose(this.#lifted.from, held.start, held.at)
-      : poseAt(entry, at);
+    const pose =
+      held?.name === name && this.#lifted
+        ? heldPose(this.#lifted.from, held.start, held.at)
+        : poseAt(entry, at);
+    const { object, dress } = entry.resting;
+    const turns = dress.zone === "battlefield" && object?.tapped === false;
+    const turned = turns ? this.#spans.turned(name, at) : 0;
+    if (!turned) return pose;
+    // Over its row from the first: turned, it reaches across the card beside it.
+    const depth = pose.depth + PAYING;
+    return { ...pose, turn: pose.turn + QUARTER * turned, depth };
+  }
+
+  /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, or
+   * a player's life total; none for what the stage does not hold. */
+  #reach(on: On, at: number): Reach | undefined {
+    const layout = this.#layout;
+    if (on === "you" || on === "opponent") {
+      return reachOfLife(layout.anchors(this.#table!.view).life(on));
+    }
+    const entry = this.#entries.get(on);
+    const pose = entry && this.#poseOf(on, entry, at);
+    return pose && reachOfCard(layout, entry.resting, pose);
+  }
+
+  /** Plays `act` if it begins or ends a span, over the stage times `from` to `to`. */
+  #span(act: Act, from: number, to: number, ease = SNAP.ease) {
+    if (act.verb === "point" || act.verb === "mark") {
+      this.#spans.play(act, from, to, ease);
+    }
   }
 
   /** Writes one entry's pose, as the pointer moves it between ticks. */

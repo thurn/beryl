@@ -27,6 +27,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { launch } from "./capture.mjs";
 import { ending } from "./fixture-views.mjs";
+import { install as installMarks } from "./written-marks.mjs";
 
 const args = process.argv.slice(2);
 const more = args.includes("--more");
@@ -74,14 +75,16 @@ const travels = new Set(
 const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
 /** The moments of `more` played besides the first with `--more`, each with the verbs whose
  * steps are taken there: cards changing zone (`zones`, `scry`), and changes on a card where it
- * lies and to players (`combat`, `place`). A scry's flips are a library card's, which the
+ * lies and to players (`combat`, `place`); and in three of them the arrows and lines the first
+ * moment has none of (an arrow at a target, the lines of combat), which are only timed: a
+ * line is no card for the tracker to follow. A scry's flips are a library card's, which the
  * stage turns at once (SNAP), not the face-down permanent's flip its values are for. */
 const MORE = {
-    zones: new Set(["fly", "vanish", "lift"]),
+    zones: new Set(["fly", "vanish", "lift", "point"]),
     scry: new Set(["fly", "vanish", "lift"]),
     look: new Set(["lift"]),
-    combat: new Set(["tap", "strike", "count"]),
-    place: new Set(["tap", "count", "flip"]),
+    combat: new Set(["tap", "strike", "count", "point"]),
+    place: new Set(["tap", "count", "flip", "point"]),
 };
 /** How long the stage stands idle before the seat answers, in stage ms (verbs.mjs GAP). */
 const GAP = 250;
@@ -101,7 +104,7 @@ const MARGIN = 0.3;
  * hides every node. Returns every step the stage told of, with its subject and its stage times from
  * the first tick, each tick's time and the box on the page of every node drawn then, and what the
  * stage shows at the end, as verbs.mjs's walk tells it (`shows`). */
-async function walk({ tick, gap, answers, edge, shoot, whole }) {
+async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
     /** What a step is about, by the name the stage gives it: its card, or the ability; for a
      * look, the top one of the library cards it lifts (src/stage/table.ts handledAt), or none
      * where it lifts none, as for a look at a hand the seat does not see, or as it ends: the
@@ -154,7 +157,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
     const wanted = new Map(shoot);
     // A shot is of its subject alone, every other node hidden, so that the tracker follows
     // the card the step is about and not the cards beside it (a batch flying the same way, a
-    // hand making room). Hiding a node moves nothing: the stage's poses are as they were.
+    // hand making room), nor the line that joins an ability to its source. Hiding a node
+    // moves nothing: the stage's poses are as they were.
     const alone = document.head.appendChild(document.createElement("style"));
     const ticks = [];
     let abilities = false;
@@ -209,8 +213,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
         for (const subject of wanted.get(ticks.length) ?? []) {
             alone.textContent =
                 subject === null
-                    ? ".stage-node { visibility: hidden; }"
-                    : `.stage-node:not([data-stage="${subject}"]) { visibility: hidden; }`;
+                    ? ".stage-node, .stage-lines { visibility: hidden; }"
+                    : `.stage-node:not([data-stage="${subject}"]), .stage-lines { visibility: hidden; }`;
             await window.berylShoot(ticks.length, at, subject);
         }
         alone.textContent = "";
@@ -244,6 +248,26 @@ async function walk({ tick, gap, answers, edge, shoot, whole }) {
             finished ||= !whole && lifted && !abilities;
             if (finished) after += 1;
             idle = stage.step ? 0 : idle + took;
+        }
+    }
+    // The marks, from the script written by hand (written-marks.mjs), each beat a script of
+    // its own over the table the moment leaves, once what is left of it has played out.
+    if (written) {
+        // What plays out unseen meanwhile is no step of this walk's.
+        const seen = steps.length;
+        stage.settle();
+        steps.length = seen;
+        const view = stage.shown.view;
+        for (const beat of window.berylWrittenMarks(view).beats) {
+            stage.play(view, { beats: [beat] });
+            for (let idle = 0; idle < gap;) {
+                const took =
+                    Math.round(ticks.length * tick) -
+                    Math.round((ticks.length - 1) * tick);
+                clock.advance(took);
+                await sample();
+                idle = stage.step ? 0 : idle + took;
+            }
         }
     }
     unfollow();
@@ -382,15 +406,21 @@ async function open(size, query, fixture) {
     return { context, page, errors };
 }
 
-const play = (page, end, shoot) =>
-    page.evaluate(walk, {
+/** Plays a moment in `page` (`walk`): to its `end`, or the suite's first as far as its
+ * ability's going, and after that one the marks written by hand, which no recording has. */
+const play = async (page, end, shoot) => {
+    const written = end === undefined && verbs.includes("mark");
+    if (written) await installMarks(page);
+    return page.evaluate(walk, {
         tick: TICK,
         gap: GAP,
         answers: end?.answers ?? ANSWERS,
         edge: EDGE,
         shoot,
         whole: end !== undefined,
+        written,
     });
+};
 
 /** What a recorded fixture of this run ends on (fixture-views.mjs `ending`). */
 const endOf = async (fixture) =>
@@ -403,7 +433,8 @@ const endOf = async (fixture) =>
  * suite's verbs (`moves` null); of another, every step of `moves`' verbs, of which the first
  * of each kind `taken` (shared by a seat's plays) has not had shot is shot, where the tracker
  * can read it (`framing`), and the rest only timed. A step of an exempt verb (a tap, which
- * turns where it lies) is only timed: the tracker follows a card that travels. A step not
+ * turns where it lies) is only timed, and so is one that begins or ends an arrow, a line or
+ * a mark: the tracker follows a card that travels. A step not
  * shot says why. */
 function choose(learned, size, moves, taken) {
     return learned.steps.flatMap((step, n) => {
@@ -416,6 +447,14 @@ function choose(learned, size, moves, taken) {
                 {
                     ...listed,
                     unshot: "it turns where it lies, which the tracker does not read",
+                },
+            ];
+        }
+        if (verb === "point" || verb === "mark") {
+            return [
+                {
+                    ...listed,
+                    unshot: "it is a line or a mark, no card for the tracker to follow",
                 },
             ];
         }

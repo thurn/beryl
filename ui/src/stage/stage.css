@@ -195,3 +195,148 @@
 .phone-orb > .stage-effect {
   font-size: 6px;
 }
+/* The arrows and lines (stage/spans.ts, stage/lines.ts): one path each in a drawing of the
+   layer's own, in stage pixels. An arrow at a target and the line to a source are over
+   everything at rest and under what flies (stage/pose.ts ALOFT). A line of combat lies on the
+   table, under every card and under the step's banner: it passes behind a creature that
+   stands in its way, and is never read as that creature's. The stage writes each path's shape from where its model has the line's two ends,
+   every tick; nothing here moves or fades one. Color says the relationship (UI Conventions,
+   exception 4): green at what its controller controls and red at what they do not. The line
+   from an ability to its source and the lines of combat are thin and pale gold, as the skin's
+   combat marks are, so that a heavy arrow always means a target. The shadow keeps a line
+   legible over card art (WebKit's filters reach the drawing, not a shape inside it). */
+.stage-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 850;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgb(22 13 12 / 75%));
+}
+.stage-lines-under {
+  z-index: 0;
+}
+.stage-line {
+  --tone: 255 233 176;
+  fill: none;
+  stroke: rgb(var(--tone));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.stage-line-friendly-target,
+.stage-line-hostile-target {
+  fill: rgb(var(--tone));
+  stroke-width: 3.5;
+}
+.stage-line-friendly-target {
+  --tone: 165 238 178;
+}
+.stage-line-hostile-target {
+  --tone: 255 163 151;
+}
+.stage-line-source {
+  stroke-width: 1.5;
+  stroke-opacity: 0.6;
+}
+.stage-line-attack,
+.stage-line-block {
+  stroke-width: 1.7;
+  stroke-opacity: 0.8;
+}
+/* The marks (UI Conventions, Marks; stage/spans.ts): each of the six has its one look, here and
+   nowhere else, drawn by an element of the stage's inside what is marked, as large as its card,
+   over its face and under an effect. The stage writes how far the mark has come to its look,
+   from 0 to 1, on that element, and the look is drawn from that number alone. An outline
+   hugs the frame and lights it, and its color is what it means: cyan for what may be picked,
+   gold for what is picked, green and red for a target by whose it is. What the offered default
+   would use wears an ember ring that stands clear of the frame, with no light. What is picked
+   to pay a cost wears no outline: it turns (stage/stage.ts `#poseOf`) and carries the tap
+   symbol. */
+.stage-mark {
+  position: absolute;
+  inset: 0;
+  z-index: 99;
+  border-radius: calc(var(--frame) * 0.05);
+  pointer-events: none;
+  opacity: var(--shown);
+}
+.card-el-hidden > .stage-mark,
+.card-el-rim > .stage-mark {
+  display: none;
+}
+.stage-mark-eligible {
+  --tone: 51 220 254;
+}
+.stage-mark-selected {
+  --tone: 255 205 96;
+}
+.stage-mark-friendly-target {
+  --tone: 116 240 136;
+}
+.stage-mark-hostile-target {
+  --tone: 255 92 74;
+}
+.stage-mark-eligible,
+.stage-mark-selected,
+.stage-mark-friendly-target,
+.stage-mark-hostile-target {
+  box-shadow:
+    0 0 0 calc(var(--frame) * 0.014) rgb(var(--tone)),
+    0 0 calc(var(--frame) * 0.05) calc(var(--frame) * 0.03)
+      rgb(var(--tone) / 80%),
+    0 0 calc(var(--frame) * 0.14) calc(var(--frame) * 0.05)
+      rgb(var(--tone) / 45%),
+    inset 0 0 0 calc(var(--frame) * 0.012) rgb(var(--tone) / 90%);
+}
+/* A target's outline leads whatever else is lit: its halo is wider and fuller than the one
+   round what may only be picked. */
+.stage-mark-friendly-target,
+.stage-mark-hostile-target {
+  box-shadow:
+    0 0 0 calc(var(--frame) * 0.018) rgb(var(--tone)),
+    0 0 calc(var(--frame) * 0.07) calc(var(--frame) * 0.045) rgb(var(--tone)),
+    0 0 calc(var(--frame) * 0.2) calc(var(--frame) * 0.08)
+      rgb(var(--tone) / 70%),
+    inset 0 0 calc(var(--frame) * 0.04) calc(var(--frame) * 0.014)
+      rgb(var(--tone));
+}
+.stage-mark-suggested {
+  inset: calc(var(--frame) * -0.04);
+  border: calc(var(--frame) * 0.016) solid rgb(240 122 28);
+  border-radius: calc(var(--frame) * 0.08);
+}
+.stage-mark-paying::after {
+  content: "\e61a";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  padding: 0.2em;
+  border-radius: 50%;
+  font: calc(var(--frame) * 0.2) / 1 "Mana";
+  color: #f3ead7;
+  background: rgb(15 26 32 / 85%);
+  box-shadow: 0 1px 6px #000;
+}
+/* A mark on a player is drawn about the face of their life total, as an effect on them is. */
+[data-life] > .stage-mark {
+  --frame: 7em;
+  inset: auto;
+  left: 50%;
+  top: 46.5%;
+  z-index: 0;
+  width: 36%;
+  height: 83%;
+  translate: -50% -50%;
+  border-radius: 50%;
+}
+[data-life] > .stage-mark-suggested {
+  width: 42%;
+  height: 96%;
+}
+.phone-orb > .stage-mark {
+  font-size: 6px;
+}

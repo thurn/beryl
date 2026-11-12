@@ -224,6 +224,11 @@ function anchors(table: PlayerView): Anchors {
   };
 }
 
+/** How far past its card's edge the tip of an attacker's chevron is, in the card's widths
+ * (design/components/card-marks-and-piles.css `.attack-chevron`: 0.15em clear of the frame
+ * and 1.9em tall, on a card 12em wide). */
+const CHEVRON = 2 / 12;
+
 /** The table as the desktop lays it out, on the stage as wide as it now is (game/Stage.tsx),
  * with what stands `around` it. */
 export const desktopWith = (around: Around): StageLayout => ({
@@ -233,6 +238,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   drawn,
   middle,
   half,
+  chevron: CHEVRON,
 });
 
 /** The desktop's table with nothing over it. */

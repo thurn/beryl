@@ -40,9 +40,33 @@ function handledAt(
     .map((o) => o.slot);
 }
 
+/** `view` with its stack as a script's table has it (script/table.rs `Table::of`), the same
+ * for both seats: on top is the spell or ability whose resolution asks the viewer something,
+ * which a view leaves out of its list, and a spell whose card has left the stack is not on
+ * it. An ability stays on the stage, with the lines drawn to it, while its prompt is open. */
+export function tabled(view: PlayerView): PlayerView {
+  const { status } = view;
+  const resolving =
+    (status.kind === "deciding" && status.decision.resolving) || undefined;
+  const same = (item: StackItem) =>
+    JSON.stringify(item) === JSON.stringify(resolving);
+  const on = (item: StackItem) =>
+    item.kind === "ability" ||
+    view.objects.some((o) => o.slot === item.slot && o.zone === "stack");
+  const listed =
+    resolving && !view.stack.some(same)
+      ? [...view.stack, resolving]
+      : view.stack;
+  const stack = listed.filter(on);
+  return stack.length === view.stack.length &&
+    stack.every((item, i) => item === view.stack[i])
+    ? view
+    : { ...view, stack };
+}
+
 /** The table of a view the stage starts over from. */
 export const tableOf = (view: PlayerView, reset?: Reset): Table => ({
-  view,
+  view: tabled(view),
   abilities: reset?.abilities ?? [],
 });
 

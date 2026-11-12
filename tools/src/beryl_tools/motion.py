@@ -98,6 +98,10 @@ MORE_ONLY: dict[str, str] = {
     verb: "only the moments of `--more` play it, captured nightly (`by motion --more`)"
     for verb in ("lift", "strike", "count", "flip")
 }
+# The verbs whose steps begin and end a span (an arrow, a line, a mark). The stage plays one
+# with the step that calls for it and staggers none (ui/src/stage/timing.ts), and an end's
+# delay is how long its arrow has stood whole, so only how long each plays is held.
+SPANS: tuple[str, ...] = ("point", "mark")
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
 INPUTS = (
@@ -272,6 +276,7 @@ def timing_verdicts(
         ]
         if (
             after is not None
+            and step["verb"] not in SPANS
             and after["n"] == step["n"] + 1
             and after["verb"] == step["verb"]
             and case_in(after, seat) == case
