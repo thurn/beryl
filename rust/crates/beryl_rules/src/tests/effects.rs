@@ -3,12 +3,14 @@
 
 use beryl_card::effect::build::{
     EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
-    THOSE, YOU, add_counters, controller_of, create_copy, destroy, discard, draw, exile,
-    exile_until_this_leaves, for_each_player, gain_life, if_else, if_then, lose_life, may, mill,
-    modify, put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence, target,
-    target_player,
+    THOSE, YOU, add_counters, controller_of, create_copy, deal_damage_to, destroy, discard, draw,
+    exile, exile_until_this_leaves, for_each_player, gain_life, if_else, if_then, lose_life, may,
+    mill, modify, put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence,
+    target, target_player,
 };
-use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects};
+use beryl_card::{
+    Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects, Recipients,
+};
 
 use crate::card::{
     Ability, FaceAbility, Modification, Part, Place, Players, Prompt, Purpose, SpecIx, Takes,
@@ -425,6 +427,117 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
     assert_eq!(s.counters_of(source.slot, CounterKind::Story), 0);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (21, 16));
     assert!(!COUNT_UP.asks());
+}
+
+/// "An opponent has more than you": the most any opponent has of an amount, each of them
+/// read in the controller's place, against the controller's own. A life total is an amount
+/// ([CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)), and a tie is not more.
+#[test]
+fn the_most_any_player_has_is_read_with_each_in_your_place() {
+    const LIFE: Amount = Amount::Life(YOU);
+    const YOUR_CREATURES: Amount = Amount::Count(&Objects::All {
+        zone: Zone::Battlefield,
+        filter: Filter::All(&[CREATURES, Filter::Whose(&Players::You)]),
+    });
+    const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
+        Condition::Compare(
+            Amount::Most(EACH_OPPONENT, amount),
+            Comparison::MoreThan,
+            *amount,
+        )
+    }
+    static CATCH_UP: Ability = does(&sequence(&[
+        // Life 20 each: no opponent has more.
+        if_then(an_opponent_has_more(&LIFE), &draw(YOU, 1)),
+        deal_damage_to(YOU, 3),
+        // 20 against 17.
+        if_then(an_opponent_has_more(&LIFE), &gain_life(YOU, 1)),
+        // Their one creature against none.
+        if_then(
+            an_opponent_has_more(&YOUR_CREATURES),
+            &Effect::CreateTokens {
+                player: YOU,
+                token: &INSECT,
+                count: Amount::Fixed(1),
+            },
+        ),
+        // One each now.
+        if_then(an_opponent_has_more(&YOUR_CREATURES), &draw(YOU, 1)),
+    ]));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    let cards = hand(&s, p);
+    assert!(resolve(&t, &mut s, &mut x, source, &CATCH_UP, &[], &[]).is_none());
+    assert_eq!((life(&s, p), life(&s, p.opponent())), (18, 20));
+    assert_eq!(hand(&s, p), cards);
+    let insects = (s.battlefield().iter())
+        .filter(|&&slot| s.name(&t, slot) == "Test Insect")
+        .count();
+    assert_eq!(insects, 1);
+}
+
+/// Damage an effect deals to permanents is marked on each
+/// ([CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e)): "Damage dealt to a
+/// creature by a source with neither wither nor infect causes that much damage to be marked
+/// on that creature." What was dealt damage is what the next instruction reads, and a card
+/// is no token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
+#[test]
+fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
+    static SINGE: Ability = does(&sequence(&[
+        Effect::DealDamage {
+            to: Recipients::Permanents(Objects::All {
+                zone: Zone::Battlefield,
+                filter: CREATURES,
+            }),
+            amount: Amount::Fixed(1),
+        },
+        // One of the two dealt damage is a card, so they are not all tokens: each is copied.
+        if_else(
+            Condition::Token(THOSE),
+            &lose_life(YOU, 5),
+            &create_copy(YOU, THOSE),
+        ),
+        // The copies are.
+        if_then(Condition::Token(THOSE), &gain_life(YOU, 1)),
+    ]));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
+    let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
+    assert!(resolve(&t, &mut s, &mut x, source, &COPY, &targets, &[]).is_none());
+    assert!(resolve(&t, &mut s, &mut x, source, &SINGE, &[], &[]).is_none());
+    let damage: Vec<u8> = (s.battlefield().iter())
+        .filter(|&&slot| s.name(&t, slot) == "Test Bear")
+        .map(|&slot| s.object(slot).damage())
+        .collect();
+    // The bear, its first copy, and the two copies made after the damage.
+    assert_eq!(damage.iter().filter(|&&d| d == 1).count(), 2);
+    assert_eq!(damage.len(), 4);
+    assert_eq!(life(&s, p), 21);
+}
+
+/// "Gain control of" with no duration lasts
+/// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a): "If no duration is
+/// stated, it lasts until the end of the game"), and the permanent comes under its new
+/// controller's control anew
+/// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+#[test]
+fn gaining_control_as_data_changes_the_controller_and_says_so() {
+    static STEAL: Ability = does_to(
+        &[A_CREATURE],
+        &modify(TARGET, Modification::Control, Duration::Indefinite),
+    );
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    s.set_summoning_sick(bear, false);
+    let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
+    assert!(resolve(&t, &mut s, &mut x, source, &STEAL, &targets, &[]).is_none());
+    assert_eq!(s.controller(bear), p);
+    assert!(s.object(bear).flags().has(ObjectFlags::SUMMONING_SICK));
+    let said = x.events.drain().into_iter().any(|event| {
+        matches!(event, Event::GainControl { object, player } if object.slot == bear && player == p)
+    });
+    assert!(said);
 }
 
 #[test]

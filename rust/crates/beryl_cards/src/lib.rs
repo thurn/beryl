@@ -11,6 +11,8 @@ pub mod colorless;
 pub mod decks;
 #[cfg(feature = "scenarios")]
 pub mod generate;
+#[cfg(feature = "scenarios")]
+pub mod library;
 pub mod multicolor;
 pub mod names;
 #[cfg(feature = "scenarios")]

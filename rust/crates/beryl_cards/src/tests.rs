@@ -266,7 +266,8 @@ fn every_card_has_scenarios_and_they_pass() {
     table.sort_unstable();
     assert_eq!(cards, table, "one SCENARIOS entry per card");
     let mut failures = Vec::new();
-    for &(card, scenarios) in SCENARIOS {
+    // A card's own, then the rules library's entries' (`crate::library`).
+    for (card, scenarios) in SCENARIOS.iter().copied().chain(crate::library::by_card()) {
         if scenarios.is_empty() {
             failures.push(format!("{card} has no scenario"));
         }
