@@ -1,9 +1,8 @@
 // How a phone draws a card (DESIGN.md of the approved prototype): its full scan, only live
-// state drawn over it in the desktop's badges. The phone's board draws these at the spots
-// mobile/layout.ts gives (PhoneBoard.tsx); the stage draws them in its nodes (`PHONE`, the
+// state drawn over it in the desktop's badges. The stage draws them in its nodes (`PHONE`, the
 // phone's skin for stage/Faces.tsx).
 import { memo } from "react";
-import type { MotionStyle } from "motion/react";
+import type { CSSProperties } from "react";
 import type { ObjectView } from "../generated/protocol";
 import {
   Card,
@@ -11,18 +10,10 @@ import {
   Loyalty,
   type CardFace,
   type CardProps,
-  type Highlight,
 } from "../components/Card";
 import { faceDownFace, marksOf, SCAN, useFace } from "../game/faces";
 import { useCardArt } from "../cards";
 import type { Skin } from "../stage/Faces.tsx";
-
-/** A card's glow: gold or cyan for what the stack names, green for what can be played. */
-export interface Glow {
-  highlight?: Highlight;
-  playable?: boolean;
-  paying?: boolean;
-}
 
 /** The em of the badges on a card `width` wide (phone.css `--badge`): a loyalty or a face-down
  * card's P/T numeral stays at least 12px however small the scan. */
@@ -46,12 +37,10 @@ export function CardScan({
   object,
   width,
   field,
-  glow = {},
 }: {
   object: ObjectView;
   width: number;
   field: boolean;
-  glow?: Glow;
 }) {
   const face = useFace(object);
   const down = object.facing === "down";
@@ -69,54 +58,24 @@ export function CardScan({
       back={down}
       width={width}
       tapped={field && object.tapped}
-      highlight={glow.highlight}
-      className={
-        glow.paying
-          ? "card-paying"
-          : glow.playable && !glow.highlight
-            ? "card-playable"
-            : undefined
-      }
       marks={
         field ? { counters: marksOf(object).counters, sick: false } : undefined
       }
-      style={{ "--badge": badgeEm(width) } as MotionStyle}
+      style={{ "--badge": badgeEm(width) } as CSSProperties}
     >
       {loyalty !== undefined && !down && <Loyalty loyalty={String(loyalty)} />}
     </Card>
   );
 }
 
-/** A spell on the stack, the top one in the source's gold. */
-export function SpellScan({
-  object,
-  width,
-  top = false,
-}: {
-  object: ObjectView;
-  width: number;
-  top?: boolean;
-}) {
+/** A spell on the stack. */
+function SpellScan({ object, width }: { object: ObjectView; width: number }) {
   const face = useFace(object);
-  return (
-    <Card
-      {...scanOrFrame(face)}
-      width={width}
-      highlight={top ? "source" : undefined}
-    />
-  );
+  return <Card {...scanOrFrame(face)} width={width} />;
 }
 
 /** An ability on the stack: its source's scan, by name, since the source may have left. */
-export function AbilityScan({
-  name,
-  width,
-  top = false,
-}: {
-  name: string;
-  width: number;
-  top?: boolean;
-}) {
+function AbilityScan({ name, width }: { name: string; width: number }) {
   const art = useCardArt(name, undefined, SCAN);
   return (
     <Card
@@ -127,7 +86,6 @@ export function AbilityScan({
         scan: art?.src,
       })}
       width={width}
-      highlight={top ? "source" : undefined}
     />
   );
 }
@@ -146,7 +104,7 @@ export function PileTop({
 
 /** The phone's faces for the stage's nodes, by where each rests (stage/phone.ts): nothing
  * under the top of a pile, a back for a card that shows none of its face there, and the
- * phone's scans for the rest. No glow yet: marks come with the prompt's state. */
+ * phone's scans for the rest. */
 export const PHONE: Skin = {
   Card: memo(function PhoneFace({ object, dress }) {
     if (dress.look === "hidden") return null;

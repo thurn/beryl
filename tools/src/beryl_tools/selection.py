@@ -7,17 +7,17 @@ A check is chosen, and its run-log record's `chosen` says why, when:
 
 - `coverage:<file>:<line>`: a changed line of ui/src (JavaScript or CSS) is one it ran, by the
   nightly coverage file (coverage.py), mapped across the commits between it and the branch;
-- `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs or a part
-  of kept.mjs, or a top-level block of them, or its entry in ui/shots.json; for a verb check
+- `body`: its own body changed: its `check(...)` call in a part of ui/scripts/kept.mjs, or a
+  top-level block of them, or its entry in ui/shots.json; for a verb check
   (`verb:<verb>/<seat>/<layout>`, ui/scripts/verbs.mjs), that script or its list, ui/verbs.json;
   for a shape check (`shape:<shape>/<seat>/<layout>`, ui/scripts/shapes.mjs), that script or its
   list, ui/shapes.json;
-- `import:<file>`: code changed in a ui/src file interactions.mjs imports into Node, which no
-  coverage sees: as if each line of interactions.mjs that uses one of its names had changed;
+- `import:<file>`: code changed in a ui/src file a kept file imports into Node, which no
+  coverage sees: as if each line of that file that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
   step recorded it against the recording the coverage run made;
-- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, interactions.mjs or a
-  kept file outside any check): every check is chosen;
+- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, or a kept file
+  outside any check): every check is chosen;
 - `record`: a change no check covers (new code, a file absent from coverage, coverage too old or
   without recordings): the rest of the time box goes to the worst failure records.
 
@@ -64,11 +64,11 @@ DEFAULT_SECONDS = 3.0
 RECORD_DAYS = 30
 # The pages a capture script runs at once (capture.mjs' workers).
 WORKERS = 4
-# What `--select` tells interactions.mjs to run: a file of titles, one a line, matched exactly.
+# What `--select` tells a check script to run: a file of titles, one a line, matched exactly.
 CHOSEN_ENV = "BERYL_CHECKS"
 
-# The paths every check of a lane runs through (fnmatch, `*` crossing folders). Lines of
-# interactions.mjs outside any check are too (`body_reasons`).
+# The paths every check of a lane runs through (fnmatch, `*` crossing folders). Lines of a
+# kept file outside any check are too (`body_reasons`).
 COMMON_HARNESS = (
     "ui/scripts/capture.mjs",
     "ui/scripts/audit.mjs",
@@ -83,17 +83,14 @@ HARNESS: dict[str, tuple[str, ...]] = {
     "ui-test": COMMON_HARNESS,
     "shots": (*COMMON_HARNESS, "ui/scripts/shots.mjs"),
 }
-INTERACTIONS = "ui/scripts/interactions.mjs"
-# The kept checks, whose ids are `ui-test:<title>` as interactions.mjs' are: the script `ui-test`
-# runs, its harness and its parts. Each file is read as interactions.mjs is: a line in no check
-# is the harness.
+# The kept checks, whose ids are `ui-test:<title>`: the script `ui-test` runs, its harness and
+# its parts. In each file a line in no check is the harness.
 KEPT_SCRIPT = "ui/scripts/kept.mjs"
 KEPT_PARTS: tuple[str, ...] = tuple(
     f"ui/scripts/kept-{part}.mjs"
     for part in ("screens", "table", "crowded", "piles", "pointer", "play")
 )
 CHECK_SOURCES: tuple[str, ...] = (
-    INTERACTIONS,
     KEPT_SCRIPT,
     "ui/scripts/kept-harness.mjs",
     *KEPT_PARTS,
@@ -257,7 +254,7 @@ def stale(found: Coverage | None, now: datetime) -> str:
 
 @dataclass
 class Region:
-    """A `check(...)` call's lines in interactions.mjs and the titles it can give: a pattern,
+    """A `check(...)` call's lines in a kept file and the titles it can give: a pattern,
     None when its title is computed where this cannot follow, and the title itself when it is
     spelled out."""
 
@@ -296,7 +293,7 @@ def title_pattern(text: str, source: str) -> tuple[re.Pattern[str] | None, str |
 
 
 def regions(source: str) -> list[Region]:
-    """The `check(...)` calls of interactions.mjs, 1-based. Prettier formats the file, so a call
+    """The `check(...)` calls of a kept file, 1-based. Prettier formats the file, so a call
     closes on the first line at its own indentation that ends `);`."""
     lines = source.splitlines()
     found: list[Region] = []
@@ -343,7 +340,7 @@ def statements(source: str) -> list[tuple[int, int]]:
 def body_reasons(
     source: str, changed: list[Hunk], universe: Iterable[str]
 ) -> tuple[set[str], bool]:
-    """The checks whose bodies `changed` (interactions.mjs' hunks) touched, and whether it touched
+    """The checks whose bodies `changed` (a kept file's hunks) touched, and whether it touched
     the harness: a line in no check and in no top-level block of checks, or in a check whose
     title cannot be followed."""
     calls = regions(source)
@@ -377,7 +374,7 @@ NODE_IMPORT: re.Pattern[str] = re.compile(
 def import_reasons(
     source: str, path: str, changed: list[Hunk], universe: Iterable[str]
 ) -> tuple[set[str], bool]:
-    """body_reasons for a change to `path`, a ui/src file, as interactions.mjs (`source`) runs it
+    """body_reasons for a change to `path`, a ui/src file, as a kept file (`source`) runs it
     in Node, where the browser's coverage does not see it: each line that uses a name the file
     imports from `path` counts as changed. Nothing when it imports nothing from there or the
     change is to comments."""
@@ -398,15 +395,15 @@ def import_reasons(
         return set(), False
     use = re.compile(rf"\b(?:{'|'.join(re.escape(n) for n in names)})\b")
     uses = [
-        Hunk(INTERACTIONS, n, 1, n, 1, [text], [text])
+        Hunk(KEPT_SCRIPT, n, 1, n, 1, [text], [text])
         for n, text in enumerate(source.splitlines(), 1)
         if n not in imports and use.search(text)
     ]
     return body_reasons(source, uses, universe)
 
 
-def interaction_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
-    """The checks interactions.mjs has: the titles it spells out, and the patterns of all of
+def kept_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
+    """The checks a kept file has: the titles it spells out, and the patterns of all of
     them (a computed title it cannot follow matches anything)."""
     found = regions(source)
     patterns = [r.title if r.title is not None else re.compile(".*") for r in found]
@@ -420,41 +417,18 @@ NONE_REACHED = 3
 
 def scripts(names: list[str]) -> dict[str, list[str]]:
     """Which of `ui-test`'s scripts run, each with the checks of `names` that are its own: a
-    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs, a title a kept check
-    gives to kept.mjs and one a check of interactions.mjs gives to it; any other, a filter
-    (`just ui-test drag`), goes to both, each running the checks it reaches. A script with none
-    does not run. With no names all run every check."""
-    every = [INTERACTIONS, KEPT_SCRIPT, VERB_SCRIPT, SHAPE_SCRIPT]
+    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs, and any other, a kept
+    check's title or a filter (`just ui-test drag`), to kept.mjs. A script with none does not
+    run. With no names all run every check."""
+    every = [KEPT_SCRIPT, VERB_SCRIPT, SHAPE_SCRIPT]
     if not names:
         return {script: [] for script in every}
     suites = {VERB_PREFIX: VERB_SCRIPT, SHAPE_PREFIX: SHAPE_SCRIPT}
     found: dict[str, list[str]] = {script: [] for script in every}
-    kept = patterns_of(KEPT_PARTS)
-    old = patterns_of((INTERACTIONS,))
     for name in names:
         suite = next((s for p, s in suites.items() if name.startswith(p)), None)
-        if suite:
-            found[suite].append(name)
-            continue
-        mine = any(p.fullmatch(name) for p in kept)
-        theirs = any(p.fullmatch(name) for p in old)
-        if mine or not theirs:
-            found[KEPT_SCRIPT].append(name)
-        if theirs or not mine:
-            found[INTERACTIONS].append(name)
+        found[suite or KEPT_SCRIPT].append(name)
     return {script: own for script, own in found.items() if own}
-
-
-def patterns_of(scripts: Iterable[str]) -> list[re.Pattern[str]]:
-    """The titles the `check(...)` calls of `scripts` give, as patterns; none for a title this
-    cannot follow."""
-    return [
-        r.title
-        for s in scripts
-        if (paths.REPO / s).exists()
-        for r in regions((paths.REPO / s).read_text())
-        if r.title is not None
-    ]
 
 
 def shot_entries(text: str) -> dict[str, object]:
@@ -668,7 +642,7 @@ def lane_checks(
     lane: str, log: list[dict[str, object]], found: Coverage | None
 ) -> list[str]:
     """The lane's checks as they are now, but those the prune moved to slow CI alone
-    (verdicts.SLOW_ONLY): shots.json's names, or the checks interactions.mjs spells out with
+    (verdicts.SLOW_ONLY): shots.json's names, or the checks the kept files spell out with
     those the log and coverage name that it can still give, and the verb and shape suites'.
     """
     slow = {s.check for s in verdicts.SLOW_ONLY}
@@ -687,7 +661,7 @@ def every_check(
     literal: list[str] = []
     patterns: list[re.Pattern[str]] = []
     for source in sources:
-        found_literal, found_patterns = interaction_titles(source)
+        found_literal, found_patterns = kept_titles(source)
         literal += found_literal
         patterns += found_patterns
     named = {str(r.get("check")) for r in log if r.get("lane") == lane}

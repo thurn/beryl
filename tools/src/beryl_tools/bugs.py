@@ -1,16 +1,12 @@
 """Bug reports from the app's bug button (beryl_session's `bugs` module writes them): `by bugs`
-lists them, `by bugs file` files a bead for each open one, `by bugs bank` banks them and
-`by bugs done` marks them fixed.
+lists them, `by bugs file` files a bead for each open one and `by bugs done` marks them
+fixed.
 
 Each report is a folder under $BERYL_BUGS, else
 `~/Library/Application Support/ca.thurn.beryl/bugs` (on Windows, `%APPDATA%\\ca.thurn.beryl\\bugs`):
 `report.md`, whose front matter holds its
-`status` (open, filed, banked, done) and `bead`, beside its screenshots, replay, views and logs. A
+`status` (open, filed, done) and `bead`, beside its screenshots, replay, views and logs. A
 done report moves to `done/`.
-
-A banked report is one about motion, arrows or combat lines that waits for the stage
-(docs/project-50k.md, K30): its board and pending check reproduce it, its bead is labeled
-`banked` and stays open, and `by bugs` lists it apart from the reports still to work.
 """
 
 from __future__ import annotations
@@ -52,8 +48,6 @@ LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
 SPEC_VIEWER_LABEL = "spec-viewer"
-# A banked report's status, and the label on its bead.
-BANKED = "banked"
 
 
 def app_data_dir() -> Path:
@@ -283,13 +277,8 @@ def list_cmd(args: argparse.Namespace) -> int:
     if not found:
         print(f"bugs: no reports in {root}")
         return 0
-    banked = [r for r in found if r.status == BANKED]
-    for r in (r for r in found if r.status != BANKED):
+    for r in found:
         print_report(r)
-    if banked:
-        print(f"\nbanked, waiting for the stage ({len(banked)}):")
-        for r in banked:
-            print_report(r)
     return 0
 
 
@@ -434,34 +423,6 @@ def import_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
-def bank_cmd(args: argparse.Namespace) -> int:
-    root = bugs_dir()
-    root.mkdir(parents=True, exist_ok=True)
-    with system.file_lock(root / ".triage.lock"):
-        return bank_reports(args, root)
-
-
-def bank_reports(args: argparse.Namespace, root: Path) -> int:
-    """Marks each report banked and labels its bead, which stays open."""
-    code = 0
-    for key in args.reports:
-        r = find(root, key)
-        if r is None or r.status == "done":
-            print(f"bugs: no report {key} to bank", file=sys.stderr)
-            code = 1
-            continue
-        if r.bead:
-            try:
-                run_bd(["update", r.bead, "--add-label", BANKED])
-            except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
-                print(f"bugs: {error}", file=sys.stderr)
-                code = 1
-                continue
-        update(r, status=BANKED)
-        print(f"banked {r.id}" + (f" ({r.bead})" if r.bead else ""))
-    return code
-
-
 def done_cmd(args: argparse.Namespace) -> int:
     root = bugs_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -489,14 +450,10 @@ def finish_reports(args: argparse.Namespace, root: Path) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = sub.add_parser(
-        "bugs", help="the app's bug reports: list, file as beads, bank, done"
-    )
+    p = sub.add_parser("bugs", help="the app's bug reports: list, file as beads, done")
     p.set_defaults(func=list_cmd, all=False)
     verbs = p.add_subparsers(dest="verb")
-    v = verbs.add_parser(
-        "list", help="the open and filed reports, then the banked ones"
-    )
+    v = verbs.add_parser("list", help="the open and filed reports")
     v.add_argument("--all", action="store_true", help="the done ones too")
     v.set_defaults(func=list_cmd)
     v = verbs.add_parser("file", help="file a bead for each open report")
@@ -507,11 +464,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v = verbs.add_parser("import", help="save reports from a ZIP for local triage")
     v.add_argument("bundle", type=Path)
     v.set_defaults(func=import_cmd)
-    v = verbs.add_parser(
-        "bank", help="bank reports for the stage; their beads stay open"
-    )
-    v.add_argument("reports", nargs="+", help="report ids or their beads")
-    v.set_defaults(func=bank_cmd)
     v = verbs.add_parser("done", help="mark reports fixed and move them to done/")
     v.add_argument("reports", nargs="+", help="report ids or their beads")
     v.add_argument("--commit", help="the fixing commit")

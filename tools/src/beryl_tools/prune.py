@@ -233,7 +233,7 @@ TEST_FN: re.Pattern[str] = re.compile(r"\bfn\s+(\w+)")
 @dataclass
 class Keeps:
     """The checks a `keep` comment with a reason holds, each a pattern over check ids: beside a
-    check() in ui/scripts/interactions.mjs or a kept part (`// keep: ...` above it), a Rust test (above its
+    check() in a part of ui/scripts/kept.mjs (`// keep: ...` above it), a Rust test (above its
     `fn`, in the rust lane's side of verdicts.CHECK_SIDE), or a shot's `keep` in ui/shots.json.
     """
 
@@ -255,7 +255,6 @@ class Keeps:
             ]
             + [
                 "--",
-                "ui/scripts/interactions.mjs",
                 "ui/scripts/kept-*.mjs",
                 "rust/*.rs",
             ],

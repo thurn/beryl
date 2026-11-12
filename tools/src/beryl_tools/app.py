@@ -22,9 +22,6 @@ def tauri(*args: str) -> int:
     if args and args[0] == "dev":
         env["BERYL_FILE_BUGS"] = str(paths.REPO)
     if args[:2] == ("build", "--bundles"):
-        # The release app plays on the stage (plan K25) until the cut-over makes it the only
-        # board; the dev app, the smoke build and the checks keep the switch (stage/switch.tsx).
-        env["VITE_BERYL_STAGE"] = "1"
         # Launching the packaged app from Finder drops the terminal's environment.
         uv, bd, dolt = (shutil.which(tool) for tool in ("uv", "bd", "dolt"))
         if uv and bd:

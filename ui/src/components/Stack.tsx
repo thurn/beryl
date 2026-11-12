@@ -1,7 +1,4 @@
-// The stack-item frame (a spell or ability on the stack) and the arrows that tie it to its source
-// (gold) and targets (red or green).
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { cancelFrame, frame } from "motion/react";
+// The stack-item frame (a spell or ability on the stack) and the marks of how it was cast.
 import {
   AbilityPlate,
   CardArt,
@@ -12,14 +9,6 @@ import {
 import { useTextFit } from "./fit";
 import { RulesText } from "./Mana";
 import type { PaidCost } from "../generated/protocol";
-import {
-  retrace,
-  route,
-  type Box,
-  type Choice,
-  type Leg,
-  type Vector,
-} from "./route";
 
 export interface StackItemProps {
   source: CardFace;
@@ -32,7 +21,6 @@ export interface StackItemProps {
   height?: number;
   /** The frame's unit in pixels, when not width / 12. */
   unit?: number;
-  id?: string;
 }
 
 /** A stack item: with art, its source's scan wearing a plate that says the item; without it,
@@ -45,13 +33,11 @@ export function StackItem({
   width = 170,
   height,
   unit,
-  id,
 }: StackItemProps) {
   const nameRef = useTextFit(source.name);
   if (showArt && source.scan) {
     return (
       <div
-        id={id}
         className="stack-item stack-item-scanned"
         style={{ width, height: width / CARD_ASPECT, fontSize: width / 12 }}
       >
@@ -62,7 +48,6 @@ export function StackItem({
   }
   return (
     <div
-      id={id}
       className={`stack-item frame-${frameKey(source)}${showArt ? "" : " stack-item-compact"}`}
       style={{ width, height, fontSize: unit ?? width / 12 }}
     >
@@ -129,362 +114,4 @@ export function StackMarks({
       )}
     </>
   );
-}
-
-/** An arrow from the element with id `from` to the one with id `to`, routed (route.ts): out of
- * whichever edge and into whichever edge make the clearest curve past the cards `Arrows` avoids
- * and the arrows before it, the head square to the edge it meets. An element marked
- * `data-oval` is met round its inscribed ellipse. One marked `data-within` with another's id
- * is a part of that one (the strip of a stack item that peeks out from under the next): the
- * arrow keeps off neither. Every arrow looks alike; only `tone` tells
- * a kind apart: gold for a source, red for an attack, red or green for a target. */
-export interface ArrowSpec {
-  from: string;
-  to: string;
-  tone: "gold" | "cyan" | "red" | "green";
-  /** A subtle direct combat line between facing edges, without an arrowhead. */
-  direct?: boolean;
-  /** Attack lines start at the tip of the card's chevron. */
-  fromChevron?: boolean;
-  /** A target link shown while both ends are settled, invalidated by a zone change. */
-  pulse?: {
-    key: string;
-    zone: string | undefined;
-    departed: boolean;
-  };
-}
-
-type Drawn = {
-  key: string;
-  /** The ids of the elements it ties, as its spec names them. */
-  from: string;
-  to: string;
-  d: string;
-  tone: ArrowSpec["tone"];
-} & ({ direct: true } | { direct: false; end: Vector; angle: number });
-
-/** An element's box in the parent's own coordinates: client rects are in screen pixels, which
- * differ by `scale` inside a scaled stage. */
-function box(rect: DOMRect, origin: DOMRect, scale: number): Box {
-  return {
-    x: (rect.left - origin.left) / scale,
-    y: (rect.top - origin.top) / scale,
-    width: rect.width / scale,
-    height: rect.height / scale,
-  };
-}
-
-/** A covered stack card exposes its name above the next card's edge. Read both rendered
- * cards so that the visible strip can never get ahead of either one during a glide. */
-function arrowEnd(element: HTMLElement, origin: DOMRect, scale: number) {
-  const rect = (node: Element) =>
-    box(node.getBoundingClientRect(), origin, scale);
-  const nextId = element.dataset.stackNext;
-  if (!nextId) return { box: rect(element), hosts: [] };
-  const card = document.getElementById(element.dataset.within ?? "");
-  const next = document.getElementById(nextId);
-  if (!card || !next) return undefined;
-  const whole = rect(card);
-  const covering = rect(next);
-  const height = Math.min(whole.height, covering.y - whole.y);
-  if (height <= 0) return undefined;
-  return { box: { ...whole, height }, hosts: [whole, covering] };
-}
-
-const point = ([x, y]: Vector) => `${x.toFixed(1)} ${y.toFixed(1)}`;
-
-/** Draws arrows between elements (by id) over its parent, which must be positioned, above
- * everything in it. They are measured after layout and again whenever the parent resizes, or,
- * to `follow` elements that move (cards gliding to their places), on every animation frame.
- * They keep off the elements `avoid` selects. `scale` thins lines and heads for small cards. */
-export function Arrows({
-  arrows,
-  scale = 1,
-  follow = false,
-  avoid,
-}: {
-  arrows: ArrowSpec[];
-  scale?: number;
-  follow?: boolean;
-  avoid?: string;
-}) {
-  const svg = useRef<SVGSVGElement>(null);
-  const [drawn, setDrawn] = useState<Drawn[]>([]);
-  // Direct links move with the cards. Write their geometry before the browser
-  // paints the frame, without waiting for React to commit an update.
-  const directPaths = useRef(new Map<string, SVGPathElement>());
-  const directGeometry = useRef(new Map<string, string>());
-  // Each arrow's ports and reach, which it keeps while its ends or the cards it avoids move:
-  // routing afresh on every frame of a glide would cost too much and could flicker.
-  const choices = useRef(new Map<string, Choice>());
-  // Where everything was on the last frame, and whether the arrows were routed afresh there:
-  // once nothing moves, they are, once.
-  const seen = useRef({ where: "", searched: false });
-  // Following, where each stack arrow's ends were and since when they have stood there: it
-  // shows only once both its ends have stood still for `REST_MS`, so it never stretches after
-  // a card on its way (a countered spell to the graveyard, a creature still landing when its
-  // trigger goes on the stack), and it goes the moment either end starts moving.
-  const rest = useRef(new Map<string, { ends: string; since: number }>());
-  const pulses = useRef(
-    new Map<string, { zone: string | undefined; until?: number }>(),
-  );
-
-  // Measured against the svg's own parent: a parent's ref is not attached yet when this runs.
-  useLayoutEffect(() => {
-    const root = svg.current?.parentElement;
-    if (!root) return;
-    seen.current = { where: "", searched: false };
-    const measure = () => {
-      const origin = root.getBoundingClientRect();
-      const scale = root.offsetWidth ? origin.width / root.offsetWidth : 1;
-      const size: Vector = [root.offsetWidth, root.offsetHeight];
-      const obstacles = avoid
-        ? [...document.querySelectorAll(avoid)].map((e) => ({
-            element: e,
-            box: box(e.getBoundingClientRect(), origin, scale),
-          }))
-        : [];
-      const now = performance.now();
-      const keyOf = (a: ArrowSpec) => `${a.from}-${a.to}`;
-      const pulsing = new Map<
-        string,
-        { zone: string | undefined; until?: number }
-      >();
-      const resting = new Map<string, { ends: string; since: number }>();
-      const ends = arrows.flatMap((a) => {
-        const pulse =
-          a.pulse &&
-          (pulses.current.get(a.pulse.key) ?? { zone: a.pulse.zone });
-        if (a.pulse && pulse) {
-          pulsing.set(a.pulse.key, pulse);
-          if (a.pulse.departed || pulse.zone !== a.pulse.zone)
-            pulse.until = now;
-          if (pulse.until !== undefined && pulse.until <= now) return [];
-        }
-        const from = document.getElementById(a.from);
-        const to = document.getElementById(a.to);
-        if (!from || !to) return [];
-        const fromEnd = arrowEnd(from, origin, scale);
-        const toEnd = arrowEnd(to, origin, scale);
-        if (!fromEnd || !toEnd) return [];
-        const source = fromEnd.box;
-        const target = toEnd.box;
-        const chevron = a.fromChevron
-          ? from.querySelector<SVGSVGElement>(".attack-chevron")?.getScreenCTM()
-          : undefined;
-        if (a.fromChevron && !chevron) return [];
-        const tip = chevron
-          ? new DOMPoint(50, 0.5).matrixTransform(chevron)
-          : undefined;
-        const start: Vector | undefined = tip
-          ? [(tip.x - origin.left) / scale, (tip.y - origin.top) / scale]
-          : undefined;
-        if (follow && !a.direct) {
-          const key = keyOf(a);
-          const at = JSON.stringify(
-            [source, target, ...fromEnd.hosts, ...toEnd.hosts].map((b) => [
-              b.x,
-              b.y,
-              b.width,
-              b.height,
-            ]),
-          );
-          const was = rest.current.get(key);
-          const since = was?.ends === at ? was.since : now;
-          resting.set(key, { ends: at, since });
-          if (now - since < REST_MS) {
-            return [];
-          }
-          if (pulse && pulse.until === undefined) {
-            pulse.until = Number.POSITIVE_INFINITY;
-          }
-        }
-        return [{ a, from, to, source, target, start }];
-      });
-      if (follow) rest.current = resting;
-      pulses.current = pulsing;
-      const where = JSON.stringify([
-        size,
-        ends.map((e) => [keyOf(e.a), e.a.tone, e.start?.map(Math.round)]),
-        ...[
-          ...ends.flatMap((e) => [e.source, e.target]),
-          ...obstacles.map((o) => o.box),
-        ].map((b) => [b.x, b.y, b.width, b.height].map(Math.round)),
-      ]);
-      const still = where === seen.current.where;
-      if (still && seen.current.searched) return;
-      // Each arrow keeps off every other card, not what holds or lies within its ends, or
-      // within what its ends are part of.
-      const routed = ends.filter(({ a }) => !a.direct);
-      const legs = routed.map(({ from, to, source, target }): Leg => {
-        const own = [from, to].flatMap((end) => {
-          const host = end.dataset.within;
-          const whole = host ? document.getElementById(host) : null;
-          return whole ? [end, whole] : [end];
-        });
-        return {
-          from: {
-            box: source,
-            oval: from.hasAttribute("data-oval"),
-            stackPeek: !!from.dataset.stackNext,
-          },
-          to: {
-            box: target,
-            oval: to.hasAttribute("data-oval"),
-            stackPeek: !!to.dataset.stackNext,
-          },
-          avoid: obstacles
-            .filter(
-              ({ element: e }) =>
-                !own.some((end) => e.contains(end) || end.contains(e)),
-            )
-            .map((o) => o.box),
-        };
-      });
-      // While anything moves, each follows its ports; standing still, or new, all are routed.
-      const traced = routed.map(({ a }, i) => {
-        const choice = choices.current.get(keyOf(a));
-        return still || !choice ? undefined : retrace(legs[i]!, choice);
-      });
-      const searched = traced.some((r) => !r);
-      const routes = searched
-        ? route(
-            legs,
-            size,
-            routed.map(({ a }) => choices.current.get(keyOf(a))),
-          )
-        : traced;
-      seen.current = { where, searched: still || searched };
-      choices.current = new Map(
-        routed.map(({ a }, i) => [keyOf(a), routes[i]!.choice]),
-      );
-      const next = routed.map(({ a }, i): Drawn => {
-        const r = routes[i]!;
-        return {
-          key: keyOf(a),
-          from: a.from,
-          to: a.to,
-          tone: a.tone,
-          d: shaft(r.p, r.angle, scale),
-          end: r.end,
-          angle: r.angle,
-          direct: false,
-        };
-      });
-      const geometry = new Map<string, string>();
-      for (const { a, source, target, start } of ends) {
-        if (!a.direct) continue;
-        const above = source.y < target.y;
-        const origin: Vector = start ?? [
-          source.x + source.width / 2,
-          source.y + (above ? source.height : 0),
-        ];
-        const end: Vector = [
-          target.x + target.width / 2,
-          target.y + (above ? 0 : target.height),
-        ];
-        const key = keyOf(a);
-        const d = `M${point(origin)} L${point(end)}`;
-        geometry.set(key, d);
-        if (directGeometry.current.get(key) !== d) {
-          directPaths.current.get(key)?.setAttribute("d", d);
-        }
-        next.push({ ...a, key, d, direct: true });
-      }
-      directGeometry.current = geometry;
-      // Unchanged, it keeps the drawn arrows.
-      setDrawn((last) =>
-        last.length === next.length &&
-        last.every(
-          (l, i) =>
-            l.key === next[i]!.key &&
-            l.direct === next[i]!.direct &&
-            (l.direct || l.d === next[i]!.d) &&
-            l.tone === next[i]!.tone,
-        )
-          ? last
-          : next,
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    // Read positions after Motion has written the card transforms for this frame.
-    if (follow && arrows.length > 0) frame.postRender(measure, true);
-    return () => {
-      observer.disconnect();
-      cancelFrame(measure);
-    };
-  }, [arrows, follow, avoid]);
-
-  return (
-    <svg
-      ref={svg}
-      className="arrows"
-      style={{ "--arrow-scale": scale } as CSSProperties}
-      aria-hidden
-    >
-      {drawn.map((a) => {
-        if (a.direct) {
-          return (
-            <g
-              key={a.key}
-              className="arrow combat-link"
-              data-from={a.from}
-              data-to={a.to}
-            >
-              <g className="arrow-line">
-                <path
-                  ref={(path) => {
-                    if (!path) {
-                      directPaths.current.delete(a.key);
-                      return;
-                    }
-                    directPaths.current.set(a.key, path);
-                    path.setAttribute(
-                      "d",
-                      directGeometry.current.get(a.key) ?? a.d,
-                    );
-                  }}
-                />
-              </g>
-            </g>
-          );
-        }
-        const head = `translate(${point(a.end)}) rotate(${a.angle.toFixed(1)}) scale(${scale})`;
-        return (
-          <g
-            key={a.key}
-            className={`arrow arrow-${a.tone}`}
-            data-from={a.from}
-            data-to={a.to}
-          >
-            <g className="arrow-line">
-              <path d={a.d} />
-              <path className="arrow-head" d={HEAD} transform={head} />
-            </g>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-/** How long both ends of a followed arrow stand still before it shows, in ms. */
-const REST_MS = 90;
-/** The tip sits at the target's edge. The shaft ends inside the filled head. */
-const HEAD = "M-14 -6 L0 0 L-14 6 Z";
-const SHAFT_SHORT = 10;
-
-/** An arrow's shaft: its cubic `p` stopped `SHAFT_SHORT` short of the tip along its heading
- * `angle` (degrees), both end and last control point, so it arrives square in the head. */
-function shaft(p: readonly Vector[], angle: number, scale: number): string {
-  const [p0, p1, p2, p3] = p as [Vector, Vector, Vector, Vector];
-  const r = (angle * Math.PI) / 180;
-  const back: Vector = [
-    -Math.cos(r) * SHAFT_SHORT * scale,
-    -Math.sin(r) * SHAFT_SHORT * scale,
-  ];
-  const move = ([x, y]: Vector): Vector => [x + back[0], y + back[1]];
-  return `M${point(p0)} C${point(p1)} ${point(move(p2))} ${point(move(p3))}`;
 }

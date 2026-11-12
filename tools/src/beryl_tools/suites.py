@@ -1,4 +1,4 @@
-"""The suites `ui-test` runs beside the checks of interactions.mjs and kept.mjs, each with its
+"""The suites `ui-test` runs beside the checks of kept.mjs, each with its
 own run-log prefix and a list of its checks Python can read: the stage's verbs
 (ui/scripts/verbs.mjs, ui/verbs.json) and its prompt shapes (ui/scripts/shapes.mjs,
 ui/shapes.json). selection.py chooses among them, and shots.py and motion.py record their
@@ -15,6 +15,7 @@ from . import paths
 VERB_SCRIPT = "ui/scripts/verbs.mjs"
 VERB_CASES = (
     "ui/scripts/verb-cases.mjs",
+    "ui/scripts/verb-run.mjs",
     "ui/scripts/verb-cases-place.mjs",
     "ui/scripts/verb-cases-piles.mjs",
     "ui/scripts/verb-cases-spans.mjs",

@@ -1,5 +1,5 @@
 // The stepped capture (plan K27, Motion oracle): the verb suite's moments (ui/verbs.json) played
-// on the stage under `?stage`, its clock held and stepped in ticks of a sixtieth of a second (on
+// on the stage, its clock held and stepped in ticks of a sixtieth of a second (on
 // whole milliseconds), screenshotting each tick of the suite's verbs' steps. `by motion`
 // measures the frames with `by video measure`, the tool Arena's numbers were taken with, and
 // holds each step to its verb's own values (tools/src/beryl_tools/motion.py). Usage:
@@ -72,7 +72,7 @@ const travels = new Set(
 /** The layouts captured, as verbs.mjs opens them. The phone's battlefield is laid out again
  * as the stack comes and goes, so a step's frames hold more than its subject moving: not
  * captured yet. */
-const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
+const LAYOUTS = { desktop: { query: "", width: 1600, height: 900 } };
 /** The moments of `more` played besides the first with `--more`, each with the verbs whose
  * steps are taken there: cards changing zone (`zones`, `scry`), and changes on a card where it
  * lies and to players (`combat`, `place`); and in three of them the arrows and lines the first
@@ -418,7 +418,7 @@ async function open(size, query, fixture) {
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(
-        new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
+        new URL(`/?${query}fixture=${fixture}&at=1#/game`, base).href,
     );
     await page.waitForFunction(
         () => window.berylStage && document.querySelector(".stage-node"),

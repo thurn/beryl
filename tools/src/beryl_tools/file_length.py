@@ -24,8 +24,6 @@ EXEMPT = (
     "ui/src/generated",
     "rust/crates/beryl_cards/src/names.rs",
     "rust/crates/beryl_search/src/frozen",
-    "ui/scripts/interactions.mjs",
-    "ui/scripts/audit.mjs",
     "ui/scripts/drive.mjs",
     "rust/crates/beryl_search/src/expert",
     "rust/crates/beryl_search/src/long.rs",

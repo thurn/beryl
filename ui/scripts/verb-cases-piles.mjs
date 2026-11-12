@@ -15,7 +15,7 @@ import {
     onSide,
     leavesFrom,
     where,
-} from "./verb-cases.mjs";
+} from "./verb-run.mjs";
 
 const routeOf = (step) => `${step.act.from}>${step.act.object.zone}`;
 const placeOf = ({ x, y, width }) => ({ x, y, width });

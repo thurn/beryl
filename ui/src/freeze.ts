@@ -12,7 +12,7 @@
 //
 // The clocks are wrapped when this module loads, before Motion takes its own references to
 // them, so main.tsx imports it first. Game views that arrive while frozen wait too (ipc.ts),
-// and so does the playback's pacing (game/playback.ts).
+// and the stage's clock stops with the frames it is stepped on (stage/clock.ts).
 
 const realFrame = window.requestAnimationFrame.bind(window);
 const realCancel = window.cancelAnimationFrame.bind(window);
@@ -36,7 +36,7 @@ const now = () => (frozenAt ?? realNow()) - skipped;
 performance.now = now;
 // Keep one public id across scheduling and freezing. An effect can cancel its frame
 // after the browser delivered it into the frozen queue; changing that id would revive
-// a disposed animation loop on thaw (including arrows from an old board).
+// a disposed animation loop on thaw.
 const scheduled = new Map<number, number>();
 window.requestAnimationFrame = (callback) => {
   const id = nextId--;
@@ -109,16 +109,8 @@ export function thaw() {
   for (const l of listeners) l();
 }
 
-export const isFrozen = () => frozenAt !== undefined;
-
 /** Runs `f` now, or once thawed if frozen. */
 export function whenThawed(f: () => void) {
   if (frozenAt === undefined) f();
   else thawed.push(f);
-}
-
-/** For useSyncExternalStore: calls `onChange` as the page freezes and thaws. */
-export function subscribeFrozen(onChange: () => void) {
-  listeners.add(onChange);
-  return () => void listeners.delete(onChange);
 }

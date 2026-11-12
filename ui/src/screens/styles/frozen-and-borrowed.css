@@ -2,16 +2,8 @@
 .page-frozen *:not([data-unfrozen], [data-unfrozen] *) {
   animation-play-state: paused !important;
 }
-
-/* The library moves back from an arrange tray as one packet. */
-[data-library-pile="you"] {
-  translate: var(--library-return-x, 0px) var(--library-return-y, 0px);
-}
-/* A browser or prompt owns this card's visual while it is off the table. */
-[data-card-borrowed],
-.card-el[data-card-borrowed] + .card-ghost,
-.stage:has([data-table-library="you"][data-card-borrowed])
-  [data-library-pile="you"] {
+/* A pile's viewer owns this card's face while it lists it (game/Piles.tsx). */
+[data-card-borrowed] {
   visibility: hidden;
   pointer-events: none;
 }

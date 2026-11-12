@@ -1,6 +1,5 @@
 // Where the inspector stands beside the table for a card pointed at on it, and the inspector
-// drawn there with what is attached to the card: the same on the old board and the stage's
-// (UI Conventions, "Hover inspection").
+// drawn there with what is attached to the card (UI Conventions, "Hover inspection").
 import type {
   ObjectView,
   PlayerView,

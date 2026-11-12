@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, each a selector or `{selector, position}` with the point of the element to click, and then with the pointer over the element `hover` selects, if given. With `expect`, a selector, the shot fails unless an element it selects then shows: what the shot is of, where no check of the screen against its view would miss it (the card under the pointer shown whole). With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it. A shot's `staged` is for a run forced onto the stage (`just ui-shots --stage`, plan K25), until the cut-over: an object replaces those of the shot's fields that name what only the old board draws, and a string says which of the stage's shots stands for it there, where it is not taken.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, each a selector or `{selector, position}` with the point of the element to click, and then with the pointer over the element `hover` selects, if given. With `expect`, a selector, the shot fails unless an element it selects then shows: what the shot is of, where no check of the screen against its view would miss it (the card under the pointer shown whole). With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it.",
   "shots": [
     {
       "name": "phone-main",
@@ -38,33 +38,15 @@
       "height": 647
     },
     {
-      "name": "phone-stage-respond",
-      "route": "/?phone&stage&fixture=phone-respond#/game",
-      "width": 393,
-      "height": 759
-    },
-    {
-      "name": "phone-stage-main",
-      "route": "/?phone&stage&fixture=phone-main#/game",
-      "width": 393,
-      "height": 759
-    },
-    {
-      "name": "phone-stage-attack",
-      "route": "/?phone&stage&fixture=phone-attack#/game",
-      "width": 393,
-      "height": 759
-    },
-    {
       "name": "phone-stage-menu",
-      "route": "/?phone&stage&fixture=phone-main#/game",
+      "route": "/?phone&fixture=phone-main#/game",
       "width": 393,
       "height": 759,
       "click": ".phone-menu"
     },
     {
       "name": "phone-stage-inspect",
-      "route": "/?phone&stage&fixture=phone-main#/game",
+      "route": "/?phone&fixture=phone-main#/game",
       "width": 393,
       "height": 759,
       "click": {
@@ -78,7 +60,7 @@
     },
     {
       "name": "phone-stage-graveyard",
-      "route": "/?phone&stage&fixture=phone-main#/game",
+      "route": "/?phone&fixture=phone-main#/game",
       "width": 393,
       "height": 759,
       "click": "[data-pile=graveyard][data-side=you]"
@@ -197,42 +179,16 @@
       "click": ".opening-hand .opening-card"
     },
     {
-      "name": "game-cast-step",
-      "route": "/?fixture=greedy-turn-9&at=-1#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=hand][data-card='Fractured Identity']",
-      "keep": "the only shot of a cast step opened from a hand card; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end",
-      "staged": "stage-pick is the stage's shot of a spell cast by a click and its target asked: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
       "name": "game-hand-pair",
       "route": "/?fixture=hand-pair#/game",
       "width": 1600,
       "height": 900
     },
     {
-      "name": "game-cast-kicker",
-      "route": "/?fixture=cast-kicker&at=1#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=hand][data-card='Thieving Skydiver']",
-      "staged": "stage-mode-ways is the stage's shot of the ways to cast a card, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
       "name": "game-evoke-exile",
       "route": "/?fixture=cast-evoke#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "game-cast-evoke",
-      "route": "/?fixture=cast-evoke&at=1#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=hand][data-card='Subtlety']",
-      "hover": ".ability-choice >> nth=1",
-      "staged": "stage-mode-ways is the stage's shot of the ways to cast a card, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-main",
@@ -400,14 +356,6 @@
       "height": 900
     },
     {
-      "name": "game-mana-picker",
-      "route": "/?fixture=mana-picker#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=battlefield][data-card='Tundra']",
-      "staged": "stage-mode-ways is the stage's shot of the ways to use a permanent, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
       "name": "game-attackers",
       "route": "/?fixture=combat-attackers#/game",
       "width": 1600,
@@ -426,98 +374,68 @@
       "height": 800
     },
     {
-      "name": "stage-blockers",
-      "route": "/?stage&fixture=combat-blockers#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "stage-main",
-      "route": "/?stage&fixture=greedy-turn-9&at=-1#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "stage-opponent-turn",
-      "route": "/?stage&fixture=opponent-turn&at=12#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
       "name": "stage-stack",
-      "route": "/?stage&fixture=stack-counter#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "stage-stack-x",
-      "route": "/?stage&fixture=stack-x#/game",
+      "route": "/?fixture=stack-counter#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-discard-full",
-      "route": "/?stage&fixture=choice-loot-full#/game",
+      "route": "/?fixture=choice-loot-full#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-order-long",
-      "route": "/?stage&fixture=order-long#/game",
+      "route": "/?fixture=order-long#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-order-long",
-      "route": "/?phone&stage&fixture=order-long#/game",
+      "route": "/?phone&fixture=order-long#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-arrow-ability",
-      "route": "/?stage&fixture=arrow-ability#/game",
+      "route": "/?fixture=arrow-ability#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-arrow-player",
-      "route": "/?stage&fixture=arrow-player#/game",
+      "route": "/?fixture=arrow-player#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-arrow-stacked",
-      "route": "/?stage&fixture=arrow-stacked#/game",
+      "route": "/?fixture=arrow-stacked#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-attack-lines",
-      "route": "/?stage&fixture=combat-double-block&at=14#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-blockers",
-      "route": "/?phone&stage&fixture=combat-blockers#/game",
+      "route": "/?phone&fixture=combat-blockers#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "phone-stage-arrow-ability",
-      "route": "/?phone&stage&fixture=arrow-ability#/game",
+      "route": "/?phone&fixture=arrow-ability#/game",
       "width": 393,
       "height": 759
     },
     {
-      "name": "stage-game-over",
-      "route": "/?stage&fixture=game-over#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
       "name": "stage-hover",
-      "route": "/?stage&fixture=emblems#/game",
+      "route": "/?fixture=emblems#/game",
       "width": 1600,
       "height": 900,
       "hover": "[data-card='Teferi, Hero of Dominaria Emblem']",
@@ -525,72 +443,65 @@
     },
     {
       "name": "stage-aim-target",
-      "route": "/?stage&fixture=shape-pick&at=10#/game",
+      "route": "/?fixture=shape-pick&at=10#/game",
       "width": 1600,
       "height": 900,
       "hover": "[data-stage]:has(> .stage-mark-eligible)"
     },
     {
-      "name": "stage-graveyard-viewer",
-      "route": "/?stage&fixture=choice-scry&at=1#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-pile=graveyard][data-side=you]"
-    },
-    {
       "name": "stage-revealed",
-      "route": "/?stage&fixture=verbs-reveal-theirs#/game",
+      "route": "/?fixture=verbs-reveal-theirs#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-revealed",
-      "route": "/?phone&stage&fixture=verbs-reveal-theirs#/game",
+      "route": "/?phone&fixture=verbs-reveal-theirs#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-revealed-open",
-      "route": "/?stage&fixture=verbs-reveal-theirs#/game",
+      "route": "/?fixture=verbs-reveal-theirs#/game",
       "width": 1600,
       "height": 900,
       "click": ".stage-revealed .button"
     },
     {
       "name": "phone-stage-revealed-open",
-      "route": "/?phone&stage&fixture=verbs-reveal-theirs#/game",
+      "route": "/?phone&fixture=verbs-reveal-theirs#/game",
       "width": 393,
       "height": 759,
       "click": "[data-pile=revealed]"
     },
     {
       "name": "stage-log-open",
-      "route": "/?stage&fixture=combat-double-block&at=14#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
       "click": ".game-log-toggle"
     },
     {
       "name": "stage-pick",
-      "route": "/?stage&fixture=shape-pick&at=1#/game",
+      "route": "/?fixture=shape-pick&at=1#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-pick-player",
-      "route": "/?stage&fixture=shape-pick&at=3#/game",
+      "route": "/?fixture=shape-pick&at=3#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-pick",
-      "route": "/?phone&stage&fixture=shape-pick&at=1#/game",
+      "route": "/?phone&fixture=shape-pick&at=1#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "phone-stage-pick-target",
-      "route": "/?phone&stage&fixture=shape-pick&at=10#/game",
+      "route": "/?phone&fixture=shape-pick&at=10#/game",
       "width": 393,
       "height": 759
     },
@@ -599,51 +510,6 @@
       "route": "/?fixture=combat-declare&at=26#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "game-declare-attack-picked",
-      "route": "/?fixture=combat-declare&at=26#/game",
-      "width": 1600,
-      "height": 900,
-      "click": [
-        "[data-slot='512']",
-        "[data-slot='10']",
-        "[data-slot='513']",
-        "[data-slot='12']"
-      ],
-      "keep": "the only shot of attackers picked but not declared; its stale updates were combat-declare's re-recordings",
-      "staged": "stage-declare-attack is the stage's shot of attackers picked and not yet declared: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
-      "name": "game-declare-block-choosing",
-      "route": "/?fixture=combat-double-block&at=14#/game",
-      "width": 1600,
-      "height": 900,
-      "click": ["[data-slot='8']", "[data-slot='258']", "[data-slot='9']"],
-      "staged": "stage-declare-block is the stage's shot of a blocker picked and its attacker asked: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
-      "name": "game-log-open",
-      "route": "/?fixture=combat-double-block&at=14#/game",
-      "width": 1600,
-      "height": 900,
-      "click": ".game-log-toggle"
-    },
-    {
-      "name": "game-declare-block",
-      "route": "/?fixture=combat-double-block&at=14#/game",
-      "width": 1600,
-      "height": 900,
-      "click": [
-        "[data-slot='8']",
-        "[data-slot='258']",
-        "[data-slot='9']",
-        "[data-slot='258']",
-        "[data-slot='15']",
-        "[data-slot='265']"
-      ],
-      "keep": "the only shot of a double block declared; its stale updates were combat-double-block's re-recordings",
-      "staged": "stage-declare-block is the stage's shot of blocks picked and not yet declared: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-trigger-1920",
@@ -664,20 +530,8 @@
       "height": 900
     },
     {
-      "name": "game-counter",
-      "route": "/?fixture=stack-counter#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
       "name": "game-arrow-spell",
       "route": "/?fixture=arrow-spell#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "game-arrow-ability",
-      "route": "/?fixture=arrow-ability#/game",
       "width": 1600,
       "height": 900
     },
@@ -690,12 +544,6 @@
     {
       "name": "game-target-player",
       "route": "/?fixture=target-player#/game",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "game-arrow-player",
-      "route": "/?fixture=arrow-player#/game",
       "width": 1600,
       "height": 900
     },
@@ -716,14 +564,6 @@
       "route": "/?fixture=choice-scry#/game",
       "width": 1920,
       "height": 1080
-    },
-    {
-      "name": "game-choice-scry-battlefield",
-      "route": "/?fixture=choice-scry#/game",
-      "width": 1600,
-      "height": 900,
-      "click": ".overlay-view",
-      "staged": "stage-split-scry is the stage's shot of a scry, which leaves the table in view with no way aside to take: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-choice-jace",
@@ -792,14 +632,6 @@
       "height": 900
     },
     {
-      "name": "game-emblems-hover",
-      "route": "/?fixture=emblems#/game",
-      "width": 1600,
-      "height": 900,
-      "hover": "[data-card='Teferi, Hero of Dominaria Emblem']",
-      "expect": ".inspect"
-    },
-    {
       "name": "game-target-graveyard",
       "route": "/?fixture=target-graveyard#/game",
       "width": 1600,
@@ -812,38 +644,10 @@
       "height": 900
     },
     {
-      "name": "game-menu-walker",
-      "route": "/?fixture=menu-choices#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=battlefield][data-card='Jace, the Mind Sculptor']",
-      "hover": ".ability-choice >> nth=2",
-      "staged": "stage-mode-ways is the stage's shot of a planeswalker's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
       "name": "game-converter-may-exile",
       "route": "/?fixture=converter-may-exile#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "game-converter-menu",
-      "route": "/?fixture=converter-exiled#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=battlefield][data-card='Currency Converter']",
-      "staged": "stage-mode-ways is the stage's shot of a permanent's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
-      "name": "game-converter-exiled",
-      "route": "/?fixture=converter-exiled#/game",
-      "width": 1600,
-      "height": 900,
-      "click": [
-        "[data-zone=battlefield][data-card='Currency Converter']",
-        ".ability-choice >> nth=1"
-      ],
-      "staged": "stage-zone-graveyard is the stage's shot of cards of a zone laid out to pick from: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-converter-choose",
@@ -856,22 +660,6 @@
       "route": "/?fixture=walkers&at=27#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "game-menu-walker-low",
-      "route": "/?fixture=walker-low#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=battlefield][data-card='Teferi, Time Raveler']",
-      "staged": "stage-mode-ways is the stage's shot of a planeswalker's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
-    },
-    {
-      "name": "game-menu-land-face",
-      "route": "/?fixture=menu-choices#/game",
-      "width": 1600,
-      "height": 900,
-      "click": "[data-zone=hand][data-card='Sink into Stupor']",
-      "staged": "stage-mode-ways is the stage's shot of a card's faces to play, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-pay-life",
@@ -993,183 +781,183 @@
     },
     {
       "name": "stage-split-scry",
-      "route": "/?stage&fixture=shape-split&at=3#/game",
+      "route": "/?fixture=shape-split&at=3#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-split-back",
-      "route": "/?stage&fixture=shape-split&at=7#/game",
+      "route": "/?fixture=shape-split&at=7#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-split-back",
-      "route": "/?phone&stage&fixture=shape-split&at=7#/game",
+      "route": "/?phone&fixture=shape-split&at=7#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-zone-graveyard",
-      "route": "/?stage&fixture=shape-zone&at=6#/game",
+      "route": "/?fixture=shape-zone&at=6#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-zone-graveyard",
-      "route": "/?phone&stage&fixture=shape-zone&at=6#/game",
+      "route": "/?phone&fixture=shape-zone&at=6#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-order",
-      "route": "/?stage&fixture=shape-order&at=4#/game",
+      "route": "/?fixture=shape-order&at=4#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-order",
-      "route": "/?phone&stage&fixture=shape-order&at=4#/game",
+      "route": "/?phone&fixture=shape-order&at=4#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-pay-crew",
-      "route": "/?stage&fixture=shape-pay&at=6#/game",
+      "route": "/?fixture=shape-pay&at=6#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-pay-crew",
-      "route": "/?phone&stage&fixture=shape-pay&at=6#/game",
+      "route": "/?phone&fixture=shape-pay&at=6#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-pay-waterbend",
-      "route": "/?stage&fixture=shape-pay&at=8#/game",
+      "route": "/?fixture=shape-pay&at=8#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "stage-declare-block",
-      "route": "/?stage&fixture=shape-declare&at=9#/game",
+      "route": "/?fixture=shape-declare&at=9#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-declare-block",
-      "route": "/?phone&stage&fixture=shape-declare&at=9#/game",
+      "route": "/?phone&fixture=shape-declare&at=9#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-declare-attack",
-      "route": "/?stage&fixture=shape-declare&at=25#/game",
+      "route": "/?fixture=shape-declare&at=25#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-declare-attack",
-      "route": "/?phone&stage&fixture=shape-declare&at=25#/game",
+      "route": "/?phone&fixture=shape-declare&at=25#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-yes-life",
-      "route": "/?stage&fixture=shape-yes&at=5#/game",
+      "route": "/?fixture=shape-yes&at=5#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-yes-life",
-      "route": "/?phone&stage&fixture=shape-yes&at=5#/game",
+      "route": "/?phone&fixture=shape-yes&at=5#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-yes-fateseal",
-      "route": "/?stage&fixture=shape-yes&at=3#/game",
+      "route": "/?fixture=shape-yes&at=3#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-yes-fateseal",
-      "route": "/?phone&stage&fixture=shape-yes&at=3#/game",
+      "route": "/?phone&fixture=shape-yes&at=3#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-yes-move",
-      "route": "/?stage&fixture=shape-yes&at=8#/game",
+      "route": "/?fixture=shape-yes&at=8#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-yes-move",
-      "route": "/?phone&stage&fixture=shape-yes&at=8#/game",
+      "route": "/?phone&fixture=shape-yes&at=8#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-number",
-      "route": "/?stage&fixture=shape-number&at=2#/game",
+      "route": "/?fixture=shape-number&at=2#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-number",
-      "route": "/?phone&stage&fixture=shape-number&at=2#/game",
+      "route": "/?phone&fixture=shape-number&at=2#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-mode-ways",
-      "route": "/?stage&fixture=shape-mode&at=1#/game",
+      "route": "/?fixture=shape-mode&at=1#/game",
       "click": "[data-stage=\"5\"]",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-mode-ways",
-      "route": "/?phone&stage&fixture=shape-yes&at=1#/game",
+      "route": "/?phone&fixture=shape-yes&at=1#/game",
       "click": "[data-stage=\"5\"]",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-mode-offer",
-      "route": "/?stage&fixture=shape-mode&at=12#/game",
+      "route": "/?fixture=shape-mode&at=12#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-mode-offer",
-      "route": "/?phone&stage&fixture=shape-mode&at=12#/game",
+      "route": "/?phone&fixture=shape-mode&at=12#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-catalog",
-      "route": "/?stage&fixture=shape-catalog&at=1#/game",
+      "route": "/?fixture=shape-catalog&at=1#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-catalog",
-      "route": "/?phone&stage&fixture=shape-catalog&at=1#/game",
+      "route": "/?phone&fixture=shape-catalog&at=1#/game",
       "width": 393,
       "height": 759
     },
     {
       "name": "stage-divide",
-      "route": "/?stage&fixture=shape-divide&at=1#/game",
+      "route": "/?fixture=shape-divide&at=1#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "phone-stage-divide",
-      "route": "/?phone&stage&fixture=shape-divide&at=1#/game",
+      "route": "/?phone&fixture=shape-divide&at=1#/game",
       "width": 393,
       "height": 759
     }

@@ -3,7 +3,7 @@ import type { ObjectView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import type { Box, Placement } from "./placement";
 import { BACK_WIDTH, FULL_WIDTH, HAND, RAISE, turned } from "./placement";
-import { DRAWN_DIP, stackPlace } from "./stackLayout";
+import { stackPlace } from "./stackLayout";
 import { STAGE, STAGE_WIDTHS, fromMiddle } from "./perspective";
 
 /** Where the action dock's leftmost button begins, passing on to the next stop left of the turn
@@ -139,10 +139,7 @@ export function handLifts(hand: Placement[], lands: Box[]): Placement[] {
  * returned to it), upside down to you as the opponent holds them. Each back's foot lies on the
  * arc (`HELD_RISE`) and the back turns to lie along it, so the fan's lower edge runs smooth at
  * any size, no back's corner standing out of it. */
-export function heldPlacements(
-  cards: ObjectView[],
-  drawn?: ReadonlySet<number>,
-): Placement[] {
+export function heldPlacements(cards: ObjectView[]): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const height = BACK_WIDTH / CARD_ASPECT;
@@ -156,10 +153,7 @@ export function heldPlacements(
     const turn = (Math.atan(-2 * bend * dx) * 180) / Math.PI;
     // The foot on the arc, and the card's middle half a card up from it along its turn: the
     // card lies upside down about that middle, as the opponent holds it, facing them.
-    const foot = [
-      STAGE.width / 2 + dx,
-      HELD_FOOT - bend * dx ** 2 + (drawn?.has(o.slot) ? DRAWN_DIP : 0),
-    ] as const;
+    const foot = [STAGE.width / 2 + dx, HELD_FOOT - bend * dx ** 2] as const;
     const a = (turn * Math.PI) / 180;
     const middle = [
       foot[0] + (Math.sin(a) * height) / 2,

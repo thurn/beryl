@@ -99,11 +99,9 @@ export const DESKTOP_REVEALED: PileSpace = {
 
 /** A hand's order of arrival is the table's (table.ts `arranged`): the layout is given its
  * cards in that order, and no other. */
-const NO_ORDER: ReadonlyMap<number, number> = new Map();
 const NONE: ReadonlySet<Name> = new Set();
 
-/** How much of its source's width an ability is as it lifts out of it (Board.tsx's
- * triggerOrigin). */
+/** How much of its source's width an ability is as it lifts out of it. */
 const EMERGING = 0.6;
 
 const resting = (object: ObjectView, place: Placement): Resting => ({
@@ -193,7 +191,7 @@ function rest(
 ): Map<Name, Resting> {
   const { abilities, handled, tray, revealed } = table;
   const view = arranged(table);
-  // A card still leaving for a pile is off it as a borrowed one is: the pile lies as it did,
+  // A card still leaving for a pile is off it: the pile lies as it did,
   // its top showing, and the card has its place on it for when it lands. So is a card a
   // prompt holds up.
   const away = tray
@@ -203,11 +201,9 @@ function rest(
     view,
     hold,
     logOpen,
-    {},
-    NO_ORDER,
     // An ability's name is no card's slot.
     away as ReadonlySet<number>,
-    zonePiles(view, NO_ORDER),
+    zonePiles(view),
     handled ?? [],
   );
   const out = new Map<Name, Resting>();
@@ -313,7 +309,7 @@ export function middle(resting: Resting, pose: Pose): Point {
 }
 
 function anchors(table: PlayerView): Anchors {
-  const piles = [...zonePiles(table, NO_ORDER), ...knownLibraries(table)];
+  const piles = [...zonePiles(table), ...knownLibraries(table)];
   return {
     pile(side, zone) {
       const { x, y, width } = piles.find(

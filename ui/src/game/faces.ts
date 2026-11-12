@@ -226,7 +226,3 @@ export function paragraphOf(text: string, ref: AbilityRef): number | undefined {
     .split("\n")
     .flatMap((p, i) => (/\.\)?$/.test(p) && !other(p) ? [i] : []))[ref.nth];
 }
-
-/** A paragraph of rules text without its reminder text, as a menu or the cast step says it. */
-export const withoutReminder = (paragraph: string) =>
-  paragraph.replace(/\s*\([^)]*\)/g, "").trim();

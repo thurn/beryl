@@ -36,9 +36,8 @@ the release pinned in `data/rules-version.json`.
   (`fixtures.json`, `beryl_cli`'s `boards.rs`), which `just ui-shots` captures
   in the states `shots.json` names. `src/generated/protocol.ts` is generated
   from `beryl_session` by ts-rs: a test fails when it is stale, and its header
-  says how to regenerate it. `src/stage/` is the stage that plays the session's
-  scripts on a clock tests can step (plan K25); it draws the table only behind
-  `?stage` until it takes the old board's place.
+  says how to regenerate it. `src/stage/` is the stage, which draws the table:
+  it plays the session's scripts on a clock tests can step (plan K25).
 - `data/`: `card-store.tsv`, the card store `just cards` builds from Scryfall's
   bulk data: a record for every card in the pool and every token they make,
   sorted for lookup by seeking (`tools/src/beryl_tools/card_store.py` specifies
@@ -165,22 +164,20 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 2. UI: `cd ui && npm run typecheck`. `npm test` runs what needs no browser
    (`ui/scripts/*.test.mjs`: the stage's clock and sequencing).
    `just ui-shots [names]` screenshots UI states headless and prints their
-   paths; `just ui-test` plays the game screen through a fixture (the old
-   board's checks, then `ui/scripts/kept.mjs`'s, which stay), then the stage's
-   verbs on the stage's own clock (`ui/scripts/verbs.mjs`; `just ui-test verb:`
-   runs those alone), and then its prompt shapes, each answered by the clicks
-   its fixture recorded with the session's replies (`ui/scripts/shapes.mjs`;
-   `just ui-test shape:`). `just ui-play [fixtures]` plays every recorded
-   fixture to its end on the stage, on both layouts, under the stage's audit.
-   `--stage` (or `BERYL_STAGE=1`) forces a whole `ui-shots`, `ui-test`,
-   `ui-live` or `specs` run onto the stage, until the cut-over makes it the only
-   board; `just specs --phone` and `just ui-live --phone` open the phone's
-   layout. Every card has a spec (`/specs/<card>`), generated from its
-   definition and scenarios, showing each of its UI moments as a live game from
-   both seats. To reproduce, debug or verify a card's behavior in the UI, use
-   the `specs` skill: `just specs --describe`, `--film`, `--motion` and
-   `--drive` show what each moment does for both players, in text, in pictures,
-   as an animation audit and under Playwright.
+   paths; `just ui-test` plays the game screen through a fixture
+   (`ui/scripts/kept.mjs`), then the stage's verbs on the stage's own clock
+   (`ui/scripts/verbs.mjs`; `just ui-test verb:` runs those alone), and then its
+   prompt shapes, each answered by the clicks its fixture recorded with the
+   session's replies (`ui/scripts/shapes.mjs`; `just ui-test shape:`).
+   `just ui-play [fixtures]` plays every recorded fixture to its end, on both
+   layouts, under the stage's audit. `just specs --phone` and
+   `just ui-live --phone` open the phone's layout. Every card has a spec
+   (`/specs/<card>`), generated from its definition and scenarios, showing each
+   of its UI moments as a live game from both seats. To reproduce, debug or
+   verify a card's behavior in the UI, use the `specs` skill:
+   `just specs --describe`, `--film`, `--motion` and `--drive` show what each
+   moment does for both players, in text, in pictures, as an animation audit and
+   under Playwright.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.

@@ -227,8 +227,8 @@ const pick = (cue: Cue) => Math.floor(Math.random() * cue.variants.length);
 
 /** Plays a sound effect: a variant at random, slightly varied, unless that sound already
  * plays at its most copies or the player muted effects. `gain` is in decibels; `delay` in
- * milliseconds; `at` stamps the log entry (the beat it sounds, game/playback.ts, or on the
- * stage the edge of its step, audio/steps.ts), now by default. */
+ * milliseconds; `at` stamps the log entry (the edge of the step it sounds, audio/steps.ts),
+ * now by default. */
 export function play(
   sound: Sound,
   {

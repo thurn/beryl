@@ -262,7 +262,7 @@ const keyOf = ({ id }: PromptButton) =>
       ? `ability-${id.nth}`
       : id.kind;
 
-/** The keys that answer the open prompt, as the old board has them: Space or Enter presses
+/** The keys that answer the open prompt: Space or Enter presses
  * the button put forward, Shift with either the one that passes on, and Escape takes a cast
  * back. A control that has the focus keeps its own key, and `idle` is false while something
  * else on the screen takes the keys. */
@@ -357,7 +357,7 @@ function PassOn({
 }
 
 /** The desktop's dock for the open prompt. While the game plays on, the turn button stands
- * where it will be with nothing to press, as the old board's does. */
+ * where it will be with nothing to press. */
 export function PromptDock({
   asked: { prompt, decision, sending },
   waiting,

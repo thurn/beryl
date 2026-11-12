@@ -1,25 +1,22 @@
 // Films each moment of the specs from both seats (`by specs --film`, tools/): plays the two
-// seats' games in step with motion on, screenshots both every INTERVAL ms from the play to
-// the settle, and lays out the bursts of motion as one sheet per moment, at most MOST frames,
+// seats' games in step with motion on, screenshots both every INTERVAL ms of stage time from
+// the play to the settle, and lays out the bursts of motion as one sheet per moment, at most MOST frames,
 // each frame your seat over theirs, labelled with its time. One image shows how the moment
 // moves for both players, where a still shows only how it ends. Usage:
 //   node scripts/film.mjs <base-url> <out-dir> [card-slug...] [--moment NAME] [--viewport WxH]
 // Writes <out-dir>/<card>/<moment>.png, and every frame under <out-dir>/<card>/<moment>/,
-// and prints each sheet's path. Under the stage (`by specs --stage`) the two seats' stages are
-// held and stepped INTERVAL ms of stage time a frame: a frame's time is the stage's, whatever
-// the machine's speed.
+// and prints each sheet's path. The two seats' stages are held and stepped INTERVAL ms of
+// stage time a frame: a frame's time is the stage's, whatever the machine's speed.
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { launch, workers } from "./capture.mjs";
 import {
     chosen,
-    LAST_VIEW,
     LONGEST,
     moving,
     openSeat,
     option,
     play,
-    QUIET,
     rest,
     viewport,
     warm,
@@ -46,56 +43,10 @@ if (!base || !out) {
     process.exit(2);
 }
 
-/** Shoots both pages every INTERVAL ms until both have been quiet (no view heard, none
- * queued) for QUIET ms and LAST_VIEW more, or LONGEST. Each frame: its ms since the play and
- * both seats' JPEGs. */
-async function film(pages, lives) {
-    const staged = await Promise.all(
-        pages.map((p) => p.evaluate(() => window.berylStage !== undefined)),
-    );
-    if (staged.every(Boolean)) return stepped(pages, lives);
-    const frames = [];
-    const quietSince = pages.map(() => undefined);
-    const start = Date.now();
-    await play(...lives);
-    while (Date.now() - start < LONGEST) {
-        const t = Date.now() - start;
-        const shots = await Promise.all(
-            pages.map((p) => p.screenshot({ type: "jpeg", quality: 70 })),
-        );
-        frames.push({ t, shots });
-        const quiet = await Promise.all(
-            pages.map((p) =>
-                p.evaluate(() => {
-                    const last = window.berylLive?.log.at(-1)?.at ?? 0;
-                    return performance.now() - last > 0 && !window.berylBehind
-                        ? performance.now() - last
-                        : 0;
-                }),
-            ),
-        );
-        quiet.forEach((q, i) => {
-            quietSince[i] =
-                q >= QUIET ? (quietSince[i] ?? Date.now()) : undefined;
-        });
-        if (
-            quietSince.every(
-                (q) => q !== undefined && Date.now() - q > LAST_VIEW,
-            )
-        ) {
-            break;
-        }
-        await new Promise((r) =>
-            setTimeout(r, Math.max(0, INTERVAL - (Date.now() - start - t))),
-        );
-    }
-    return frames;
-}
-
-/** `film` on the stage: holds both seats' clocks, plays, and once neither page is owed a view
+/** Films `pages`: holds both seats' clocks, plays, and once neither page is owed a view
  * (moments.mjs `rest`) shoots both and steps each stage still playing INTERVAL ms on, until
  * both are at rest. Each frame: the stage ms since the play, and both seats' JPEGs. */
-async function stepped(pages, lives) {
+async function film(pages, lives) {
     const each = (run, ...given) =>
         Promise.all(pages.map((p) => p.evaluate(run, ...given)));
     await each(() => window.berylStage.clock.hold());

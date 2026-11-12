@@ -1,13 +1,14 @@
-// The game's table drawn on the stage (plan K25), in place of game/Board.tsx behind `?stage`
-// (switch.tsx) until it takes over: the cloth, one node an object or ability where the page's
-// stage has it (playback.ts), and the chrome around them (Chrome.tsx, game/Corner.tsx). The
+// The game's table drawn on the stage (plan K25): the cloth, one node an object or ability
+// where the page's stage has it (playback.ts), and the chrome around them (Chrome.tsx,
+// game/Corner.tsx). The
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out
 // for what stands around it, and hears the pointer. The prompt picked on the table is the
 // session's, drawn and answered through prompt.ts and PromptBar.tsx, as are a cost paid with
 // permanents, a declaration of attackers or blockers (Aim.tsx draws its line to the pointer),
 // the cards a prompt holds up to be sorted, picked or asked about and the triggers it has put
 // in order (Tray.tsx), and the ways to use a card, a catalog's entries and a division's
-// shares (Choose.tsx). What the session holds no state of is answered over the table.
+// shares (Choose.tsx). The opening's decisions are answered over the table
+// (screens/Opening.tsx).
 import {
   useCallback,
   useEffect,
@@ -16,9 +17,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type ComponentProps,
 } from "react";
-import type { Board } from "../game/Board";
 import { Corner, UndoButton } from "../game/Corner";
 import { RAISE } from "../game/placement";
 import { useStageWidth } from "../game/Stage";
@@ -26,7 +25,12 @@ import { linked } from "../game/zoneViews";
 import { Aim } from "./Aim.tsx";
 import { Entries, Shares, Ways } from "./Choose.tsx";
 import { Controls, Hud, useHovered } from "./Chrome.tsx";
-import type { ObjectView } from "../generated/protocol";
+import type {
+  ObjectView,
+  PlayerView,
+  StopsSetting,
+} from "../generated/protocol";
+import type { LogEntry } from "../game/log";
 import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
@@ -56,8 +60,27 @@ export function StageBoard({
   onLeave,
   onConcede,
   dimmed,
-  inert,
-}: ComponentProps<typeof Board>) {
+}: {
+  /** The latest view whose script has played out. */
+  view: PlayerView;
+  /** What has happened in the game up to it, oldest first. */
+  log: LogEntry[];
+  /** An answer is on its way, or the game plays on without the player. */
+  waiting: boolean;
+  /** Plays out at once the views still to show; none when none wait. */
+  onSkip?: () => void;
+  /** Takes back the cast in progress. */
+  cancel(): void;
+  /** Takes back the player's latest answer. */
+  undo(): void;
+  stops: StopsSetting;
+  setStops(stops: StopsSetting): void;
+  onLeave(): void;
+  /** Concedes the game; none once it is over. */
+  onConcede?: () => void;
+  /** A screen is over the table: the opening or the game's end. */
+  dimmed: boolean;
+}) {
   const { stage, prompts } = pageStage();
   const asked = usePrompt(prompts);
   const { layer, surface } = useSurface(stage);
@@ -85,7 +108,7 @@ export function StageBoard({
   }, [prompts]);
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
-  const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
+  const undoable = !waiting && (decision?.undo ?? 0) > 0;
   const { pay, suggest } = usePaying(asked);
   const { press, lost } = useLostMana(
     asked,
@@ -114,7 +137,7 @@ export function StageBoard({
   const number = prompts.number.bind(prompts);
   const answers = { waiting, press, cancel, suggest, number };
   // A prompt's keys answer it while nothing else takes them.
-  usePromptKeys(asked, answers, !settings && !onSkip && !inert);
+  usePromptKeys(asked, answers, !settings && !onSkip);
   // The keys that are not a prompt's: Escape closes the settings, the platform's undo takes
   // back an answer, and Space or Enter ends a replay as a press on the table does.
   const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
@@ -227,7 +250,6 @@ export function StageBoard({
           hovered={hovered}
           stops={stops}
           setStops={setStops}
-          inert={inert}
           dimmed={dimmed}
         >
           <PromptDock asked={asked} {...answers} />
@@ -241,7 +263,6 @@ export function StageBoard({
           />
         )}
         <Corner
-          inert={inert}
           open={settings}
           setOpen={setSettings}
           stops={stops}

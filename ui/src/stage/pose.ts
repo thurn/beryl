@@ -29,7 +29,7 @@ export interface Pose {
   flat?: number;
 }
 
-/** How far over everything at rest a moving object is drawn (CardLayer's FLYING_Z). */
+/** How far over everything at rest a moving object is drawn. */
 export const ALOFT = 900;
 
 /** The pose `progress` of the way from `from` to `to`, showing the side it will show there:

@@ -3,7 +3,6 @@ import "./card-palettes.css";
 import "./mana-symbols.css";
 import "./card-frame.css";
 import "./card-marks-and-piles.css";
-import "./arrows.css";
 import "./buttons.css";
 import "./phase-tracker.css";
 import "./life-orbs.css";

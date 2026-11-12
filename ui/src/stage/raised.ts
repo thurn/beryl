@@ -3,8 +3,7 @@
 // made invisible, so the pointer finds the cards in the fan's resting order: each card's
 // visible strip is that card's, and a neighbor's edge moves the hover to the neighbor as
 // Arena's does. Over the hand, this copy of the node, which the pointer passes through, shows
-// the card raised. The old board drew its raised card the same way (game/CardLayer.tsx,
-// `ghosted`).
+// the card raised.
 
 /** One copy at a time, of the node `raise` names, kept as that node is: its pose each time
  * the stage draws it, and its face each time React draws it, as a change to the node's

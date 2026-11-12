@@ -3,16 +3,12 @@
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import type { PileLook } from "./pileLook";
 import { PILES, pileLook } from "./pileLook";
-import { inOrder } from "./placement";
 import { isLand } from "./battlefield";
 
 /** The slot each of a side's emblems is drawn under: one no object has, counting down from -1,
  * the two sides' taking turns, so that each emblem keeps its own as more are made. */
 export const emblemSlot = (side: Side, index: number) =>
   -1 - (2 * index + (side === "you" ? 1 : 0));
-
-/** Whether a slot is an emblem's (`emblemSlot`), which nothing can be done with. */
-export const isEmblem = (slot: number) => slot < 0;
 
 /** Each player's emblems ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141): "An
  * emblem is a marker used to represent an object that has one or more abilities, but usually no other
@@ -165,10 +161,7 @@ export function exiledWith(view: PlayerView, slot: number): ObjectView[] {
 
 /** Each side's graveyard and exile piles, but for the cards your hand fan holds because you can
  * play them (`playableElsewhere`). */
-export function zonePiles(
-  view: PlayerView,
-  exileOrder: ReadonlyMap<number, number>,
-): ZonePile[] {
+export function zonePiles(view: PlayerView): ZonePile[] {
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
   const holding = new Set(view.battlefield);
   const inHand = new Set(playableElsewhere(view));
@@ -176,15 +169,12 @@ export function zonePiles(
     const graveyard = view.players[side].graveyard.flatMap((slot) =>
       inHand.has(slot) ? [] : (bySlot.get(slot) ?? []),
     );
-    const exile = inOrder(
-      view.objects.filter(
-        (o) =>
-          o.owner === side &&
-          o.zone === "exile" &&
-          !inHand.has(o.slot) &&
-          held(o, holding) === undefined,
-      ),
-      exileOrder,
+    const exile = view.objects.filter(
+      (o) =>
+        o.owner === side &&
+        o.zone === "exile" &&
+        !inHand.has(o.slot) &&
+        held(o, holding) === undefined,
     );
     return [
       { zone: "graveyard" as const, cards: graveyard },

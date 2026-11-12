@@ -314,7 +314,6 @@ def measure_here() -> int:
         try:
             with shots.served_ui(env) as url:
                 scripts = [
-                    ("ui-test", ["scripts/interactions.mjs", url, str(recorded)]),
                     ("ui-test", ["scripts/kept.mjs", url, str(recorded)]),
                     ("ui-test", ["scripts/verbs.mjs", url, str(recorded)]),
                     ("ui-test", ["scripts/shapes.mjs", url, str(recorded)]),

@@ -5,11 +5,10 @@
 // is drawn with (`Skin`): the desktop's are here, the phone's in mobile/faces.tsx.
 import { memo, useSyncExternalStore, type ComponentType } from "react";
 import { createPortal } from "react-dom";
-import { MotionConfig } from "motion/react";
 import type { ObjectView } from "../generated/protocol";
 import { CARD_ASPECT, CardBack } from "../components/Card";
 import { StackItem, StackMarks } from "../components/Stack";
-import { Look, type CardState } from "../game/CardLayer";
+import { Look, type CardState } from "../game/Look";
 import { abilityText, BLANK, useAbilityFace } from "../game/faces";
 import type { DomSurface } from "./dom.ts";
 import type { Dress, StackAbility } from "./layout.ts";
@@ -91,12 +90,10 @@ export interface Skin {
   }>;
 }
 
-/** The desktop's faces: the old board's cards and stack items. */
+/** The desktop's faces: full cards and stack items. */
 export const DESKTOP: Skin = { Card: Face, Ability: AbilityFace };
 
-/** Every node's face. The skin turns a tapped frame with a spring of its own (Card.tsx's
- * TURN), on the browser's time; on the stage a record's change shows at once, and what moves
- * is a step's track, so the skin's motion is switched off here. */
+/** Every node's face. A record's change shows at once: what moves is a step's track. */
 export function Faces({
   stage,
   surface,
@@ -111,7 +108,7 @@ export function Faces({
 }) {
   const { resting } = useSyncExternalStore(stage.subscribe, () => stage.shown);
   return (
-    <MotionConfig reducedMotion="always">
+    <>
       {[...resting].map(([name, { object, ability, source, dress }]) => {
         const node = surface.node(name);
         if (!node) return null;
@@ -126,6 +123,6 @@ export function Faces({
         );
         return createPortal(face, node, `${name}`);
       })}
-    </MotionConfig>
+    </>
   );
 }

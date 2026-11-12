@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { slotOf as offeredSlot, twins } from "../src/game/decisions.ts";
+import { twins } from "../src/game/decisions.ts";
 import {
     SAME,
     check,
@@ -305,7 +305,7 @@ await check(
                     "the browser owns the card",
                 );
             }
-            // Once the flight has arrived, each card shows whole on hover.
+            // Each card shows whole on hover.
             await page.clock.runFor(500);
             await page.hover(`${viewer} [data-card="${listed[0]}"]`);
             await page
@@ -435,7 +435,6 @@ await check(
             async ({ view, map }) => {
                 const { layout } = await import("/src/game/layout.ts");
                 const { zonePiles } = await import("/src/game/zoneViews.ts");
-                const order = new Map();
                 const borrowed = new Set();
                 // Each card of the pile of `map`'s copies that wears a count, with the count.
                 const counted = (v) =>
@@ -444,10 +443,8 @@ await check(
                             v,
                             "held",
                             false,
-                            {},
-                            order,
                             borrowed,
-                            zonePiles(v, order),
+                            zonePiles(v),
                             [],
                         ).values(),
                     ]
@@ -514,6 +511,26 @@ await check(
         ...tokenRun,
     },
 );
+
+/** The card a candidate is about, if any. */
+function offeredSlot(option) {
+    switch (option.kind) {
+        case "object":
+        case "playLand":
+        case "attack":
+        case "block":
+        case "lethal":
+        case "cast":
+        case "activate":
+        case "mana":
+        case "turnFaceUp":
+            return option.slot;
+        case "defender":
+            return option.planeswalker ?? undefined;
+        default:
+            return undefined;
+    }
+}
 
 // Every object an open decision offers something for has an element a player can see and point
 // at: the card on the table or in a choice's tray, a twin the engine offers it through, or the

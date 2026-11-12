@@ -57,37 +57,30 @@ show the mechanics it shares.
    script played wrongly is a stage bug (`ui/src/stage/`).
 
 3. **Audit its motion.** `just specs --motion <card> [--moment M]` plays each
-   moment from both seats with motion on and judges every event: `ok` (moved,
-   faded or animated long enough, visibly), `instant` (a jump), `unseen` (moved
-   off screen, covered or transparent), `still` (nothing showed it), and
-   `crowded` (more than three events in one view). Arrows are judged too: `jump`
-   (a new path while both its ends stood still) and `stretch` (drawn while an end
-   moved). Beside the events,
-   `duplicate` flags two visible instances of the same card in any recorded
-   frame, including face-down cards, browsers and prompts. Hover inspection
-   is exempt. Distinct slots and ability indicators may share card art.
-   The `ui` findings judge what moved with no event behind it (a fan making
-   room, a button sliding in). About 20 s a card; the JSON with every event, ok
-   ones too, lands in `$BERYL_CACHE/spec-motion/`. Taps, untaps and `ui`
-   findings of a scripted play are `minor`: printed only with `--minor`. A
-   finding is a lead, not a verdict: look at the film, and at Arena's motion at
-   the same moment, before fixing. Arena's tokens appear at their slot and its
-   permanents dissolve where they are (UI Conventions, "Settled as Arena"), so
-   a `still` or `instant` there can be right.
-
-   With `--stage` every seat opens on the stage (`?stage`), and the audit judges
-   by what each view's script said should happen
-   (`ui/scripts/stage-audit.mjs`): one finding a step, measured at every tick of
-   the stage's own clock, which it holds and steps. There a token that appears
-   and an ability that is gone in no time are `ok`, a step the stage never
-   played is `still`, an arrow's `jump` is read from the stage's model, and the
-   one card shown twice is a `mode` prompt's (UI Conventions, "Choosing how to
-   cast"). `--film`, `--shots` and `--drive` take `--stage` too: a film's frames
-   are then 120 ms of stage time apart, whatever the machine's speed.
+   moment from both seats with motion on and judges it by what each view's
+   script said should happen (`ui/scripts/stage-audit.mjs`): one finding a
+   step, measured at every tick of the stage's own clock, which it holds and
+   steps. `ok` (the stage played the step and the page showed it, for as long
+   as its verb takes), `still` (the stage played no such step, or nothing shows
+   it), `instant` (a jump where the verb gives time to travel), `unseen` (off
+   screen, covered or transparent the while) and `crowded` (more than three
+   different moves begun at once in one beat). An arrow or line's `jump` (a new
+   shape while both its ends stood still) is read from the stage's model.
+   `duplicate` flags two painted instances of one object in a tick, face-down
+   cards, browsers and prompts included; hover inspection is exempt, as is
+   what the design language shows twice (the cards of a `mode` prompt: UI
+   Conventions, "Choosing how to cast"). A token that appears and an ability
+   that is gone in no time are `ok`. About 20 s a card; the JSON with every
+   step, ok ones too, lands in `$BERYL_CACHE/spec-motion/`. Taps and untaps
+   are `minor`: printed only with `--minor`. A finding is a lead, not a
+   verdict: look at the film, and at Arena's motion at the same moment, before
+   fixing.
 
 4. **Watch it.** `just specs --film <card> [--moment M]` writes one sheet per
    moment, `$BERYL_CACHE/spec-film/<checkout>/<card>/<moment>.png`: the bursts
-   of motion as frames, each your seat over theirs, labelled with ms since play.
+   of motion as frames, each your seat over theirs, labelled with ms of stage
+   time since play (frames are 120 ms of it apart, whatever the machine's
+   speed).
    Every frame, full size, is beside it in `<moment>/` (`<ms>-yours.jpg`,
    `<ms>-theirs.jpg`) for a closer look. Read the sheet, not every frame. A run
    replaces only its own cards' folders. `--viewport 1180x820` films (and shoots
@@ -107,9 +100,7 @@ show the mechanics it shares.
 
    `spec.open(card, moment, seat)` opens one seat (and points `page` at it),
    `spec.both` both, held until `spec.play()`, and `spec.audit(action?)` plays
-   them (or runs the action, a live click) and audits both seats' motion. An
-   action is the viewer's own, so what it moves before the game answers is
-   judged too, not minor: a chooser opening, the hand rising (`ui` findings).
+   them (or runs the action, a live click) and audits both seats' motion.
    `spec.seat("theirs")` points `page`, `shot` and `probe` at that seat at once;
    `spec.settled()` waits for quiet.
 
@@ -301,9 +292,8 @@ Fix it in this order, preferring the general fix:
 3. **A general fix in the UI**: a prompt, layout or wording belongs to a shape
    or a zone, never to one card, so fix it where every card with that shape
    gets it, and audit a few other cards that open it. A wrong motion, arrow or
-   combat line is banked for the stage, not fixed in the code it replaces
-   (`ui/src/game/beats.ts`, `playback.ts`'s holds, `CardLayer.tsx`): the
-   `bugfix` skill, step 3, says how.
+   combat line is the script's (the session's builder) or the stage's
+   (`ui/src/stage/`): the `bugfix` skill, step 3, says how to tell.
 
 There are no hand-written moments: a case only one card has is a scenario in its
 file. A fixed engine bug gets its entry in `docs/bugs.md`.
@@ -319,5 +309,5 @@ exception; any other difference is a finding, cited with the recording id and
 time. Where the recordings show nothing, judge by the design philosophy in
 `.agents/skills/ui-review/SKILL.md`; never file a bead asking the user to look
 at something. Report what each moment
-shows from each seat, what you fixed or banked, which other cards' moments
+shows from each seat, what you fixed, which other cards' moments
 changed, and any moment you could not get and why.

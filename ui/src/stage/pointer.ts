@@ -65,11 +65,10 @@ export interface Holding {
   pose(name: Name): Pose | null;
 }
 
-/** How far a press travels before it picks its card up, in stage pixels (CardLayer's). */
+/** How far a press travels before it picks its card up, in stage pixels. */
 export const DRAG_THRESHOLD = 6;
 
-/** How far over everything, what flies included, a held card is drawn (CardLayer's
- * DRAGGING_Z). */
+/** How far over everything, what flies included, a held card is drawn. */
 const HELD_DEPTH = 1000;
 
 /** The pose of a card picked up at `from` by a press at `start`, with the pointer now at `at`:

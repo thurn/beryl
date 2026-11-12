@@ -63,7 +63,7 @@ export async function cardRecords(name) {
 }
 
 // Every fixture recorded for this run (ui/fixtures.json defines them), and none a script wrote
-// into the folder: interactions.mjs runs first and writes its own beside them.
+// into the folder.
 const { fixtures: defined } = JSON.parse(
     await readFile(new URL("../fixtures.json", import.meta.url), "utf8"),
 );
@@ -151,10 +151,9 @@ async function pause(page) {
     }
 }
 
-/** Runs `body` on a fresh page of a fixture's first `at` views, drawn by the stage (`?stage`,
- * plan K25) whatever the run's switch, once `ready` matches and its fonts have loaded, alongside
- * other checks (capture.mjs' workers): awaiting it waits only for a free worker. Its run-log id
- * is `ui-test:<title>`, as the checks of interactions.mjs were. The page's fixtures come from
+/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches and its
+ * fonts have loaded, alongside other checks (capture.mjs' workers): awaiting it waits only for
+ * a free worker. Its run-log id is `ui-test:<title>`. The page's fixtures come from
  * `fixtures`, not from what Vite serves. The page runs on Playwright's fake clock, paused once
  * the page is ready so that a check cannot race the wall clock; `clock: "off"` leaves the
  * browser's own, and says why. */
@@ -215,7 +214,7 @@ export async function check(
                 assert.ok(["paused", "off"].includes(clock), clock);
                 if (clock === "paused") await page.clock.install();
                 if (init) await page.addInitScript(init);
-                const route = `/?fixture=${fixture}&at=${at}&stage${phone ? "&phone" : ""}${hash}`;
+                const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
                 await page.goto(new URL(route, base).href, {
                     waitUntil: "load",
                 });

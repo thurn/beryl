@@ -15,8 +15,6 @@ import type { ScriptStage } from "./stage.ts";
 /** What the pile is called, on its pill and over its browser: Arena's words. */
 export const REVEALED = "Revealed Cards";
 
-const UNMARKED = new Map<number, never>();
-
 /** The faces the stage rests in the pile, the first revealed first. */
 export const revealedIn = (resting: ReadonlyMap<Name, Resting>): ObjectView[] =>
   [...resting]
@@ -89,9 +87,6 @@ export function RevealedCards({
         <ZoneViewer
           pile={{ cards: [...cards] }}
           title={REVEALED}
-          states={UNMARKED}
-          offers={() => false}
-          onPick={() => {}}
           onClose={() => setOpen(false)}
         />
       )}

@@ -3,8 +3,8 @@
 // clearly for both players. Usage:
 //   node scripts/motion.mjs <base-url> <out.json> [card-slug...] [--moment NAME] [--minor]
 //     [--viewport WxH]
-// The measuring and the verdicts are audit.mjs's, and under the stage (`by specs --stage`)
-// stage-audit.mjs's, which judges by each view's script on the stage's own clock. Prints each finding by moment and seat,
+// The measuring and the verdicts are stage-audit.mjs's, which judges by each view's script on
+// the stage's own clock. Prints each finding by moment and seat,
 // writes them all to <out.json>, and exits 1 if any is not ok. Minor findings (taps and
 // untaps, and what moved with no event to show) are written but printed and counted only
 // with --minor. A seat that fails to open or play is tried again once, in a fresh page.

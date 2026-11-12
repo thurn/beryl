@@ -1,4 +1,4 @@
-// The table's corner controls, the same on the old board and the stage's: the gear's column at
+// The table's corner controls: the gear's column at
 // the top right (the bug report, the gear and its settings, with concede and leaving in them),
 // undo under it, and full control's mark by the turn button (UI Conventions, "Chrome").
 import { useState } from "react";
@@ -8,11 +8,8 @@ import { Button, Tip } from "../components/Controls";
 import type { StopsSetting } from "../generated/protocol";
 
 /** The gear's column at the top right: the bug report, which stays over any screen, and the
- * gear with the settings it opens, which like the turn's controls give way to a screen over
- * the table (`inert`). Undo, under them, is its own (`UndoButton`): it stays while a choice
- * covers the table. */
+ * gear with the settings it opens. Undo, under them, is its own (`UndoButton`). */
 export function Corner({
-  inert,
   open,
   setOpen,
   stops,
@@ -20,7 +17,6 @@ export function Corner({
   onLeave,
   onConcede,
 }: {
-  inert?: boolean;
   /** The settings are open: the table's, since a press anywhere on it closes them. */
   open: boolean;
   setOpen(open: boolean): void;
@@ -42,19 +38,16 @@ export function Corner({
       >
         <BugIcon />
       </button>
-      {/* Like the turn's controls, the gear gives way to a screen over the table. */}
-      {!inert && (
-        <button
-          type="button"
-          className="icon-button gear-button"
-          aria-label="Settings"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setOpen(!open)}
-        >
-          <Gear />
-        </button>
-      )}
-      {open && !inert && (
+      <button
+        type="button"
+        className="icon-button gear-button"
+        aria-label="Settings"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => setOpen(!open)}
+      >
+        <Gear />
+      </button>
+      {open && (
         <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
           <Settings
             stops={stops}

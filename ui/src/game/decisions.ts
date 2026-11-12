@@ -1,57 +1,18 @@
-// What the human can do on the board at their open decision: which cards they can act on and
-// how, which they can pick, and what the prompt asks. Pure functions of the decision.
+// What the opening's screen plans of its decisions (screens/Opening.tsx), and what the table's
+// layout asks of a view's objects. Pure functions.
 import type {
   Candidate,
   CandidateIndex,
   DecisionView,
   Kind,
   ObjectView,
-  Payment,
   PlayerView,
-  Side,
-  StackItem,
 } from "../generated/protocol";
-
-/** One thing a card or a player offers: the candidate's index and its label; for a cast or an
- * activation, the ways it can be paid; for a blocker, the attackers it may block; for an
- * activation of the card's own ability, which of its activated abilities it is; and the picks
- * it plans after its own (the target itself, for a count of targets taken with it). */
-export interface Act {
-  index: CandidateIndex;
-  label: string;
-  option: Candidate;
-  payments: Payment[];
-  blocks: number[];
-  nth: number | null;
-  then?: Intent[];
-}
-
-export interface Interactions {
-  /** Each card's candidates, by slot. */
-  bySlot: Map<number, Act[]>;
-  /** The players the decision can name. */
-  players: Map<Side, Act>;
-  /** Choosing no target, at a count of up to one target taken on the board with its target. */
-  skip?: CandidateIndex;
-  /** Passing priority, at a priority decision. */
-  pass?: CandidateIndex;
-  /** Finishing a declaration or a division (attackers, blockers, combat damage). */
-  done?: CandidateIndex;
-  /** At a decision among things (targets, cards): a card with one candidate is picked by
-   * clicking it, so it glows cyan; elsewhere clicking a card lists its candidates. */
-  picking: boolean;
-  /** The card the choice is for, glowing gold: the spell or ability on top of the stack. */
-  source?: number;
-}
 
 /** A pick a later decision should get: one of its kind, the candidate `wants` names or,
  * failing that, one `alike` names (a card the engine offers in place of an interchangeable
- * one, architecture §7.2); `picked` hears which it was. An overlay says a whole scry; the
- * board, a whole combat declaration. A pick that `waits` stays planned while the player
- * answers other decisions before it (a cast's payment, after the targets they pick on the
- * board), until priority returns. An `optional` pick is passed over, as `skipped` hears, when
- * the engine does not ask its decision, having made the pick itself (a blocker's attacker
- * when it may block only one). */
+ * one, architecture §7.2); `picked` hears which it was. The opening says a mulligan's cards
+ * for the bottom all at once. */
 export interface Intent {
   kind: Kind;
   /** The purpose of the prompt the decision's pick must belong to (`PromptView`'s), for a
@@ -61,11 +22,6 @@ export interface Intent {
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
   picked?(option: Candidate): void;
-  skipped?(): void;
-  waits?: boolean;
-  optional?: boolean;
-  /** A cast setup's follow-up, grouped with the previous answer for Undo. */
-  continuation?: boolean;
 }
 
 /** Whether `intent` is for `decision`: of its kind and, where it says, its purpose. */
@@ -77,17 +33,8 @@ const answers = (decision: DecisionView, intent: Intent) =>
 export const aimsAttack = ({ prompt }: DecisionView) =>
   prompt.purpose === "attack" && prompt.part === "aim";
 
-/** A button's label from the session's words: `{picked}`, `{of}` and `{s}` are the UI's to
- * fill while it holds the prompt's state, how many are picked, how many the prompt takes and
- * the plural's letter unless one is picked ("Submit 1", "2 Attackers"). */
-export const counted = (template: string, picked: number, of: number) =>
-  template
-    .replace("{picked}", String(picked))
-    .replace("{of}", String(of))
-    .replace("{s}", picked === 1 ? "" : "s");
-
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
-export function intended(
+function intended(
   decision: DecisionView,
   intent: Intent,
 ): CandidateIndex | undefined {
@@ -100,40 +47,18 @@ export function intended(
   return index < 0 ? undefined : index;
 }
 
-/** What `plan` picks at `decision`: its next intent, past optional ones the engine did not
- * ask, with the candidate it names, if any (which it is told of), and the intents after it. */
+/** What `plan` picks at `decision`: the candidate its first intent names, if any (which it
+ * is told of), and the intents after it. */
 export function follow(
   decision: DecisionView,
   plan: Intent[],
-): { intent?: Intent; index?: CandidateIndex; rest: Intent[] } {
-  let i = 0;
-  while (plan[i]?.optional && !answers(decision, plan[i]!)) {
-    plan[i]!.skipped?.();
-    i += 1;
-  }
-  const intent = plan[i];
+): { index?: CandidateIndex; rest: Intent[] } {
+  const intent = plan[0];
   const index = intent && intended(decision, intent);
   if (intent && index !== undefined) {
     intent.picked?.(decision.candidates[index]!.option);
   }
-  return { intent, index, rest: plan.slice(i + 1) };
-}
-
-/** The view with what is resolving back on top of its stack. The engine takes a spell or
- * ability off the stack as it begins to resolve, and a question its resolution asks names it
- * as `resolving`; it is still on the stack until it finishes (CR 608.2n: "As the final part of
- * an instant or sorcery spell's resolution, the spell is put into its owner's graveyard"), and
- * the player answering sees what asks, as a spell asking whether they pay its tax. */
-export function withResolving(view: PlayerView): PlayerView {
-  if (view.status.kind !== "deciding") return view;
-  const resolving = view.status.decision.resolving;
-  if (!resolving) return view;
-  const same = (item: StackItem) =>
-    resolving.kind === "spell"
-      ? item.kind === "spell" && item.slot === resolving.slot
-      : JSON.stringify(item) === JSON.stringify(resolving);
-  if (view.stack.some(same)) return view;
-  return { ...view, stack: [...view.stack, resolving] };
+  return { index, rest: plan.slice(1) };
 }
 
 /** The objects a spell or ability on the stack names, a target or an ability's source. The
@@ -170,243 +95,8 @@ export function twins(a: ObjectView, b: ObjectView): boolean {
   );
 }
 
-/** Whether all a card offers is tapping it for mana
- * ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate an
- * activated mana ability whenever they have priority"), floating it until it is spent or the
- * step ends: every untapped source can, which no glow need say. */
-export const tapsOnly = (acts: Act[]) =>
-  acts.length > 0 && acts.every((a) => a.option.kind === "mana");
-
-/** Whether two candidates are the same answer. */
-export const optionsMatch = (a: Candidate, b: Candidate) =>
-  JSON.stringify(a) === JSON.stringify(b);
-
-/** The card a candidate is about, if any. */
-export function slotOf(option: Candidate): number | undefined {
-  switch (option.kind) {
-    case "object":
-    case "playLand":
-    case "attack":
-    case "block":
-    case "lethal":
-    case "cast":
-    case "activate":
-    case "mana":
-    case "turnFaceUp":
-      return option.slot;
-    case "defender":
-      return option.planeswalker ?? undefined;
-    default:
-      return undefined;
-  }
-}
-
-export function interactions(view: PlayerView): Interactions {
-  const status = view.status;
-  const bySlot = new Map<number, Act[]>();
-  const players = new Map<Side, Act>();
-  if (status.kind !== "deciding") {
-    return { bySlot, players, picking: false };
-  }
-  const decision = status.decision;
-  let pass: CandidateIndex | undefined;
-  let done: CandidateIndex | undefined;
-  decision.candidates.forEach(({ option, ...candidate }, index) => {
-    const slot = slotOf(option);
-    const act = { index, option, ...candidate };
-    if (slot !== undefined) {
-      bySlot.set(slot, [...(bySlot.get(slot) ?? []), act]);
-    } else if (option.kind === "player") {
-      players.set(option.player, act);
-    } else if (option.kind === "defender") {
-      // Attacking no planeswalker is attacking the defending player (CR 508.1b).
-      players.set("opponent", act);
-    } else if (option.kind === "pass") {
-      pass = index;
-    } else if (option.kind === "done") {
-      done = index;
-    }
-  });
-  const skip = upToOne(decision, bySlot, players);
-  // Interchangeable cards collapse to one candidate (architecture §7.2): of two basic lands
-  // of a name in your hand the engine offers one, of two untapped Insect tokens one attacker.
-  // Either card offers it, unless the stack names one of them.
-  const named = referenced(view);
-  const offered = view.objects.filter(
-    (o) => bySlot.has(o.slot) && !named.has(o.slot),
-  );
-  for (const o of view.objects) {
-    if (
-      bySlot.has(o.slot) ||
-      named.has(o.slot) ||
-      (o.zone !== "hand" && o.zone !== "battlefield")
-    ) {
-      continue;
-    }
-    const twin = offered.find((t) => twins(o, t));
-    if (twin) bySlot.set(o.slot, bySlot.get(twin.slot)!);
-  }
-  return {
-    bySlot,
-    players,
-    pass,
-    done,
-    skip,
-    picking: decision.kind !== "priority",
-    source: decision.source ?? undefined,
-  };
-}
-
-/** A count of up to one target taken as the target itself
- * ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "If the spell has a
- * variable number of targets, the player announces how many targets they will choose before
- * they announce those targets"): each target the count of one lets the spell choose is
- * picked on the board, announcing one and then it, and none is a skip. Adds the targets to
- * `bySlot` and `players`; returns the count of none, if the decision is such a count. */
-function upToOne(
-  decision: DecisionView,
-  bySlot: Map<number, Act[]>,
-  players: Map<Side, Act>,
-): CandidateIndex | undefined {
-  if (decision.kind !== "targetCount") return undefined;
-  const count = (n: number) =>
-    decision.candidates.findIndex(
-      (c) => c.option.kind === "number" && c.option.n === n,
-    );
-  const [none, one] = [count(0), count(1)];
-  if (decision.candidates.length !== 2 || none < 0 || one < 0) {
-    return undefined;
-  }
-  const { option, ...candidate } = decision.candidates[one]!;
-  for (const target of candidate.targets) {
-    const named: Candidate =
-      target.kind === "object"
-        ? { kind: "object", slot: target.slot }
-        : { kind: "player", player: target.player };
-    const then: Intent[] = [
-      { kind: "target", wants: (o) => optionsMatch(o, named) },
-    ];
-    const act = { index: one, option, ...candidate, then };
-    if (target.kind === "object") bySlot.set(target.slot, [act]);
-    else players.set(target.player, act);
-  }
-  return none;
-}
-
-/** The object the answer `index` to `decision` would target, itself or as the target
- * `then` plans after a count, if the session asks about that target before it is taken
- * (its prompt's `warned`: the player's own permanent, for a removal, or their own spell,
- * for a counter). */
-export function warnedTarget(
-  decision: DecisionView,
-  index: CandidateIndex,
-  then?: Intent,
-): number | undefined {
-  const option = decision.candidates[index]?.option;
-  const state = decision.prompt.state;
-  const warned = state?.shape === "pick" ? state.warned : [];
-  return warned
-    .flatMap((on) => (on.kind === "object" ? [on.slot] : []))
-    .find((slot) =>
-      option?.kind === "object"
-        ? option.slot === slot
-        : option?.kind === "number" &&
-          then?.kind === "target" &&
-          then.wants({ kind: "object", slot }),
-    );
-}
-
-/** The pick the session suggests in a division of combat damage: the candidate that deals
- * lethal damage to the blocker its prompt marks as suggested. None under full control, where
- * the player makes each pick. */
-export function suggestedDamage(
-  decision: DecisionView,
-  fullControl: boolean,
-): CandidateIndex | undefined {
-  if (fullControl) return undefined;
-  const slot = decision.prompt.marks.flatMap((m) =>
-    m.mark === "suggested" && m.on.kind === "object" ? [m.on.slot] : [],
-  )[0];
-  const index = decision.candidates.findIndex(
-    (c) => c.option.kind === "lethal" && c.option.slot === slot,
-  );
-  return index < 0 ? undefined : index;
-}
-
-/** The combat declarations: made on the board, finished with the turn button. */
-export const isCombat = (kind: Kind) =>
-  kind === "attacker" ||
-  kind === "attackTarget" ||
-  kind === "blocker" ||
-  kind === "blockTarget" ||
-  kind === "damageDivision";
-
 /** The decisions before the first turn, which the opening screen asks over the table. */
 export const isOpening = ({ kind, prompt }: DecisionView) =>
   kind === "playOrDraw" ||
   kind === "keepOrMulligan" ||
   prompt.purpose === "put-on-bottom";
-
-/** Whether a hand card's candidates include playing or casting it: what dropping it on the
- * battlefield does. */
-export const playActs = (acts: Act[]) =>
-  acts.filter((a) => a.option.kind === "cast" || a.option.kind === "playLand");
-
-/** The prompt's title, in the session's words: what the decision asks, and for whom when a
- * target has a source, which Arena names first in parentheses ("(True-Name Nemesis) Choose a
- * player.", `jD7VqaT8VC8 16:32.5`; "(Archon of Cruelty) Discard a card.",
- * `SN9QFe2kM4Y 37:42.5`). */
-export function prompt(decision: DecisionView, source?: string): string {
-  const { title } = decision.prompt;
-  return source && decision.kind === "target" ? `(${source}) ${title}` : title;
-}
-
-/** The picks that put simultaneous triggers on the stack to resolve in `order`, the indexes of
- * `decision`'s triggers from the first to resolve, all but one of them
- * ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052): "Each time an object is put on
- * the stack, it's put on top of all objects already there"): the trigger left out first, as it
- * resolves last, then the rest from the last to resolve up, the first to resolve going on
- * unasked as the last left. After the first, each names its trigger by its source and ability,
- * as the candidates' indexes shift, and waits through the targets of the one before. */
-export function triggerPlan(
-  decision: DecisionView,
-  order: CandidateIndex[],
-): Intent[] {
-  const triggers = decision.candidates.map((c) => c.option);
-  const last = triggers.findIndex((_, i) => !order.includes(i));
-  const put = [last, ...order.slice(1).reverse()].map((i) => triggers[i]!);
-  return put.map((option, i) =>
-    i === 0
-      ? { kind: "triggerOrder", wants: (o) => optionsMatch(o, option) }
-      : {
-          kind: "triggerOrder",
-          wants: (o) =>
-            o.kind === "trigger" &&
-            option.kind === "trigger" &&
-            o.source === option.source &&
-            o.ability === option.ability,
-          waits: true,
-        },
-  );
-}
-
-/** The picks that untap the permanents in `picked`, one at a time, then done: each the
- * permanent itself or, failing that, the twin the engine offers in its place (it offers one
- * of interchangeable permanents, architecture §7.2). */
-export function untapPlan(
-  picked: Iterable<number>,
-  objects: Map<number, ObjectView>,
-): Intent[] {
-  const pick = (slot: number): Intent => ({
-    kind: "chooseUpTo",
-    wants: (o) => o.kind === "object" && o.slot === slot,
-    alike: (o) => {
-      const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
-      return a !== undefined && b !== undefined && twins(a, b);
-    },
-  });
-  return [
-    ...[...picked].map(pick),
-    { kind: "chooseUpTo", wants: (o) => o.kind === "done" },
-  ];
-}

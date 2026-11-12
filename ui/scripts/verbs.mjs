@@ -1,9 +1,8 @@
 // The verb suite (plan K24 and K25): every verb the stage plays, checked from both seats on
-// the stage's own clock. `by ui-test` serves the UI and runs this beside interactions.mjs,
-// which the cut-over retires. Usage:
+// the stage's own clock. `by ui-test` serves the UI and runs this after kept.mjs. Usage:
 //   node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]
 // A check is `verb:<verb>/<seat>/<layout>` (ui/verbs.json lists them), named whole or in
-// part to run it alone, and logged by that name. Each opens its moments' fixtures with `?stage`
+// part to run it alone, and logged by that name. Each opens its moments' fixtures
 // in its layout's windows (the desktop's, or each phone size ui/shots.json has with `?phone`),
 // holds the stage's clock, plays the recording on as its seat did, and steps the clock inside
 // one `page.evaluate`, reading `stage.step` and `stage.pose`: no check waits on the page's
@@ -28,7 +27,8 @@ import {
 } from "./capture.mjs";
 import { ending as endOf } from "./fixture-views.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
-import { CASES as ZONES, complete } from "./verb-cases.mjs";
+import { CASES as ZONES } from "./verb-cases.mjs";
+import { complete } from "./verb-run.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
 import { CASES as PILES } from "./verb-cases-piles.mjs";
 import { CASES as SPANS } from "./verb-cases-spans.mjs";
@@ -81,12 +81,12 @@ const windows = (asks) => [
  * new token's neighbours glide to their new places meanwhile, where the desktop's stay. */
 const LAYOUTS = {
     desktop: {
-        query: "stage",
+        query: "",
         windows: [{ width: 1600, height: 900 }],
         reflows: false,
     },
     phone: {
-        query: "phone&stage",
+        query: "phone&",
         windows: windows((query) => query.has("phone")),
         reflows: true,
     },
@@ -590,7 +590,7 @@ async function play(context, watch, query, fixture, tick, end, written) {
     let hung = false;
     const playOut = async () => {
         await page.goto(
-            new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
+            new URL(`/?${query}fixture=${fixture}&at=1#/game`, base).href,
         );
         await page.waitForFunction(
             () => window.berylStage && document.querySelector(".stage-node"),

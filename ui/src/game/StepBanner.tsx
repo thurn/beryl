@@ -1,4 +1,4 @@
-// A step's announcement over the battlefield, the same on the old board and the stage's.
+// A step's announcement over the battlefield.
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Coin } from "../components/Player";

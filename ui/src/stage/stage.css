@@ -32,7 +32,7 @@
   scale: 1.06;
 }
 /* Its face lets the pointer through to its hit box: the card's frame where it lies in the fan,
-   reaching up as far as the card rises (game/CardLayer.tsx's `hand-hit`, 63:88). */
+   reaching up as far as the card rises. */
 .stage-node[data-raised] > * {
   opacity: 0;
   pointer-events: none !important;
@@ -137,8 +137,7 @@
   opacity: calc((1 - var(--settle)) * 0.6);
 }
 /* The card darkens at once and holds dark, a warning of what comes, then breaks up from the top
-   down along the mask's stippled edge (the old board's, which the cut-over leaves to this
-   rule) for the rest of its time. */
+   down along the mask's stippled edge for the rest of its time. */
 .stage-node:has(> .stage-effect-dissolve) {
   mask-image: url("../design/dissolve-mask.svg");
   mask-size: 100% 240%;
@@ -202,9 +201,6 @@
     0 0 calc(var(--frame) * 0.16) calc(var(--frame) * 0.03)
       rgb(255 226 170 / 80%);
   opacity: calc(1 - var(--pulse));
-}
-.stage-node :is(.badge-pop-0, .badge-pop-1) {
-  animation: none;
 }
 .stage-node:has(> .stage-effect-pulse)
   :is(.card-pt, .card-pt-counter, .card-loyalty, .mark-badge) {

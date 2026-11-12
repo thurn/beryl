@@ -6,7 +6,7 @@
   display: grid;
   grid-template-columns: 1000px 338px;
   /* On the base stage; held to its middle (Stage.tsx --shift-mid), and on a narrower one closer
-     together (ChoiceOverlay.tsx side). */
+     together. */
   column-gap: clamp(16px, calc(72px + 0.35 * var(--shift, 0px)), 72px);
   align-items: start;
   padding: 48px 0 0 calc(136px + var(--shift-mid, 0px));

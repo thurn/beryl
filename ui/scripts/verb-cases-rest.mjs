@@ -8,7 +8,7 @@
 // what only a whole run shows. Nothing here touches a page.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { complete, effectsOn } from "./verb-cases.mjs";
+import { complete, effectsOn } from "./verb-run.mjs";
 
 const { verbs } = JSON.parse(
     readFileSync(

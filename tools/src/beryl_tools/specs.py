@@ -17,11 +17,10 @@ runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 
 Cards are named by slug or by name ("Teferi, Time Raveler"); a card with no spec gets the
 specced cards nearest it in rules text. Each card's film and shots replace only that card's.
-`--release` builds `beryl_cli` optimized and serves the UI's production build. `--stage`, or
-`BERYL_STAGE` set, serves every page on the stage (plan K25), where the film and the audit
-step the stage's own clock and judge by each view's script (ui/scripts/stage-audit.mjs),
-until the cut-over makes the stage the only board. `--phone` opens every seat the capture
-flags open on the phone's layout.
+`--release` builds `beryl_cli` optimized and serves the UI's production build. The film and
+the audit step the stage's own clock and judge by each view's script
+(ui/scripts/stage-audit.mjs). `--phone` opens every seat the capture flags open on the
+phone's layout.
 """
 
 from __future__ import annotations
@@ -43,11 +42,9 @@ from . import nearest as nearest_cards
 from .shots import (
     PHONE,
     UiError,
-    force_stage,
     free_port,
     port_free,
     served_ui,
-    staged,
     wait_for_server,
     browser_env,
 )
@@ -86,7 +83,6 @@ def build_ui() -> bool:
     built = subprocess.run(
         [system.npm_bin("vite"), "build", "--logLevel", "warn"],
         cwd=paths.UI,
-        env={**os.environ, **({"VITE_BERYL_STAGE": "1"} if staged() else {})},
         stdin=subprocess.DEVNULL,
         check=False,
     )
@@ -330,7 +326,6 @@ def drive(
 
 
 def specs(args: argparse.Namespace) -> int:
-    force_stage(args)
     if args.phone:
         os.environ[PHONE_ENV] = "1"
         args.viewport = args.viewport or f"{PHONE[0]}x{PHONE[1]}"
@@ -468,11 +463,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--minor", action="store_true", help="--motion: print minor findings too"
-    )
-    p.add_argument(
-        "--stage",
-        action="store_true",
-        help="every page on the stage, as with BERYL_STAGE set (plan K25)",
     )
     p.add_argument(
         "--phone",

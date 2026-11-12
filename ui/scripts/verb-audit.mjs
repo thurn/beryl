@@ -25,7 +25,7 @@ async function audited(context, base, query, fixture, ends, watch) {
     const done = await watch?.(page);
     try {
         await page.goto(
-            new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
+            new URL(`/?${query}fixture=${fixture}&at=1#/game`, base).href,
         );
         await page.waitForFunction(
             () => window.berylStage && document.querySelector(".stage-node"),
@@ -81,7 +81,7 @@ export async function auditsHold({
     const faulted = await audited(
         context,
         base,
-        `${query}&skip=${verb}`,
+        `${query}skip=${verb}&`,
         fixture,
         skipped,
     );

@@ -14,7 +14,7 @@ import {
     onSide,
     sounded,
     where,
-} from "./verb-cases.mjs";
+} from "./verb-run.mjs";
 import { NEAR, STRIKE } from "../src/stage/tracks.ts";
 
 /** The middle of a permanent's card at `pose`: of its frame, which lies turned a quarter in

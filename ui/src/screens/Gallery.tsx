@@ -1,6 +1,6 @@
 // The component library on one page, laid out as docs/ui_mockups/ui_system.png. `just ui-shots`
 // captures it; it is also the place to look at a component while changing it.
-import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { Card, Crest } from "../components/Card";
 import {
   Button,
@@ -15,7 +15,7 @@ import {
   LifeOrb,
   PlayerBadge,
 } from "../components/Player";
-import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
+import { StackItem } from "../components/Stack";
 import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
 
@@ -255,34 +255,25 @@ function CardsAndStates() {
         <Card
           card={costless(SAMPLE.swords)}
           width={128}
-          style={{ rotate: -7 }}
+          style={{ rotate: "-7deg" }}
         />
       </At>
       <At x={168} y={358}>
         <Card card={SAMPLE.mountain} width={124} />
       </At>
       <At x={274} y={367}>
-        <Card card={SAMPLE.plateau} width={128} style={{ rotate: 7 }} />
+        <Card card={SAMPLE.plateau} width={128} style={{ rotate: "7deg" }} />
       </At>
     </Panel>
   );
 }
 
 function CombatAndStack() {
-  const arrows = useMemo<ArrowSpec[]>(
-    () => [
-      { from: "g-attacker", to: "g-blocker", tone: "red" },
-      { from: "g-titan", to: "g-trigger", tone: "gold" },
-      { from: "g-trigger", to: "g-beast", tone: "cyan" },
-    ],
-    [],
-  );
   return (
     <Panel n="05" title="Combat & stack">
       <div className="combat-stack">
         <At x={80} y={66}>
           <Card
-            id="g-attacker"
             card={SAMPLE.beast}
             variant="field"
             width={80}
@@ -291,7 +282,6 @@ function CombatAndStack() {
         </At>
         <At x={330} y={60}>
           <Card
-            id="g-blocker"
             card={SAMPLE.angel}
             variant="field"
             width={80}
@@ -306,16 +296,10 @@ function CombatAndStack() {
         </CaptionAt>
         <div className="panel-rule" />
         <At x={44} y={270}>
-          <Card
-            id="g-titan"
-            card={SAMPLE.infernoTitan}
-            variant="field"
-            width={78}
-          />
+          <Card card={SAMPLE.infernoTitan} variant="field" width={78} />
         </At>
         <At x={180} y={241}>
           <StackItem
-            id="g-trigger"
             source={SAMPLE.infernoTitan}
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={136}
@@ -324,15 +308,8 @@ function CombatAndStack() {
           />
         </At>
         <At x={360} y={270}>
-          <Card id="g-beast" card={SAMPLE.beast} variant="field" width={78} />
+          <Card card={SAMPLE.beast} variant="field" width={78} />
         </At>
-        <CaptionAt x={121} y={422}>
-          Gold: source → ability
-        </CaptionAt>
-        <CaptionAt x={367} y={422}>
-          Cyan: ability → target
-        </CaptionAt>
-        <Arrows arrows={arrows} scale={0.65} />
       </div>
     </Panel>
   );

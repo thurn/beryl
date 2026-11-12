@@ -16,8 +16,8 @@
 // checks read, and are not painted, and the layer says which of the two are painted
 // (`data-light`) for the styles that hide them and the marks a card's face would wear. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
 // far through an announcement is (shown.ts) is a number on the layer's parent, which the
-// chrome's banners are drawn in. The elements keep the names the old board gave its
-// own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
+// chrome's banners are drawn in. The elements carry the names (`card-el` and its looks,
+// `stack-ability`) which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";

@@ -28,8 +28,8 @@ import { watching } from "./stage-audit.mjs";
 
 /** The layouts a recording is played in: the query its page opens with and its window. */
 const LAYOUTS = {
-    desktop: { query: "stage", size: { width: 1600, height: 900 } },
-    phone: { query: "phone&stage", size: { width: 393, height: 759 } },
+    desktop: { query: "", size: { width: 1600, height: 900 } },
+    phone: { query: "phone&", size: { width: 393, height: 759 } },
 };
 
 const args = process.argv.slice(2);
@@ -93,10 +93,8 @@ async function served(context) {
  * faults of the screen it ends on. */
 async function played(page, fixture, layout) {
     await page.goto(
-        new URL(
-            `/?${LAYOUTS[layout].query}&fixture=${fixture}&at=1#/game`,
-            base,
-        ).href,
+        new URL(`/?${LAYOUTS[layout].query}fixture=${fixture}&at=1#/game`, base)
+            .href,
     );
     await page.waitForFunction(() => window.berylStage && window.berylFixture);
     await page.evaluate(() => document.fonts.ready.then(() => {}));

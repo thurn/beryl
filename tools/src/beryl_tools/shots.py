@@ -5,13 +5,13 @@ paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromiu
 Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
-as a player would (ui/scripts/interactions.mjs, the old board's checks; ui/scripts/kept.mjs, those
-that stay at the cut-over), and then the stage's verbs on the stage's own clock
-(ui/scripts/verbs.mjs, the checks named `verb:...`). It records its fixtures into the cache
+as a player would (ui/scripts/kept.mjs), then the stage's verbs on the stage's own clock
+(ui/scripts/verbs.mjs, the checks named `verb:...`) and its prompt shapes
+(ui/scripts/shapes.mjs, `shape:...`). It records its fixtures into the cache
 instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and
 `ui-test` lanes).
 
-`ui-play` plays every recorded fixture from its first view to its last on the stage, on the
+`ui-play` plays every recorded fixture from its first view to its last, on the
 desktop's layout and the phone's, under the stage's audit of each step and the screen audits of
 where it ends (ui/scripts/playthrough.mjs).
 
@@ -52,30 +52,6 @@ RECORDED: Path = paths.UI / "public" / "fixtures"
 
 # The phone's screen, as ui/shots.json's phone shots have it.
 PHONE = (393, 759)
-
-# Set (`--stage` sets it) to force a whole run onto the stage (ui/src/stage/switch.tsx, plan
-# K25): every page the UI serves draws the stage's board, with or without `?stage`. The
-# cut-over makes the stage the only board and removes this.
-STAGE_ENV = "BERYL_STAGE"
-
-
-def staged() -> bool:
-    """Whether this run is forced onto the stage."""
-    return bool(os.environ.get(STAGE_ENV))
-
-
-def force_stage(args: argparse.Namespace) -> None:
-    """Takes `--stage` into the environment, where every tool and script of the run reads it."""
-    if getattr(args, "stage", False):
-        os.environ[STAGE_ENV] = "1"
-
-
-def stage_flag(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--stage",
-        action="store_true",
-        help=f"every page on the stage, as with {STAGE_ENV} set (plan K25)",
-    )
 
 
 class UiError(Exception):
@@ -176,9 +152,6 @@ def served_ui(
     """
     port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
-    if env.get(STAGE_ENV):
-        # Vite hands the page only what is named for it.
-        env = {**env, "VITE_BERYL_STAGE": "1"}
     mode = ["preview", "--strictPort"] if preview else []
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(
@@ -223,7 +196,6 @@ def fixture_views(name: str) -> int:
 def ui_shots(args: argparse.Namespace) -> int:
     if args.views:
         return fixture_views(args.views)
-    force_stage(args)
     chooser = selection.Chooser("shots") if args.select else None
     if chooser and chooser.choice.idle():
         print("shots: the change reaches no shot")
@@ -258,8 +230,10 @@ def ui_shots(args: argparse.Namespace) -> int:
     return code
 
 
-# The fixtures ui/scripts/interactions.mjs and kept.mjs play.
-INTERACTION_FIXTURES = [
+# The fixtures recorded for ui/scripts/kept.mjs: its checks open some by name, one looks at the
+# last decision of every recording (kept-piles.mjs), and the fixtures it derives draw their
+# card records from them all (kept-harness.mjs `recordedCards`).
+KEPT_FIXTURES = [
     "greedy-turn-9",
     "opening-bottom",
     "opponent-turn",
@@ -318,7 +292,6 @@ INTERACTION_FIXTURES = [
 
 
 def ui_test(args: argparse.Namespace) -> int:
-    force_stage(args)
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     chooser = selection.Chooser("ui-test") if args.select else None
     if chooser and chooser.choice.idle():
@@ -329,7 +302,7 @@ def ui_test(args: argparse.Namespace) -> int:
         if record_fixtures(recorded, ui_test_fixtures()):
             code = checks.CANNOT_RUN
         else:
-            code = interactions(env, recorded, list(args.only), chooser)
+            code = scripted(env, recorded, list(args.only), chooser)
     except UiError as e:
         print(f"ui-test: {e}", file=sys.stderr)
         code = checks.CANNOT_RUN
@@ -342,25 +315,22 @@ def ui_test(args: argparse.Namespace) -> int:
 
 
 def ui_test_fixtures() -> list[str]:
-    """The fixtures `ui-test` records: interactions.mjs' and kept.mjs', and the verb and shape
-    suites'."""
+    """The fixtures `ui-test` records: kept.mjs', and the verb and shape suites'."""
     fixtures = suites.verb_fixtures() + suites.shape_fixtures()
-    return list(dict.fromkeys(INTERACTION_FIXTURES + fixtures))
+    return list(dict.fromkeys(KEPT_FIXTURES + fixtures))
 
 
-def interactions(
+def scripted(
     env: dict[str, str],
     recorded: Path,
     only: list[str],
     chooser: selection.Chooser | None,
 ) -> int:
-    """Plays the checks of interactions.mjs, kept.mjs, verbs.mjs and shapes.mjs in turn: those
-    `only` names, or with `chooser`, those it chose, which the scripts match exactly so that a
-    rerun's filters narrow them. A script none of the names is for does not run
-    (selection.scripts), one they reach no check of is no failure unless none reach one, nor
-    interactions.mjs on a run forced onto the stage, whose checks go
-    with the old board (`BERYL_STAGE_EVERY` set plays them there too). Fails if any script
-    does."""
+    """Plays the checks of kept.mjs, verbs.mjs and shapes.mjs in turn: those `only` names, or
+    with `chooser`, those it chose, which the scripts match exactly so that a rerun's filters
+    narrow them. A script none of the names is for does not run (selection.scripts), and one
+    they reach no check of is no failure unless none reach one. Fails if any script does.
+    """
     with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
         names = only
         if chooser:
@@ -372,13 +342,10 @@ def interactions(
                 chosen.write_text("".join(f"{t}\n" for t in names))
                 env = {**env, selection.CHOSEN_ENV: str(chosen)}
         code = 0
-        every_staged = bool(os.environ.get("BERYL_STAGE_EVERY"))
         # Whether a script reached a check: a filter goes to every script it may be for.
         reached = False
         with served_ui(env) as url:
             for script, own in selection.scripts(names).items():
-                if script == selection.INTERACTIONS and staged() and not every_staged:
-                    continue
                 ran = subprocess.run(
                     ["node", str(paths.REPO / script), url, str(recorded)]
                     + (own if only else []),
@@ -398,9 +365,8 @@ def interactions(
 
 
 def ui_play(args: argparse.Namespace) -> int:
-    """Plays every recorded fixture to its end on the stage, in both layouts, under the
-    generic audits (ui/scripts/playthrough.mjs)."""
-    os.environ[STAGE_ENV] = "1"
+    """Plays every recorded fixture to its end, in both layouts, under the generic audits
+    (ui/scripts/playthrough.mjs)."""
     recorded = paths.cache_root() / "ui-play" / paths.REPO.name
     names = list(
         dict.fromkeys(n.removeprefix("play:").split("/")[0] for n in args.only)
@@ -429,7 +395,6 @@ def ui_play(args: argparse.Namespace) -> int:
 
 
 def ui_live(args: argparse.Namespace) -> int:
-    force_stage(args)
     out = (
         paths.cache_root()
         / "ui-live"
@@ -514,7 +479,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         metavar="FIXTURE",
         help="list a fixture's views with the index each route's &at= takes",
     )
-    stage_flag(p)
     p.set_defaults(func=ui_shots)
     p = sub.add_parser(
         "ui-test", help="play the game screen headless through a fixture"
@@ -530,11 +494,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="store_true",
         help="only the checks the branch's change can break, as many as fit (selection.py)",
     )
-    stage_flag(p)
     p.set_defaults(func=ui_test)
     p = sub.add_parser(
         "ui-play",
-        help="play every recorded fixture to its end on the stage, under the audits",
+        help="play every recorded fixture to its end, under the audits",
     )
     p.add_argument(
         "only",
@@ -560,5 +523,4 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--release", action="store_true", help="optimized agents (`just dev` is debug)"
     )
-    stage_flag(p)
     p.set_defaults(func=ui_live)

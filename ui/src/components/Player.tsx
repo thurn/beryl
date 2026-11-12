@@ -84,14 +84,11 @@ export function LifeOrb({
   life,
   active = false,
   seat = "you",
-  anchor,
 }: {
   life: number;
   active?: boolean;
   /** Whose orb: its ring underlines the side toward that player's edge. */
   seat?: "you" | "opponent";
-  /** The element id of the oval, which arrows meet. */
-  anchor?: string;
 }) {
   // The opponent's art is drawn flipped, so the effects that depend on where the light comes
   // from flip with it, keeping it on top; their ids carry the seat so two orbs can share a page.
@@ -159,8 +156,6 @@ export function LifeOrb({
             />
           )}
           <path
-            id={anchor}
-            data-oval
             className="life-orb-core"
             d={cushion()}
             stroke={`url(#${id("rim")})`}

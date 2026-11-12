@@ -3,10 +3,9 @@
 //   node scripts/specs.mjs <base-url> <out-dir> [card-slug...] [--moment NAME]
 //     [--viewport WxH] [--select SELECTOR] [--crop SELECTOR|X,Y,W,H]
 // Each moment is shot from both seats, `<card>/<moment>.png` and `<card>/<moment>-theirs.png`,
-// once its actions have played out and the page has been quiet a while, as a reviewer would
-// first see it settled; prints each path, and exits non-zero if a page logs an error or never
-// shows the game, or, on the stage (`by specs --stage`), if a seat's screen fails the audits
-// `by ui-shots` holds a fixture's to. `--select` keeps only the seats where an element it selects shows (a
+// once its actions have played out and its stage is at rest, as a reviewer would first see it
+// settled; prints each path, and exits non-zero if a page logs an error or never shows the
+// game, or if a seat's screen fails the audits `by ui-shots` holds a fixture's to. `--select` keeps only the seats where an element it selects shows (a
 // prompt: `.prompt-title`); `--crop` shoots only the box of the first element it selects
 // (with a margin), or a fixed region. A seat that fails is tried again once.
 import { mkdir } from "node:fs/promises";
@@ -32,14 +31,9 @@ import {
     viewport,
     warm,
     LAYOUT,
-    STAGED,
+    LONGEST,
 } from "./moments.mjs";
 
-/** How long the page must hear nothing before it counts as settled, and the most to wait. */
-const QUIET = 2500;
-/** How long the last view shown takes to play out once nothing waits behind it. */
-const LAST_VIEW = 2000;
-const LONGEST = 30000;
 /** The margin around a cropped element. */
 const MARGIN = 24;
 
@@ -66,23 +60,6 @@ try {
     process.exit(2);
 }
 
-/** Waits until the old board's `page` has heard nothing for QUIET ms and queues no view, then
- * LAST_VIEW more for its animation; or LONGEST. */
-async function quiet(page) {
-    await page.waitForFunction(
-        ([quiet, longest, started]) => {
-            const log = window.berylLive?.log ?? [];
-            const last = log.at(-1)?.at ?? 0;
-            const now = performance.now();
-            const still = now - last > quiet && !window.berylBehind;
-            return still || now - started > longest;
-        },
-        [QUIET, LONGEST, await page.evaluate(() => performance.now())],
-        { timeout: LONGEST + 5000, polling: 250 },
-    );
-    await page.waitForTimeout(LAST_VIEW);
-}
-
 /** The clip `--crop` asks for on `page`, or undefined for the whole page. Throws if its
  * selector shows nothing. */
 async function clip(page) {
@@ -104,8 +81,7 @@ async function clip(page) {
 }
 
 /** What the screen audits find on a settled seat's `page` (capture.mjs), as `by ui-shots`
- * holds a fixture's screen to them: on the stage, where the screen is held to the view its
- * stage shows. */
+ * holds a fixture's screen to them: the screen is held to the view its stage shows. */
 async function faults(page) {
     const found = [
         ...(await toldErrors(page)).map(
@@ -158,17 +134,12 @@ for (const spec of specs) {
                             timeout: LONGEST,
                         });
                         await play(live);
-                        // On the stage the page is settled when the stage is at rest; the
-                        // old board's is waited out.
-                        if (STAGED) {
-                            await page.waitForFunction(
-                                `(${rest})().settled`,
-                                undefined,
-                                { timeout: LONGEST },
-                            );
-                        } else {
-                            await quiet(page);
-                        }
+                        // The page is settled when the stage is at rest.
+                        await page.waitForFunction(
+                            `(${rest})().settled`,
+                            undefined,
+                            { timeout: LONGEST },
+                        );
                         await settle(page);
                         if (
                             select &&
@@ -178,7 +149,7 @@ for (const spec of specs) {
                             return;
                         }
                         await page.screenshot({ path, clip: await clip(page) });
-                        if (STAGED) errors.push(...(await faults(page)));
+                        errors.push(...(await faults(page)));
                         console.log(path);
                     } catch (e) {
                         errors.push(String(e).split("\n")[0]);

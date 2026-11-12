@@ -1,17 +1,6 @@
 // Mana and ability symbols from the Mana font (src/design/fonts.ts). Glyph code points follow
 // mana-font's mana.css.
 import { Fragment, type ReactNode } from "react";
-import type { Mana } from "../generated/protocol";
-
-/** Each type of mana's symbol. */
-export const MANA_SYMBOLS: Record<Mana, string> = {
-  white: "W",
-  blue: "U",
-  black: "B",
-  red: "R",
-  green: "G",
-  colorless: "C",
-};
 
 // Code points in the Mana font.
 const CODES: Record<string, number> = {
@@ -85,44 +74,6 @@ export function RulesText({ text }: { text: string }) {
       ),
     );
   return <>{parts}</>;
-}
-
-/** A loyalty ability's cost ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)):
- * `+1`, `−2` or `0` on the printed loyalty symbol, an arrow up, down or flat. */
-export function LoyaltyCost({ cost }: { cost: string }) {
-  const tone = cost.startsWith("+")
-    ? "up"
-    : cost.startsWith("\u2212")
-      ? "down"
-      : "zero";
-  return (
-    <span
-      className={`loyalty-cost loyalty-${tone}`}
-      role="img"
-      aria-label={cost}
-    >
-      <span className="loyalty-glyph" aria-hidden>
-        {String.fromCharCode(LOYALTY_CODES[tone])}
-      </span>
-      <span className="loyalty-number" aria-hidden>
-        {cost}
-      </span>
-    </span>
-  );
-}
-
-const LOYALTY_CODES = { up: 0xe627, down: 0xe625, zero: 0xe626 } as const;
-
-/** Whether `text` is a loyalty cost, as the engine writes one: "+1", "−2", "0". */
-export const isLoyaltyCost = (text: string) => /^([+\u2212]\d+|0)$/.test(text);
-
-/** An activation cost: a loyalty symbol, or rules text with its symbols drawn. */
-export function CostText({ text }: { text: string }) {
-  return isLoyaltyCost(text) ? (
-    <LoyaltyCost cost={text} />
-  ) : (
-    <RulesText text={text} />
-  );
 }
 
 /** Flying, drawn as on the mockups' badges: an eagle facing left, wings raised, the right one

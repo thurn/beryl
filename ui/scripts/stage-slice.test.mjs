@@ -307,27 +307,3 @@ test("a skip plays out everything given; a view from the past shows at once", ()
     feed.arrive(update(before(), { beats: [] }, 0), false);
     assert.equal(feed.fed().shown, fourth);
 });
-
-test("views held back while gathering play in order once released", () => {
-    const { stage: made } = stage(SLICE);
-    const feed = new Feed(made);
-    const first = update(before(), { reset: { abilities: [] }, beats: [] });
-    feed.arrive(first, false);
-    feed.gather();
-    const second = update(onStack(), { beats: [[cast]] });
-    const third = update(triggered(), { beats: [[resolve], [emerge]] });
-    feed.arrive(second, false);
-    feed.arrive(third, false);
-    made.clock.advance(5000);
-    // Nothing of them reached the stage: the table is as it was under the choice.
-    assert.equal(feed.fed().shown, first);
-    assert.equal(feed.fed().latest, third);
-    assert.equal(made.pose(CREATURE).y, 500);
-    feed.release();
-    assert.equal(feed.fed().latest, undefined);
-    assert.equal(feed.fed().behind, true);
-    made.clock.advance(400);
-    assert.equal(feed.fed().shown, second);
-    made.clock.advance(800);
-    assert.equal(feed.fed().shown, third);
-});

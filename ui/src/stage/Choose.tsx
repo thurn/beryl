@@ -23,7 +23,7 @@ import type {
   PlayerView,
   PromptButton,
 } from "../generated/protocol";
-import { Look } from "../game/CardLayer";
+import { Look } from "../game/Look";
 import { abilityText, BLANK, useAbilityFace } from "../game/faces";
 import { waysOf, type Asked, type Prompts } from "./prompt.ts";
 import type { ScriptStage } from "./stage.ts";

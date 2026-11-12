@@ -10,7 +10,7 @@ from beryl_tools.selection import Coverage, Hunk, Record
 NOW = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
 COMBAT = "ui/src/game/combat.ts"
 
-INTERACTIONS = """\
+KEPT_TABLE = """\
 import assert from "node:assert/strict";
 
 async function check(title, body, { fixture = FIXTURE } = {}) {
@@ -58,14 +58,14 @@ def hunk(path: str, old: int, new: int, removed: list[str], added: list[str]) ->
 
 def lane_files(root: Path) -> None:
     (root / "ui" / "scripts").mkdir(parents=True)
-    (root / "ui" / "scripts" / "interactions.mjs").write_text(INTERACTIONS)
+    (root / "ui" / "scripts" / "kept-table.mjs").write_text(KEPT_TABLE)
     shots = {"shots": [{"name": "attack", "route": "/a"}, {"name": "block"}]}
     (root / "ui" / "shots.json").write_text(json.dumps(shots))
 
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A checkout holding interactions.mjs and shots.json, whose shots.json at the base had
+    """A checkout holding a kept file and shots.json, whose shots.json at the base had
     `attack` routed elsewhere."""
     lane_files(tmp_path)
     monkeypatch.setattr(paths, "REPO", tmp_path)
@@ -144,7 +144,7 @@ def test_code_no_check_ran_fills_the_box_by_record(repo: Path) -> None:
 
 
 def test_a_checks_own_body_chooses_it(repo: Path) -> None:
-    script = "ui/scripts/interactions.mjs"
+    script = "ui/scripts/kept-table.mjs"
     # Line 8 is in the drag check's body; line 20 in the loop that sizes the stack checks.
     changed = {
         script: [
@@ -162,8 +162,8 @@ def test_a_checks_own_body_chooses_it(repo: Path) -> None:
     }
 
 
-def test_interactions_outside_any_check_is_the_harness(repo: Path) -> None:
-    script = "ui/scripts/interactions.mjs"
+def test_a_kept_file_outside_any_check_is_the_harness(repo: Path) -> None:
+    script = "ui/scripts/kept-table.mjs"
     # Line 4 is in check()'s own definition: an option default reaches every check.
     changed = {script: [hunk(script, 4, 4, ["    a;"], ["    b;"])]}
     choice = selection.choose("ui-test", [script], changed, UNIVERSE, None, "base")
@@ -171,9 +171,9 @@ def test_interactions_outside_any_check_is_the_harness(repo: Path) -> None:
     assert set(choice.reasons) == set(UNIVERSE)
 
 
-def test_code_interactions_runs_in_node_chooses_the_checks_using_it(repo: Path) -> None:
-    script = repo / "ui" / "scripts" / "interactions.mjs"
-    imported = INTERACTIONS.replace(
+def test_code_a_kept_file_runs_in_node_chooses_the_checks_using_it(repo: Path) -> None:
+    script = repo / "ui" / "scripts" / "kept-table.mjs"
+    imported = KEPT_TABLE.replace(
         'import assert from "node:assert/strict";\n',
         'import assert from "node:assert/strict";\n'
         'import { type Plan, blockPlan as plan } from "../src/game/combat.ts";\n',
@@ -349,7 +349,7 @@ def test_the_verb_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
         "verbs-zones",
         "verbs-zones-theirs",
     ]
-    # They are the lane's checks beside those interactions.mjs gives.
+    # They are the lane's checks beside those the kept files give.
     found = selection.lane_checks("ui-test", [], None)
     assert found[-4:] == VERB_CHECKS
     assert "ui-test:dragging a creature forward joins the attack" in found
@@ -390,13 +390,12 @@ for (const size of [1180, 1600]) {
 def test_each_name_goes_to_the_script_whose_check_it_is(repo: Path) -> None:
     (repo / "ui" / "scripts" / "kept-screens.mjs").write_text(KEPT)
     every = {
-        selection.INTERACTIONS: [],
         selection.KEPT_SCRIPT: [],
         selection.VERB_SCRIPT: [],
         selection.SHAPE_SCRIPT: [],
     }
     assert selection.scripts([]) == every
-    # A title goes to the script whose check gives it, a computed one too.
+    # A suite's check goes to its script, and any other name to the kept checks.
     titles = [
         "dragging a creature forward joins the attack",
         "verb:fly/yours/desktop",
@@ -405,8 +404,8 @@ def test_each_name_goes_to_the_script_whose_check_it_is(repo: Path) -> None:
         "the piles lie clear at 1180 wide",
     ]
     assert selection.scripts(titles) == {
-        selection.INTERACTIONS: ["dragging a creature forward joins the attack"],
         selection.KEPT_SCRIPT: [
+            "dragging a creature forward joins the attack",
             "Escape closes the settings",
             "the piles lie clear at 1180 wide",
         ],
@@ -417,14 +416,11 @@ def test_each_name_goes_to_the_script_whose_check_it_is(repo: Path) -> None:
         selection.VERB_SCRIPT: ["verb:emerge"]
     }
     assert selection.scripts(["shape:"]) == {selection.SHAPE_SCRIPT: ["shape:"]}
-    # A filter goes to both, each running what it reaches (NONE_REACHED where nothing).
-    assert selection.scripts(["drag"]) == {
-        selection.INTERACTIONS: ["drag"],
-        selection.KEPT_SCRIPT: ["drag"],
-    }
+    # A filter goes to the kept checks, which run what it reaches (NONE_REACHED where nothing).
+    assert selection.scripts(["drag"]) == {selection.KEPT_SCRIPT: ["drag"]}
 
 
-def test_a_kept_checks_body_and_harness_choose_as_interactions_does(
+def test_a_kept_parts_body_and_harness_choose(
     repo: Path,
 ) -> None:
     script = "ui/scripts/kept-screens.mjs"

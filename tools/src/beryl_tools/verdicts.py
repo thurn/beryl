@@ -17,8 +17,8 @@ Each verdict is a comment on the check's bead (one closed bead per check that ha
 labeled `ci-check`), so the record is in git, shared by every machine and survives a cache wipe;
 passes and timings stay in the run log (runlog.py). Quarantine reads the verdicts from those
 beads, so it is the same on every host. A quarantined check still runs and is logged, but its
-failure fails no run and so files no bead. A check on the [`PENDING`] list is a banked UI report
-the stage must pass one day: it runs and is logged as pending-fail or pending-pass, and fails no
+failure fails no run and so files no bead. A check on the [`PENDING`] list is one a named bead's
+work must make pass one day: it runs and is logged as pending-fail or pending-pass, and fails no
 run either.
 
 Nothing here fails a check: a git or bd call that fails is reported and the run goes on.
@@ -89,10 +89,9 @@ NEUTRAL = ("docs/*", ".beads/*", "*.md")
 
 @dataclass(frozen=True)
 class Pending:
-    """A banked UI report (plan K30): the check that shows it, the board in beryl_cli's
-    boards.rs that reproduces it, and the report's bead. The bugfix skill names the board, its
-    fixture and its shot `banked-<bead>`, so the check is `shots:banked-<bead>`. The stage's
-    bead that makes it pass removes the entry, and the check becomes a normal one."""
+    """A check that shows a known fault, the board in beryl_cli's boards.rs that reproduces it,
+    and the fault's bead. The bead that makes it pass removes the entry, and the check becomes
+    a normal one."""
 
     check: str
     board: str

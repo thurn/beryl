@@ -1,10 +1,10 @@
 // The desktop's chrome around the stage's cards (plan K25): everything on the game screen that
-// is neither motion nor a prompt, drawn by React from the components the old board draws it
-// with. What shows the table (life, mana, the piles, the stack's peeks, the turn's step) is
+// is neither motion nor a prompt, drawn by React. What shows the table (life, mana, the piles,
+// the turn's step) is
 // drawn from the stage's table, so that what a step changes shows as the step plays; what
 // answers the player (undo, the settings) goes by the view last played out. Announcements show
 // for as long as the step that makes them plays, on the stage's time (`Shown.notices`); the
-// combat banner, which no step announces, keeps the old board's timer.
+// combat banner, which no step announces, keeps a timer of its own.
 //
 // What the pointer does that is no prompt's is answered here (prompt.ts `listen`): the
 // inspector of the card it is on, placed clear of what the open prompt may have the player
@@ -25,11 +25,10 @@ import type { Box } from "../game/placement";
 import { incoming } from "../game/combat";
 import { FullControlIcon } from "../game/Corner";
 import { InspectAt, inspectorPlace } from "../game/Inspector";
-import { Incoming, LifeChange, lifeId } from "../game/Life";
+import { Incoming, LifeChange } from "../game/Life";
 import type { LogEntry } from "../game/log";
 import { GameLog, opponentActing } from "../game/Narration";
 import { PileButton, ZoneViewer } from "../game/Piles";
-import { itemId, StackPeek } from "../game/StackPeek";
 import { useStageWidth } from "../game/Stage";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
 import { combatBanner, STEP_NAMES } from "../game/stepLabels";
@@ -49,8 +48,6 @@ import { noticePlace, TimingRefusal, useRefusal } from "./Refusal.tsx";
 import type { ScriptStage } from "./stage.ts";
 
 const SIDES = ["opponent", "you"] as const;
-const NO_ORDER: ReadonlyMap<number, number> = new Map();
-const UNMARKED = new Map<number, never>();
 
 /** Where each badge stands, at the table's left. */
 const BADGES = { opponent: 62, you: 704 };
@@ -149,7 +146,6 @@ export function Hud({
               life={life}
               active={table.turn.active === side}
               seat={side}
-              anchor={lifeId(side)}
             />
             {damage !== undefined && (
               <Incoming amount={damage} lethal={damage > 0 && damage >= life} />
@@ -197,11 +193,7 @@ export function Hud({
       )}
       <GameLog log={log} folded open={logOpen} onToggle={onLog} />
       {turn && (
-        <TurnAnnouncement
-          key={table.turn.number}
-          side={turn.notice.active}
-          staged
-        />
+        <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />
       )}
     </>
   );
@@ -263,7 +255,6 @@ export function Controls({
   hovered,
   stops,
   setStops,
-  inert,
   dimmed,
   children,
 }: {
@@ -276,8 +267,6 @@ export function Controls({
   children?: ReactNode;
   stops: StopsSetting;
   setStops(stops: StopsSetting): void;
-  /** A screen over the table answers the decision: the turn's controls give way. */
-  inert?: boolean;
   dimmed?: boolean;
 }) {
   const { table, resting } = useSyncExternalStore(
@@ -306,8 +295,7 @@ export function Controls({
     [stage, prompts],
   );
   const piles = useMemo(
-    () =>
-      table ? [...zonePiles(table, NO_ORDER), ...knownLibraries(table)] : [],
+    () => (table ? [...zonePiles(table), ...knownLibraries(table)] : []),
     // The piles hold to the stage's edges.
     [table, width],
   );
@@ -358,48 +346,31 @@ export function Controls({
             />
           ),
       )}
-      {/* Where each item beneath the top peeks out, which its arrows leave from. */}
-      {table.stack.map(
-        (item, i) =>
-          i < table.stack.length - 1 && (
-            <StackPeek
-              key={i}
-              index={i}
-              count={table.stack.length}
-              within={itemId(item, i)}
-              nextItem={itemId(table.stack[i + 1]!, i + 1)}
+      <div className="turn-controls">
+        {stops.fullControl && (
+          <span className="full-control has-tip">
+            <FullControlIcon />
+            <Tip side="above">Full control</Tip>
+          </span>
+        )}
+        {/* As on Arena, each player's step stops about their life orb; the current step
+            lights in the active player's. */}
+        {SIDES.map((side) => {
+          const key = side === "you" ? "yours" : "theirs";
+          return (
+            <StepStops
+              key={side}
+              side={side}
+              current={table.turn.active === side ? table.turn.step : undefined}
+              now={`Turn ${table.turn.number} · ${STEP_NAMES[table.turn.step]}`}
+              whose={side === "you" ? "Your" : "Opponent's"}
+              stops={stops[key]}
+              onStops={(steps) => setStops({ ...stops, [key]: steps })}
             />
-          ),
-      )}
-      {!inert && (
-        <div className="turn-controls">
-          {stops.fullControl && (
-            <span className="full-control has-tip">
-              <FullControlIcon />
-              <Tip side="above">Full control</Tip>
-            </span>
-          )}
-          {/* As on Arena, each player's step stops about their life orb; the current step
-              lights in the active player's. */}
-          {SIDES.map((side) => {
-            const key = side === "you" ? "yours" : "theirs";
-            return (
-              <StepStops
-                key={side}
-                side={side}
-                current={
-                  table.turn.active === side ? table.turn.step : undefined
-                }
-                now={`Turn ${table.turn.number} · ${STEP_NAMES[table.turn.step]}`}
-                whose={side === "you" ? "Your" : "Opponent's"}
-                stops={stops[key]}
-                onStops={(steps) => setStops({ ...stops, [key]: steps })}
-              />
-            );
-          })}
-          {children}
-        </div>
-      )}
+          );
+        })}
+        {children}
+      </div>
       {notice && <TimingRefusal key={notice.id} source={notice.source} />}
       {inspected && !dimmed && !viewed && (
         <InspectAt
@@ -421,9 +392,6 @@ export function Controls({
           key={viewedKey}
           pile={viewed}
           title={viewedTitle}
-          states={UNMARKED}
-          offers={() => false}
-          onPick={() => {}}
           onClose={() => setViewing(undefined)}
         />
       )}

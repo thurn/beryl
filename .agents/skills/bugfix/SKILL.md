@@ -29,8 +29,7 @@ The user's report wins over Arena and over an earlier report.
 A plausible code change is a candidate fix. For rules and UI reports, closure
 requires evidence that the player's requested behavior works, including the
 scope of the complaint beyond the pictured card. AI reports retain the
-blunder-catalog completion criteria below. Reports about motion, arrows and
-combat lines are banked for the stage rather than fixed (step 3).
+blunder-catalog completion criteria below.
 
 ## Where reports are
 
@@ -40,7 +39,7 @@ player select the area that shows the bug, and writes a folder under
 `beryl_session`'s `bugs.rs` writes it):
 
 - `report.md`: front matter (`kind`: `bug`, or `ai` for a play of the AI's the
-  player ticked "AI play" for; `status`: open, filed, banked or done; `bead`;
+  player ticked "AI play" for; `status`: open, filed or done; `bead`;
   the game's `seed`, `turn`, `step`, `decision`; the `commit` the app was built
   from, marked if it had uncommitted changes; the page `url`), then the player's
   words and how to reproduce it.
@@ -72,8 +71,7 @@ reproduces it.
 
 ## The loop
 
-1. **File them.** `just bugs` lists open and filed reports, then the banked
-   ones apart. `just bugs file` files a bead for each open one (type bug, label
+1. **File them.** `just bugs` lists open and filed reports. `just bugs file` files a bead for each open one (type bug, label
    `bug-report`, priority 1) holding the report's path and the player's words,
    and writes the bead into the report's front matter. `bd list --label bug-report --all --limit 0`
    includes closed history and work left in progress. Reconcile the local
@@ -126,34 +124,14 @@ reproduces it.
 
    Rules and AI reports stay as they are. Record the kind on the bead.
 
-   **Bank** a report about motion, arrows or combat lines (most script, verb
-   and mark reports). The stage replaces the code that draws them
-   (`ui/src/game/beats.ts`, `CardLayer.tsx`, `Board.tsx`'s flights and arrows,
-   `ui/src/components/Stack.tsx`, `Piles.tsx`, `ManaFlow.tsx`): do not fix it
-   there. Instead, through a worktree as AGENTS.md says:
-
-   - Read the moment's script first (`just specs --script <card>`, or the
-     steps `just ui-shots --views <fixture>` lists; the `specs` skill, step 2):
-     a wrong script is a session bug to fix in the builder now, not banked.
-   - Reproduce the state as a board in `rust/crates/beryl_cli/src/boards.rs`
-     named `banked-<bead>`, with a comment above it saying what the player
-     reported and what should happen instead.
-   - Add a fixture of the same name to `ui/fixtures.json` that stops on the
-     moment, and a shot of the same name to `ui/shots.json` that shows it.
-   - Register it as a pending case in `tools/src/beryl_tools/verdicts.py`'s
-     `PENDING`:
-     `Pending(check="shots:banked-<bead>", board="banked-<bead>", bead="<bead>")`.
-     It runs and is logged but fails no run; `just ci-report --pending` lists
-     the cases and any that now pass. The stage's bead that makes one pass
-     removes the entry and closes the report.
-   - Land it with `enact push`, then `just bugs bank <bead>`, which marks the
-     report banked and labels the bead `banked`. The bead stays open: note on
-     it the evidence (Arena's moment, Beryl's) and the acceptance the stage
-     must meet. Skip banked beads in later bugfix runs.
-
-   Fix everything else as now: shape, layout, skin and wording reports, a
-   motion report whose cause is outside the code above (a wrong view or event
-   from the session, say), and every rules and AI report.
+   A report about motion, arrows or combat lines (most script, verb and mark
+   reports) is fixed where the stage plays it. Read the moment's script first
+   (`just specs --script <card>`, or the steps `just ui-shots --views <fixture>`
+   lists; the `specs` skill, step 2): a wrong script is a session bug to fix
+   in the builder (`rust/crates/beryl_session/src/script/`), and a right
+   script played wrongly is the stage's (`ui/src/stage/`). Hold the fix with
+   a case of the verb or shape suite (`ui/scripts/verb-cases*.mjs`,
+   `shape-cases*.mjs`).
 
 4. **Reproduce.** Pick by what went wrong:
 
@@ -253,7 +231,7 @@ filed. Use `bd note <bead> "..."` to record what you tried.
 
 Before ending the run, reconcile its report list with the final bead and local
 report states. Give the reporter a concise outcome for every report in scope:
-verified fixed (with commit and evidence), banked (with its board), cataloged
+verified fixed (with commit and evidence), cataloged
 AI blunder, awaiting human input, unresolved/partially fixed, or untouched (with
 reason). For unfinished work, record the remaining acceptance criteria and next
 action in the bead. Do not let a successful subset stand in for completing the

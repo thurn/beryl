@@ -1,5 +1,5 @@
 // How a verb's films are taken (verb-film.mjs): a moment of the verb suite (ui/verbs.json)
-// played on the stage under `?stage`, its clock held and stepped in ticks on whole
+// played on the stage, its clock held and stepped in ticks on whole
 // milliseconds, with each tick's time and where everything drawn then lay. The stepped capture
 // (stepped.mjs) walks a moment the same way for `by motion`'s check, where it shoots each
 // step's subject alone for the tracker; a film shoots the table as a player sees it, and
@@ -351,7 +351,7 @@ export async function openStage(
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(
-        new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
+        new URL(`/?${query}fixture=${fixture}&at=1#/game`, base).href,
     );
     await page.waitForFunction(
         () => window.berylStage && document.querySelector(".stage-node"),

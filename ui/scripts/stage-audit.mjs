@@ -1,15 +1,13 @@
-// The motion and duplicate audits under the stage (`?stage`, plan K25): what `by specs
-// --motion`, the driver's `probe.audit` and `spec.audit` judge by where the page has a stage
-// (`window.berylStage`), in place of audit.mjs's guesses from a view's events. The script the
+// The motion and duplicate audits of the stage (plan K25): what `by specs --motion`, the
+// driver's `probe.audit` and `spec.audit` judge by (`window.berylStage`). The script the
 // session sent with each view says what was meant, step by step; the stage says when it began
 // and ended each step (`stage.follow`); and the page is measured as a player sees it at every
 // tick of the stage's own clock, which this holds and steps. Nothing here waits on the page's
 // time: a moment is over when the last view the page heard asks its viewer something or ends
 // the game, the stage has played it out, and no answer of the page's is still on its way.
 //
-// `watching(page)` begins an audit and returns how to end it; without a stage it is
-// audit.mjs's recording, settled by moments.mjs's waits, until the cut-over. Each step of each
-// script gets a finding, with audit.mjs's verdicts read from the script:
+// `watching(page)` begins an audit and returns how to end it. Each step of each script gets a
+// finding, its verdict read from the script:
 //   ok        the stage played the step and the page showed it, for as long as its verb takes
 //   still     the stage played no such step, or nothing on the page shows it
 //   instant   what the step moves jumped, in a step whose verb gives it time to travel. A verb
@@ -22,23 +20,14 @@
 //             of a shape an entry names, and the face a verb holds up beside its card
 //   jump      an arrow or line whole on the table changed shape while both its ends stood
 //             still, read from the stage's model (`stage.lines`). One redrawn as an end of it
-//             moves is no finding here, where audit.mjs has `stretch`: a line is "drawn every
+//             moves is no finding: a line is "drawn every
 //             moment from where its two ends are" (UI Conventions, Verbs, point), and that it
 //             ends before a target leaves is the script's own check (script/check.rs)
-// A finding about a tap or untap is `minor`, as in audit.mjs. What the screen around the table
+// A finding about a tap or untap is `minor`. What the screen around the table
 // animates on the page's own time (a button sliding in) is not judged here: it is no step's.
 import { readFile } from "node:fs/promises";
-import {
-    audit,
-    collect,
-    duplicates,
-    record,
-    CROWDED,
-    MIN_MS,
-    MIN_PX,
-    SEEN,
-} from "./audit.mjs";
-import { LONGEST, rest, settled } from "./moments.mjs";
+import { duplicates, record, CROWDED, MIN_MS, MIN_PX, SEEN } from "./audit.mjs";
+import { LONGEST, rest } from "./moments.mjs";
 
 /** The stage time between two measurements of the page: two frames'. Measuring the page is
  * nearly all an audit costs, and what a tick this long could miss is shorter than anything a
@@ -653,31 +642,19 @@ export function judge(
 }
 
 /** Begins an audit of `page`'s motion and returns how to end it, once whatever is audited has
- * been set going (a moment played, a click): that resolves to its findings, `audit`'s where
- * the page has no stage. With `live`, an action of the viewer's set it going (audit.mjs). A
- * page still owed a view after the longest wait throws. */
+ * been set going (a moment played, a click): that resolves to its findings. A page still owed
+ * a view after the longest wait throws. */
 export async function watching(page) {
-    if (await page.evaluate(() => window.berylStage !== undefined)) {
-        await page.evaluate(record, { stepped: true });
-        await page.evaluate(watch);
-        await page.evaluate(`window.__stageAudit.rest = ${rest}`);
-        return async () => {
-            const run = await page.evaluate(walk, {
-                tick: TICK,
-                longest: LONGEST,
-            });
-            if (run.unheard) {
-                throw new Error(
-                    `the page was still owed a view after ${LONGEST} ms`,
-                );
-            }
-            return judge(run);
-        };
-    }
-    const since = await page.evaluate(() => performance.now());
     await page.evaluate(record);
-    return async ({ live = false } = {}) => {
-        await settled(page);
-        return audit(await page.evaluate(collect, since), { live });
+    await page.evaluate(watch);
+    await page.evaluate(`window.__stageAudit.rest = ${rest}`);
+    return async () => {
+        const run = await page.evaluate(walk, { tick: TICK, longest: LONGEST });
+        if (run.unheard) {
+            throw new Error(
+                `the page was still owed a view after ${LONGEST} ms`,
+            );
+        }
+        return judge(run);
     };
 }

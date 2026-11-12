@@ -274,12 +274,9 @@ function SeatPage({
       search.get("instance") ??
       `seat-${Math.random().toString(36).slice(2, 10)}`;
     const live = `${window.location.origin}${API}/m/${slug}/${moment.name}/${seat}/${id}`;
-    // `?stage` and `?phone` go on to the game: the moment plays on the stage
-    // (stage/switch.tsx), in the phone's layout (mobile/phone.ts).
-    const layout = ["stage", "phone"]
-      .filter((name) => search.has(name))
-      .map((name) => `&${name}`)
-      .join("");
+    // `?phone` goes on to the game: the moment plays in the phone's layout
+    // (mobile/phone.ts).
+    const layout = search.has("phone") ? "&phone" : "";
     window.location.replace(
       `/?live=${encodeURIComponent(live)}&spec${search.has("hold") ? "" : "&specReplay"}${layout}#/game`,
     );

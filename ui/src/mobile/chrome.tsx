@@ -1,32 +1,13 @@
 // The chrome of the phone's game screen around its cards (DESIGN.md of the approved prototype):
 // each player's piles and life orb, the menu, the phase icon in the middle, and the dock
-// answering the decisions the desktop's does. The phone's board draws its cards among these
-// itself (PhoneBoard.tsx); behind `?stage` the stage does (stage/PhoneStageBoard.tsx), and
-// these stay as they are.
+// answering the decisions the desktop's does. The stage draws the cards among these
+// (stage/PhoneStageBoard.tsx).
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type {
-  CandidateIndex,
-  ObjectView,
-  PlayerView,
-  Side,
-} from "../generated/protocol";
+import type { PlayerView, Side } from "../generated/protocol";
 import { CardBack } from "../components/Card";
-import {
-  Button,
-  FastForwardIcon,
-  PhaseIcon,
-  TurnButton,
-} from "../components/Controls";
+import { PhaseIcon } from "../components/Controls";
 import { LifeOrb } from "../components/Player";
-import { attackPlan, blockPlan } from "../game/combat";
 import { Incoming, LifeChange } from "../game/Life";
-import {
-  follow,
-  suggestedDamage,
-  type interactions,
-  type Intent,
-} from "../game/decisions";
-import { HALT_BUTTON, passButton } from "../game/stepLabels";
 import { PileTop } from "./faces";
 import { phaseOf, PILE, type Band, type Viewport } from "./layout";
 
@@ -154,101 +135,6 @@ export function useViewport() {
     return () => observer.disconnect();
   }, []);
   return { ref, viewport };
-}
-
-/** The dock: the turn button, as the desktop's dock labels it, and the pass-on button where
- * passing on makes sense. A declaration's button declares what is picked on the table: for
- * now nothing (picking comes with the phone's gestures). */
-export function PhoneDock({
-  view,
-  waiting,
-  can,
-  objects,
-  choose,
-  passOn,
-}: {
-  view: PlayerView;
-  waiting: boolean;
-  can: ReturnType<typeof interactions>;
-  objects: Map<number, ObjectView>;
-  choose(index: CandidateIndex, then?: Intent[]): void;
-  passOn(): void;
-}) {
-  const decision =
-    view.status.kind === "deciding" ? view.status.decision : undefined;
-  const declare = (plan: Intent[]) => () => {
-    if (!decision) return;
-    const { index, rest } = follow(decision, plan);
-    if (index !== undefined) choose(index, rest);
-  };
-  if (!waiting && decision?.kind === "attacker") {
-    return (
-      <div className="phone-dock">
-        <TurnButton
-          label="No Attacks"
-          onClick={declare(attackPlan(new Map(), objects))}
-        />
-      </div>
-    );
-  }
-  if (!waiting && decision?.kind === "blocker") {
-    return (
-      <div className="phone-dock">
-        <TurnButton
-          label="No Blocks"
-          onClick={declare(blockPlan(new Map(), objects))}
-        />
-      </div>
-    );
-  }
-  if (!waiting && decision?.kind === "damageDivision") {
-    const preferred = suggestedDamage(decision, view.stops.fullControl);
-    const done = can.done;
-    const primary = preferred ?? done;
-    return (
-      <div className="phone-dock">
-        <TurnButton
-          label="Assign Damage"
-          disabled={primary === undefined}
-          onClick={() => primary !== undefined && choose(primary)}
-        />
-        {preferred !== undefined && done !== undefined && (
-          <Button variant="secondary" onClick={() => choose(done)}>
-            Done
-          </Button>
-        )}
-      </div>
-    );
-  }
-  if (!waiting && decision?.kind !== "priority") return null;
-  const stop = decision?.halt
-    ? HALT_BUTTON
-    : decision?.passTo
-      ? passButton(view, decision.passTo)
-      : { label: "Pass", caption: "" };
-  const passesOn =
-    !waiting && decision?.passOn != null && can.pass !== undefined;
-  return (
-    <div className="phone-dock">
-      <TurnButton
-        label={waiting ? "Pass" : stop.label}
-        disabled={waiting || can.pass === undefined}
-        onClick={() => can.pass !== undefined && choose(can.pass)}
-      />
-      {passesOn && decision?.passOn && (
-        <button
-          type="button"
-          className="pass-on-button"
-          aria-label={passButton(view, decision.passOn).caption}
-          onClick={passOn}
-        >
-          <span className="pass-on-face button-primary">
-            <FastForwardIcon />
-          </span>
-        </button>
-      )}
-    </div>
-  );
 }
 
 function MenuIcon() {

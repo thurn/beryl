@@ -1,12 +1,11 @@
-// The game as the player watches it on the stage (plan K25), behind `?stage`: game/playback.ts's
-// `usePlayback` with the stage in place of its beats and timers. Each view goes to the page's
-// stage with its script (feed.ts), and the screen takes it when the stage says its script has
-// played out.
+// The game as the player watches it on the stage (plan K25). Each view the session sends goes
+// to the page's stage with its script (feed.ts), and the screen takes it when the stage says
+// its script has played out.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { play } from "../audio/sound";
 import { soundSteps } from "../audio/steps.ts";
-import { click, startGame } from "../ipc";
-import type { usePlayback } from "../game/playback";
+import { click, startGame, type GameUpdate, type SessionId } from "../ipc";
+import type { LogEntry } from "../game/log";
 import { useGameUpdates, useShownToFrame } from "../game/updates";
 import { animationFrames } from "./clock.ts";
 import { desktop } from "./desktop.ts";
@@ -17,7 +16,7 @@ import { ScriptStage } from "./stage.ts";
 import { caseOf, timingOf } from "./timing.ts";
 
 /** The stage, for a test to step and read (`window.berylStage`, under a driven browser only,
- * as playback.ts's `berylShown`): `clock` (`now`, `advance`, `hold`, `release`), `idle`,
+ * only): `clock` (`now`, `advance`, `hold`, `release`), `idle`,
  * `settle`, `step`, `pose` and `shown`; what draws its prompts (`window.berylPrompts`), for a
  * capture of the stage's own motion to shut; and the case a step is of (`window.berylCase`),
  * for a capture to name its steps as the data does. */
@@ -58,8 +57,30 @@ export function pageStage() {
   return page;
 }
 
+/** The game as the screen around the table draws it. */
+export interface Playback {
+  /** The latest view whose script has played out. */
+  update: GameUpdate;
+  /** More views wait for their scripts to play. */
+  behind: boolean;
+  /** Plays out at once everything the stage was given, as a click skips Arena's animations. */
+  skip(): void;
+  /** What has happened in the game up to it, oldest first. */
+  log: LogEntry[];
+}
+
 /** The game in progress as the player watches it on the stage, and how to start one. */
-export function useStagePlayback(): ReturnType<typeof usePlayback> {
+export function usePlayback(): {
+  playback?: Playback;
+  /** A game is starting: its first view has not arrived. */
+  starting: boolean;
+  /** The game in progress, if any, is still being asked for, as the page loads. */
+  resuming: boolean;
+  /** The game resumed from its save as the page loaded, if one was. */
+  resumed?: SessionId;
+  /** Starts a game against `agent`, replacing any in progress. */
+  start(agent: string, seed?: number): Promise<void>;
+} {
   const { stage, feed } = pageStage();
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(true);
@@ -75,10 +96,7 @@ export function useStagePlayback(): ReturnType<typeof usePlayback> {
       if (!awaiting || feed.fed().shown) setResuming(false);
     },
   });
-  const { shown, behind, latest, log } = useSyncExternalStore(
-    feed.subscribe,
-    feed.fed,
-  );
+  const { shown, behind, log } = useSyncExternalStore(feed.subscribe, feed.fed);
   // Whether the stage is still playing, a prompt's marks coming up too, for a capture that
   // waits for the table to settle (`by specs --shots`).
   const { busy } = useSyncExternalStore(stage.subscribe, () => stage.shown);
@@ -99,14 +117,8 @@ export function useStagePlayback(): ReturnType<typeof usePlayback> {
   return {
     playback: shown && {
       update: shown,
-      // The screen takes a view once the stage has played it: nothing in it is still to be
-      // announced.
-      live: false,
       behind,
       skip: () => feed.skip(),
-      gather: () => feed.gather(),
-      release: () => feed.release(),
-      latest,
       log,
     },
     starting,

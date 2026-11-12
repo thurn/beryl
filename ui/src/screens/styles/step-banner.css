@@ -4,7 +4,7 @@
    is the banner. */
 .step-banner {
   position: absolute;
-  /* Over the permanents (CardLayer), which a card peeking out above its row would otherwise
+  /* Over the permanents, which a card peeking out above its row would otherwise
      lay over the detail; it takes no pointer, so they stay at hand. Under the life orbs. */
   z-index: 240;
   left: calc(802px + var(--shift-mid, 0px));

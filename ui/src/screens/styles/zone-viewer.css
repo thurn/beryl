@@ -23,14 +23,7 @@
     0 0 0 1.5px var(--metal-bright),
     0 0 12px 3px rgb(233 173 74 / 35%);
 }
-.pile-button-playable {
-  box-shadow:
-    0 0 0 2px var(--playable),
-    0 0 6px 2px rgb(var(--playable-rgb) / 45%);
-}
-.pile-button-target {
-  box-shadow: var(--glow-cyan);
-}
+
 /* The zone viewer: every card in a pile on a panel over the dimmed table, which a click beside
    it closes; under the hovered card's scan. */
 .viewer-scrim {
@@ -73,14 +66,7 @@
 .zone-viewer-going .zone-viewer-header {
   opacity: 0;
 }
-/* The visible rows can fly across the table without exposing the rows below them. */
-.zone-viewer-flying .zone-viewer-card:nth-child(n + 11) {
-  visibility: hidden;
-}
-.zone-viewer-flying .zone-viewer-cards {
-  overflow: visible;
-  mask-image: none;
-}
+
 .viewer-scrim:has(+ .zone-viewer-rising),
 .viewer-scrim:has(+ .zone-viewer-going) {
   opacity: 0;
@@ -154,9 +140,7 @@
   border-radius: 3px;
   background: var(--metal);
 }
-.zone-viewer-card-offered {
-  cursor: pointer;
-}
+
 .zone-viewer-empty {
   margin: 8px 0 0;
   font: italic 16px var(--font-sans);

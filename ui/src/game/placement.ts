@@ -1,6 +1,6 @@
 // What a placed card is: its look, its Placement, its footprint on the stage, and the
 // helpers that turn a spot on the table into a Placement's position.
-import type { ObjectView, Side, ZoneName } from "../generated/protocol";
+import type { Side, ZoneName } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import { depthScale, lean } from "./perspective";
 
@@ -28,8 +28,8 @@ export const HAND = {
 };
 
 /** How the hand card the pointer is over rises out of the fan: straightened, lifted and a
- * little enlarged about its top center. CardLayer draws it inside the card's element, which
- * stays where the fan puts it, so hovering moves nothing else and the pointer keeps the card.
+ * little enlarged about its top center. The card's node
+ * stays where the fan puts it (stage/raised.ts), so hovering moves nothing else and the pointer keeps the card.
  * A card rises less where it would reach over your lands (`Placement.lift`). */
 export const RAISE = { lift: 70, scale: 1.06 };
 
@@ -45,7 +45,6 @@ export type Look =
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
   | "shown" // a full frame face up over the table, on its way to a pile (SHOWCASE)
   | "handling" // cards lifted while the opponent handles them
-  | "scry-bottom" // backs rounding the library to slide beneath it
   | "hidden"; // fully occluded by the rest of a pile
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
@@ -157,14 +156,4 @@ export function turned(
     rotate,
     skew: 0,
   };
-}
-
-/** Order of arrival (standIns.ts), falling back to the view's slot order. */
-export function inOrder(
-  cards: ObjectView[],
-  order: ReadonlyMap<number, number> | undefined,
-): ObjectView[] {
-  if (!order?.size) return cards;
-  const key = (o: ObjectView) => order.get(o.slot) ?? Infinity;
-  return [...cards].sort((a, b) => key(a) - key(b));
 }

@@ -86,7 +86,7 @@ export function TurnButton({
   );
 }
 
-/** Passing on to the next stop (Board.tsx' pass-on button). */
+/** Passing on to the next stop (the dock's pass-on button). */
 export function FastForwardIcon() {
   return (
     <svg viewBox="0 0 24 16" aria-hidden>

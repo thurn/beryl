@@ -565,17 +565,15 @@ const probe = {
         };
     },
 
-    /** The motion audit (audit.mjs) of whatever `action` sets going (an async function: a
-     * click, or `spec.play`): records every frame while it runs and the page settles, then
-     * judges each event the page showed meanwhile, as `by specs --motion` does. Returns the
-     * findings that are not ok (all of them with `all`). On the stage (`by specs --stage`)
-     * the audit is stage-audit.mjs's: it holds the stage's clock from here until `action`
-     * returns and then steps it, so `action` sets things going and waits for nothing the
-     * stage plays. */
-    async audit(action, { all = false, live = true } = {}) {
+    /** The motion audit (stage-audit.mjs) of whatever `action` sets going (an async function:
+     * a click, or `spec.play`), as `by specs --motion` judges it: it holds the stage's clock
+     * from here until `action` returns and then steps it, so `action` sets things going and
+     * waits for nothing the stage plays. Returns the findings that are not ok (all of them
+     * with `all`). */
+    async audit(action, { all = false } = {}) {
         const watched = await watching(page);
         await action();
-        const findings = await watched({ live });
+        const findings = await watched();
         return all ? findings : findings.filter((f) => f.verdict !== "ok");
     },
 
@@ -731,17 +729,15 @@ const spec = {
         );
     },
     /** Plays every open seat at once (or runs `action`, a live click, say) and audits
-     * each seat's motion (audit.mjs): the findings that are not ok, by seat. An action is the
-     * viewer's own: what it moves before the game answers is audited too (`ui` findings). */
+     * each seat's motion (stage-audit.mjs): the findings that are not ok, by seat. */
     async audit(action, { all = false } = {}) {
-        const live = action !== undefined;
         const open = Object.entries(seats);
         const watched = await Promise.all(
             open.map(([, s]) => watching(s.page)),
         );
         await (action ?? (() => spec.play()))();
         // Every seat is watched to its end at once, as they play at once.
-        const found = await Promise.all(watched.map((end) => end({ live })));
+        const found = await Promise.all(watched.map((end) => end()));
         const out = {};
         for (const [i, [name]] of open.entries()) {
             const findings = found[i];

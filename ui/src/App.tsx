@@ -13,7 +13,7 @@ import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen } from "./screens/Game";
 import { StartScreen } from "./screens/StartScreen";
-import { usePlayback } from "./stage/switch";
+import { usePlayback } from "./stage/playback";
 import { useMusic } from "./audio/SoundControls";
 import { setMobile, usePhone } from "./mobile/phone";
 

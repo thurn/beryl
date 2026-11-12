@@ -23,12 +23,6 @@ export const cardEntry = (name: string) => cardRecords.find(name)?.card;
 export const landFace = (name: string) =>
   cardEntry(name)?.faces.find((f) => /\bLand\b/.test(f.type_line));
 
-/** The face a card or face name names: a card's first, or the face of that name. */
-export function faceEntry(name: string): CardFace | undefined {
-  const found = cardRecords.find(name);
-  return found?.card.faces[found.face];
-}
-
 /** The printed face of a token named `name` where it has its own, as Thundertrap Trainer's
  * offspring, a 1/1 copy, has beside the card it shares a name with. */
 export const tokenFace = (name: string) => cardRecords.token(name)?.faces[0];

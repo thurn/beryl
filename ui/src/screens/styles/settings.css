@@ -1,5 +1,5 @@
 /* The settings gear is a button; its menu drops below it. */
-/* The gear's column at the stage's top right (Board.tsx): the gear, the bug report, then undo
+/* The gear's column at the stage's top right (game/Corner.tsx): the gear, the bug report, then undo
    while there is something to take back. */
 .gear-button {
   position: absolute;

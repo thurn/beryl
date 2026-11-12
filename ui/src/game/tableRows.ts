@@ -1,7 +1,6 @@
 // Where each side's rows of permanents may lie, and the game log's column they avoid.
 import type { Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
-import type { Layout } from "./placement";
 import { LAND_WIDTH } from "./placement";
 import { depthScale } from "./perspective";
 
@@ -102,18 +101,3 @@ export const ROOM = {
 const LOG_RIGHT = 318;
 /** Where the permanents' rows start while the open log stands in its column: right of it. */
 export const BESIDE_LOG = LOG_RIGHT + 14;
-
-/** Whether a permanent lies over the game log's column, so that the log must fold away rather
- * than hide behind it (Narration.tsx). Both rows of permanents span the log's height, so only
- * how far left one reaches matters; a little slack covers the lean of a card's near end. */
-export function overLog(placements: Layout): boolean {
-  for (const p of placements.values()) {
-    if (
-      (p.look === "field" || p.look === "beneath" || p.look === "attached") &&
-      p.x < LOG_RIGHT + 8
-    ) {
-      return true;
-    }
-  }
-  return false;
-}

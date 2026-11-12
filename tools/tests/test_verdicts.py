@@ -59,7 +59,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root.mkdir()
     git(root, "init", "-q", "-b", "work")
     write(root, "ui/src/Board.tsx", "board\n")
-    write(root, "ui/scripts/interactions.mjs", "checks\n")
+    write(root, "ui/scripts/kept-table.mjs", "checks\n")
     git(root, "add", "-A")
     git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a")
     monkeypatch.setattr(paths, "REPO", root)
@@ -120,7 +120,7 @@ def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
     repo: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
-    write(repo, "ui/scripts/interactions.mjs", "checks, fixed\n")
+    write(repo, "ui/scripts/kept-table.mjs", "checks, fixed\n")
     assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
     assert bd.verdicts("ui-test:drag") == ["stale"]
 
@@ -138,7 +138,7 @@ def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
 
     assert checks.run_lanes([one("ui-test:drag", False)], "check", 60, False) == 1
     write(repo, "ui/src/Board.tsx", "board, fixed twice\n")
-    write(repo, "ui/scripts/interactions.mjs", "checks, fixed twice\n")
+    write(repo, "ui/scripts/kept-table.mjs", "checks, fixed twice\n")
     assert checks.run_lanes([one("ui-test:drag", True)], "check", 60, False) == 0
     assert bd.verdicts("ui-test:drag")[-1] == "mixed"
     assert "just verdict 'ui-test:drag' stale|catch" in capsys.readouterr().out

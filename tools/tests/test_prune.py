@@ -56,7 +56,7 @@ class Store(verdicts.Beads):
         return {c: e for c, e in self.found.items() if c in set(checks)}
 
 
-INTERACTIONS = """
+KEPT_TABLE = """
 const keptTitle = "kept \\"stale\\"";
 // keep: guards the only test of the kept state
 await check(
@@ -92,7 +92,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(paths, "REPO", tmp_path)
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "ui" / "scripts").mkdir(parents=True)
-    (tmp_path / "ui" / "scripts" / "interactions.mjs").write_text(INTERACTIONS)
+    (tmp_path / "ui" / "scripts" / "kept-table.mjs").write_text(KEPT_TABLE)
     (tmp_path / "ui" / "shots.json").write_text(json.dumps(SHOTS))
     lib = tmp_path / "rust" / "crates" / "beryl_rules" / "src" / "lib.rs"
     lib.parent.mkdir(parents=True)

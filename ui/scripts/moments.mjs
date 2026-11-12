@@ -2,14 +2,9 @@
 // driver share (`by specs --film | --motion | --drive`, tools/). A moment's seat page,
 // `/scenarios/<card>/<moment>/<yours|theirs>?hold`, is a fresh game that waits for its play, so
 // a script starts watching before anything moves. Motion is not reduced: how things move is
-// what these look at. With `BERYL_STAGE` set (`by specs --stage`) a seat opens on the stage
-// (`?stage`, plan K25), and a page with a stage is settled when the stage says so, on no
-// timer; the waits below are the old board's, until the cut-over.
+// what these look at. A page is settled when its stage says so, on no timer.
 
-/** How long the page must hear no view and queue none before it counts as settled, how long
- * the last view's animation may take after that, and the most to wait for either. */
-export const QUIET = 1500;
-export const LAST_VIEW = 1200;
+/** The most to wait for a page to open or to settle. */
 export const LONGEST = 30000;
 
 /** How many times a request or a seat's opening is tried, and the wait before the first
@@ -93,12 +88,8 @@ export async function chosen(base, slugs, moment) {
     return specs;
 }
 
-/** Whether seats open on the stage (`by specs --stage`). */
-export const STAGED = Boolean(process.env.BERYL_STAGE);
-
-/** What a seat's address asks for besides: the stage, and the phone's layout (`by specs
- * --phone`). */
-export const LAYOUT = `${STAGED ? "&stage" : ""}${process.env.BERYL_PHONE ? "&phone" : ""}`;
+/** What a seat's address asks for besides: the phone's layout (`by specs --phone`). */
+export const LAYOUT = process.env.BERYL_PHONE ? "&phone" : "";
 
 /** Opens a moment's seat in `page`, held, and waits until its first view shows, retried (a
  * fresh game each try). Returns the page's live game URL on the spec server, which `play`
@@ -156,7 +147,7 @@ export function option(args, name, flag = false) {
     return flag ? Boolean(args.splice(at, 1)) : args.splice(at, 2)[1];
 }
 
-/** In a page with a stage: how far the page is from rest. `owed` a view: the last one heard
+/** How far the page is from rest. `owed` a view: the last one heard
  * plays on (it is followed unasked, ipc.ts `playsOn`), or the page has since sent an answer
  * the session took, or has yet to reply to, and no view has come of it; a click that only
  * changed its prompt's state brings none. `shown`: the stage shows the last view heard, its
@@ -178,7 +169,7 @@ export function rest() {
     const heard = log.findLastIndex((entry) => updateOf(entry) !== undefined);
     if (heard < 0) return { owed: true, shown: false, busy, settled: false };
     const { view } = updateOf(log[heard]);
-    const answers = ["choose", "click", "pass_on", "undo", "cancel"];
+    const answers = ["choose", "click", "undo", "cancel"];
     const owed =
         view.status.kind === "thinking" ||
         view.status.kind === "playing" ||
@@ -200,37 +191,14 @@ export function rest() {
     return { owed, shown, busy, settled: !owed && shown && !busy };
 }
 
-/** Waits until `page` is settled, or `LONGEST`. With a stage, that is when it is at rest
- * (`rest`), asked each frame: no fixed wait. Without, until it has heard no view for `QUIET`
- * ms and queues none, then `LAST_VIEW` more for its animation. */
+/** Waits until `page` is at rest (`rest`), asked each frame, or `LONGEST`: an opponent who
+ * never answers leaves a view owed for good, and the wait ends there. */
 export async function settled(page) {
-    if (await page.evaluate(() => window.berylStage !== undefined)) {
-        // An opponent who never answers leaves a view owed for good: as without a stage, the
-        // wait ends there.
-        await page
-            .waitForFunction(`(${rest})().settled`, undefined, {
-                timeout: LONGEST,
-            })
-            .catch((e) => {
-                if (e.name !== "TimeoutError") throw e;
-            });
-        return;
-    }
-    const started = await page.evaluate(() => performance.now());
-    await page.waitForFunction(
-        ([quiet, longest, started]) => {
-            const log = window.berylLive?.log ?? [];
-            const last = log.at(-1)?.at ?? 0;
-            const now = performance.now();
-            return (
-                (now - last > quiet && !window.berylBehind) ||
-                now - started > longest
-            );
-        },
-        [QUIET, LONGEST, started],
-        { timeout: LONGEST + 5000, polling: 100 },
-    );
-    await page.waitForTimeout(LAST_VIEW);
+    await page
+        .waitForFunction(`(${rest})().settled`, undefined, { timeout: LONGEST })
+        .catch((e) => {
+            if (e.name !== "TimeoutError") throw e;
+        });
 }
 
 /** A browser context and page at `width`×`height` with motion on, collecting the page's

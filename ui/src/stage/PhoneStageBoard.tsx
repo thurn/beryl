@@ -1,5 +1,4 @@
-// The phone's game screen drawn on the stage (plan K25 and K29), in place of
-// mobile/PhoneBoard.tsx behind `?stage` (switch.tsx): the phone's strips and dock as they are
+// The phone's game screen drawn on the stage (plan K25 and K29): the phone's strips
 // (mobile/chrome.tsx), one node an object or ability where the page's stage has it, laid out
 // for the phone (phone.ts) and drawn in the phone's faces (mobile/faces.tsx), and the rest of
 // the chrome the desktop's board has, composed for a phone (PhoneChrome.tsx). The same scripts
@@ -15,26 +14,20 @@ import {
   useMemo,
   useState,
   useSyncExternalStore,
-  type ComponentProps,
 } from "react";
 import { ManaPool, Thinking } from "../components/Player";
-import type { ObjectView, StopsSetting } from "../generated/protocol";
+import type {
+  ObjectView,
+  PlayerView,
+  StopsSetting,
+} from "../generated/protocol";
 import { incoming } from "../game/combat";
 import { blockedBy } from "./Chrome.tsx";
-import { interactions } from "../game/decisions";
 import type { LogEntry } from "../game/log";
 import { opponentActing } from "../game/Narration";
-import {
-  MenuButton,
-  Middle,
-  Orb,
-  PhoneDock,
-  Piles,
-  useViewport,
-} from "../mobile/chrome";
+import { MenuButton, Middle, Orb, Piles, useViewport } from "../mobile/chrome";
 import { PHONE } from "../mobile/faces";
 import { phoneLayout } from "../mobile/layout";
-import type { PhoneBoard } from "../mobile/PhoneBoard";
 import "../mobile/phone.css";
 import { Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
@@ -54,7 +47,6 @@ import {
 } from "./PhoneChrome.tsx";
 import { pageStage } from "./playback.ts";
 import { Entries, Shares, Ways } from "./Choose.tsx";
-import { onTable } from "./prompt.ts";
 import {
   PhonePromptDock,
   PhonePromptOver,
@@ -68,25 +60,11 @@ import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
 
-/** What the phone's board on the stage takes: the old phone board's, and what the chrome it
- * adds answers with. */
-export type PhoneStageProps = ComponentProps<typeof PhoneBoard> & {
-  log: LogEntry[];
-  /** Takes back the player's latest answer, at a decision that may. */
-  undo?: () => void;
-  stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
-  /** Concedes the game; none once it is over. */
-  onConcede?: () => void;
-};
-
 const SIDES = ["opponent", "you"] as const;
 
 export function PhoneStageBoard({
   view,
   waiting,
-  choose,
-  passOn,
   cancel,
   onLeave,
   log,
@@ -94,7 +72,22 @@ export function PhoneStageBoard({
   stops,
   setStops,
   onConcede,
-}: PhoneStageProps) {
+}: {
+  /** The latest view whose script has played out. */
+  view: PlayerView;
+  /** An answer is on its way, or the game plays on without the player. */
+  waiting: boolean;
+  /** Takes back the cast in progress. */
+  cancel(): void;
+  onLeave(): void;
+  log: LogEntry[];
+  /** Takes back the player's latest answer. */
+  undo(): void;
+  stops: StopsSetting;
+  setStops(stops: StopsSetting): void;
+  /** Concedes the game; none once it is over. */
+  onConcede?: () => void;
+}) {
   const { stage, feed, prompts } = pageStage();
   const asked = usePrompt(prompts);
   const { pay, suggest } = usePaying(asked);
@@ -118,13 +111,6 @@ export function PhoneStageBoard({
   const bands = useMemo(
     () => viewport && table && phoneLayout(table, viewport).bands,
     [table, viewport],
-  );
-  // What the session holds no state of (a payment among plans it cannot tell apart) keeps
-  // the old phone board's dock, which answers through the screen.
-  const can = useMemo(() => interactions(view), [view]);
-  const objects = useMemo(
-    () => new Map(view.objects.map((o) => [o.slot, o])),
-    [view],
   );
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
   const [sheet, setSheet] = useState<
@@ -183,7 +169,7 @@ export function PhoneStageBoard({
       : undefined;
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
-  const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
+  const undoable = !waiting && (decision?.undo ?? 0) > 0;
   // The damage shows from the attack's declaration until it is dealt, less that of the
   // attackers the open prompt has a blocker aimed at.
   const blocked = blockedBy(asked);
@@ -228,23 +214,7 @@ export function PhoneStageBoard({
                 <PlayerTarget prompts={prompts} asked={asked} side={side} />
               </Orb>
               {side === "you" ? (
-                // A prompt the stage holds is its dock's from the view that asks it, while
-                // the steps that led to it still play.
-                asked.prompt ||
-                waiting ||
-                decision?.kind === "priority" ||
-                (decision && onTable(decision.prompt)) ? (
-                  <PhonePromptDock asked={asked} {...answers} />
-                ) : (
-                  <PhoneDock
-                    view={view}
-                    waiting={waiting}
-                    can={can}
-                    objects={objects}
-                    choose={choose}
-                    passOn={passOn}
-                  />
-                )
+                <PhonePromptDock asked={asked} {...answers} />
               ) : (
                 <>
                   {opponentActing(view, waiting) && (

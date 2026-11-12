@@ -32,8 +32,6 @@ import type { Name, Resting } from "./layout.ts";
 import { announced, coinBanner, scryWords } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
 
-const NO_ORDER: ReadonlyMap<number, number> = new Map();
-
 /** The least a control measures on a phone (phone.css). */
 const TOUCH = 40;
 /** A card listed in a pile's sheet. */
@@ -49,7 +47,7 @@ export type PhonePile = ZonePile & { zone: "library" | "graveyard" };
 /** The piles a touch opens: a graveyard that holds anything, and a library of which a card is
  * known. */
 export function phonePiles(table: PlayerView): PhonePile[] {
-  return [...zonePiles(table, NO_ORDER), ...knownLibraries(table)].filter(
+  return [...zonePiles(table), ...knownLibraries(table)].filter(
     (pile): pile is PhonePile => pile.zone !== "exile" && pile.cards.length > 0,
   );
 }
@@ -380,11 +378,7 @@ export function Notices({
       )}
       {turn && (
         <div className="phone-announce" style={{ top: middle }}>
-          <TurnAnnouncement
-            key={table.turn.number}
-            side={turn.notice.active}
-            staged
-          />
+          <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />
         </div>
       )}
     </>

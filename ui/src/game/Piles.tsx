@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   CARD_ASPECT,
@@ -24,31 +25,11 @@ import { Tip } from "../components/Controls";
 import { cardEntry, useCardArt, type CardFace } from "../cards";
 import { ManaSymbol } from "../components/Mana";
 import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
-import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
 import { STAGE } from "./perspective";
 import { type Box } from "./placement";
 import { type ZonePile } from "./zoneViews";
 import { useReducedMotion } from "motion/react";
-import { BORROW_FLIGHT_MS, useBorrowedCard } from "./choiceFlight";
-
-/** The arrange tray borrows the whole library. Measure the envelope of its skewed cards. */
-export function LibraryAnchor({ side, look }: Pick<ZonePile, "side" | "look">) {
-  const height = look.width / CARD_ASPECT;
-  const drop = height * Math.tan((look.skew * Math.PI) / 180);
-  return (
-    <div
-      className="hud"
-      data-table-library={side}
-      style={{
-        left: look.x + Math.min(0, look.depth.x) + Math.min(0, drop),
-        top: look.y + look.depth.y,
-        width: look.width + Math.abs(look.depth.x) + Math.abs(drop),
-        height: height - look.depth.y,
-      }}
-    />
-  );
-}
 
 /** What a pile is called: "Your graveyard", "Opponent's exile". */
 export function pileName({ side, zone }: Pick<ZonePile, "side" | "zone">) {
@@ -57,32 +38,17 @@ export function pileName({ side, zone }: Pick<ZonePile, "side" | "zone">) {
 
 const cardCount = (n: number) => `${n} card${n === 1 ? "" : "s"}`;
 
-/** How a pile's cards are marked: one is a target (to pick, or of the top of the stack), one
- * has something to play, or neither. */
-export function pileMark(
-  pile: ZonePile,
-  states: Map<number, CardState>,
-): "target" | "playable" | undefined {
-  const marks = pile.cards.map((o) => states.get(o.slot));
-  if (marks.some((s) => s?.highlight === "target")) return "target";
-  if (marks.some((s) => s?.playable)) return "playable";
-  return undefined;
-}
-
 /** What a pile's tip says on hover: its zone and how many cards, "Graveyard · 5". */
-export const pileTip = (zone: string, count: number) =>
+const pileTip = (zone: string, count: number) =>
   `${zone[0]!.toUpperCase()}${zone.slice(1)} · ${count}`;
 
 /** A pile's button, over its top card: it opens the zone viewer. Its thickness shows its size
- * at a glance; hovering it names its zone and count. It glows as its cards are marked
- * (pileMark). */
+ * at a glance; hovering it names its zone and count. */
 export function PileButton({
   pile,
-  mark,
   onOpen,
 }: {
   pile: ZonePile;
-  mark?: "target" | "playable";
   onOpen(): void;
 }) {
   const { look, cards } = pile;
@@ -97,9 +63,7 @@ export function PileButton({
     >
       <button
         type="button"
-        className={["pile-button", mark && `pile-button-${mark}`]
-          .filter(Boolean)
-          .join(" ")}
+        className="pile-button"
         style={{
           width: look.width,
           height,
@@ -125,16 +89,11 @@ const VIEWER_COLUMNS = 5;
 /** Matches the chrome transition in screens.css. */
 const VIEWER_FADE_MS = 200;
 
-/** Every card in a pile, the top one first, over the dimmed table, marked as on the table:
- * hovering one shows it whole, and one the open decision `offers` something for is picked with
- * a click. Escape, the
- * close button or a click beside it closes it. */
+/** Every card in a pile, the top one first, over the dimmed table: hovering one shows it
+ * whole. Escape, the close button or a click beside it closes it. */
 export function ZoneViewer({
   pile,
   title,
-  states,
-  offers,
-  onPick,
   onClose,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
@@ -142,9 +101,6 @@ export function ZoneViewer({
   /** What the viewer is called, if not the pile's name: the permanent whose exiled cards it
    * shows. */
   title?: string;
-  states: Map<number, CardState>;
-  offers(slot: number): boolean;
-  onPick(slot: number): void;
   onClose(): void;
 }) {
   useOpenSound();
@@ -168,18 +124,11 @@ export function ZoneViewer({
   useLayoutEffect(() => {
     const element = panel.current;
     if (reduce || !element) return;
-    element.classList.add("zone-viewer-rising", "zone-viewer-flying");
+    element.classList.add("zone-viewer-rising");
     const rise = requestAnimationFrame(() =>
       element.classList.remove("zone-viewer-rising"),
     );
-    const settle = setTimeout(
-      () => element.classList.remove("zone-viewer-flying"),
-      BORROW_FLIGHT_MS,
-    );
-    return () => {
-      cancelAnimationFrame(rise);
-      clearTimeout(settle);
-    };
+    return () => cancelAnimationFrame(rise);
   }, [reduce]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
@@ -231,9 +180,6 @@ export function ZoneViewer({
                 key={o.slot}
                 object={o}
                 closing={closing}
-                state={states.get(o.slot) ?? {}}
-                offered={offers(o.slot)}
-                onPick={() => onPick(o.slot)}
                 hover={inspect(o)}
               />
             ))}
@@ -274,47 +220,47 @@ function useScrollEdges() {
   return [ref, more, measure] as const;
 }
 
+/** While the viewer lists a card it owns it: the card's node on the table is hidden
+ * (`[data-card-borrowed]`), so that no card is drawn twice, until the viewer begins to close. */
+function useOwned(
+  ref: RefObject<HTMLElement | null>,
+  slot: number | undefined,
+) {
+  useLayoutEffect(() => {
+    const node =
+      slot === undefined
+        ? null
+        : ref.current
+            ?.closest(".stage")
+            ?.querySelector(`.card-layer > .card-el[data-slot="${slot}"]`);
+    if (!node) return;
+    node.setAttribute("data-card-borrowed", "");
+    return () => node.removeAttribute("data-card-borrowed");
+  }, [ref, slot]);
+}
+
 function ViewerCard({
   object,
   closing,
-  state,
-  offered,
-  onPick,
   hover,
 }: {
   object: ObjectView;
   closing: boolean;
-  state: CardState;
-  offered: boolean;
-  onPick(): void;
   hover: HoverHandlers;
 }) {
   const face = useFace(object);
   const ref = useRef<HTMLDivElement>(null);
-  useBorrowedCard(ref, closing ? undefined : object.slot);
+  useOwned(ref, closing ? undefined : object.slot);
   return (
     <div
       ref={ref}
-      className={
-        offered
-          ? "zone-viewer-card zone-viewer-card-offered"
-          : "zone-viewer-card"
-      }
+      className="zone-viewer-card"
       data-viewer-slot={object.slot}
       data-card={object.name ?? undefined}
-      role={offered ? "button" : undefined}
-      onClick={offered ? onPick : undefined}
       {...hover}
     >
       {object.name ? (
-        <Card
-          card={face}
-          width={VIEWER_CARD}
-          highlight={state.highlight}
-          className={
-            state.playable && !state.highlight ? "card-playable" : undefined
-          }
-        />
+        <Card card={face} width={VIEWER_CARD} />
       ) : (
         <CardBack width={VIEWER_CARD} />
       )}

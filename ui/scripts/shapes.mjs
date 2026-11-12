@@ -1,6 +1,6 @@
 // The shape suite (plan K24 and K26): every prompt shape the stage draws, answered from the
 // seat that is asked and watched from the seat across the table. `by ui-test` serves the UI
-// and runs this beside interactions.mjs and verbs.mjs. Usage:
+// and runs this after kept.mjs and verbs.mjs. Usage:
 //   node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]
 // A check is `shape:<shape>/<seat>/<layout>` (ui/shapes.json lists them), named whole or in
 // part to run it alone, and logged by that name.
@@ -107,7 +107,7 @@ const { shots } = JSON.parse(
  * writes what the prompt asks, and whether a card of the hand is played by a click. */
 const LAYOUTS = {
     desktop: {
-        query: "stage",
+        query: "",
         windows: [{ width: 1600, height: 900 }],
         dock: ".stage-prompt, .stage-ways",
         title: ".stage-prompt .prompt-title",
@@ -115,7 +115,7 @@ const LAYOUTS = {
         handClicks: true,
     },
     phone: {
-        query: "phone&stage",
+        query: "phone&",
         windows: [
             ...new Map(
                 shots
@@ -321,7 +321,7 @@ async function opened(context, watch, query, fixture, at = 1) {
     const page = await context.newPage();
     const done = await watch(page);
     await page.goto(
-        new URL(`/?${query}&fixture=${fixture}&at=${at}#/game`, base).href,
+        new URL(`/?${query}fixture=${fixture}&at=${at}#/game`, base).href,
     );
     await page.waitForFunction(
         () => window.berylStage && document.querySelector(".stage-node"),

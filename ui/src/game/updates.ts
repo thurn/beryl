@@ -1,6 +1,6 @@
 // Hearing the game: the views the session sends, from the page's start, and the game already
 // in progress as the page loads. What shows them, and at what pace, is its caller's
-// (playback.ts; stage/playback.ts behind `?stage`).
+// (stage/playback.ts).
 import { useEffect, useRef, useState } from "react";
 import {
   currentGame,

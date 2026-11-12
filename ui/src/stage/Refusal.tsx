@@ -11,7 +11,7 @@ import { desktop } from "./desktop.ts";
 import type { Name, Resting } from "./layout.ts";
 import type { Asked, Prompts } from "./prompt.ts";
 
-/** How long the word at the permanent that forbids a click stays, in ms: the old board's. */
+/** How long the word at the permanent that forbids a click stays, in ms. */
 const NOTICE_MS = 1800;
 
 interface Said {

@@ -1,6 +1,5 @@
 // What the board says about the game playing on: who is acting (the opponent's badge)
-// and the game log. What came and went on the stack is seen there, each
-// spell and ability held in a beat of its own (beats.ts).
+// and the game log.
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import type { PlayerView } from "../generated/protocol";
 import type { LogEntry } from "./log";

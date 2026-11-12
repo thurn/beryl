@@ -20,6 +20,7 @@ import type {
 import { cardRecords, strings } from "./cardRecords";
 import { brief, forwardTo, note, noteUpdate } from "./diagnostics";
 import { whenThawed } from "./freeze";
+import { apply, tableOf, type Table } from "./stage/table";
 
 export type * from "./generated/protocol";
 
@@ -72,8 +73,7 @@ export interface FixtureCall {
  * player answers or the end, as if the app played on from the recorded answer. A `cancel`
  * goes back to the priority the cast began at, shown again with nothing happening in it, and
  * the next `choose` plays the recording on from there; an `undo` goes back to the decision before
- * the latest, shown again as undone; a `pass_on` plays on as a `choose` does, and so does a `click`
- * whose recorded reply says it answered its prompt. A response recorded with its request (a
+ * the latest, shown again as undone; a `click` plays on as a `choose` does where its recorded reply says it answered its prompt. A response recorded with its request (a
  * click's, which is the prompt after that click) answers that request alone: any other is
  * refused. The events a listener gets as it
  * starts listening are past; those released by `choose` and `cancel` happen live.
@@ -123,10 +123,29 @@ export function fixtureTransport(
   const calls: FixtureCall[] = [];
   const viewAt = (i: number) =>
     (events[i]?.payload as Events["game-update"] | undefined)?.view;
-  /** Shows the recorded view `at` again, with nothing happening in it, `undone` if so; the
+  /** The numbers of the abilities on the stack of the recorded view `at`, bottom first, as
+   * the recording's scripts up to it gave them. */
+  const abilitiesAt = (at: number) => {
+    let table: Table | undefined;
+    for (const { event, payload } of events.slice(0, at + 1)) {
+      if (event !== "game-update") continue;
+      const { view } = payload as Events["game-update"];
+      const script = view.script;
+      if (!table || !script || script.reset) {
+        table = tableOf(view, script?.reset, table);
+      }
+      for (const { act } of script?.beats.flat() ?? []) {
+        table = apply(table, act);
+      }
+    }
+    return table?.abilities ?? [];
+  };
+  /** Shows the recorded view `at` again, with nothing happening in it, `undone` if so: the
+   * stage starts over from it, as from the session's view of a decision gone back to. The
    * next `choose` plays the recording on from there. */
   const showAgain = (at: number, undone: boolean) => {
     const update = events[at]!.payload as Events["game-update"];
+    const script = { reset: { abilities: abilitiesAt(at) }, beats: [] };
     released = at + 1;
     queueMicrotask(() => {
       for (const l of [...listeners]) {
@@ -134,7 +153,7 @@ export function fixtureTransport(
           l.handler(
             {
               ...update,
-              view: { ...update.view, events: [], undone },
+              view: { ...update.view, events: [], undone, script },
             } as never,
             false,
           );
@@ -144,7 +163,6 @@ export function fixtureTransport(
     return Promise.resolve(null);
   };
   /** Takes back the latest answer: the decision before the latest view's, again. */
-  const continuations = new Set<number>();
   const undo = () => {
     const latest = viewAt(released - 1);
     if (latest?.status.kind !== "deciding" || !latest.status.decision.undo) {
@@ -155,8 +173,7 @@ export function fixtureTransport(
     let at = released - 1;
     while (at > 0) {
       at -= 1;
-      if (viewAt(at)?.status.kind === "deciding" && !continuations.has(at))
-        break;
+      if (viewAt(at)?.status.kind === "deciding") break;
     }
     return showAgain(at, true);
   };
@@ -220,8 +237,7 @@ export function fixtureTransport(
         const { names } = (args as Args<"card_records">).request;
         return Promise.resolve(cards(names) as Result<C>);
       }
-      // A recording holds one line of play: passing on plays it on as its next answer did.
-      const queue = responses.get(command === "pass_on" ? "choose" : command);
+      const queue = responses.get(command);
       const recorded = queue?.[0];
       if (!queue || !recorded) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
@@ -240,19 +256,10 @@ export function fixtureTransport(
       // A click whose recorded reply says it answered plays on as an answer does.
       const answers =
         command === "choose" ||
-        command === "pass_on" ||
         (command === "click" &&
           (response as Result<"click">).kind === "answered");
       if (answers && released < events.length) {
         const from = released;
-        if (
-          command === "choose" &&
-          (args as Args<"choose">).request.continuation
-        ) {
-          continuations.add(from - 1);
-        } else {
-          continuations.delete(from - 1);
-        }
         let last;
         do {
           last = events[released];
@@ -566,11 +573,8 @@ export const startGame = (agent: string, seed?: number) =>
   call("start_game", { request: { agent, seed: seed ?? null } });
 
 /** Answers the human's decision `decision` with its candidate `index`. */
-export const choose = (
-  decision: DecisionId,
-  index: CandidateIndex,
-  continuation?: boolean,
-) => call("choose", { request: { decision, index, continuation } });
+export const choose = (decision: DecisionId, index: CandidateIndex) =>
+  call("choose", { request: { decision, index } });
 
 /** Sends a click on the open prompt of `decision`, made on its state `revision`
  * (`PromptView.revision`): the session decides what it does. Resolves to the prompt's whole
@@ -591,11 +595,6 @@ export const cancel = (decision: DecisionId) =>
  * (`DecisionView.undo`); the view of the decision it answered arrives again. */
 export const undo = (decision: DecisionId) =>
   call("undo", { request: { decision } });
-
-/** Passes the human's priority from the open decision `decision` on to their next stop
- * (`DecisionView.passOn`); the views as the game plays on arrive. */
-export const passOn = (decision: DecisionId) =>
-  call("pass_on", { request: { decision } });
 
 /** The human concedes game `session`; the view of its end arrives at the next decision. */
 export const concede = (session: SessionId) =>

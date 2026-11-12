@@ -1,4 +1,4 @@
-/* The game screen on a portrait phone (mobile/PhoneBoard.tsx), in CSS pixels: the desktop's
+/* The game screen on a portrait phone (stage/PhoneStageBoard.tsx), in CSS pixels: the desktop's
    components (design/*.css, screens.css) at phone sizes, after the prototype's DESIGN.md. Its
    values: an 8px side gutter, 48px and 60px strips, 40px buttons with 18px type, 40px icon
    buttons, the life orb at --orb 0.37px. Mobile adds no colors. */
@@ -79,18 +79,6 @@ body.phone {
   border-bottom-color: #3a332e;
 }
 
-/* The opponent's hand: a back per card peeking from the top edge, overlapping by 10px. */
-.phone-backs {
-  position: absolute;
-  right: 56px;
-  top: -10px;
-  display: flex;
-  padding-left: 10px;
-}
-.phone-backs > .card-back {
-  margin-left: -10px;
-}
-
 .phone-board .icon-button {
   width: 40px;
   height: 40px;
@@ -101,12 +89,6 @@ body.phone {
 }
 .phone-menu {
   margin-left: auto;
-}
-.phone-board .phone-payment-cancel {
-  width: 32px;
-  height: 32px;
-  margin-left: 4px;
-  font-size: 20px;
 }
 
 /* The middle: the phase icon on the gold line, glowing while it is your turn; left of the

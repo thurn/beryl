@@ -71,9 +71,9 @@ const phone = shots.find((shot) =>
 /** The layouts filmed, as verbs.mjs opens them: the desktop's window, and the first phone
  * size the shots take. */
 const LAYOUTS = {
-    desktop: { query: "stage", size: { width: 1600, height: 900 } },
+    desktop: { query: "", size: { width: 1600, height: 900 } },
     phone: {
-        query: "phone&stage",
+        query: "phone&",
         size: { width: phone.width, height: phone.height },
     },
 };

@@ -6,7 +6,7 @@
 // It is asked for as its step begins, or as the step's motion ends where it is the sound of
 // something arriving (a card placed as it lands), at that edge's stage time, and sounds then
 // or a share of the step after (a strike's hit, as its lunge lands): nothing waits a fixed
-// time. This is audio/events.ts for the stage, which takes its place at the cut-over.
+// time.
 import type {
   ObjectView,
   Side,
@@ -18,8 +18,23 @@ import type {
 import type { Edge, ScriptStage } from "../stage/stage.ts";
 import type { Act, Step as ScriptStep, Table } from "../stage/table.ts";
 import { STRIKE } from "../stage/tracks.ts";
-import { ARRIVING, THEIRS_DB } from "./events";
 import { play, type Sound } from "./sound";
+
+/** A card arriving in each zone. */
+const ARRIVING: Record<ZoneName, Sound | null> = {
+  battlefield: "place",
+  graveyard: "shove",
+  exile: "exile",
+  hand: "slide",
+  library: "fan",
+  // A spell sounds by its cast, which comes with its move to the stack.
+  stack: null,
+  // A token ceasing to exist, once its move to a graveyard has sounded.
+  nowhere: null,
+};
+
+/** How much quieter the opponent's doings are than the player's own, in decibels. */
+const THEIRS_DB = -4;
 
 /** A sound a step asks for, the edge of the step it is asked for at, and how far into the
  * step after that edge it sounds, as a share of the step's time (none: at the edge). */

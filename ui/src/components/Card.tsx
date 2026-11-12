@@ -7,14 +7,11 @@
 // card whole, never reshaping it.
 import {
   Fragment,
-  useEffect,
   useLayoutEffect,
   useRef,
-  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion, useReducedMotionConfig, type MotionStyle } from "motion/react";
 import { useCardBack } from "../cards";
 import { useTextFit } from "./fit";
 import { AbilityBadge, type AbilityMark, ManaCost, RulesText } from "./Mana";
@@ -70,8 +67,6 @@ export interface CardProps {
   variant?: "full" | "field";
   /** The card's width in pixels; its height and everything on it scale with it. */
   width?: number;
-  /** The parent animates the size during a flight between card frames. */
-  instantSize?: boolean;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -81,51 +76,10 @@ export interface CardProps {
   /** Face down (CR 708.2): the back in place of its face, its marks and stats drawn over it. */
   back?: boolean;
   className?: string;
-  /** Placement on the slot: Motion style, so `rotate` and `y` compose with layout animation. */
-  style?: MotionStyle;
-  id?: string;
+  /** Placement on the slot. */
+  style?: CSSProperties;
   /** Badges drawn over the frame, turning with it. */
   children?: ReactNode;
-}
-
-/** How a card turns as it taps or untaps, and its slot with it. */
-const TURN = { type: "spring", stiffness: 260, damping: 26 } as const;
-
-/** A card's frame in its slot, a quarter round when tapped. Where motion is switched off (the
- * stage's faces, stage/Faces.tsx: `still`) the turn is written as the face is drawn: Motion
- * applies even a change that takes no time a frame late, and for that frame the stage's own
- * turn of the card (stage.css) would add to the turn it had. */
-function Frame({
-  still,
-  tapped,
-  className,
-  style,
-  children,
-}: {
-  still: boolean;
-  tapped: boolean;
-  className: string;
-  style: { width: number; height: number };
-  children: ReactNode;
-}) {
-  return still ? (
-    <div
-      className={className}
-      style={{ ...style, transform: tapped ? "rotate(90deg)" : undefined }}
-    >
-      {children}
-    </div>
-  ) : (
-    <motion.div
-      className={className}
-      style={style}
-      initial={false}
-      animate={{ rotate: tapped ? 90 : 0 }}
-      transition={TURN}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 /** A card's width over its height, 63 by 88 millimeters. */
@@ -288,13 +242,8 @@ function stats(card: CardFace): ReactNode {
 /** A planeswalker's loyalty on the printed loyalty symbol, the shield its card prints it on
  * ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)). */
 export function Loyalty({ loyalty }: { loyalty: string }) {
-  const pop = usePop(loyalty);
   return (
-    <span
-      className={`card-loyalty ${pop ?? ""}`}
-      role="img"
-      aria-label={`Loyalty ${loyalty}`}
-    >
+    <span className="card-loyalty" role="img" aria-label={`Loyalty ${loyalty}`}>
       <span className="card-loyalty-glyph" aria-hidden>
         {"\ue628"}
       </span>
@@ -328,37 +277,18 @@ export type MarkIcon = keyof typeof MARK_ICONS;
 
 /** A mark's badge: its icon, with a count when it has one, named `label` for assistive
  * technology when it stands alone. */
-/** A class that pops a badge for a moment each time `value` changes once it has shown: a
- * loyalty ability's cost, or a counter put on or taken off, seen as it happens rather than
- * only found changed. Two classes alternate, so a change during a pop starts another. */
-function usePop(value: unknown): string | undefined {
-  const [pops, setPops] = useState(0);
-  const last = useRef(value);
-  useEffect(() => {
-    if (last.current === value) return;
-    last.current = value;
-    setPops((n) => n + 1);
-  }, [value]);
-  return pops === 0 ? undefined : `badge-pop-${pops % 2}`;
-}
-
 export function MarkBadge({
   icon,
   count,
   label,
-  pop: given,
 }: {
   icon: MarkIcon;
   count?: number;
   label?: string;
-  /** The pop of the card's counters as a whole (`usePop`): a badge new on a card in play pops
-   * as it appears. */
-  pop?: string;
 }) {
-  const pop = usePop(count) ?? given;
   return (
     <span
-      className={`mark-badge mark-${icon} ${pop ?? ""}`}
+      className={`mark-badge mark-${icon}`}
       role={label ? "img" : undefined}
       aria-label={label}
     >
@@ -375,7 +305,6 @@ export function Card({
   variant = "full",
   width = 160,
   tapped = false,
-  instantSize = false,
   highlight,
   combat,
   marks,
@@ -383,7 +312,6 @@ export function Card({
   back = false,
   className,
   style,
-  id,
   children,
 }: CardProps) {
   const height = width / CARD_ASPECT;
@@ -392,14 +320,10 @@ export function Card({
   const countOf = (kind: CounterMark) =>
     marks?.counters.find((c) => c.kind === kind)?.count ?? 0;
   const ptCounters = countOf("plusOne") - countOf("minusOne");
-  const ptPop = usePop(ptCounters);
   const otherCounters =
     marks?.counters.filter(
       (c) => c.kind !== "plusOne" && c.kind !== "minusOne",
     ) ?? [];
-  const countersPop = usePop(
-    otherCounters.map((c) => `${c.kind} ${c.count}`).join(),
-  );
   const scan = back ? undefined : card.scan;
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
@@ -438,20 +362,14 @@ export function Card({
   // layout.ts also draws a tapped frame smaller, to stand as tall as its row.)
   const frame = { width, height };
   const slot = tapped ? { width: height, height: width } : frame;
-  // With motion switched off the slot's size is the face's own, for the reason `Frame` gives.
-  const still = useReducedMotionConfig() ?? false;
   return (
-    <motion.div
-      className="card-slot"
-      style={{ fontSize: em, ...style, ...(still ? slot : undefined) }}
-      id={id}
-      initial={false}
-      animate={still ? undefined : slot}
-      transition={instantSize ? { duration: 0 } : TURN}
-    >
-      {combat === "attacker" && <AttackChevron id={id} />}
-      {combat === "blocker" && <BlockArc id={id} />}
-      <Frame still={still} tapped={tapped} className={classes} style={frame}>
+    <div className="card-slot" style={{ fontSize: em, ...style, ...slot }}>
+      {combat === "attacker" && <AttackChevron />}
+      {combat === "blocker" && <BlockArc />}
+      <div
+        className={classes}
+        style={{ ...frame, transform: tapped ? "rotate(90deg)" : undefined }}
+      >
         {back ? (
           <BackImage />
         ) : scan ? (
@@ -513,7 +431,7 @@ export function Card({
             kind, as the card's text does, with their net count past one. */}
         {ptCounters !== 0 && (
           <span
-            className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"} ${ptPop ?? ""}`}
+            className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"}`}
             role="img"
             aria-label={`${Math.abs(ptCounters)} ${ptCounters > 0 ? "+1/+1" : "-1/-1"} counters`}
           >
@@ -531,7 +449,6 @@ export function Card({
                 icon={c.kind}
                 count={c.count}
                 label={`${c.count} ${c.kind} counters`}
-                pop={countersPop}
               />
             ))}
           </span>
@@ -543,8 +460,8 @@ export function Card({
           <span className="card-count">×{count}</span>
         )}
         {children}
-      </Frame>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -556,11 +473,10 @@ const RAYS = [-34, -22, -12, 0, 12, 22, 34]
   .map((dx) => `M50 1 L${50 + dx - 1.2} 16.5 L${50 + dx + 1.2} 16.5 Z`)
   .join(" ");
 
-function AttackChevron({ id }: { id?: string }) {
+function AttackChevron() {
   const arms = "M0 17 Q30 9 50 0.5 Q70 9 100 17";
   return (
     <svg
-      id={id && `${id}-mark`}
       className="combat-marker attack-chevron"
       viewBox="0 0 100 17"
       preserveAspectRatio="none"
@@ -580,10 +496,9 @@ function AttackChevron({ id }: { id?: string }) {
   );
 }
 
-function BlockArc({ id }: { id?: string }) {
+function BlockArc() {
   return (
     <svg
-      id={id && `${id}-mark`}
       className="combat-marker block-arc"
       viewBox="0 0 100 20"
       preserveAspectRatio="none"
