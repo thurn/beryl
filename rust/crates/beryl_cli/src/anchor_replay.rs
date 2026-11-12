@@ -18,7 +18,8 @@
 //! such bias.
 //!
 //! With `--guarded`, only the decisions an anchored search guards (`beryl_search::guarded`)
-//! count; without it, every decision where greedy's answer differs.
+//! count; without it, every decision where greedy's answer differs. The baseline here is
+//! always greedy, including when counting every decision for an `anchor+expert` entrant.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -234,16 +235,8 @@ fn replay(
         let mut x = Scratch::new();
         let obs = observe(s, &t, &mut x, d.player);
         let greedy = policy.choose(&t, obs, d);
-        let counted = !only_guarded
-            || guarded(
-                &t,
-                &policy,
-                obs,
-                d,
-                greedy,
-                Choice(choice),
-                family.options.guard,
-            );
+        let counted =
+            !only_guarded || guarded(&t, &policy, obs, d, greedy, Choice(choice), family.options);
         if greedy.0 != choice && counted {
             let mean = |c: u16| {
                 let v = f64::from(search.visits[usize::from(c)]);

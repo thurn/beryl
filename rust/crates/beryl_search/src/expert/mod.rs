@@ -105,6 +105,7 @@ const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
 
 /// The expert, for one game: the table, the rollout policy it builds on and falls back to,
 /// and the stream and working memory its combat simulations use.
+#[derive(Debug)]
 pub struct ExpertAgent<L: Layout = Small> {
     table: GameTable,
     policy: RolloutPolicy,

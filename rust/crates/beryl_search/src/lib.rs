@@ -373,6 +373,7 @@ pub const DEEP_SEARCHER: Family = Family {
     knowledge: Knowledge::Tuned,
     options: Options {
         anchor: true,
+        expert: false,
         guard: true,
         mid: false,
         means: false,
@@ -385,6 +386,7 @@ pub const DEEP_SEARCHER: Family = Family {
 /// Deep Seer's options: the anchor alone.
 const ANCHORED: Options = Options {
     anchor: true,
+    expert: false,
     guard: false,
     mid: false,
     means: false,

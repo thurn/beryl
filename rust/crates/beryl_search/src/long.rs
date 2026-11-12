@@ -63,7 +63,7 @@ use crate::eval::evaluate;
 use crate::mcts::{shows_the_same, smart};
 use crate::rollout::{RolloutPolicy, Rules, Softmax, soft_rollout, soft_rollout_to};
 use crate::values::Knowledge;
-use crate::{Agent, AgentDecision, Search, Sight, Widen};
+use crate::{Agent, AgentDecision, ExpertAgent, Search, Sight, Widen};
 
 /// How the search treats what it cannot see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -108,12 +108,16 @@ impl Family {
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Options {
-    /// Where [`guarded`], greedy's answer is the root's default. The search's own choice
+    /// Where [`guarded`], the root defaults to greedy's answer (or the expert's with
+    /// [`Options::expert`]). The search's own choice
     /// replaces it only by a clear lead ([`ANCHOR_MARGIN`], [`ANCHOR_ERRORS`]), measured tree
     /// by tree after the last quarter of the work goes to the two alone. Most of a search's
     /// choices lead the runner-up by less than noise; there, a sensible default beats a coin
     /// flip.
     pub anchor: bool,
+    /// With [`Options::anchor`], use the live expert's answer as the default at every
+    /// searched decision. Used for the yardstick in docs/ai-strategy.md §6.6.
+    pub expert: bool,
     /// With [`Options::anchor`], [`guarded`] holds greedy's answer at attacker declarations,
     /// choices of up to a number of objects, and picks from the player's hand other than
     /// mulligan bottoms. At priority it holds against casts and activations scored at 0 or less.
@@ -170,10 +174,10 @@ const EXPLORATION: f64 = 0.7;
 const ROUNDS: u64 = 16;
 
 /// The rounds an anchored search grows freely before the rest goes to its choice and
-/// greedy's alone.
+/// the default answer alone.
 const FREE_ROUNDS: u64 = ROUNDS * 3 / 4;
 
-/// The least lead in mean reward over greedy's answer that lets an anchored search play its
+/// The least lead in mean reward over the default answer that lets an anchored search play its
 /// own choice instead. Below it, the rollouts' small differences are not trusted however
 /// many there are: the Deep Seer incident's Oust on its own token led passing by 0.006.
 /// Measured by `beryl_cli anchor-replay --guarded` over run-003's games of
@@ -254,8 +258,9 @@ impl FromStr for Family {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate or tuned; options anchor, guard, mid, means, \
-                 hold, waste and combat joined by + in that order, guard only with anchor)"
+                 rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
+                 means, hold, waste and combat joined by + in that order; \
+                 expert and guard require anchor)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -270,6 +275,7 @@ impl FromStr for Family {
                 for name in named.split('+') {
                     let flag = match name {
                         "anchor" => &mut o.anchor,
+                        "expert" => &mut o.expert,
                         "guard" => &mut o.guard,
                         "mid" => &mut o.mid,
                         "means" => &mut o.means,
@@ -284,7 +290,7 @@ impl FromStr for Family {
                     *flag = true;
                 }
                 // One spelling per family, so that a name read back prints as it was given.
-                if o.to_name() != *named || (o.guard && !o.anchor) {
+                if o.to_name() != *named || ((o.expert || o.guard) && !o.anchor) {
                     return Err(bad());
                 }
                 o
@@ -330,10 +336,11 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+guard+mid+means+hold+waste+combat`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
+            (self.expert, "expert"),
             (self.guard, "guard"),
             (self.mid, "mid"),
             (self.means, "means"),
@@ -361,6 +368,7 @@ impl Options {
 pub struct LongSearch<L: Layout = Small> {
     table: GameTable,
     policy: RolloutPolicy,
+    expert: Option<ExpertAgent<L>>,
     settings: Settings,
     seed: u64,
     /// The next decision's index among the agent's own.
@@ -393,6 +401,7 @@ impl<L: Layout> LongSearch<L> {
         Self {
             table: t.clone(),
             policy: family.rollout_policy(t),
+            expert: family.options.expert.then(|| ExpertAgent::new(t, seed)),
             settings,
             seed,
             decision,
@@ -465,11 +474,11 @@ impl<L: Layout> LongSearch<L> {
     }
 
     /// Grows `trees` on decision `d` to the budget, in rounds, until the leader is settled.
-    /// With greedy's answer `anchor`, the first [`FREE_ROUNDS`] grow as ever; then, if the
-    /// leader is not greedy's answer and `guards` it, the rest of the work goes to the two
+    /// With the default answer `anchor`, the first [`FREE_ROUNDS`] grow as ever; then, if the
+    /// leader differs from the default and `guards` holds, the rest of the work goes to the two
     /// alone, so that the choice between them is not made against a starved estimate.
     /// Returns the iterations run, the work they spent and the candidate checked against
-    /// greedy's answer that way, if one was.
+    /// the default answer that way, if one was.
     fn grow(
         &self,
         trees: &mut [Tree<L>],
@@ -608,14 +617,14 @@ struct Plan<'a> {
     threads: usize,
 }
 
-/// An anchored search's check of its choice against greedy's answer.
+/// An anchored search's check of its choice against the default answer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnchorCheck {
-    /// Greedy's answer.
+    /// The default answer, from the live expert for [`Options::expert`] and greedy otherwise.
     pub greedy: Choice,
     /// The search's own choice: the candidate visited most.
     pub search: Choice,
-    /// The search's choice's mean reward less greedy's, averaged over the trees that visited
+    /// The search's choice's mean reward less the default's, averaged over the trees that visited
     /// both, and the standard error of that average across them.
     pub lead: f64,
     pub error: f64,
@@ -624,7 +633,7 @@ pub struct AnchorCheck {
 }
 
 impl AnchorCheck {
-    /// Whether the search's choice leads greedy's answer clearly enough to be played instead:
+    /// Whether the search's choice leads the default answer clearly enough to be played instead:
     /// by [`ANCHOR_MARGIN`], and by [`ANCHOR_ERRORS`] standard errors where more than one tree
     /// measured it.
     #[must_use]
@@ -648,8 +657,8 @@ impl AnchorCheck {
     }
 }
 
-/// The check of choice `search` against greedy's answer `greedy` across `trees`.
-fn check<L: Layout>(trees: &[Tree<L>], search: Choice, greedy: Choice) -> AnchorCheck {
+/// The check of choice `search` against the default answer across `trees`.
+fn check<L: Layout>(trees: &[Tree<L>], search: Choice, default: Choice) -> AnchorCheck {
     let leads: Vec<f64> = trees
         .iter()
         .filter_map(|tree| {
@@ -658,12 +667,12 @@ fn check<L: Layout>(trees: &[Tree<L>], search: Choice, greedy: Choice) -> Anchor
                 let n = &tree.nodes[n as usize];
                 (n.visits > 0).then(|| n.reward / f64::from(n.visits))
             };
-            Some(mean(search)? - mean(greedy)?)
+            Some(mean(search)? - mean(default)?)
         })
         .collect();
     let (lead, error) = mean_and_error(&leads);
     AnchorCheck {
-        greedy,
+        greedy: default,
         search,
         lead,
         error,
@@ -866,6 +875,7 @@ impl Widen for LongSearch<Small> {
         LongSearch {
             table: self.table.clone(),
             policy: self.policy.clone(),
+            expert: self.expert.as_ref().map(Widen::widen),
             settings: self.settings,
             seed: self.seed,
             decision: self.decision,
@@ -877,8 +887,8 @@ impl Widen for LongSearch<Small> {
 
 impl<L: Layout> Agent<L> for LongSearch<L> {
     /// The candidate visited most across the trees, of equals the best by mean; with
-    /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], greedy's answer unless
-    /// that is clearly beaten. A decision with one
+    /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], the guarded default
+    /// answer unless it is clearly beaten. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let decision = self.decision;
@@ -899,24 +909,22 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             None => (self.plant(obs, d, decision), decision),
         };
         let inherited = trees.iter().map(Tree::visits).sum();
-        // Greedy's answer from what the player sees, never from a world the search dealt.
-        let greedy = self
-            .settings
-            .family
-            .options
-            .anchor
-            .then(|| self.policy.choose(&self.table, obs, d));
-        let guard = self.settings.family.options.guard;
+        // The default answers from the player's observation, independently of the search trees.
+        let options = self.settings.family.options;
+        let default = options.anchor.then(|| match &mut self.expert {
+            Some(expert) => expert.choose(obs, d),
+            None => self.policy.choose(&self.table, obs, d),
+        });
         let guards = |b: Choice| {
-            greedy.is_some_and(|g| guarded(&self.table, &self.policy, obs, d, g, b, guard))
+            default.is_some_and(|g| guarded(&self.table, &self.policy, obs, d, g, b, options))
         };
-        let (iterations, work, checked) = self.grow(&mut trees, greedy, guards);
+        let (iterations, work, checked) = self.grow(&mut trees, default, guards);
         let (visits, rewards) = totals(&trees);
         let best = Choice(self.pick(&trees) as u16);
         let means = crate::mcts::tree_means(visits.len(), root_stats(&trees));
-        // The candidate checked against greedy's answer after the two had the last of the work
+        // The candidate checked against the default after the two had the last of the work
         // to themselves, whichever then has more visits; else the leader, if guarded.
-        let anchor = greedy.and_then(|g| {
+        let anchor = default.and_then(|g| {
             let search = checked.or(guards(best).then_some(best))?;
             Some(check(&trees, search, g))
         });
@@ -951,6 +959,10 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     }
 
     fn resume_point(&self) -> Option<AgentDecision> {
+        if self.expert.is_some() {
+            // Match replay must rebuild the expert's combat plan and random stream too.
+            return Some(AgentDecision(0));
+        }
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
     }
 
@@ -960,6 +972,9 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
 
     fn rewind(&mut self, to: AgentDecision) {
         self.decision = to;
+        if self.expert.is_some() {
+            self.expert = Some(ExpertAgent::new(&self.table, self.seed));
+        }
         self.kept = None;
         self.last = None;
     }
@@ -1376,7 +1391,7 @@ impl<L: Layout> Tree<L> {
     }
 }
 
-/// Whether an anchored search ([`Options::anchor`]) plays greedy's answer `greedy` to
+/// Whether an anchored search ([`Options::anchor`]) plays the default answer to
 /// decision `d`, seen in `obs`, over its own choice `search` unless that choice leads
 /// clearly. Without `guard` this covers a cast where greedy would pass, as Deep Seer once cast
 /// Oust on its own token. Not spending a card on a coin flip is nearly free. Elsewhere
@@ -1395,25 +1410,30 @@ impl<L: Layout> Tree<L> {
 /// a number of objects, and picks from the player's own hand except for mulligan bottoms.
 /// At priority, hold against a cast or activation scored at 0 or less by the rollout policy,
 /// regardless of greedy's answer, with the same `never_cast` exemption.
+///
+/// With [`Options::expert`], hold the expert's answer at every decision.
 pub fn guarded<L: Layout>(
     t: &GameTable,
     policy: &RolloutPolicy,
     obs: Observation<'_, L>,
     d: &Decision<L>,
-    greedy: Choice,
+    default: Choice,
     search: Choice,
-    guard: bool,
+    options: Options,
 ) -> bool {
+    if options.expert {
+        return search != default;
+    }
     let eligible = |slot: L::Slot| {
         obs.card(slot)
             .is_none_or(|card| !policy.values().get(card).never_cast)
     };
-    if !guard {
+    if !options.guard {
         return d.kind == DecisionKind::Priority
-            && d.candidates.option(greedy) == Some(Opt::Pass)
+            && d.candidates.option(default) == Some(Opt::Pass)
             && matches!(d.candidates.option(search), Some(Opt::Cast { slot, .. }) if eligible(slot));
     }
-    if search == greedy {
+    if search == default {
         return false;
     }
     match d.kind {
@@ -1735,6 +1755,8 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+hold",
             "pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat",
             "pimc72/hidden/rollout/tuned/anchor+guard+mid+means+hold+waste+combat",
+            "pimc72/hidden/rollout/tuned/anchor+expert",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1756,6 +1778,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/guard+mid",
             "pimc18/hidden/rollout/tuned/guard+anchor",
             "pimc18/hidden/rollout/tuned/hold+anchor",
+            "pimc18/hidden/rollout/tuned/expert",
+            "pimc18/hidden/rollout/tuned/anchor+guard+expert",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
@@ -1925,7 +1949,7 @@ mod tests {
         let holds = |s: &State, d: &Decision, x: &mut Scratch| {
             let obs = observe(s, &t, x, d.player);
             let g = policy.choose(&t, obs, d);
-            (0..d.len()).any(|i| guarded(&t, &policy, obs, d, g, Choice(i as u16), false))
+            (0..d.len()).any(|i| guarded(&t, &policy, obs, d, g, Choice(i as u16), anchor))
         };
         let mut scratch = Scratch::new();
         let chosen: Vec<(State, Decision)> = (2..12)
@@ -1947,14 +1971,14 @@ mod tests {
             let greedy = policy.choose(&t, obs, &d);
             if let Some(a) = search.anchor {
                 assert_eq!(a.greedy, greedy);
-                assert!(guarded(&t, &policy, obs, &d, greedy, a.search, false));
+                assert!(guarded(&t, &policy, obs, &d, greedy, a.search, anchor));
                 assert_eq!(c, a.played());
                 if c != greedy {
                     assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
                 }
                 checked += 1;
             } else {
-                assert!(c == greedy || !guarded(&t, &policy, obs, &d, greedy, c, false));
+                assert!(c == greedy || !guarded(&t, &policy, obs, &d, greedy, c, anchor));
                 assert_eq!(c, free, "unguarded, it plays as the plain search");
             }
         }
@@ -2004,9 +2028,16 @@ mod tests {
                             let crypt = obs
                                 .card(slot)
                                 .is_some_and(|card| t.def(card).name == names::MANA_CRYPT);
-                            assert_eq!(guarded(&t, &policy, obs, &d, g, c, false), !crypt);
+                            assert_eq!(
+                                guarded(&t, &policy, obs, &d, g, c, Options::default()),
+                                !crypt
+                            );
                             if crypt {
-                                assert!(!guarded(&t, &policy, obs, &d, g, c, true));
+                                let options = Options {
+                                    guard: true,
+                                    ..Options::default()
+                                };
+                                assert!(!guarded(&t, &policy, obs, &d, g, c, options));
                                 never += 1;
                             } else {
                                 other += 1;
@@ -2047,6 +2078,11 @@ mod tests {
         let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
         let policy = RolloutPolicy::new(&t);
         let mut x = Scratch::new();
+        let options = Options {
+            anchor: true,
+            guard: true,
+            ..Options::default()
+        };
         let mut remaining = BTreeSet::from([
             "attacker",
             "attack target",
@@ -2064,7 +2100,7 @@ mod tests {
                 let obs = observe(&s, &t, &mut x, d.player);
                 let view = policy.view(&t, obs, d.player, false);
                 let hand = obs.zone(ZoneKey::Of(d.player, Zone::Hand));
-                assert!(!guarded(&t, &policy, obs, &d, g, g, true));
+                assert!(!guarded(&t, &policy, obs, &d, g, g, options));
                 for i in 0..d.len() {
                     let c = Choice(i as u16);
                     if c == g {
@@ -2112,7 +2148,7 @@ mod tests {
                         _ => ("other decision", false),
                     };
                     assert_eq!(
-                        guarded(&t, &policy, obs, &d, g, c, true),
+                        guarded(&t, &policy, obs, &d, g, c, options),
                         expected,
                         "{case}"
                     );
@@ -2167,8 +2203,56 @@ mod tests {
                 }
                 None => assert_eq!(c, greedy, "unchecked, the search agreed with greedy"),
             }
-            assert!(c == greedy || guarded(&t, &policy, obs, &d, greedy, c, true));
+            assert!(
+                c == greedy || guarded(&t, &policy, obs, &d, greedy, c, settings.family.options)
+            );
         }
         assert!(checked > 0, "no attacker decision checked");
+    }
+
+    #[test]
+    fn an_expert_anchored_search_checks_nonpriority_choices() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let settings = Settings {
+            family: "pimc2/hidden/rollout/tuned/anchor+expert".parse().unwrap(),
+            work: 8_000,
+            threads: 1,
+        };
+        let mut x = Scratch::new();
+        let (mut held, mut overruled) = (0, 0);
+        for (s, d, greedy) in (0..12).flat_map(|seed| greedy_decisions(&t, seed)) {
+            if d.len() < 2 || matches!(d.kind, DecisionKind::Priority | DecisionKind::Attacker) {
+                continue;
+            }
+            let obs = observe(&s, &t, &mut x, d.player);
+            let expert = ExpertAgent::new(&t, 5).choose(obs, &d);
+            if expert == greedy {
+                continue;
+            }
+            let mut anchored = LongSearch::new(&t, settings, 5);
+            let choice = anchored.choose(obs, &d);
+            if let Some(check) = anchored.last_search().expect("searched").anchor {
+                assert_eq!(check.greedy, expert);
+                assert_ne!(check.search, expert);
+                if choice == expert {
+                    assert!(!check.overrides());
+                    held += 1;
+                } else {
+                    assert_eq!(choice, check.search);
+                    assert!(check.overrides());
+                    overruled += 1;
+                }
+            } else {
+                assert_eq!(choice, expert);
+            }
+            if held > 0 && overruled > 0 {
+                break;
+            }
+        }
+        assert!(held > 0, "no disagreement held the expert's answer");
+        assert!(
+            overruled > 0,
+            "no disagreement overruled the expert's answer"
+        );
     }
 }

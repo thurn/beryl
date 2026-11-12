@@ -6,9 +6,10 @@ mod common;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Decision, GameTable, Observation, Profile, Scratch, Seat, Slot, State, Zone, ZoneKey, observe,
+    Decision, GameTable, Observation, Profile, Replay, Scratch, Seat, Slot, State, Step, Zone,
+    ZoneKey, apply, next, observe,
 };
-use beryl_search::{Agent, Family, GreedyAgent, LongSearch, Search, Settings};
+use beryl_search::{Agent, AgentDecision, Family, GreedyAgent, LongSearch, Search, Settings};
 use common::{mirror, play};
 
 /// Positions from a greedy mirror game with more than two candidates, `from_end` such
@@ -163,6 +164,33 @@ fn every_family_plays_a_game_to_its_end() {
         });
         assert!(decisions > 20, "{family}: {decisions} decisions");
     }
+}
+
+#[test]
+fn expert_anchored_search_replays_a_game_from_its_seed() {
+    let t = mirror();
+    let settings = settings("pimc2/hidden/cut1/tuned/anchor+expert", 600, 1);
+    let mut s = State::new(&t, 4, Profile::SMART).unwrap();
+    let mut x = Scratch::new();
+    let mut first = LongSearch::new(&t, settings, 5);
+    let mut replay = LongSearch::resumed(&t, settings, 5, AgentDecision(0));
+    let mut opponent = GreedyAgent::new(&t);
+    let mut checked = 0;
+    while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
+        let obs = observe(&s, &t, &mut x, d.player);
+        let choice = if d.player == Seat::BOTH[0] {
+            let choice = first.choose(obs, &d);
+            assert_eq!(choice, replay.choose(obs, &d));
+            assert_eq!(first.last_search(), replay.last_search());
+            assert_eq!(first.resume_point(), Some(AgentDecision(0)));
+            checked += usize::from(first.last_search().is_some_and(|s| s.anchor.is_some()));
+            choice
+        } else {
+            opponent.choose(obs, &d)
+        };
+        apply(&mut s, &t, &mut x, &mut Replay, choice);
+    }
+    assert!(checked > 0, "the game must exercise the anchor");
 }
 
 #[test]

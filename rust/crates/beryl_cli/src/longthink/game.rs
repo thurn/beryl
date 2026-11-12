@@ -2,11 +2,12 @@
 //! made; a resumed game replays from its seed through the logged answers at engine speed and
 //! asks its agents again only where the log ends.
 //!
-//! A search keeps no running state a replay could lose: its trees are seeded from the
-//! agent's seed and the decision's index ([`LongSearch::resumed`]). Its logged answers are taken
+//! A search's trees are seeded from the agent's seed and the decision's index
+//! ([`LongSearch::resumed`]). Its logged answers are taken
 //! as they stand up to the point its last logged line says a rebuilt agent must start
 //! from: the next decision, or, inside a chain of decisions reusing one search's trees, the
-//! decision that planted them, re-searched from there to the same answers. Every other
+//! decision that planted them, re-searched from there to the same answers. The expert yardstick
+//! starts at the first decision to rebuild its combat plan and random stream. Every other
 //! agent is asked again for real, cheaply and deterministically, so its own state follows
 //! the game. A replayed answer that differs from the logged one stops the game: the binary
 //! no longer plays as the run did.
