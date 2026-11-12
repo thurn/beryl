@@ -320,8 +320,9 @@ recordings do not show them.
   total's rim. A touch on a graveyard, or on a library with a known card, lists
   its cards; a touch on a card shows it whole, and a touch beside it puts it
   away. The turn's banner crosses the middle band, a combat step's lies under
-  the opponent's strip, and a scry's pill beside its player's strip. A prompt
-  picked on the table is the desktop's: the button it puts forward stands in the
+  the opponent's strip, and a scry's pill beside its player's lands, past the
+  end of their row; a coin is tossed just above the middle band. A prompt picked
+  on the table is the desktop's: the button it puts forward stands in the
   player's strip where the turn button is, with the one that passes on beside
   it; what it asks is a pill over that strip, and its other buttons are stacked
   over the turn button. A touch on a card the prompt can use uses it, and one it
@@ -449,14 +450,16 @@ held to by `just motion`.
   38:37.0). Beryl: 800 ms, in place.
 - **announce.** A notice passes over the table: the turn banner, the pill that
   says what a scry did, a coin tossed. Play goes on under the banner and the
-  pill, which fade in, stand and fade out, the banner sinking toward its player
-  as it goes. A coin is waited for: it turns in the air, lands, and only then
-  says who won. "Your Turn" or "Opponent's Turn" glows at the centre for about a
-  second while cards move under it. A pill above an avatar reads "Scry: 1 top, 1
-  bottom." for about 3 s. A coin a card flips is tossed mid-table and lands in
-  about 1.2 s (IEXcjBn3BXk 19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3,
-  IHPV6yRaFlk 52:54.6, SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Beryl: 1200
-  ms, 116 ms after its cause, in place.
+  pill, which are drawn over the cards in flight and fade in, stand and fade
+  out, the banner sinking toward its player as it goes. A coin is waited for: it
+  is thrown mid-table, rises toward the viewer turning fast, slows as it falls
+  back onto its plate, lands with a swell and a flare, and only then says who
+  won, which stands for the rest of its step. "Your Turn" or "Opponent's Turn"
+  glows at the centre for about a second while cards move under it. A pill above
+  an avatar reads "Scry: 1 top, 1 bottom." for about 3 s. A coin a card flips is
+  tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk 19:35.7, WCknTZNbraE
+  16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6, SN9QFe2kM4Y 14:52.7,
+  WCknTZNbraE 16:42.0). Beryl: 1200 ms, 116 ms after its cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
   attacker to what it attacks, from a blocker to its attacker. An arrow at a

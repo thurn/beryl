@@ -264,7 +264,13 @@ export function PhoneStageBoard({
             piles={piles}
             onOpen={({ side, zone }) => setSheet({ side, zone })}
           />
-          <Notices stage={stage} view={view} table={table} bands={bands} />
+          <Notices
+            stage={stage}
+            view={view}
+            table={table}
+            bands={bands}
+            width={viewport?.width ?? 0}
+          />
           <PhonePromptOver
             asked={asked}
             {...answers}

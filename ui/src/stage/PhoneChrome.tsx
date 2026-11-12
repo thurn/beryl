@@ -4,7 +4,7 @@
 // the bug report; a touch on a pile lists its cards, and a touch on a card inspects it; undo
 // and full control's mark stand at the end of the middle band; announcements pass over the
 // table for as long as their steps play.
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { requestBugReport } from "../components/BugReport";
 import { Button } from "../components/Controls";
 import type {
@@ -284,22 +284,28 @@ export function MiddleEnd({
   );
 }
 
+/** How wide a scry's pill is at most, and how far it stands off the row it lies beside. */
+const PILL = { width: 156, gap: 8 };
+
 /** What is announced, over the table: the turn across the middle band, a combat step or a coin's
- * flip under the opponent's strip, and what a scry did beside its player's strip. The combat
+ * flip under the opponent's strip, and what a scry did beside its player's lands. The combat
  * banner, which no step announces, keeps the desktop's timer. */
 export function Notices({
   stage,
   view,
   table,
   bands,
+  width,
 }: {
   stage: ScriptStage;
   /** The view last played out. */
   view: PlayerView;
   table: PlayerView;
   bands: Bands;
+  /** The stage's width, in its own pixels. */
+  width: number;
 }) {
-  const { notices } = stage.shown;
+  const { notices, resting } = stage.shown;
   const coin = announced(notices, "coin");
   const scry = announced(notices, "scry");
   const turn = announced(notices, "turn");
@@ -309,6 +315,31 @@ export function Notices({
   );
   const banner = coin ? coinBanner(coin, table) : combat;
   const middle = bands.middle.top + bands.middle.height / 2;
+  /** Where a pill lies beside `side`'s lands: past the end of their row, on whichever side
+   * of it has the room, so that it covers no permanent while play goes on under it. None
+   * where the row leaves no room, when it lies at the strip's edge as before. */
+  const beside = (side: Side): CSSProperties | undefined => {
+    const band = side === "you" ? bands.yourLands : bands.opponentLands;
+    let [left, right] = [Infinity, -Infinity];
+    for (const { pose, dress, object } of resting.values()) {
+      const within = pose.y >= band.top - 1 && pose.y < band.top + band.height;
+      if (dress.zone !== "battlefield" || !within) continue;
+      left = Math.min(left, pose.x);
+      // A tapped card lies on its long side.
+      right = Math.max(right, pose.x + pose.width * (object?.tapped ? 1.4 : 1));
+    }
+    const top = band.top + band.height / 2;
+    const row = { top, translate: "0 -50%" };
+    if (right === -Infinity)
+      return { ...row, left: "50%", translate: "-50% -50%" };
+    if (right + PILL.gap + PILL.width <= width) {
+      return { ...row, left: right + PILL.gap };
+    }
+    if (left - PILL.gap - PILL.width >= 0) {
+      return { ...row, left: left - PILL.gap, translate: "-100% -50%" };
+    }
+    return undefined;
+  };
   const edge = (side: Side) =>
     side === "you"
       ? bands.yourStrip.top - 30
@@ -335,7 +366,9 @@ export function Notices({
         <div
           className="phone-pill stage-notice-scry"
           role="status"
-          style={{ top: edge(scry.notice.player) }}
+          style={
+            beside(scry.notice.player) ?? { top: edge(scry.notice.player) }
+          }
         >
           {scryWords(scry.notice)}
         </div>

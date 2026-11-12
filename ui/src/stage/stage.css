@@ -350,25 +350,41 @@
 }
 /* A coin a card flips, mid-table and over the cards, as the turn's banner is (Arena tosses
    its own there, `WCknTZNbraE 16:42.0`), just above that banner's band, which may still be
-   going as an upkeep's coin is tossed: the plate comes up with the coin turning in the air
-   over it, rising and falling back; the coin swells and settles as it lands, half way
-   through, and only then does the plate say who won. */
+   going as an upkeep's coin is tossed. The coin is thrown: for the first third of its step
+   it is in the air, rising toward the viewer and falling back, its shadow left on the plate
+   under it, turning fast as it leaves and slowing as it comes down; it lands with a swell
+   and a flare, and only then does the plate say who won, which stands for the rest. The
+   skin's own landing (design/components/mana-pool-and-coin.css) is off. */
 .step-banner.stage-notice {
   --through: var(--notice-coin, 0);
-  --aloft: min(1, var(--through) / 0.5);
-  --landed: clamp(0, (var(--through) - 0.5) / 0.15, 1);
+  --aloft: min(1, var(--through) / 0.33);
+  --up: sin(var(--aloft) * 180deg);
+  --landed: clamp(0, (var(--through) - 0.33) / 0.09, 1);
+  --swell: sin(var(--landed) * 180deg);
   top: 292px;
   z-index: 2600;
   opacity: min(
     1,
-    var(--through) / 0.08,
-    (1 - var(--through)) / 0.12
+    var(--through) / 0.06,
+    (1 - var(--through)) / 0.08
   ) !important;
 }
 .stage-notice .step-banner-coin {
-  translate: 0 calc(sin(var(--aloft) * 180deg) * -18px);
-  transform: scaleX(cos(var(--aloft) * 900deg));
-  scale: calc(1 + 0.4 * sin(var(--landed) * 180deg));
+  animation: none;
+  translate: 0 calc(var(--up) * -42px);
+  scale: calc(1 + 0.3 * var(--up) + 0.14 * var(--swell));
+  transform: scaleX(
+    cos((1 - (1 - var(--aloft)) * (1 - var(--aloft))) * 1080deg)
+  );
+  filter: drop-shadow(
+      0 calc(var(--up) * 42px / (1 + 0.3 * var(--up)))
+        calc(1px + var(--up) * 4px) rgb(0 0 0 / 55%)
+    )
+    drop-shadow(0 0 calc(var(--swell) * 10px) rgb(255 236 190 / 95%))
+    brightness(calc(1 + 0.8 * var(--swell)));
+}
+.stage-notice .step-banner-detail {
+  opacity: clamp(0, (var(--through) - 0.38) / 0.06, 1);
 }
 /* A phone's banners are placed by its bands (stage/PhoneChrome.tsx). The phase icon in the
    middle band would show through its turn banner as that fades: it gives way for as long
@@ -383,9 +399,6 @@
   opacity: calc(
     1 - min(1, var(--notice-turn, 0) / 0.04, (1 - var(--notice-turn, 0)) / 0.04)
   );
-}
-.stage-notice .step-banner-detail {
-  opacity: clamp(0, (var(--through) - 0.5) / 0.1, 1);
 }
 /* The marks (UI Conventions, Marks; stage/spans.ts): each of the six has its one look, here and
    nowhere else, drawn by an element of the stage's inside what is marked, as large as its card,
