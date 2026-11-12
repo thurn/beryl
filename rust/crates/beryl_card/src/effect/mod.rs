@@ -40,7 +40,7 @@ use crate::continuous::{Duration, Modification, RuleChange};
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::ids::Zone;
-use crate::index::SpecIx;
+use crate::index::{AbilityIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::Takes;
 
@@ -262,6 +262,46 @@ pub enum Effect {
         card: Objects,
         free: bool,
     },
+    /// "[Player] untaps up to [count] [permanents]", of their choice as the instruction is
+    /// reached
+    /// ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)): "To untap a
+    /// permanent, rotate it back to the upright position from a sideways position. Only
+    /// tapped permanents can be untapped." The permanents are any the expression names,
+    /// whoever controls them.
+    UntapUpTo {
+        player: Players,
+        count: Amount,
+        permanents: Objects,
+    },
+    /// "[When], [effect]", said in the middle of an effect: creates a delayed triggered
+    /// ability
+    /// ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)): "Delayed triggered
+    /// abilities are created during the resolution of spells or abilities". Its controller
+    /// is the player who controls what is resolving
+    /// ([CR 603.7d](https://yawgatog.com/resources/magic-rules/#R6037d),
+    /// [CR 603.7e](https://yawgatog.com/resources/magic-rules/#R6037e)), and its source is
+    /// that spell or that ability's source.
+    ///
+    /// The ability is one of its face's, written with a delayed trigger
+    /// ([`crate::Trigger::next`]) and named here by its place among them: a game keeps a
+    /// waiting ability as its card, face and place. `carrying` is a number settled as this
+    /// instruction is reached
+    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)), which the delayed
+    /// ability reads when it resolves, as "add an amount of {C} equal to that spell's mana
+    /// value".
+    Delay {
+        ability: AbilityIx,
+        carrying: Amount,
+    },
+    /// "[Player] gets an emblem with [abilities]"
+    /// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "This means that
+    /// [player] puts an emblem with [ability] into the command zone. The emblem is both
+    /// owned and controlled by that player." The emblem's definition is its abilities; its
+    /// card lists it among what it creates ([`CardDef::tokens`]).
+    GetEmblem {
+        player: Players,
+        emblem: &'static CardDef,
+    },
     /// "[Player] wins the game"
     /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
     /// state that a player wins the game."
@@ -290,7 +330,8 @@ impl Effect {
             | Effect::Unless { .. }
             | Effect::Discard { .. }
             | Effect::Scry { .. }
-            | Effect::Explore(_) => true,
+            | Effect::Explore(_)
+            | Effect::UntapUpTo { .. } => true,
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -333,6 +374,8 @@ impl Effect {
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
             | Effect::MayCast { .. }
+            | Effect::Delay { .. }
+            | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_) => false,
         }
@@ -414,6 +457,9 @@ impl Effect {
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
             | Effect::MayCast { .. }
+            | Effect::UntapUpTo { .. }
+            | Effect::Delay { .. }
+            | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_) => false,
         }
@@ -497,6 +543,12 @@ impl Effect {
             Effect::DealDamage { to, amount } => to.names_paid() || amount.names_paid(),
             Effect::MayCast { player, card, .. } => player.names_paid() || card.names_paid(),
             Effect::ChangeRule { .. } => false,
+            Effect::UntapUpTo {
+                player,
+                count,
+                permanents,
+            } => player.names_paid() || count.names_paid() || permanents.names_paid(),
+            Effect::Delay { carrying, .. } => carrying.names_paid(),
             Effect::Draw { player, count }
             | Effect::Discard { player, count }
             | Effect::Mill { player, count }
@@ -520,6 +572,7 @@ impl Effect {
                 objects.names_paid() || count.names_paid()
             }
             Effect::AddMana { player, .. }
+            | Effect::GetEmblem { player, .. }
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player) => player.names_paid(),

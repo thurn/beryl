@@ -231,6 +231,21 @@ impl Effect {
                 player.filters(visit);
                 effect.filters(visit);
             }
+            _ => self.operands(visit),
+        }
+    }
+
+    /// The filters of one instruction's operands, where it holds no other instruction.
+    fn operands(&self, visit: Visit) {
+        match self {
+            // Those that hold others, which `filters` takes apart, and a rule change, whose
+            // rule is the ability's, walked with it (`Ability::rule`).
+            Effect::Sequence(_)
+            | Effect::If { .. }
+            | Effect::May { .. }
+            | Effect::Unless { .. }
+            | Effect::ForEachPlayer { .. }
+            | Effect::ChangeRule { .. } => {}
             Effect::Counter(objects)
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -250,8 +265,6 @@ impl Effect {
                 player.filters(visit);
                 card.filters(visit);
             }
-            // Its rule is the ability's, walked with it (`Ability::rule`).
-            Effect::ChangeRule { .. } => {}
             Effect::Modify {
                 objects,
                 modification,
@@ -298,7 +311,19 @@ impl Effect {
                 objects.filters(visit);
                 count.filters(visit);
             }
+            Effect::UntapUpTo {
+                player,
+                count,
+                permanents,
+            } => {
+                player.filters(visit);
+                count.filters(visit);
+                permanents.filters(visit);
+            }
+            // The delayed ability is one of the face's, walked with them.
+            Effect::Delay { carrying, .. } => carrying.filters(visit),
             Effect::AddMana { player, .. }
+            | Effect::GetEmblem { player, .. }
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player) => {

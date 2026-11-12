@@ -5,65 +5,59 @@
 //! −8: You get an emblem with 'Whenever you draw a card, exile target permanent an opponent
 //! controls.'"
 
-use beryl_card::effect::build::{TARGET, exile, put_into_library};
-use beryl_card::{Effect, LibraryPosition, Players};
-use beryl_engine::TurnStep;
-use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Supertypes,
-    TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    TARGET, YOU, delay, draw, exile, get_emblem, put_into_library, sequence, untap_up_to,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Effect, Face, Filter, LibraryPosition, Objects, Players, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TurnStep, Types, Zone, card, mana,
+};
 
-/// The index of the delayed untap among the face's abilities.
-const UNTAP: AbilityIx = AbilityIx::new(3);
+/// The place of the delayed untap among the face's abilities.
+const UNTAP: u8 = 3;
 
-pub static CARD: CardDef = CardDef {
-    name: names::TEFERI_HERO_OF_DOMINARIA,
-    faces: &[Face {
-        cost: ManaCost::new(3, [1, 1, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::PLANESWALKER,
-        subtypes: Subtypes::of(&[Subtype::Teferi]),
-        colors: Colors::WHITE.union(Colors::BLUE),
-        loyalty: Some(4),
-        abilities: &[
-            Ability::loyalty(1).custom(bodies!(draw_and_delay)),
+pub static CARD: CardDef = card(
+    names::TEFERI_HERO_OF_DOMINARIA,
+    &[Face::EMPTY
+        .cost(mana("{3}{W}{U}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::PLANESWALKER)
+        .subtypes(Subtypes::of(&[Subtype::Teferi]))
+        .colors(Colors::WHITE.union(Colors::BLUE))
+        .loyalty(4)
+        .abilities(&[
+            Ability::loyalty(1).effect(&DRAW_AND_DELAY),
             Ability::loyalty(-3)
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )])
                 .effect(&THIRD_FROM_THE_TOP),
-            Ability::loyalty(-8).custom(bodies!(emblem)),
+            Ability::loyalty(-8).effect(&get_emblem(YOU, &EMBLEM)),
             Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
-                .custom(bodies!(untap_two_lands))
-                .pauses(),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[&EMBLEM],
-};
+                .effect(&UNTAP_TWO_LANDS),
+        ])],
+)
+.creating(&[&EMBLEM]);
 
 /// The emblem of the −8 ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An
 /// emblem is a marker used to represent an object that has one or more abilities, but usually
-/// no other characteristics."
-pub static EMBLEM: CardDef = CardDef {
-    name: "Teferi, Hero of Dominaria Emblem",
-    faces: &[Face {
-        abilities: &[Ability::triggered(&Trigger::draws(Players::You))
+/// no other characteristics." Teferi's controller gets it
+/// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "This means that [player]
+/// puts an emblem with [ability] into the command zone. The emblem is both owned and
+/// controlled by that player."
+pub static EMBLEM: CardDef = card(
+    "Teferi, Hero of Dominaria Emblem",
+    &[
+        Face::EMPTY.abilities(&[Ability::triggered(&Trigger::draws(Players::You))
             .effect(&EXILE_TARGET)
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Whose(&Players::EachOpponent),
-            )])],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            )])]),
+    ],
+);
 
 /// "+1: Draw a card. At the beginning of the next end step, untap up to two lands." The second
 /// sentence creates a delayed triggered ability
@@ -72,16 +66,17 @@ pub static EMBLEM: CardDef = CardDef {
 /// triggered ability creates a delayed triggered ability, the source of that delayed
 /// triggered ability is the same as the source of that other ability." It triggers whether or
 /// not Teferi is still on the battlefield, since it refers to no object.
-fn draw_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.draw(ctx.controller(), 1);
-    ctx.delay(UNTAP, 0);
-    Ok(())
-}
+static DRAW_AND_DELAY: Effect = sequence(&[draw(YOU, 1), delay(UNTAP)]);
 
 /// "Untap up to two lands": any lands, whoever controls them, chosen as it resolves.
-fn untap_two_lands<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.untap_up_to_lands(2)
-}
+static UNTAP_TWO_LANDS: Effect = untap_up_to(
+    YOU,
+    2,
+    Objects::All {
+        zone: Zone::Battlefield,
+        filter: Filter::Types(Types::LAND),
+    },
+);
 
 /// "−3: Put target nonland permanent into its owner's library third from the top." Under two
 /// cards, or on the bottom of a library with fewer
@@ -90,15 +85,6 @@ fn untap_two_lands<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// cards in it, the player puts that card on the bottom of that library." It goes to its
 /// owner's library ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)).
 static THIRD_FROM_THE_TOP: Effect = put_into_library(TARGET, LibraryPosition::FromTop(3));
-
-/// "−8: You get an emblem with ..."
-/// [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that [player]
-/// puts an emblem with [ability] into the command zone. The emblem is both owned and
-/// controlled by that player."
-fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_emblem(ctx.controller(), &EMBLEM);
-    Ok(())
-}
 
 /// "Whenever you draw a card, exile target permanent an opponent controls."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,

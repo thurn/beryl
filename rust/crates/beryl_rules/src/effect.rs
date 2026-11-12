@@ -17,7 +17,7 @@ use crate::card::{
     Prompt, RuleChange, Stop, Types,
 };
 use crate::event::{Reason, Recipient, Sink, TokenEntry};
-use crate::filter::Filter;
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -586,8 +586,11 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// [`tap::untap_up_to`]: this ability's controller untaps up to `n` lands.
     pub fn untap_up_to_lands(&mut self, n: u8) -> Flow {
-        let (you, lands) = (self.controller(), Filter::Types(Types::LAND));
-        tap::untap_up_to(&mut self.game, &mut self.resolution, you, lands, n)
+        let (s, you) = (&*self.game.state, self.controller());
+        let battlefield = s.in_zone(Zone::Battlefield);
+        let lands = Filter::Types(Types::LAND).select(s, self.game.table, battlefield, you);
+        tap::untap_up_to(&mut self.game, &mut self.resolution, you, lands, n)?;
+        Ok(())
     }
 
     /// [`coins::flip`], for this ability's source.

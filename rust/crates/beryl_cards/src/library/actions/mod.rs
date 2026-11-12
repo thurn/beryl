@@ -2,3 +2,4 @@
 
 pub mod counter;
 pub mod explore;
+pub mod tap;

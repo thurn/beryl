@@ -46,6 +46,9 @@ pub enum Malformed {
     /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
     /// puts a countered spell instead of its owner's graveyard.
     Countered,
+    /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
+    /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it.
+    Delayed,
 }
 
 impl Malformed {
@@ -64,6 +67,9 @@ impl Malformed {
                 "a target of effect data declares what it takes: the data says so itself"
             }
             Malformed::Countered => "a countered spell is put somewhere other than exile",
+            Malformed::Delayed => {
+                "an effect delays an ability that is not a delayed trigger of its face"
+            }
         }
     }
 }
@@ -203,6 +209,21 @@ impl Scope<'_> {
                 };
                 both(self.players(players), each.effect(effect))
             }
+            _ => self.instruction(effect),
+        }
+    }
+
+    /// One instruction that holds no other.
+    const fn instruction(self, effect: &Effect) -> Checked {
+        match effect {
+            // Those that hold others, which `effect` takes apart, and a rule change, whose
+            // rule is the ability's own (`Ability::effect`).
+            Effect::Sequence(_)
+            | Effect::If { .. }
+            | Effect::May { .. }
+            | Effect::Unless { .. }
+            | Effect::ForEachPlayer { .. }
+            | Effect::ChangeRule { .. } => Ok(()),
             Effect::Counter(objects)
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -223,8 +244,6 @@ impl Scope<'_> {
                 both(to, self.amount(amount))
             }
             Effect::MayCast { player, card, .. } => both(self.players(player), self.objects(card)),
-            // The rule it starts is the ability's own (`Ability::effect`).
-            Effect::ChangeRule { .. } => Ok(()),
             Effect::Draw { player, count }
             | Effect::Discard { player, count }
             | Effect::Mill { player, count }
@@ -271,9 +290,31 @@ impl Scope<'_> {
                 modification,
                 ..
             } => both(self.objects(objects), self.modification(modification)),
-            Effect::FlipCoin(player) | Effect::WinGame(player) | Effect::LoseGame(player) => {
-                self.players(player)
+            Effect::UntapUpTo {
+                player,
+                count,
+                permanents,
+            } => both(
+                self.players(player),
+                both(self.amount(count), self.objects(permanents)),
+            ),
+            Effect::Delay { ability, carrying } => {
+                let abilities = self.face.abilities;
+                let delayed = ability.index() < abilities.len()
+                    && match abilities[ability.index()].trigger() {
+                        Some(trigger) => trigger.delayed,
+                        None => false,
+                    };
+                if delayed {
+                    self.amount(carrying)
+                } else {
+                    Err(Malformed::Delayed)
+                }
             }
+            Effect::GetEmblem { player, .. }
+            | Effect::FlipCoin(player)
+            | Effect::WinGame(player)
+            | Effect::LoseGame(player) => self.players(player),
         }
     }
 
@@ -404,10 +445,13 @@ mod tests {
     use crate::cost::CastingKind;
     use crate::effect::build::{
         TARGET, TARGET_PLAYER, THAT_PLAYER, YOU, add_mana, counter_and_exile, deal_damage_to,
-        destroy, draw, explore, for_each_player, if_then, may_cast_free,
+        delay, destroy, draw, explore, for_each_player, get_emblem, if_then, may_cast_free,
+        untap_up_to,
     };
+    use crate::ids::TurnStep;
     use crate::mana::{ManaColor, ManaSet};
     use crate::target::TargetSpec;
+    use crate::trigger::Trigger;
 
     const A_CREATURE: TargetSpec = TargetSpec::one(TargetKind::Permanent, Filter::Any);
     const A_PLAYER: TargetSpec = TargetSpec::one(TargetKind::Player, Filter::Any);
@@ -521,6 +565,24 @@ mod tests {
         assert_eq!(checked(DISSIPATE), Ok(()));
     }
 
+    #[test]
+    fn a_delay_of_no_delayed_trigger_of_the_face_is_refused() {
+        const AT_THE_NEXT_END_STEP: Ability =
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+                .effect(&draw(YOU, 1));
+        const PAST_THE_END: &[Ability] = &[Ability::spell().effect(&delay(1))];
+        const ITSELF: &[Ability] = &[Ability::spell().effect(&delay(0)), AT_THE_NEXT_END_STEP];
+        const PRINTED: &[Ability] = &[
+            Ability::spell().effect(&delay(1)),
+            Ability::triggered(&Trigger::ENTERS).effect(&draw(YOU, 1)),
+        ];
+        const WELL_FORMED: &[Ability] = &[Ability::spell().effect(&delay(1)), AT_THE_NEXT_END_STEP];
+        for abilities in [PAST_THE_END, ITSELF, PRINTED] {
+            assert_eq!(checked(abilities), Err(Malformed::Delayed));
+        }
+        assert_eq!(checked(WELL_FORMED), Ok(()));
+    }
+
     /// The operands of the entries a card port added are walked as any other's.
     #[test]
     fn the_operands_of_every_entry_are_checked() {
@@ -535,7 +597,20 @@ mod tests {
             Condition::Not(&Condition::Token(TARGET)),
             &draw(YOU, 1),
         ))];
-        for abilities in [DAMAGE, EXPLORE, CAST, MOST, A_TOKEN] {
+        const UNTAP: &[Ability] = &[Ability::spell().effect(&untap_up_to(YOU, 2, TARGET))];
+        const CARRYING: &[Ability] = &[
+            Ability::spell().effect(&Effect::Delay {
+                ability: crate::index::AbilityIx::new(1),
+                carrying: Amount::ManaValue(TARGET),
+            }),
+            Ability::triggered(&Trigger::main_phase(YOU).next()).effect(&draw(YOU, 1)),
+        ];
+        const EMBLEM: CardDef = crate::definition::card("Test Emblem", &[Face::EMPTY]);
+        const EMBLEM_FOR: &[Ability] =
+            &[Ability::spell().effect(&get_emblem(TARGET_PLAYER, &EMBLEM))];
+        for abilities in [
+            DAMAGE, EXPLORE, CAST, MOST, A_TOKEN, UNTAP, CARRYING, EMBLEM_FOR,
+        ] {
             assert_eq!(checked(abilities), Err(Malformed::Target));
         }
     }

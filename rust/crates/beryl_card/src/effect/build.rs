@@ -26,7 +26,7 @@ use crate::effect::{
     Recipients,
 };
 use crate::ids::Zone;
-use crate::index::SpecIx;
+use crate::index::{AbilityIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
 
 /// "This creature", "this spell": [`Objects::This`].
@@ -313,6 +313,29 @@ pub const fn may_cast_free(player: Players, card: Objects) -> Effect {
         card,
         free: true,
     }
+}
+
+/// [`Effect::UntapUpTo`]: "[player] untaps up to [count] [permanents]".
+pub const fn untap_up_to(player: Players, count: u8, permanents: Objects) -> Effect {
+    Effect::UntapUpTo {
+        player,
+        count: Amount::Fixed(count),
+        permanents,
+    }
+}
+
+/// [`Effect::Delay`] carrying nothing: "[when], [effect]", the delayed triggered ability
+/// that is the `ability`th of its face, counting from 0.
+pub const fn delay(ability: u8) -> Effect {
+    Effect::Delay {
+        ability: AbilityIx::new(ability),
+        carrying: Amount::Fixed(0),
+    }
+}
+
+/// [`Effect::GetEmblem`]: "[player] gets an emblem with [abilities]".
+pub const fn get_emblem(player: Players, emblem: &'static CardDef) -> Effect {
+    Effect::GetEmblem { player, emblem }
 }
 
 /// [`Effect::WinGame`]: "[player] wins the game".

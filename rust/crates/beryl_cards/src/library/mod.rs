@@ -12,6 +12,8 @@ pub mod casting;
 pub mod coins;
 pub mod continuous;
 pub mod damage;
+pub mod delayed_triggers;
+pub mod emblems;
 
 /// Every entry's scenarios: the library module, the card that has the effect, and the
 /// scenarios, which the oracles play as that card's.
@@ -27,6 +29,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         actions::explore::SCENARIOS,
     ),
     (
+        "actions::tap",
+        names::TEFERI_HERO_OF_DOMINARIA,
+        actions::tap::SCENARIOS,
+    ),
+    (
         "casting",
         names::MALCOLM_ALLURING_SCOUNDREL,
         casting::SCENARIOS,
@@ -38,6 +45,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         continuous::SCENARIOS,
     ),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
+    (
+        "delayed_triggers",
+        names::TEFERI_HERO_OF_DOMINARIA,
+        delayed_triggers::SCENARIOS,
+    ),
+    (
+        "emblems",
+        names::TEFERI_HERO_OF_DOMINARIA,
+        emblems::SCENARIOS,
+    ),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

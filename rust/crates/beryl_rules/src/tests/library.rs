@@ -7,7 +7,6 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
 use crate::decision::Candidates;
 use crate::event::{self, Event, Reason};
-use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
@@ -64,7 +63,7 @@ fn tapped(s: &State, slot: Slot) -> bool {
 /// can be untapped." Here an opponent of the ability's controller untaps a creature: neither
 /// the lands nor the controller the helper was first written for.
 #[test]
-fn any_player_untaps_up_to_n_tapped_permanents_that_pass_any_filter() {
+fn any_player_untaps_up_to_n_of_the_tapped_permanents_named() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let land = put(&t, &mut s, &mut x, p, "Test Land");
@@ -75,9 +74,9 @@ fn any_player_untaps_up_to_n_tapped_permanents_that_pass_any_filter() {
         let permanent = s.object_ref(slot);
         tap::tap(&mut Game::new(&mut s, &t, &mut x.events), permanent).unwrap();
     }
-    let creatures = Filter::Types(Types::CREATURE);
+    let creatures: Bitboard<Slot> = [mine, theirs, upright].into_iter().collect();
     let untap = |game: &mut Game, resolution: &mut Resolution| {
-        tap::untap_up_to(game, resolution, p.opponent(), creatures, 2)
+        tap::untap_up_to(game, resolution, p.opponent(), creatures, 2).map(|_| ())
     };
 
     let (paused, question) = resolving(&t, &mut s.clone(), &mut x, source, &[], untap);

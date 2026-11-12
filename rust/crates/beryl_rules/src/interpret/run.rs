@@ -8,7 +8,7 @@
 
 use beryl_card::{Effect, Objects, Players};
 
-use crate::actions::{counter, destroy, discard, exile, explore, mill, sacrifice, scry};
+use crate::actions::{counter, destroy, discard, exile, explore, mill, sacrifice, scry, tap};
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow};
 use crate::effect::EffectCtx;
@@ -19,7 +19,7 @@ use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
-use crate::{library, life, mana, one_shot, tokens, zones};
+use crate::{delayed_triggers, emblems, library, life, mana, one_shot, tokens, zones};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -180,6 +180,15 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::MayCast { player, card, free } => {
                 casting::may_cast_instruction(self, player, card, free)
             }
+            Effect::UntapUpTo {
+                player,
+                count,
+                permanents,
+            } => tap::untap_up_to_instruction(self, player, count, permanents)?,
+            Effect::Delay { ability, carrying } => {
+                delayed_triggers::instruction(self, ability, carrying)?
+            }
+            Effect::GetEmblem { player, emblem } => emblems::instruction(self, player, emblem)?,
             Effect::WinGame(players) => ending::win_instruction(self, players),
             Effect::LoseGame(players) => ending::lose_instruction(self, players),
         };

@@ -1,9 +1,12 @@
 //! Delayed triggered abilities
 //! ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
 
+use beryl_card::Amount;
+
 use crate::card::AbilityIx;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
 use crate::state::{PendingTrigger, TriggerInfo};
@@ -32,4 +35,23 @@ pub fn create<L: Layout>(
         },
     };
     trigger::delay(game.state, delayed)
+}
+
+/// [`Effect::Delay`](beryl_card::Effect::Delay): "[When], [effect]", said by a resolving
+/// spell or ability
+/// ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)): "Delayed triggered
+/// abilities are created during the resolution of spells or abilities". The number it
+/// carries is settled now
+/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "the answer is
+/// determined only once, when the effect is applied." It acts on nothing, so its outcome is
+/// nothing.
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    ability: AbilityIx,
+    carrying: Amount,
+) -> Result<Outcome<L>, Full> {
+    let amount = run.scene().amount(carrying);
+    let (game, resolution) = run.resolving();
+    create(game, resolution, ability, amount)?;
+    Ok(Outcome::NOTHING)
 }
