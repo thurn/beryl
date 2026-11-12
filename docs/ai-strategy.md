@@ -143,7 +143,8 @@ played again from the current build: `…/tuned/anchor+guard+hold` is the champi
 after the first two rungs. The audit (§4.5) depends on this.
 
 Yardsticks, never candidates: `expert-frozen`, `greedy` (the rollout policy as a
-player) and Deep Seer (the omniscient twin).
+player), Deep Seer (the omniscient twin) and the champion anchored to the expert
+(§6.6).
 
 ## 4. The ladder
 
@@ -271,7 +272,7 @@ A check that gains measured at 1M and 3M hold at 10M.
   budget, games, score, Elo interval, verdict, the suite's open and fixed counts
   after it, and the human games since the last promotion. A match's verdict is
   `pass`, `fail` or `undecided`; a rung stopped by the gate is
-  `failed at the suite`; an audit is `audit`.
+  `failed at the suite`; an audit is `audit`; §6.6's measurement is `yardstick`.
 - The bead's notes hold the command lines, the seed and the printed result.
 - Logs, transcripts and position files are never committed.
 - **To promote:** in a worktree, set `DEEP_SEARCHER`'s options in
@@ -518,6 +519,30 @@ events into its notes. It needs judgement the others do not and is not labeled
 - **Worlds.** 18 worlds in place of 72: four times the rollouts a tree.
 - **`order`.** A node's children are first tried in the order greedy scores them
   instead of at random, so a wide choice is priced by its best answers.
+
+### 6.6 A yardstick: the champion anchored to the expert
+
+The expert gets 18 of the 20 suite positions right and the champion 2 (§2.2).
+One measurement says how much of that gap the root alone can close, and at what
+price in strength. It is a yardstick, measured once after the `guard` rung, and
+never promoted: the expert is 3,200 lines for 29 cards, so a champion that
+leaned on it would tell us nothing about a Legacy deck, and would not count
+toward §1's bar.
+
+- **The option `expert`.** With `anchor` and `expert` set, the root's default at
+  every decision is the expert's answer, and `guarded` holds it at every kind of
+  decision unless the search leads clearly.
+- **What is measured** (by-97g.32 builds it, by-97g.33 measures):
+  - the suite: how many of the 20 entries are fixed;
+  - the screen: how many moves a game differ from the champion's, by kind;
+  - a match against the champion, 400 games at 3M with `--bar audit`: the score
+    with its interval.
+- **What it tells us.** The suite count is the most that root defaults can buy:
+  entries still open are ones where the search overrules a right answer by a
+  clear lead, which only sounder rollouts fix. The score is what plausibility
+  costs, or gains, when the default is a good one. The rungs after it are then
+  read against both numbers.
+- Its row in `docs/ladder.md` has the verdict `yardstick`.
 
 ## 7. Speed
 
