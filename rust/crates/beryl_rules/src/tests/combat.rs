@@ -11,13 +11,13 @@ use crate::event::{Event, TokenEntry};
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
 use crate::state::{CounterKind, ObjectFlags, Zone, ZoneKey};
-use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next,
 };
 use crate::{Layout, bodies};
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// A vanilla creature card with keywords.
 macro_rules! creature {

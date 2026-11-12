@@ -15,10 +15,15 @@ from pathlib import Path
 
 from . import paths
 
-# Where the rules live: the engine's rules modules and the card definitions.
-RULES = ("rust/crates/beryl_engine/src", "rust/crates/beryl_cards/src")
-# The engine is the facade other crates import the kernel through, and its tests set up
-# tables of two.
+# Where the rules live: the rules' modules, the facade in front of them, which is held as
+# they are so that no rule is written there, and the card definitions.
+RULES = (
+    "rust/crates/beryl_rules/src",
+    "rust/crates/beryl_engine/src",
+    "rust/crates/beryl_cards/src",
+)
+# The facade other crates import the kernel through re-exports the module, and the rules'
+# tests set up tables of two.
 EXEMPT = ("rust/crates/beryl_engine/src/lib.rs",)
 SKIPPED_DIRECTORIES = {"tests"}
 NAMED: re.Pattern[str] = re.compile(r"\btwo_player\b")

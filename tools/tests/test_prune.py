@@ -94,7 +94,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "ui" / "scripts").mkdir(parents=True)
     (tmp_path / "ui" / "scripts" / "interactions.mjs").write_text(INTERACTIONS)
     (tmp_path / "ui" / "shots.json").write_text(json.dumps(SHOTS))
-    lib = tmp_path / "rust" / "crates" / "beryl_engine" / "src" / "lib.rs"
+    lib = tmp_path / "rust" / "crates" / "beryl_rules" / "src" / "lib.rs"
     lib.parent.mkdir(parents=True)
     lib.write_text(LIB_RS)
     return tmp_path
@@ -121,8 +121,8 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
         "ui-test:quarantined and caught": [verdict("catch", 90), *flakes],
         "ui-test:flaky once": flakes[:1],
         "ui-test:old flakes": [verdict("flaky", 1, backfilled=True)] * 2,
-        "rust:beryl_engine::tests::kept_test": flakes,
-        "rust:beryl_engine::product_kept": flakes,
+        "rust:beryl_rules::tests::kept_test": flakes,
+        "rust:beryl_rules::product_kept": flakes,
     }
     monkeypatch.setattr(verdicts, "STORE", Store(history))
     pending = verdicts.Pending("ui-test:pending", "board", "by-x")
@@ -161,12 +161,12 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
             "the only shot of the kept state",
         ),
         "ui-test:quarantined": ("delete", "quarantined, never caught anything", ""),
-        "rust:beryl_engine::product_kept": (
+        "rust:beryl_rules::product_kept": (
             "delete",
             "quarantined, never caught anything",
             "",
         ),
-        "rust:beryl_engine::tests::kept_test": (
+        "rust:beryl_rules::tests::kept_test": (
             "keep",
             "quarantined, never caught anything",
             "the one test of the engine's undo",
@@ -181,9 +181,9 @@ def test_the_costliest_tenth_of_the_fast_check_moves_unless_it_failed(
     """Twenty fast-check tests and one already moved: the tenth is the moved one and t19. t18
     would be in a tenth of the twenty, as if every prune moved another tenth."""
     monkeypatch.setattr(verdicts, "STORE", Store({}))
-    moved = verdicts.SlowOnly("rust:beryl_engine::moved", "2026-11-01", 100.0, 9)
+    moved = verdicts.SlowOnly("rust:beryl_rules::moved", "2026-11-01", 100.0, 9)
     monkeypatch.setattr(verdicts, "SLOW_ONLY", (moved,))
-    tests = [f"rust:beryl_engine::tests::t{i:02}" for i in range(20)]
+    tests = [f"rust:beryl_rules::tests::t{i:02}" for i in range(20)]
     log = [record(t, seconds=500.0) for t in [*tests, moved.check]]
     for i, t in enumerate(tests):
         log += [record(t, seconds=float(i), script="check")] * 2

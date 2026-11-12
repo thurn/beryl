@@ -30,6 +30,7 @@ NAMES_RS: Path = paths.RUST / "crates" / "beryl_cards" / "src" / "names.rs"
 SCOPE = (
     "rust/crates/beryl_card/src",
     "rust/crates/beryl_kernel/src",
+    "rust/crates/beryl_rules/src",
     "rust/crates/beryl_engine/src",
     "rust/crates/beryl_session/src",
     "rust/crates/beryl_scenario/src",

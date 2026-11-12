@@ -7,7 +7,7 @@ NAMES = ["Ponder", "Jace, the Mind Sculptor", "Jace", "Aang's Iceberg", "Island"
 INDEX = card_names.NameIndex(
     [n for n in NAMES if n not in card_names.BASIC_LAND_TYPES], {"PONDER"}
 )
-ENGINE = "rust/crates/beryl_engine/src"
+ENGINE = "rust/crates/beryl_rules/src"
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -150,7 +150,7 @@ def test_a_card_file_names_its_card_through_its_definition(tmp_path: Path) -> No
         f"{src}/blue/mod.rs",
         f"{src}/lib.rs",
         f"{src}/blue/deleted.rs",
-        "rust/crates/beryl_engine/src/blue/counterspell.rs",
+        "rust/crates/beryl_rules/src/blue/counterspell.rs",
         f"{src}/blue/counterspell.rs",
     ]
     assert card_names.cards_in(changed, tmp_path) == [

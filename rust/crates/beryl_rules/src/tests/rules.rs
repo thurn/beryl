@@ -7,11 +7,11 @@ use crate::event::Sink;
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{PendingTrigger, Zone, ZoneKey};
-use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
 };
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 const LEGENDS: &Decklist = &[(40, "Test Legend")];
 

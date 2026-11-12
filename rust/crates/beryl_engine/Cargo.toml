@@ -1,7 +1,7 @@
 [package]
 name = "beryl_engine"
 version = "0.1.0"
-description = "The rules engine: state, turn structure, priority, decisions and the Observation view"
+description = "The facade other crates import: the rules and the kernel under one name"
 edition.workspace = true
 license.workspace = true
 publish = false
@@ -10,9 +10,9 @@ publish = false
 workspace = true
 
 [dependencies]
-beryl_card = { path = "../beryl_card" }
 beryl_kernel = { path = "../beryl_kernel" }
+beryl_rules = { path = "../beryl_rules" }
 
 [features]
-# Records which abilities a game exercised (`coverage`), for the card tests.
-coverage = []
+# Records which abilities a game exercised (`beryl_rules`' `coverage`), for the card tests.
+coverage = ["beryl_rules/coverage"]

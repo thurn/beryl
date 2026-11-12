@@ -6,8 +6,8 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::profile::Limits;
 use crate::state::{Zone, ZoneKey};
-use crate::two_player::TwoPlayerSeat as _;
 use crate::{Choice, DecisionKind, Decklist, Opt, Outcome, Profile, StallReason, State};
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// Plays a land-and-pass game, returning the outcome, the final state and the state hash at
 /// every decision.

@@ -17,13 +17,13 @@ use crate::ids::{Seat, Slot};
 use crate::state::{
     Affects, CounterKind, Duration, Payload, Pending, TargetPlace, TurnStep, Zone, ZoneKey,
 };
-use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
 };
 use crate::{Layout, bodies};
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};
 

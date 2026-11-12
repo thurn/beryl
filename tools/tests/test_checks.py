@@ -206,15 +206,15 @@ def test_failed_rust_tests_are_named_as_nextest_filters() -> None:
         FAIL [   0.010s] (3/4) beryl_cli::exe also_bad
   stdout ───
     test also_bad ... FAILED
-     SIGSEGV [   1.002s] (4/4) beryl_engine tests::crashes
+     SIGSEGV [   1.002s] (4/4) beryl_rules tests::crashes
      Summary [   0.011s] 4 tests run: 2 passed, 2 failed, 0 skipped
         FAIL [   0.010s] (3/4) beryl_cli::exe also_bad
 """
     failed = checks.failed_tests(output)
-    assert failed == ["beryl_cli::exe also_bad", "beryl_engine tests::crashes"]
+    assert failed == ["beryl_cli::exe also_bad", "beryl_rules tests::crashes"]
     assert checks.nextest_filter(failed) == (
         "(binary_id(beryl_cli::exe) & test(=also_bad))"
-        " | (binary_id(beryl_engine) & test(=tests::crashes))"
+        " | (binary_id(beryl_rules) & test(=tests::crashes))"
     )
     # The allocations harness and the doctests run beside nextest, so a failure of either
     # reruns the lot.
@@ -331,9 +331,7 @@ def test_a_card_or_vocabulary_change_runs_the_tests_that_read_card_files(
         assert "python" not in lanes  # No black or pyre for a Rust-only change.
     # The engine's files are not read by any Python test.
     assert (
-        scale_tests_run(
-            lanes_for(monkeypatch, ["rust/crates/beryl_engine/src/turn.rs"])
-        )
+        scale_tests_run(lanes_for(monkeypatch, ["rust/crates/beryl_rules/src/turn.rs"]))
         == 0
     )
 
@@ -425,7 +423,7 @@ def test_the_motion_capture_runs_when_the_stage_or_its_data_change(
 def test_windows_leaves_the_browser_checks_to_the_mac(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    changed = ["ui/src/stage/verbs.ts", "rust/crates/beryl_engine/src/turn.rs"]
+    changed = ["ui/src/stage/verbs.ts", "rust/crates/beryl_rules/src/turn.rs"]
     mac = lanes_for(monkeypatch, changed)
     assert {"ui-test", "shots"} <= set(mac)
     windows = lanes_for(monkeypatch, changed, windows=True)

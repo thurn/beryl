@@ -845,8 +845,8 @@ fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
 
 /// Whether activating `ability` of the object in `slot` now would do nothing, as its card
 /// declares ([`Needs`]): its cost would be paid and its effect find nothing to act on. The
-/// activation is still legal (CR 602.2); [`Profile::hides_pointless`](crate::Profile) says
-/// who isn't offered it.
+/// activation is still legal (CR 602.2);
+/// [`Profile::hides_pointless`](crate::profile::Profile) says who isn't offered it.
 pub fn pointless<L: Layout>(
     s: &State<L>,
     t: &GameTable,

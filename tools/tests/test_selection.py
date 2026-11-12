@@ -234,7 +234,7 @@ def test_a_rust_change_chooses_the_checks_whose_fixture_recording_changed(
     universe = ["ui-test:attack", "ui-test:scry"]
     choice = selection.choose(
         "ui-test",
-        ["rust/crates/beryl_engine/src/combat.rs"],
+        ["rust/crates/beryl_rules/src/combat.rs"],
         {},
         universe,
         found,

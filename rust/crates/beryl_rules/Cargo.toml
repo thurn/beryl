@@ -1,0 +1,18 @@
+[package]
+name = "beryl_rules"
+version = "0.1.0"
+description = "The rules: turns, priority, casting, mana, combat, layers, triggers and the interpreter of effect data"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_card = { path = "../beryl_card" }
+beryl_kernel = { path = "../beryl_kernel" }
+
+[features]
+# Records which abilities a game exercised (`coverage`), for the card tests.
+coverage = []

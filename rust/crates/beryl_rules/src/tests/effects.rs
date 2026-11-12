@@ -21,8 +21,8 @@ use crate::ids::{Seat, Slot};
 use crate::state::{
     CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey,
 };
-use crate::two_player::TwoPlayerSeat as _;
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::events::{INSECT, advance_to, game, put, with_ctx};
 

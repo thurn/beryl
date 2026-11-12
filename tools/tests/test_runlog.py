@@ -153,11 +153,11 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
         """The checks' beads hold one recent flake and one catch from before the window."""
 
         def checks(self) -> list[str]:
-            return ["rust:beryl_engine::tests::a"]
+            return ["rust:beryl_rules::tests::a"]
 
         def history(self, checks: Iterable[str]) -> dict[str, list[verdicts.Entry]]:
             return {
-                "rust:beryl_engine::tests::a": [
+                "rust:beryl_rules::tests::a": [
                     {
                         "time": (now - timedelta(days=40)).isoformat(),
                         "verdict": "catch",
@@ -169,8 +169,8 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     monkeypatch.setattr(verdicts, "STORE", Verdicts())
     runlog.append(
         [
-            record("rust:beryl_engine::tests::a", "pass", 1.0),
-            record("rust:beryl_engine::tests::a", "fail", 2.0),
+            record("rust:beryl_rules::tests::a", "pass", 1.0),
+            record("rust:beryl_rules::tests::a", "fail", 2.0),
             record("ui-test:drag", "pass", 10.0),
             record("ui-test:drag", "skip", 0.0),
             record("shots:board", "fail", 100.0, days_ago=40),
@@ -183,8 +183,8 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     )
     assert runlog.report(args) == 0
     out = json.loads(capsys.readouterr().out)
-    assert list(out["checks"]) == ["ui-test:drag", "rust:beryl_engine::tests::a"]
-    assert out["checks"]["rust:beryl_engine::tests::a"] == {
+    assert list(out["checks"]) == ["ui-test:drag", "rust:beryl_rules::tests::a"]
+    assert out["checks"]["rust:beryl_rules::tests::a"] == {
         "runs": 2,
         "failures": 1,
         "skips": 0,
@@ -253,12 +253,12 @@ def test_nextest_junit_gives_each_test_a_check() -> None:
       <testcase name="plays::a_game" classname="beryl_cli::exe" time="0.5"/>
       <testcase name="plays::loses" classname="beryl_cli::exe" time="1.25">
         <failure message="assertion failed"/></testcase>
-      <testcase name="slow" classname="beryl_engine" time="0"><skipped/></testcase>
+      <testcase name="slow" classname="beryl_rules" time="0"><skipped/></testcase>
     </testsuite></testsuites>"""
     assert checks.junit_results(xml) == [
         ("rust:beryl_cli::exe::plays::a_game", "pass", 0.5),
         ("rust:beryl_cli::exe::plays::loses", "fail", 1.25),
-        ("rust:beryl_engine::slow", "skip", 0.0),
+        ("rust:beryl_rules::slow", "skip", 0.0),
     ]
 
 

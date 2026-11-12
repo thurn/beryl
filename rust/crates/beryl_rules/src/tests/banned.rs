@@ -43,7 +43,7 @@ fn the_engine_crates_use_no_banned_types() {
     );
     let crates = manifest.parent().unwrap();
     let mut files = Vec::new();
-    for name in ["beryl_engine", "beryl_cards"] {
+    for name in ["beryl_rules", "beryl_cards"] {
         sources(&crates.join(name).join("src"), &mut files);
     }
     assert!(files.len() > 10);

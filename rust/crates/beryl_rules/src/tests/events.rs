@@ -22,13 +22,13 @@ use crate::state::{
     CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags, Payload,
     PendingTrigger, StackEntry, TargetPlace, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
-use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
     Scratch, State, Step, apply, next,
 };
 use crate::{Layout, bodies, conditions};
+use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{LAND, begin};
 
