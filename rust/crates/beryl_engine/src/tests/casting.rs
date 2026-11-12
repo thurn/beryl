@@ -2,10 +2,14 @@
 //! `apply` on positions set up with the cards of [`super::cast`].
 
 use super::cast::{Game, cast, index_of};
-use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility};
+use super::events::with_ctx;
+use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, Rule};
 use crate::event::{self, Reason};
 use crate::ids::Slot;
-use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, Tracker, TurnStep, Zone, ZoneKey};
+use crate::state::{
+    Affects, CounterKind, Duration, ManaPool, ObjectFlags, Payload, Pending, Tracker, TurnStep,
+    Zone, ZoneKey,
+};
 use crate::zone::Place;
 use crate::{Choice, DecisionKind, Opt, Profile};
 
@@ -455,11 +459,29 @@ fn a_static_rule_change_follows_its_permanents_controller_and_ends_with_it() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.give(g.me, "Test Island", Zone::Battlefield);
     let raveler = g.give(g.me, "Test Raveler", Zone::Battlefield);
+    let thief = g.give(g.them, "Test Bear", Zone::Battlefield);
     g.at(g.me, TurnStep::Upkeep);
     assert!(g.offers_cast(flasher), "mine limits my opponents, not me");
-    g.s.board().set_controller(raveler, g.them);
-    g.at(g.me, TurnStep::Upkeep);
+    // A control effect and no change to the object: layer 2 says whose opponents.
+    let stolen = g.s.object_ref(raveler);
+    with_ctx(&g.t, &mut g.s, &mut g.x, thief, |ctx| {
+        ctx.gain_control(stolen, Duration::EndOfTurn);
+    });
+    assert_eq!(g.s.base_controller(raveler), g.me);
     assert!(!g.offers_cast(flasher), "under their control it limits me");
+    // CR 708.2: face down it has no abilities, whoever controls it.
+    g.s.board().set_face(raveler, FaceIx::DOWN);
+    assert!(
+        g.offers_cast(flasher),
+        "a face-down permanent limits nobody"
+    );
+    g.s.board().set_face(raveler, FaceIx::FRONT);
+    assert!(!g.offers_cast(flasher));
+    // The control effect ends, and the limit is my opponents' again.
+    g.s.expire(Duration::EndOfTurn);
+    assert!(g.offers_cast(flasher), "mine again");
+    g.s.board().set_controller(raveler, g.them);
+    assert!(!g.offers_cast(flasher));
     let graveyard = Zone::Graveyard;
     event::move_one(
         &mut g.s,
@@ -497,6 +519,33 @@ fn sorceries_can_be_cast_as_though_they_had_flash_until_your_next_turn() {
         !g.offers_cast(ponder),
         "the permission ended as my turn began"
     );
+}
+
+/// A player who may cast sorceries as though they had flash and whom another effect limits
+/// to sorcery speed casts them at sorcery speed
+/// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
+/// allows or directs something to happen, and another effect states that it can't happen,
+/// the "can't" effect takes precedence."
+#[test]
+fn a_limit_to_sorcery_speed_beats_a_permission_to_cast_as_though_with_flash() {
+    let mut g = Game::new(Profile::EXACT);
+    let ponder = g.give(g.me, "Test Ponder", Zone::Hand);
+    let island = g.give(g.me, "Test Island", Zone::Battlefield);
+    let me = g.me;
+    g.current();
+    with_ctx(&g.t, &mut g.s, &mut g.x, island, |ctx| {
+        ctx.add_effect(
+            Affects::Player(me),
+            Payload::Rule(Rule::SorceriesAsFlash),
+            Duration::UntilYourNextTurn(me),
+        );
+    });
+    g.at(g.me, TurnStep::Upkeep);
+    assert!(g.offers_cast(ponder), "as though it had flash");
+    g.give(g.them, "Test Raveler", Zone::Battlefield);
+    assert!(!g.offers_cast(ponder), "can't beats can");
+    g.main(g.me);
+    assert!(g.offers_cast(ponder), "at sorcery speed still");
 }
 
 #[test]
