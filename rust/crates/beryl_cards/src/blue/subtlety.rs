@@ -78,7 +78,7 @@ pub mod scenarios {
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
-    /// The planeswalker spell for the evoke: XMage's harness fails that scenario with the
+    /// The planeswalker spell for the evoke: the `XMage` harness fails that scenario with the
     /// planeswalker prop on the stack, though it plays it with Teferi.
     const TEFERI: &str = names::TEFERI_TIME_RAVELER;
 
