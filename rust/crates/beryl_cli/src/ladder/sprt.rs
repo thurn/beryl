@@ -3,14 +3,15 @@
 
 use serde::Serialize;
 
-/// The pre-registered bars of docs/ai-strategy.md §4.2. Each passes when its test accepts
-/// `elo1`.
+/// The match bars of docs/ai-strategy.md §§4.4–4.5.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bar {
-    /// "No gain" against "+50 Elo" at α = β = 0.001.
+    /// "No gain" against "+30 Elo" at α = β = 0.05.
     Stronger,
     /// "−25 Elo" against "no change" at α = β = 0.05: not weaker.
     Plausible,
+    /// Play the full cap and check the score's 95% interval against 50%.
+    Audit,
 }
 
 impl Bar {
@@ -18,16 +19,17 @@ impl Bar {
         match self {
             Bar::Stronger => "stronger",
             Bar::Plausible => "plausible",
+            Bar::Audit => "audit",
         }
     }
 
-    pub fn sprt(self) -> Sprt {
-        match self {
+    pub fn sprt(self) -> Option<Sprt> {
+        Some(match self {
             Bar::Stronger => Sprt {
                 elo0: 0.0,
-                elo1: 50.0,
-                alpha: 0.001,
-                beta: 0.001,
+                elo1: 30.0,
+                alpha: 0.05,
+                beta: 0.05,
             },
             Bar::Plausible => Sprt {
                 elo0: -25.0,
@@ -35,7 +37,8 @@ impl Bar {
                 alpha: 0.05,
                 beta: 0.05,
             },
-        }
+            Bar::Audit => return None,
+        })
     }
 }
 
@@ -63,7 +66,7 @@ impl Pairs {
     }
 }
 
-/// How a sequential test stands.
+/// The result recorded for a ladder match.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Verdict {
@@ -73,6 +76,8 @@ pub enum Verdict {
     Fail,
     /// The cap came first.
     Undecided,
+    /// The fixed-cap audit completed.
+    Audit,
 }
 
 /// A trinomial sequential probability ratio test over seed pairs, between Elo `elo0` and
@@ -87,8 +92,7 @@ pub enum Verdict {
 /// log-likelihood ratio of the counts, splits profiled out, is then the binomial ratio of
 /// swept against lost: the split share's estimate is the same under both hypotheses and
 /// cancels. A split adds nothing to it, which is right for a seed on which the two agents
-/// played alike (§4.1), so a run of splits never decides a match. At +50 Elo about half the
-/// pairs are decided and the stronger bar ends in about 700 games, as §4.2 expects.
+/// played alike (§4.4), so a run of splits never decides a match.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub struct Sprt {
     pub elo0: f64,
@@ -161,11 +165,10 @@ mod tests {
 
     #[test]
     fn the_bounds_match_alpha_and_beta() {
-        let [lo, hi] = Bar::Stronger.sprt().bounds();
-        assert!((lo - (0.001f64 / 0.999).ln()).abs() < 1e-12, "{lo}");
-        assert!((hi - (0.999f64 / 0.001).ln()).abs() < 1e-12, "{hi}");
-        assert!((hi - 6.906_755).abs() < 1e-6);
-        let [lo, hi] = Bar::Plausible.sprt().bounds();
+        let [lo, hi] = Bar::Stronger.sprt().unwrap().bounds();
+        assert!((lo - (0.05f64 / 0.95).ln()).abs() < 1e-12, "{lo}");
+        assert!((hi - (0.95f64 / 0.05).ln()).abs() < 1e-12, "{hi}");
+        let [lo, hi] = Bar::Plausible.sprt().unwrap().bounds();
         assert!((lo + 2.944_439).abs() < 1e-6 && (hi - 2.944_439).abs() < 1e-6);
     }
 
@@ -186,7 +189,7 @@ mod tests {
     #[test]
     fn sweeps_accept_elo1_within_the_expected_pairs() {
         for bar in [Bar::Stronger, Bar::Plausible] {
-            let sprt = bar.sprt();
+            let sprt = bar.sprt().unwrap();
             let step = (swept_share(sprt.elo1) / swept_share(sprt.elo0)).ln();
             let expected = (sprt.bounds()[1] / step).ceil() as u32;
             for n in 0..expected {
@@ -206,21 +209,15 @@ mod tests {
                 "{bar:?}"
             );
         }
-        assert_eq!(
-            Bar::Stronger.sprt().decide(pairs(27, 0, 0)),
-            None,
-            "28 sweeps"
-        );
-        assert_eq!(
-            Bar::Stronger.sprt().decide(pairs(28, 0, 0)),
-            Some(Verdict::Pass)
-        );
+        let stronger = Bar::Stronger.sprt().unwrap();
+        assert_eq!(stronger.decide(pairs(18, 0, 0)), None);
+        assert_eq!(stronger.decide(pairs(19, 0, 0)), Some(Verdict::Pass));
     }
 
     #[test]
     fn splits_never_decide() {
         for bar in [Bar::Stronger, Bar::Plausible] {
-            let sprt = bar.sprt();
+            let sprt = bar.sprt().unwrap();
             assert!(sprt.llr(pairs(0, 1_000_000, 0)).abs() < 1e-12);
             assert_eq!(sprt.decide(pairs(0, 1_000_000, 0)), None);
             // Nor do they move the test on the decided pairs.
@@ -232,7 +229,7 @@ mod tests {
     /// error rate allows (Wald's bounds are conservative).
     #[test]
     fn simulated_errors_stay_within_alpha_and_beta() {
-        let sprt = Bar::Plausible.sprt();
+        let sprt = Bar::Plausible.sprt().unwrap();
         let mut rng = SplitMix64::new(7);
         let mut wrong = |elo: f64, wrong: Verdict| {
             let q = swept_share(elo);

@@ -7,9 +7,9 @@
 //!   [budget]` plays a round robin, N games per pairing (an agent alone plays itself), and
 //!   prints the table; `--json` also writes the results, `--check` checks the invariants at
 //!   every decision. Games run in parallel, one thread each.
-//! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible]
+//! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
 //!   [--cap N] [--seed N] [--positions DIR] [--out DIR]` plays a paired match against the
-//!   champion until a sequential test decides it or the cap ends it, and prints a
+//!   champion up to the cap, with a sequential test for stronger and plausible, and prints a
 //!   `docs/ladder.md` row ([`ladder`], `just ladder`).
 //! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` cuts the
 //!   ladder's balanced start positions from champion games; `beryl_cli positions sample
@@ -84,7 +84,7 @@ const USAGE: &str = "usage:
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
       [--paired] [--iterations N] [--trees K]
       (an agent is a registered one or a long-think entrant, family@budget)
-  beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible]
+  beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
   beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
   beryl_cli positions sample [--count N] DIR

@@ -1,6 +1,6 @@
-//! `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible] [--cap N]
+//! `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit] [--cap N]
 //! [--seed N] [--out DIR]` (`just ladder`): a paired match between a challenger and the
-//! champion, ended by a sequential test (docs/ai-strategy.md §4).
+//! champion (docs/ai-strategy.md §4).
 //!
 //! - **The agents.** Each is a registered agent or a long-think entrant (`family@budget`); a
 //!   family named without a budget plays at `--work`, the proxy budget of 3M engine steps a
@@ -12,7 +12,8 @@
 //!   still running when it comes are not counted.
 //! - **The test.** A sequential probability ratio test over the pairs, swept, split or lost
 //!   ([`Sprt`]), between the two Elo hypotheses of the bar ([`Bar`]), stopping on a decision
-//!   or at the cap.
+//!   or at the cap. The audit plays the full cap in complete pairs and checks the score's
+//!   Wilson 95% interval.
 //! - **The record.** It prints the games, the pairs, the challenger's score, an Elo estimate
 //!   with its 95% interval, the verdict and a ready `docs/ladder.md` row, and writes
 //!   `match.json` beside the games. The games go to `--out`, by default
@@ -61,7 +62,7 @@ pub fn games_at_once() -> usize {
 const PROXY: u64 = 3_000_000;
 
 const USAGE: &str = "usage: beryl_cli ladder <challenger> [--vs NAME] [--work 3M] \
-                     [--bar stronger|plausible] [--cap N] [--seed N] [--positions DIR] \
+                     [--bar stronger|plausible|audit] [--cap N] [--seed N] [--positions DIR] \
                      [--out DIR]";
 
 pub fn main(args: &[String]) -> Result<(), String> {
@@ -90,6 +91,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
                 bar = match value()?.as_str() {
                     "stronger" => Bar::Stronger,
                     "plausible" => Bar::Plausible,
+                    "audit" => Bar::Audit,
                     other => return Err(format!("--bar: no bar {other:?}\n{USAGE}")),
                 }
             }
@@ -123,16 +125,20 @@ pub fn main(args: &[String]) -> Result<(), String> {
         out,
         positions,
     };
-    let report = run(&m, |pairs, llr, bounds| {
-        eprintln!(
-            "pairs {}: {} swept, {} split, {} lost; LLR {llr:.2} in [{:.2}, {:.2}]",
+    let report = run(&m, |pairs, sprt| {
+        let line = format!(
+            "pairs {}: {} swept, {} split, {} lost",
             pairs.total(),
             pairs.swept,
             pairs.split,
-            pairs.lost,
-            bounds[0],
-            bounds[1]
+            pairs.lost
         );
+        if let Some(sprt) = sprt {
+            let [lo, hi] = sprt.bounds();
+            eprintln!("{line}; LLR {:.2} in [{lo:.2}, {hi:.2}]", sprt.llr(pairs));
+        } else {
+            eprintln!("{line}");
+        }
     })?;
     print!("{}", report.text());
     Ok(())
@@ -208,12 +214,34 @@ struct Shared {
     failure: Option<String>,
 }
 
-/// Plays match `m`, calling `progress` with the pairs, the LLR and the bounds each time a
-/// pair is counted, and writes its games and `match.json` to `m.out`.
+impl Shared {
+    fn open(out: &Path) -> Result<Self, String> {
+        Ok(Self {
+            halves: BTreeMap::new(),
+            pairs: Pairs::default(),
+            from_positions: Pairs::default(),
+            from_shuffle: Pairs::default(),
+            counted: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            verdict: None,
+            games: Log::open(&out.join("games.jsonl"))?,
+            decisions: Log::open(&out.join("decisions.jsonl"))?,
+            failure: None,
+        })
+    }
+}
+
+/// Plays match `m`, reporting the pairs and the optional sequential test as pairs are counted,
+/// and writes its games and `match.json` to `m.out`.
 pub fn run(
     m: &Match,
-    mut progress: impl FnMut(Pairs, f64, [f64; 2]) + Send,
+    mut progress: impl FnMut(Pairs, Option<Sprt>) + Send,
 ) -> Result<Report, String> {
+    if m.bar == Bar::Audit && !m.cap.is_multiple_of(2) {
+        return Err("--cap: an audit needs an even number of games".to_owned());
+    }
     if m.out.join("games.jsonl").exists() {
         return Err(format!(
             "{} already holds a match: pass another --out",
@@ -232,20 +260,7 @@ pub fn run(
     let games = m.cap - m.cap % 2;
     let next = AtomicU32::new(0);
     let stop = AtomicBool::new(false);
-    let shared = Mutex::new(Shared {
-        halves: BTreeMap::new(),
-        pairs: Pairs::default(),
-        from_positions: Pairs::default(),
-        from_shuffle: Pairs::default(),
-        counted: 0,
-        wins: 0,
-        losses: 0,
-        draws: 0,
-        verdict: None,
-        games: Log::open(&m.out.join("games.jsonl"))?,
-        decisions: Log::open(&m.out.join("decisions.jsonl"))?,
-        failure: None,
-    });
+    let shared = Mutex::new(Shared::open(&m.out)?);
     let progress = Mutex::new(&mut progress);
     let workers = games_at_once().min(games as usize);
     thread::scope(|scope| {
@@ -271,8 +286,7 @@ pub fn run(
                     match counted {
                         Ok(new) => {
                             if new {
-                                let pairs = sh.pairs;
-                                (progress.lock().unwrap())(pairs, sprt.llr(pairs), sprt.bounds());
+                                (progress.lock().unwrap())(sh.pairs, sprt);
                             }
                             if sh.verdict.is_some() {
                                 stop.store(true, Ordering::Relaxed);
@@ -298,7 +312,7 @@ pub fn run(
 }
 
 /// The report of match `m` from what its workers counted.
-fn report(m: &Match, sprt: Sprt, sh: &Shared) -> Report {
+fn report(m: &Match, sprt: Option<Sprt>, sh: &Shared) -> Report {
     let mut report = Report {
         date: beryl_session::corpus::today(),
         challenger: m.challenger.clone(),
@@ -321,9 +335,12 @@ fn report(m: &Match, sprt: Sprt, sh: &Shared) -> Report {
         score_interval: [0.0, 1.0],
         elo: 0.0,
         elo_interval: [0.0, 0.0],
-        llr: 0.0,
-        bounds: sprt.bounds(),
-        verdict: sh.verdict.unwrap_or(Verdict::Undecided),
+        llr: None,
+        bounds: None,
+        verdict: sh.verdict.unwrap_or(match m.bar {
+            Bar::Audit => Verdict::Audit,
+            Bar::Stronger | Bar::Plausible => Verdict::Undecided,
+        }),
         out: m.out.display().to_string(),
     };
     report.tally();
@@ -332,7 +349,7 @@ fn report(m: &Match, sprt: Sprt, sh: &Shared) -> Report {
 
 /// Counts the pairs both of whose games are in, in order, until the test decides. Returns
 /// whether any was counted.
-fn count_pairs(sh: &mut Shared, m: &Match, sprt: Sprt) -> bool {
+fn count_pairs(sh: &mut Shared, m: &Match, sprt: Option<Sprt>) -> bool {
     let mut any = false;
     while sh.verdict.is_none() {
         let first = sh.counted;
@@ -353,7 +370,7 @@ fn count_pairs(sh: &mut Shared, m: &Match, sprt: Sprt) -> bool {
             sh.from_shuffle.add(a + b);
         }
         sh.counted += 2;
-        sh.verdict = sprt.decide(sh.pairs);
+        sh.verdict = sprt.and_then(|test| test.decide(sh.pairs));
         any = true;
     }
     any
@@ -497,6 +514,43 @@ mod tests {
         dir
     }
 
+    #[test]
+    fn audit_counts_all_pairs_and_checks_the_score_interval() {
+        let out = scratch("audit");
+        fs::create_dir_all(&out).unwrap();
+        let m = Match {
+            challenger: "greedy".to_owned(),
+            champion: "random".to_owned(),
+            work: PROXY,
+            bar: Bar::Audit,
+            cap: 400,
+            seed: 0,
+            out: out.clone(),
+            positions: Vec::new(),
+        };
+        let test = m.bar.sprt();
+        for (sweeps, score, verdict) in [
+            (100, "score 50.0% [45.1, 54.9]", "audit: passed"),
+            (80, "score 40.0% [35.3, 44.9]", "audit: failed"),
+        ] {
+            let mut sh = Shared::open(&out).unwrap();
+            // The opening sweep streak is enough to stop either sequential test.
+            for pair in 0..m.cap / 2 {
+                let halves = if pair < sweeps { 2 } else { 0 };
+                sh.halves
+                    .extend([(2 * pair, halves), (2 * pair + 1, halves)]);
+                assert!(count_pairs(&mut sh, &m, test));
+                assert!(sh.verdict.is_none(), "after pair {pair}");
+            }
+            let r = report(&m, test, &sh);
+            assert_eq!((r.games, r.verdict), (400, Verdict::Audit));
+            assert!(r.text().contains(score), "{}", r.text());
+            assert!(r.text().lines().any(|line| line == verdict), "{}", r.text());
+            assert!(r.row().contains(" | audit | "));
+        }
+        let _ = fs::remove_dir_all(&out);
+    }
+
     /// A pair's two games share their seed and swap the seats; every game leaves its log and
     /// transcript, and `match.json` the result.
     #[test]
@@ -512,7 +566,7 @@ mod tests {
             out: out.clone(),
             positions: Vec::new(),
         };
-        let r = run(&m, |_, _, _| {}).unwrap();
+        let r = run(&m, |_, _| {}).unwrap();
         assert_eq!(
             (r.games, r.pairs.total(), r.verdict),
             (6, 3, Verdict::Undecided)
@@ -543,7 +597,7 @@ mod tests {
                 out: scratch("again"),
                 ..m.clone()
             },
-            |_, _, _| {},
+            |_, _| {},
         )
         .unwrap();
         assert_eq!(
@@ -551,7 +605,7 @@ mod tests {
             (r.wins, r.losses, r.pairs)
         );
         assert!(
-            run(&m, |_, _, _| {}).is_err(),
+            run(&m, |_, _| {}).is_err(),
             "a second match in one directory"
         );
         let _ = fs::remove_dir_all(&out);
@@ -594,7 +648,7 @@ mod tests {
             .collect();
         let name = |k: usize| Some(set[k % set.len()].0.as_str());
         assert_eq!(names, [name(0), name(1), name(2), name(3), None, name(4)]);
-        let r = run(&m, |_, _, _| {}).unwrap();
+        let r = run(&m, |_, _| {}).unwrap();
         assert_eq!((r.from_positions.total(), r.from_shuffle.total()), (5, 1));
         assert!(r.text().contains("from positions 5"));
         let games: Vec<GameRecord> = files::read(&out.join("games.jsonl")).unwrap();

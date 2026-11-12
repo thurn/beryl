@@ -241,7 +241,7 @@ review *args:
 tournament *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
-# A paired match against the champion until the SPRT decides, at low priority (--vs NAME, --work 3M, --bar stronger|plausible, --cap N, --seed N, --out DIR)
+# A paired match against the champion, at low priority (--vs NAME, --work 3M, --bar stronger|plausible|audit, --cap N, --seed N, --out DIR)
 [group('agents')]
 [no-cd]
 ladder *args:

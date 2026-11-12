@@ -408,7 +408,7 @@ mod tests {
             out: out.clone(),
             positions: Vec::new(),
         };
-        run(&m, |_, _, _| {}).unwrap();
+        run(&m, |_, _| {}).unwrap();
         out
     }
 

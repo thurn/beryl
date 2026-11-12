@@ -45,7 +45,7 @@ pub struct Report {
     pub champion: String,
     pub budget: String,
     pub bar: &'static str,
-    pub sprt: Sprt,
+    pub sprt: Option<Sprt>,
     pub seed: u64,
     pub cap: u32,
     pub games: u32,
@@ -66,8 +66,8 @@ pub struct Report {
     /// The challenger's Elo over the champion from the decided pairs, and its 95% interval.
     pub elo: f64,
     pub elo_interval: [f64; 2],
-    pub llr: f64,
-    pub bounds: [f64; 2],
+    pub llr: Option<f64>,
+    pub bounds: Option<[f64; 2]>,
     pub verdict: Verdict,
     pub out: String,
 }
@@ -84,7 +84,8 @@ impl Report {
         self.elo = elo_of_swept_share(q);
         let [lo, hi] = wilson(f64::from(self.pairs.swept), decided);
         self.elo_interval = [elo_of_swept_share(lo), elo_of_swept_share(hi)];
-        self.llr = self.sprt.llr(self.pairs);
+        self.llr = self.sprt.map(|test| test.llr(self.pairs));
+        self.bounds = self.sprt.map(Sprt::bounds);
         self.spread_positions = spread(self.from_positions);
         self.spread_shuffle = spread(self.from_shuffle);
     }
@@ -108,6 +109,7 @@ impl Report {
                 Verdict::Pass => "pass",
                 Verdict::Fail => "fail",
                 Verdict::Undecided => "undecided",
+                Verdict::Audit => "audit",
             },
         )
     }
@@ -115,19 +117,19 @@ impl Report {
     /// The match as text, ending with its row.
     pub fn text(&self) -> String {
         let mut out = String::new();
-        let _ = writeln!(
+        let _ = write!(
             out,
-            "{} v {} at {}, bar {} (elo {} v {}, alpha {}, beta {}), seed {}",
-            self.challenger,
-            self.champion,
-            self.budget,
-            self.bar,
-            self.sprt.elo0,
-            self.sprt.elo1,
-            self.sprt.alpha,
-            self.sprt.beta,
-            self.seed
+            "{} v {} at {}, bar {}",
+            self.challenger, self.champion, self.budget, self.bar
         );
+        if let Some(test) = self.sprt {
+            let _ = write!(
+                out,
+                " (elo {} v {}, alpha {}, beta {})",
+                test.elo0, test.elo1, test.alpha, test.beta
+            );
+        }
+        let _ = writeln!(out, ", seed {}", self.seed);
         let _ = writeln!(
             out,
             "games {} (cap {}): {} won, {} lost, {} drawn",
@@ -168,11 +170,20 @@ impl Report {
             signed(self.elo_interval[0]),
             signed(self.elo_interval[1])
         );
-        let _ = writeln!(
-            out,
-            "LLR {:.2} in [{:.2}, {:.2}]: {:?}",
-            self.llr, self.bounds[0], self.bounds[1], self.verdict
-        );
+        if self.verdict == Verdict::Audit {
+            let result = if self.score_interval[1] >= 0.5 {
+                "passed"
+            } else {
+                "failed"
+            };
+            let _ = writeln!(out, "audit: {result}");
+        } else if let (Some(llr), Some([lo, hi])) = (self.llr, self.bounds) {
+            let _ = writeln!(
+                out,
+                "LLR {llr:.2} in [{lo:.2}, {hi:.2}]: {:?}",
+                self.verdict
+            );
+        }
         let _ = writeln!(out, "games in {}\n\n{ROW_HEADER}\n{}", self.out, self.row());
         out
     }
@@ -226,8 +237,8 @@ mod tests {
             score_interval: [0.0, 1.0],
             elo: 0.0,
             elo_interval: [0.0, 0.0],
-            llr: 0.0,
-            bounds: Bar::Stronger.sprt().bounds(),
+            llr: None,
+            bounds: None,
             verdict: Verdict::Pass,
             out: "/tmp/x".to_owned(),
         };
