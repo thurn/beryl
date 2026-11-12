@@ -4,7 +4,6 @@
     "rust/crates/beryl_session/src/sessions.rs": 1,
     "tools/src/beryl_tools/forge.py": 32,
     "tools/src/beryl_tools/specs.py": 1,
-    "tools/src/beryl_tools/xmage.py": 56,
     "ui/src/screens/samples.ts": 1
   },
   "mechanics": []

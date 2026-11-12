@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, cards, checks, forge, paths, runlog, system, xmage
+from . import card_store, cards, checks, forge, paths, runlog, system, xmage, xmage_java
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -579,7 +579,7 @@ def surefire_results(classes: Sequence[str]) -> dict[tuple[str, str], str | None
     the failure's message."""
     outcomes: dict[tuple[str, str], str | None] = {}
     for name in classes:
-        path = reports() / f"TEST-{xmage.PACKAGE}.{name}.xml"
+        path = reports() / f"TEST-{xmage_java.PACKAGE}.{name}.xml"
         if not path.is_file():
             continue
         for case in ET.parse(path).getroot().iter("testcase"):
@@ -598,17 +598,17 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
     (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
     """
-    faces = xmage.Faces.load(card_store.STORE)
-    exports = xmage.export_all(entries, faces, xmage.xmage_cards(checkout(XMAGE)))
-    classes = xmage.write(exports, xmage_tests())
-    for old in reports().glob(f"TEST-{xmage.PACKAGE}.*.xml"):
+    faces = xmage_java.Faces.load(card_store.STORE)
+    exports = xmage.export_all(entries, faces, xmage_java.xmage_cards(checkout(XMAGE)))
+    classes = xmage_java.write(exports, xmage_tests())
+    for old in reports().glob(f"TEST-{xmage_java.PACKAGE}.*.xml"):
         old.unlink()
     if classes:
         run(
             mvn(
                 "-pl",
                 "Mage.Tests",
-                f"-Dtest={xmage.PACKAGE}.*BerylTest",
+                f"-Dtest={xmage_java.PACKAGE}.*BerylTest",
                 "-Dsurefire.failIfNoSpecifiedTests=false",
                 "-Dxmage.dataCollectors.printGameLogs=false",
                 "test",
@@ -632,7 +632,7 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
             entry["status"] = "unsupported"
             entry["reason"] = export.unsupported
         else:
-            key = (xmage.class_name(export.card), export.method)
+            key = (xmage_java.class_name(export.card), export.method)
             entry["test"] = f"{key[0]}.{key[1]}"
             failure = outcomes.get(key, "no result: the test did not compile or run")
             if failure is None:

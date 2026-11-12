@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import card_store, checks, oracles, xmage
+from beryl_tools import card_store, checks, oracles, xmage, xmage_facts, xmage_java
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-xmage.json"
 XMAGE_CARDS = {
@@ -25,9 +25,9 @@ XMAGE_CARDS = {
 }
 
 
-def exports(known: set[str] = XMAGE_CARDS) -> dict[str, xmage.Export]:
+def exports(known: set[str] = XMAGE_CARDS) -> dict[str, xmage_java.Export]:
     dump = json.loads(FIXTURE.read_text())
-    faces = xmage.Faces.load(card_store.STORE)
+    faces = xmage_java.Faces.load(card_store.STORE)
     return {e.scenario: e for e in xmage.export_all(dump, faces, known)}
 
 
@@ -67,7 +67,9 @@ def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
     lines = body("Get Lost on a creature gives two Maps; one explores a land into hand")
     get_lost = 'castSpell(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Get Lost");'
     passing = "passPriority(1, PhaseStep.PRECOMBAT_MAIN, playerA);"
-    sacrifice = 'activateAbility(1, PhaseStep.PRECOMBAT_MAIN, playerA, "{1}, {T}, ");'
+    sacrifice = (
+        'activateAbility(1, PhaseStep.PRECOMBAT_MAIN, playerA, "{1}, {T}, Sacrifice");'
+    )
     assert lines.index(get_lost) < lines.index(passing) < lines.index(sacrifice)
     assert lines.count(passing) == 1
 
@@ -116,7 +118,7 @@ def test_what_the_exporter_cannot_say_is_unsupported_with_the_reason() -> None:
 
 def test_write_makes_a_class_per_card_with_a_supported_scenario(tmp_path: Path) -> None:
     (tmp_path / "Stale.java").write_text("old")
-    classes = xmage.write(list(exports().values()), tmp_path)
+    classes = xmage_java.write(list(exports().values()), tmp_path)
     assert sorted(classes) == [
         "GetLostBerylTest",
         "ManaCryptBerylTest",
@@ -139,7 +141,7 @@ def surefire(path: Path, name: str, cases: dict[str, str | None]) -> None:
         )
         rows.append(f'<testcase name="{method}" classname="x">{inner}</testcase>')
     path.mkdir(parents=True, exist_ok=True)
-    report = path / f"TEST-{xmage.PACKAGE}.{name}.xml"
+    report = path / f"TEST-{xmage_java.PACKAGE}.{name}.xml"
     report.write_text(f"<testsuite>{''.join(rows)}</testsuite>")
 
 
@@ -165,9 +167,9 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
     dump = [e for e in json.loads(FIXTURE.read_text()) if e["card"] != "Mana Tithe"]
     found = list(exports().values())
-    drain: xmage.Export = next(e for e in found if e.card == "Mana Drain")
-    crypt: xmage.Export = next(e for e in found if e.card == "Mana Crypt")
-    get_lost: xmage.Export = next(e for e in found if e.card == "Get Lost")
+    drain: xmage_java.Export = next(e for e in found if e.card == "Mana Drain")
+    crypt: xmage_java.Export = next(e for e in found if e.card == "Mana Crypt")
+    get_lost: xmage_java.Export = next(e for e in found if e.card == "Get Lost")
 
     def maven(*args: object, **kwargs: object) -> str:
         # Stands in for Maven: Mana Drain passes, Mana Crypt and Get Lost fail.
@@ -178,7 +180,7 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
 
     monkeypatch.setattr(oracles, "run", maven)
     monkeypatch.setattr(oracles, "java_home", lambda: tmp_path)
-    monkeypatch.setattr(xmage, "xmage_cards", lambda checkout: XMAGE_CARDS)
+    monkeypatch.setattr(xmage_java, "xmage_cards", lambda checkout: XMAGE_CARDS)
     allowed = tmp_path / "divergences.json"
     monkeypatch.setattr(oracles, "DIVERGENCES", allowed)
     log = tmp_path / "oracle.log"
@@ -217,16 +219,23 @@ def test_oracle_needs_the_oracles_built(
     assert oracles.oracle(argparse.Namespace(cards=[])) == checks.CANNOT_RUN
 
 
-@pytest.mark.parametrize("source", ["Time Spiral", "Teferi, Hero of Dominaria"])
-def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> None:
+def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:
     # XMage asks to untap all only when tapped lands <= the limit. With three tapped
-    # lands and Teferi's limit of two, a mandatory No consumes the first land choice.
-    entry: xmage.Json = {
+    # lands and a limit of two, a mandatory No consumes the first land choice.
+    source = "Untapper"
+    untap: xmage_facts.Json = {"kind": "UntapUpTo", "count": 2, "player": "You"}
+    ability: xmage_facts.Json = {"index": "Own 0", "kind": "Spell"}
+    ability |= {"instructions": [untap]}
+    described = {source: {"faces": [{"name": source, "abilities": [ability]}]}}
+    entry: xmage_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
+        "cards": described,
     }
-    export = xmage.Export(card=source, scenario="untap choices", method="untap_choices")
-    writer = xmage.Exporter(entry, xmage.Faces.load(card_store.STORE), export)
+    export = xmage_java.Export(
+        card=source, scenario="untap choices", method="untap_choices"
+    )
+    writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
     position = xmage.Position(
         turn=1,
         step="End",
@@ -256,12 +265,12 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> N
 def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
     # Beryl asks a waterbend's permanents as a mana payment and a crew's creatures as a choice
     # of an object, as it asks an effect's: the trace's purpose says which they are.
-    entry: xmage.Json = {
+    entry: xmage_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
     }
-    export = xmage.Export(card="Aang's Iceberg", scenario="costs", method="costs")
-    writer = xmage.Exporter(entry, xmage.Faces.load(card_store.STORE), export)
+    export = xmage_java.Export(card="Aang's Iceberg", scenario="costs", method="costs")
+    writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
     position = xmage.Position(
         turn=1,
         step="PrecombatMain",
@@ -276,13 +285,13 @@ def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
         face_down=[],
         creatures=[1, 0],
     )
-    crypt: xmage.Json = {"pick": "Card", "card": "Mana Crypt"}
+    crypt: xmage_facts.Json = {"pick": "Card", "card": "Mana Crypt"}
     writer.answer({"player": 0, "kind": "ManaPayment", "pick": crypt}, position)
     writer.answer(
         {"player": 0, "kind": "ManaPayment", "pick": {"pick": "Done"}}, position
     )
     # XMage asks a cost's one answer, and an effect's only when it stands for several cards.
-    forced: xmage.Json = {"player": 0, "kind": "ChooseObject", "turn": 1}
+    forced: xmage_facts.Json = {"player": 0, "kind": "ChooseObject", "turn": 1}
     forced |= {"step": "PrecombatMain", "pick": {"pick": "Card", "card": "Island"}}
     writer.forced(forced | {"purpose": "crew"}, position)
     writer.forced(forced | {"purpose": "discard"}, position)

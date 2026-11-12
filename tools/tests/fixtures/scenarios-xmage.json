@@ -309,7 +309,185 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Elite Spellbinder": {
+    "faces": [
+     {
+      "name": "Elite Spellbinder",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Enters",
+        "targets": [
+         {
+          "kind": "Player",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "LookAt",
+          "player": "You",
+          "objects": "InZoneOf Hand"
+         },
+         {
+          "kind": "Choose",
+          "player": "You",
+          "objects": "InZoneOf Hand",
+          "optional": true
+         },
+         {
+          "kind": "Exile",
+          "objects": "Those"
+         },
+         {
+          "kind": "PermitCast",
+          "player": "OwnerOf Those",
+          "objects": "Those"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Get Lost": {
+    "faces": [
+     {
+      "name": "Get Lost",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Destroy",
+          "objects": "Target 0"
+         },
+         {
+          "kind": "CreateTokens",
+          "player": "ControllerOf Target 0",
+          "count": 2
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Map Token": {
+    "faces": [
+     {
+      "name": "Map Token",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Activated",
+        "cost": {
+         "mana": "{1}",
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          },
+          {
+           "action": "Sacrifice",
+           "of": "This"
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Explore",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Plains": {
+    "faces": [
+     {
+      "name": "Plains",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  },
  {
   "card": "Adeline, Resplendent Cathar",
@@ -553,7 +731,154 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Adeline, Resplendent Cathar": {
+    "faces": [
+     {
+      "name": "Adeline, Resplendent Cathar",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Static"
+       },
+       {
+        "index": "Own 1",
+        "kind": "Triggered",
+        "trigger": "PlayerAttacks",
+        "instructions": [
+         {
+          "kind": "CreateAttackingTokens",
+          "player": "You",
+          "others": "EachOpponent",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Human Token": {
+    "faces": [
+     {
+      "name": "Human Token"
+     }
+    ]
+   },
+   "Jace, the Mind Sculptor": {
+    "faces": [
+     {
+      "name": "Jace, the Mind Sculptor",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": 2
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Player",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Fateseal",
+          "player": "You",
+          "others": "Target 0",
+          "count": 1
+         }
+        ]
+       },
+       {
+        "index": "Own 1",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": 0
+          }
+         ]
+        },
+        "instructions": [
+         {
+          "kind": "Draw",
+          "player": "You",
+          "count": 3
+         },
+         {
+          "kind": "PutBack",
+          "player": "You",
+          "count": 2
+         }
+        ]
+       },
+       {
+        "index": "Own 2",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": -1
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "ReturnToHand",
+          "objects": "Target 0"
+         }
+        ]
+       },
+       {
+        "index": "Own 3",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": -12
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Player",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Exile",
+          "objects": "InZoneOf Library"
+         },
+         {
+          "kind": "ShuffleInto",
+          "player": "Target 0",
+          "objects": "InZoneOf Hand"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  },
  {
   "card": "Mana Drain",
@@ -814,7 +1139,141 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mana Drain": {
+    "faces": [
+     {
+      "name": "Mana Drain",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Spell",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Counter",
+          "objects": "Target 0"
+         },
+         {
+          "kind": "Delay",
+          "count": "ManaValue"
+         }
+        ]
+       },
+       {
+        "index": "Own 1",
+        "kind": "Triggered",
+        "trigger": "MainPhase",
+        "instructions": [
+         {
+          "kind": "AddManaOfKind",
+          "player": "You",
+          "count": "Carried"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Plains": {
+    "faces": [
+     {
+      "name": "Plains",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Timetwister": {
+    "faces": [
+     {
+      "name": "Timetwister",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "instructions": [
+         {
+          "kind": "ShuffleInto",
+          "player": "EachPlayer",
+          "objects": "CardsIn"
+         },
+         {
+          "kind": "Draw",
+          "player": "EachPlayer",
+          "count": 7
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  },
  {
   "card": "Mana Crypt",
@@ -957,7 +1416,91 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mana Crypt": {
+    "faces": [
+     {
+      "name": "Mana Crypt",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Step",
+        "instructions": [
+         {
+          "kind": "FlipCoin",
+          "player": "You"
+         },
+         {
+          "kind": "DealDamage",
+          "player": "You",
+          "count": 3
+         }
+        ]
+       },
+       {
+        "index": "Own 1",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Colorless"
+         ],
+         "amount": 2
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  },
  {
   "card": "Mana Tithe",
@@ -1226,7 +1769,133 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mana Tithe": {
+    "faces": [
+     {
+      "name": "Mana Tithe",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Spell",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Unless",
+          "player": "ControllerOf Target 0",
+          "cost": {
+           "mana": "{1}"
+          }
+         },
+         {
+          "kind": "Counter",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Plains": {
+    "faces": [
+     {
+      "name": "Plains",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Portable Hole": {
+    "faces": [
+     {
+      "name": "Portable Hole",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Enters",
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "ExileUntilThisLeaves",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  },
  {
   "card": "Mana Tithe",
@@ -1369,6 +2038,132 @@
     "taps": [],
     "forced": []
    }
-  ]
+  ],
+  "cards": {
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mana Tithe": {
+    "faces": [
+     {
+      "name": "Mana Tithe",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Spell",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Unless",
+          "player": "ControllerOf Target 0",
+          "cost": {
+           "mana": "{1}"
+          }
+         },
+         {
+          "kind": "Counter",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Plains": {
+    "faces": [
+     {
+      "name": "Plains",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Portable Hole": {
+    "faces": [
+     {
+      "name": "Portable Hole",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Enters",
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "ExileUntilThisLeaves",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
  }
 ]

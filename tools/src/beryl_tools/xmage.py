@@ -20,7 +20,8 @@ trace is what places each Beryl action as XMage commands:
   answered without asking (the trace's `forced`): as plain answers where XMage always asks
   them, as optional ones (`setOptionalChoice`) where it may not. Coin flips replay Beryl's
   results, and mana payments replay the sources Beryl tapped. Where XMage asks a card's
-  questions differently, the tables below translate them.
+  questions differently, rules over the dump's description of each card the scenario names
+  (`xmage_facts.py`) translate them.
 - Assertions run inside `runCode` at their position, through XMage's `assert*` family where it
   states the same fact and `BerylScenarioTest`'s helpers where it does not. Beryl's decision
   assertions (who decides, among how many candidates) are about Beryl's decision surface and are
@@ -32,161 +33,22 @@ A scenario or card outside this vocabulary is reported as unsupported, with the 
 
 from __future__ import annotations
 
-import json
-import re
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import cast
 
-from . import xmage_classes
-from .cards import listed
-
-Json = dict[str, object]
-
-PACKAGE = "org.mage.test.beryl"
-BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"
-
-# Beryl's TurnStep names to XMage's PhaseStep, in turn order.
-STEPS: dict[str, str] = {
-    "Untap": "UNTAP",
-    "Upkeep": "UPKEEP",
-    "Draw": "DRAW",
-    "PrecombatMain": "PRECOMBAT_MAIN",
-    "BeginningOfCombat": "BEGIN_COMBAT",
-    "DeclareAttackers": "DECLARE_ATTACKERS",
-    "DeclareBlockers": "DECLARE_BLOCKERS",
-    "FirstStrikeDamage": "FIRST_COMBAT_DAMAGE",
-    "CombatDamage": "COMBAT_DAMAGE",
-    "EndOfCombat": "END_COMBAT",
-    "PostcombatMain": "POSTCOMBAT_MAIN",
-    "End": "END_TURN",
-    "Cleanup": "CLEANUP",
-}
-ORDER: list[str] = list(STEPS)
-# The steps every turn has, where a game can stop: combat's middle steps are skipped without
-# attackers, and the first-strike step without first strike.
-EVERY_TURN = (
-    "Untap",
-    "Upkeep",
-    "Draw",
-    "PrecombatMain",
-    "BeginningOfCombat",
-    "EndOfCombat",
-    "PostcombatMain",
-    "End",
-    "Cleanup",
+from .xmage_facts import Cards, Json, Unsupported
+from .xmage_java import (
+    EVERY_TURN,
+    ORDER,
+    STEPS,
+    COUNTERS,
+    Export,
+    Faces,
+    assertion_code,
+    java_string,
+    method_name,
 )
-
-COUNTERS: dict[str, str] = {
-    "PlusOne": "P1P1",
-    "MinusOne": "M1M1",
-    "Loyalty": "LOYALTY",
-    "Time": "TIME",
-    "Story": "STORY",
-    "Chorus": "CHORUS",
-}
-MANA: dict[str, str] = {
-    "White": "WHITE",
-    "Blue": "BLUE",
-    "Black": "BLACK",
-    "Red": "RED",
-    "Green": "GREEN",
-    "Colorless": "COLORLESS",
-}
-
-# Beryl's activated abilities by card and index (`{"Own": i}` or `{"Granted": k}`), as the
-# start of the ability's text in XMage, which `activateAbility` matches.
-ABILITIES: dict[tuple[str, str], str] = {
-    ("Strip Mine", "Own 1"): "{T}, Sacrifice",
-    ("Spara's Headquarters", "Own 4"): "Cycling",
-    ("Jace, Vryn's Prodigy", "Own 0"): "{T}: Draw a card",
-    ("Jace, Vryn's Prodigy", "Granted 0"): "Crew 5",
-    ("Jace, Telepath Unbound", "Own 0"): "+1:",
-    ("Jace, Telepath Unbound", "Own 1"): "-3:",
-    ("Jace, Telepath Unbound", "Own 2"): "-9:",
-    ("Jace, the Mind Sculptor", "Own 0"): "+2:",
-    ("Jace, the Mind Sculptor", "Own 1"): "0:",
-    ("Jace, the Mind Sculptor", "Own 2"): "-1:",
-    ("Jace, the Mind Sculptor", "Own 3"): "-12:",
-    ("Jace, Wielder of Mysteries", "Own 1"): "+1:",
-    ("Jace, Wielder of Mysteries", "Own 2"): "-8:",
-    ("Teferi, Hero of Dominaria", "Own 0"): "+1:",
-    ("Teferi, Hero of Dominaria", "Own 1"): "-3:",
-    ("Teferi, Hero of Dominaria", "Own 2"): "-8:",
-    ("Teferi, Time Raveler", "Own 1"): "+1:",
-    ("Teferi, Time Raveler", "Own 2"): "-3:",
-    ("The Wandering Emperor", "Own 1"): "+1:",
-    ("The Wandering Emperor", "Own 2"): "-1:",
-    ("The Wandering Emperor", "Own 3"): "-2:",
-    ("Staff of the Storyteller", "Own 2"): "{W}, {T}, Remove a story counter",
-    ("Map Token", "Own 0"): "{1}, {T}, ",
-    ("Aang's Iceberg", "Own 1"): "waterbend {3}",
-    ("Currency Converter", "Own 1"): "{2}, {T}: Draw a card",
-    ("Currency Converter", "Own 2"): "{T}: Put a card exiled",
-}
-
-# Mana sources with one mana ability, by its text in XMage. Beryl pays from the sources its
-# payment plan keeps most else payable with; XMage taps its own choice, so a payment tapping
-# only these is replayed (`pay`).
-MANA_ABILITIES: dict[str, str] = {
-    "Plains": "{T}: Add {W}",
-    "Island": "{T}: Add {U}",
-    "Mana Crypt": "{T}: Add {C}{C}",
-    "Strip Mine": "{T}: Add {C}",
-}
-# Mana sources XMage could tap for more than one kind of mana, where the payment is left to it.
-MANA_CHOICES = (
-    "Floodfarm Verge",
-    "Tundra",
-    "Seachrome Coast",
-    "Spara's Headquarters",
-    "Soporific Springs",
-)
-
-# Cards whose casting options (Beryl's `costs` bits, in order) XMage asks about when the spell
-# is cast: for each, XMage's answer for paying it and for not paying it, if it asks then.
-CAST_QUESTIONS: dict[str, list[tuple[str, str | None]]] = {
-    # An alternative cost, a choice among the ways to cast it.
-    "Overlord of the Mistmoors": [("Cast with Impending", "Cast with no")],
-    # Asked only while a blue card in hand could pay it.
-    "Subtlety": [("Cast with Evoke", None)],
-    # Kicker and offspring, yes or no.
-    "Thieving Skydiver": [("Yes", "No")],
-    "Thundertrap Trainer": [("Yes", "No")],
-}
-
-# Cards with overload (bit 0 of `costs`), which XMage casts overloaded as a spell of its own,
-# "<name> with overload".
-OVERLOADS = ("Damn", "Winds of Abandon")
-
-# Cards with two triggers that wait together, by the start of XMage's text of the one a
-# TriggerOrder answer naming the card puts on the stack: Beryl's first, by ability index.
-TRIGGERS_FIRST: dict[str, str] = {"Subtlety": "When {this} enters, choose"}
-
-# Resolving cards whose search of a library XMage asks for even with nothing to find, by the
-# searcher relative to the spell's controller; Beryl asks nothing then.
-FORCED_SEARCHES: dict[str, str] = {"Winds of Abandon": "opponent"}
-
-# Cards whose targets go in the cast command rather than the target queue: TestPlayer's
-# addTarget cannot choose a permanent for a "spell or permanent" target.
-TARGETS_IN_CAST = ("Sink into Stupor",)
-
-# Questions XMage asks before a choice Beryl makes directly, by the resolving card and Beryl's
-# decision kind, with the answer that leaves the choice to Beryl's picks.
-ASKED_FIRST: dict[tuple[str, str], str] = {
-    # "Include your tapped lands to untap?", XMage's shortcut for untapping them all, asked
-    # only when its controller has no more tapped lands than it untaps.
-    ("Time Spiral", "ChooseUpTo"): "No",
-    ("Teferi, Hero of Dominaria", "ChooseUpTo"): "No",
-}
-
-# Abilities where Beryl asks whether to choose a card and then which: whether XMage asks the yes
-# or no too (else it asks once, for up to one card), and the queue it takes the card from.
-MAY_CHOOSE: dict[str, tuple[bool, str]] = {
-    "Elite Spellbinder": (False, "setChoice"),
-    "Thundertrap Trainer": (True, "addTarget"),
-}
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
 # targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
@@ -196,84 +58,10 @@ FORCED_COSTS = ("crew", "waterbend", "exile-cost")
 # Others XMage asks when the one answer stands for several identical cards.
 FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 
-# Counterspells whose "unless its controller pays" XMage asks even of a controller who cannot
-# pay, where Beryl asks nothing (CR 118.3): XMage's mana costs can always be paid as far as its
-# question is concerned, and the payment fails after a yes. The exporter answers no for them.
-UNLESS_PAYS = ("Mana Tithe", "No More Lies")
-
-# Resolving cards whose choices of cards XMage takes from the target queue instead.
-CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor", "Trinket Mage", "Winds of Abandon")
-
-# Resolving cards that may search a library, a yes or no and then the search, which XMage asks
-# as a target from the library (CHOICES_AS_TARGETS) even with no card to find, where Beryl,
-# with nothing to choose, asks nothing.
-SEARCHES = ("Trinket Mage",)
-
-# Resolving cards that scry. Beryl chooses the cards for the bottom one at a time until done
-# (ChooseUpTo), then the rest from the top down (ChooseObject). XMage takes the bottom ones as
-# one target list.
-SCRIES = ("Aang's Iceberg",)
-
-# Resolving cards that look at the top of a library, put some of the cards into the hand and
-# the rest on the bottom in any order, with how many go to the hand. Beryl chooses those one at
-# a time (ChooseObject), then the rest for the bottom one at a time, each under the one before.
-# XMage takes the cards for the hand as one target list and the bottom order, in the same
-# sense, from the choice queue. With no more cards than go to the hand, Beryl takes them all
-# unasked where XMage asks for them, so the scenario cannot name the answer.
-TAKES: dict[str, int] = {"Stock Up": 2}
-
 # The answers XMage takes from the choice queue, by Beryl decision kind: with these, a
 # waterbend's permanents, which Beryl asks as a payment whose purpose says so.
 CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
 YES_NO_KINDS = ("YesNo", "CastOffer")
-
-
-class Unsupported(Exception):
-    """A scenario, or a part of one, outside what the exporter can say in XMage's terms."""
-
-
-@dataclass(frozen=True)
-class Faces:
-    """What the exporter needs of the decks' cards in the store: backs, land backs, loyalty, cost."""
-
-    back: dict[str, str]
-    land_back: dict[str, str]
-    loyalty: dict[str, int]
-    mana_cost: dict[str, str]
-
-    @staticmethod
-    def load(store: Path) -> Faces:
-        back: dict[str, str] = {}
-        land_back: dict[str, str] = {}
-        loyalty: dict[str, int] = {}
-        mana_cost: dict[str, str] = {}
-        for card in listed(store)[0]:
-            faces = cast(list[Json], card["faces"])
-            names = [cast(str, f["name"]) for f in faces]
-            mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))
-            for face, name in zip(faces, names):
-                if "loyalty" in face:
-                    loyalty[name] = int(cast(str, face["loyalty"]))
-            if len(faces) > 1:
-                back[names[0]] = names[1]
-                front_land = "Land" in cast(str, faces[0]["type_line"])
-                if "Land" in cast(str, faces[1]["type_line"]) and not front_land:
-                    land_back[names[0]] = names[1]
-        return Faces(back, land_back, loyalty, mana_cost)
-
-
-def java_string(text: str) -> str:
-    return json.dumps(text, ensure_ascii=False)
-
-
-def class_name(card: str) -> str:
-    return xmage_classes.card_class(card.split(" // ")[0]) + "BerylTest"
-
-
-def method_name(index: int, scenario: str) -> str:
-    words = re.sub(r"[^A-Za-z0-9 ]", " ", scenario).split()
-    body = "_".join(w.lower() for w in words)[:60].rstrip("_")
-    return f"s{index:02d}_{body}"
 
 
 @dataclass
@@ -294,18 +82,6 @@ class Position:
     creatures: list[int]
 
 
-@dataclass
-class Export:
-    """One scenario as an XMage test method, or why it is unsupported."""
-
-    card: str
-    scenario: str
-    method: str
-    body: list[str] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
-    unsupported: str | None = None
-
-
 class Exporter:
     """Translates one scenario into the statements of a test method."""
 
@@ -313,6 +89,7 @@ class Exporter:
         self.entry = entry
         self.faces = faces
         self.export = export
+        self.cards = Cards(cast(Json, entry.get("cards", {})), faces.oracle)
         setup = cast(Json, entry["setup"])
         self.setup: Json = setup
         self.first_turn: int = cast(int, setup["turn"])
@@ -331,17 +108,17 @@ class Exporter:
         self.trace: list[Position] = []
         self.index = 0
         self.taken: set[int] = set()
-        # The resolving object and kind of the last answer, for `ASKED_FIRST`.
+        # The resolving object and kind of the last answer, for XMage's untap shortcut.
         self.last_answer: tuple[str | None, str] = (None, "")
-        # After a yes to a `MAY_CHOOSE` ability's question: the command for the card chosen.
+        # After a yes to a `Cards.may_choose` ability's question: the command for the card chosen.
         self.may_choose: str | None = None
         # A scry in progress: who scries, the cards for the bottom, and those ordered on top.
         self.scry: tuple[str, list[str], list[str]] | None = None
-        # A `TAKES` card cast but not yet resolved by its picks, and the cards chosen for the
+        # A `Cards.takes` card cast but not yet resolved by its picks, and the cards chosen for the
         # hand by the one resolving.
         self.take_pending: str | None = None
         self.taking: list[str] | None = None
-        # The `UNLESS_PAYS` counterspells on the stack whose payer Beryl has not asked yet, with
+        # The `Cards.unless_pays` counterspells on the stack whose payer Beryl has not asked yet, with
         # that payer.
         self.unless_pays: dict[str, str] = {}
 
@@ -422,7 +199,7 @@ class Exporter:
                 raise Unsupported(f"ordering {name}'s simultaneous triggers")
 
     def unasked(self, p: Position) -> None:
-        """For each `UNLESS_PAYS` counterspell that left the stack without Beryl asking its
+        """For each `Cards.unless_pays` counterspell that left the stack without Beryl asking its
         payer, the no XMage asks for (optional, should it not ask)."""
         on_stack = {cast(str, item["name"]) for item in p.stack}
         for card, payer in list(self.unless_pays.items()):
@@ -493,14 +270,14 @@ class Exporter:
             for name in reversed(cast(list[str], setup["library"])):
                 self.emit(f"addCard(Zone.LIBRARY, {who}, {java_string(name)});")
             # XMage plays its turn 1 from the untap step, where Beryl's setup starts at its step
-            # with the earlier ones done: a Mana Crypt there flips a coin XMage would lose half
-            # the time. Beryl's setup skipped that flip, so XMage wins it.
-            crypt = any(
-                p["card"] == "Mana Crypt"
+            # with the earlier ones done: a permanent that flips a coin at the upkeep flips one
+            # XMage would lose half the time. Beryl's setup skipped that flip, so XMage wins it.
+            flips = any(
+                self.cards.flips_a_coin_each_turn(cast(str, p["card"]))
                 for p in cast(list[Json], setup["battlefield"])
             )
             if (
-                crypt
+                flips
                 and who == "playerA"
                 and ORDER.index(start) > ORDER.index("Upkeep")
             ):
@@ -579,23 +356,23 @@ class Exporter:
         return card
 
     def empty_search(self, p: Position) -> None:
-        """After a `FORCED_SEARCHES` card resolves without Beryl asking for a card, the skip XMage's
-        search with nothing to find asks for."""
-        if not p.stack or p.stack[-1]["name"] not in FORCED_SEARCHES:
+        """After a spell or ability resolves whose search by each player who lost objects to it
+        Beryl did not ask (`Cards.search_by_each_player`), the skip XMage's search with nothing
+        to find asks of each of them: the players whose creatures the next position has fewer
+        of. One who lost none searches for no cards, which XMage does not ask either."""
+        if not p.stack:
+            return
+        if not self.cards.search_by_each_player(cast(str, p.stack[-1]["name"])):
             return
         following = self.actions[self.index + 1 : self.index + 2]
         if following and following[0].get("kind") == "ChooseUpTo":
             return
-        top = p.stack[-1]
-        caster = self.player(top["controller"])
-        searcher = caster
-        if FORCED_SEARCHES[cast(str, top["name"])] == "opponent":
-            searcher = "playerB" if caster == "playerA" else "playerA"
-            # Winds of Abandon's search counts the opponent's creatures it exiled: with none,
-            # XMage asks nothing either.
-            if p.creatures[1 - cast(int, top["controller"])] == 0:
-                return
-        self.emit(f"addTarget({searcher}, TestPlayer.TARGET_SKIP);")
+        if self.index + 1 >= len(self.trace):
+            raise Unsupported("a search by each player who lost objects, at the end")
+        after = self.trace[self.index + 1].creatures
+        for seat, (before, now) in enumerate(zip(p.creatures, after)):
+            if now < before:
+                self.emit(f"addTarget({self.player(seat)}, TestPlayer.TARGET_SKIP);")
 
     def cast(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
@@ -607,15 +384,16 @@ class Exporter:
             self.flashback(action, p)
             return
         name = card
-        if card in OVERLOADS and costs:
-            if costs != 1:
+        overload = self.cards.overload_bit(card)
+        if overload is not None and costs >> overload & 1:
+            if costs != 1 << overload:
                 raise Unsupported(f"casting option {costs:#b} of {card}")
             name, costs = f"{card} with overload", 0
         self.prepare(who, p, starts=True)
         self.pay(who, p, None)
         spell = self.spell_on_top(p)
         targets = "TestPlayer.NO_TARGET"
-        if card in TARGETS_IN_CAST:
+        if self.cards.targets_in_cast(card):
             targets = java_string("^".join(self.take_targets(action["player"])))
         if p.stack and not any(cast(bool, item["spell"]) for item in p.stack):
             # XMage's spell abilities are named "Cast <card>"; an ability's text is its rule.
@@ -634,16 +412,16 @@ class Exporter:
                 f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets}, "
                 f"{java_string(spell)});"
             )
-        questions = CAST_QUESTIONS.get(card, [])
+        questions = self.cards.cast_answers(card)
         if costs >> len(questions):
             raise Unsupported(f"casting option {costs:#b} of {card}")
-        for bit, answers in enumerate(questions):
-            answer = answers[0] if costs >> bit & 1 else answers[1]
-            if answer is not None:
+        for bit, (paid, unpaid) in enumerate(questions):
+            answer = paid if costs >> bit & 1 else unpaid
+            if answer:
                 self.emit(f"setChoice({who}, {java_string(answer)});")
-        if card in UNLESS_PAYS:
+        if self.cards.unless_pays(card):
             self.unless_pays[card] = self.target_controller(action["player"], card)
-        if card in TAKES:
+        if self.cards.takes(card) is not None:
             self.take_pending = card
 
     def flashback(self, action: Json, p: Position) -> None:
@@ -666,23 +444,26 @@ class Exporter:
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
         tapped, which are among the taps by the next position, less the activated `source`
-        itself. A payment with a source of several kinds of mana is left to XMage. One that
-        sacrifices a Treasure is unsupported: XMage asks the color it makes, which the trace
-        doesn't record."""
+        itself, by their one mana ability (`Cards.mana_text`). A payment with a source of
+        several kinds of mana is left to XMage. One that sacrifices a source for mana of any
+        color is unsupported: XMage asks the color, which the trace doesn't record."""
         if self.index + 1 >= len(self.trace):
             return
         taps = list(self.trace[self.index + 1].taps)
-        if "Treasure Token" in taps:
-            raise Unsupported("a payment with a Treasure, whose color XMage asks")
+        if any(self.cards.sacrificed_for_mana_of_any_color(name) for name in taps):
+            raise Unsupported(
+                "a payment sacrificing a source for mana of a color XMage asks"
+            )
         if p.stack:
             return
         if source in taps:
             taps.remove(source)
-        if any(name in MANA_CHOICES for name in taps):
+        if any(self.cards.mana_choice(name) for name in taps):
             return
         for name in taps:
-            if name in MANA_ABILITIES:
-                text = java_string(MANA_ABILITIES[name])
+            text = self.cards.mana_text(name)
+            if text is not None:
+                text = java_string(text)
                 self.emit(f"activateManaAbility({self.at(p)}, {who}, {text});")
 
     def cast_targets(self) -> list[Json]:
@@ -738,7 +519,7 @@ class Exporter:
         card = cast(str, action["card"])
         ability = cast(Json, action["ability"])
         ((how, index),) = ability.items()
-        text = ABILITIES.get((card, f"{how} {index}"))
+        text = self.cards.ability_text(card, how, cast(int, index))
         if text is None:
             raise Unsupported(f"{card}'s ability {how} {index}")
         self.prepare(who, p, starts=True)
@@ -762,16 +543,21 @@ class Exporter:
         source = cast(str, p.stack[-1]["name"]) if p.stack else None
         if kind == "YesNo" and source is not None:
             self.unless_pays.pop(source, None)
-        first = ASKED_FIRST.get((source or "", kind))
-        if first is not None and self.last_answer != (source, kind):
-            self.emit(f"setOptionalChoice({who}, {self.at(p)}, {java_string(first)});")
+        # "Include your tapped lands to untap?", XMage's shortcut for untapping them all,
+        # asked only when its controller has no more tapped lands than it untaps: no leaves
+        # the choice to Beryl's picks.
+        untaps = source is not None and self.cards.untaps_up_to(source)
+        if untaps and kind == "ChooseUpTo" and self.last_answer != (source, kind):
+            self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
         self.last_answer = (source, kind)
         pick = cast(Json, action["pick"])
         what = cast(str, pick["pick"])
         card = cast("str | None", pick.get("card"))
-        if source in TAKES and kind == "ChooseObject" and card is not None:
-            self.take(who, source, card)
-        elif source in SCRIES and kind == "ChooseUpTo":
+        resolving = source or ""
+        may_choose = self.cards.may_choose(resolving)
+        if self.cards.takes(resolving) and kind == "ChooseObject" and card is not None:
+            self.take(who, resolving, card)
+        elif self.cards.scries(resolving) and kind == "ChooseUpTo":
             if self.scry is None:
                 self.scry = (who, [], [])
             if card is not None:
@@ -789,8 +575,8 @@ class Exporter:
         ):
             self.emit(f"{self.may_choose}({who}, {java_string(card)});")
             self.may_choose = None
-        elif source in MAY_CHOOSE and kind == "YesNo":
-            asks, command = MAY_CHOOSE[source]
+        elif may_choose is not None and kind == "YesNo":
+            asks, command = may_choose
             if asks:
                 self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
             if what == "Yes":
@@ -798,7 +584,7 @@ class Exporter:
             elif not asks:
                 skip = "CHOICE_SKIP" if command == "setChoice" else "TARGET_SKIP"
                 self.emit(f"{command}({who}, TestPlayer.{skip});")
-        elif source in SEARCHES and kind == "YesNo":
+        elif self.cards.may_search(resolving) and kind == "YesNo":
             self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
             if what == "Yes" and self.next_answer_kind() != "ChooseUpTo":
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
@@ -830,8 +616,9 @@ class Exporter:
                 f"block({self.turn(p.turn)}, {who}, {java_string(card)}, "
                 f"{java_string(attackers[0])});"
             )
-        elif kind == "TriggerOrder" and card in TRIGGERS_FIRST:
-            self.emit(f"setChoice({who}, {java_string(TRIGGERS_FIRST[card])});")
+        elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
+            text = java_string(cast(str, self.cards.first_trigger_text(card)))
+            self.emit(f"setChoice({who}, {text});")
         elif (kind in CHOICE_KINDS or bending) and card is not None:
             name = java_string(self.object_name(card, p))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
@@ -848,7 +635,7 @@ class Exporter:
             raise Unsupported(f"answering {kind} with {what}")
 
     def take(self, who: str, source: str, card: str) -> None:
-        """One pick of a `TAKES` card: for the hand, queued as one target list once all are
+        """One pick of a `Cards.takes` card: for the hand, queued as one target list once all are
         chosen, then for the bottom, from the choice queue."""
         if self.take_pending == source:
             self.take_pending = None
@@ -858,7 +645,7 @@ class Exporter:
             self.emit(f"setChoice({who}, {java_string(card)});")
             return
         taking.append(card)
-        if len(taking) == TAKES[source]:
+        if len(taking) == self.cards.takes(source):
             self.emit(f"addTarget({who}, {java_string('^'.join(taking))});")
             self.taking = None
 
@@ -869,10 +656,9 @@ class Exporter:
                 return cast("str | None", action.get("kind"))
         return None
 
-    @staticmethod
-    def choice_command(source: str | None, kind: str) -> str:
+    def choice_command(self, source: str | None, kind: str) -> str:
         """The queue XMage takes a choice of a card from."""
-        targets = source in CHOICES_AS_TARGETS and kind in (
+        targets = self.cards.choices_as_targets(source or "") and kind in (
             "ChooseObject",
             "ChooseUpTo",
         )
@@ -906,63 +692,13 @@ class Exporter:
         if p.kind != "Priority":
             self.export.skipped.append(f"{what}: in the middle of a {p.kind} decision")
             return
-        code = self.assertion_code(assertion)
+        code = assertion_code(assertion, self.player(assertion.get("player")))
         who = self.player(p.decider)
         self.prepare(who, p)
         self.emit(
             f"runCode({java_string(what)}, {self.at(p)}, {who}, "
             f"(info, player, game) -> {code});"
         )
-
-    def assertion_code(self, a: Json) -> str:
-        what = cast(str, a["assert"])
-        who = self.player(a.get("player"))
-        card = cast("str | None", a.get("card"))
-        name = java_string(card) if card is not None else "null"
-        count = a.get("count")
-        if what == "Life":
-            return f"assertLife({who}, {a['life']})"
-        if what == "Count":
-            zone = cast(str, a["zone"])
-            if zone == "Battlefield":
-                return f"assertOwnedOnBattlefield({who}, {name}, {count})"
-            method = {
-                "Hand": "assertHandCount",
-                "Graveyard": "assertGraveyardCount",
-                "Library": "assertLibraryCount",
-                "Exile": "assertExileCount",
-            }.get(zone)
-            if method is None:
-                raise Unsupported(f"counting {zone}")
-            if card is None:
-                return f"{method}({who}, {count})"
-            return f"{method}({who}, {name}, {count})"
-        if what == "Tapped":
-            return f"assertTappedControlled({who}, {name}, {count})"
-        if what == "Controls":
-            return f"assertPermanentCount({who}, {name}, {count})"
-        if what == "Attacking":
-            return f"assertAttackingControlled({who}, {name}, {count})"
-        if what == "FaceDown":
-            return f"assertFaceDownControlled({who}, {name}, {count})"
-        if what == "Pt":
-            token = "true" if a["token"] else "false"
-            return f"assertPt({who}, {name}, {token}, {a['power']}, {a['toughness']})"
-        if what == "Creature":
-            creature = "true" if a["creature"] else "false"
-            return f"assertCreature({who}, {name}, {creature})"
-        if what == "Counters":
-            kind = COUNTERS[cast(str, a["kind"])]
-            return f"assertCountersOn({who}, {name}, CounterType.{kind}, {count})"
-        if what == "Stack":
-            return f"assertStackSize({count})"
-        if what == "Library":
-            top = ", ".join(java_string(n) for n in cast(list[str], a["top"]))
-            return f"assertLibraryTop({who}, {top})"
-        if what == "Mana":
-            color = MANA[cast(str, a["color"])]
-            return f"assertManaPool({who}, ManaType.{color}, {a['amount']})"
-        raise Unsupported(f"a {what} assertion")
 
     def stop(self) -> None:
         """Stops at the first step after the last position that every turn has."""
@@ -1012,69 +748,3 @@ def export_all(dump: Sequence[Json], faces: Faces, cards: set[str]) -> list[Expo
         counters[card] = counters.get(card, 0) + 1
         exports.append(export_one(entry, counters[card], faces, cards))
     return exports
-
-
-IMPORTS = """\
-import mage.constants.ManaType;
-import mage.constants.PhaseStep;
-import mage.constants.Zone;
-import mage.counters.CounterType;
-import org.junit.Test;
-import org.mage.test.player.TestPlayer;
-"""
-
-
-def render_class(card: str, exports: Sequence[Export]) -> str:
-    """The test class of one card's supported scenarios."""
-    out = [
-        f"package {PACKAGE};",
-        "",
-        IMPORTS,
-        f"/** Beryl's scenarios for {card}, generated by `just oracle`. Do not edit. */",
-        f"public class {class_name(card)} extends BerylScenarioTest {{",
-    ]
-    for export in exports:
-        if export.unsupported is not None:
-            continue
-        out += [
-            "",
-            f"    /** {export.scenario} */",
-            "    @Test",
-            f"    public void {export.method}() {{",
-        ]
-        out += [f"        {line}" for line in export.body]
-        out.append("    }")
-    out.append("}")
-    return "\n".join(out) + "\n"
-
-
-def write(exports: Sequence[Export], directory: Path) -> list[str]:
-    """Writes the base class and one test class per card with a supported scenario into
-    `directory`, which it empties first. Returns the class names."""
-    directory.mkdir(parents=True, exist_ok=True)
-    for old in directory.glob("*.java"):
-        old.unlink()
-    (directory / BASE.name).write_text(BASE.read_text(), newline="\n")
-    by_card: dict[str, list[Export]] = {}
-    for export in exports:
-        by_card.setdefault(export.card, []).append(export)
-    classes = []
-    for card, group in by_card.items():
-        if all(e.unsupported is not None for e in group):
-            continue
-        name = class_name(card)
-        (directory / f"{name}.java").write_text(render_class(card, group), newline="\n")
-        classes.append(name)
-    return classes
-
-
-def xmage_cards(checkout: Path) -> set[str]:
-    """The card names XMage implements: every set file lists its cards as
-    `new SetCardInfo("Name", ...`."""
-    names: set[str] = set()
-    pattern = re.compile(r'new SetCardInfo\("((?:[^"\\]|\\.)*)"')
-    for path in (checkout / "Mage.Sets" / "src" / "mage" / "sets").glob("*.java"):
-        names.update(
-            m.group(1) for m in pattern.finditer(path.read_text(errors="replace"))
-        )
-    return names

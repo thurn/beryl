@@ -1108,8 +1108,10 @@ trace. Python exporters in `tools/` generate:
   `Mage.Tests`, on `CardTestPlayerBase` through Beryl's `BerylScenarioTest`
   helpers: `addCard`, `castSpell`, `attack`, `addTarget`, `setChoice`,
   `setStrictChooseMode(true)`, the `assert*` family. Where XMage asks a card's
-  questions differently from Beryl, tables at the top of `xmage.py` translate
-  them; a new card's scenario that fails on XMage usually needs an entry there.
+  questions differently from Beryl, rules in `xmage_facts.py` translate them,
+  reading the dump's description of each card a scenario names (its abilities'
+  costs, mana, casting options and effects), never its name; a new card's
+  scenario that fails on XMage usually needs a rule there for what it does.
 - **Forge**, the secondary oracle. Each scenario becomes a
   `forge.game.GameState` text setup (`p0life`, `p0hand`, `p0battlefield` with
   `|Tapped` and `|Counters:LOYALTY=3`) and a list of steps that Beryl's own
