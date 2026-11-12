@@ -108,6 +108,9 @@ export function record(ui) {
         // layer over the whole table covers nothing between its arrows.
         if (x.tagName === "svg") return false;
         if (x instanceof SVGGraphicsElement) return true;
+        // So is a canvas of the stage's light (src/stage/glow.ts), as large as the table and
+        // clear but where something is lit, and light lies on a card without hiding it.
+        if (x.classList.contains("stage-lights")) return false;
         if (/^(IMG|CANVAS|VIDEO)$/.test(x.tagName)) return true;
         const style = getComputedStyle(x);
         if (style.backgroundImage !== "none") return true;
