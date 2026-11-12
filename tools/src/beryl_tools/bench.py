@@ -221,7 +221,7 @@ def bench(args: argparse.Namespace) -> int:
 
 
 def toolchain() -> str:
-    data = tomllib.loads((paths.RUST / "rust-toolchain.toml").read_text())
+    data = tomllib.loads((paths.REPO / "rust-toolchain.toml").read_text())
     return str(data["toolchain"]["channel"])
 
 

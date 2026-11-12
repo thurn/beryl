@@ -55,14 +55,14 @@ def run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]
 
 def rust_targets(targets: tuple[str, ...]) -> int:
     """Adds the Rust `targets` missing from the toolchain rust-toolchain.toml pins."""
-    # From rust/, so rustup acts on the pinned toolchain.
-    installed = run("rustup", "target", "list", "--installed", cwd=paths.RUST)
+    # From the repository, so rustup acts on the pinned toolchain.
+    installed = run("rustup", "target", "list", "--installed", cwd=paths.REPO)
     missing = [t for t in targets if t not in installed.stdout.split()]
     if not missing:
         return 0
     print(f"mobile-setup: rustup target add {' '.join(missing)}")
     return subprocess.run(
-        ["rustup", "target", "add", *missing], cwd=paths.RUST, check=False
+        ["rustup", "target", "add", *missing], cwd=paths.REPO, check=False
     ).returncode
 
 
@@ -143,11 +143,24 @@ def ndk_env() -> dict[str, str]:
 def check(args: argparse.Namespace) -> int:
     """Type-checks the app crate for the iOS Simulator and Android: the native builds slow CI
     can afford (seconds on a warm cache)."""
+    manifest = str(paths.RUST / "Cargo.toml")
     for target in ("aarch64-apple-ios-sim", "aarch64-linux-android"):
         started = time.monotonic()
+        # From ui/, where Xcode's and Gradle's build scripts run cargo, so this
+        # resolves the toolchain the way the phone builds do.
         code = subprocess.run(
-            ["cargo", "check", "--locked", "-p", "beryl_app", "--target", target],
-            cwd=paths.RUST,
+            [
+                "cargo",
+                "check",
+                "--locked",
+                "--manifest-path",
+                manifest,
+                "-p",
+                "beryl_app",
+                "--target",
+                target,
+            ],
+            cwd=paths.UI,
             env=ndk_env(),
             check=False,
         ).returncode

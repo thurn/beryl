@@ -1265,8 +1265,8 @@ binaries: fat LTO, `panic = "abort"` and `codegen-units = 1`, with
 `-C target-cpu=apple-m4` passed by the recipes that build it, since a Cargo
 profile cannot set the CPU; `apple-m4` is what `native` resolves to here under
 rustc 1.98. Profile-guided optimization, trained on the cube rollout benchmark,
-is not used yet. It needs `llvm-tools` in `rust/rust-toolchain.toml`, and BOLT,
-the usual next step on Linux, does not support macOS binaries.
+is not used yet. It needs `llvm-tools` in `rust-toolchain.toml`, and BOLT, the
+usual next step on Linux, does not support macOS binaries.
 
 - Estimated gains for a branchy engine: PGO 5 to 15%, fat LTO and abort a few
   percent together, the CPU target 0 to 2%.

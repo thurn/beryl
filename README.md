@@ -16,7 +16,7 @@ On an Apple silicon Mac:
 | Tool                     | Install                                                                                  |
 | ------------------------ | ---------------------------------------------------------------------------------------- |
 | Xcode Command Line Tools | `xcode-select --install`                                                                 |
-| Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it                          |
+| Rust                     | [rustup](https://rustup.rs); `rust-toolchain.toml` pins it                               |
 | Node.js 24               | `brew install node`                                                                      |
 | uv                       | `brew install uv`                                                                        |
 | just 1.59+               | `cargo install just --locked`                                                            |
@@ -36,7 +36,7 @@ On Windows 11 (x64), which runs the app, the tests and the agents, but not
 | ------------------------- | ------------------------------------------------------------------------ |
 | Visual Studio Build Tools | The "Desktop development with C++" workload; WebView2 ships with Windows |
 | Git for Windows           | `winget install Git.Git`; `just` runs recipes in its `sh`                |
-| Rust                      | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it          |
+| Rust                      | [rustup](https://rustup.rs); `rust-toolchain.toml` pins it               |
 | Node.js 24, uv            | `winget install OpenJS.NodeJS astral-sh.uv`                              |
 | just 1.59+                | `cargo install just --locked`                                            |
 | JDK 21, Maven             | `just oracle-setup`, with winget and Apache's Maven download             |

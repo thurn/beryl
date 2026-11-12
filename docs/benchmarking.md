@@ -131,8 +131,8 @@ The VM:
 
 - `beryl-bench`: arm64 Ubuntu on Apple's virtualization, 4 CPUs, 4 GiB. It
   mounts only the main checkout, read-only. `by bench-count` installs Valgrind,
-  the Rust pinned in `rust/rust-toolchain.toml` and the `gungraun-runner`
-  matching `Cargo.lock`.
+  the Rust pinned in `rust-toolchain.toml` and the `gungraun-runner` matching
+  `Cargo.lock`.
 - Each worktree builds into a target directory of its own in the VM, so it
   counts its own code: Cargo names the engine's artifacts the same in every
   worktree and trusts file times. A new one starts as a copy of the count gate's
