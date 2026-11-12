@@ -9,7 +9,7 @@ use beryl_cards::names::{
     STOCK_UP, SWIFT_RECONFIGURATION, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
     THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TRINKET_MAGE, TUNDRA,
 };
-use beryl_engine::{DecisionKind, TurnStep};
+use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
 use super::shorthand::{ISLAND_, LANDS, PLAINS_, choose, play_land};
@@ -197,15 +197,12 @@ const ATTACKERS: &[Permanent] = &[
 
 /// Declaring blockers and then attackers: the opponent's turn, in which its two creatures
 /// attack and the human's three may block either, and the human's turn after it, with a
-/// planeswalker across the table to aim an attacker at. `turn` is the turn it opens in, the
-/// opponent's when it is even.
-const fn declare(name: &'static str, turn: u16) -> Scenario {
+/// planeswalker across the table to aim an attacker at. It opens in `turn`, which is
+/// `active`'s: the opponent's for the seat that blocks first, the human's for the seat that
+/// watches.
+const fn declare(name: &'static str, turn: u16, active: Seat) -> Scenario {
     Scenario::new(name)
-        .at(
-            turn,
-            if turn % 2 == 0 { P1 } else { P0 },
-            TurnStep::PrecombatMain,
-        )
+        .at(turn, active, TurnStep::PrecombatMain)
         .hand(P0, &[COUNTERSPELL])
         .battlefield(P0, DEFENDERS)
         .battlefield(P1, ATTACKERS)
@@ -223,7 +220,7 @@ const ATTACK: &[Action] = &[
 pub(super) const SHAPES: &[Scenario] = &[
     // The fixtures' clicks play these.
     pay("shape-pay"),
-    declare("shape-declare", 4).actions(ATTACK),
+    declare("shape-declare", 4, P1).actions(ATTACK),
     split("shape-split").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
     zone("shape-zone"),
     order("shape-order"),
@@ -262,7 +259,7 @@ pub(super) const SHAPES: &[Scenario] = &[
         Action::answer(P0, DecisionKind::ManaPayment, Pick::Done),
         Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
     ]),
-    declare("shape-declare-theirs", 3).actions(&[
+    declare("shape-declare-theirs", 3, P0).actions(&[
         choose(P0, DecisionKind::Attacker, ELITE_SPELLBINDER),
         choose(P0, DecisionKind::AttackTarget, THE_WANDERING_EMPEROR),
         choose(P0, DecisionKind::Attacker, SNAPCASTER_MAGE),
