@@ -1,6 +1,6 @@
 //! Adding mana ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)).
 
-use beryl_card::Players;
+use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaSet};
@@ -40,6 +40,24 @@ pub(crate) fn add_instruction<L: Layout>(
     for player in run.in_turn_order(players) {
         add(run.game(), player, source, color, mana.amount);
         added += u32::from(mana.amount);
+    }
+    Outcome::of(Bitboard::EMPTY, added)
+}
+
+/// [`Effect::AddManaOfKind`](beryl_card::Effect::AddManaOfKind): "[Player] adds [amount]
+/// mana of [kind]" (CR 106.4), by a spell or an ability that is no mana ability, of the one
+/// kind it names. The outcome is the mana added.
+pub(crate) fn add_of_kind_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+    kind: ManaColor,
+    amount: Amount,
+) -> Outcome<L> {
+    let (source, amount) = (run.resolution().entry.object, run.scene().amount(amount));
+    let mut added = 0;
+    for player in run.in_turn_order(players) {
+        add(run.game(), player, source, kind, amount);
+        added += u32::from(amount);
     }
     Outcome::of(Bitboard::EMPTY, added)
 }

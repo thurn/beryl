@@ -36,9 +36,9 @@ pub enum Malformed {
     /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy
     /// makes.
     Copy,
-    /// [`Effect::AddMana`] outside a mana ability: an ability that adds mana is one
-    /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)), and the engine
-    /// produces mana only as it resolves one.
+    /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
+    /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
+    /// names the kind it adds ([`Effect::AddManaOfKind`]).
     AddMana,
     /// [`crate::TargetSpec::removal`] or [`crate::TargetSpec::counter`] declared of an
     /// ability whose effect is data, which says what it takes itself
@@ -50,6 +50,9 @@ pub enum Malformed {
     /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
     /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it.
     Delayed,
+    /// [`Amount::Carried`] in an ability that is not a delayed triggered ability: no effect
+    /// made it, so it carries nothing.
+    Carried,
     /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about
     /// anything.
     TriggeredOn,
@@ -83,6 +86,9 @@ impl Malformed {
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Delayed => {
                 "an effect delays an ability that is not a delayed trigger of its face"
+            }
+            Malformed::Carried => {
+                "an amount is what a delayed trigger carries, and its ability is not one"
             }
             Malformed::TriggeredOn => {
                 "an effect names what its trigger event was about, and its ability has none"
@@ -259,6 +265,75 @@ impl Scope<'_> {
             | Effect::Explore(objects)
             | Effect::GainFlashback(objects) => self.objects(objects),
             Effect::LookAt { player, cards } => both(self.players(player), self.objects(cards)),
+            Effect::CreateAttackingTokens {
+                player,
+                count,
+                attacking,
+                ..
+            } => both(
+                both(self.players(player), self.players(attacking)),
+                self.amount(count),
+            ),
+            Effect::DealDamage { to, amount } => {
+                let to = match to {
+                    Recipients::Players(players) => self.players(players),
+                    Recipients::Permanents(objects) => self.objects(objects),
+                };
+                both(to, self.amount(amount))
+            }
+            Effect::MayCast { player, card, .. } => both(self.players(player), self.objects(card)),
+            Effect::Draw { player, count }
+            | Effect::Discard { player, count }
+            | Effect::Mill { player, count }
+            | Effect::Scry { player, count }
+            | Effect::GainLife {
+                player,
+                amount: count,
+            }
+            | Effect::LoseLife {
+                player,
+                amount: count,
+            }
+            | Effect::CreateTokens { player, count, .. }
+            | Effect::AddManaOfKind {
+                player,
+                amount: count,
+                ..
+            } => both(self.players(player), self.amount(count)),
+            Effect::AddCounters { objects, count, .. }
+            | Effect::RemoveCounters { objects, count, .. } => {
+                both(self.objects(objects), self.amount(count))
+            }
+            Effect::Modify {
+                objects,
+                modification,
+                ..
+            } => both(self.objects(objects), self.modification(modification)),
+            Effect::UntapUpTo {
+                player,
+                count,
+                permanents,
+            } => both(
+                self.players(player),
+                both(self.amount(count), self.objects(permanents)),
+            ),
+            Effect::GetEmblem { player, .. }
+            | Effect::ManifestDread(player)
+            | Effect::FlipCoin(player)
+            | Effect::WinGame(player)
+            | Effect::LoseGame(player) => self.players(player),
+            Effect::Choose { .. }
+            | Effect::PermitCast { .. }
+            | Effect::CounterInto { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::AddMana { .. }
+            | Effect::Delay { .. } => self.limited(effect),
+        }
+    }
+
+    /// One instruction the engine carries out only for some of what its operands can say.
+    const fn limited(self, effect: &Effect) -> Checked {
+        match effect {
             // One object, picked: the one run of picks the interpreter asks.
             Effect::Choose {
                 player,
@@ -283,42 +358,10 @@ impl Scope<'_> {
                 }
                 Duration::UntilYourNextTurn => Err(Malformed::Permitted),
             },
-            Effect::CreateAttackingTokens {
-                player,
-                count,
-                attacking,
-                ..
-            } => both(
-                both(self.players(player), self.players(attacking)),
-                self.amount(count),
-            ),
             Effect::CounterInto { spells, zone } => match zone {
                 Zone::Exile => self.objects(spells),
                 _ => Err(Malformed::Countered),
             },
-            Effect::DealDamage { to, amount } => {
-                let to = match to {
-                    Recipients::Players(players) => self.players(players),
-                    Recipients::Permanents(objects) => self.objects(objects),
-                };
-                both(to, self.amount(amount))
-            }
-            Effect::MayCast { player, card, .. } => both(self.players(player), self.objects(card)),
-            Effect::Draw { player, count }
-            | Effect::Discard { player, count }
-            | Effect::Mill { player, count }
-            | Effect::Scry { player, count }
-            | Effect::GainLife {
-                player,
-                amount: count,
-            }
-            | Effect::LoseLife {
-                player,
-                amount: count,
-            }
-            | Effect::CreateTokens { player, count, .. } => {
-                both(self.players(player), self.amount(count))
-            }
             Effect::CreateCopies {
                 player,
                 of,
@@ -334,10 +377,6 @@ impl Scope<'_> {
                     both(self.amount(count), except),
                 )
             }
-            Effect::AddCounters { objects, count, .. }
-            | Effect::RemoveCounters { objects, count, .. } => {
-                both(self.objects(objects), self.amount(count))
-            }
             Effect::AddMana { player, .. } => {
                 if matches!(self.ability.kind(), AbilityKind::Mana) {
                     self.players(player)
@@ -345,19 +384,6 @@ impl Scope<'_> {
                     Err(Malformed::AddMana)
                 }
             }
-            Effect::Modify {
-                objects,
-                modification,
-                ..
-            } => both(self.objects(objects), self.modification(modification)),
-            Effect::UntapUpTo {
-                player,
-                count,
-                permanents,
-            } => both(
-                self.players(player),
-                both(self.amount(count), self.objects(permanents)),
-            ),
             Effect::Delay { ability, carrying } => {
                 let abilities = self.face.abilities;
                 let delayed = ability.index() < abilities.len()
@@ -371,11 +397,7 @@ impl Scope<'_> {
                     Err(Malformed::Delayed)
                 }
             }
-            Effect::GetEmblem { player, .. }
-            | Effect::ManifestDread(player)
-            | Effect::FlipCoin(player)
-            | Effect::WinGame(player)
-            | Effect::LoseGame(player) => self.players(player),
+            _ => Ok(()),
         }
     }
 
@@ -445,6 +467,10 @@ impl Scope<'_> {
     const fn amount(self, amount: &Amount) -> Checked {
         match amount {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany => Ok(()),
+            Amount::Carried => match self.ability.trigger() {
+                Some(trigger) if trigger.delayed => Ok(()),
+                _ => Err(Malformed::Carried),
+            },
             Amount::Count(objects) => self.objects(objects),
             Amount::Times(_, amount) => self.amount(amount),
             Amount::Life(players) => self.players(players),
@@ -693,6 +719,59 @@ mod tests {
         ] {
             assert_eq!(checked(abilities), Err(Malformed::Target));
         }
+    }
+
+    /// What this port's entries can say that no game could carry out.
+    #[test]
+    fn what_the_port_entries_cannot_mean_is_refused() {
+        use crate::effect::CastTerms;
+        use crate::effect::build::{
+            CARRIED, THAT_CARD, add_mana_of_kind, choose, exile, look_at, permit_cast,
+        };
+        use crate::prompt::{Prompt, Purpose};
+        // "That card", of an ability nothing triggered, and of one something did.
+        const THAT: &[Ability] = &[Ability::spell().effect(&exile(THAT_CARD))];
+        const DISCARDED: &[Ability] =
+            &[Ability::triggered(&Trigger::discards(YOU)).effect(&exile(THAT_CARD))];
+        // A number no effect settled for it.
+        const UNCARRIED: &[Ability] = &[Ability::triggered(&Trigger::main_phase(YOU))
+            .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED))];
+        // A choice the interpreter cannot ask: two objects, or no object at all.
+        const TWO: &[Ability] = &[Ability::spell().effect(&choose(
+            YOU,
+            Objects::ExiledWithThis,
+            Prompt::new(Purpose::Choose).most(2),
+        ))];
+        const YES_OR_NO: &[Ability] = &[Ability::spell().effect(&choose(
+            YOU,
+            Objects::ExiledWithThis,
+            Prompt::new(Purpose::May).most(1),
+        ))];
+        // The battlefield is no player's own.
+        const SHARED: &[Ability] = &[Ability::spell().effect(&look_at(
+            YOU,
+            Objects::InZoneOf {
+                zone: Zone::Battlefield,
+                players: &YOU,
+                filter: Filter::Any,
+            },
+        ))];
+        // A permission lasts this turn, or while the card stays where it is.
+        const A_ROUND: &[Ability] = &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::GraveyardCard, Filter::Any)])
+            .effect(&permit_cast(
+                YOU,
+                TARGET,
+                Duration::UntilYourNextTurn,
+                CastTerms::PLAIN,
+            ))];
+        assert_eq!(checked(THAT), Err(Malformed::TriggeredOn));
+        assert_eq!(checked(DISCARDED), Ok(()));
+        assert_eq!(checked(UNCARRIED), Err(Malformed::Carried));
+        assert_eq!(checked(TWO), Err(Malformed::Chosen));
+        assert_eq!(checked(YES_OR_NO), Err(Malformed::Chosen));
+        assert_eq!(checked(SHARED), Err(Malformed::ZoneOf));
+        assert_eq!(checked(A_ROUND), Err(Malformed::Permitted));
     }
 
     /// In a card's `static` this panic is the build failure.

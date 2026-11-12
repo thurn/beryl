@@ -27,7 +27,7 @@ use crate::effect::{
 };
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
-use crate::mana::{ManaCost, ManaSet};
+use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::prompt::Prompt;
 
 /// "This creature", "this spell": [`Objects::This`].
@@ -86,6 +86,9 @@ pub const fn each_player_other_than(players: &'static Players) -> Players {
 pub const X: Amount = Amount::X;
 /// "That many": [`Amount::ThatMany`].
 pub const THAT_MANY: Amount = Amount::ThatMany;
+
+/// The number a delayed triggered ability carries: [`Amount::Carried`].
+pub const CARRIED: Amount = Amount::Carried;
 
 /// "If you do": [`Condition::Did`].
 pub const IF_YOU_DO: Condition = Condition::Did;
@@ -364,6 +367,25 @@ pub const fn remove_counters(objects: Objects, kind: CounterKind, count: u8) -> 
 /// [`Effect::AddMana`]: "[player] adds [mana]".
 pub const fn add_mana(player: Players, mana: ManaSet) -> Effect {
     Effect::AddMana { player, mana }
+}
+
+/// [`Effect::AddManaOfKind`]: "[player] adds [amount] mana of [kind]".
+pub const fn add_mana_of_kind(player: Players, kind: ManaColor, amount: Amount) -> Effect {
+    Effect::AddManaOfKind {
+        player,
+        kind,
+        amount,
+    }
+}
+
+/// [`Effect::Delay`] carrying a number: "[when], [effect]", the delayed triggered ability
+/// that is the `ability`th of its face, counting from 0, which reads `carrying` as
+/// [`CARRIED`].
+pub const fn delay_carrying(ability: u8, carrying: Amount) -> Effect {
+    Effect::Delay {
+        ability: AbilityIx::new(ability),
+        carrying,
+    }
 }
 
 /// [`Effect::Modify`]: "[objects] get, gain or become [modification] [duration]".

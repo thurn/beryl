@@ -17,11 +17,8 @@ use crate::zones;
 /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
 /// control. It returns as a new object
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
-/// (CR 712.11a): "If a spell or ability puts a double-faced card onto the battlefield
-/// 'transformed' or 'converted,' it enters the battlefield with its back face up. If a
-/// player is instructed to put a card that isn't a double-faced card onto the battlefield
-/// transformed or converted, that card stays in its current zone." If it already left the
-/// battlefield, it isn't exiled, so it doesn't return.
+/// ([`return_transformed`]). If it already left the battlefield, it isn't exiled, so it
+/// doesn't return.
 pub fn exile_and_return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
     object: ObjectRef<L>,
@@ -36,9 +33,13 @@ pub fn exile_and_return_transformed<L: Layout>(
     return_transformed(game, game.state.object_ref(object.slot))
 }
 
-/// Returns a card to the battlefield transformed under its owner's control (CR 712.11a): a
-/// double-faced card "enters the battlefield with its back face up", and one that isn't
-/// "stays in its current zone." One that has changed zones since does not move
+/// Returns a card to the battlefield transformed under its owner's control
+/// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
+/// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
+/// enters the battlefield with its back face up. If a player is instructed to put a card
+/// that isn't a double-faced card onto the battlefield transformed or converted, that card
+/// stays in its current zone." It returns as a new object, and one that has changed zones
+/// since it was named does not move
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 pub fn return_transformed<L: Layout>(
     game: &mut Game<'_, L>,

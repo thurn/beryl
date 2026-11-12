@@ -1,6 +1,6 @@
-//! Carrying out effect data's instructions. [`Run::carry_out`] is the table of them: an
-//! entry's arm is in its library function's module, named `instruction` (the crate's
-//! contract, "Modules").
+//! Carrying out effect data's instructions. [`Run::carry_out`] takes apart those that hold
+//! others, and [`Run::instruction`] is the table of the rest: an entry's arm is in its
+//! library function's module, named `instruction` (the crate's contract, "Modules").
 //!
 //! An instruction acts on every object it names at once where the engine has a primitive
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
@@ -13,7 +13,7 @@ use crate::actions::{
     transform,
 };
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, FaceAbility, Flow};
+use crate::card::{AbilityIx, FaceAbility, Flow, Stop};
 use crate::effect::EffectCtx;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -130,6 +130,22 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
+            _ => self.instruction(effect)?,
+        };
+        Ok(())
+    }
+
+    /// Carries out one instruction that holds no other: the table of the entries, each
+    /// naming its arm. The outcome is what the instruction after reads.
+    #[inline]
+    #[allow(clippy::too_many_lines)] // A line or five per entry.
+    fn instruction(&mut self, effect: &'static Effect) -> Result<Outcome<L>, Stop> {
+        Ok(match *effect {
+            Effect::Sequence(_)
+            | Effect::If { .. }
+            | Effect::May { .. }
+            | Effect::Unless { .. }
+            | Effect::ForEachPlayer { .. } => unreachable!("`carry_out` takes these apart"),
             Effect::Choose {
                 player,
                 among,
@@ -192,6 +208,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 count,
             } => counters::remove_instruction(self, objects, kind, count)?,
             Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana),
+            Effect::AddManaOfKind {
+                player,
+                kind,
+                amount,
+            } => mana::add_of_kind_instruction(self, player, kind, amount),
             Effect::Modify {
                 objects,
                 modification,
@@ -221,8 +242,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::GetEmblem { player, emblem } => emblems::instruction(self, player, emblem)?,
             Effect::WinGame(players) => ending::win_instruction(self, players),
             Effect::LoseGame(players) => ending::lose_instruction(self, players),
-        };
-        Ok(())
+        })
     }
 
     /// Carries out the effect an [`Effect::If`], [`Effect::May`] or [`Effect::Unless`] came

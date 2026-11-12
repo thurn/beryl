@@ -171,7 +171,7 @@ impl Recipients {
 impl Amount {
     fn filters(&self, visit: Visit) {
         match self {
-            Amount::Fixed(_) | Amount::X | Amount::ThatMany => {}
+            Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => {}
             Amount::Count(objects) => objects.filters(visit),
             Amount::Times(_, amount) => amount.filters(visit),
             Amount::Life(players) => players.filters(visit),
@@ -246,15 +246,30 @@ impl Effect {
 
     /// The filters of one instruction's operands, where it holds no other instruction.
     fn operands(&self, visit: Visit) {
+        let (players, objects, amount) = self.operand_set(visit);
+        if let Some(players) = players {
+            players.filters(visit);
+        }
+        if let Some(objects) = objects {
+            objects.filters(visit);
+        }
+        if let Some(amount) = amount {
+            amount.filters(visit);
+        }
+    }
+
+    /// One instruction's players, objects and amount: the most any has. What else one has
+    /// is walked in its arm.
+    fn operand_set(&self, visit: Visit) -> (Option<&Players>, Option<&Objects>, Option<&Amount>) {
         match self {
-            // Those that hold others, which `filters` takes apart, and a rule change, whose
-            // rule is the ability's, walked with it (`Ability::rule`).
+            // Those that hold others, which `filters` takes apart, and a rule change,
+            // whose rule is the ability's, walked with it (`Ability::rule`).
             Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::May { .. }
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
-            | Effect::ChangeRule { .. } => {}
+            | Effect::ChangeRule { .. } => (None, None, None),
             Effect::Counter(objects)
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
@@ -269,10 +284,10 @@ impl Effect {
             | Effect::GainFlashback(objects)
             | Effect::CounterInto {
                 spells: objects, ..
-            } => objects.filters(visit),
+            } => (None, Some(objects), None),
             Effect::DealDamage { to, amount } => {
                 to.filters(visit);
-                amount.filters(visit);
+                (None, None, Some(amount))
             }
             Effect::MayCast { player, card, .. }
             | Effect::PermitCast {
@@ -288,85 +303,60 @@ impl Effect {
                 player,
                 among: card,
                 ..
-            } => {
-                player.filters(visit);
-                card.filters(visit);
-            }
+            } => (Some(player), Some(card), None),
             Effect::CreateAttackingTokens {
                 player,
                 count,
                 attacking,
                 ..
             } => {
-                player.filters(visit);
-                count.filters(visit);
                 attacking.filters(visit);
+                (Some(player), None, Some(count))
             }
             Effect::Modify {
                 objects,
                 modification,
                 ..
             } => {
-                objects.filters(visit);
                 modification.filters(visit);
+                (None, Some(objects), None)
             }
-            Effect::Draw {
+            Effect::Draw { player, count }
+            | Effect::Discard { player, count }
+            | Effect::Mill { player, count }
+            | Effect::Scry { player, count }
+            | Effect::GainLife {
                 player,
-                count: amount,
+                amount: count,
             }
-            | Effect::Discard {
+            | Effect::LoseLife {
                 player,
-                count: amount,
+                amount: count,
             }
-            | Effect::Mill {
+            | Effect::CreateTokens { player, count, .. }
+            | Effect::AddManaOfKind {
                 player,
-                count: amount,
-            }
-            | Effect::Scry {
-                player,
-                count: amount,
-            }
-            | Effect::GainLife { player, amount }
-            | Effect::LoseLife { player, amount }
-            | Effect::CreateTokens {
-                player,
-                count: amount,
+                amount: count,
                 ..
-            } => {
-                player.filters(visit);
-                amount.filters(visit);
-            }
+            } => (Some(player), None, Some(count)),
             Effect::CreateCopies {
                 player, of, count, ..
-            } => {
-                player.filters(visit);
-                of.filters(visit);
-                count.filters(visit);
             }
-            Effect::AddCounters { objects, count, .. }
-            | Effect::RemoveCounters { objects, count, .. } => {
-                objects.filters(visit);
-                count.filters(visit);
-            }
-            Effect::UntapUpTo {
+            | Effect::UntapUpTo {
                 player,
                 count,
-                permanents,
-            } => {
-                player.filters(visit);
-                count.filters(visit);
-                permanents.filters(visit);
-            }
+                permanents: of,
+            } => (Some(player), Some(of), Some(count)),
+            Effect::AddCounters { objects, count, .. }
+            | Effect::RemoveCounters { objects, count, .. } => (None, Some(objects), Some(count)),
             // The delayed ability is one of the face's, walked with them.
-            Effect::Delay { carrying, .. } => carrying.filters(visit),
+            Effect::Delay { carrying, .. } => (None, None, Some(carrying)),
             Effect::AddMana { player, .. }
             | Effect::GetEmblem { player, .. }
             | Effect::ManifestDread(player)
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
-            | Effect::LoseGame(player) => {
-                player.filters(visit);
-            }
+            | Effect::LoseGame(player) => (Some(player), None, None),
         }
     }
 }

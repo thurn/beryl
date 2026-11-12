@@ -11,49 +11,41 @@
 //! −9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
 
 use beryl_card::effect::build::{
-    TARGET, TARGET_PLAYER, THIS, THOSE, YOU, discard, draw, exile, if_then, mill, modify,
-    permit_cast, return_transformed, sequence,
+    TARGET, TARGET_PLAYER, THIS, THOSE, YOU, discard, draw, exile, get_emblem, if_then, mill,
+    modify, permit_cast, return_transformed, sequence,
 };
 use beryl_card::{
-    Amount, CastTerms, Comparison, Condition, Duration, Effect, Objects, Players, Zone,
+    Ability, Amount, CardDef, CastTerms, Colors, Comparison, Condition, Cost, Duration, Effect,
+    Face, Filter, Modification, Objects, Players, Subtype, Subtypes, Supertypes, TargetKind,
+    TargetSpec, Trigger, Types, Zone, card, mana,
 };
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Layout, bodies};
 
 use crate::names;
 
 /// [CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122): a double-faced card "has a
 /// Magic card face on each side rather than a Magic card face on one side and a Magic card
 /// back on the other."
-pub static CARD: CardDef = CardDef {
-    name: names::JACE_VRYNS_PRODIGY,
-    faces: &[
-        Face {
-            cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
-            supertypes: Supertypes::LEGENDARY,
-            types: Types::CREATURE,
-            subtypes: Subtypes::of(&[Subtype::Human, Subtype::Wizard]),
-            colors: Colors::BLUE,
-            power: Some(0),
-            toughness: Some(2),
-            abilities: &[Ability::activated(Cost::TAP).effect(&LOOT_AND_TRANSFORM)],
-            ..Face::EMPTY
-        },
-        Face {
-            name: TELEPATH,
-            supertypes: Supertypes::LEGENDARY,
-            types: Types::PLANESWALKER,
-            subtypes: Subtypes::of(&[Subtype::Jace]),
+pub static CARD: CardDef = card(
+    names::JACE_VRYNS_PRODIGY,
+    &[
+        Face::EMPTY
+            .cost(mana("{1}{U}"))
+            .supertypes(Supertypes::LEGENDARY)
+            .types(Types::CREATURE)
+            .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
+            .colors(Colors::BLUE)
+            .power_toughness(0, 2)
+            .abilities(&[Ability::activated(Cost::TAP).effect(&LOOT_AND_TRANSFORM)]),
+        Face::EMPTY
+            .named(TELEPATH)
+            .supertypes(Supertypes::LEGENDARY)
+            .types(Types::PLANESWALKER)
+            .subtypes(Subtypes::of(&[Subtype::Jace]))
             // CR 712.6d: the back face has only its own characteristics. Its color indicator
             // makes it blue (CR 204.1).
-            colors: Colors::BLUE,
-            loyalty: Some(5),
-            abilities: &[
+            .colors(Colors::BLUE)
+            .loyalty(5)
+            .abilities(&[
                 Ability::loyalty(1)
                     .targeting(&[TargetSpec::up_to_one(
                         TargetKind::Permanent,
@@ -69,33 +61,27 @@ pub static CARD: CardDef = CardDef {
                         ]),
                     )])
                     .effect(&RECAST),
-                Ability::loyalty(-9).custom(bodies!(emblem)),
-            ],
-            transformed: true,
-            ..Face::EMPTY
-        },
+                Ability::loyalty(-9).effect(&GET_EMBLEM),
+            ])
+            .transformed(),
     ],
-    tokens: &[&EMBLEM],
-};
+)
+.creating(&[&EMBLEM]);
 
 /// The emblem of the −9 ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An
 /// emblem is a marker used to represent an object that has one or more abilities, but usually
 /// no other characteristics."
-pub static EMBLEM: CardDef = CardDef {
-    name: "Jace, Telepath Unbound Emblem",
-    faces: &[Face {
-        abilities: &[
-            Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
-                .effect(&MILL_FIVE)
-                .targeting(&[TargetSpec::one(
-                    TargetKind::Player,
-                    Filter::Whose(&Players::EachOpponent),
-                )]),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static EMBLEM: CardDef = card(
+    "Jace, Telepath Unbound Emblem",
+    &[Face::EMPTY.abilities(&[
+        Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
+            .effect(&MILL_FIVE)
+            .targeting(&[TargetSpec::one(
+                TargetKind::Player,
+                Filter::Whose(&Players::EachOpponent),
+            )]),
+    ])],
+);
 
 /// "The cards in your graveyard".
 static YOUR_GRAVEYARD: Objects = Objects::All {
@@ -150,10 +136,7 @@ static RECAST: Effect = permit_cast(
 /// cards.'" [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that
 /// [player] puts an emblem with [ability] into the command zone. The emblem is both owned and
 /// controlled by that player."
-fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_emblem(ctx.controller(), &EMBLEM);
-    Ok(())
-}
+static GET_EMBLEM: Effect = get_emblem(YOU, &EMBLEM);
 
 /// "Whenever you cast a spell, target opponent mills five cards."
 /// [CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a): "For a player to mill a

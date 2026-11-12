@@ -41,7 +41,7 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
-use crate::mana::{ManaCost, ManaSet};
+use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::prompt::Prompt;
 use crate::target::Takes;
 
@@ -287,6 +287,16 @@ pub enum Effect {
     /// that produces mana instructs a player to add that mana." Where the set has several
     /// kinds, the player chooses one of them.
     AddMana { player: Players, mana: ManaSet },
+    /// "[Player] adds [amount] mana of [kind]", by a spell or an ability that is no mana
+    /// ability, as "add an amount of {C} equal to that spell's mana value"
+    /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
+    /// instructs a player to add mana, that mana goes into a player's mana pool." The kind
+    /// is the one it names: no one chooses.
+    AddManaOfKind {
+        player: Players,
+        kind: ManaColor,
+        amount: Amount,
+    },
     /// "[Objects] get, gain or become [modification] [duration]": a continuous effect from a
     /// resolving spell or ability
     /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): it "lasts as long as
@@ -460,6 +470,7 @@ impl Effect {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
+            | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
@@ -544,6 +555,7 @@ impl Effect {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
+            | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
             | Effect::Explore(_)
             | Effect::Choose { .. }
@@ -693,9 +705,12 @@ impl Effect {
                 player,
                 amount: count,
             }
-            | Effect::CreateTokens { player, count, .. } => {
-                player.names_paid() || count.names_paid()
-            }
+            | Effect::CreateTokens { player, count, .. }
+            | Effect::AddManaOfKind {
+                player,
+                amount: count,
+                ..
+            } => player.names_paid() || count.names_paid(),
             Effect::CreateCopies {
                 player, of, count, ..
             } => player.names_paid() || of.names_paid() || count.names_paid(),

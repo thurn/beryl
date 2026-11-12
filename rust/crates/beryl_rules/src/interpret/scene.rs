@@ -340,6 +340,9 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Fixed(n) => i32::from(n),
             Amount::X => i32::from(self.x),
             Amount::ThatMany => i32::from(self.registers.outcome.number),
+            // CR 608.2h: settled once, as the effect that made the delayed ability was
+            // applied.
+            Amount::Carried => i32::from(self.subject.info.amount),
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             // CR 119.1: a player's life total, which may be below zero.

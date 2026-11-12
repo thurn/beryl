@@ -1,58 +1,44 @@
 //! Mana Drain. {U}{U} Instant. "Counter target spell. At the beginning of your next main phase,
 //! add an amount of {C} equal to that spell's mana value."
 
-use beryl_card::Players;
-use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, Colors, Face, Flow, ManaColor, ManaCost, TargetKind, TargetSpec,
-    Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::MANA_DRAIN,
-    faces: &[Face {
-        cost: ManaCost::new(0, [0, 2, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::BLUE,
-        abilities: &[
-            Ability::spell()
-                .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
-                .custom(bodies!(counter_and_delay)),
-            Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .custom(bodies!(add_colorless)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{
+    CARRIED, TARGET, YOU, add_mana_of_kind, counter, delay_carrying, sequence,
+};
+use beryl_card::{
+    Ability, Amount, CardDef, Colors, Effect, Face, Filter, ManaColor, Players, TargetKind,
+    TargetSpec, Trigger, Types, card, mana,
 };
 
-/// The mana value is read before the spell leaves the stack, X included
+/// The place of the delayed ability among the face's abilities.
+const ADD_COLORLESS: u8 = 1;
+
+pub static CARD: CardDef = card(
+    names::MANA_DRAIN,
+    &[Face::EMPTY
+        .cost(mana("{U}{U}"))
+        .types(Types::INSTANT)
+        .colors(Colors::BLUE)
+        .abilities(&[
+            Ability::spell()
+                .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+                .effect(&COUNTER_AND_DELAY),
+            // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
+            // a player's mana pool."
+            Ability::triggered(&Trigger::main_phase(Players::You).next())
+                .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED)),
+        ])],
+);
+
+/// The mana value is the spell's as it was on the stack, X included
 /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
 /// number chosen for it while the object is on the stack." The second sentence creates a
 /// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
 /// "Delayed triggered abilities are created during the resolution of spells or abilities".
-fn counter_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let value = ctx.spell_mana_value(spell).unwrap_or(0);
-    ctx.counter(spell, false);
-    ctx.delay(AbilityIx::new(1), value);
-    Ok(())
-}
-
-/// [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "When an effect instructs a
-/// player to add mana, that mana goes into a player's mana pool."
-fn add_colorless<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let amount = ctx.trigger().amount;
-    ctx.add_mana(ctx.controller(), ManaColor::Colorless, amount);
-    Ok(())
-}
+static COUNTER_AND_DELAY: Effect = sequence(&[
+    counter(TARGET),
+    delay_carrying(ADD_COLORLESS, Amount::ManaValue(TARGET)),
+]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

@@ -17,6 +17,7 @@ pub mod delayed_triggers;
 pub mod emblems;
 pub mod keywords;
 pub mod linked;
+pub mod mana;
 pub mod tokens;
 pub mod zones;
 
@@ -78,6 +79,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         keywords::flashback::SCENARIOS,
     ),
     ("linked", names::CURRENCY_CONVERTER, linked::SCENARIOS),
+    ("mana", names::MANA_DRAIN, mana::SCENARIOS),
     (
         "tokens",
         names::ADELINE_RESPLENDENT_CATHAR,

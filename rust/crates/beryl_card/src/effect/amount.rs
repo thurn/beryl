@@ -22,6 +22,13 @@ pub enum Amount {
     /// [module](crate::effect) says which instruction that is): the cards it drew or
     /// discarded, the life gained or lost, the counters put or removed, the objects it moved.
     ThatMany,
+    /// The number a delayed triggered ability carries from the effect that made it
+    /// ([`crate::Effect::Delay`]), settled as that effect was applied (CR 608.2h): "that
+    /// much", or "that spell's mana value" of a spell long gone
+    /// ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c)): "A delayed
+    /// triggered ability that refers to a particular object still affects it even if the
+    /// object changes characteristics."
+    Carried,
     /// "The number of [objects]", "for each [object]".
     Count(&'static Objects),
     /// "[n] for each ...": `n` times an amount, as "you lose 2 life for each card in your
@@ -56,7 +63,7 @@ impl Amount {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Amount::Fixed(_) => false,
-            Amount::X | Amount::ThatMany => true,
+            Amount::X | Amount::ThatMany | Amount::Carried => true,
             Amount::Count(objects) => objects.needs_a_resolution(),
             Amount::Times(_, amount) => amount.needs_a_resolution(),
             Amount::Life(players) => players.needs_a_resolution(),
@@ -75,7 +82,7 @@ impl Amount {
     /// Whether it reads what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
         match self {
-            Amount::Fixed(_) | Amount::X | Amount::ThatMany => false,
+            Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => false,
             Amount::Count(objects) => objects.names_paid(),
             Amount::Times(_, amount) => amount.names_paid(),
             Amount::Life(players) => players.names_paid(),

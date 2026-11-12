@@ -8,13 +8,11 @@
 //! reference to an object that has since changed zones does nothing to it
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
-use crate::actions::{
-    counter, destroy, discard, manifest_dread, reveal, search, shuffle, tap, transform,
-};
+use crate::actions::{counter, destroy, discard, reveal, search, shuffle, tap};
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, Flow, ManaColor, ManaCost,
-    Prompt, RuleChange, Stop, Types,
+    Ability, AbilityIx, CardDef, CastingKind, FaceAbility, Flow, ManaColor, ManaCost, Prompt,
+    RuleChange, Stop, Types,
 };
 use crate::event::{Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
@@ -26,8 +24,8 @@ use crate::layout::{Layout, Small};
 use crate::query::Copiable;
 use crate::resolution::Resolution;
 use crate::state::{
-    Continuous, CounterKind, Duration, ObjectRef, PendingTrigger, StackEntry, State, Target,
-    TargetPlace, TargetPlaces, TriggerInfo, Zone, ZoneKey,
+    Continuous, CounterKind, Duration, ObjectRef, PendingTrigger, StackEntry, State, TargetPlace,
+    TargetPlaces, TriggerInfo, Zone,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
@@ -122,21 +120,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.resolution.trigger()
     }
 
-    /// The announced value of X.
-    pub fn x(&self) -> u8 {
-        self.resolution.x()
-    }
-
-    /// Whether the casting option at `option` in the face's list was paid.
-    pub fn paid(&self, option: CastingIx) -> bool {
-        self.resolution.paid(option)
-    }
-
-    /// [`Resolution::target`].
-    pub fn target(&self, place: TargetPlace) -> Option<Target<L>> {
-        self.resolution.target(&self.game, place)
-    }
-
     /// [`Resolution::target_object`].
     pub fn target_object(&self, place: TargetPlace) -> Option<ObjectRef<L>> {
         self.resolution.target_object(&self.game, place)
@@ -179,11 +162,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         stack::spell_controller(self.game.state, spell)
     }
 
-    /// [`stack::spell_mana_value`].
-    pub fn spell_mana_value(&self, spell: ObjectRef<L>) -> Option<u8> {
-        stack::spell_mana_value(self.game.state, self.game.table, spell)
-    }
-
     /// [`choices::yes_no`].
     pub fn choose_yes_no(
         &mut self,
@@ -192,24 +170,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         about: Bitboard<L::Slot>,
     ) -> Result<bool, Stop> {
         choices::yes_no(&mut self.game, &mut self.resolution, player, prompt, about)
-    }
-
-    /// [`choices::pick_up_to`].
-    pub fn choose_up_to(
-        &mut self,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        n: u8,
-        prompt: Prompt,
-    ) -> Result<Bitboard<L::Slot>, Stop> {
-        choices::pick_up_to(
-            &mut self.game,
-            &mut self.resolution,
-            player,
-            candidates,
-            n,
-            prompt,
-        )
     }
 
     /// [`choices::pick`].
@@ -242,12 +202,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             candidates,
             prompt,
         )
-    }
-
-    /// [`discard::discard_one_of`] the cards in `player`'s hand.
-    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef<L>>, Stop> {
-        let hand = self.game.state.zone(ZoneKey::Of(player, Zone::Hand));
-        discard::discard_one_of(&mut self.game, &mut self.resolution, player, hand)
     }
 
     /// [`discard::discard_cards`].
@@ -423,17 +377,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// card on the bottom of that player's library."
     pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
         let r = library::put_into(&mut self.game, object, Place::Bottom);
-        self.check(r);
-    }
-
-    /// [`manifest_dread::manifest_dread`].
-    pub fn manifest_dread(&mut self, player: Seat) -> Flow {
-        manifest_dread::manifest_dread(&mut self.game, &mut self.resolution, player)
-    }
-
-    /// [`transform::exile_and_return_transformed`].
-    pub fn exile_and_return_transformed(&mut self, object: ObjectRef<L>) {
-        let r = transform::exile_and_return_transformed(&mut self.game, object);
         self.check(r);
     }
 

@@ -68,10 +68,10 @@
 //! The kind of mana an [`Effect::AddMana`](beryl_card::Effect::AddMana) adds comes from, in
 //! order: the choice of a mana ability's activator (CR 605.3b), which the resolution carries;
 //! the one kind of a set that names one; and for a set of several outside a mana ability, a
-//! question asked as the effect is applied (CR 608.2d). Only the first is built. Outside a
-//! mana ability the resolution's kind is colorless, a debug assertion says so, and no card
-//! does it; the bead that first needs a spell to add mana builds the second, and the third
-//! comes with its question.
+//! question asked as the effect is applied (CR 608.2d). The first is
+//! [`Effect::AddMana`](beryl_card::Effect::AddMana), a mana ability's alone, and the second
+//! [`Effect::AddManaOfKind`](beryl_card::Effect::AddManaOfKind), a spell's or any other
+//! ability's; the third comes with its question, when a card first needs it.
 //!
 //! ## How a resolution stops
 //!
@@ -112,7 +112,7 @@
 //!    function named `instruction`, or `<function>_instruction` where the module has more
 //!    than one. It takes the interpreter's `Run` and the entry's operands as the vocabulary
 //!    writes them (`Objects`, `Players`, `Amount`), reads them against the scene, calls the
-//!    function, and returns the outcome the instructions after it read. `Run::carry_out`
+//!    function, and returns the outcome the instructions after it read. `Run::instruction`
 //!    (`interpret/run.rs`) is the table of entries, one line for each, naming its arm; an
 //!    entry whose module is not written still has its arm there. Two entries that differ
 //!    only in where they put a card share one arm, which each one's own names

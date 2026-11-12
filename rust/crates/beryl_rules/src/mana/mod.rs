@@ -29,7 +29,7 @@ use crate::layout::Layout;
 use crate::layout::Small;
 
 pub use add::add;
-pub(crate) use add::add_instruction;
+pub(crate) use add::{add_instruction, add_of_kind_instruction};
 pub(crate) use pay::{
     activate, manual_options, manual_pay, pay, standalone_options, waterbend_mana_options,
 };
