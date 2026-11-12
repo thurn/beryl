@@ -103,8 +103,8 @@ pub mod scenarios {
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use super::FISH_TOKEN;
-    use crate::names;
     use crate::tokens::TREASURE_TOKEN;
+    use crate::{names, props};
 
     const BEZA: &str = names::BEZA_THE_BOUNDING_SPRING;
 
@@ -114,21 +114,21 @@ pub mod scenarios {
 
     const ISLAND: Permanent = Permanent::new(names::ISLAND);
 
-    const SKYDIVER: Permanent = Permanent::new(names::THIEVING_SKYDIVER);
+    const TWO_DROP: Permanent = Permanent::new(props::SMALL_CREATURE);
 
     const SPELLBINDER: Permanent = Permanent::new(names::ELITE_SPELLBINDER);
 
     /// Five lands and two creatures.
-    const BEHIND: &[Permanent] = &[PLAIN, PLAIN, PLAIN, PLAIN, PLAIN, SKYDIVER, SPELLBINDER];
+    const BEHIND: &[Permanent] = &[PLAIN, PLAIN, PLAIN, PLAIN, PLAIN, TWO_DROP, SPELLBINDER];
 
     /// Four lands and one creature.
-    const TIED: &[Permanent] = &[PLAIN, PLAIN, PLAIN, PLAIN, SKYDIVER];
+    const TIED: &[Permanent] = &[PLAIN, PLAIN, PLAIN, PLAIN, TWO_DROP];
 
     /// Beza's four lands and Sink into Stupor's three.
     const RESPONDING: &[Permanent] = &[PLAIN, PLAIN, PLAIN, PLAIN, ISLAND, ISLAND, ISLAND];
 
     /// Two lands and two creatures.
-    const AHEAD_IN_CREATURES: &[Permanent] = &[PLAIN, PLAIN, SKYDIVER, SPELLBINDER];
+    const AHEAD_IN_CREATURES: &[Permanent] = &[PLAIN, PLAIN, TWO_DROP, SPELLBINDER];
 
     const fn controls_count(player: Seat, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Controls {
@@ -197,7 +197,7 @@ pub mod scenarios {
                 controls_count(P0, BEZA, 1),
             ]),
         // As Beza's ability triggers, P1 has more creatures (two to one) and as many cards in hand
-        // (none). P0 returns the Skydiver to P1's hand in response, so as the ability resolves the
+        // (none). P0 returns the two-drop to P1's hand in response, so as the ability resolves the
         // creatures are tied and P1 has more cards in hand: no Fish, but a card.
         Scenario::new("Beza compares as its ability resolves")
             .hand(P0, &[BEZA, names::SINK_INTO_STUPOR])
@@ -209,12 +209,12 @@ pub mod scenarios {
                 Action::cast(P0, BEZA),
                 Action::Resolve,
                 Action::cast(P0, names::SINK_INTO_STUPOR),
-                Action::choose(P0, DecisionKind::Target, names::THIEVING_SKYDIVER),
+                Action::choose(P0, DecisionKind::Target, props::SMALL_CREATURE),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Hand,
-                    card: Some(names::THIEVING_SKYDIVER),
+                    card: Some(props::SMALL_CREATURE),
                     count: 1,
                 }),
                 Action::Resolve,
@@ -224,14 +224,15 @@ pub mod scenarios {
                 life(P0, 20),
             ]),
         // A Treasure pays for a spell as it is cast, sacrificed for one mana of any color
-        // (CR 111.10a): P0 counters Get Lost with Counterspell from an Island and Beza's Treasure.
+        // (CR 111.10a): P0 counters Sink into Stupor, aimed at Beza, with Counterspell from an
+        // Island and Beza's Treasure.
         // The Treasure offers no activation of its own (§10): P0 may pass or counter.
         Scenario::new("Beza's Treasure pays for Counterspell")
             .hand(P0, &[BEZA, names::COUNTERSPELL, names::ISLAND])
             .battlefield(P0, PLAINS)
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, &[PLAIN, PLAIN, PLAIN, PLAIN, PLAIN])
-            .hand(P1, &[names::GET_LOST])
+            .battlefield(P1, &[PLAIN, PLAIN, ISLAND, ISLAND, ISLAND])
+            .hand(P1, &[props::REMOVAL])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, BEZA),
@@ -243,7 +244,8 @@ pub mod scenarios {
                     player: P0,
                     card: names::ISLAND,
                 },
-                Action::cast(P1, names::GET_LOST),
+                Action::cast(P1, props::REMOVAL),
+                Action::choose(P1, DecisionKind::Target, BEZA),
                 Action::assert(Assertion::Decision {
                     player: P0,
                     kind: DecisionKind::Priority,
@@ -260,7 +262,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Graveyard,
-                    card: Some(names::GET_LOST),
+                    card: Some(props::REMOVAL),
                     count: 1,
                 }),
                 controls_count(P0, BEZA, 1),

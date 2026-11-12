@@ -124,22 +124,20 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::card::{Castings, FaceIx};
 
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const WINDS: &str = names::WINDS_OF_ABANDON;
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
-    const SKYDIVER: &str = names::THIEVING_SKYDIVER;
-
-    const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
+    /// P0's creature, or P1's second.
+    const TWO_DROP: &str = props::SMALL_CREATURE;
 
     const fn controls(player: Seat, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Controls {
@@ -164,7 +162,7 @@ pub mod scenarios {
         Permanent::new(names::PLAINS),
         Permanent::new(names::PLAINS),
         Permanent::new(names::PLAINS),
-        Permanent::new(ADELINE),
+        Permanent::new(TWO_DROP),
     ];
 
     pub const SCENARIOS: &[Scenario] = &[
@@ -176,7 +174,7 @@ pub mod scenarios {
                 &[
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
-                    Permanent::new(ADELINE),
+                    Permanent::new(TWO_DROP),
                 ],
             )
             .hand(P0, &[WINDS, names::PLAINS])
@@ -192,7 +190,7 @@ pub mod scenarios {
                     card: Some(SPELLBINDER),
                     count: 1,
                 }),
-                controls(P0, ADELINE, 1),
+                controls(P0, TWO_DROP, 1),
                 controls(P1, names::PLAINS, 1),
                 tapped(P1, names::PLAINS, 1),
                 Action::assert(Assertion::Count {
@@ -207,7 +205,7 @@ pub mod scenarios {
         Scenario::new("Winds of Abandon overloaded: a basic per creature exiled")
             .battlefield(P0, SIX_PLAINS_AND_ADELINE)
             .hand(P0, &[WINDS, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(SKYDIVER)])
+            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
             .library(P1, &[names::ISLAND, names::PLAINS, names::TUNDRA])
             .actions(&[
                 Action::Cast {
@@ -225,7 +223,7 @@ pub mod scenarios {
                     card: None,
                     count: 2,
                 }),
-                controls(P0, ADELINE, 1),
+                controls(P0, TWO_DROP, 1),
                 controls(P1, names::ISLAND, 1),
                 controls(P1, names::PLAINS, 0),
                 tapped(P1, names::ISLAND, 1),
@@ -238,7 +236,7 @@ pub mod scenarios {
             )
             .hand(P0, &[WINDS, names::PLAINS])
             .battlefield(P1, &[Permanent::new(SPELLBINDER)])
-            .library(P1, &[names::TUNDRA, names::SEACHROME_COAST])
+            .library(P1, &[names::TUNDRA, TWO_DROP])
             .actions(&[
                 Action::cast(P0, WINDS),
                 Action::Resolve,
@@ -263,6 +261,7 @@ pub mod scenarios {
             ]),
         // UI regression by-yfw: the token leaves while Winds stays on the stack for the search.
         Scenario::new("Winds of Abandon exiles a token before its controller searches")
+            .interaction(&[names::STAFF_OF_THE_STORYTELLER])
             .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(
                 P0,

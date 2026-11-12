@@ -67,7 +67,7 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     /// P0 counters P1's Timetwister (mana value 3) in P1's precombat main phase. The mana waits
     /// for P0's own next main phase: not P1's postcombat main, but P0's precombat main of turn 3,
@@ -125,37 +125,45 @@ pub mod scenarios {
                 amount: 3,
             }),
         ]),
+        // P1 counters P0's artifact with Counterspell, and P0 drains the Counterspell.
         Scenario::new("Mana Drain on the caster's own turn: mana at that turn's postcombat main")
             .battlefield(
                 P0,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .hand(P0, &[props::ARTIFACT, names::MANA_DRAIN, names::PLAINS])
+            .battlefield(
+                P1,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
-            .hand(P0, &[names::MANA_CRYPT, names::MANA_DRAIN, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
-            .hand(P1, &[names::MANA_TITHE])
+            .hand(P1, &[props::INSTANT])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P0, names::MANA_CRYPT),
+                Action::cast(P0, props::ARTIFACT),
                 Action::pass(P0),
-                Action::cast(P1, names::MANA_TITHE),
+                Action::cast(P1, props::INSTANT),
                 Action::cast(P0, names::MANA_DRAIN),
                 Action::answer(
                     P0,
                     DecisionKind::Target,
                     Pick::Card {
-                        card: names::MANA_TITHE,
+                        card: props::INSTANT,
                     },
                 ),
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Graveyard,
-                    card: Some(names::MANA_TITHE),
+                    card: Some(props::INSTANT),
                     count: 1,
                 }),
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Battlefield,
-                    card: Some(names::MANA_CRYPT),
+                    card: Some(props::ARTIFACT),
                     count: 1,
                 }),
                 Action::assert(Assertion::Mana {
@@ -171,7 +179,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Mana {
                     player: P0,
                     color: Color::Colorless,
-                    amount: 1,
+                    amount: 2,
                 }),
             ]),
     ];

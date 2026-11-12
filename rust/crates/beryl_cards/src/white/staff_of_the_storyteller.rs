@@ -74,7 +74,6 @@ static CREATE_SPIRIT: Effect = create_tokens(YOU, &SPIRIT, 1);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
@@ -101,6 +100,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("its own Spirit and a Samurai each add a story counter, spent to draw")
+            .interaction(&[EMPEROR])
             .hand(P0, &[STAFF])
             .battlefield(
                 P0,
@@ -151,6 +151,7 @@ pub mod scenarios {
             ]),
         // CR 603.2c: Overlord's attack makes two Insects in one event, so one story counter.
         Scenario::new("two tokens created at once add one story counter")
+            .interaction(&[names::OVERLORD_OF_THE_MISTMOORS])
             .battlefield(
                 P0,
                 &[

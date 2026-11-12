@@ -56,6 +56,12 @@ pub struct Scenario {
     pub name: &'static str,
     pub setup: Setup,
     pub actions: &'static [Action],
+    /// The other cards this scenario is about, when it shows how particular cards interact
+    /// ([`Scenario::interaction`]). Any other scenario names only its own card, that card's
+    /// tokens, basic lands and the designated props, so one card's change cannot break
+    /// another card's tests (plan, Verification). The oracles don't read it.
+    #[serde(skip)]
+    pub interaction: &'static [&'static str],
 }
 
 /// Where the game starts. Every card named belongs to the player whose list names it; the
@@ -516,6 +522,7 @@ impl Scenario {
                 players: [NEW_PLAYER; 2],
             },
             actions: &[],
+            interaction: &[],
         }
     }
 
@@ -575,6 +582,14 @@ impl Scenario {
     #[must_use]
     pub const fn actions(mut self, actions: &'static [Action]) -> Scenario {
         self.actions = actions;
+        self
+    }
+
+    /// Marks this scenario as one about how its card interacts with `cards` in particular,
+    /// which it may then name beside its own card, tokens, basic lands and props.
+    #[must_use]
+    pub const fn interaction(mut self, cards: &'static [&'static str]) -> Scenario {
+        self.interaction = cards;
         self
     }
 }

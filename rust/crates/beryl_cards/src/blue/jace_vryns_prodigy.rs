@@ -172,14 +172,13 @@ const TELEPATH: &str = "Jace, Telepath Unbound";
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::TELEPATH;
-    use crate::names;
+    use crate::{names, props};
 
     const JACE: &str = names::JACE_VRYNS_PRODIGY;
 
@@ -187,7 +186,7 @@ pub mod scenarios {
 
     const PLAINS: &str = names::PLAINS;
 
-    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+    const ARTIFACT: &str = props::ARTIFACT;
 
     const fn loyalty(count: u8) -> Action {
         Action::assert(Assertion::Counters {
@@ -331,7 +330,7 @@ pub mod scenarios {
                     Permanent::new(PLAINS),
                 ],
             )
-            .hand(P0, &[STAFF, PLAINS])
+            .hand(P0, &[ARTIFACT, PLAINS])
             .library(P0, &[ISLAND])
             .library(P1, &[PLAINS, PLAINS, PLAINS, PLAINS, PLAINS, ISLAND])
             .actions(&[
@@ -343,8 +342,8 @@ pub mod scenarios {
                     card: Some(JACE),
                     count: 1,
                 }),
-                // The trigger goes on the stack above the Staff and resolves first.
-                Action::cast(P0, STAFF),
+                // The trigger goes on the stack above the artifact and resolves first.
+                Action::cast(P0, ARTIFACT),
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Graveyard,
@@ -357,7 +356,7 @@ pub mod scenarios {
                 }),
                 Action::assert(Assertion::Controls {
                     player: P0,
-                    card: STAFF,
+                    card: ARTIFACT,
                     count: 1,
                 }),
             ]),

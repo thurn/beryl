@@ -103,14 +103,13 @@ fn explore<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::MAP;
-    use crate::names;
+    use crate::{names, props};
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
@@ -183,7 +182,7 @@ pub mod scenarios {
         Scenario::new("Get Lost can't be cast without a target")
             .battlefield(P0, THREE_PLAINS)
             .hand(P0, &[names::GET_LOST])
-            .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::AdvanceTo {

@@ -25,11 +25,10 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
-    use beryl_engine::{TurnStep, Zone};
+    use beryl_engine::Zone;
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const fn coast_tapped(count: u8) -> Action {
         Action::assert(Assertion::Tapped {
@@ -78,10 +77,9 @@ pub mod scenarios {
             .hand(P0, &[names::SEACHROME_COAST])
             .library(P1, &[names::ISLAND])
             .actions(&[PLAY, coast_tapped(1)]),
-        // Its {W} is P0's only white mana for Mana Tithe, against P1's Mana Crypt. P1's land
-        // still to play keeps the game in their main phase.
+        // Its {W} is P0's only white mana for the artifact. The land still to play keeps the
+        // game in P0's main phase.
         Scenario::new("Seachrome Coast's white mana")
-            .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(
                 P0,
                 &[
@@ -89,17 +87,15 @@ pub mod scenarios {
                     Permanent::new(names::ISLAND),
                 ],
             )
-            .hand(P0, &[names::MANA_TITHE])
-            .library(P0, &[names::ISLAND])
-            .hand(P1, &[names::MANA_CRYPT, names::PLAINS])
+            .hand(P0, &[props::ARTIFACT, names::PLAINS])
+            .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P1, names::MANA_CRYPT),
-                Action::cast(P0, names::MANA_TITHE),
+                Action::cast(P0, props::ARTIFACT),
                 coast_tapped(1),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Graveyard,
-                    card: Some(names::MANA_CRYPT),
+                Action::Resolve,
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: props::ARTIFACT,
                     count: 1,
                 }),
             ]),

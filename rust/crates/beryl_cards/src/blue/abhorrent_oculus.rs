@@ -56,12 +56,11 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const OCULUS: &str = names::ABHORRENT_OCULUS;
 
@@ -79,11 +78,11 @@ pub mod scenarios {
     /// Six graveyard cards and a seventh at the bottom, top first.
     const SEVEN: &[&str] = &[
         names::COUNTERSPELL,
-        names::MANA_DRAIN,
-        names::STOCK_UP,
-        names::REPRIEVE,
+        props::REMOVAL,
+        props::UNTARGETED_SPELL,
+        props::ARTIFACT,
         names::OUST,
-        names::THIRST_FOR_DISCOVERY,
+        props::PLANESWALKER,
         names::PLAINS,
     ];
 
@@ -126,7 +125,7 @@ pub mod scenarios {
                     kind: DecisionKind::ChooseObject,
                     candidates: 2,
                 }),
-                Action::choose(P0, DecisionKind::ChooseObject, names::THIRST_FOR_DISCOVERY),
+                Action::choose(P0, DecisionKind::ChooseObject, props::PLANESWALKER),
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Graveyard,
@@ -348,6 +347,7 @@ pub mod scenarios {
         // CR 708.2: the copy Fractured Identity makes of the face-down Snapcaster Mage is a 2/2
         // with no text, for player 1, the one player other than its controller.
         Scenario::new("Fractured Identity copies a face-down permanent as a 2/2")
+            .interaction(&[names::FRACTURED_IDENTITY])
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, &[Permanent::new(OCULUS)])
             .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])

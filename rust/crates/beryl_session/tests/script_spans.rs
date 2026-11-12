@@ -39,29 +39,27 @@ const TEFERI_FALLS: &str = "combat damage removes Teferi while other attacks rem
 /// leaves. The same from both seats, but for who the player is.
 #[test]
 fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
-    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 4);
+    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 7);
     let chosen = text(&[
-        "set #1 (Beza, the Bounding Spring) battlefield 4/5 attacking #256",
-        "& +point attack #1 > #256",
+        "set #0 (Elite Spellbinder) battlefield 3/1 attacking #256",
+        "& +point attack #0 > #256",
     ]);
     assert_eq!(first, chosen);
     assert_eq!(second, chosen);
-    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 8);
+    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 9);
     let combat = |defender: &str, attacker: &str| {
         text(&[
-            "tap #1 (Beza, the Bounding Spring)".to_owned(),
-            format!("& +point attack #3 > {defender}"),
-            "& tap #0 (Snapcaster Mage)".to_owned(),
-            "& tap #3 (Subtlety)".to_owned(),
-            format!("set turn 1 {attacker} declareBlockers"),
-            format!("set turn 1 {attacker} combatDamage"),
-            "strike #1 > #256 4".to_owned(),
-            "& strike #0 > #258 2".to_owned(),
-            format!("& strike #3 > {defender} 3"),
-            format!("& count {defender} life 17"),
-            "-point attack #1 > #256".to_owned(),
+            "tap #0 (Elite Spellbinder)".to_owned(),
+            format!("& +point attack #2 > {defender}"),
+            "& tap #2 (Snapcaster Mage)".to_owned(),
+            format!("set turn 3 {attacker} declareBlockers"),
+            format!("set turn 3 {attacker} combatDamage"),
+            "strike #0 > #256 3".to_owned(),
+            format!("& strike #2 > {defender} 2"),
+            format!("& count {defender} life 18"),
+            "-point attack #0 > #256".to_owned(),
             "vanish #256 (Teferi, Time Raveler) battlefield>graveyard stateBased".to_owned(),
-            format!("set turn 1 {attacker} endOfCombat"),
+            format!("set turn 3 {attacker} endOfCombat"),
         ])
     };
     assert_eq!(first, combat("opponent", "you"));
@@ -78,19 +76,17 @@ fn a_combat_line_is_begun_once_and_never_swings() {
     assert_eq!(
         first,
         lines(&[
-            (4, "+point attack #1 > #256"),
-            (6, "+point attack #0 > #258"),
-            (8, "+point attack #3 > opponent"),
-            (8, "-point attack #1 > #256"),
+            (7, "+point attack #0 > #256"),
+            (9, "+point attack #2 > opponent"),
+            (9, "-point attack #0 > #256"),
         ])
     );
     assert_eq!(
         second,
         lines(&[
-            (4, "+point attack #1 > #256"),
-            (6, "+point attack #0 > #258"),
-            (8, "+point attack #3 > you"),
-            (8, "-point attack #1 > #256"),
+            (7, "+point attack #0 > #256"),
+            (9, "+point attack #2 > you"),
+            (9, "-point attack #0 > #256"),
         ])
     );
     // An attacker's line stays through its attack trigger and through the choice of what
@@ -225,38 +221,36 @@ const HOLE: &str = "Portable Hole's target gone before the trigger resolves";
 
 /// The theme of six reports (by-yfw, by-ad8, by-8uw among them): an arrow left on a card that
 /// moved, or drawn at it in its graveyard or hand. A trigger aims at a permanent that is
-/// destroyed in response: the trigger's arrow ends before the permanent goes, in the same
-/// beat as the arrow of the spell that destroys it, and is not drawn again though the trigger
-/// stays on the stack still naming the card, now in a graveyard.
+/// returned to its owner's hand in response: the trigger's arrow ends before the permanent
+/// goes, in the same beat as the arrow of the spell that returns it, and is not drawn again
+/// though the trigger stays on the stack still naming the card, now in a hand.
 #[test]
 fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     let [first, second] = script(names::PORTABLE_HOLE, HOLE, 5);
-    let destroyed = text(&[
-        "-point hostile-target a1 > #257",
-        "& -point hostile-target #3 > #257",
-        "vanish #257 (Jace, Vryn's Prodigy) battlefield>graveyard destroy <- #3",
-        "appear #512 (Map Token) nowhere>battlefield created <- #3",
-        "& appear #513 (Map Token) nowhere>battlefield created <- #3",
-        "vanish #3 (Get Lost) stack>graveyard resolve",
+    let returned = text(&[
+        "-point hostile-target a1 > #256",
+        "& -point hostile-target #4 > #256",
+        "vanish #256 (Snapcaster Mage) battlefield>hand effect <- #4",
+        "vanish #4 (Sink into Stupor) stack>graveyard resolve",
     ]);
-    assert_eq!(first, destroyed);
-    assert_eq!(second, destroyed);
+    assert_eq!(first, returned);
+    assert_eq!(second, returned);
     let aimed = lines(&[
-        (2, "+point hostile-target a1 > #257"),
-        (5, "-point hostile-target a1 > #257"),
+        (2, "+point hostile-target a1 > #256"),
+        (5, "-point hostile-target a1 > #256"),
     ]);
     let [first, second] = steps(names::PORTABLE_HOLE, HOLE, "target a1");
     assert_eq!(first, aimed);
     assert_eq!(second, aimed);
     // What the UI drew the arrow from: the view after still has the trigger on the stack
-    // aimed at the card's slot, and the card in its graveyard.
+    // aimed at the card's slot, and the card in its owner's hand.
     let view = &views(names::PORTABLE_HOLE, HOLE, |_, _, _| {})[6][0];
     assert!(matches!(
         view.stack.as_slice(),
-        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: 257 }]
+        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: 256 }]
     ));
-    let jace = view.objects.iter().find(|o| o.slot == 257).unwrap();
-    assert_eq!(jace.zone, ZoneName::Graveyard);
+    let creature = view.objects.iter().find(|o| o.slot == 256).unwrap();
+    assert_eq!(creature.zone, ZoneName::Hand);
     // A spell returned to its owner's hand takes no arrow there with it (by-8uw): the
     // arrow at it, and its own at what it would have countered, end before it goes.
     let name = "Reprieve on a counterspell saves the spell it targets";
@@ -264,19 +258,19 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     assert_eq!(
         first,
         text(&[
-            "-point hostile-target #258 > #0",
-            "& -point hostile-target #2 > #258",
-            "vanish #258 (Counterspell) stack>hand effect <- #2",
-            "fly #1 (Island) library>hand draw <- #2",
-            "vanish #2 (Reprieve) stack>graveyard resolve",
+            "-point hostile-target #259 > #0",
+            "& -point hostile-target #3 > #259",
+            "vanish #259 (Counterspell) stack>hand effect <- #3",
+            "fly #4 (Island) library>hand draw <- #3",
+            "vanish #3 (Reprieve) stack>graveyard resolve",
         ])
     );
-    let [first, _] = steps(names::REPRIEVE, name, "target #2 > #258");
+    let [first, _] = steps(names::REPRIEVE, name, "target #3 > #259");
     assert_eq!(
         first,
         lines(&[
-            (5, "+point hostile-target #2 > #258"),
-            (6, "-point hostile-target #2 > #258"),
+            (5, "+point hostile-target #3 > #259"),
+            (6, "-point hostile-target #3 > #259"),
         ])
     );
 }
@@ -322,7 +316,7 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
         lines.extend(
             [
                 "-point hostile-target #1 > #256",
-                "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
+                "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
                 "& vanish #1 (Counterspell) stack>graveyard resolve",
             ]
             .map(str::to_owned),
@@ -451,7 +445,7 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     kept.beats.remove(2);
     assert_eq!(
         broken(&table, &[], &kept),
-        "`vanish #256 (Mana Crypt) stack>graveyard counter <- #1`: \
+        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
          `+point hostile-target #1 > #256` is not ended before #256 moves"
     );
     // Ended in the beat that moves its target is not before.
@@ -460,7 +454,7 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     together.beats[2].splice(0..0, end);
     assert_eq!(
         broken(&table, &[], &together),
-        "`vanish #256 (Mana Crypt) stack>graveyard counter <- #1`: \
+        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
          `+point hostile-target #1 > #256` ends in the beat that moves #256, not before it"
     );
 }
@@ -499,7 +493,7 @@ fn two_visuals_of_one_thing_break_a_rule() {
     };
     assert_eq!(
         broken(&table, &[], &again),
-        "`appear #256 (Mana Crypt) nowhere>stack created`: \
+        "`appear #256 (Portable Hole) nowhere>stack created`: \
          #256 is on the table already: one visual per thing"
     );
 }

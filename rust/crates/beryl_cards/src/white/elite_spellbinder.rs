@@ -74,11 +74,11 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
-    const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+    const ARTIFACT: &str = props::ARTIFACT;
 
     const THREE_PLAINS: &[Permanent] = &[
         Permanent::new(names::PLAINS),
@@ -87,20 +87,12 @@ pub mod scenarios {
     ];
 
     pub const SCENARIOS: &[Scenario] = &[
-        // The exiled Skydiver costs its owner {3}{U} on their turn: all four Islands.
+        // The exiled artifact costs its owner {2}{W} on their turn: all three Plains.
         Scenario::new("Spellbinder's card costs its owner {2} more")
             .hand(P0, &[SPELLBINDER])
             .battlefield(P0, THREE_PLAINS)
-            .hand(P1, &[SKYDIVER, names::ISLAND])
-            .battlefield(
-                P1,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
+            .hand(P1, &[ARTIFACT, names::ISLAND])
+            .battlefield(P1, THREE_PLAINS)
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::Cast {
@@ -124,7 +116,7 @@ pub mod scenarios {
                     assertion: Assertion::Count {
                         player: P1,
                         zone: Zone::Exile,
-                        card: Some(SKYDIVER),
+                        card: Some(ARTIFACT),
                         count: 1,
                     },
                 },
@@ -132,7 +124,7 @@ pub mod scenarios {
                     assertion: Assertion::Count {
                         player: P1,
                         zone: Zone::Hand,
-                        card: Some(SKYDIVER),
+                        card: Some(ARTIFACT),
                         count: 0,
                     },
                 },
@@ -140,8 +132,7 @@ pub mod scenarios {
                     turn: 2,
                     step: TurnStep::PrecombatMain,
                 },
-                // Pass, an Island to play, the one P0 saw or the one just drawn, and the Skydiver
-                // unkicked: kicked, it would need five.
+                // Pass, an Island to play, the one P0 saw or the one just drawn, and the artifact.
                 Action::Assert {
                     assertion: Assertion::Decision {
                         player: P1,
@@ -151,22 +142,22 @@ pub mod scenarios {
                 },
                 Action::Cast {
                     player: P1,
-                    card: SKYDIVER,
+                    card: ARTIFACT,
                     face: FaceIx::FRONT,
                     costs: Castings::NONE,
                 },
                 Action::Assert {
                     assertion: Assertion::Tapped {
                         player: P1,
-                        card: names::ISLAND,
-                        count: 4,
+                        card: names::PLAINS,
+                        count: 3,
                     },
                 },
                 Action::Resolve,
                 Action::Assert {
                     assertion: Assertion::Controls {
                         player: P1,
-                        card: SKYDIVER,
+                        card: ARTIFACT,
                         count: 1,
                     },
                 },

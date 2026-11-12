@@ -15,6 +15,7 @@ use crate::{CARDS, SCENARIOS, blue, decks, names};
 
 mod effect_data;
 mod knowledge;
+mod props;
 
 /// This crate's directory, read at run time: a test binary from the shared target directory
 /// may have been built in a worktree that no longer exists.

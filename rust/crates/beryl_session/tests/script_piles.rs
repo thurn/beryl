@@ -61,16 +61,16 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
     let [first, second] = script(names::ELITE_SPELLBINDER, name, 10);
     let cast = |who: &str| {
         let mut lines = vec![format!(
-            "fly #260 (Thieving Skydiver) exile>stack cast <- {who}"
+            "fly #259 (Portable Hole) exile>stack cast <- {who}"
         )];
-        // The four lands tap together, and then each sends its mana.
-        let lands = [257, 258, 259, 261];
+        // The three lands tap together, and then each sends its mana.
+        let lands = [257, 258, 261];
         for (i, land) in lands.into_iter().enumerate() {
             let and = if i == 0 { "" } else { "& " };
-            lines.push(format!("{and}tap #{land} (Island) <- {who}"));
+            lines.push(format!("{and}tap #{land} (Plains) <- {who}"));
         }
         for land in lands {
-            lines.push(format!("& streak #{land} > #260 blue 1 <- {who}"));
+            lines.push(format!("& streak #{land} > #259 white 1 <- {who}"));
         }
         text(&lines)
     };

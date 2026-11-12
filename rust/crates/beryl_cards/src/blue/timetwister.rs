@@ -56,11 +56,10 @@ pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{Seat, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
         Action::assert(Assertion::Count {
@@ -98,9 +97,9 @@ pub mod scenarios {
         Scenario::new("Timetwister shuffles graveyards away")
             .battlefield(P0, THREE_ISLANDS)
             .hand(P0, &[names::TIMETWISTER])
-            .graveyard(P0, &[names::MANA_TITHE, names::OUST])
+            .graveyard(P0, &[props::INSTANT, names::OUST])
             .library(P0, &[names::PLAINS; 5])
-            .graveyard(P1, &[names::MANA_DRAIN])
+            .graveyard(P1, &[props::INSTANT])
             .library(P1, &[names::ISLAND; 8])
             .actions(&[
                 Action::cast(P0, names::TIMETWISTER),

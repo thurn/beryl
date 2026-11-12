@@ -350,7 +350,8 @@ mod tests {
 
     #[test]
     fn review_shares_the_payment_choice_and_its_result() {
-        use beryl_cards::names::{MANA_TITHE, OVERLORD_OF_THE_MISTMOORS};
+        use beryl_cards::names::MANA_TITHE;
+        use beryl_cards::props::ARTIFACT;
         use beryl_session::CandidateIndex;
         use beryl_session::protocol::{Candidate, ZoneName};
 
@@ -402,16 +403,28 @@ mod tests {
                 .recv_timeout(std::time::Duration::from_secs(5))
                 .unwrap();
             for update in views {
-                assert!(update.view.objects.iter().any(|o| {
-                    o.name.as_deref() == Some(OVERLORD_OF_THE_MISTMOORS) && o.zone == expected
-                }));
+                assert!(
+                    update
+                        .view
+                        .objects
+                        .iter()
+                        .any(|o| { o.name.as_deref() == Some(ARTIFACT) && o.zone == expected }),
+                    "{:?}",
+                    update
+                        .view
+                        .objects
+                        .iter()
+                        .map(|o| (o.name.clone(), o.zone))
+                        .collect::<Vec<_>>()
+                );
             }
         }
     }
 
     #[test]
     fn counter_review_starts_before_the_target_spell_is_cast() {
-        use beryl_cards::names::{MANA_CRYPT, MANA_TITHE};
+        use beryl_cards::names::MANA_TITHE;
+        use beryl_cards::props::ARTIFACT;
         use beryl_session::protocol::ZoneName;
 
         let def = CARDS
@@ -447,7 +460,7 @@ mod tests {
                 .recv_timeout(std::time::Duration::from_secs(5))
                 .unwrap()
         };
-        for (actor, card) in [(0, MANA_CRYPT), (1, MANA_TITHE)] {
+        for (actor, card) in [(0, ARTIFACT), (1, MANA_TITHE)] {
             let (views, steps) = next();
             let Status::Deciding { decision } = &views[actor].view.status else {
                 panic!("expected the {card} caster to act");
@@ -466,9 +479,11 @@ mod tests {
         for update in views {
             assert!(!matches!(update.view.status, Status::Deciding { decision }
                 if decision.prompt.is(beryl_engine::card::Purpose::UnlessPays)));
-            assert!(update.view.objects.iter().any(|o| {
-                o.name.as_deref() == Some(MANA_CRYPT) && o.zone == ZoneName::Graveyard
-            }));
+            assert!(
+                update.view.objects.iter().any(|o| {
+                    o.name.as_deref() == Some(ARTIFACT) && o.zone == ZoneName::Graveyard
+                })
+            );
         }
     }
 

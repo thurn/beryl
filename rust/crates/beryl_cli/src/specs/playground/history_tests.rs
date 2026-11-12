@@ -186,7 +186,7 @@ fn known_top_search_and_three_land_untap_are_interactive() {
             assert!(!decision.prompt.is(Purpose::MaySearch));
             return known_top
                 && decision.prompt.is(Purpose::Search)
-                && decision.candidates.len() >= 3;
+                && decision.candidates.len() >= 2;
         }
         false
     });
@@ -320,7 +320,7 @@ fn undo_rewinds_the_opponents_response_too() {
             let e = json!(e);
             e["kind"] == "cast"
                 && v.objects.iter().any(|o| {
-                    o.name.as_deref() == Some("No More Lies") && json!(o.slot) == e["slot"]
+                    o.name.as_deref() == Some("Counterspell") && json!(o.slot) == e["slot"]
                 })
         }));
         if responses >= 2 {

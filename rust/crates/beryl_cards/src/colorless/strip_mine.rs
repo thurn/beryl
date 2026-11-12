@@ -49,12 +49,11 @@ fn destroy_land<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Seat, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
         Action::assert(Assertion::Count {
@@ -65,10 +64,10 @@ pub mod scenarios {
         })
     }
 
-    /// Its {C} pays for Mana Tithe's tithe in that card's scenarios. Strip Mine may target
-    /// itself, since targets are chosen before costs are paid (CR 601.2c, 601.2h), so the
-    /// target is a decision between the two lands; with a second Strip Mine, it is a decision
-    /// between three, as targeting itself and its twin lead to different games.
+    /// Its {C} pays a creature's generic mana. Strip Mine may target itself, since targets are
+    /// chosen before costs are paid (CR 601.2c, 601.2h), so the target is a decision between the
+    /// two lands; with a second Strip Mine, it is a decision between three, as targeting itself and
+    /// its twin lead to different games.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Strip Mine destroys a basic land")
             .battlefield(P0, &[Permanent::new(names::STRIP_MINE)])
@@ -116,6 +115,32 @@ pub mod scenarios {
                 count(P0, Zone::Graveyard, Some(names::STRIP_MINE), 1),
                 count(P1, Zone::Graveyard, Some(names::PLAINS), 1),
                 count(P0, Zone::Battlefield, Some(names::STRIP_MINE), 1),
+            ]),
+        // The Island pays the {U}, Strip Mine the {1}. The land still to play keeps the game in
+        // P0's main phase.
+        Scenario::new("Strip Mine's colorless mana")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::STRIP_MINE),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(P0, &[props::SMALL_CREATURE, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, props::SMALL_CREATURE),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::STRIP_MINE,
+                    count: 1,
+                }),
+                Action::Resolve,
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: props::SMALL_CREATURE,
+                    count: 1,
+                }),
             ]),
     ];
 }

@@ -74,13 +74,12 @@ fn draw_seven<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const JACE: &str = names::JACE_WIELDER_OF_MYSTERIES;
 
@@ -88,16 +87,13 @@ pub mod scenarios {
 
     const PLAINS: &str = names::PLAINS;
 
-    /// A Staff of the Storyteller with a story counter, and a Plains to pay for its ability.
-    const STAFF: &[Permanent] = &[
-        Permanent::new(names::STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 1),
-        Permanent::new(PLAINS),
-    ];
+    /// The Islands to flash in the small creature with.
+    const ISLANDS: &[Permanent] = &[Permanent::new(ISLAND), Permanent::new(ISLAND)];
 
-    const STAFF_AND_JACE: &[Permanent] = &[
+    const ISLANDS_AND_JACE: &[Permanent] = &[
         Permanent::new(JACE),
-        Permanent::new(names::STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 1),
-        Permanent::new(PLAINS),
+        Permanent::new(ISLAND),
+        Permanent::new(ISLAND),
     ];
 
     const fn outcome(outcome: Ending) -> Action {
@@ -148,10 +144,11 @@ pub mod scenarios {
                 count(P0, Zone::Graveyard, 2),
                 outcome(Ending::Win { player: P0 }),
             ]),
-        // The Staff's ability, at instant speed, gives P0 something to pass in the upkeep.
+        // A creature with flash gives P0 something to pass in the upkeep.
         Scenario::new("the draw step's draw from an empty library wins")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, STAFF_AND_JACE)
+            .battlefield(P0, ISLANDS_AND_JACE)
+            .hand(P0, &[props::SMALL_CREATURE])
             .library(P1, &[ISLAND])
             .actions(&[Action::pass(P0), outcome(Ending::Win { player: P0 })]),
         // The replacement is Jace's controller's alone: the opponent drawing from an empty
@@ -160,7 +157,8 @@ pub mod scenarios {
             .at(2, P1, TurnStep::Upkeep)
             .battlefield(P0, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND])
-            .battlefield(P1, STAFF)
+            .battlefield(P1, ISLANDS)
+            .hand(P1, &[props::SMALL_CREATURE])
             .actions(&[Action::pass(P1), outcome(Ending::Win { player: P0 })]),
         // At exactly eight loyalty Jace dies before the ability resolves: no replacement. Five
         // cards are drawn, two draws fail, and the library is empty: a win.

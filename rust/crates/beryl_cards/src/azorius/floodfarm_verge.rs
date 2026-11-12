@@ -31,18 +31,20 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const VERGE: &str = names::FLOODFARM_VERGE;
 
-    /// P1 casts Mana Crypt in their main phase, with a land still to play.
-    const fn crypt_cast() -> Action {
-        Action::cast(P1, names::MANA_CRYPT)
+    /// P1 casts the artifact in their main phase, with a land still to play.
+    const fn artifact_cast() -> Action {
+        Action::cast(P1, props::ARTIFACT)
     }
+
+    /// P1's Plains for the artifact.
+    const P1_PLAINS: &[Permanent] = &[Permanent::new(names::PLAINS)];
 
     const fn verge_tapped(count: u8) -> Action {
         Action::assert(Assertion::Tapped {
@@ -59,71 +61,67 @@ pub mod scenarios {
             .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(names::TUNDRA)])
             .hand(P0, &[names::COUNTERSPELL])
             .library(P0, &[names::ISLAND])
-            .hand(P1, &[names::MANA_CRYPT, names::PLAINS])
+            .battlefield(P1, P1_PLAINS)
+            .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .actions(&[
-                crypt_cast(),
+                artifact_cast(),
                 Action::cast(P0, names::COUNTERSPELL),
                 verge_tapped(1),
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Graveyard,
-                    card: Some(names::MANA_CRYPT),
+                    card: Some(props::ARTIFACT),
                     count: 1,
                 }),
             ]),
-        // Seachrome Coast is neither: the Verge makes only {W}, so P0 can't cast Counterspell
-        // and has nothing to do, and the Crypt resolves.
+        // A second Verge is neither a Plains nor an Island, so each makes only {W}: P0 can't
+        // cast Counterspell and has nothing to do, and the artifact resolves.
         Scenario::new("Floodfarm Verge's {U} without a Plains or an Island")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
-                P0,
-                &[
-                    Permanent::new(VERGE),
-                    Permanent::new(names::SEACHROME_COAST),
-                ],
-            )
+            .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(VERGE)])
             .hand(P0, &[names::COUNTERSPELL])
             .library(P0, &[names::ISLAND])
-            .hand(P1, &[names::MANA_CRYPT, names::PLAINS])
+            .battlefield(P1, P1_PLAINS)
+            .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .actions(&[
-                crypt_cast(),
+                artifact_cast(),
+                Action::Resolve,
                 Action::assert(Assertion::Controls {
                     player: P1,
-                    card: names::MANA_CRYPT,
+                    card: props::ARTIFACT,
                     count: 1,
                 }),
                 verge_tapped(0),
             ]),
-        // A basic Plains enables the {U}: with the Plains's {W} for the generic mana, Jace.
+        // A basic Plains enables the {U}: with the Plains's {W} for the generic mana, the
+        // two-drop creature.
         Scenario::new("Floodfarm Verge's {U} with a Plains")
             .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(names::PLAINS)])
-            .hand(P0, &[names::JACE_VRYNS_PRODIGY])
+            .hand(P0, &[props::SMALL_CREATURE])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P0, names::JACE_VRYNS_PRODIGY),
+                Action::cast(P0, props::SMALL_CREATURE),
                 Action::Resolve,
                 Action::assert(Assertion::Controls {
                     player: P0,
-                    card: names::JACE_VRYNS_PRODIGY,
+                    card: props::SMALL_CREATURE,
                     count: 1,
                 }),
             ]),
-        // Alone, its {W} pays for Mana Tithe against the Crypt.
+        // Alone, its {W} pays for the artifact. The land still to play keeps the game in P0's
+        // main phase.
         Scenario::new("Floodfarm Verge's {W}")
-            .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(P0, &[Permanent::new(VERGE)])
-            .hand(P0, &[names::MANA_TITHE])
-            .library(P0, &[names::ISLAND])
-            .hand(P1, &[names::MANA_CRYPT, names::PLAINS])
+            .hand(P0, &[props::ARTIFACT, names::PLAINS])
+            .library(P1, &[names::ISLAND])
             .actions(&[
-                crypt_cast(),
-                Action::cast(P0, names::MANA_TITHE),
+                Action::cast(P0, props::ARTIFACT),
                 verge_tapped(1),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Graveyard,
-                    card: Some(names::MANA_CRYPT),
+                Action::Resolve,
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: props::ARTIFACT,
                     count: 1,
                 }),
             ]),

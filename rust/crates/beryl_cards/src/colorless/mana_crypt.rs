@@ -44,7 +44,6 @@ fn flip<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 

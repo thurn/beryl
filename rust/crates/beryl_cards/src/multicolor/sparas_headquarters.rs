@@ -36,7 +36,7 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Count {
@@ -107,6 +107,28 @@ pub mod scenarios {
                     card: names::SPARAS_HEADQUARTERS,
                     count: 1,
                 }),
+            ]),
+        // Its {W} is the only white mana for the artifact. The land still to play keeps the game
+        // in P0's main phase.
+        Scenario::new("Spara's Headquarters' white mana")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::SPARAS_HEADQUARTERS),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(P0, &[props::ARTIFACT, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, props::ARTIFACT),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::SPARAS_HEADQUARTERS,
+                    count: 1,
+                }),
+                Action::Resolve,
+                count(P0, Zone::Battlefield, props::ARTIFACT, 1),
             ]),
     ];
 }

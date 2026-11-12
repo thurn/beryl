@@ -30,11 +30,10 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)];
 
@@ -48,45 +47,54 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Mana Crypt goes to its owner's graveyard, not exile, and never reaches the battlefield.
+        // The artifact goes to its owner's graveyard, not exile, and never reaches the
+        // battlefield.
         Scenario::new("Counterspell counters a spell into its owner's graveyard")
             .battlefield(P0, ISLANDS)
             .hand(P0, &[names::COUNTERSPELL])
             .battlefield(P1, &[Permanent::new(names::PLAINS)])
-            .hand(P1, &[names::MANA_CRYPT, names::PLAINS])
+            .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .library(P0, &[names::ISLAND])
             .at(2, P1, TurnStep::PrecombatMain)
             .actions(&[
-                Action::cast(P1, names::MANA_CRYPT),
+                Action::cast(P1, props::ARTIFACT),
                 Action::cast(P0, names::COUNTERSPELL),
-                count(P1, Zone::Graveyard, names::MANA_CRYPT, 1),
-                count(P1, Zone::Battlefield, names::MANA_CRYPT, 0),
+                count(P1, Zone::Graveyard, props::ARTIFACT, 1),
+                count(P1, Zone::Battlefield, props::ARTIFACT, 0),
                 count(P0, Zone::Graveyard, names::COUNTERSPELL, 1),
             ]),
-        // Two spells on the stack: Counterspell targets the one beneath, the Mana Tithe that
-        // targets it, so the Crypt resolves.
+        // Two spells on the stack: P0's Counterspell targets the one beneath, P1's Counterspell
+        // that targets the artifact, so the artifact resolves. A Plains pays for the artifact,
+        // the Islands for Counterspell.
         Scenario::new("Counterspell chooses among spells on the stack")
-            .battlefield(P0, ISLANDS)
-            .hand(P0, &[names::MANA_CRYPT, names::COUNTERSPELL, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
-            .hand(P1, &[names::MANA_TITHE])
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .hand(P0, &[props::ARTIFACT, names::COUNTERSPELL, names::PLAINS])
+            .battlefield(P1, ISLANDS)
+            .hand(P1, &[names::COUNTERSPELL])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P0, names::MANA_CRYPT),
+                Action::cast(P0, props::ARTIFACT),
                 Action::pass(P0),
-                Action::cast(P1, names::MANA_TITHE),
+                Action::cast(P1, names::COUNTERSPELL),
                 Action::cast(P0, names::COUNTERSPELL),
                 Action::answer(
                     P0,
                     DecisionKind::Target,
                     Pick::Card {
-                        card: names::MANA_TITHE,
+                        card: names::COUNTERSPELL,
                     },
                 ),
                 Action::Resolve,
-                count(P1, Zone::Graveyard, names::MANA_TITHE, 1),
+                count(P1, Zone::Graveyard, names::COUNTERSPELL, 1),
                 Action::Resolve,
-                count(P0, Zone::Battlefield, names::MANA_CRYPT, 1),
+                count(P0, Zone::Battlefield, props::ARTIFACT, 1),
             ]),
     ];
 }

@@ -113,17 +113,17 @@ static EXILE_AND_GAIN: Effect = sequence(&[exile(TARGET), gain_life(YOU, 2)]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::SAMURAI_TOKEN;
-    use crate::names;
+    use crate::{names, props};
 
     const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
 
-    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    /// A 2/1.
+    const CREATURE: &str = props::SMALL_CREATURE;
 
     const PLAINS: &str = names::PLAINS;
 
@@ -141,21 +141,20 @@ pub mod scenarios {
             .at(2, P1, TurnStep::BeginningOfCombat)
             .hand(P0, &[EMPEROR])
             .battlefield(P0, LANDS)
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(CREATURE)])
             .library(P0, &[PLAINS, PLAINS])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
-                Action::pass(P1),
                 Action::pass(P0),
-                // Jace attacks, tapped; the attackers' controller has nothing to do.
-                Action::choose(P1, DecisionKind::Attacker, JACE),
+                // The creature attacks, tapped; the attackers' controller has nothing to do.
+                Action::choose(P1, DecisionKind::Attacker, CREATURE),
                 // With nothing else to do, each resolves as soon as its controller passes.
                 Action::cast(P0, EMPEROR),
                 Action::activate(P0, EMPEROR, 3),
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(JACE),
+                    card: Some(CREATURE),
                     count: 1,
                 }),
                 Action::assert(Assertion::Life {
@@ -192,7 +191,7 @@ pub mod scenarios {
             ]),
         Scenario::new("+1 grows a creature and gives it first strike")
             .battlefield(P0, &[Permanent::new(EMPEROR)])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(CREATURE)])
             .library(P0, &[PLAINS, PLAINS])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
@@ -201,10 +200,10 @@ pub mod scenarios {
                 Action::Resolve,
                 Action::assert(Assertion::Pt {
                     player: P1,
-                    card: JACE,
+                    card: CREATURE,
                     token: false,
-                    power: 1,
-                    toughness: 3,
+                    power: 3,
+                    toughness: 2,
                 }),
                 Action::assert(Assertion::Counters {
                     player: P0,
@@ -219,10 +218,10 @@ pub mod scenarios {
                 },
                 Action::assert(Assertion::Pt {
                     player: P1,
-                    card: JACE,
+                    card: CREATURE,
                     token: false,
-                    power: 1,
-                    toughness: 3,
+                    power: 3,
+                    toughness: 2,
                 }),
             ]),
         Scenario::new("−1 makes a 2/2 Samurai")

@@ -71,12 +71,11 @@ fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
 
@@ -94,7 +93,7 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Mana Crypt and Counterspell to the hand; Reprieve, then Plains, then Island to the
+        // The artifact and Counterspell to the hand; Oust, then Plains, then Island to the
         // bottom, each under the one before. The sixth card, Tundra, is now on top.
         Scenario::new("Stock Up takes two of five and orders the rest on the bottom")
             .battlefield(P0, ISLANDS)
@@ -104,9 +103,9 @@ pub mod scenarios {
                 &[
                     names::ISLAND,
                     names::PLAINS,
-                    names::MANA_CRYPT,
+                    props::ARTIFACT,
                     names::COUNTERSPELL,
-                    names::REPRIEVE,
+                    props::SORCERY,
                     names::TUNDRA,
                 ],
             )
@@ -119,15 +118,15 @@ pub mod scenarios {
                     kind: DecisionKind::ChooseObject,
                     candidates: 5,
                 }),
-                take(names::MANA_CRYPT),
+                take(props::ARTIFACT),
                 take(names::COUNTERSPELL),
-                take(names::REPRIEVE),
+                take(props::SORCERY),
                 take(names::PLAINS),
-                in_hand(names::MANA_CRYPT),
+                in_hand(props::ARTIFACT),
                 in_hand(names::COUNTERSPELL),
                 Action::assert(Assertion::Library {
                     player: P0,
-                    top: &[names::TUNDRA, names::REPRIEVE, names::PLAINS, names::ISLAND],
+                    top: &[names::TUNDRA, props::SORCERY, names::PLAINS, names::ISLAND],
                 }),
             ]),
         // Four cards: two to the hand, and the order of the other two on the bottom.
@@ -138,7 +137,7 @@ pub mod scenarios {
                 P0,
                 &[
                     names::PLAINS,
-                    names::MANA_CRYPT,
+                    props::ARTIFACT,
                     names::ISLAND,
                     names::COUNTERSPELL,
                 ],
@@ -147,10 +146,10 @@ pub mod scenarios {
             .actions(&[
                 Action::cast(P0, names::STOCK_UP),
                 Action::Resolve,
-                take(names::MANA_CRYPT),
+                take(props::ARTIFACT),
                 take(names::COUNTERSPELL),
                 take(names::ISLAND),
-                in_hand(names::MANA_CRYPT),
+                in_hand(props::ARTIFACT),
                 in_hand(names::COUNTERSPELL),
                 Action::assert(Assertion::Library {
                     player: P0,
@@ -161,12 +160,12 @@ pub mod scenarios {
         Scenario::new("Stock Up with two cards in the library")
             .battlefield(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
-            .library(P0, &[names::MANA_CRYPT, names::PLAINS])
+            .library(P0, &[props::ARTIFACT, names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::STOCK_UP),
                 Action::Resolve,
-                in_hand(names::MANA_CRYPT),
+                in_hand(props::ARTIFACT),
                 in_hand(names::PLAINS),
                 Action::assert(Assertion::Count {
                     player: P0,

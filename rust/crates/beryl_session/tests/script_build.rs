@@ -44,10 +44,24 @@ fn a_seats_first_script_starts_its_screen_over() {
 #[test]
 fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     let name = "Counterspell counters a spell into its owner's graveyard";
-    // The second player casts Mana Crypt for nothing.
+    // The second player casts Portable Hole, its Plains sending its mana into the spell.
     let [first, second] = script(names::COUNTERSPELL, name, 1);
-    assert_eq!(first, "fly #256 (Mana Crypt) hand>stack cast <- opponent\n");
-    assert_eq!(second, "fly #256 (Mana Crypt) hand>stack cast <- you\n");
+    assert_eq!(
+        first,
+        text(&[
+            "fly #256 (Portable Hole) hand>stack cast <- opponent",
+            "tap #258 (Plains) <- opponent",
+            "& streak #258 > #256 white 1 <- opponent",
+        ])
+    );
+    assert_eq!(
+        second,
+        text(&[
+            "fly #256 (Portable Hole) hand>stack cast <- you",
+            "tap #258 (Plains) <- you",
+            "& streak #258 > #256 white 1 <- you",
+        ])
+    );
     // The first answers. Their Islands tap together, each sending its mana into the spell; the
     // spell is read by the player who did not cast it; the countered spell and the
     // counterspell leave in one beat.
@@ -62,7 +76,7 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
             "& streak #0 > #1 blue 1 <- you",
             "& streak #2 > #1 blue 1 <- you",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
+            "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
     );
@@ -77,7 +91,7 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
             "& streak #2 > #1 blue 1 <- opponent",
             "dwell #1",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Mana Crypt) stack>graveyard counter <- #1",
+            "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve",
         ])
     );
@@ -207,7 +221,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
     let [first, second] = script(
         names::THE_WANDERING_EMPEROR,
         "flashed in during combat, \u{2212}2 exiles the tapped attacker",
-        5,
+        4,
     );
     assert_eq!(
         first,
@@ -218,7 +232,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "count #1 (The Wandering Emperor) loyalty 1 <- you",
             "-point attack #257 > you",
             "& -point hostile-target a1 > #257",
-            "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
@@ -247,7 +261,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "dwell a1",
             "-point attack #257 > opponent",
             "& -point hostile-target a1 > #257",
-            "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+            "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve",
@@ -295,7 +309,7 @@ fn a_plus_one_counter_counts_with_the_stats_it_changes() {
         3,
     );
     let lines = [
-        "count #256 (Jace, Vryn's Prodigy) plusOne 1 <- a1",
+        "count #256 (Snapcaster Mage) plusOne 1 <- a1",
         "-point source a1 > #0",
         "& -point hostile-target a1 > #256",
         "vanish a1 stack>gone resolve",
@@ -340,15 +354,33 @@ fn an_aura_flies_onto_its_permanent() {
     let [first, second] = script(
         names::SWIFT_RECONFIGURATION,
         "a creature becomes a noncreature Vehicle that can't crew alone",
-        3,
+        2,
     );
-    let lines = [
-        "-point hostile-target #0 > #256",
-        "fly #0 (Swift Reconfiguration) stack>battlefield on #256 resolve",
-        "count #256 (Jace, Vryn's Prodigy) pt",
+    // Cast with flash, it resolves at once: no one can respond.
+    let cast = |who: &str| {
+        [
+            format!("fly #0 (Swift Reconfiguration) hand>stack cast at #259 <- {who}"),
+            "& +point hostile-target #0 > #259".to_owned(),
+            format!("tap #1 (Plains) <- {who}"),
+            format!("& streak #1 > #0 white 1 <- {who}"),
+        ]
+    };
+    let lands = [
+        "-point hostile-target #0 > #259",
+        "fly #0 (Swift Reconfiguration) stack>battlefield on #259 resolve",
+        "count #259 (Snapcaster Mage) pt",
     ];
-    assert_eq!(first, text(&lines));
-    assert_eq!(second, text(&lines));
+    let mine: Vec<String> = cast("you")
+        .into_iter()
+        .chain(lands.map(String::from))
+        .collect();
+    let theirs: Vec<String> = cast("opponent")
+        .into_iter()
+        .chain(["dwell #0".to_owned()])
+        .chain(lands.map(String::from))
+        .collect();
+    assert_eq!(first, text(&mine));
+    assert_eq!(second, text(&theirs));
 }
 
 /// `vanish` in a batch: a sweeper's creatures leave in one beat, the token with no record
@@ -383,9 +415,9 @@ fn cards_drawn_and_discarded_fly_from_both_seats() {
     );
     let lines = [
         "fly #6 (Plains) library>hand draw <- #2",
-        "& fly #7 (Mana Crypt) library>hand draw <- #2",
+        "& fly #7 (Portable Hole) library>hand draw <- #2",
         "& fly #3 (Counterspell) library>hand draw <- #2",
-        "fly #7 (Mana Crypt) hand>graveyard discard <- #2",
+        "fly #7 (Portable Hole) hand>graveyard discard <- #2",
         "& fly #6 (Plains) hand>graveyard discard <- #2",
         "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
     ];
@@ -394,9 +426,9 @@ fn cards_drawn_and_discarded_fly_from_both_seats() {
     let lines = [
         "-lift opponent library all",
         "fly #6 library>hand draw <- #2",
-        "& fly #7 (Mana Crypt) library>hand draw <- #2",
+        "& fly #7 (Portable Hole) library>hand draw <- #2",
         "& fly #3 library>hand draw <- #2",
-        "fly #7 (Mana Crypt) hand>graveyard discard <- #2",
+        "fly #7 (Portable Hole) hand>graveyard discard <- #2",
         "& fly #6 (Plains) hand>graveyard discard <- #2",
         "vanish #2 (Thirst for Discovery) stack>graveyard resolve",
     ];
@@ -451,8 +483,8 @@ fn an_exiled_permanent_vanishes() {
     let name = "Portable Hole exiles until it leaves the battlefield";
     let [first, second] = script(names::PORTABLE_HOLE, name, 3);
     let lines = [
-        "-point hostile-target a1 > #257",
-        "vanish #257 (Jace, Vryn's Prodigy) battlefield>exile exile <- a1",
+        "-point hostile-target a1 > #261",
+        "vanish #261 (Snapcaster Mage) battlefield>exile exile <- a1",
         "-point source a1 > #2",
         "vanish a1 stack>gone resolve",
     ];

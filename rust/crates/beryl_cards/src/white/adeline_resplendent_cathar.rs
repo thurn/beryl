@@ -76,13 +76,12 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, TurnStep};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::HUMAN_TOKEN;
-    use crate::names;
+    use crate::{names, props};
 
     const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
 
@@ -230,11 +229,11 @@ pub mod scenarios {
                     },
                 },
             ]),
-        // "Attacking that player or a planeswalker they control": its controller picks Teferi
-        // (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
+        // "Attacking that player or a planeswalker they control": its controller picks the
+        // planeswalker (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
         Scenario::new("Adeline's Human attacks a planeswalker")
             .battlefield(P0, &[Permanent::new(ADELINE)])
-            .battlefield(P1, &[Permanent::new(names::TEFERI_TIME_RAVELER)])
+            .battlefield(P1, &[Permanent::new(props::PLANESWALKER)])
             .actions(&[
                 Action::AdvanceTo {
                     turn: 1,
@@ -245,7 +244,7 @@ pub mod scenarios {
                 // Adeline at the player; with no other creature, attackers are declared and the
                 // trigger resolves straight to its question.
                 Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
-                Action::choose(P0, DecisionKind::AttackTarget, names::TEFERI_TIME_RAVELER),
+                Action::choose(P0, DecisionKind::AttackTarget, props::PLANESWALKER),
                 Action::assert(Assertion::Attacking {
                     player: P0,
                     card: HUMAN_TOKEN,
@@ -255,16 +254,16 @@ pub mod scenarios {
                     turn: 1,
                     step: TurnStep::EndOfCombat,
                 },
-                // Adeline's 2 to the player, the Human's 1 to Teferi.
+                // Adeline's 2 to the player, the Human's 1 to the planeswalker.
                 Action::assert(Assertion::Life {
                     player: P1,
                     life: 18,
                 }),
                 Action::assert(Assertion::Counters {
                     player: P1,
-                    card: names::TEFERI_TIME_RAVELER,
+                    card: props::PLANESWALKER,
                     kind: beryl_engine::state::CounterKind::Loyalty,
-                    count: 3,
+                    count: 2,
                 }),
             ]),
     ];

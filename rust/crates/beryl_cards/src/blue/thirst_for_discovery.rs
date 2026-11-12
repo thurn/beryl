@@ -62,12 +62,11 @@ fn draw_three_discard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Seat, Zone};
 
     use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
 
@@ -94,7 +93,7 @@ pub mod scenarios {
     /// an empty library.
     const DRAWS: &[&str] = &[
         names::PLAINS,
-        names::MANA_CRYPT,
+        props::ARTIFACT,
         names::COUNTERSPELL,
         names::ISLAND,
     ];
@@ -122,9 +121,9 @@ pub mod scenarios {
                 Action::cast(P0, THIRST),
                 Action::Resolve,
                 yes_no(P0, Pick::No),
-                discard(names::MANA_CRYPT),
+                discard(props::ARTIFACT),
                 discard(names::PLAINS),
-                count(Zone::Graveyard, Some(names::MANA_CRYPT), 1),
+                count(Zone::Graveyard, Some(props::ARTIFACT), 1),
                 count(Zone::Graveyard, Some(names::PLAINS), 1),
                 count(Zone::Hand, Some(names::COUNTERSPELL), 1),
             ]),
@@ -136,7 +135,7 @@ pub mod scenarios {
                 P0,
                 &[
                     names::TUNDRA,
-                    names::MANA_CRYPT,
+                    props::ARTIFACT,
                     names::COUNTERSPELL,
                     names::ISLAND,
                 ],
@@ -147,7 +146,7 @@ pub mod scenarios {
                 Action::Resolve,
                 discard(names::TUNDRA),
                 discard(names::COUNTERSPELL),
-                count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+                count(Zone::Hand, Some(props::ARTIFACT), 1),
                 count(Zone::Graveyard, None, 3),
             ]),
         // One card to draw: P0 draws it, discards it, the only card in hand, and then loses for
@@ -156,12 +155,12 @@ pub mod scenarios {
         Scenario::new("Thirst for Discovery with fewer than two cards to discard")
             .battlefield(P0, ISLANDS)
             .hand(P0, &[THIRST])
-            .library(P0, &[names::MANA_CRYPT])
+            .library(P0, &[props::ARTIFACT])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 // P0 has nothing else to do, so Thirst resolves at once.
                 Action::cast(P0, THIRST),
-                count(Zone::Graveyard, Some(names::MANA_CRYPT), 1),
+                count(Zone::Graveyard, Some(props::ARTIFACT), 1),
                 count(Zone::Hand, None, 0),
                 Action::assert(Assertion::Outcome {
                     outcome: Ending::Win { player: P1 },

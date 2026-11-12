@@ -77,18 +77,19 @@ fn sacrifice_and_scry<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
-    use beryl_engine::state::Zone;
+    use beryl_engine::state::{CounterKind, Zone};
     use beryl_engine::{DecisionKind, TurnStep};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
     use crate::tokens::TREASURE_TOKEN;
+    use crate::{names, props};
 
     const ICEBERG: &str = names::AANGS_ICEBERG;
 
-    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+    const ARTIFACT: &str = props::ARTIFACT;
+
+    const CREATURE: &str = props::CREATURE;
 
     const JACE: &str = names::JACE_VRYNS_PRODIGY;
 
@@ -106,24 +107,27 @@ pub mod scenarios {
                     Permanent::new(PLAINS),
                     Permanent::new(PLAINS),
                     Permanent::new(PLAINS),
-                    Permanent::new(JACE),
+                    Permanent::new(CREATURE),
                 ],
             )
-            .battlefield(P1, &[Permanent::new(STAFF)])
-            .library(P0, &[ISLAND, STAFF, PLAINS, ISLAND])
+            .battlefield(
+                P1,
+                &[Permanent::new(props::PLANESWALKER).counters(CounterKind::Loyalty, 5)],
+            )
+            .library(P0, &[ISLAND, ARTIFACT, PLAINS, ISLAND])
             .library(P1, &[PLAINS])
             .actions(&[
-                // Flash: at the end of the opponent's turn, exiling their artifact rather than
-                // the Iceberg's own controller's Jace.
+                // Flash: at the end of the opponent's turn, exiling their planeswalker rather
+                // than the Iceberg's own controller's creature.
                 Action::cast(P0, ICEBERG),
                 Action::Resolve,
                 Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-                Action::choose(P0, DecisionKind::Target, STAFF),
+                Action::choose(P0, DecisionKind::Target, props::PLANESWALKER),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(STAFF),
+                    card: Some(props::PLANESWALKER),
                     count: 1,
                 }),
                 // Its controller's turn: three Plains untapped and a creature, for waterbend {3}.
@@ -132,8 +136,8 @@ pub mod scenarios {
                     step: TurnStep::PrecombatMain,
                 },
                 Action::activate(P0, ICEBERG, 1),
-                // CR 701.67a: Jace taps for one generic mana; two Plains pay the rest.
-                Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: JACE }),
+                // CR 701.67a: the creature taps for one generic mana; two Plains pay the rest.
+                Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: CREATURE }),
                 Action::assert(Assertion::Tapped {
                     player: P0,
                     card: PLAINS,
@@ -141,33 +145,30 @@ pub mod scenarios {
                 }),
                 Action::assert(Assertion::Tapped {
                     player: P0,
-                    card: JACE,
+                    card: CREATURE,
                     count: 1,
                 }),
-                // Scry 2 over Staff and Plains: Staff to the bottom, Plains stays on top.
-                Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Card { card: STAFF }),
+                // Scry 2 over the artifact and Plains: the artifact to the bottom, Plains stays
+                // on top.
+                Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Card { card: ARTIFACT }),
                 Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
                 Action::assert(Assertion::Library {
                     player: P0,
-                    top: &[PLAINS, ISLAND, STAFF],
+                    top: &[PLAINS, ISLAND, ARTIFACT],
                 }),
-                // Sacrificed, so the Staff returns under its owner's control (CR 610.3c): a new
-                // object, whose enters ability makes a Spirit.
+                // Sacrificed, so the planeswalker returns under its owner's control
+                // (CR 610.3c): a new object, with its printed loyalty.
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Graveyard,
                     card: Some(ICEBERG),
                     count: 1,
                 }),
-                Action::assert(Assertion::Controls {
+                Action::assert(Assertion::Counters {
                     player: P1,
-                    card: STAFF,
-                    count: 1,
-                }),
-                Action::assert(Assertion::Controls {
-                    player: P1,
-                    card: super::super::staff_of_the_storyteller::SPIRIT_TOKEN,
-                    count: 1,
+                    card: props::PLANESWALKER,
+                    kind: CounterKind::Loyalty,
+                    count: 3,
                 }),
             ]),
         Scenario::new("waterbend taps a creature and an artifact; scry reorders the top")
@@ -176,8 +177,8 @@ pub mod scenarios {
                 &[
                     Permanent::new(ICEBERG),
                     Permanent::new(PLAINS),
-                    Permanent::new(JACE),
-                    Permanent::new(STAFF),
+                    Permanent::new(CREATURE),
+                    Permanent::new(ARTIFACT),
                 ],
             )
             .library(P0, &[ISLAND, PLAINS])
@@ -190,11 +191,12 @@ pub mod scenarios {
                     kind: DecisionKind::ManaPayment,
                     candidates: 2,
                 }),
-                Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: STAFF }),
-                // Then Jace is the only way left to pay one more, and the Plains pays the last.
+                Action::answer(P0, DecisionKind::ManaPayment, Pick::Card { card: ARTIFACT }),
+                // Then the creature is the only way left to pay one more, and the Plains pays
+                // the last.
                 Action::assert(Assertion::Tapped {
                     player: P0,
-                    card: JACE,
+                    card: CREATURE,
                     count: 1,
                 }),
                 Action::assert(Assertion::Tapped {
@@ -211,6 +213,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("waterbend uses mana sources without sacrificing them")
+            .interaction(&[names::MANA_CRYPT, JACE, names::CURRENCY_CONVERTER])
             .battlefield(
                 P0,
                 &[

@@ -60,7 +60,7 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SKYDIVER: &str = names::THIEVING_SKYDIVER;
 
@@ -72,6 +72,7 @@ pub mod scenarios {
         // Get Lost gives the opponent two Maps; kicked for 1, the Skydiver can take a Map or
         // Mana Crypt, each of mana value 0, and takes the Crypt for good.
         Scenario::new("Thieving Skydiver kicked steals Mana Crypt over a Map")
+            .interaction(&[names::MANA_CRYPT, names::GET_LOST])
             .hand(P0, &[names::GET_LOST, SKYDIVER])
             .battlefield(
                 P0,
@@ -86,10 +87,7 @@ pub mod scenarios {
             )
             .battlefield(
                 P1,
-                &[
-                    Permanent::new(CRYPT),
-                    Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
-                ],
+                &[Permanent::new(CRYPT), Permanent::new(props::CREATURE)],
             )
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::PLAINS])

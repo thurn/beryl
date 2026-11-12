@@ -38,13 +38,12 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::card::{Castings, FaceIx};
 
     use beryl_engine::{DecisionKind, Seat, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Count {
@@ -61,6 +60,7 @@ pub mod scenarios {
         // Thieving Skydiver kicked for X = 1 taps three of four Islands. Returned to P0's hand,
         // it never enters, and the mana spent on it, X included, stays spent.
         Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
+            .interaction(&[names::THIEVING_SKYDIVER])
             .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
             .hand(P0, &[names::THIEVING_SKYDIVER, names::PLAINS])
             .library(P0, &[names::ISLAND])
@@ -88,17 +88,17 @@ pub mod scenarios {
                 count(P1, Zone::Hand, names::PLAINS, 1),
                 count(P1, Zone::Graveyard, names::REPRIEVE, 1),
             ]),
-        // P1 counters Mana Crypt; P0 returns the Counterspell to P1's hand, and the Crypt
+        // P1 counters the artifact; P0 returns the Counterspell to P1's hand, and the artifact
         // resolves.
         Scenario::new("Reprieve on a counterspell saves the spell it targets")
-            .battlefield(P0, &[Permanent::new(names::PLAINS); 2])
-            .hand(P0, &[names::MANA_CRYPT, names::REPRIEVE])
+            .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
+            .hand(P0, &[props::ARTIFACT, names::REPRIEVE])
             .library(P0, &[names::ISLAND])
             .battlefield(P1, &[Permanent::new(names::ISLAND); 2])
             .hand(P1, &[names::COUNTERSPELL])
             .library(P1, &[names::PLAINS])
             .actions(&[
-                Action::cast(P0, names::MANA_CRYPT),
+                Action::cast(P0, props::ARTIFACT),
                 Action::pass(P0),
                 Action::cast(P1, names::COUNTERSPELL),
                 Action::cast(P0, names::REPRIEVE),
@@ -113,7 +113,7 @@ pub mod scenarios {
                 count(P1, Zone::Hand, names::COUNTERSPELL, 1),
                 count(P0, Zone::Hand, names::ISLAND, 1),
                 Action::Resolve,
-                count(P0, Zone::Battlefield, names::MANA_CRYPT, 1),
+                count(P0, Zone::Battlefield, props::ARTIFACT, 1),
             ]),
     ];
 }

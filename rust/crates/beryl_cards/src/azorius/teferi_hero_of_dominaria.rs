@@ -126,13 +126,12 @@ static EXILE_TARGET: Effect = exile(TARGET);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
 
@@ -140,19 +139,11 @@ pub mod scenarios {
 
     const PLAINS: &str = names::PLAINS;
 
-    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    const CREATURE: &str = props::CREATURE;
 
-    const SCULPTOR: &str = names::JACE_THE_MIND_SCULPTOR;
+    const SCULPTOR: &str = props::PLANESWALKER;
 
-    const RAVELER: &str = names::TEFERI_TIME_RAVELER;
-
-    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
-
-    const CRYPT: &str = names::MANA_CRYPT;
-
-    const GET_LOST: &str = names::GET_LOST;
-
-    const HOLE: &str = names::PORTABLE_HOLE;
+    const HOLE: &str = props::ARTIFACT;
 
     const fn loyalty(count: u8) -> Action {
         Action::assert(Assertion::Counters {
@@ -184,20 +175,20 @@ pub mod scenarios {
         Action::assert(Assertion::Library { player, top })
     }
 
-    /// −3 on P1's Jace, whose library is `before`; `then` checks where he went. The Island is a
-    /// land and can't be chosen; Teferi himself could.
+    /// −3 on P1's creature, whose library is `before`; `then` checks where it went. The Island
+    /// is a land and can't be chosen; Teferi himself could.
     const fn tuck(
         name: &'static str,
         before: &'static [&'static str],
         then: &'static [Action],
     ) -> Scenario {
         const TEFERIS: &[Permanent] = &[Permanent::new(TEFERI)];
-        const JACES: &[Permanent] = &[Permanent::new(JACE), Permanent::new(ISLAND)];
+        const CREATURES: &[Permanent] = &[Permanent::new(CREATURE), Permanent::new(ISLAND)];
         Scenario::new(name)
             .battlefield(P0, TEFERIS)
             .hand(P0, &[PLAINS])
             .library(P0, &[ISLAND])
-            .battlefield(P1, JACES)
+            .battlefield(P1, CREATURES)
             .library(P1, before)
             .actions(then)
     }
@@ -241,7 +232,8 @@ pub mod scenarios {
                 tapped(P0, PLAINS, 0),
             ]),
         // The delayed ability refers to no object, so it untaps lands though Teferi is gone: P0
-        // destroys him with Get Lost, paid with both Plains. P0 untaps one Plains and stops.
+        // taps both Plains for two Portable Holes, and P1 returns Teferi to P0's hand with Sink
+        // into Stupor. P0 untaps one Plains and stops.
         Scenario::new("+1's untap comes at the end step after Teferi has left")
             .battlefield(
                 P0,
@@ -251,15 +243,29 @@ pub mod scenarios {
                     Permanent::new(PLAINS),
                 ],
             )
-            .hand(P0, &[GET_LOST])
+            .hand(P0, &[HOLE, HOLE])
             .library(P0, &[ISLAND])
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(ISLAND),
+                    Permanent::new(ISLAND),
+                    Permanent::new(ISLAND),
+                ],
+            )
+            .hand(P1, &[props::REMOVAL])
             .library(P1, &[ISLAND])
             .actions(&[
+                Action::cast(P0, HOLE),
+                Action::Resolve,
+                Action::cast(P0, HOLE),
+                Action::Resolve,
                 Action::activate(P0, TEFERI, 0),
                 Action::Resolve,
-                Action::cast(P0, GET_LOST),
-                Action::Resolve,
-                count(P0, Zone::Graveyard, Some(TEFERI), 1),
+                Action::pass(P0),
+                Action::cast(P1, props::REMOVAL),
+                Action::choose(P1, DecisionKind::Target, TEFERI),
+                count(P0, Zone::Hand, Some(TEFERI), 1),
                 tapped(P0, PLAINS, 2),
                 Action::AdvanceTo {
                     turn: 1,
@@ -275,10 +281,10 @@ pub mod scenarios {
             &[PLAINS, PLAINS, ISLAND],
             &[
                 Action::activate(P0, TEFERI, 1),
-                Action::choose(P0, DecisionKind::Target, JACE),
+                Action::choose(P0, DecisionKind::Target, CREATURE),
                 Action::Resolve,
-                library(P1, &[PLAINS, PLAINS, JACE, ISLAND]),
-                count(P1, Zone::Battlefield, Some(JACE), 0),
+                library(P1, &[PLAINS, PLAINS, CREATURE, ISLAND]),
+                count(P1, Zone::Battlefield, Some(CREATURE), 0),
                 loyalty(1),
             ],
         ),
@@ -287,9 +293,9 @@ pub mod scenarios {
             &[PLAINS],
             &[
                 Action::activate(P0, TEFERI, 1),
-                Action::choose(P0, DecisionKind::Target, JACE),
+                Action::choose(P0, DecisionKind::Target, CREATURE),
                 Action::Resolve,
-                library(P1, &[PLAINS, JACE]),
+                library(P1, &[PLAINS, CREATURE]),
                 loyalty(1),
             ],
         ),
@@ -306,7 +312,7 @@ pub mod scenarios {
                 P1,
                 &[
                     Permanent::new(HOLE),
-                    Permanent::new(STAFF),
+                    Permanent::new(HOLE),
                     Permanent::new(ISLAND),
                 ],
             )
@@ -336,11 +342,11 @@ pub mod scenarios {
                 count(P1, Zone::Exile, None, 2),
                 Action::assert(Assertion::Controls {
                     player: P1,
-                    card: STAFF,
+                    card: HOLE,
                     count: 1,
                 }),
             ]),
-        // Jace, the Mind Sculptor's 0 draws three cards, three draws: the emblem triggers three
+        // The Mind Sculptor's 0 draws three cards, three draws: the emblem triggers three
         // times (CR 603.2c), each trigger targeting as it goes on the stack.
         Scenario::new("−8's emblem triggers once for each card of a multiple draw")
             .battlefield(
@@ -354,9 +360,9 @@ pub mod scenarios {
             .battlefield(
                 P1,
                 &[
-                    Permanent::new(RAVELER),
-                    Permanent::new(CRYPT),
-                    Permanent::new(STAFF),
+                    Permanent::new(CREATURE),
+                    Permanent::new(HOLE),
+                    Permanent::new(props::SMALL_CREATURE),
                     Permanent::new(ISLAND),
                 ],
             )
@@ -368,9 +374,9 @@ pub mod scenarios {
                 Action::Resolve,
                 Action::choose(P0, DecisionKind::ChooseObject, ISLAND),
                 Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
-                Action::choose(P0, DecisionKind::Target, RAVELER),
-                Action::choose(P0, DecisionKind::Target, CRYPT),
-                Action::choose(P0, DecisionKind::Target, STAFF),
+                Action::choose(P0, DecisionKind::Target, CREATURE),
+                Action::choose(P0, DecisionKind::Target, HOLE),
+                Action::choose(P0, DecisionKind::Target, props::SMALL_CREATURE),
                 Action::assert(Assertion::Stack { count: 3 }),
                 Action::Resolve,
                 Action::Resolve,
@@ -393,15 +399,15 @@ pub mod scenarios {
                     Permanent::new(names::TUNDRA),
                 ],
             )
-            .hand(P0, &[names::REPRIEVE, names::TRINKET_MAGE])
+            .hand(P0, &[props::INSTANT, CREATURE])
             .library(P0, &[PLAINS, ISLAND])
             .library(P1, &[ISLAND, PLAINS])
             .actions(&[
                 // Pay for a spell so these lands are tapped in every engine, after its untap step.
-                Action::cast(P0, names::TRINKET_MAGE),
+                // The creature, then its enters trigger, which sees an empty hand.
+                Action::cast(P0, CREATURE),
                 Action::Resolve,
                 Action::Resolve,
-                Action::answer(P0, DecisionKind::YesNo, Pick::No),
                 Action::activate(P0, TEFERI, 0),
                 Action::Resolve,
                 Action::AdvanceTo {

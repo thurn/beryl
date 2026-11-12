@@ -72,7 +72,7 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const TRAINER: &str = names::THUNDERTRAP_TRAINER;
 
@@ -104,7 +104,7 @@ pub mod scenarios {
     const LANDS: &[&str] = &[names::PLAINS; 8];
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Mana Drain and Oust qualify among the top four; the Trainer takes Oust.
+        // Counterspell and Oust qualify among the top four; the Trainer takes Oust.
         Scenario::new("Thundertrap Trainer takes a spell")
             .hand(P0, &[TRAINER])
             .battlefield(P0, ISLANDS.split_at(2).0)
@@ -112,8 +112,8 @@ pub mod scenarios {
                 P0,
                 &[
                     names::PLAINS,
-                    names::MANA_DRAIN,
-                    names::THIEVING_SKYDIVER,
+                    props::INSTANT,
+                    props::CREATURE,
                     names::OUST,
                     names::ISLAND,
                 ],

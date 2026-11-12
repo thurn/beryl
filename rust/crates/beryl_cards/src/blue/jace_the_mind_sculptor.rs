@@ -146,13 +146,12 @@ fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
 
@@ -160,9 +159,9 @@ pub mod scenarios {
 
     const PLAINS: &str = names::PLAINS;
 
-    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+    const ARTIFACT: &str = props::ARTIFACT;
 
-    const PRODIGY: &str = names::JACE_VRYNS_PRODIGY;
+    const CREATURE: &str = props::CREATURE;
 
     const fn loyalty(count: u8) -> Action {
         Action::assert(Assertion::Counters {
@@ -177,17 +176,17 @@ pub mod scenarios {
         Scenario::new("+2 puts the top of an opponent's library on the bottom")
             .battlefield(P0, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND, PLAINS])
-            .library(P1, &[STAFF, PLAINS, ISLAND])
+            .library(P1, &[ARTIFACT, PLAINS, ISLAND])
             .actions(&[
                 Action::activate(P0, JACE, 0),
                 Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
                 Action::Resolve,
                 Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
                 // Assertions read the next open decision: by then, the opponent has drawn the
-                // Plains that the Staff left on top.
+                // Plains that the artifact left on top.
                 Action::assert(Assertion::Library {
                     player: P1,
-                    top: &[ISLAND, STAFF],
+                    top: &[ISLAND, ARTIFACT],
                 }),
                 Action::assert(Assertion::Count {
                     player: P1,
@@ -212,17 +211,17 @@ pub mod scenarios {
             ]),
         Scenario::new("0 draws three and puts two back in the order chosen")
             .battlefield(P0, &[Permanent::new(JACE)])
-            .hand(P0, &[STAFF])
-            .library(P0, &[ISLAND, PLAINS, PRODIGY, ISLAND])
+            .hand(P0, &[ARTIFACT])
+            .library(P0, &[ISLAND, PLAINS, CREATURE, ISLAND])
             .library(P1, &[PLAINS])
             .actions(&[
                 Action::activate(P0, JACE, 1),
                 Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, STAFF),
+                Action::choose(P0, DecisionKind::ChooseObject, ARTIFACT),
                 Action::choose(P0, DecisionKind::ChooseObject, ISLAND),
                 Action::assert(Assertion::Library {
                     player: P0,
-                    top: &[ISLAND, STAFF, ISLAND],
+                    top: &[ISLAND, ARTIFACT, ISLAND],
                 }),
                 Action::assert(Assertion::Count {
                     player: P0,
@@ -237,7 +236,7 @@ pub mod scenarios {
                 P0,
                 &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
             )
-            .battlefield(P1, &[Permanent::new(PRODIGY)])
+            .battlefield(P1, &[Permanent::new(CREATURE)])
             .hand(P1, &[PLAINS])
             .library(P0, &[ISLAND, ISLAND])
             .library(P1, &[ISLAND, ISLAND, ISLAND])
@@ -247,7 +246,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Hand,
-                    card: Some(PRODIGY),
+                    card: Some(CREATURE),
                     count: 1,
                 }),
                 loyalty(12),

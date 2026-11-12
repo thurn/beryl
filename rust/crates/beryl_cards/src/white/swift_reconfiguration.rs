@@ -67,15 +67,17 @@ pub mod scenarios {
     use beryl_engine::{DecisionKind, TurnStep};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SWIFT: &str = names::SWIFT_RECONFIGURATION;
 
-    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    /// The creature to reconfigure: a 2/1, mana value 2.
+    const TWO_DROP: &str = props::SMALL_CREATURE;
 
     const PLAINS: &str = names::PLAINS;
 
-    const OVERLORD: &str = names::OVERLORD_OF_THE_MISTMOORS;
+    /// Two of these, power 3 each, crew 5 together.
+    const CREW: &str = props::CREATURE;
 
     const SKYDIVER: &str = names::THIEVING_SKYDIVER;
 
@@ -93,33 +95,25 @@ pub mod scenarios {
             .at(2, P1, TurnStep::PrecombatMain)
             .hand(P0, &[SWIFT])
             .battlefield(P0, &[Permanent::new(PLAINS)])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(TWO_DROP)])
+            .hand(P1, &[PLAINS])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
                 Action::pass(P1),
-                // Flash: cast on the opponent's turn.
+                // Flash: cast on the opponent's turn. No one can respond, so it resolves.
                 Action::cast(P0, SWIFT),
-                Action::Resolve,
                 Action::assert(Assertion::Creature {
                     player: P1,
-                    card: JACE,
+                    card: TWO_DROP,
                     creature: false,
                 }),
-                // Not a creature, so its {T} ability isn't summoning-sick-limited, but crew 5 needs
-                // power 5 from other creatures, which P1 doesn't have: only its loot ability is offered.
+                // Crew 5 needs power 5 from other creatures, which P1 doesn't have: only passing
+                // and the land are offered.
                 Action::assert(Assertion::Decision {
                     player: P1,
                     kind: DecisionKind::Priority,
                     candidates: 2,
-                }),
-                // Its loot resolves unasked, with Plains alone to discard.
-                Action::activate(P1, JACE, 0),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: beryl_engine::Zone::Graveyard,
-                    card: Some(PLAINS),
-                    count: 1,
                 }),
                 Action::assert(Assertion::Controls {
                     player: P0,
@@ -132,8 +126,9 @@ pub mod scenarios {
                 P0,
                 &[
                     Permanent::new(PLAINS),
-                    Permanent::new(JACE),
-                    Permanent::new(OVERLORD),
+                    Permanent::new(TWO_DROP),
+                    Permanent::new(CREW),
+                    Permanent::new(CREW),
                 ],
             )
             .hand(P0, &[SWIFT])
@@ -141,32 +136,32 @@ pub mod scenarios {
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
                 Action::cast(P0, SWIFT),
-                Action::choose(P0, DecisionKind::Target, JACE),
+                Action::choose(P0, DecisionKind::Target, TWO_DROP),
                 Action::Resolve,
                 Action::assert(Assertion::Creature {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     creature: false,
                 }),
-                // Crew 5, granted by the Aura: the Overlord taps, the only creature that can.
-                Action::activate_granted(P0, JACE, 0),
+                // Crew 5, granted by the Aura: the two others tap, the only way to power 5.
+                Action::activate_granted(P0, TWO_DROP, 0),
                 Action::assert(Assertion::Tapped {
                     player: P0,
-                    card: OVERLORD,
-                    count: 1,
+                    card: CREW,
+                    count: 2,
                 }),
                 Action::Resolve,
                 Action::assert(Assertion::Creature {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     creature: true,
                 }),
                 Action::assert(Assertion::Pt {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     token: false,
-                    power: 0,
-                    toughness: 2,
+                    power: 2,
+                    toughness: 1,
                 }),
                 // A creature now, it may attack; it doesn't.
                 Action::AdvanceTo {
@@ -182,7 +177,7 @@ pub mod scenarios {
                 },
                 Action::assert(Assertion::Creature {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     creature: false,
                 }),
             ]),
@@ -190,9 +185,10 @@ pub mod scenarios {
         // ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)), so a kicked Thieving
         // Skydiver reaches it only with X of at least 2.
         Scenario::new("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
+            .interaction(&[SKYDIVER])
             .hand(P0, &[SWIFT, SKYDIVER])
             .battlefield(P0, SKYDIVER_LANDS)
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(TWO_DROP)])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS])
             .actions(&[
@@ -210,14 +206,15 @@ pub mod scenarios {
                 Action::assert(Assertion::Stack { count: 0 }),
                 Action::assert(Assertion::Controls {
                     player: P1,
-                    card: JACE,
+                    card: TWO_DROP,
                     count: 1,
                 }),
             ]),
         Scenario::new("Thieving Skydiver kicked for 2 takes the reconfigured creature")
+            .interaction(&[SKYDIVER])
             .hand(P0, &[SWIFT, SKYDIVER])
             .battlefield(P0, SKYDIVER_LANDS)
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(TWO_DROP)])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS])
             .actions(&[
@@ -234,10 +231,10 @@ pub mod scenarios {
                 Action::Resolve,
                 Action::assert(Assertion::Controls {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     count: 1,
                 }),
-                // The Aura stays its controller's, still attached: Jace is no creature.
+                // The Aura stays its controller's, still attached: the creature is no creature.
                 Action::assert(Assertion::Controls {
                     player: P0,
                     card: SWIFT,
@@ -245,7 +242,7 @@ pub mod scenarios {
                 }),
                 Action::assert(Assertion::Creature {
                     player: P0,
-                    card: JACE,
+                    card: TWO_DROP,
                     creature: false,
                 }),
             ]),

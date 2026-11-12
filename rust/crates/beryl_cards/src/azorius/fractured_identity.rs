@@ -62,18 +62,17 @@ fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::state::CounterKind;
 
     use beryl_engine::{Seat, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
     use crate::white::the_wandering_emperor::SAMURAI_TOKEN;
+    use crate::{names, props};
 
     const IDENTITY: &str = names::FRACTURED_IDENTITY;
 
-    const RAVELER: &str = names::TEFERI_TIME_RAVELER;
+    const PLANESWALKER: &str = props::PLANESWALKER;
 
     const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
 
@@ -114,7 +113,18 @@ pub mod scenarios {
         target: &'static [Permanent],
         then: &'static [Action],
     ) -> Scenario {
+        fracture_with(name, &[], target, then)
+    }
+
+    /// [`fracture_of`] for a scenario about Fractured Identity and the cards `interaction`.
+    const fn fracture_with(
+        name: &'static str,
+        interaction: &'static [&'static str],
+        target: &'static [Permanent],
+        then: &'static [Action],
+    ) -> Scenario {
         Scenario::new(name)
+            .interaction(interaction)
             .battlefield(P0, FIVE_LANDS)
             .hand(P0, &[IDENTITY])
             .library(P0, &[names::ISLAND])
@@ -124,26 +134,27 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Counters are not copied: P1's Teferi at 6 loyalty becomes P0's at 4.
+        // Counters are not copied: P1's planeswalker at 6 loyalty becomes P0's at its printed 3.
         fracture_of(
             "Fractured Identity on a planeswalker: the copy has its printed loyalty",
-            &[Permanent::new(RAVELER).counters(CounterKind::Loyalty, 6)],
+            &[Permanent::new(PLANESWALKER).counters(CounterKind::Loyalty, 6)],
             &[
                 Action::cast(P0, IDENTITY),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(RAVELER),
+                    card: Some(PLANESWALKER),
                     count: 1,
                 }),
-                controls(P1, RAVELER, 0),
-                controls(P0, RAVELER, 1),
-                loyalty(P0, RAVELER, 4),
+                controls(P1, PLANESWALKER, 0),
+                controls(P0, PLANESWALKER, 1),
+                loyalty(P0, PLANESWALKER, 3),
             ],
         ),
-        fracture_of(
+        fracture_with(
             "Fractured Identity on a double-faced card front face up",
+            &[JACE],
             &[Permanent::new(JACE)],
             &[
                 Action::cast(P0, IDENTITY),
@@ -158,8 +169,9 @@ pub mod scenarios {
             ],
         ),
         // CR 707.8a: the copy of a transformed permanent enters with its back face up.
-        fracture_of(
+        fracture_with(
             "Fractured Identity on a transformed double-faced card",
+            &[JACE],
             &[Permanent::new(JACE).transformed()],
             &[
                 Action::cast(P0, IDENTITY),
@@ -173,6 +185,7 @@ pub mod scenarios {
         // P0 targets their own Samurai token: it is exiled and ceases to exist, and P1, the one
         // other player, gets the copy, a 2/2.
         Scenario::new("Fractured Identity on its caster's own token")
+            .interaction(&[EMPEROR])
             .battlefield(
                 P0,
                 &[

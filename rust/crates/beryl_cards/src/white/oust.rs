@@ -41,11 +41,10 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
@@ -71,8 +70,8 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         // With no legal target it can't be cast
-        // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is
-        // an artifact, so passing is P0's only option.
+        // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's only
+        // permanent is a noncreature artifact, so passing is P0's only option.
         Scenario::new("Oust can't be cast without a target")
             .battlefield(
                 P0,
@@ -83,7 +82,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::OUST])
-            .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::AdvanceTo {
@@ -136,25 +135,33 @@ pub mod scenarios {
             }),
             life(P1, 23),
         ]),
-        // UI regression by-97z: the lower spell's target stays legible beneath a response.
+        // UI regression by-97z: the lower spell's target stays legible beneath a response. P0's
+        // own Counterspell keeps each of P0's priorities a decision.
         Scenario::new("Oust beneath an opposing counterspell")
-            .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
-            .hand(P0, &[names::OUST, names::REPRIEVE, names::PLAINS])
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(P0, &[names::OUST, props::INSTANT, names::PLAINS])
             .battlefield(
                 P1,
                 &[
                     Permanent::new(SPELLBINDER),
                     Permanent::new(names::ISLAND),
-                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::ISLAND),
                 ],
             )
-            .hand(P1, &[names::NO_MORE_LIES])
+            .hand(P1, &[props::INSTANT])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::OUST),
                 Action::pass(P0),
-                Action::cast(P1, names::NO_MORE_LIES),
+                Action::cast(P1, props::INSTANT),
                 Action::pass(P0),
                 Action::assert(Assertion::Controls {
                     player: P1,

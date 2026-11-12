@@ -23,14 +23,15 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::Zone;
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use crate::names;
 
-    /// Two Swamps pay Damn's {B}{B}, which two Plains could not.
+    /// Two Swamps pay Damn's {B}{B}, which two Plains could not: Damn is the one card that asks
+    /// for black mana.
     pub const SCENARIOS: &[Scenario] = &[Scenario::new("two Swamps pay {B}{B}")
+        .interaction(&[names::DAMN])
         .battlefield(
             P0,
             &[Permanent::new(names::SWAMP), Permanent::new(names::SWAMP)],

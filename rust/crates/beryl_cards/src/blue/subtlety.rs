@@ -74,10 +74,12 @@ pub mod scenarios {
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
+    /// The planeswalker spell for the evoke: XMage's harness fails that scenario with the
+    /// planeswalker prop on the stack, though it plays it with Teferi.
     const TEFERI: &str = names::TEFERI_TIME_RAVELER;
 
     const fn library(player: Seat, top: &'static [&'static str]) -> Action {
@@ -130,12 +132,13 @@ pub mod scenarios {
                     count: 1,
                 }),
             ]),
-        // Evoked with no mana, exiling Mana Drain, against P1's Teferi. P0 orders the triggers so
-        // the sacrifice resolves first; the tuck resolves anyway, and P1 puts Teferi on the
+        // Evoked with no mana, exiling Timetwister, against P1's Teferi. P0 orders the triggers
+        // so the sacrifice resolves first; the tuck resolves anyway, and P1 puts Teferi on the
         // bottom.
         Scenario::new("Subtlety evoked: sacrificed, its trigger still tucks a planeswalker spell")
+            .interaction(&[TEFERI])
             .at(2, P1, TurnStep::PrecombatMain)
-            .hand(P0, &[names::SUBTLETY, names::MANA_DRAIN])
+            .hand(P0, &[names::SUBTLETY, props::UNTARGETED_SPELL])
             .battlefield(
                 P1,
                 &[
@@ -157,7 +160,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Exile,
-                    card: Some(names::MANA_DRAIN),
+                    card: Some(props::UNTARGETED_SPELL),
                     count: 1,
                 }),
                 Action::Resolve,
@@ -193,8 +196,8 @@ pub mod scenarios {
                 P0,
                 &[
                     names::SUBTLETY,
-                    names::TIME_SPIRAL,
-                    names::FRACTURED_IDENTITY,
+                    props::UNTARGETED_SPELL,
+                    props::PLANESWALKER,
                 ],
             )
             .battlefield(
@@ -226,11 +229,11 @@ pub mod scenarios {
                     kind: DecisionKind::ChooseObject,
                     candidates: 2,
                 }),
-                Action::choose(P0, DecisionKind::ChooseObject, names::TIME_SPIRAL),
+                Action::choose(P0, DecisionKind::ChooseObject, props::UNTARGETED_SPELL),
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Exile,
-                    card: Some(names::TIME_SPIRAL),
+                    card: Some(props::UNTARGETED_SPELL),
                     count: 1,
                 }),
                 Action::Resolve,

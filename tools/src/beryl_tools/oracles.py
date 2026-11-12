@@ -483,6 +483,8 @@ def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
             "--quiet",
             "-p",
             "beryl_cards",
+            "--features",
+            "scenarios",
             "--bin",
             "beryl_scenario",
             "--",

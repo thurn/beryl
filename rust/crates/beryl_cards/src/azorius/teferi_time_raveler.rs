@@ -86,60 +86,56 @@ fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use beryl_engine::state::CounterKind;
+
+    use crate::{names, props};
 
     const TEFERI: &str = names::TEFERI_TIME_RAVELER;
 
-    const ICEBERG: &str = names::AANGS_ICEBERG;
-
-    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
-
-    const JACE: &str = names::JACE_VRYNS_PRODIGY;
-
     pub const SCENARIOS: &[Scenario] = &[
         // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A planeswalker or battle
-        // that’s removed from combat stops being attacked."
+        // that’s removed from combat stops being attacked." Teferi's −3, with no target, leaves
+        // him 1 loyalty; in P0's turn the 3/1 removes him, and the 2/1's attack on the player
+        // goes on. The other planeswalker is a destination no one picks.
         Scenario::new("combat damage removes Teferi while other attacks remain")
+            .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(
                 P0,
                 &[
-                    Permanent::new(names::BEZA_THE_BOUNDING_SPRING),
-                    Permanent::new(names::SNAPCASTER_MAGE),
-                    Permanent::new(names::SUBTLETY),
+                    Permanent::new(props::CREATURE),
+                    Permanent::new(props::SMALL_CREATURE),
                 ],
             )
             .battlefield(
                 P1,
-                &[
-                    Permanent::new(TEFERI),
-                    Permanent::new(names::JACE_THE_MIND_SCULPTOR),
-                ],
+                &[Permanent::new(TEFERI), Permanent::new(props::PLANESWALKER)],
             )
             .library(P0, &[names::ISLAND])
-            .library(P1, &[names::PLAINS])
+            .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[
+                Action::activate(P1, TEFERI, 2),
+                Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 0 }),
+                Action::assert(Assertion::Counters {
+                    player: P1,
+                    card: TEFERI,
+                    kind: CounterKind::Loyalty,
+                    count: 1,
+                }),
                 Action::AdvanceTo {
-                    turn: 1,
+                    turn: 3,
                     step: TurnStep::BeginningOfCombat,
                 },
                 Action::pass(P0),
-                Action::choose(P0, DecisionKind::Attacker, names::BEZA_THE_BOUNDING_SPRING),
+                Action::choose(P0, DecisionKind::Attacker, props::CREATURE),
                 Action::choose(P0, DecisionKind::AttackTarget, TEFERI),
-                Action::choose(P0, DecisionKind::Attacker, names::SNAPCASTER_MAGE),
-                Action::choose(
-                    P0,
-                    DecisionKind::AttackTarget,
-                    names::JACE_THE_MIND_SCULPTOR,
-                ),
-                Action::choose(P0, DecisionKind::Attacker, names::SUBTLETY),
+                Action::choose(P0, DecisionKind::Attacker, props::SMALL_CREATURE),
                 Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
                 Action::AdvanceTo {
-                    turn: 1,
+                    turn: 3,
                     step: TurnStep::EndOfCombat,
                 },
                 Action::assert(Assertion::Count {
@@ -150,39 +146,28 @@ pub mod scenarios {
                 }),
                 Action::assert(Assertion::Counters {
                     player: P1,
-                    card: names::JACE_THE_MIND_SCULPTOR,
-                    kind: beryl_engine::state::CounterKind::Loyalty,
-                    count: 1,
+                    card: props::PLANESWALKER,
+                    kind: CounterKind::Loyalty,
+                    count: 3,
                 }),
                 Action::assert(Assertion::Life {
                     player: P1,
-                    life: 17,
+                    life: 18,
                 }),
             ]),
         // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
         // with an empty stack.
         Scenario::new("an opponent's flash spell waits for sorcery timing")
             .battlefield(P0, &[Permanent::new(TEFERI)])
-            .hand(P1, &[ICEBERG])
+            .hand(P1, &[props::SMALL_CREATURE])
             .battlefield(
                 P1,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(JACE),
-                ],
+                &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[
-                Action::pass(P0),
-                // Passing and Jace's loot: Aang's Iceberg has flash, but Teferi forbids it now.
-                Action::assert(Assertion::Decision {
-                    player: P1,
-                    kind: DecisionKind::Priority,
-                    candidates: 2,
-                }),
+                // Only passing in P1's upkeep: the creature has flash, but Teferi forbids it now.
                 Action::AdvanceTo {
                     turn: 2,
                     step: TurnStep::Upkeep,
@@ -190,30 +175,24 @@ pub mod scenarios {
                 Action::assert(Assertion::Decision {
                     player: P1,
                     kind: DecisionKind::Priority,
-                    candidates: 2,
+                    candidates: 1,
                 }),
-                // Nor in its own main phase while the loot is on the stack: with only passing
-                // left, the loot resolves unasked, straight to its discard.
+                // The stack empty in its main phase: sorcery timing.
                 Action::AdvanceTo {
                     turn: 2,
                     step: TurnStep::PrecombatMain,
                 },
-                Action::activate(P1, JACE, 0),
-                Action::choose(P1, DecisionKind::ChooseObject, names::ISLAND),
-                // The stack empty in its main phase: sorcery timing.
-                Action::cast(P1, ICEBERG),
-                Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-                Action::choose(P1, DecisionKind::Target, TEFERI),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Exile,
-                    card: Some(TEFERI),
+                Action::cast(P1, props::SMALL_CREATURE),
+                Action::Resolve,
+                Action::assert(Assertion::Controls {
+                    player: P1,
+                    card: props::SMALL_CREATURE,
                     count: 1,
                 }),
             ]),
         Scenario::new("−3 returns an opposing artifact and draws a card")
             .battlefield(P0, &[Permanent::new(TEFERI)])
-            .battlefield(P1, &[Permanent::new(STAFF)])
+            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -222,7 +201,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Hand,
-                    card: Some(STAFF),
+                    card: Some(props::ARTIFACT),
                     count: 1,
                 }),
                 Action::assert(Assertion::Count {
@@ -234,7 +213,7 @@ pub mod scenarios {
                 Action::assert(Assertion::Counters {
                     player: P0,
                     card: TEFERI,
-                    kind: beryl_engine::state::CounterKind::Loyalty,
+                    kind: CounterKind::Loyalty,
                     count: 1,
                 }),
                 // CR 606.3: one loyalty ability a turn.
@@ -247,7 +226,7 @@ pub mod scenarios {
         Scenario::new("+1 lets a sorcery be cast on the opponent's turn, until the next")
             .battlefield(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
             .hand(P0, &[names::OUST, names::OUST])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .battlefield(P1, &[Permanent::new(props::CREATURE)])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[
@@ -260,11 +239,17 @@ pub mod scenarios {
                 Action::pass(P1),
                 // In the opponent's upkeep, as though it had flash (CR 702.8a).
                 Action::cast(P0, names::OUST),
-                Action::Resolve,
-                // Second from the top.
+                // Second from the top: P1 has drawn the Plains above it since, and stops in their
+                // main phase with it to play.
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Hand,
+                    card: Some(names::PLAINS),
+                    count: 1,
+                }),
                 Action::assert(Assertion::Library {
                     player: P1,
-                    top: &[names::PLAINS, JACE, names::ISLAND],
+                    top: &[props::CREATURE, names::ISLAND],
                 }),
                 Action::assert(Assertion::Life {
                     player: P1,

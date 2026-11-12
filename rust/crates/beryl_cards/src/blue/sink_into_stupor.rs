@@ -68,12 +68,11 @@ fn bounce<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SPRINGS: &str = "Soporific Springs";
 
@@ -127,14 +126,14 @@ pub mod scenarios {
             .battlefield(
                 P1,
                 &[
-                    Permanent::new(names::MANA_CRYPT),
+                    Permanent::new(props::ARTIFACT),
                     Permanent::new(names::ISLAND),
                 ],
             )
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::cast(P0, names::SINK_INTO_STUPOR),
-                count(P1, Zone::Hand, names::MANA_CRYPT, 1),
+                count(P1, Zone::Hand, props::ARTIFACT, 1),
                 count(P1, Zone::Battlefield, names::ISLAND, 1),
             ]),
         // Played as Soporific Springs paying 3 life, it taps for the {U} of the other copy cast
@@ -145,7 +144,7 @@ pub mod scenarios {
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
             .hand(P0, &[names::SINK_INTO_STUPOR, names::SINK_INTO_STUPOR])
-            .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::PlayLand {
@@ -158,7 +157,7 @@ pub mod scenarios {
                 springs_tapped(0),
                 Action::cast(P0, names::SINK_INTO_STUPOR),
                 springs_tapped(1),
-                count(P1, Zone::Hand, names::MANA_CRYPT, 1),
+                count(P1, Zone::Hand, props::ARTIFACT, 1),
             ]),
         Scenario::new("Soporific Springs: no life paid, it enters tapped")
             .hand(P0, &[names::SINK_INTO_STUPOR])

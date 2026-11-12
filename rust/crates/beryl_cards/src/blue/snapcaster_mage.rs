@@ -57,18 +57,15 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const SNAPCASTER: &str = names::SNAPCASTER_MAGE;
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-
-    const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
 
     const fn priority_candidates(candidates: u8) -> Action {
         Action::assert(Assertion::Decision {
@@ -131,8 +128,9 @@ pub mod scenarios {
                 count(P0, Zone::Exile, names::COUNTERSPELL, 1),
                 count(P0, Zone::Graveyard, names::COUNTERSPELL, 0),
             ]),
-        // P1 answers the flashback Counterspell with Reprieve, which would return it to P0's
-        // hand: cast with flashback, it is exiled instead (CR 702.34a), and Adeline resolves.
+        // P1 answers the flashback Counterspell with Sink into Stupor, which would return it to
+        // P0's hand: cast with flashback, it is exiled instead (CR 702.34a), and the creature
+        // resolves.
         Scenario::new("Snapcaster Mage: a flashback spell returned to hand is exiled")
             .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(
@@ -152,23 +150,23 @@ pub mod scenarios {
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
                     Permanent::new(names::ISLAND),
                 ],
             )
-            .hand(P1, &[ADELINE, names::REPRIEVE, names::PLAINS])
+            .hand(P1, &[props::CREATURE, props::REMOVAL, names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P1, ADELINE),
-                Action::pass(P1),
+                Action::cast(P1, props::CREATURE),
                 Action::cast(P0, SNAPCASTER),
-                // Snapcaster resolves; P1, who could Reprieve, passes as its trigger resolves and
-                // again with Adeline alone on the stack.
+                // Snapcaster resolves; P1, who could cast Sink into Stupor, passes as its trigger
+                // resolves and again with the creature alone on the stack.
                 Action::Resolve,
                 Action::pass(P1),
                 Action::pass(P1),
                 Action::cast(P0, names::COUNTERSPELL),
-                Action::cast(P1, names::REPRIEVE),
+                Action::cast(P1, props::REMOVAL),
                 Action::choose(P1, DecisionKind::Target, names::COUNTERSPELL),
                 Action::Resolve,
                 count(P0, Zone::Exile, names::COUNTERSPELL, 1),
@@ -176,7 +174,7 @@ pub mod scenarios {
                 Action::Resolve,
                 Action::assert(Assertion::Controls {
                     player: P1,
-                    card: ADELINE,
+                    card: props::CREATURE,
                     count: 1,
                 }),
             ]),
@@ -184,6 +182,7 @@ pub mod scenarios {
         // alternative cost, so overload can't be added (CR 118.9a), though P0 could pay it. The
         // two candidates are passing and the {B}{B} cast.
         Scenario::new("Snapcaster Mage: flashback is the one alternative cost")
+            .interaction(&[names::DAMN])
             .battlefield(
                 P0,
                 &[
@@ -222,8 +221,8 @@ pub mod scenarios {
             )
             .hand(P0, &[SNAPCASTER])
             .graveyard(P0, &[names::OUST])
-            .library(P0, &[names::MANA_DRAIN])
-            .library(P1, &[names::MANA_DRAIN])
+            .library(P0, &[props::INSTANT])
+            .library(P1, &[props::INSTANT])
             .actions(&[
                 Action::cast(P0, SNAPCASTER),
                 Action::Resolve,
@@ -248,7 +247,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::PLAINS, ADELINE])
+            .graveyard(P0, &[names::PLAINS, props::CREATURE])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, SNAPCASTER),

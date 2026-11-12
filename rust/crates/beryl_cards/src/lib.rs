@@ -13,6 +13,8 @@ pub mod decks;
 pub mod generate;
 pub mod multicolor;
 pub mod names;
+#[cfg(feature = "scenarios")]
+pub mod props;
 pub mod tokens;
 pub mod white;
 

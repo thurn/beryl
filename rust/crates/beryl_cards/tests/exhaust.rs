@@ -105,10 +105,14 @@ fn every_scenario_keeps_the_invariants_to_a_depth() {
     assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
 }
 
-/// A deliberately broken invariant, that the stack stays empty, is found from the first
-/// scenario that ends with an empty stack, and its transcript replays to a position that breaks
-/// it. The check panics, as the engine's debug assertions do, rather than returning a
-/// violation.
+/// A deliberately broken invariant, that the stack stays empty, is found from a scenario's end
+/// position, and its transcript replays to a position that breaks it. The check panics, as the
+/// engine's debug assertions do, rather than returning a violation.
+///
+/// The search checks every position, the runner stops only where someone has a choice, and a
+/// spell or ability that no one can respond to resolves between the two: a search that breaks
+/// the check there replays to an empty stack. So the test takes the first finding the runner
+/// can stop at, and there must be one.
 #[test]
 fn a_broken_invariant_is_found_and_replays() {
     #[allow(clippy::unnecessary_wraps)] // A `Check`, failing by panicking.
@@ -116,25 +120,28 @@ fn a_broken_invariant_is_found_and_replays() {
         assert!(s.stack().is_empty(), "something is on the stack");
         Ok(())
     }
+    /// Whether `scenario`, a finding's transcript, plays to a position that breaks the check.
+    fn breaks(scenario: &Scenario) -> bool {
+        let mut live = Live::new(&CARDS, scenario).unwrap();
+        for &action in scenario.actions {
+            live.act(action)
+                .unwrap_or_else(|f| panic!("{f}\n{}", scenario.name));
+        }
+        live.position(Action::pass(scenario.setup.active))
+            .unwrap_or_else(|f| panic!("{f}\n{}", scenario.name));
+        catch_unwind(|| stack_stays_empty(live.table(), live.state())).is_err()
+    }
     let found = scenarios()
         .into_iter()
         .find_map(|(_, scenario)| {
             exhaust(&CARDS, scenario, BOUNDS, stack_stays_empty)
                 .err()
                 .filter(|found| found.searched > 0)
+                .filter(|found| {
+                    assert!(found.why.contains("something is on the stack"), "{found}");
+                    breaks(found.scenario.as_ref().expect("a scriptable sequence"))
+                })
         })
-        .expect("a scenario reaches a spell or an ability on the stack");
+        .expect("a scenario's search breaks the check where the runner stops");
     println!("{found}");
-    assert!(found.why.contains("something is on the stack"), "{found}");
-    let scenario = found.scenario.as_ref().expect("a scriptable sequence");
-    let mut live = Live::new(&CARDS, scenario).unwrap();
-    for &action in scenario.actions {
-        live.act(action).unwrap_or_else(|f| panic!("{f}\n{found}"));
-    }
-    live.position(Action::pass(scenario.setup.active))
-        .unwrap_or_else(|f| panic!("{f}\n{found}"));
-    assert!(
-        catch_unwind(|| stack_stays_empty(live.table(), live.state())).is_err(),
-        "the transcript stops short of the failure:\n{found}"
-    );
 }

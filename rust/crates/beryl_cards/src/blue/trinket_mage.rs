@@ -57,14 +57,17 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
-    use crate::names;
+    use crate::{names, props};
 
     const MAGE: &str = names::TRINKET_MAGE;
+
+    /// The artifacts of mana value 0 and 2 beside the prop's 1, for the scenarios about which
+    /// mana values qualify.
+    const CRYPT_AND_STAFF: &[&str] = &[names::MANA_CRYPT, names::STAFF_OF_THE_STORYTELLER];
 
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
 
@@ -88,11 +91,16 @@ pub mod scenarios {
         names::PLAINS,
     ];
 
+    /// The artifact prop (mana value 1) is the one trinket; Oust and the lands are not
+    /// artifacts.
+    const PROP_LIBRARY: &[&str] = &[names::ISLAND, props::ARTIFACT, names::OUST, names::PLAINS];
+
     /// Casts the Mage and resolves it, then its trigger, up to the "you may".
     const ENTER: [Action; 3] = [Action::cast(P0, MAGE), Action::Resolve, Action::Resolve];
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Trinket Mage finds Mana Crypt")
+            .interaction(CRYPT_AND_STAFF)
             .hand(P0, &[MAGE])
             .battlefield(P0, ISLANDS)
             .library(P0, LIBRARY)
@@ -116,18 +124,25 @@ pub mod scenarios {
         Scenario::new("Trinket Mage finds Portable Hole")
             .hand(P0, &[MAGE])
             .battlefield(P0, ISLANDS)
-            .library(P0, LIBRARY)
+            .library(P0, PROP_LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
                 ENTER[0],
                 ENTER[1],
                 ENTER[2],
                 Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                // Finding nothing or the Hole.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseUpTo,
+                    candidates: 2,
+                }),
                 Action::choose(P0, DecisionKind::ChooseUpTo, names::PORTABLE_HOLE),
                 count(Zone::Hand, Some(names::PORTABLE_HOLE), 1),
-                count(Zone::Library, Some(names::MANA_CRYPT), 1),
+                count(Zone::Library, None, 3),
             ]),
         Scenario::new("Trinket Mage finds nothing although Mana Crypt is there")
+            .interaction(CRYPT_AND_STAFF)
             .hand(P0, &[MAGE])
             .battlefield(P0, ISLANDS)
             .library(P0, LIBRARY)
@@ -147,10 +162,7 @@ pub mod scenarios {
         Scenario::new("Trinket Mage searches a library without a trinket")
             .hand(P0, &[MAGE])
             .battlefield(P0, ISLANDS)
-            .library(
-                P0,
-                &[names::STAFF_OF_THE_STORYTELLER, names::OUST, names::PLAINS],
-            )
+            .library(P0, &[props::CREATURE, names::OUST, names::PLAINS])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 ENTER[0],
@@ -164,7 +176,7 @@ pub mod scenarios {
         Scenario::new("Trinket Mage declines to search")
             .hand(P0, &[MAGE])
             .battlefield(P0, ISLANDS)
-            .library(P0, LIBRARY)
+            .library(P0, PROP_LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
                 ENTER[0],
@@ -175,7 +187,7 @@ pub mod scenarios {
                 // Unsearched and unshuffled.
                 Action::assert(Assertion::Library {
                     player: P0,
-                    top: LIBRARY,
+                    top: PROP_LIBRARY,
                 }),
             ]),
         // UI regression by-kac: a known library top must not add a separate Search? prompt.
@@ -184,24 +196,24 @@ pub mod scenarios {
             .battlefield(
                 P0,
                 &[
-                    Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+                    Permanent::new(props::PLANESWALKER),
                     Permanent::new(names::ISLAND),
                     Permanent::new(names::ISLAND),
                     Permanent::new(names::ISLAND),
                 ],
             )
-            .library(P0, LIBRARY)
+            .library(P0, PROP_LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
-                Action::activate(P0, names::JACE_THE_MIND_SCULPTOR, 0),
+                Action::activate(P0, props::PLANESWALKER, 0),
                 Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
                 Action::answer(P0, DecisionKind::YesNo, Pick::No),
                 ENTER[0],
                 ENTER[1],
                 ENTER[2],
                 Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-                Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
-                count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+                Action::choose(P0, DecisionKind::ChooseUpTo, props::ARTIFACT),
+                count(Zone::Hand, Some(props::ARTIFACT), 1),
             ]),
     ];
 }

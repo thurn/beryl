@@ -62,18 +62,17 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::card::{Castings, FaceIx};
 
     use beryl_engine::{DecisionKind, Zone};
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-    use crate::names;
     use crate::white::adeline_resplendent_cathar::HUMAN_TOKEN;
+    use crate::{names, props};
 
     const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
-    const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
+    const TWO_DROP: &str = props::SMALL_CREATURE;
 
     const fn creatures(player: beryl_engine::Seat, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Controls {
@@ -84,14 +83,14 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        // For {B}{B}, one target: P0 destroys P1's Elite Spellbinder and keeps Adeline.
+        // For {B}{B}, one target: P0 destroys P1's Elite Spellbinder and keeps its own two-drop.
         Scenario::new("Damn for {B}{B} destroys its target alone")
             .battlefield(
                 P0,
                 &[
                     Permanent::new(names::SWAMP),
                     Permanent::new(names::SWAMP),
-                    Permanent::new(ADELINE),
+                    Permanent::new(TWO_DROP),
                 ],
             )
             .hand(P0, &[names::DAMN])
@@ -102,7 +101,7 @@ pub mod scenarios {
                 Action::choose(P0, DecisionKind::Target, SPELLBINDER),
                 Action::Resolve,
                 creatures(P1, SPELLBINDER, 0),
-                creatures(P0, ADELINE, 1),
+                creatures(P0, TWO_DROP, 1),
             ]),
         // With only white mana, the overload is the one way to cast it: two candidates, passing
         // and the overloaded cast. It asks for no target and destroys every creature, P0's own
@@ -115,17 +114,11 @@ pub mod scenarios {
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
-                    Permanent::new(ADELINE),
+                    Permanent::new(TWO_DROP),
                 ],
             )
             .hand(P0, &[names::DAMN])
-            .battlefield(
-                P1,
-                &[
-                    Permanent::new(SPELLBINDER),
-                    Permanent::new(names::THIEVING_SKYDIVER),
-                ],
-            )
+            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::assert(Assertion::Decision {
@@ -140,9 +133,9 @@ pub mod scenarios {
                     costs: Castings::only(0),
                 },
                 Action::Resolve,
-                creatures(P0, ADELINE, 0),
+                creatures(P0, TWO_DROP, 0),
                 creatures(P1, SPELLBINDER, 0),
-                creatures(P1, names::THIEVING_SKYDIVER, 0),
+                creatures(P1, TWO_DROP, 0),
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Graveyard,
@@ -162,7 +155,9 @@ pub mod scenarios {
         // face-down creature, revealed as it leaves
         // ([CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down
         // permanent ... moves from the battlefield to any other zone, its owner must reveal it").
+        // Adeline's Human is the token, and a token's maker is on the battlefield with it.
         Scenario::new("Damn overloaded takes tokens and face-down creatures at once")
+            .interaction(&[names::ADELINE_RESPLENDENT_CATHAR])
             .battlefield(
                 P0,
                 &[
@@ -170,7 +165,7 @@ pub mod scenarios {
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
                     Permanent::new(names::PLAINS),
-                    Permanent::new(ADELINE),
+                    Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
                     Permanent::token(HUMAN_TOKEN),
                 ],
             )
@@ -191,7 +186,7 @@ pub mod scenarios {
                     costs: Castings::only(0),
                 },
                 Action::Resolve,
-                creatures(P0, ADELINE, 0),
+                creatures(P0, names::ADELINE_RESPLENDENT_CATHAR, 0),
                 creatures(P0, HUMAN_TOKEN, 0),
                 creatures(P1, SPELLBINDER, 0),
                 Action::assert(Assertion::Count {

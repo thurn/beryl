@@ -123,14 +123,13 @@ pub static CARD: CardDef = CardDef {
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-
     use beryl_engine::{DecisionKind, TurnStep, Zone};
 
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::ROGUE_TOKEN;
-    use crate::names;
     use crate::tokens::TREASURE_TOKEN;
+    use crate::{names, props};
 
     const CONVERTER: &str = names::CURRENCY_CONVERTER;
 
@@ -179,13 +178,13 @@ pub mod scenarios {
         Permanent::new(names::JACE_VRYNS_PRODIGY),
     ];
 
-    /// The Converter, the {2} for its loot, and a tapped Jace, Vryn's Prodigy, which can neither
-    /// loot nor attack on the first turn.
-    const LOOTING_BESIDE_JACE: &[Permanent] = &[
+    /// The Converter, the {2} for its loot, and a tapped creature, which can't attack on the
+    /// first turn.
+    const LOOTING_BESIDE_A_CREATURE: &[Permanent] = &[
         PERMANENT,
         ISLAND,
         ISLAND,
-        Permanent::new(names::JACE_VRYNS_PRODIGY).tapped(),
+        Permanent::new(props::CREATURE).tapped(),
     ];
 
     pub const SCENARIOS: &[Scenario] = &[
@@ -225,6 +224,7 @@ pub mod scenarios {
         // Jace's loot discards an Island; the Converter may exile it but doesn't, so its {T} finds
         // nothing to return and makes nothing.
         Scenario::new("Currency Converter declines to exile another loot's discard")
+            .interaction(&[names::JACE_VRYNS_PRODIGY])
             .battlefield(
                 P0,
                 &[
@@ -251,13 +251,14 @@ pub mod scenarios {
         // Thirst for Discovery discards Tundra and Counterspell, one at a time: one trigger for
         // each card, both exiled.
         Scenario::new("Currency Converter exiles Thirst for Discovery's discards")
+            .interaction(&[names::THIRST_FOR_DISCOVERY])
             .battlefield(P0, CASTING_THIRST)
             .hand(P0, &[names::THIRST_FOR_DISCOVERY])
             .library(
                 P0,
                 &[
                     names::TUNDRA,
-                    names::MANA_CRYPT,
+                    props::ARTIFACT,
                     names::COUNTERSPELL,
                     names::ISLAND,
                 ],
@@ -276,11 +277,12 @@ pub mod scenarios {
                 Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
                 count(P0, Zone::Exile, names::TUNDRA, 1),
                 count(P0, Zone::Exile, names::COUNTERSPELL, 1),
-                count(P0, Zone::Hand, names::MANA_CRYPT, 1),
+                count(P0, Zone::Hand, props::ARTIFACT, 1),
             ]),
         // Jace's loot discards an Island and the Converter's own loot Oust: the Converter exiles
         // both. Next turn it returns the land of the two, for a Treasure.
         Scenario::new("Currency Converter chooses among its exiled cards")
+            .interaction(&[names::JACE_VRYNS_PRODIGY])
             .battlefield(P0, LOOTING_WITH_JACE)
             .hand(P0, &[names::ISLAND, names::OUST])
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
@@ -317,10 +319,10 @@ pub mod scenarios {
             ]),
         // P1 returns the Converter to P0's hand in response to its {T}. The ability still refers
         // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
-        // Rogue. Jace makes the target a choice, which the oracles are then told.
+        // Rogue. The creature makes the target a choice, which the oracles are then told.
         Scenario::new("Currency Converter's ability returns a card after the Converter left")
-            .battlefield(P0, LOOTING_BESIDE_JACE)
-            .hand(P0, &[names::OUST])
+            .battlefield(P0, LOOTING_BESIDE_A_CREATURE)
+            .hand(P0, &[names::OUST, props::SMALL_CREATURE])
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
             .battlefield(P1, ISLANDS)
             .hand(P1, &[names::SINK_INTO_STUPOR])
@@ -335,6 +337,7 @@ pub mod scenarios {
                     turn: 3,
                     step: TurnStep::PrecombatMain,
                 },
+                // The two-drop in P0's hand, with flash, makes each of P0's priorities a decision.
                 Action::activate(P0, CONVERTER, 2),
                 Action::pass(P0),
                 Action::cast(P1, names::SINK_INTO_STUPOR),
