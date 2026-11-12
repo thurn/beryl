@@ -199,14 +199,18 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     });
   });
   // The cards the opponent is looking at lie beside their library, toward the table, face
-  // down at its size (UI Conventions, "Cards the opponent looks at").
+  // down at its size (UI Conventions, "Cards the opponent looks at"). They are off the pile,
+  // as the desktop's are (game/layout.ts `handlingPlacements`): the card beneath them is its
+  // top while they are up.
   const handling = view.handling;
+  const lifted = new Set<number>();
   if (handling?.zone === "library") {
     const spot = pileSpot(bands, handling.side, "library");
     const toward = handling.side === "you" ? -1 : 1;
     (handled ?? []).forEach((slot, i) => {
       const object = objects.get(slot);
       if (object?.zone !== "library") return;
+      lifted.add(slot);
       const place = {
         ...spot,
         x: spot.x + i * LIFTED.step,
@@ -215,7 +219,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
       out.set(slot, {
         object,
         pose: upright(place, DEPTH.backs + i, "back"),
-        dress: dressed("library", "pile", PILE.width, true),
+        dress: dressed("library", "handling", PILE.width, true),
       });
     });
   }
@@ -226,7 +230,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     // where it was, and the pile shows the top it had until that one lands. One on its way
     // there shows as a top will, over it.
     const arrived = view.players[object.owner][pile].filter(
-      (slot) => !leaving?.has(slot),
+      (slot) => !leaving?.has(slot) && !lifted.has(slot),
     );
     const top =
       object.zone === pile &&
