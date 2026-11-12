@@ -148,7 +148,7 @@ impl Builder<'_> {
     /// Before the permanents that leave in the beat event `i` begins: the triggered
     /// abilities that come out of them lift first, though the engine puts them on the stack
     /// afterwards
-    /// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "The next time a
+    /// ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033): "the next time a
     /// player would receive priority"): an ability lifts out of a permanent that is leaving
     /// before that goes (Arena, `I3Te0m1bBFw 26:56.75`).
     pub(super) fn lift_ahead(&mut self, i: usize, told: &[Told]) {
