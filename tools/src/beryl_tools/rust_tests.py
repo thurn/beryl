@@ -1,9 +1,11 @@
 """The rust lane's tests step (checks.py): the workspace's tests under cargo-nextest, each test's
 result in the run log (runlog.py), or only the tests a failed run named (reruns.failed_tests).
+`by test-rust` runs the same tests the same way for a session at work.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -16,7 +18,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import paths, runlog, verdicts
+from . import paths, runlog, verdicts, warm
 from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED
 
 
@@ -144,7 +146,7 @@ def rust_tests_step(
         return CANNOT_RUN
     # Every test runs past a failure, so that a rerun of those named failed covers the run:
     # nextest would otherwise cancel the rest unrun.
-    every = "not binary(allocations)"
+    every = NO_ALLOCATIONS
     slow_only = slow_only_filter(s.check for s in verdicts.SLOW_ONLY) if fast else ""
     if slow_only:
         every += f" & not ({slow_only})"
@@ -244,3 +246,54 @@ def junit_results(xml: str) -> list[tuple[str, str, float]]:
         check = f"rust:{case.get('classname')}::{case.get('name')}"
         found.append((check, outcome, float(case.get("time") or 0)))
     return found
+
+
+# What only cargo test runs: doctests, and the flags after `--` that go to a test binary.
+CARGO_ONLY = ("--doc", "--")
+# What keeps cargo-nextest from the harness-less `allocations` targets, which it cannot list.
+NO_ALLOCATIONS = "not binary(allocations)"
+
+
+def session_command(args: list[str], nextest: bool) -> list[str] | None:
+    """The command `by test-rust <args>` runs in `rust/`, or none for the whole workspace as the
+    check runs it (`rust_tests_step`): cargo-nextest's for a package or a name filter, and
+    cargo test's for what nextest cannot run (`--doc`, `--test allocations`, flags after `--`)
+    and where cargo-nextest is missing. A filterset of the caller's own (`-E`) is theirs to
+    keep off the `allocations` targets."""
+    asks_allocations = any(
+        a == "--test=allocations" or (a == "allocations" and before == "--test")
+        for before, a in zip(["", *args], args)
+    )
+    if not nextest or asks_allocations or any(a in CARGO_ONLY for a in args):
+        return ["cargo", "test", *args]
+    if not args:
+        return None
+    own_filterset = any(a in ("-E", "--filterset") for a in args)
+    return [
+        "cargo",
+        "nextest",
+        "run",
+        "--cargo-quiet",
+        "--no-fail-fast",
+        "--status-level=fail",
+        "--final-status-level=fail",
+        *([] if own_filterset else ["-E", NO_ALLOCATIONS]),
+        *args,
+    ]
+
+
+def session_tests(args: argparse.Namespace) -> int:
+    # A fresh worktree's first build clones the cached target, as the checks' does.
+    warm.ensure_target(paths.REPO, tauri=False)
+    cmd = session_command(args.extra, shutil.which("cargo-nextest") is not None)
+    if cmd is None:
+        return rust_tests_step()
+    return subprocess.run(cmd, cwd=paths.RUST, check=False).returncode
+
+
+def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    p = sub.add_parser(
+        "test-rust",
+        help="the Rust tests in parallel, as the check runs them (-p <crate>, a name filter)",
+    )
+    p.set_defaults(func=session_tests, passthrough=True)

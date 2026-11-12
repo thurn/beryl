@@ -177,10 +177,10 @@ oracle *cards:
 oracle-smoke *args:
     {{ by }} oracle-smoke "$@"
 
-# The Rust tests (cargo test flags, e.g. -p beryl_app)
+# The Rust tests, in parallel as the check runs them (-p beryl_app, a name filter; --doc, --test allocations or flags after -- go to cargo test)
 [group('test')]
 test-rust *args:
-    cd rust && cargo test "$@"
+    {{ by }} test-rust "$@"
 
 # Random-game fuzzing at length: N engine games, then N session games with every script checked, optimized but with debug assertions on
 [group('test')]

@@ -504,3 +504,42 @@ def test_the_fast_check_tests_the_packages_a_change_can_break() -> None:
     assert affected("rust/Cargo.lock") is None
     assert affected("data/card-store.tsv") is None
     assert rust_tests.affected_packages(None, packages) is None
+
+
+def test_a_session_runs_rust_tests_as_the_check_does() -> None:
+    command = rust_tests.session_command
+    # The whole workspace is the check's own step.
+    assert command([], nextest=True) is None
+    # A package or a name filter goes to nextest, kept off the harness-less targets.
+    assert command(["-p", "beryl_session", "corpus"], nextest=True) == [
+        "cargo",
+        "nextest",
+        "run",
+        "--cargo-quiet",
+        "--no-fail-fast",
+        "--status-level=fail",
+        "--final-status-level=fail",
+        "-E",
+        "not binary(allocations)",
+        "-p",
+        "beryl_session",
+        "corpus",
+    ]
+    # A filterset of the caller's own would be joined to ours by "or": theirs stands alone.
+    own = command(["-E", "test(corpus)"], nextest=True)
+    assert own is not None and own.count("-E") == 1
+    # What nextest cannot run is cargo test's, and everything is where nextest is missing.
+    for args in (
+        ["--doc"],
+        ["--test", "allocations"],
+        ["-p", "beryl_engine", "--test=allocations"],
+        ["corpus", "--", "--nocapture"],
+    ):
+        assert command(args, nextest=True) == ["cargo", "test", *args]
+    assert command([], nextest=False) == ["cargo", "test"]
+    assert command(["-p", "beryl_app"], nextest=False) == [
+        "cargo",
+        "test",
+        "-p",
+        "beryl_app",
+    ]
