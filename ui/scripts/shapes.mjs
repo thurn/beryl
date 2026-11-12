@@ -24,6 +24,9 @@
 // and no card is drawn twice. A card of a split is dropped by carrying it to its place, and
 // a trigger moved the same way, or put first by a click (shape-cases.mjs). The scry flight
 // is a case of the split: the cards a scry looks at, from the look to the library again.
+// A cost paid with permanents says how much is left as the session wrote it, and a
+// declaration draws a line from each creature to what the session has it aimed at; paying
+// with permanents and the combat line are their cases (shape-cases-table.mjs).
 //
 // The seat across the table is shown none of it: its fixture plays the same game on, and at
 // every tick the stage holds no mark and the dock no button, until the view that asks that
@@ -50,6 +53,12 @@ import {
     onTable,
     scryFlight,
 } from "./shape-cases.mjs";
+import {
+    combatLines,
+    declared,
+    leftOf,
+    payingWithPermanents,
+} from "./shape-cases-table.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -164,10 +173,16 @@ function asked(fixture) {
 }
 
 /** What the screen should draw of `held`, a prompt and its decision, in `layout`: its title,
- * its buttons where each stands, and its marks. */
+ * its buttons where each stands, its marks, what it holds up, how much of its cost is left
+ * and the lines of its declaration. */
 function expected(held, layout) {
     const { decision, prompt } = held;
-    if (!prompt) return { title: "", buttons: [], marks: [], up: heldUp() };
+    const more = {
+        up: heldUp(prompt),
+        left: leftOf(prompt),
+        ...declared(prompt),
+    };
+    if (!prompt) return { title: "", buttons: [], marks: [], ...more };
     const where = (button) =>
         button.primary
             ? "forward"
@@ -194,9 +209,22 @@ function expected(held, layout) {
         marks: prompt.marks
             .map(({ on, mark }) => `${mark} ${subject(on)}`)
             .sort(),
-        up: heldUp(prompt),
+        ...more,
     };
 }
+
+/** What `drawn` returns of a screen that draws `want` (`expected`) and is at rest. */
+const whole = (want) => ({
+    title: want.title,
+    buttons: want.buttons,
+    marks: want.marks,
+    model: want.marks,
+    coming: 0,
+    busy: false,
+    up: want.up,
+    left: want.left,
+    lines: { page: want.lines, model: want.lines },
+});
 
 const subject = (on) =>
     on.kind === "object"
@@ -212,8 +240,9 @@ const byPlace = (a, b) =>
  * each stands (`forward` in the turn button's place, `passOn` the round one, `other` stacked
  * over), every mark the page and the stage's model hold, each as `<mark> <on>`, and what is
  * held up (`heldUp`): the cards lying over everything at rest and under what flies, those in
- * a pile's box by that box, and the triggers listed. */
-function drawn({ dock, title, captions }) {
+ * a pile's box by that box, and the triggers listed; how much of a cost it says is left; and
+ * the lines of `arrow`, a declaration's, that the page and the model hold. */
+function drawn({ dock, title, captions, arrow }) {
     // A label as the session wrote it: a mana symbol is drawn from its `{...}`.
     const words = (element) => {
         const copy = element.cloneNode(true);
@@ -222,9 +251,14 @@ function drawn({ dock, title, captions }) {
         )) {
             symbol.textContent = symbol.getAttribute("aria-label");
         }
-        for (const tip of copy.querySelectorAll(".tip, kbd")) tip.remove();
+        for (const tip of copy.querySelectorAll(".tip, kbd, .prompt-left")) {
+            if (tip !== copy) tip.remove();
+        }
         return copy.textContent.trim();
     };
+    const left = document.querySelector(`:is(${title}) .prompt-left`);
+    const ours = (keys) =>
+        keys.filter((key) => arrow && key?.startsWith(`${arrow} `)).sort();
     const buttons = [...document.querySelectorAll(dock)].flatMap((part) =>
         [...part.querySelectorAll("button")].map((button) => {
             const passOn = button.classList.contains("pass-on-button");
@@ -320,28 +354,31 @@ function drawn({ dock, title, captions }) {
         ).length,
         busy: stage.shown.busy,
         up,
+        left: left ? words(left).replace(/^\(|\)$/g, "") : "",
+        lines: {
+            page: ours(
+                [...document.querySelectorAll(".stage-line")].map(
+                    (line) => line.dataset.line,
+                ),
+            ),
+            model: ours(stage.lines().map((line) => line.key)),
+        },
     };
 }
 
 /** Holds the page to draw `want` (`expected`), once it has drawn what it was sent: the
  * screen is React's, which draws a reply a moment after the stage's model has it. */
 async function holds(page, layout, want, what) {
-    const read = () => page.evaluate(drawn, layout);
-    const same = (got) =>
-        JSON.stringify({ ...got, buttons: [...got.buttons].sort(byPlace) }) ===
-        JSON.stringify({
-            title: want.title,
-            buttons: want.buttons,
-            marks: want.marks,
-            model: want.marks,
-            coming: 0,
-            busy: false,
-            up: want.up,
-        });
+    const asked = { ...layout, arrow: want.arrow };
+    const wanted = JSON.stringify(whole(want));
+    const sorted = (got) => ({
+        ...got,
+        buttons: [...got.buttons].sort(byPlace),
+    });
     try {
         await page.waitForFunction(
-            ([drawn, layout, wanted]) => {
-                const got = new Function(`return (${drawn})`)()(layout);
+            ([drawn, asked, wanted]) => {
+                const got = new Function(`return (${drawn})`)()(asked);
                 const sorted = [...got.buttons].sort((a, b) =>
                     `${a.where} ${a.label}`.localeCompare(
                         `${b.where} ${b.label}`,
@@ -349,38 +386,14 @@ async function holds(page, layout, want, what) {
                 );
                 return JSON.stringify({ ...got, buttons: sorted }) === wanted;
             },
-            [
-                drawn.toString(),
-                layout,
-                JSON.stringify({
-                    title: want.title,
-                    buttons: want.buttons,
-                    marks: want.marks,
-                    model: want.marks,
-                    coming: 0,
-                    busy: false,
-                    up: want.up,
-                }),
-            ],
+            [drawn.toString(), asked, wanted],
             { timeout: 15_000 },
         );
     } catch {
         // It never did: say how it differs.
-        const got = await read();
-        if (same(got)) return;
-        assert.deepEqual(
-            { ...got, buttons: [...got.buttons].sort(byPlace) },
-            {
-                title: want.title,
-                buttons: want.buttons,
-                marks: want.marks,
-                model: want.marks,
-                coming: 0,
-                busy: false,
-                up: want.up,
-            },
-            what,
-        );
+        const got = sorted(await page.evaluate(drawn, asked));
+        if (JSON.stringify(got) === wanted) return;
+        assert.deepEqual(got, whole(want), what);
     }
 }
 
@@ -450,6 +463,8 @@ async function answer(context, watch, layout, fixture, carry) {
         fixture,
         at,
     );
+    const paying = payingWithPermanents(page, layout.dock, TICK);
+    const combat = combatLines(page, TICK);
     try {
         await holds(page, layout, expected(opens, layout), "as it opens");
         if (!layout.handClicks) {
@@ -532,8 +547,11 @@ async function answer(context, watch, layout, fixture, carry) {
             if (purpose === "scry" && answered) {
                 await scryFlight(page, before, after, TICK);
             }
+            if (answered) await paying.answered(before);
+            await combat.follow(before, answered);
             await page.evaluate(settled, SETTLE);
             await holds(page, layout, expected(after, layout), `after ${what}`);
+            await paying.drawn(before, after);
             if (answered) {
                 // The stage shows the view the recording played on to.
                 const shows = await page.evaluate(() => {
@@ -566,6 +584,8 @@ async function answer(context, watch, layout, fixture, carry) {
             clicks.map(({ before }) => before.prompt.revision),
             "the state each click was made on",
         );
+        paying.done();
+        combat.done();
         assert.deepEqual(await stageFaults(page), []);
         return clicks.map(({ before }) => before.prompt.purpose);
     } finally {
@@ -631,6 +651,8 @@ async function watchIt(context, watch, layout, fixture) {
                 },
             ],
             up: heldUp(),
+            left: "",
+            ...declared(),
         };
         await holds(page, layout, waits, "as it opens");
         const { seen, done: played } = await page.evaluate(watching, {

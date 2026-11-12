@@ -7,8 +7,9 @@ import assert from "node:assert/strict";
 /** Whether the stage holds `prompt` (src/stage/prompt.ts `onTable`): where it does not, the
  * screen is held to show none of it. */
 export function onTable(prompt) {
-    const shape = prompt.state?.shape;
-    return shape === "pick" || shape === "split" || shape === "order";
+    return ["pick", "split", "order", "pay", "declare"].includes(
+        prompt.state?.shape,
+    );
 }
 
 /** What `prompt` holds up, as the session's state says it: a split's piles, each under its
