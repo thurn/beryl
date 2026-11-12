@@ -383,14 +383,14 @@ test("an arrow runs from what asks to a target picked, and the script that casts
 });
 
 /** A prompt of the declare shape as the session sends it: blockers, each aimed at an attacker. */
-const declare = (marks, pairs, revision = 0) => ({
+const declare = (marks, pairs, revision = 0, lined = true) => ({
     revision,
     shape: "declare",
     purpose: "block",
     title: "Choose blockers.",
     marks,
     buttons: [],
-    state: { shape: "declare", arrow: "block", pairs, aiming: [] },
+    state: { shape: "declare", arrow: "block", pairs, lined, aiming: [] },
 });
 
 test("a declaration draws a line from each creature aimed, and the script that plays it takes them over", async () => {
@@ -432,6 +432,22 @@ test("a declaration draws a line from each creature aimed, and the script that p
     made.clock.advance(0);
     assert.deepEqual(surface.spans, ["- 1 selected"]);
     assert.deepEqual([...surface.lines.keys()], ["block 1 2"]);
+});
+
+test("a declaration whose lines the session leaves out draws none, so none goes as it is confirmed", async () => {
+    const { made, surface, prompts, reply, click } = prompted();
+    prompts.play(asking(declare(marked("eligible", 1), [])));
+    made.clock.advance(0);
+    surface.spans.length = 0;
+    const pairs = [{ from: 1, to: { kind: "player", player: "opponent" } }];
+    click(1);
+    await reply({
+        kind: "open",
+        prompt: declare(marked("selected", 1), pairs, 1, false),
+    });
+    made.clock.advance(0);
+    assert.deepEqual(surface.spans, ["- 1 eligible", "+ 1 selected"]);
+    assert.equal(surface.lines.size, 0);
 });
 
 /** A prompt of the pay shape as the session sends it: a cost of 3, with `left` to pay. */

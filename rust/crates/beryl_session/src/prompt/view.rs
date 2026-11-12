@@ -278,6 +278,9 @@ pub enum ShapeView {
         /// The line drawn from each object to what it is aimed at.
         arrow: Arrow,
         pairs: Vec<Pair>,
+        /// Whether those lines are drawn: a block's are, and an attack's only where more
+        /// than one thing can be attacked, as the script draws them once it is declared.
+        lined: bool,
         /// The objects picked whose aim the next click gives.
         aiming: Vec<u16>,
     },

@@ -27,6 +27,7 @@
 //! pay {3}{U}, {1} left              pay: the cost and what is still to pay
 //! declare attack: #4>opponent #6>#20
 //! aiming #8                         declare: the pairs, then those awaiting an aim
+//! declare attack, no lines: #4>opponent       no line is drawn for a pair
 //! ```
 //!
 //! Then a line for each mark in use, in the list's order, with what carries it: cards by slot,
@@ -213,9 +214,11 @@ impl Display for ShapeView {
             ShapeView::Declare {
                 arrow,
                 pairs,
+                lined,
                 aiming,
             } => {
-                write!(f, "declare {}:", arrow.name())?;
+                let lines = if *lined { "" } else { ", no lines" };
+                write!(f, "declare {}{lines}:", arrow.name())?;
                 for pair in pairs {
                     write!(f, " #{}>{}", pair.from, pair.to)?;
                 }

@@ -141,6 +141,7 @@ pub use build::Screen;
 pub use check::{Open, carried};
 pub use follow::Follow;
 pub use replay::{failure, replay};
+pub(crate) use spans::walkers;
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
 pub use verb::{Arrow, Mark, Span, Verb};

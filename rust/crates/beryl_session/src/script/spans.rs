@@ -93,6 +93,18 @@ fn aimed(table: &Table) -> Vec<Open> {
     spans
 }
 
+/// Whether `side` controls a planeswalker among the permanents `objects`: an attack on that
+/// side has more than one thing to aim at, so each attacker's line is drawn. The prompt that
+/// declares an attack asks this too ([`crate::prompt`]'s declare shape), so a line it draws is
+/// one the script goes on drawing.
+pub(crate) fn walkers<'a>(objects: impl IntoIterator<Item = &'a ObjectView>, side: Side) -> bool {
+    objects.into_iter().any(|o| {
+        o.zone == ZoneName::Battlefield
+            && o.controller == side
+            && o.types.contains(&CardType::Planeswalker)
+    })
+}
+
 /// The lines of the combat `table` shows: each blocker's to its attacker, and each attacker's
 /// to what it attacks where a planeswalker could be attacked.
 pub(super) fn combat(table: &Table, aimless: &[u16]) -> Vec<Open> {
@@ -104,10 +116,10 @@ pub(super) fn combat(table: &Table, aimless: &[u16]) -> Vec<Open> {
         Side::Opponent => Side::You,
     };
     let walkers = |side: Side| {
-        table.battlefield.iter().any(|&slot| {
-            permanent(slot)
-                .is_some_and(|o| o.controller == side && o.types.contains(&CardType::Planeswalker))
-        })
+        walkers(
+            table.battlefield.iter().filter_map(|&slot| permanent(slot)),
+            side,
+        )
     };
     for &slot in &table.battlefield {
         let Some(object) = permanent(slot).filter(|_| !aimless.contains(&slot)) else {

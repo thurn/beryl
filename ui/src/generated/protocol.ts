@@ -783,6 +783,11 @@ cost: string, left: string, } | { "shape": "declare",
  */
 arrow: Arrow, pairs: Array<Pair>, 
 /**
+ * Whether those lines are drawn: a block's are, and an attack's only where more
+ * than one thing can be attacked, as the script draws them once it is declared.
+ */
+lined: boolean, 
+/**
  * The objects picked whose aim the next click gives.
  */
 aiming: Array<number>, };

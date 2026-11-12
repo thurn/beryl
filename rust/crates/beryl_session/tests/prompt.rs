@@ -368,6 +368,7 @@ fn attack() -> Worked {
                         to: card(20),
                     },
                 ],
+                lined: true,
                 aiming: vec![8],
             },
         ),

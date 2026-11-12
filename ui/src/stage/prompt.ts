@@ -476,9 +476,11 @@ export class Prompts {
       };
       wanted.set(keyOf(aimed), aimed);
     }
-    // A declaration's line, from each attacker or blocker to what it is aimed at.
+    // A declaration's line, from each attacker or blocker to what it is aimed at, where the
+    // session says one is drawn: the script draws the same once it is declared.
     const state = prompt?.state;
-    const declared = state?.shape === "declare" ? state : undefined;
+    const declared =
+      state?.shape === "declare" && state.lined ? state : undefined;
     for (const { from, to } of declared?.pairs ?? []) {
       const source: Subject = { kind: "object", slot: from };
       const { arrow } = declared!;

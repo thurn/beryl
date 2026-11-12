@@ -22,13 +22,19 @@ use super::ahead;
 use super::held::{Clicked, Run, Step, Table, Want, alike, button, named, options};
 use super::{ButtonId, Click, Marked, Pair, PartName, PromptView, ShapeView};
 use crate::protocol::{Candidate, DecisionView, Side};
-use crate::script::{Arrow, Mark, Subject};
+use crate::script::{Arrow, Mark, Subject, walkers};
 
 /// The state of a declaration.
 #[derive(Clone, Debug)]
 pub(crate) struct Declare {
     purpose: Purpose,
     arrow: Arrow,
+    /// Whether a line is drawn from each creature declared to what it is aimed at: a
+    /// blocker's to its attacker, and an attacker's only where a planeswalker could be
+    /// attacked. With one thing to attack its chevron says it all (Arena,
+    /// `IEXcjBn3BXk 25:52.5`), and the script draws none either (`script/spans.rs`), so a
+    /// line drawn here would go as the declaration is confirmed.
+    lined: bool,
     /// The creatures that can be declared, each with what it can be aimed at: those the
     /// decision offers, in its order, then the ones that stand for one of those.
     able: Vec<(u16, Vec<Subject>)>,
@@ -56,13 +62,15 @@ impl Declare {
     ) -> Option<Declare> {
         let prompt = &decision.prompt;
         let d = table.d?;
+        let (arrow, lined) = match purpose {
+            Purpose::Attack => (Arrow::Attack, walkers(&table.view.objects, Side::Opponent)),
+            Purpose::Block => (Arrow::Block, true),
+            _ => return None,
+        };
         let mut declare = Declare {
             purpose,
-            arrow: match purpose {
-                Purpose::Attack => Arrow::Attack,
-                Purpose::Block => Arrow::Block,
-                _ => return None,
-            },
+            arrow,
+            lined,
             able: Vec::new(),
             pairs: Vec::new(),
             aiming: Vec::new(),
@@ -245,6 +253,7 @@ impl Declare {
         view.state = Some(ShapeView::Declare {
             arrow: self.arrow,
             pairs: self.pairs.clone(),
+            lined: self.lined,
             aiming: self.aiming.clone(),
         });
     }

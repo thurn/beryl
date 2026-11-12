@@ -17,13 +17,14 @@ export function leftOf(prompt) {
 }
 
 /** The line `prompt` draws from each attacker or blocker to what it is aimed at, and none
- * for a prompt that declares nothing: which lines, and each as the stage names it. */
+ * for a prompt that declares nothing or whose lines the session leaves out (an attack with
+ * one thing to aim at): which lines, and each as the stage names it. */
 export function declared(prompt) {
     const state = prompt?.state;
     if (state?.shape !== "declare") return { arrow: null, lines: [] };
     return {
         arrow: state.arrow,
-        lines: state.pairs
+        lines: (state.lined ? state.pairs : [])
             .map(({ from, to }) => `${state.arrow} ${from} ${named(to)}`)
             .sort(),
     };

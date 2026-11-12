@@ -25,8 +25,9 @@
 // a trigger moved the same way, or put first by a click (shape-cases.mjs). The scry flight
 // is a case of the split: the cards a scry looks at, from the look to the library again.
 // A cost paid with permanents says how much is left as the session wrote it, and a
-// declaration draws a line from each creature to what the session has it aimed at; paying
-// with permanents and the combat line are their cases (shape-cases-table.mjs). The ways to
+// declaration draws a line from each creature to what the session has it aimed at, where
+// the session has one drawn; paying with permanents and the combat line are their cases
+// (shape-cases-table.mjs), the combat line followed on every recording. The ways to
 // use a card are buttons over the table, each named as the session names the way; a number,
 // a catalog's entries and a division's shares are held to the session's state, and set by
 // the steps and entries the screen draws (shape-cases-panel.mjs).
@@ -456,9 +457,9 @@ async function opened(context, watch, query, fixture, at = 1) {
 
 /** Answers the prompts of `fixture` on a page of its own by the recording's clicks, each made
  * with the pointer, and holds the screen to the session's state before the first and after
- * each. With `carry`, a card of the hand is carried out of it instead of clicked; with
- * `lines`, the recording is the declarations', whose lines are followed to the damage. */
-async function answer(context, watch, layout, fixture, carry, lines) {
+ * each. With `carry`, a card of the hand is carried out of it instead of clicked. Every line
+ * a declaration draws is followed to the damage. */
+async function answer(context, watch, layout, fixture, carry) {
     const { opens, clicks, at } = asked(await recorded(fixture));
     const { page, done } = await opened(
         context,
@@ -468,7 +469,7 @@ async function answer(context, watch, layout, fixture, carry, lines) {
         at,
     );
     const paying = payingWithPermanents(page, layout.dock, TICK);
-    const combat = lines ? combatLines(page, TICK) : undefined;
+    const combat = combatLines(page, TICK);
     try {
         await holds(page, layout, expected(opens, layout), "as it opens");
         if (!layout.handClicks) {
@@ -554,7 +555,7 @@ async function answer(context, watch, layout, fixture, carry, lines) {
                 await scryFlight(page, before, after, TICK);
             }
             if (answered) await paying.answered(before);
-            await combat?.follow(before, answered);
+            await combat.follow(before, answered);
             await page.evaluate(settled, SETTLE);
             await holds(page, layout, expected(after, layout), `after ${what}`);
             await paying.drawn(before, after);
@@ -591,7 +592,7 @@ async function answer(context, watch, layout, fixture, carry, lines) {
             "the state each click was made on",
         );
         paying.done();
-        combat?.done();
+        combat.done();
         assert.deepEqual(await stageFaults(page), []);
         return clicks.map(({ before }) => before.prompt.purpose);
     } finally {
@@ -733,7 +734,6 @@ for (const [shape, seats] of Object.entries(shapes)) {
                                 at,
                                 fixture,
                                 carry,
-                                shape === "declare",
                             );
                             assert.ok(
                                 cases.length > 0,
