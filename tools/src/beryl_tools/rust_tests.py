@@ -4,12 +4,14 @@ result in the run log (runlog.py), or only the tests a failed run named (reruns.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -50,13 +52,77 @@ def regex(text: str) -> str:
     return re.escape(text).replace("/", "\\/")
 
 
-def fast_rust_tests_step(*only: str) -> int:
-    """The fast check's tests step: the workspace's tests but those the pruning rule moved to
-    slow CI alone (verdicts.SLOW_ONLY)."""
-    return rust_tests_step(*only, fast=True)
+def workspace_packages() -> list[dict[str, object]]:
+    """The workspace's packages as `cargo metadata` describes them; none when it fails."""
+    run = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps", "--locked"],
+        cwd=paths.RUST,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        return list(json.loads(run.stdout)["packages"]) if run.returncode == 0 else []
+    except (ValueError, KeyError):
+        return []
 
 
-def rust_tests_step(*only: str, fast: bool = False) -> int:
+def affected_packages(
+    changed: Iterable[str] | None, packages: list[dict[str, object]] | None = None
+) -> list[str] | None:
+    """The packages a change can break, for the fast check's clippy and tests: each package it
+    touched and every package that depends on one of them, through any kind of dependency.
+    None for the whole workspace: no list of changes, a change under rust/ outside every
+    package (the workspace's manifest, lock file or cargo configuration), the card store,
+    which a crate embeds, or a change that reaches every package anyway. Most changes touch
+    cards or rules, on which nearly everything depends; one to the search or the CLI alone
+    builds and tests a third of the workspace."""
+    if changed is None:
+        return None
+    packages = workspace_packages() if packages is None else packages
+    dirs: dict[str, str] = {}
+    dependents: defaultdict[str, set[str]] = defaultdict(set)
+    for p in packages:
+        manifest = Path(str(p["manifest_path"])).parent
+        dirs[Path(os.path.relpath(manifest, paths.REPO)).as_posix() + "/"] = str(
+            p["name"]
+        )
+        for d in p.get("dependencies") or []:  # pyre-ignore[16]: JSON
+            if isinstance(d, dict) and d.get("path"):
+                dependents[str(d["name"])].add(str(p["name"]))
+    touched: set[str] = set()
+    for path in changed:
+        if path == "data/card-store.tsv":
+            return None
+        if not path.startswith("rust/"):
+            continue
+        owner = next((n for d, n in dirs.items() if path.startswith(d)), None)
+        if owner is None:
+            return None
+        touched.add(owner)
+    found, stack = set(touched), list(touched)
+    while stack:
+        for r in dependents[stack.pop()] - found:
+            found.add(r)
+            stack.append(r)
+    return sorted(found) if found and len(found) < len(dirs) else None
+
+
+def fast_rust_tests_step(*args: str) -> int:
+    """The fast check's tests step: the tests but those the pruning rule moved to slow CI alone
+    (verdicts.SLOW_ONLY), of the packages `--packages=a,b` names (`affected_packages`), else
+    of the workspace."""
+    named = [a.split("=", 1)[1] for a in args if a.startswith("--packages=")]
+    only = [a for a in args if not a.startswith("--packages=")]
+    packages = named[0].split(",") if named else None
+    if packages:
+        print(f"rust-tests: the packages the change can break: {' '.join(packages)}")
+    return rust_tests_step(*only, fast=True, packages=packages)
+
+
+def rust_tests_step(
+    *only: str, fast: bool = False, packages: list[str] | None = None
+) -> int:
     """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`); `fast`
     leaves out verdicts.SLOW_ONLY's.
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
@@ -66,7 +132,8 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
     cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
     report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
     check each."""
-    cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
+    scope = [a for p in packages for a in ("-p", p)] if packages else ["--workspace"]
+    cargo = ["cargo", "test", "--locked", *scope, "-q"]
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
     build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
@@ -84,7 +151,7 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
         "run",
         "--locked",
         f"--profile={NEXTEST_PROFILE}",
-        "--workspace",
+        *scope,
         "--cargo-quiet",
         "--no-fail-fast",
         "--status-level=fail",
@@ -97,6 +164,13 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
         "rust:allocations": ([*cargo, "--test", "allocations"], ALLOCATIONS_FAILED),
         "rust:doctests": ([*cargo, "--doc"], DOCTESTS_FAILED),
     }
+    if packages:
+        # Cargo refuses a target that none of the packages it is given has.
+        kinds = targets(workspace_packages(), packages)
+        if "allocations" not in kinds:
+            del beside["rust:allocations"]
+        if "lib" not in kinds:
+            del beside["rust:doctests"]
     jobs = [nextest] if only else [nextest, *(cmd for cmd, _ in beside.values())]
     junit = nextest_junit()
     junit.unlink(missing_ok=True)
@@ -129,6 +203,19 @@ def rust_tests_step(*only: str, fast: bool = False) -> int:
     except (OSError, ET.ParseError) as e:
         print(f"rust-tests: no per-test results for the run log: {e}")
     return next((r.returncode for r, _ in runs if r.returncode != 0), 0)
+
+
+def targets(packages: list[dict[str, object]], names: list[str]) -> set[str]:
+    """The kinds of the targets of the packages named `names`, and their test targets' names."""
+    found: set[str] = set()
+    for p in packages:
+        if p["name"] not in names:
+            continue
+        for target in p.get("targets") or []:  # pyre-ignore[16]: JSON
+            kinds = set(target.get("kind") or [])
+            found |= {"lib"} if kinds & {"lib", "rlib"} else set()
+            found |= {str(target.get("name"))} if "test" in kinds else set()
+    return found
 
 
 NEXTEST_PROFILE = "check"

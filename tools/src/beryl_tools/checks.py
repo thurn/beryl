@@ -75,6 +75,7 @@ from .reruns import (
     whole,
 )
 from .rust_tests import (
+    affected_packages,
     fast_rust_tests_step,
     junit_results,
     nextest_filter,
@@ -522,8 +523,11 @@ def scale_lane() -> Lane:
     )
 
 
-def rust_lane(fast: bool = False) -> Lane:
-    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY."""
+def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
+    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, and `packages` holds
+    clippy and the tests to those packages (`affected_packages`)."""
+    scope = [a for p in packages for a in ("-p", p)] if packages else []
+    named = [f"--packages={','.join(packages)}"] if packages else []
     return (
         Lane("rust", warm=True)
         .step(
@@ -532,7 +536,16 @@ def rust_lane(fast: bool = False) -> Lane:
         .step("fmt", ["cargo", "fmt", "--all", "--check"], paths.RUST)
         .step(
             "clippy",
-            ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
+            [
+                "cargo",
+                "clippy",
+                "--locked",
+                *scope,
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ],
             paths.RUST,
         )
         .step(
@@ -542,6 +555,7 @@ def rust_lane(fast: bool = False) -> Lane:
                 "-m",
                 "beryl_tools.checks",
                 "fast-rust-tests" if fast else "rust-tests",
+                *named,
             ],
             rerun=failed_tests,
         )
@@ -657,7 +671,7 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     elif touched(CARD_FILES):
         lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/") or touched(CARD_STORE):
-        lanes.append(rust_lane(fast=True))
+        lanes.append(rust_lane(True, affected_packages(changed)))
     if touched(script_checks.inputs()) or touched(CARD_STORE):
         lanes.append(script_checks.lane())
     if touched(r"^ui/"):

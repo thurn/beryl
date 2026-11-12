@@ -7,7 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import bisect, build_paths, checks, hygiene, oracles, reruns
+from beryl_tools import (
+    bisect,
+    build_paths,
+    checks,
+    hygiene,
+    oracles,
+    paths,
+    reruns,
+    rust_tests,
+)
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -462,3 +471,36 @@ def test_windows_leaves_the_browser_checks_to_the_mac(
     windows = lanes_for(monkeypatch, changed, windows=True)
     assert not {"ui-test", "shots", "motion"} & set(windows)
     assert {"ui", "rust"} <= set(windows)
+
+
+def test_the_fast_check_tests_the_packages_a_change_can_break() -> None:
+    def package(name: str, *deps: str) -> dict[str, object]:
+        return {
+            "name": name,
+            "manifest_path": str(paths.RUST / "crates" / name / "Cargo.toml"),
+            "dependencies": [{"name": d, "path": f"../{d}"} for d in deps]
+            + [{"name": "serde"}],
+        }
+
+    packages: list[dict[str, object]] = [
+        package("kernel"),
+        package("rules", "kernel"),
+        package("search", "rules"),
+        package("cli", "search"),
+        package("bench", "search", "kernel"),
+    ]
+
+    def affected(*changed: str) -> list[str] | None:
+        return rust_tests.affected_packages(list(changed), packages)
+
+    assert affected("rust/crates/cli/src/main.rs") == ["cli"]
+    assert affected("rust/crates/search/src/lib.rs", "tools/x.py") == [
+        "bench",
+        "cli",
+        "search",
+    ]
+    # Everything depends on the kernel; the workspace's own files build every crate.
+    assert affected("rust/crates/kernel/src/lib.rs") is None
+    assert affected("rust/Cargo.lock") is None
+    assert affected("data/card-store.tsv") is None
+    assert rust_tests.affected_packages(None, packages) is None
