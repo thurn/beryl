@@ -275,6 +275,33 @@ fn what_the_port_entries_cannot_mean_is_refused() {
     assert_eq!(checked(A_ROUND), Err(Malformed::Permitted));
 }
 
+/// A card offered as the effect finishes is the effect's last word, and an ability names one
+/// rule change to the game.
+#[test]
+fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
+    use crate::continuous::{Governed, RuleChange, When};
+    use crate::effect::build::{THOSE, change_rule, sequence};
+    static AS_INSTANT: RuleChange = RuleChange {
+        players: Players::You,
+        what: Governed::ActivateLoyaltyAbilities(Objects::This),
+        when: When::AsInstant,
+    };
+    const CAST: Effect = may_cast_free(YOU, THOSE);
+    const CAST_THEN_DRAW: &[Ability] = &[Ability::spell().effect(&sequence(&[CAST, draw(YOU, 1)]))];
+    const DRAW_THEN_CAST: &[Ability] =
+        &[Ability::spell().effect(&sequence(&[draw(YOU, 1), if_then(Condition::Did, &CAST)]))];
+    const EACH_CASTS: &[Ability] =
+        &[Ability::spell().effect(&for_each_player(Players::EachPlayer, &CAST))];
+    const RULE: Effect = change_rule(&AS_INSTANT, Duration::EndOfTurn);
+    const ONE_RULE: &[Ability] = &[Ability::spell().effect(&sequence(&[draw(YOU, 1), RULE]))];
+    const TWO_RULES: &[Ability] = &[Ability::spell().effect(&sequence(&[RULE, RULE]))];
+    assert_eq!(checked(CAST_THEN_DRAW), Err(Malformed::Cast));
+    assert_eq!(checked(DRAW_THEN_CAST), Ok(()));
+    assert_eq!(checked(EACH_CASTS), Err(Malformed::Cast));
+    assert_eq!(checked(ONE_RULE), Ok(()));
+    assert_eq!(checked(TWO_RULES), Err(Malformed::Rules));
+}
+
 /// In a card's `static` this panic is the build failure.
 #[test]
 #[should_panic(expected = "an effect adds mana outside a mana ability")]

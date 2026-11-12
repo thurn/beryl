@@ -94,6 +94,13 @@ pub enum TableError {
     /// engine does not read in a filter ([`crate::filter::reads`]): "that player controls",
     /// "its owner controls".
     Players { card: &'static str },
+    /// A card of the game, or a token or emblem one makes, creates a token or an emblem it
+    /// does not list among what it creates ([`CardDef::tokens`]): the game would have no
+    /// card for it, so no game is played with it.
+    Unlisted {
+        card: &'static str,
+        creates: &'static str,
+    },
     /// A card of the game, or a token or emblem one makes, has a cost the engine has no
     /// code to pay ([`payable`]): it would be played without paying it, so no game is played
     /// with it.
@@ -226,6 +233,24 @@ fn asks_what_entered_this_turn(ability: &Ability) -> bool {
         }))
 }
 
+/// Whether every token and emblem `def`'s effects create is one of `defs`, the cards of a
+/// game: those its decks name and those they list among what they create.
+fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
+    let mut unlisted = None;
+    def.creates(&mut |made| {
+        if !defs.iter().any(|d| std::ptr::eq(*d, made)) {
+            unlisted.get_or_insert(made.name);
+        }
+    });
+    match unlisted {
+        Some(creates) => Err(TableError::Unlisted {
+            card: def.name,
+            creates,
+        }),
+        None => Ok(()),
+    }
+}
+
 impl GameTable {
     /// Assigns game indices in order of first appearance, the first deck before the second,
     /// then the tokens and emblems those cards can create, then [`FACE_DOWN_COPY`], so the
@@ -266,6 +291,7 @@ impl GameTable {
             LargeCardIx::try_from_index(last).unwrap_or_default(),
         );
         for def in &defs {
+            listed(def, &defs)?;
             payable::check(def).map_err(|unpayable| TableError::Cost {
                 card: def.name,
                 unpayable,

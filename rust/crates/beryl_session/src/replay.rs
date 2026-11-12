@@ -186,6 +186,9 @@ impl ReplayFile {
                         "{card} has a static ability the engine cannot apply: {unapplied:?}"
                     ),
                 },
+                TableError::Unlisted { card, creates } => SessionError::Deck {
+                    reason: format!("{card} creates {creates}, which it does not list"),
+                },
                 TableError::Players { card } => SessionError::Deck {
                     reason: format!("{card} has a filter naming players the engine cannot read"),
                 },

@@ -29,6 +29,32 @@ impl CardDef {
     }
 }
 
+impl CardDef {
+    /// Calls `visit` with every token and emblem the effect data of the card's faces
+    /// creates ([`Effect::CreateTokens`], [`Effect::CreateAttackingTokens`],
+    /// [`Effect::GetEmblem`]): what the card must list among what it creates
+    /// ([`CardDef::tokens`]) for a game to have them.
+    pub fn creates(&self, visit: &mut dyn FnMut(&'static CardDef)) {
+        let visit = std::cell::RefCell::new(visit);
+        for face in self.faces {
+            for ability in face.abilities.iter().chain(face.grants) {
+                let Behavior::Data(effect) = ability.body() else {
+                    continue;
+                };
+                effect.any(&|instruction| {
+                    if let Effect::CreateTokens { token: made, .. }
+                    | Effect::CreateAttackingTokens { token: made, .. }
+                    | Effect::GetEmblem { emblem: made, .. } = *instruction
+                    {
+                        (visit.borrow_mut())(made);
+                    }
+                    false
+                });
+            }
+        }
+    }
+}
+
 impl Ability {
     /// Calls `visit` with every filter of the ability: what it may target, what pays its
     /// cost, what triggers it, what it needs to be activated, its conditions, its continuous

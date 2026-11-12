@@ -376,8 +376,8 @@ pub enum Effect {
     /// "[Rule change] [duration]": a continuous effect from a resolving spell or ability that
     /// changes a rule of the game for the players it names
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
-    /// effects affect game rules rather than objects." An ability starts at most one, which
-    /// is its [`crate::Ability::rule`].
+    /// effects affect game rules rather than objects." An ability starts at most one
+    /// ([`crate::Malformed::Rules`]), which is its [`crate::Ability::rule`].
     ChangeRule {
         rule: &'static RuleChange,
         duration: Duration,
@@ -409,8 +409,8 @@ pub enum Effect {
     /// specifically instructs or allows a player to cast a spell during resolution, they do
     /// so by following the steps in rules 601.2a-i, except no player receives priority after
     /// it's cast." The player decides as the effect finishes, so this is the effect's last
-    /// instruction, and it offers one card. Without its mana cost the card is cast for an
-    /// alternative cost
+    /// instruction ([`crate::Malformed::Cast`]), and it offers one card. Without its mana
+    /// cost the card is cast for an alternative cost
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
     MayCast {
         player: Players,

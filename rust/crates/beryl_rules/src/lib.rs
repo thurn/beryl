@@ -130,8 +130,9 @@
 //! [`actions::scry`]), beside the cards' own. A scenario there uses basic lands, the
 //! designated prop cards and one card that has the effect. The bead that ports an entry
 //! writes its scenario and lists it in `beryl_cards::library::SCENARIOS` under that card,
-//! the card crate's tests and the oracles play the tree as they play a card's, and a later
-//! test holds that every entry has one.
+//! the card crate's tests and the oracles play the tree as they play a card's, and its
+//! tiering test (`tests/vocabulary.rs`) holds that a hand-written scenario carries out every
+//! entry a card says.
 //!
 //! ## Custom bodies
 //!

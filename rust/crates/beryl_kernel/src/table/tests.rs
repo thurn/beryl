@@ -186,6 +186,43 @@ fn a_table_refuses_what_the_engine_has_no_code_to_read() {
     assert_eq!(refused("Toll"), Some(TableError::Players { card: "Toll" }));
 }
 
+/// "Create a Beta token", by a card that lists none, and by one that lists it.
+static MAKER: CardDef = CardDef {
+    name: "Maker",
+    faces: &[Face {
+        abilities: &[
+            Ability::triggered(&Trigger::ENTERS).effect(&Effect::CreateTokens {
+                player: Players::You,
+                token: &BETA,
+                count: beryl_card::Amount::Fixed(1),
+            }),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static LISTING_MAKER: CardDef = CardDef {
+    name: "Listing Maker",
+    faces: MAKER.faces,
+    tokens: &[&BETA],
+};
+static MAKERS: CardTable = CardTable::new(&[&ALPHA, &MAKER, &LISTING_MAKER]);
+
+/// A token its card does not list is no card of the game, and creating it would stop the
+/// game where it happened: no table is built.
+#[test]
+fn a_table_refuses_a_card_that_creates_what_it_does_not_list() {
+    let table = |card: &'static str| GameTable::new(&MAKERS, [&[(4, "Alpha")], &[(1, card)]]);
+    assert_eq!(
+        table("Maker").err(),
+        Some(TableError::Unlisted {
+            card: "Maker",
+            creates: "Beta"
+        })
+    );
+    assert!(table("Listing Maker").is_ok());
+}
+
 #[test]
 fn get_finds_each_name_and_misses_unknown() {
     assert!(std::ptr::eq(TABLE.get("Beta").unwrap(), &raw const BETA));

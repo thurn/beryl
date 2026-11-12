@@ -79,7 +79,7 @@ pub enum Objects {
     /// (CR 608.2h).
     ///
     /// The engine does not keep what a cost took, so a card table refuses a definition that
-    /// names it (`beryl_kernel`'s `TableError::Paid`). When a card needs it, the step that
+    /// names it (`beryl_kernel`'s `Unpayable::Named`). When a card needs it, the step that
     /// pays a part with objects has each one remember, as a memo, the spell or the source
     /// it paid for, and this reads the objects that remember the one resolving.
     Paid(CostAction),

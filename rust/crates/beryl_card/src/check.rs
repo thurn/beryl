@@ -69,6 +69,14 @@ pub enum Malformed {
     /// [`Effect::Fateseal`] of a number of cards other than one, which is all the engine
     /// fateseals.
     Fateseal,
+    /// [`Effect::MayCast`] that is not the last thing its effect does, or that is said for
+    /// each of several players: the card is cast as the effect finishes, so an instruction
+    /// after it would be carried out before the spell is cast, and a second offer would
+    /// take the first one's place.
+    Cast,
+    /// More than one [`Effect::ChangeRule`] in an ability, which names one rule change to
+    /// the game ([`Ability::rule`]): the others would have no number.
+    Rules,
 }
 
 impl Malformed {
@@ -86,6 +94,8 @@ impl Malformed {
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",
             Malformed::Fateseal => "an effect fateseals a number of cards other than one",
+            Malformed::Cast => "an effect lets a player cast a card before its last instruction",
+            Malformed::Rules => "an ability's effect starts more than one rule change",
             Malformed::Delayed => {
                 "an effect delays an ability that is not a delayed trigger of its face"
             }
@@ -164,6 +174,79 @@ const fn no_mana(cost: &Cost) -> bool {
     mana.generic == 0 && mana.x == 0 && symbols == 0
 }
 
+/// What the check asks of an ability's effect as a whole.
+const fn whole(effect: &Effect) -> Checked {
+    if !casts_last(effect, true) {
+        Err(Malformed::Cast)
+    } else if rule_changes(effect) > 1 {
+        Err(Malformed::Rules)
+    } else {
+        Ok(())
+    }
+}
+
+/// Whether every [`Effect::MayCast`] of `effect` is the last thing a resolution that comes to
+/// it does, `last` saying whether `effect` itself is
+/// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): the engine has the
+/// player cast the card as the effect finishes.
+const fn casts_last(effect: &Effect, last: bool) -> bool {
+    match effect {
+        Effect::MayCast { .. } => last,
+        Effect::Sequence(effects) => {
+            let mut i = 0;
+            while i < effects.len() {
+                if !casts_last(&effects[i], last && i + 1 == effects.len()) {
+                    return false;
+                }
+                i += 1;
+            }
+            true
+        }
+        Effect::If {
+            then, otherwise, ..
+        } => {
+            casts_last(then, last)
+                && match otherwise {
+                    Some(otherwise) => casts_last(otherwise, last),
+                    None => true,
+                }
+        }
+        Effect::May { effect, .. } | Effect::Unless { effect, .. } => casts_last(effect, last),
+        // The next player's turn at it comes after.
+        Effect::ForEachPlayer { effect, .. } => casts_last(effect, false),
+        _ => true,
+    }
+}
+
+/// How many of `effect`'s instructions start a rule change ([`Effect::ChangeRule`]).
+const fn rule_changes(effect: &Effect) -> usize {
+    match effect {
+        Effect::ChangeRule { .. } => 1,
+        Effect::Sequence(effects) => {
+            let mut count = 0;
+            let mut i = 0;
+            while i < effects.len() {
+                count += rule_changes(&effects[i]);
+                i += 1;
+            }
+            count
+        }
+        Effect::If {
+            then, otherwise, ..
+        } => {
+            rule_changes(then)
+                + match otherwise {
+                    Some(otherwise) => rule_changes(otherwise),
+                    None => 0,
+                }
+        }
+        Effect::May { effect, .. }
+        | Effect::Unless { effect, .. }
+        | Effect::ForEachPlayer { effect, .. } => rule_changes(effect),
+        _ => 0,
+    }
+}
+
 /// Where an expression is read: the ability it is part of, on its face.
 #[derive(Clone, Copy)]
 struct Scope<'a> {
@@ -184,7 +267,7 @@ impl Scope<'_> {
             None => Ok(()),
         };
         let body = match self.ability.body() {
-            Behavior::Data(effect) => self.effect(effect),
+            Behavior::Data(effect) => both(self.effect(effect), whole(effect)),
             Behavior::Custom(_) => Ok(()),
         };
         both(condition, both(layer, body))
