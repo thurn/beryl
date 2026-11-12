@@ -1,5 +1,4 @@
 {
-  "rust/crates/beryl_rules/src/engine.rs": 826,
   "tools/src/beryl_tools/xmage.py": 1080,
   "ui/src/game/Board.tsx": 3082,
   "ui/src/game/CardLayer.tsx": 1145,
