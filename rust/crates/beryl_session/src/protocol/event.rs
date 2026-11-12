@@ -125,6 +125,15 @@ pub enum GameEvent {
         player: Side,
         attackers: Vec<u16>,
     },
+    /// `player` declared the creature in `blocker` a blocker of the one in `attacker`
+    /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the
+    /// chosen creatures, the defending player chooses one creature for it to block"): one
+    /// event for each blocker of a declaration.
+    Block {
+        player: Side,
+        blocker: u16,
+        attacker: u16,
+    },
     StepBegins {
         step: Step,
         active: Side,
@@ -275,6 +284,22 @@ fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     }
 }
 
+fn block_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
+    let Event::Block {
+        player,
+        blocker,
+        attacker,
+    } = *e
+    else {
+        unreachable!("a block")
+    };
+    GameEvent::Block {
+        player: side(obs, player),
+        blocker: blocker.slot.num(),
+        attacker: attacker.slot.num(),
+    }
+}
+
 fn library_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {
@@ -314,10 +339,8 @@ pub(super) fn game_events<L: Layout>(
                 return None;
             }
             // Said for whoever follows the stack through the events, which a seat's screen
-            // does ([`heard`]): a view shows the stack itself, and the blocks declared.
-            if let Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } =
-                e
-            {
+            // does ([`heard`]): a view shows the stack itself.
+            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
                 return None;
             }
             let mut event = game_event(t, obs, e);
@@ -345,7 +368,14 @@ pub fn heard<L: Layout>(
         stack,
         ..Heard::default()
     };
-    for (event, said) in events.iter().zip(said) {
+    // The engine's group of each event, numbered as [`beryl_engine::event::Tag::groups`]
+    // does, and that of the latest event the view tells.
+    let mut group = 0_u32;
+    let mut told = None;
+    for (i, (event, said)) in events.iter().zip(said).enumerate() {
+        if i > 0 && !said.together {
+            group += 1;
+        }
         let cause = said.cause.of(|player| side(obs, player));
         let before = heard.causes.len();
         match (event, said.moved) {
@@ -358,16 +388,16 @@ pub fn heard<L: Layout>(
             (Event::StackDeparture { .. }, Some(Subject::Ability { id })) => {
                 heard.moves.push((before, Move::Departure { id, cause }));
             }
-            // A view's draw says its cards, a spell arrives and leaves as its card moves, and
-            // no view is told a block.
+            // A view's draw says its cards, and a spell arrives and leaves as its card moves.
             (
-                Event::DrawCard { .. }
-                | Event::StackArrival { .. }
-                | Event::StackDeparture { .. }
-                | Event::Block { .. },
+                Event::DrawCard { .. } | Event::StackArrival { .. } | Event::StackDeparture { .. },
                 _,
             ) => {}
-            _ => heard.causes.push(cause),
+            _ => {
+                heard.causes.push(cause);
+                heard.together.push(told == Some(group));
+                told = Some(group);
+            }
         }
     }
     heard
@@ -430,9 +460,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             item: stack_item(t, obs, item),
         },
         Event::AbilityFinished => GameEvent::AbilityFinished,
-        Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } => {
-            unreachable!("the stack's arrivals and departures and the blocks are in no view")
+        Event::StackArrival { .. } | Event::StackDeparture { .. } => {
+            unreachable!("the stack's arrivals and departures are in no view")
         }
+        Event::Block { .. } => block_event(obs, e),
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(obs.in_candidate_order(tokens)),

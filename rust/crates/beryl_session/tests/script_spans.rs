@@ -11,7 +11,7 @@ use beryl_session::protocol::{
     Candidate, Kind, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
 };
 use beryl_session::script::{
-    Act, Arrow, Follow, Notice, Open, Script, Span, Step, Subject, Table, carried,
+    Act, Arrow, Follow, Heard, Notice, Open, Screen, Script, Span, Step, Subject, Table, carried,
 };
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 use common::{script, scripts, text, views};
@@ -54,8 +54,8 @@ fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
     let combat = |defender: &str, attacker: &str| {
         text(&[
             "tap #0 (Elite Spellbinder)".to_owned(),
-            format!("& +point attack #2 > {defender}"),
             "& tap #2 (Snapcaster Mage)".to_owned(),
+            format!("& +point attack #2 > {defender}"),
             format!("set turn 3 {attacker} declareBlockers"),
             format!("set turn 3 {attacker} combatDamage"),
             "strike #0 > #256 3".to_owned(),
@@ -234,6 +234,59 @@ fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
 
 const HOLE: &str = "Portable Hole's target gone before the trigger resolves";
 
+/// `point`, the lines of a combat that begins and ends inside one script: the seat's screen is
+/// shown no view from the attack to the deaths combat damage deals, as a seat is that has
+/// nothing to decide meanwhile. The block line begins with the block's event and ends before
+/// the creatures leave, though the view's end has no line, as when each part had a view.
+#[test]
+fn a_combat_inside_one_script_shows_its_lines() {
+    let name = "Sphinx dies as a card, then as a token";
+    let views = common::views_heard(names::SPHINX_OF_FALSE_CONCLUSIONS, name, |_, _, _| {});
+    // The second combat: its attack is view 18's, its block and damage view 21's.
+    let (shown, combat) = views.split_at(17);
+    let combat = &combat[..5];
+    let mut screen = Screen::default();
+    for seats in shown {
+        let (view, heard) = &seats[0];
+        screen.script(view, heard);
+    }
+    let mut merged = Heard::default();
+    let mut events = Vec::new();
+    for seats in combat {
+        let (view, heard) = &seats[0];
+        let before = events.len();
+        let moves = heard.moves.iter().cloned();
+        merged.moves.extend(moves.map(|(at, m)| (at + before, m)));
+        merged.causes.extend(&heard.causes);
+        merged.together.extend(&heard.together);
+        events.extend(view.events.iter().cloned());
+        merged.stack.clone_from(&heard.stack);
+    }
+    let mut view = combat[4][0].0.clone();
+    view.events = events;
+    let script = screen.script(&view, &merged).to_string();
+    let lines: Vec<&str> = script
+        .lines()
+        .map(|line| line.trim_start_matches("& "))
+        .filter(|line| {
+            ["point block", "strike", "vanish #"]
+                .iter()
+                .any(|part| line.contains(part))
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "+point block #258 > #512",
+            "strike #258 > #512 3",
+            "strike #512 > #258 4",
+            "-point block #258 > #512",
+            "vanish #258 (Elite Spellbinder) battlefield>graveyard stateBased",
+            "vanish #512 battlefield>gone stateBased",
+        ]
+    );
+}
+
 /// The theme of six reports (by-yfw, by-ad8, by-8uw among them): an arrow left on a card that
 /// moved, or drawn at it in its graveyard or hand. A trigger aims at a permanent that is
 /// returned to its owner's hand in response: the trigger's arrow ends before the permanent
@@ -343,8 +396,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
 }
 
 /// `streak` of mana from a source sacrificed for it: the Treasure's mana leaves where the
-/// Treasure lay, in the beat that takes it from sight, after the mana of the land tapped
-/// with it.
+/// Treasure lay, as it is taken from sight, after the mana of the land tapped with it: all in
+/// one beat, the payment being one event of the rules.
 #[test]
 fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
     let name = "Beza's Treasure pays for Counterspell";
@@ -356,7 +409,7 @@ fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
             format!("tap #0 (Island) <- {who}"),
             format!("& tap #512 (Treasure Token) <- {who}"),
             "& streak #0 > #1 blue 1 <- #0".to_owned(),
-            format!("vanish #512 battlefield>gone sacrifice <- {who}"),
+            format!("& vanish #512 battlefield>gone sacrifice <- {who}"),
             "& streak #512 > #1 blue 1 <- #512".to_owned(),
         ])
     };

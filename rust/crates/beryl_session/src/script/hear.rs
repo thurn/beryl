@@ -88,6 +88,10 @@ pub enum Move {
 pub struct Heard {
     /// What each of the view's events came from, in their order.
     pub causes: Vec<Cause>,
+    /// Whether each of the view's events happened as one event of the rules with the view's
+    /// event before it, in their order: the engine's group ([`beryl_engine::event::Tag`]'s
+    /// `together`). The first of a view begins a group of its own.
+    pub together: Vec<bool>,
     /// The abilities that arrived on the stack and left it, in order, each with how many of
     /// the view's events came before it.
     pub moves: Vec<(usize, Move)>,
@@ -104,6 +108,9 @@ pub struct Said {
     /// The entry a [`Event::StackArrival`] puts on the stack or a [`Event::StackDeparture`]
     /// takes off it.
     pub moved: Option<Subject>,
+    /// It happened as one event of the rules with the engine event before it
+    /// ([`beryl_engine::event::Tag`]'s `together`).
+    pub together: bool,
 }
 
 /// The stack as the engine's events tell it, each entry by the name scripts give it: a
@@ -168,6 +175,7 @@ impl Names {
             said.push(Said {
                 cause,
                 moved: arrives.or(leaves),
+                together: tagged.tag.together,
             });
         }
         said

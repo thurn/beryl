@@ -225,11 +225,11 @@ impl Builder<'_> {
 
     /// The arrows and lines are the table's: one it no longer calls for ends, and one it
     /// calls for begins, unless an end of it moved in this beat (it then begins in a later
-    /// one) or it was ended for good. A line of combat begins only if the view's end has it
-    /// too: until the script closes, a record's part in combat may be the view before's, and
-    /// a line drawn from it would point at the player before the planeswalker (by-m0wf).
+    /// one) or it was ended for good. A line of combat begins as its declaration's event
+    /// sets the records it joins (`attack.rs`), so a combat that begins and ends in one
+    /// script shows its lines.
     pub(super) fn sync(&mut self) {
-        let wanted = wanted(&self.table, self.aimless);
+        let wanted = wanted(&self.table, &self.aimless);
         let arrow = |span: &&Open| matches!(span, Open::Point { .. });
         let stale: Vec<Open> = self.spans.iter().filter(arrow).copied().collect();
         for span in stale {
@@ -238,14 +238,12 @@ impl Builder<'_> {
             }
         }
         for span in wanted {
-            let Open::Point { arrow, from, to } = span else {
+            let Open::Point { from, to, .. } = span else {
                 continue;
             };
             // A spell or ability going on the stack takes its arrows with it.
             let leaves = self.moved.contains(&from) && !self.landed.contains(&from);
-            let combat = matches!(arrow, Arrow::Attack | Arrow::Block);
             if !self.spans.contains(&span)
-                && (!combat || self.lines.contains(&span))
                 && !self.broken.contains(&(from, to))
                 && !leaves
                 && !self.moved.contains(&to)
@@ -275,6 +273,8 @@ impl Builder<'_> {
     /// a `dwell` on the player who lost, or on the viewer where no one did.
     pub(super) fn close(&mut self, view: &PlayerView) {
         self.open = false;
+        // The records are the view's now: only its own aimless attackers have no line.
+        self.aimless = self.pending.to_vec();
         self.sync();
         if let Some(handling) = view.handling {
             let span = Open::Lift { handling };

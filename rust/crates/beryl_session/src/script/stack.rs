@@ -7,7 +7,7 @@
 
 use super::build::{Builder, activator};
 use super::hear::{Cause, Move};
-use super::infer::Told;
+use super::staging::Told;
 use super::{Act, Fact, Subject};
 use crate::protocol::{GameEvent, StackItem, Why, ZoneName};
 

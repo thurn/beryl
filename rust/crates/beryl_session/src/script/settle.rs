@@ -104,7 +104,7 @@ impl Builder<'_> {
         });
         // An opening hand is dealt, and a mulligan's goes back, with no event before the
         // first turn: their cards do not travel, as none a view's events move before the game
-        // does (`infer::show`).
+        // does (`staging.rs`, `still`).
         let dealt = self.table.turn.number == 0
             && (self.mulligan(next)
                 || (from == Some(ZoneName::Library) && next.zone == ZoneName::Hand));
@@ -139,6 +139,7 @@ impl Builder<'_> {
         if now == *next {
             return;
         }
+        self.declare(next.slot);
         if now.tapped != next.tapped {
             now.tapped = next.tapped;
             now.combat.clone_from(&next.combat);

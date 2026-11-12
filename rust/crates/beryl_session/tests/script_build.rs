@@ -590,8 +590,9 @@ fn a_face_down_permanent_flips() {
     );
 }
 
-/// `set` of a library: both hands go into their libraries together, each library is
-/// shuffled with nothing to show, and each player's seven are drawn in a beat.
+/// `set` of a library: both hands go into their libraries and each library is shuffled with
+/// nothing to show, all in one beat as one instruction for each player is one event of the
+/// rules, and each player's seven are drawn in a beat.
 #[test]
 fn a_shuffle_sets_the_library() {
     let [first, second] = script(names::TIMETWISTER, "Timetwister with empty graveyards", 1);
@@ -626,8 +627,8 @@ fn a_shuffle_sets_the_library() {
     let (own, theirs) = ([3, 11, 8, 4, 10, 7, 2], [263, 258, 261, 260, 256, 259, 257]);
     let mut expected = cast("you");
     expected.extend(wheel.clone());
-    expected.push("set you library 8 <- #1".to_owned());
-    expected.push("set opponent library 8 <- #1".to_owned());
+    expected.push("& set you library 8 <- #1".to_owned());
+    expected.push("& set opponent library 8 <- #1".to_owned());
     expected.extend(draws(own, Some("Plains")));
     expected.extend(draws(theirs, None));
     expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());
@@ -635,8 +636,8 @@ fn a_shuffle_sets_the_library() {
     let mut expected = cast("opponent");
     expected.push("dwell #1".to_owned());
     expected.extend(wheel);
-    expected.push("set opponent library 8 <- #1".to_owned());
-    expected.push("set you library 8 <- #1".to_owned());
+    expected.push("& set opponent library 8 <- #1".to_owned());
+    expected.push("& set you library 8 <- #1".to_owned());
     expected.extend(draws(own, None));
     expected.extend(draws(theirs, Some("Island")));
     expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());

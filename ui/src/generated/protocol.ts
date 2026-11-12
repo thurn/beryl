@@ -528,7 +528,7 @@ item: StackItem, } | { "kind": "ability", item: StackItem,
  * a loyalty ability of a permanent is to put on or remove from that permanent a certain
  * number of loyalty counters, as shown by the loyalty symbol in the ability's cost."
  */
-loyalty: number | null, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, 
+loyalty: number | null, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "block", player: Side, blocker: number, attacker: number, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, 
 /**
  * The permanent whose ability flipped it.
  */

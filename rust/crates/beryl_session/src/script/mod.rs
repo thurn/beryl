@@ -1,6 +1,6 @@
 //! The script: what one seat's screen does between two views (plan K23 to K26,
 //! `docs/project-50k.md`, Target architecture, Presentation). The session builds one beside each
-//! view, per seat; the stage plays it and infers nothing. A script says what happens and in
+//! view, per seat; the stage plays it and guesses nothing. A script says what happens and in
 //! what order. It holds no geometry and no timing: where things lie is the stage's layout, and
 //! how long a verb takes is the design language's data (`data/ui-conventions.json`).
 //!
@@ -89,8 +89,10 @@
 //! (`settle.rs`). What an event came from, what its mana pays for and which stack entry it is
 //! about are the engine's word, which the session hands the screen beside the view
 //! ([`Heard`], see Cause): the builder follows the stack by the engine's arrivals and
-//! departures, and guesses none of it. Which events happen together is still read from
-//! their order, in `infer.rs` (by-w8gv.21.74).
+//! departures, and guesses none of it. Which events happen at once is the engine's word too:
+//! the events of one group are one beat. What the stage shows as one beyond that, and in
+//! what order within a beat, is presentation (`staging.rs`), each rule read from the tags and
+//! citing the UI Conventions entry or the Arena moment it follows.
 //!
 //! # Hidden information
 //!
@@ -131,13 +133,13 @@ mod build;
 mod check;
 mod follow;
 mod hear;
-mod infer;
 mod mana;
 mod moves;
 mod replay;
 mod settle;
 mod spans;
 mod stack;
+mod staging;
 mod table;
 mod text;
 mod verb;

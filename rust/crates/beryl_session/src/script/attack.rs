@@ -1,5 +1,5 @@
-//! An attacker's record in a script as it is declared: its part in combat, with the tap that
-//! declares it or with no motion.
+//! An attacker's and a blocker's record in a script as it is declared: its part in combat,
+//! with the tap that declares it or with no motion.
 
 use super::build::Builder;
 use super::{Act, Fact, Subject};
@@ -10,12 +10,68 @@ impl Builder<'_> {
     /// with no motion.
     pub(super) fn attack(&mut self, attackers: &[u16], cause: Option<Subject>) {
         for &slot in attackers {
+            self.declare(slot);
             if let Some(mut object) = self.permanent(slot)
                 && let Some(combat) = self.declared(&object)
             {
                 object.combat = Some(combat);
                 let fact = Fact::Object { object };
                 self.emit(Act::Set { fact }, cause);
+            }
+        }
+    }
+
+    /// The attacker in `slot` has its record as it is declared, or as the view ends: its line
+    /// may be drawn, unless what it attacks is still to be chosen as the view ends.
+    pub(super) fn declare(&mut self, slot: u16) {
+        if !self.pending.contains(&slot) {
+            self.aimless.retain(|&s| s != slot);
+        }
+    }
+
+    /// The creature in `blocker` is declared a blocker of the one in `attacker`
+    /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the
+    /// chosen creatures, the defending player chooses one creature for it to block"), and
+    /// the attacker is blocked
+    /// ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h): "An attacking
+    /// creature with one or more creatures declared as blockers for it becomes a blocked
+    /// creature"): each record says so with no motion, and the line between them begins.
+    pub(super) fn block(&mut self, blocker: u16, attacker: u16, cause: Option<Subject>) {
+        if let Some(mut object) = self.permanent(blocker) {
+            let blocking = Some(Combat::Blocking {
+                attacker: Some(attacker),
+            });
+            if object.combat != blocking {
+                object.combat = blocking;
+                let fact = Fact::Object { object };
+                self.emit(Act::Set { fact }, cause);
+            }
+        }
+        if let Some(mut object) = self.permanent(attacker)
+            && let Some(Combat::Attacking { blocked, .. }) = &mut object.combat
+            && !*blocked
+        {
+            *blocked = true;
+            let fact = Fact::Object { object };
+            self.emit(Act::Set { fact }, cause);
+        }
+    }
+
+    /// Every permanent leaves combat as a step that is not combat's begins
+    /// ([CR 511.3](https://yawgatog.com/resources/magic-rules/#R5113): "As soon as the end
+    /// of combat step ends, all creatures, battles, and planeswalkers are removed from
+    /// combat"): each record says so with no motion, and the lines of combat end, so that a
+    /// combat that begins and ends in one script does not leave them to its last beat.
+    pub(super) fn end_combat(&mut self) {
+        let fighting: Vec<u16> = (self.table.battlefield.iter())
+            .filter(|slot| self.permanent(**slot).is_some_and(|o| o.combat.is_some()))
+            .copied()
+            .collect();
+        for slot in fighting {
+            if let Some(mut object) = self.permanent(slot) {
+                object.combat = None;
+                let fact = Fact::Object { object };
+                self.emit(Act::Set { fact }, None);
             }
         }
     }
@@ -30,11 +86,11 @@ impl Builder<'_> {
         object.tapped = tapped;
         // An attacker taps as it is declared: its record says both.
         let attacks = |e: &GameEvent| matches!(e, GameEvent::Attack { attackers, .. } if attackers.contains(&slot));
-        if tapped
-            && self.events.iter().any(attacks)
-            && let Some(combat) = self.declared(&object)
-        {
-            object.combat = Some(combat);
+        if tapped && self.events.iter().any(attacks) {
+            self.declare(slot);
+            if let Some(combat) = self.declared(&object) {
+                object.combat = Some(combat);
+            }
         }
         self.emit(Act::Tap { object }, cause);
     }

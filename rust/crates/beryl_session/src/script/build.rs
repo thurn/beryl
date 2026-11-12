@@ -3,15 +3,16 @@
 //! played on a working table as they are written; what the view's table then has that no
 //! event told (`settle.rs`) closes the script. What an event came from, what mana pays for
 //! and which spell or ability on the stack an event is about are the engine's word
-//! ([`Heard`]); which events happen together is still read from their order (`infer.rs`).
+//! ([`Heard`]), and so is which events happen at once; how they are staged beyond that is
+//! `staging.rs`'s.
 
 use std::collections::BTreeMap;
 
 use super::hear::{Cause, Heard, Move};
-use super::infer::{self, Told};
 use super::moves::{counted, set_counters};
 use super::spans;
 use super::stack::Held;
+use super::staging::{self, Told};
 use super::table::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check, replay};
 use crate::protocol::{
@@ -36,6 +37,9 @@ pub struct Screen {
     /// The arrows ended for good while their spell or ability is still on the stack, by
     /// their ends ([`Builder::part`]).
     broken: Vec<(Subject, Subject)>,
+    /// The attackers whose target the latest view had still to be chosen
+    /// ([`PlayerView::pending_attackers`]).
+    aimless: Vec<u16>,
 }
 
 impl Screen {
@@ -67,10 +71,11 @@ impl Screen {
             Some(before) => {
                 #[cfg(debug_assertions)]
                 let shown = (before.clone(), self.spans.clone());
-                let told = infer::tell(&before, view, &self.looked);
+                let pregame = before.turn.number == 0;
                 let mut builder = Builder::new(before, &after, view, heard, self);
+                let told = staging::tell(view, heard, &builder.causes, &self.looked, pregame);
                 builder.lower(view.handling);
-                builder.walk(&told, infer::making(view));
+                builder.walk(&told, staging::making(view));
                 builder.settle();
                 builder.close(view);
                 let beats = builder.beats();
@@ -99,7 +104,8 @@ impl Screen {
                 }
             }
         };
-        self.looked = infer::looked(view);
+        self.looked = staging::looked(view);
+        self.aimless = view.pending_attackers.clone().unwrap_or_default();
         self.table = Some(after);
         script
     }
@@ -177,10 +183,13 @@ pub(super) struct Builder<'a> {
     pub(super) landed: Vec<Subject>,
     pub(super) begun: Vec<Open>,
     pub(super) ended: Vec<Open>,
-    /// The attackers with no line, what they attack being not yet chosen, and the lines of
-    /// combat as the view ends.
-    pub(super) aimless: &'a [u16],
-    pub(super) lines: Vec<Open>,
+    /// The attackers with no line: what they attack is not yet chosen as the view ends, or
+    /// was not as the view before ended and no event has declared it since, so their
+    /// records may say no more than that they attack and a line drawn from one would point
+    /// at the player before the planeswalker (by-m0wf).
+    pub(super) aimless: Vec<u16>,
+    /// The attackers whose target is still to be chosen as the view ends.
+    pub(super) pending: &'a [u16],
     /// The players whose pools' losses have gone into what they paid for, and whether a
     /// step ends in the script, which empties every pool.
     drained: Vec<Side>,
@@ -197,7 +206,9 @@ impl<'a> Builder<'a> {
         heard: &'a Heard,
         screen: &Screen,
     ) -> Self {
-        let aimless = view.pending_attackers.as_deref().unwrap_or(&[]);
+        let pending = view.pending_attackers.as_deref().unwrap_or(&[]);
+        let mut aimless = screen.aimless.clone();
+        aimless.extend(pending);
         // An event nothing was said of is the rules'.
         let mut causes = heard.causes.clone();
         causes.resize(view.events.len(), Cause::Rules);
@@ -219,7 +230,7 @@ impl<'a> Builder<'a> {
             begun: Vec::new(),
             ended: Vec::new(),
             aimless,
-            lines: spans::combat(after, aimless),
+            pending,
             drained: Vec::new(),
             empties: view.events.iter().any(begins),
             touched: BTreeMap::new(),
@@ -275,7 +286,7 @@ impl<'a> Builder<'a> {
     /// `making`: the viewer is in the middle of a cast or activation no event announces yet.
     fn walk(&mut self, told: &[Told], making: bool) {
         let mut moves = self.moves.iter().peekable();
-        for i in infer::order(self.events) {
+        for i in staging::order(self.events, told) {
             while let Some((_, arrives)) = moves.next_if(|(before, _)| *before <= i) {
                 self.stack_move(arrives);
             }
@@ -369,6 +380,9 @@ impl<'a> Builder<'a> {
             } => self.cast(*slot, *controller, item, cause),
             GameEvent::Ability { item, .. } => self.announce(item, said),
             GameEvent::Attack { attackers, .. } => self.attack(attackers, cause),
+            &GameEvent::Block {
+                blocker, attacker, ..
+            } => self.block(blocker, attacker, cause),
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
             GameEvent::CoinFlip { .. } | GameEvent::Scry { .. } => {
@@ -546,6 +560,18 @@ impl<'a> Builder<'a> {
     }
 
     fn step_begins(&mut self, i: usize, step: TurnStep, active: Side) {
+        let combat = matches!(
+            step,
+            TurnStep::BeginningOfCombat
+                | TurnStep::DeclareAttackers
+                | TurnStep::DeclareBlockers
+                | TurnStep::FirstStrikeDamage
+                | TurnStep::CombatDamage
+                | TurnStep::EndOfCombat
+        );
+        if !combat {
+            self.end_combat();
+        }
         let later = self.events[i + 1..]
             .iter()
             .any(|e| matches!(e, GameEvent::StepBegins { .. }));
