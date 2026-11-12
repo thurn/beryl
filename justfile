@@ -81,6 +81,11 @@ ui-shots *args:
 ui-test *args:
     {{ by }} ui-test "$@"
 
+# Play every recorded fixture to its end on the stage, both layouts, under the audits (fixture names)
+[group('app')]
+ui-play *args:
+    {{ by }} ui-play "$@"
+
 # Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
 [group('app')]
 ui-live *args:

@@ -17,10 +17,11 @@ runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 
 Cards are named by slug or by name ("Teferi, Time Raveler"); a card with no spec gets the
 specced cards nearest it in rules text. Each card's film and shots replace only that card's.
-`--release` builds `beryl_cli` optimized and serves the UI's production build. `--stage` opens
-every seat the capture flags and the driver open on the stage (`?stage`, plan K25), where the
-film and the audit step the stage's own clock and judge by each view's script
-(ui/scripts/stage-audit.mjs), until the cut-over makes the stage the only board.
+`--release` builds `beryl_cli` optimized and serves the UI's production build. `--stage`, or
+`BERYL_STAGE` set, serves every page on the stage (plan K25), where the film and the audit
+step the stage's own clock and judge by each view's script (ui/scripts/stage-audit.mjs),
+until the cut-over makes the stage the only board. `--phone` opens every seat the capture
+flags open on the phone's layout.
 """
 
 from __future__ import annotations
@@ -40,13 +41,20 @@ from pathlib import Path
 from . import card_store, cards, checks, paths, scryfall, system, warm
 from . import nearest as nearest_cards
 from .shots import (
+    PHONE,
     UiError,
+    force_stage,
     free_port,
     port_free,
     served_ui,
+    staged,
     wait_for_server,
     browser_env,
 )
+
+# What tells the capture scripts to open each seat on the phone's layout
+# (ui/scripts/moments.mjs).
+PHONE_ENV = "BERYL_PHONE"
 
 
 def out_dir(kind: str) -> Path:
@@ -78,6 +86,7 @@ def build_ui() -> bool:
     built = subprocess.run(
         [system.npm_bin("vite"), "build", "--logLevel", "warn"],
         cwd=paths.UI,
+        env={**os.environ, **({"VITE_BERYL_STAGE": "1"} if staged() else {})},
         stdin=subprocess.DEVNULL,
         check=False,
     )
@@ -321,6 +330,10 @@ def drive(
 
 
 def specs(args: argparse.Namespace) -> int:
+    force_stage(args)
+    if args.phone:
+        os.environ[PHONE_ENV] = "1"
+        args.viewport = args.viewport or f"{PHONE[0]}x{PHONE[1]}"
     warm.ensure()
     resolved = resolve(args.cards)
     if resolved is None:
@@ -368,8 +381,6 @@ def specs(args: argparse.Namespace) -> int:
                 **browser_env(),
                 "BERYL_SPECS_PORT": str(spec_port),
                 "BERYL_CLI": str(binary),
-                # The capture scripts open each seat on the stage (ui/scripts/moments.mjs).
-                **({"BERYL_STAGE": "1"} if args.stage else {}),
             }
             port = None if capturing else args.port or None
             with served_ui(env, port, preview=args.release) as url:
@@ -461,7 +472,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--stage",
         action="store_true",
-        help="--shots, --film, --motion, --drive: each seat on the stage (?stage)",
+        help="every page on the stage, as with BERYL_STAGE set (plan K25)",
+    )
+    p.add_argument(
+        "--phone",
+        action="store_true",
+        help="--shots, --film, --motion: each seat on the phone's layout",
     )
     p.add_argument(
         "--release",

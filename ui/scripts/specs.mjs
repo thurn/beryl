@@ -5,12 +5,24 @@
 // Each moment is shot from both seats, `<card>/<moment>.png` and `<card>/<moment>-theirs.png`,
 // once its actions have played out and the page has been quiet a while, as a reviewer would
 // first see it settled; prints each path, and exits non-zero if a page logs an error or never
-// shows the game. `--select` keeps only the seats where an element it selects shows (a
+// shows the game, or, on the stage (`by specs --stage`), if a seat's screen fails the audits
+// `by ui-shots` holds a fixture's to. `--select` keeps only the seats where an element it selects shows (a
 // prompt: `.prompt-title`); `--crop` shoots only the box of the first element it selects
 // (with a margin), or a fixed region. A seat that fails is tried again once.
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { launch, openPage, settle, workers } from "./capture.mjs";
+import {
+    clippedText,
+    crowdedControls,
+    launch,
+    openPage,
+    phoneFaults,
+    screenFaults,
+    settle,
+    stageFaults,
+    toldErrors,
+    workers,
+} from "./capture.mjs";
 import {
     chosen,
     option,
@@ -19,6 +31,7 @@ import {
     retried,
     viewport,
     warm,
+    LAYOUT,
     STAGED,
 } from "./moments.mjs";
 
@@ -90,6 +103,27 @@ async function clip(page) {
     };
 }
 
+/** What the screen audits find on a settled seat's `page` (capture.mjs), as `by ui-shots`
+ * holds a fixture's screen to them: on the stage, where the screen is held to the view its
+ * stage shows. */
+async function faults(page) {
+    const found = [
+        ...(await toldErrors(page)).map(
+            (e) => `the screen tells of an error: ${e}`,
+        ),
+        ...(await clippedText(page)).map((cut) => `text cut: ${cut}`),
+        ...(await screenFaults(page)).map((fault) => `screen: ${fault}`),
+        ...(await crowdedControls(page)).map((fault) => `controls: ${fault}`),
+        ...(await stageFaults(page)).map((fault) => `stage: ${fault}`),
+    ];
+    if (process.env.BERYL_PHONE) {
+        found.push(
+            ...(await phoneFaults(page)).map((fault) => `phone: ${fault}`),
+        );
+    }
+    return found;
+}
+
 const browser = await launch();
 await warm(browser, base);
 const run = workers();
@@ -117,7 +151,7 @@ for (const spec of specs) {
                     ).href;
                     try {
                         await page.goto(
-                            `${base}?live=${encodeURIComponent(live)}&spec${STAGED ? "&stage" : ""}#/game`,
+                            `${base}?live=${encodeURIComponent(live)}&spec${LAYOUT}#/game`,
                             { waitUntil: "load" },
                         );
                         await page.waitForSelector("[data-life]", {
@@ -144,6 +178,7 @@ for (const spec of specs) {
                             return;
                         }
                         await page.screenshot({ path, clip: await clip(page) });
+                        if (STAGED) errors.push(...(await faults(page)));
                         console.log(path);
                     } catch (e) {
                         errors.push(String(e).split("\n")[0]);

@@ -10,6 +10,10 @@ clock (ui/scripts/verbs.mjs, the checks named `verb:...`). It records its fixtur
 instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and
 `ui-test` lanes).
 
+`ui-play` plays every recorded fixture from its first view to its last on the stage, on the
+desktop's layout and the phone's, under the stage's audit of each step and the screen audits of
+where it ends (ui/scripts/playthrough.mjs).
+
 `ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
 the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless page
 open on it that an agent drives one step at a time over HTTP, until interrupted.
@@ -43,6 +47,34 @@ SERVER_TIMEOUT = 60.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
 RECORDED: Path = paths.UI / "public" / "fixtures"
+
+
+# The phone's screen, as ui/shots.json's phone shots have it.
+PHONE = (393, 759)
+
+# Set (`--stage` sets it) to force a whole run onto the stage (ui/src/stage/switch.tsx, plan
+# K25): every page the UI serves draws the stage's board, with or without `?stage`. The
+# cut-over makes the stage the only board and removes this.
+STAGE_ENV = "BERYL_STAGE"
+
+
+def staged() -> bool:
+    """Whether this run is forced onto the stage."""
+    return bool(os.environ.get(STAGE_ENV))
+
+
+def force_stage(args: argparse.Namespace) -> None:
+    """Takes `--stage` into the environment, where every tool and script of the run reads it."""
+    if getattr(args, "stage", False):
+        os.environ[STAGE_ENV] = "1"
+
+
+def stage_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--stage",
+        action="store_true",
+        help=f"every page on the stage, as with {STAGE_ENV} set (plan K25)",
+    )
 
 
 class UiError(Exception):
@@ -143,6 +175,9 @@ def served_ui(
     """
     port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
+    if env.get(STAGE_ENV):
+        # Vite hands the page only what is named for it.
+        env = {**env, "VITE_BERYL_STAGE": "1"}
     mode = ["preview", "--strictPort"] if preview else []
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(
@@ -187,6 +222,7 @@ def fixture_views(name: str) -> int:
 def ui_shots(args: argparse.Namespace) -> int:
     if args.views:
         return fixture_views(args.views)
+    force_stage(args)
     chooser = selection.Chooser("shots") if args.select else None
     if chooser and chooser.choice.idle():
         print("shots: the change reaches no shot")
@@ -281,6 +317,7 @@ INTERACTION_FIXTURES = [
 
 
 def ui_test(args: argparse.Namespace) -> int:
+    force_stage(args)
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     chooser = selection.Chooser("ui-test") if args.select else None
     if chooser and chooser.choice.idle():
@@ -344,7 +381,39 @@ def interactions(
         return code
 
 
+def ui_play(args: argparse.Namespace) -> int:
+    """Plays every recorded fixture to its end on the stage, in both layouts, under the
+    generic audits (ui/scripts/playthrough.mjs)."""
+    os.environ[STAGE_ENV] = "1"
+    recorded = paths.cache_root() / "ui-play" / paths.REPO.name
+    names = list(
+        dict.fromkeys(n.removeprefix("play:").split("/")[0] for n in args.only)
+    )
+    try:
+        env = browser_env()
+        if record_fixtures(recorded, names):
+            code = checks.CANNOT_RUN
+        else:
+            with served_ui(env) as url:
+                code = subprocess.run(
+                    ["node", "scripts/playthrough.mjs", url, str(recorded)]
+                    + (["--minor"] if args.minor else [])
+                    + list(args.only),
+                    cwd=paths.UI,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                ).returncode
+    except UiError as e:
+        print(f"ui-play: {e}", file=sys.stderr)
+        code = checks.CANNOT_RUN
+    if code != 0:
+        print("ui-play: FAILED", file=sys.stderr)
+    return code
+
+
 def ui_live(args: argparse.Namespace) -> int:
+    force_stage(args)
     out = (
         paths.cache_root()
         / "ui-live"
@@ -387,11 +456,13 @@ def ui_live(args: argparse.Namespace) -> int:
             )
         )
         with served_ui(env) as url:
-            app = f"{url}?live=http://127.0.0.1:{game_port}#/"
+            phone = "&phone" if args.phone else ""
+            app = f"{url}?live=http://127.0.0.1:{game_port}{phone}#/"
+            width, height = PHONE if args.phone else (args.width, args.height)
             children.append(
                 subprocess.Popen(
                     ["node", "scripts/drive.mjs", str(drive_port), app, str(out)]
-                    + [str(args.width), str(args.height)],
+                    + [str(width), str(height)],
                     cwd=paths.UI,
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -427,6 +498,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         metavar="FIXTURE",
         help="list a fixture's views with the index each route's &at= takes",
     )
+    stage_flag(p)
     p.set_defaults(func=ui_shots)
     p = sub.add_parser(
         "ui-test", help="play the game screen headless through a fixture"
@@ -442,7 +514,19 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="store_true",
         help="only the checks the branch's change can break, as many as fit (selection.py)",
     )
+    stage_flag(p)
     p.set_defaults(func=ui_test)
+    p = sub.add_parser(
+        "ui-play",
+        help="play every recorded fixture to its end on the stage, under the audits",
+    )
+    p.add_argument(
+        "only",
+        nargs="*",
+        help="fixtures, or plays by name (play:<fixture>/<layout>); all by default",
+    )
+    p.add_argument("--minor", action="store_true", help="count minor findings too")
+    p.set_defaults(func=ui_play)
     p = sub.add_parser(
         "ui-live",
         help="live games in a headless page an agent drives over HTTP, until interrupted",
@@ -453,6 +537,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--width", type=int, default=1600)
     p.add_argument("--height", type=int, default=900)
     p.add_argument(
+        "--phone",
+        action="store_true",
+        help=f"the phone's layout, at {PHONE[0]}x{PHONE[1]}",
+    )
+    p.add_argument(
         "--release", action="store_true", help="optimized agents (`just dev` is debug)"
     )
+    stage_flag(p)
     p.set_defaults(func=ui_live)

@@ -96,6 +96,10 @@ export async function chosen(base, slugs, moment) {
 /** Whether seats open on the stage (`by specs --stage`). */
 export const STAGED = Boolean(process.env.BERYL_STAGE);
 
+/** What a seat's address asks for besides: the stage, and the phone's layout (`by specs
+ * --phone`). */
+export const LAYOUT = `${STAGED ? "&stage" : ""}${process.env.BERYL_PHONE ? "&phone" : ""}`;
+
 /** Opens a moment's seat in `page`, held, and waits until its first view shows, retried (a
  * fresh game each try). Returns the page's live game URL on the spec server, which `play`
  * posts to. */
@@ -103,7 +107,7 @@ export async function openSeat(page, base, slug, moment, seat, instance) {
     return retried(async (n) => {
         await page.goto(
             new URL(
-                `${moment.startsWith("playground-") ? "playground" : "scenarios"}/${slug}/${moment}/${seat}?hold${STAGED ? "&stage" : ""}${instance ? `&instance=${instance}` : ""}`,
+                `${moment.startsWith("playground-") ? "playground" : "scenarios"}/${slug}/${moment}/${seat}?hold${LAYOUT}${instance ? `&instance=${instance}` : ""}`,
                 base,
             ).href,
         );

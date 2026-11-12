@@ -1,8 +1,9 @@
 // Which board draws the game's table and what paces its views: the stage's (plan K25) with
 // `?stage` in the URL, read as mobile/phone.ts reads `?phone`, or in every page of a UI built
-// with `VITE_BERYL_STAGE` set (`by bundle`: the release app plays on the stage), and the old
-// ones without, until the stage takes their place. The desktop's and the phone's boards are
-// two layouts of the one stage.
+// or served with `VITE_BERYL_STAGE` set (`by bundle`: the release app plays on the stage; and
+// `by ui-shots | ui-test | ui-live | specs --stage`, or `BERYL_STAGE` set, which hand it to
+// Vite: a whole run forced onto the stage), and the old ones without, until the stage takes
+// their place. The desktop's and the phone's boards are two layouts of the one stage.
 import type { ComponentProps } from "react";
 import { Board as CardBoard } from "../game/Board";
 import { usePlayback as useBeats } from "../game/playback";

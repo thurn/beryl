@@ -473,15 +473,29 @@ export function cutText(page) {
     });
 }
 
+/** What the game screen tells its player went wrong (src/screens/Game.tsx's toast): a command
+ * the session, or a recording, refused. A screen a check opens shows none: a click a recording
+ * holds no answer to is refused so, and the shot of what it was to open would show the table
+ * as it was. */
+export async function toldErrors(page) {
+    return page.evaluate(() =>
+        [...document.querySelectorAll(".game-error")].map((e) =>
+            e.textContent.trim(),
+        ),
+    );
+}
+
 /** Where the game screen disagrees with the view the fixture last released
- * (`window.berylFixture.view()`, src/ipc.ts), once it has settled: each permanent, spell and
+ * (`window.berylFixture.view()`, src/ipc.ts), or on a live page the view its stage says it
+ * shows (`window.berylStage.shown.view`), once it has settled: each permanent, spell and
  * card in the viewer's hand drawn exactly once, in its zone, under its name; a permanent's
  * power and toughness (less marked damage), loyalty, counters and orientation; both life
  * totals; and no card drawn that the view does not have.
- * Each is described for a failure message. Nothing on a page without a fixture. */
+ * Each is described for a failure message. Nothing on a page with neither. */
 export async function screenFaults(page) {
     return page.evaluate(() => {
-        const view = window.berylFixture?.view?.();
+        const view =
+            window.berylFixture?.view?.() ?? window.berylStage?.shown.view;
         // A screen other than the game's, as the menu, draws no table to check.
         if (!view || !document.querySelector("[data-life]")) return [];
         const phone = document.querySelector(".phone-board") !== null;
@@ -539,10 +553,13 @@ export async function screenFaults(page) {
                 // +1/+1 and -1/-1 counters show as one pill naming the kind, with a count
                 // past one.
                 const pill = e.querySelector(".card-pt-counter");
+                const many = pill?.querySelector("b");
                 const badge =
                     c.kind === "plusOne" || c.kind === "minusOne"
                         ? pill
-                            ? (text(pill.querySelector("b"))?.slice(1) ?? "1")
+                            ? many
+                                ? text(many).slice(1)
+                                : "1"
                             : undefined
                         : text(e.querySelector(`.mark-${c.kind} b`));
                 if (badge !== String(c.count)) {
@@ -558,8 +575,9 @@ export async function screenFaults(page) {
                 faults.push(`${what} drawn ${tapped ? "untapped" : "tapped"}`);
             }
         }
-        // Each emblem is drawn as a card, under a slot no object has (layout's emblemSlot).
-        for (const side of ["you", "opponent"]) {
+        // Each emblem is drawn as a card, under a slot no object has (layout's emblemSlot);
+        // the phone draws no emblem yet (UI Conventions, "The phone").
+        for (const side of phone ? [] : ["you", "opponent"]) {
             for (const name of view.players[side].emblems) {
                 const card = [...drawn].some(
                     ([slot, els]) =>

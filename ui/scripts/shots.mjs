@@ -8,6 +8,10 @@
 // (phoneFaults). A desktop game screen is checked again, without a screenshot, at the windows
 // of RESIZED: the stage's narrowest and widest (src/game/Stage.tsx fitStage), where its layout
 // differs most from the shots' 16:9. A phone screen has a shot at each phone size instead.
+// With `BERYL_STAGE` set (`by ui-shots --stage`) every page is served on the stage (plan K25):
+// a shot's `staged`, if an object, then replaces those of its fields that name what only the
+// old board draws, and if a string says why the shot is not taken there (the stage's own shot
+// of that state, by name), until the cut-over leaves the stage's shots alone.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -23,6 +27,7 @@ import {
     settle,
     stageFaults,
     still,
+    toldErrors,
     workers,
 } from "./capture.mjs";
 
@@ -43,9 +48,26 @@ if (!base || !out || !list) {
     process.exit(2);
 }
 
-const { shots } = JSON.parse(await readFile(list, "utf8"));
+/** Whether every page is on the stage (`by ui-shots --stage`). */
+const STAGED = Boolean(process.env.BERYL_STAGE);
+const listed = JSON.parse(await readFile(list, "utf8")).shots;
+/** The shots as this run takes them: on the stage, each as its `staged` has it, and none that
+ * the stage shoots under another name. */
+const shots = STAGED
+    ? listed.flatMap(({ staged, ...shot }) => {
+          if (typeof staged === "string") {
+              if (only.includes(shot.name)) {
+                  console.log(
+                      `ui-shots: ${shot.name} is not the stage's: ${staged}`,
+                  );
+              }
+              return [];
+          }
+          return [{ ...shot, ...staged }];
+      })
+    : listed;
 const chosen = only.length ? shots.filter((s) => only.includes(s.name)) : shots;
-const unknown = only.filter((name) => !shots.some((s) => s.name === name));
+const unknown = only.filter((name) => !listed.some((s) => s.name === name));
 if (unknown.length) {
     console.error(`ui-shots: no shot named ${unknown.join(", ")}`);
     process.exit(2);
@@ -90,6 +112,8 @@ async function capture(browser, shot) {
         } else {
             await page.screenshot({ path, fullPage: true });
         }
+        for (const told of await toldErrors(page))
+            errors.push(`the screen tells of an error: ${told}`);
         for (const cut of await clippedText(page))
             errors.push(`text cut: ${cut}`);
         for (const fault of await screenFaults(page))

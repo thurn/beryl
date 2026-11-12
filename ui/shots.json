@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (docs/project-50k.md, Checks) would delete it. A shot's `staged` is for a run forced onto the stage (`just ui-shots --stage`, plan K25), until the cut-over: an object replaces those of the shot's fields that name what only the old board draws, and a string says which of the stage's shots stands for it there, where it is not taken.",
   "shots": [
     {
       "name": "phone-main",
@@ -195,7 +195,8 @@
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Fractured Identity']",
-      "keep": "the only shot of a cast step opened from a hand card; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end"
+      "keep": "the only shot of a cast step opened from a hand card; its stale updates were greedy-turn-9's re-recordings, which ended when its states were named from its end",
+      "staged": "stage-pick is the stage's shot of a spell cast by a click and its target asked: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-hand-pair",
@@ -208,7 +209,8 @@
       "route": "/?fixture=cast-kicker&at=1#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Thieving Skydiver']"
+      "click": "[data-zone=hand][data-card='Thieving Skydiver']",
+      "staged": "stage-mode-ways is the stage's shot of the ways to cast a card, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-evoke-exile",
@@ -222,7 +224,8 @@
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Subtlety']",
-      "hover": ".ability-choice >> nth=1"
+      "hover": ".ability-choice >> nth=1",
+      "staged": "stage-mode-ways is the stage's shot of the ways to cast a card, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-main",
@@ -394,7 +397,8 @@
       "route": "/?fixture=mana-picker#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=battlefield][data-card='Tundra']"
+      "click": "[data-zone=battlefield][data-card='Tundra']",
+      "staged": "stage-mode-ways is the stage's shot of the ways to use a permanent, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-attackers",
@@ -568,14 +572,16 @@
         "[data-slot='513']",
         "[data-slot='12']"
       ],
-      "keep": "the only shot of attackers picked but not declared; its stale updates were combat-declare's re-recordings"
+      "keep": "the only shot of attackers picked but not declared; its stale updates were combat-declare's re-recordings",
+      "staged": "stage-declare-attack is the stage's shot of attackers picked and not yet declared: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-declare-block-choosing",
       "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-slot='8']", "[data-slot='258']", "[data-slot='9']"]
+      "click": ["[data-slot='8']", "[data-slot='258']", "[data-slot='9']"],
+      "staged": "stage-declare-block is the stage's shot of a blocker picked and its attacker asked: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-log-open",
@@ -597,7 +603,8 @@
         "[data-slot='15']",
         "[data-slot='265']"
       ],
-      "keep": "the only shot of a double block declared; its stale updates were combat-double-block's re-recordings"
+      "keep": "the only shot of a double block declared; its stale updates were combat-double-block's re-recordings",
+      "staged": "stage-declare-block is the stage's shot of blocks picked and not yet declared: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-trigger-1920",
@@ -676,7 +683,8 @@
       "route": "/?fixture=choice-scry#/game",
       "width": 1600,
       "height": 900,
-      "click": ".overlay-view"
+      "click": ".overlay-view",
+      "staged": "stage-split-scry is the stage's shot of a scry, which leaves the table in view with no way aside to take: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-choice-jace",
@@ -769,7 +777,8 @@
       "width": 1600,
       "height": 900,
       "click": "[data-zone=battlefield][data-card='Jace, the Mind Sculptor']",
-      "hover": ".ability-choice >> nth=2"
+      "hover": ".ability-choice >> nth=2",
+      "staged": "stage-mode-ways is the stage's shot of a planeswalker's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-converter-may-exile",
@@ -782,7 +791,8 @@
       "route": "/?fixture=converter-exiled#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=battlefield][data-card='Currency Converter']"
+      "click": "[data-zone=battlefield][data-card='Currency Converter']",
+      "staged": "stage-mode-ways is the stage's shot of a permanent's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-converter-exiled",
@@ -792,7 +802,8 @@
       "click": [
         "[data-zone=battlefield][data-card='Currency Converter']",
         ".ability-choice >> nth=1"
-      ]
+      ],
+      "staged": "stage-zone-graveyard is the stage's shot of cards of a zone laid out to pick from: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-converter-choose",
@@ -811,14 +822,16 @@
       "route": "/?fixture=walker-low#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=battlefield][data-card='Teferi, Time Raveler']"
+      "click": "[data-zone=battlefield][data-card='Teferi, Time Raveler']",
+      "staged": "stage-mode-ways is the stage's shot of a planeswalker's abilities, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-menu-land-face",
       "route": "/?fixture=menu-choices#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Sink into Stupor']"
+      "click": "[data-zone=hand][data-card='Sink into Stupor']",
+      "staged": "stage-mode-ways is the stage's shot of a card's faces to play, chosen among: this one's clicks open the old board's own chooser, and a recording holds no answer to a click the stage would send"
     },
     {
       "name": "game-pay-life",

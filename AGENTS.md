@@ -167,13 +167,17 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    stage's verbs on the stage's own clock (`ui/scripts/verbs.mjs`;
    `just ui-test verb:` runs those alone), and then its prompt shapes, each
    answered by the clicks its fixture recorded with the session's replies
-   (`ui/scripts/shapes.mjs`; `just ui-test shape:`). Every card has a spec
-   (`/specs/<card>`), generated from its definition and scenarios, showing each
-   of its UI moments as a live game from both seats. To reproduce, debug or
-   verify a card's behavior in the UI, use the `specs` skill:
-   `just specs --describe`, `--film`, `--motion` and `--drive` show what each
-   moment does for both players, in text, in pictures, as an animation audit and
-   under Playwright.
+   (`ui/scripts/shapes.mjs`; `just ui-test shape:`). `just ui-play [fixtures]`
+   plays every recorded fixture to its end on the stage, on both layouts, under
+   the stage's audit. `--stage` (or `BERYL_STAGE=1`) forces a whole `ui-shots`,
+   `ui-test`, `ui-live` or `specs` run onto the stage, until the cut-over makes
+   it the only board; `just specs --phone` and `just ui-live --phone` open the
+   phone's layout. Every card has a spec (`/specs/<card>`), generated from its
+   definition and scenarios, showing each of its UI moments as a live game from
+   both seats. To reproduce, debug or verify a card's behavior in the UI, use
+   the `specs` skill: `just specs --describe`, `--film`, `--motion` and
+   `--drive` show what each moment does for both players, in text, in pictures,
+   as an animation audit and under Playwright.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
