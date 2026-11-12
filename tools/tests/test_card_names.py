@@ -163,6 +163,6 @@ def test_every_card_file_names_its_card() -> None:
     files = [
         p.relative_to(card_names.paths.REPO).as_posix()
         for p in (card_names.NAMES_RS.parent).glob("*/*.rs")
-        if p.name != "mod.rs" and p.parent.name not in ("bin", "tests")
+        if p.name != "mod.rs" and p.parent.name not in ("bin", "tests", "library")
     ]
     assert len(card_names.cards_in(files)) == len(files)
