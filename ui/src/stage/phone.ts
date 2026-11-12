@@ -36,7 +36,7 @@ import {
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import { fan, type PileSpace } from "./revealed.ts";
-import type { Table } from "./table.ts";
+import { arranged, type Table } from "./table.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
 
 /** What each kind of thing at rest is drawn over, all under what flies (pose.ts ALOFT): the
@@ -131,11 +131,9 @@ function fanned(spot: Spot, depth: number, face: Pose["face"]): Pose {
 const pileOf = (zone: ObjectView["zone"]) =>
   zone === "library" ? "library" : "graveyard";
 
-function rest(
-  { view, abilities, handled, tray, revealed }: Table,
-  viewport: Viewport,
-  left?: ReadonlySet<Name>,
-) {
+function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
+  const { abilities, handled, tray, revealed } = table;
+  const view = arranged(table);
   // A card a prompt holds up is off its pile as one still leaving for it is.
   const leaving = tray
     ? new Set([...(left ?? []), ...tray.piles.flatMap((pile) => pile.cards)])

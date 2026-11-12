@@ -397,27 +397,30 @@ stage to; Arena's measured instances are kept beside them as reference in
   changes turns over on the way, top over bottom and seen in depth: a spell is
   edge-on a little past half way and lands face up, a drawn card turns over as
   it leaves the library and flies face up, and one that lay the other way up the
-  table never spins round besides. A card you draw alone is held up large to be
-  read and then drops into the hand; each of several drawn together rises over
-  the table, clear of the cards held, and comes down into its place, the hand
-  having made room for them all as the first left. A card that lands face down
-  the other way up the table, as the opponent's draw does, leaves the way up it
-  will lie. A spell cast and a permanent resolving leave the straight line in a
-  shallow arc that bows toward their controller's edge of the table, the
-  permanent leaning a little into it. A played land glides from where it is
-  released to its slot in about 0.4 s. The opponent's spell leaves their hand as
-  a card back and is face up when it reaches the stack, about 0.4 s; the
-  player's own flies from where it is released in about 0.35 s. A resolving
-  permanent flies to its slot in about 0.6 s and the slot flashes. A drawn card
-  leaves the library turning face up within about 0.2 s, flies large beside the
-  stack, holds about 0.2 s and drops into the hand, about 1.1 s in all; three
-  drawn by one spell leave a quarter second apart and fly the same way with no
-  hold, about 0.7 s each. A discard drops to the graveyard at hand size in about
-  0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15,
-  pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w
-  16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3).
-  Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle as it ends (into the
-  battlefield).
+  table never spins round besides. A card you draw flies from the library across
+  the table to a place beside the stack, where one drawn alone is held up large
+  to be read, sinking a little, and then drops into the right end of the hand;
+  each of several drawn together sweeps past that place without stopping and
+  comes down into the hand, which has made room for them all as the first left.
+  A card that comes to a hand joins its right end, and keeps its place there. A
+  card that lands face down the other way up the table, as the opponent's draw
+  does, leaves the way up it will lie. A spell cast and a permanent resolving
+  leave the straight line in a shallow arc that bows toward their controller's
+  edge of the table, the permanent leaning a little into it. A played land
+  glides from where it is released to its slot in about 0.4 s. The opponent's
+  spell leaves their hand as a card back and is face up when it reaches the
+  stack, about 0.4 s; the player's own flies from where it is released in about
+  0.35 s. A resolving permanent flies to its slot in about 0.6 s and the slot
+  flashes. A drawn card leaves the library at the lower left turning face up
+  within about 0.2 s, flies right across the table to a place beside the stack
+  growing as it comes, holds there about 0.2 s and drops into the right end of
+  the hand, about 1.1 s in all; three drawn by one spell leave a quarter second
+  apart and fly the same way with no hold, about 0.7 s each. A discard drops to
+  the graveyard at hand size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w
+  16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5,
+  UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, vPdoSA5H5xU
+  17:46.2, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3). Beryl: 475 ms, 326 ms
+  apart, ease-out. Effects: settle as it ends (into the battlefield).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. Its row makes room in its
   delay, so it shows at a place already open. A token appears whole with a short

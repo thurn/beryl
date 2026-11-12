@@ -2,6 +2,7 @@
 // that only records, over a layout that lays the table out in rows, so every expectation is a
 // number worked out by hand.
 import { abilityName } from "../src/stage/layout.ts";
+import { arranged } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
 
 export const object = (slot, zone = "battlefield", more = {}) => ({
@@ -33,6 +34,7 @@ export const view = (battlefield, hand = [], more = {}) => ({
 });
 
 /** Permanents in a row 400 apart at y 0; a hand's cards in a row at y 500; the stack's items
+ * in its order of arrival; the stack's items
  * in a column 100 apart at x 2000, bottom first; a library's cards in one place, at x 3000
  * and y 500. Cards in no zone drawn here (a graveyard's) rest nowhere. A card with no name
  * shows its back. An ability lifts out of its source 10 in from its corner, at half its width,
@@ -43,7 +45,9 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * opponent's at y -300. A card a prompt holds up lies face up in the row of its pile at
  * y -1000, the piles 1000 apart and a pile's cards 200, each 150 wide, over everything else. */
 export const row = {
-    rest({ view: table, abilities, tray }) {
+    rest({ abilities, tray, ...kept }) {
+        // A hand in its order of arrival, as the table keeps it.
+        const table = arranged(kept);
         const out = new Map();
         const pose = (x, y, depth, face = "front") => ({
             x,

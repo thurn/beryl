@@ -364,8 +364,9 @@ export const CASES = {
             } else if (route === "library>hand") {
                 assert.equal(end.face, "front", what);
                 if (!read) {
+                    // One of several sweeps past the place a card drawn alone is held at
+                    // (drawn.ts `swept`): how large it is there is the layout's.
                     seen.together += 1;
-                    if (half) assert.ok(!larger(half), `${what}: not held up`);
                 } else {
                     seen.held += 1;
                     assert.ok(larger(half), `${what}: it is held up large`);

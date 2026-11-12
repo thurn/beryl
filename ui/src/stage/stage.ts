@@ -244,7 +244,7 @@ export class ScriptStage {
       entry.track = undefined;
       entry.leaving = entry.landing = undefined;
     }
-    let table = tableOf(view, script?.reset);
+    let table = tableOf(view, script?.reset, this.#table);
     // A reset's steps are only the spans to show, begun at once.
     for (const { act } of script?.beats.flat() ?? []) {
       table = apply(table, act);

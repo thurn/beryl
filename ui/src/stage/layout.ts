@@ -105,7 +105,7 @@ export interface StageLayout {
    * small copy on it, which then travels to `rest`, its place on the stack. */
   emerging(source: Pose, rest: Pose): Pose;
   /** Where a card you draw is held up to be read before it drops into your hand, where it
-   * will lie at `rest`. */
+   * will lie at `rest`; one of several drawn together passes it without stopping. */
   drawn(rest: Pose): Pose;
   /** The middle of the card `resting` is dressed as, were it drawn at `pose`: what a card
    * turns about as it taps, grows about as it turns over, and strikes at. */

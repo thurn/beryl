@@ -7,14 +7,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
-import {
-    CLOSES,
-    halfTurned,
-    DRAW_TURN,
-    HELD,
-    TURN,
-    TURNING,
-} from "../src/stage/tracks.ts";
+import { CLOSES, halfTurned, TURN, TURNING } from "../src/stage/tracks.ts";
+import { HELD, HELD_TURN } from "../src/stage/drawn.ts";
 import { tippedOf } from "../src/stage/pose.ts";
 import { object, reach, row, stage, view } from "./stage-table.mjs";
 
@@ -487,20 +481,24 @@ for (const tick of [10, 50]) {
         assert.deepEqual([made.pose(9).x, made.pose(9).y], [3000, 500]);
         assert.equal(made.pose(9).face, "back");
         assert.equal(made.shown.resting.get(9).dress.back, true);
-        // It turns over as it leaves the library.
-        reach(made.clock, Math.floor(1000 * HELD.in * DRAW_TURN.at) - 10, tick);
+        // It turns over on its way in, off the straight line toward the table.
+        reach(made.clock, Math.floor(1000 * HELD_TURN) - 10, tick);
         assert.equal(made.pose(9).face, "back");
-        reach(made.clock, Math.ceil(1000 * HELD.in * DRAW_TURN.at) + 10, tick);
+        reach(made.clock, Math.ceil(1000 * HELD_TURN) + 10, tick);
+        assert.ok(made.pose(9).y < 500 - 300 * (1 - made.pose(9).x / 2600));
         assert.equal(made.pose(9).face, "front");
         assert.equal(made.shown.resting.get(9).dress.back, false);
-        // It is held over where it will lie (the hand's second place, at x 400), large.
-        const held = { x: 400, y: 200, width: 200 };
-        for (const at of [1000 * HELD.in, 1000 * (HELD.in + HELD.hold)]) {
-            reach(made.clock, at, tick);
-            const { x, y, width } = made.pose(9);
-            assert.deepEqual({ x, y, width }, held, `at ${at} ms`);
-            assert.ok(made.pose(9).depth >= 900, "it is over what rests");
-        }
+        // It is held where the layout holds a card drawn (over the hand's second place, at
+        // x 400, here), large, and sinks a little toward the hand while it is held.
+        reach(made.clock, 1000 * HELD.in, tick);
+        const { x: left, y: top, width: wide } = made.pose(9);
+        assert.deepEqual([left, top, wide], [400, 200, 200]);
+        reach(made.clock, 1000 * (HELD.in + HELD.hold), tick);
+        const sunk = made.pose(9);
+        assert.equal(sunk.x, 400);
+        assert.ok(sunk.y > 200 && sunk.y < 240, `it sinks: ${sunk.y}`);
+        assert.ok(sunk.width > 180, "still large");
+        assert.ok(sunk.depth >= 900, "it is over what rests");
         reach(made.clock, 1000, tick);
         const { x, y, width, depth } = made.pose(9);
         assert.deepEqual(
@@ -511,7 +509,23 @@ for (const tick of [10, 50]) {
     });
 }
 
-test("several cards drawn together rise over the table, to a hand that opens once", () => {
+test("a card that comes to a hand joins its right end, whatever its slot", () => {
+    const { stage: made } = stage({ fly: { duration: 400 } });
+    const table = view([1], [4, 7]);
+    table.objects.push(object(2, "library", { name: null }));
+    table.players.you.library = [2];
+    made.play(table);
+    made.play(view([1], [2, 4, 7]), { beats: [[draw(2)]] });
+    made.clock.advance(400);
+    const at = (slot) => made.shown.resting.get(slot).pose.x;
+    assert.deepEqual([at(4), at(7), at(2)], [0, 400, 800]);
+    // And it keeps that place when a later view is taken whole, until it leaves the hand.
+    made.play(view([1], [2, 4, 7]));
+    made.clock.advance(0);
+    assert.deepEqual([at(4), at(7), at(2)], [0, 400, 800]);
+});
+
+test("several cards drawn together sweep past where one is held, to a hand that opens once", () => {
     const ahead = { duration: 1000, stagger: 100, ahead: true };
     const { stage: made } = stage({ fly: ahead });
     const table = drawing();
@@ -532,14 +546,16 @@ test("several cards drawn together rise over the table, to a hand that opens onc
     assert.deepEqual([made.pose(10).x, made.pose(10).y], [3000, 500]);
     assert.equal(made.pose(10).face, "back");
     made.clock.advance(450);
-    // Half way, the first is half way along, linear, from (3000, 500) to (400, 500), and
-    // off that line toward the table, at its own size; it has turned face up.
-    assert.equal(made.pose(9).x, 1700);
-    assert.ok(made.pose(9).y < 300, `it rises: ${made.pose(9).y}`);
-    assert.equal(made.pose(9).width, 100);
+    // Half way, the first is as far up the table and as large as a card drawn alone is
+    // held (over its place in the hand, at twice its width, here), face up, and never past
+    // that place; it does not stop there.
+    const { x, y, width } = made.pose(9);
+    assert.deepEqual([x, y, width], [1050, 200, 200]);
     assert.equal(made.pose(9).face, "front");
+    made.clock.advance(50);
+    assert.ok(made.pose(9).y > 200, "it goes on");
     // The second left a stagger after, and each lands where the hand had it from the first.
-    assert.ok(made.pose(10).x < 3000 && made.pose(10).x > 1700);
+    assert.ok(made.pose(10).x < 3000 && made.pose(10).x > 800);
     made.clock.advance(600);
     assert.deepEqual([made.pose(9).x, made.pose(9).y], [400, 500]);
     assert.deepEqual([made.pose(10).x, made.pose(10).y], [800, 500]);

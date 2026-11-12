@@ -4,7 +4,7 @@ import type { ObjectView, PlayerView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import type { HandHold } from "../game/handLayout";
 import { layout, STACK_Z } from "../game/layout";
-import { fromMiddle } from "../game/perspective";
+import { fromMiddle, STAGE } from "../game/perspective";
 import { FULL_WIDTH, type Placement } from "../game/placement";
 import { STACK, stackPlace } from "../game/stackLayout";
 import { MANA_POOLS } from "../game/tableRows";
@@ -25,7 +25,7 @@ import {
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import { fan, type PileSpace } from "./revealed.ts";
-import type { Table, Tray } from "./table.ts";
+import { arranged, type Table, type Tray } from "./table.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
 
 /** Each life orb's corner on the base stage, held to the stage's middle, and its size
@@ -97,7 +97,8 @@ export const DESKTOP_REVEALED: PileSpace = {
   dress: { look: "shown", frame: FULL_WIDTH },
 };
 
-/** No order of arrival is kept yet: a hand lies in its cards' slot order. */
+/** A hand's order of arrival is the table's (table.ts `arranged`): the layout is given its
+ * cards in that order, and no other. */
 const NO_ORDER: ReadonlyMap<number, number> = new Map();
 const NONE: ReadonlySet<Name> = new Set();
 
@@ -185,10 +186,12 @@ export interface Around {
 }
 
 function rest(
-  { view, abilities, handled, tray, revealed }: Table,
+  table: Table,
   { hold, logOpen, cleared }: Around,
   leaving: ReadonlySet<Name> = NONE,
 ): Map<Name, Resting> {
+  const { abilities, handled, tray, revealed } = table;
+  const view = arranged(table);
   // A card still leaving for a pile is off it as a borrowed one is: the pile lies as it did,
   // its top showing, and the card has its place on it for when it lands. So is a card a
   // prompt holds up.
@@ -243,13 +246,35 @@ export function emerging(source: Pose, rest: Pose): Pose {
 const DRAWN = 1.57;
 
 /** Upright over where it will lie, its foot a quarter of the way down the card it becomes:
- * Arena's drops straight down into the hand (`UrGalw_f35w 16:52.4`). */
+ * where a phone holds up a card drawn, whose table has no room beside its stack. */
 export function drawn(rest: Pose): Pose {
   const width = rest.width * DRAWN;
   return {
     ...rest,
     x: rest.x - (width - rest.width) / 2,
     y: rest.y + (rest.width / 4 - width) / CARD_ASPECT,
+    width,
+    rotation: 0,
+    skew: 0,
+  };
+}
+
+/** Where the desktop holds up a card drawn: how large against its size in the hand, how far
+ * its right edge is from the stack's left, and how far down the stage its middle is.
+ * Arena's flies from the library right across the table to a place beside its stack, its
+ * middle a little over half way down the screen, and drops from there into the right end of
+ * the hand (`vPdoSA5H5xU 17:46.17` to `17:47.30`, `SswBO8aOOgc 20:28.5`). Arena's is 1.57
+ * times its hand card, which is a third the size of Beryl's on its table: at that size
+ * Beryl's would cover the middle of the table, so it is held up less. */
+const BESIDE = { size: 1.3, gap: 28, down: 0.5 };
+
+/** Upright beside the stack, wherever in the hand it will lie. */
+export function beside(rest: Pose): Pose {
+  const width = rest.width * BESIDE.size;
+  return {
+    ...rest,
+    x: STACK.x - BESIDE.gap - width,
+    y: STAGE.height * BESIDE.down - width / CARD_ASPECT / 2,
     width,
     rotation: 0,
     skew: 0,
@@ -313,7 +338,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   rest: (table, leaving) => rest(table, around, leaving),
   anchors,
   emerging,
-  drawn,
+  drawn: beside,
   middle,
   half,
   chevron: CHEVRON,

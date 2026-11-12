@@ -86,6 +86,35 @@ export interface Table {
   tray?: Tray;
   /** The cards held up to be read. */
   revealed?: Revealed;
+  /** Each card that has come to a hand since the stage started over, by its slot, and its
+   * turn among them: a hand keeps no order in the rules, and on the table a card joins the
+   * right end of its hand, as Arena's does (`vPdoSA5H5xU 17:47.3`). */
+  order?: ReadonlyMap<number, number>;
+}
+
+/** `table`'s view with each hand in its order of arrival (`Table.order`): the cards that
+ * were there as the stage started over in slot order, then those that came since, the
+ * latest last. Nothing else of the view depends on where a record lies in its list. */
+export function arranged({ view, order }: Table): PlayerView {
+  if (!order?.size) return view;
+  const turn = (o: ObjectView) => order.get(o.slot) ?? 0;
+  const objects = [...view.objects].sort((a, b) => turn(a) - turn(b));
+  return { ...view, objects };
+}
+
+/** `order` once the card in `slot` has gone from `from` to `to`: last of those in a hand,
+ * or of none. */
+function arrived(
+  order: Table["order"],
+  slot: number,
+  from: ZoneName,
+  to: ZoneName,
+): Table["order"] {
+  if ((from === "hand") === (to === "hand")) return order;
+  const next = new Map(order);
+  next.delete(slot);
+  if (to === "hand") next.set(slot, 1 + Math.max(0, ...next.values()));
+  return next;
 }
 
 /** The cards a look that begins at `view` handles: the top `count` of a library, top first,
@@ -128,11 +157,23 @@ export function tabled(view: PlayerView): PlayerView {
     : { ...view, stack };
 }
 
-/** The table of a view the stage starts over from. */
-export const tableOf = (view: PlayerView, reset?: Reset): Table => ({
-  view: tabled(view),
-  abilities: reset?.abilities ?? [],
-});
+/** The table of a view the stage starts over from: the cards of `before`, the table until
+ * then, that lay in a hand and still do keep their order there. */
+export function tableOf(
+  view: PlayerView,
+  reset?: Reset,
+  before?: Table,
+): Table {
+  const table = { view: tabled(view), abilities: reset?.abilities ?? [] };
+  const held = (of: PlayerView) =>
+    new Set(of.objects.filter((o) => o.zone === "hand").map((o) => o.slot));
+  if (!before?.order?.size) return table;
+  const [was, is] = [held(before.view), held(view)];
+  const order = new Map(
+    [...before.order].filter(([slot]) => was.has(slot) && is.has(slot)),
+  );
+  return order.size ? { ...table, order } : table;
+}
 
 /** Where the stack item `subject` names lies in the stack, bottom first. */
 function stackIndex({ view, abilities }: Table, subject: Subject) {
@@ -257,8 +298,9 @@ function put(
     ...table.view.objects.filter((o) => o.slot !== object.slot),
     object,
   ].sort((a, b) => a.slot - b.slot);
-  const next = { ...table, view: { ...table.view, objects } };
   const zone = before?.zone ?? from;
+  const order = arrived(table.order, object.slot, zone, object.zone);
+  const next = { ...table, view: { ...table.view, objects }, order };
   if (zone === object.zone && at === undefined) return next;
   return placed(
     taken(next, object.slot, zone, before?.owner ?? object.owner),

@@ -14,16 +14,16 @@ import {
   type Resting,
   type StageLayout,
 } from "./layout.ts";
+import { HELD_TURN, heldUp, swept } from "./drawn.ts";
 import type { Pose } from "./pose.ts";
 import {
   bowOf,
   depths,
+  DRAW_TURN,
   drawsToRead,
   fade,
   FLIP,
   glide,
-  HELD_TURN,
-  heldUp,
   lunge,
   meets,
   shownUp,
@@ -295,19 +295,20 @@ function enters(
         ? { name: act.object.slot, track: own(fade(ease)) }
         : undefined;
     case "fly": {
-      // Your draw is held up to be read on its way, unless it is one of several: Arena's
-      // three cards of one spell pass at their own size (`WQiYBv23buw 29:14.2`).
+      // Your draw flies across the table to the place it is held up at, to be read, and
+      // drops from there into your hand; one of several goes the same way and passes that
+      // place without stopping (Arena's: `vPdoSA5H5xU 17:46.2`, `WQiYBv23buw 29:14.2`).
       const card = placed(act.object.slot);
+      if (!card || !scene.moving || !drawsToRead(act)) return undefined;
       const several = scene.beat.some((o) => o !== act && drawsToRead(o));
-      if (!card || !scene.moving || several || !drawsToRead(act)) {
-        return undefined;
-      }
+      const back = card.pose.face === "back";
+      const way = several
+        ? swept(card.pose, ease, layout.drawn)
+        : heldUp(card.pose, ease, layout.drawn);
+      const turn = several ? DRAW_TURN.at : HELD_TURN;
       return {
         name: act.object.slot,
-        track: {
-          ...own(heldUp(card.pose, ease, layout.drawn)),
-          turn: card.pose.face === "back" ? HELD_TURN : undefined,
-        },
+        track: { ...own(way), turn: back ? turn : undefined },
       };
     }
     case "tap": {

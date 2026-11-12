@@ -86,11 +86,11 @@ export interface Turning {
 /** A flight's turn-over unless it is a draw's. */
 const CAST: Turning = { at: TURN, each: TURNING };
 
-/** A drawn card's: it turns over as it leaves the library, while it is small and at its
- * fastest, and has its face up for most of its way. Arena's is edge-on 100 to 150 ms after
- * it leaves and face up by 170 to 220, of a flight of 580 to 740 (`SswBO8aOOgc 20:28.55` to
- * `28.77`, `WQiYBv23buw 29:14.23` to `14.40`). */
-export const DRAW_TURN: Turning = { at: 0.2, each: 0.12 };
+/** A drawn card's: it turns over as it leaves the library, about half way to the place
+ * beside the stack it flies to, and has its face up for the rest of its way. Arena's is
+ * edge-on 100 to 150 ms after it leaves and face up by 170 to 220, of a flight of 700 to
+ * 740 where it is not held up (`WQiYBv23buw 29:14.23` to `14.40`). */
+export const DRAW_TURN: Turning = { at: 0.16, each: 0.08 };
 
 /** Whether `act` is a card drawn: the flight from a library to its player's hand that the
  * game calls a draw, and no other way a card comes to a hand. */
@@ -133,10 +133,8 @@ export interface Bow {
  * table's far edge, and a full bow carried the card along that edge, half out of sight,
  * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
- * (data/arena-motion.json, fly and emerge). A drawn card that is not held up rises over the
- * table on its way to the hand, away from its player's edge, so that it turns face up clear
- * of the cards already held and comes down into its place: Arena's leave the library up
- * the table and come down into the hand (`WQiYBv23buw 29:14.2`). */
+ * (data/arena-motion.json, fly and emerge). A card drawn that no one reads, the opponent's,
+ * leaves the line toward the middle of the table, away from its player's edge. */
 export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6 },
@@ -160,7 +158,7 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
 
 /** `pose`, which is `through` of the straight way from `from` to `to`, as far off that way
  * as `bow` has it there: nothing at either end. */
-function bowed(
+export function bowed(
   pose: Pose,
   from: Pose,
   to: Pose,
@@ -350,39 +348,6 @@ export function shareOf(
   const from = Math.max(0, handled.indexOf(name as number)) * gap;
   return [from / length, (from + each) / length];
 }
-
-/** How a card held up on its way is shared out over its step: the share of the time it
- * flies in, and the share it is held. Arena's draw at a turn's start flies in for about 600
- * ms, holds 200 to 240 and drops for 230 to 300 (data/arena-motion.json, fly, "draw":
- * 20:28.4 and 16:52.4). */
-export const HELD = { in: 0.55, hold: 0.2 };
-
-/** When, as a share of its step, a card held up has turned over: a draw's share of its way
- * in (`DRAW_TURN`). */
-export const HELD_TURN = HELD.in * DRAW_TURN.at;
-
-/** The way of a card that is held up to be read before it lands: from `start` to where
- * `held` puts it for its resting place, turning over on the way, a hold there, and the drop
- * to where it rests. */
-export const heldUp =
-  (start: Pose, ease: Timing["ease"], held: (rest: Pose) => Pose): Path =>
-  (progress, rest) => {
-    const up = { ...held(rest), depth: ALOFT + rest.depth };
-    const dropping =
-      (progress - HELD.in - HELD.hold) / (1 - HELD.in - HELD.hold);
-    if (dropping > 0) return between(up, rest, ease(dropping), true);
-    const flying = Math.min(1, progress / HELD.in);
-    const pose = {
-      ...between(start, up, ease(flying), false),
-      depth: up.depth,
-    };
-    if (start.face !== "back") return pose;
-    return {
-      ...pose,
-      face: progress < HELD_TURN ? "back" : pose.face,
-      flat: flatAt(flying, DRAW_TURN),
-    };
-  };
 
 /** How far a permanent turns as it taps, in degrees. */
 export const QUARTER = 90;
