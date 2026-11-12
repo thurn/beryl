@@ -550,10 +550,11 @@ fn flip() -> (Step, &'static str) {
     let notice = Notice::Coin {
         player: Side::You,
         won: false,
+        source: 0,
     };
     let cause = Some(Subject::Ability { id: 1 });
     let act = Act::Announce { notice };
-    let broken = "`announce coin you lost <- a1`: its cause a1 is not on the table as it runs, \
+    let broken = "`announce coin you lost by #0 <- a1`: its cause a1 is not on the table as it runs, \
                   and did not leave it in this beat";
     (Step { act, cause }, broken)
 }

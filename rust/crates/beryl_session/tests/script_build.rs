@@ -175,7 +175,8 @@ fn combat_damage_strikes_and_counts_life() {
     );
 }
 
-/// `announce` and `streak`: a coin a permanent's trigger flips, and the damage the trigger
+/// `announce` and `streak`: a coin a permanent's trigger flips, which names the permanent and
+/// is the trigger's doing, and the damage the trigger
 /// then deals, from the ability to the player, with the life it takes.
 #[test]
 fn a_coin_is_announced_and_noncombat_damage_streaks() {
@@ -187,7 +188,7 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
     assert_eq!(
         first,
         text(&[
-            "announce coin you lost <- a1",
+            "announce coin you lost by #1 <- a1",
             "streak a1 > you damage 3 <- a1",
             "& count you life 17 <- a1",
             "-point source a1 > #1",
@@ -201,7 +202,7 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
     assert_eq!(
         second,
         text(&[
-            "announce coin opponent lost <- a1",
+            "announce coin opponent lost by #1 <- a1",
             "streak a1 > opponent damage 3 <- a1",
             "& count opponent life 17 <- a1",
             "-point source a1 > #1",

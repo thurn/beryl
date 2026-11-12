@@ -371,20 +371,10 @@ impl<'a> Builder<'a> {
             GameEvent::Attack { attackers, .. } => self.attack(attackers, cause),
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
-            &GameEvent::CoinFlip { player, won, .. } => {
-                self.announce_notice(Notice::Coin { player, won }, cause);
-            }
-            &GameEvent::Scry {
-                player,
-                top,
-                bottom,
-            } => {
-                let notice = Notice::Scry {
-                    player,
-                    top,
-                    bottom,
-                };
-                self.announce_notice(notice, cause);
+            GameEvent::CoinFlip { .. } | GameEvent::Scry { .. } => {
+                if let Some(notice) = notice(&events[i]) {
+                    self.emit(Act::Announce { notice }, cause);
+                }
             }
             &GameEvent::LibraryShuffled { player } => self.shuffle(player, cause),
             &GameEvent::Reveal { slot } => self.reveal(i, slot, cause),
@@ -407,10 +397,6 @@ impl<'a> Builder<'a> {
             | GameEvent::Lose { .. }
             | GameEvent::Win { .. } => {}
         }
-    }
-
-    fn announce_notice(&mut self, notice: Notice, cause: Option<Subject>) {
-        self.emit(Act::Announce { notice }, cause);
     }
 
     /// The spell in `slot` is announced: as its cast completed it, if the table has it another
@@ -579,6 +565,31 @@ impl<'a> Builder<'a> {
             let notice = Notice::Turn { active };
             self.emit(Act::Announce { notice }, None);
         }
+    }
+}
+
+/// What a pill or a banner says of `event`, if it is one that is announced.
+fn notice(event: &GameEvent) -> Option<Notice> {
+    match *event {
+        GameEvent::CoinFlip {
+            player,
+            won,
+            source,
+        } => Some(Notice::Coin {
+            player,
+            won,
+            source,
+        }),
+        GameEvent::Scry {
+            player,
+            top,
+            bottom,
+        } => Some(Notice::Scry {
+            player,
+            top,
+            bottom,
+        }),
+        _ => None,
     }
 }
 

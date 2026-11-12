@@ -261,6 +261,11 @@ pub enum Notice {
     Turn { active: Side },
     /// "Scry: 1 top, 1 bottom."
     Scry { player: Side, top: u8, bottom: u8 },
-    /// A coin a card's effect flipped; the step's cause is the permanent.
-    Coin { player: Side, won: bool },
+    /// A coin an ability of the permanent in `source` flipped: the card the banner names. The
+    /// step's cause is the ability, as it resolves.
+    Coin {
+        player: Side,
+        won: bool,
+        source: u16,
+    },
 }

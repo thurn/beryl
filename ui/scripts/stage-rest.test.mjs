@@ -27,7 +27,7 @@ const banner = {
 const coin = {
     act: {
         verb: "announce",
-        notice: { kind: "coin", player: "you", won: false },
+        notice: { kind: "coin", player: "you", won: false, source: 1 },
     },
 };
 /** The first point of a path: where a streak's tail is. */

@@ -30,17 +30,13 @@ export function announced<K extends Notice["kind"]>(
 export const scryWords = ({ top, bottom }: Of<"scry">) =>
   `Scry: ${top} top, ${bottom} bottom.`;
 
-/** The banner of a coin's flip: the card that flipped it, which is the step's cause, and who
- * won or lost. */
+/** The banner of a coin's flip: the card that flipped it, which the notice names, and who won
+ * or lost. */
 export function coinBanner(
-  { notice, step }: { notice: Of<"coin">; step: ScriptStep },
+  { notice }: { notice: Of<"coin"> },
   table: PlayerView,
 ): { title: string; detail: string } {
-  const cause = step.cause;
-  const source =
-    cause?.kind === "object"
-      ? table.objects.find((o) => o.slot === cause.slot)?.name
-      : undefined;
+  const source = table.objects.find((o) => o.slot === notice.source)?.name;
   const who = notice.player === "you" ? "You" : "Opponent";
   return {
     title: source ?? "Coin flip",

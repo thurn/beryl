@@ -597,7 +597,7 @@ export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": 
 
 export type Fact = { "kind": "turn", number: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<number>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
-export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, };
+export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, source: number, };
 
 export type Span = "begin" | "end";
 

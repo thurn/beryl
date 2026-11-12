@@ -389,9 +389,13 @@ impl Display for Notice {
                 top,
                 bottom,
             } => write!(f, "scry {} {top} top {bottom} bottom", wire(player)),
-            Notice::Coin { player, won } => {
+            Notice::Coin {
+                player,
+                won,
+                source,
+            } => {
                 let result = if won { "won" } else { "lost" };
-                write!(f, "coin {} {result}", wire(player))
+                write!(f, "coin {} {result} by #{source}", wire(player))
             }
         }
     }

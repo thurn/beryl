@@ -558,9 +558,10 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
     assert_eq!(
         announce(Notice::Coin {
             player: Side::You,
-            won: false
+            won: false,
+            source: 4
         }),
-        "announce coin you lost"
+        "announce coin you lost by #4"
     );
 }
 
