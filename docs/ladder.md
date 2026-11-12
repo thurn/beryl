@@ -5,10 +5,11 @@ Champion: `pimc72/hidden/rollout/tuned/anchor+guard`
 One row a match or audit, newest first. docs/ai-strategy.md §4 says how each row
 is made.
 
-| Date       | Challenger                                    | Champion                                 | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
-| ---------- | --------------------------------------------- | ---------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+hold | pimc72/hidden/rollout/tuned/anchor+guard | -      | -     | -     | -              | failed at the suite | 11 / 9             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard@3M   | pimc72/hidden/rollout/tuned/anchor@3M    | 3M     | 574   | 52.4% | +23 [-10, +57] | pass                | 15 / 5             | ?           |
+| Date       | Challenger                                     | Champion                                 | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
+| ---------- | ---------------------------------------------- | ---------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+waste | pimc72/hidden/rollout/tuned/anchor+guard | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+hold  | pimc72/hidden/rollout/tuned/anchor+guard | -      | -     | -     | -              | failed at the suite | 11 / 9             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard@3M    | pimc72/hidden/rollout/tuned/anchor@3M    | 3M     | 574   | 52.4% | +23 [-10, +57] | pass                | 15 / 5             | ?           |
 
 ## Measured on the first match
 
