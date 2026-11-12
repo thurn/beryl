@@ -14,7 +14,11 @@ def test_the_pool_is_real_cards_that_reach_only_names_and_tokens() -> None:
     assert len(pool) > 20
     assert any(s.name == "Counterspell" for s in pool)
     for source in pool:
-        assert set(scale.CRATE_PATH.findall(source.text)) <= {"names", "tokens"}
+        assert set(scale.CRATE_PATH.findall(source.text)) <= {
+            "names",
+            "tokens",
+            "props",
+        }
 
 
 def test_a_clone_renames_only_its_own_card() -> None:
@@ -23,7 +27,7 @@ def test_a_clone_renames_only_its_own_card() -> None:
     assert "name: names::COUNTERSPELL_7," in text
     assert "hand(P0, &[names::COUNTERSPELL_7])" in text
     assert not re.search(r"names::COUNTERSPELL\b", text)
-    assert "names::MANA_CRYPT" in text  # the other cards stay what they are
+    assert "props::ARTIFACT" in text  # the other cards stay what they are
     assert (
         "Behavior::Data(&counter(TARGET))" in text
     )  # its body and scenarios come along

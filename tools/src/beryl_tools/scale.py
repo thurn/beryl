@@ -51,11 +51,14 @@ DEFAULT_CARDS = 50_000
 DEFAULT_CRATES = 20
 BERYL_CARDS: Path = paths.RUST / "crates" / "beryl_cards" / "src"
 CRATES: Path = paths.RUST / "crates"
-# The modules a clone reaches by `crate::`, which a shard re-exports from `beryl_cards`.
-REEXPORTED = ("tokens",)
+# The modules a clone reaches by `crate::`, which a shard re-exports from `beryl_cards`: the
+# shared tokens, and the props its scenarios name.
+REEXPORTED = ("tokens", "props")
 # What a file may reach in its own crate; others, such as another card's private helper, can't
 # be cloned.
 CRATE_PATH: re.Pattern[str] = re.compile(r"\b(?:crate|super)::(\w+)")
+# The same reached in a group: `use crate::{names, props};`.
+CRATE_GROUP: re.Pattern[str] = re.compile(r"\b(?:crate|super)::\{([^}]*)\}")
 # A card's own name: the constant its `CardDef` gives as `name`.
 NAME_FIELD: re.Pattern[str] = re.compile(
     r"^\s*name: names::([A-Z0-9_]+),", re.MULTILINE
@@ -92,7 +95,12 @@ def sources(src: Path = BERYL_CARDS) -> list[Source]:
             continue
         text = path.read_text()
         field = NAME_FIELD.search(text)
-        reaches = set(CRATE_PATH.findall(text)) - {"names", *REEXPORTED}
+        grouped = {
+            name.strip()
+            for group in CRATE_GROUP.findall(text)
+            for name in group.split(",")
+        }
+        reaches = (set(CRATE_PATH.findall(text)) | grouped) - {"names", *REEXPORTED}
         if field is None or reaches or field.group(1) not in names:
             continue
         found.append(Source(path, text, field.group(1), names[field.group(1)]))
@@ -152,9 +160,10 @@ def card_crates() -> list[str]:
 
 
 def shard_manifest(name: str) -> str:
-    dependencies = "".join(
-        f'{crate} = {{ path = "{CRATES / crate}" }}\n'
-        for crate in ["beryl_cards", *card_crates()]
+    # `beryl_cards` with its scenarios, which hold the props the clones' scenarios name.
+    dependencies = f'beryl_cards = {{ path = "{CRATES / "beryl_cards"}", features = ["scenarios"] }}\n'
+    dependencies += "".join(
+        f'{crate} = {{ path = "{CRATES / crate}" }}\n' for crate in card_crates()
     )
     return f"""[package]
 name = "{name}"
