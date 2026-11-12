@@ -93,8 +93,8 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::cast(P0, PORTABLE_HOLE),
             choose(P0, DecisionKind::Target, MANA_CRYPT),
             Action::cast(P1, STOCK_UP),
+            // Stock Up is the only target, so casting Reprieve already selects it.
             Action::cast(P0, REPRIEVE),
-            choose(P0, DecisionKind::Target, STOCK_UP),
         ]),
     // Cards leaving and entering piles the other ways: the first seat's Snapcaster Mage gives
     // the Thirst for Discovery in its graveyard flashback, and it casts Thirst from there,

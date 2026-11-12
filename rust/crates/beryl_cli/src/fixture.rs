@@ -161,9 +161,9 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let told = sent.clone();
     let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
     let progress = Shared::default();
-    // Whether each view was the stop with the board's scripts done, in the views' order: what
-    // the session then goes by to hand the seat over, on the thread that sends the view.
-    let (done, handed) = channel();
+    // Snapshot script progress with each view, before the session can answer its next decision.
+    // The session also uses this snapshot to know when to hand the seat over.
+    let (sent_progress, view_progress) = channel();
     let at_stop = Arc::new(AtomicBool::new(false));
     let (scripts, at, said) = (
         Arc::clone(&progress),
@@ -175,9 +175,10 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             let told = sent.clone();
             move |panic| drop(told.send(Err(panic)))
         });
-        let stopped = boards::lock(&scripts).done() && at.reached(&update.view);
+        let scripts = boards::lock(&scripts);
+        let stopped = scripts.done() && at.reached(&update.view);
         said.store(stopped, Ordering::SeqCst);
-        let _ = done.send(stopped);
+        let _ = sent_progress.send((stopped, scripts.next.into_iter().flatten().next()));
         // The recording stops listening once it has what it came for.
         let _ = sent.send(Ok(update));
     });
@@ -206,7 +207,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         let update = update
             .map_err(|_| "the session ended without a view".to_owned())?
             .map_err(|panic| format!("the session {panic}"))?;
-        let handed = handed.recv().unwrap_or(false);
+        let (handed, waiting) = view_progress.recv().expect("script progress for this view");
         let reached = left.is_none() && stop.reached(&update.view);
         let status = &update.view.status;
         let (deciding, ended) = (
@@ -238,7 +239,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         }
         if left == Some(0) || (ended && left.is_some()) {
             // A board's actions all lead up to where its recording ends.
-            if let Some(action) = boards::lock(&progress).next.iter().flatten().next() {
+            if let Some(action) = waiting {
                 return Err(format!("the board's {action:?} was never taken"));
             }
             if !deciding && !ended {

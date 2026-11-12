@@ -245,7 +245,8 @@ pub(super) const COMBAT: &[Scenario] = &[
             ADELINE_RESPLENDENT_CATHAR,
         )]),
     // Swift Reconfiguration makes Jace, Vryn's Prodigy a Vehicle with crew 5, which three
-    // creatures of power 2, 2 and 3 may crew: Snapcaster Mage, then Elite Spellbinder.
+    // creatures of power 2, 2 and 3 may crew. The fixture shows the second pick after
+    // Snapcaster Mage is tapped.
     Scenario::new("crew")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(
@@ -267,6 +268,5 @@ pub(super) const COMBAT: &[Scenario] = &[
             choose(P0, DecisionKind::Target, JACE_VRYNS_PRODIGY),
             Action::activate_granted(P0, JACE_VRYNS_PRODIGY, 0),
             choose(P0, DecisionKind::ChooseObject, SNAPCASTER_MAGE),
-            choose(P0, DecisionKind::ChooseObject, ELITE_SPELLBINDER),
         ]),
 ];
