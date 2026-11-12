@@ -405,14 +405,21 @@ held to by `just motion`.
   (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg
   54:54.0, sMpAJ0HKDdg 54:57.5). Beryl: 850 ms, 285 ms apart. Effects: impact as
   its blow lands (on what it strikes).
-- **streak.** A streak leaves one thing and lands on another, which flashes:
-  mana from its source into the spell or ability it pays for, and damage from a
-  spell or ability to what it hits. Each tapped land sends one streak of its
-  color to the spell on the stack in about 0.3 s. A burn spell or ability glows,
-  and a streak of fire crosses to its target in about 0.25 s, with a burst where
-  it lands; the spell leaves after (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85,
-  pE4XSNi-nZc 22:00.6, IEXcjBn3BXk 20:40.88, IEXcjBn3BXk 38:36.7, I3Te0m1bBFw
-  31:37.8). Beryl: 250 ms, 100 ms after its cause.
+- **streak.** A streak of light leaves one thing and lands on another, which
+  flashes: mana from its source into the spell or ability it pays for, and
+  damage from a spell or ability to what it hits. It rises out of its source on
+  a low arc, a bright head with a tail behind it, quickening all the way, and
+  its tail is drawn in as it lands. Several into one spell leave together. A
+  source with no place left on the table sends none: what its mana pays for only
+  flashes. Each tapped land sends one streak of its color to the spell on the
+  stack in about 0.3 s. A burn spell or ability glows, and a streak of fire
+  crosses to its target in about 0.25 s, with a burst where it lands; the spell
+  leaves after (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85, pE4XSNi-nZc 22:00.6,
+  IEXcjBn3BXk 20:40.88, IEXcjBn3BXk 38:36.7, I3Te0m1bBFw 31:37.8). Beryl: 250
+  ms, 100 ms after its cause, ease-in. Effects: glow as it begins (mana) (on
+  what it leaves), flash as it ends (mana) (on what it strikes), glow as it
+  begins (damage) (on what it leaves), impact as it ends (damage) (on what it
+  strikes).
 - **count.** A number changes and shows that it did: a life total, a kind of
   counter, a power and toughness, a mana pool. A life total jumps to its new
   value in a burst of about 0.4 s; a loss's red number drifts down from the
@@ -431,18 +438,23 @@ held to by `just motion`.
   "Revealed Cards" pile at the top left. Revealed cards gather under a "Revealed
   Cards" pill at the top left, which opens into a browser of them and stays
   afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9). Beryl: 200 ms, ease-out.
-- **dwell.** Nothing moves while a spell or ability is read: the opponent's,
-  before it resolves unanswered. The opponent's spell sits on the stack for 0.7
-  to 1.9 s before it resolves (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5). Beryl:
-  800 ms, in place.
-- **announce.** A notice passes over the table while play goes on under it: the
-  turn banner, the pill that says what a scry did, a coin tossed. "Your Turn" or
-  "Opponent's Turn" glows at the centre for about a second while cards move
-  under it. A pill above an avatar reads "Scry: 1 top, 1 bottom." for about 3 s.
-  A coin a card flips is tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk
-  19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6,
-  SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Beryl: 1200 ms, 116 ms after its
-  cause, in place.
+- **dwell.** Nothing moves while something is read: the opponent's spell or
+  ability, before it resolves unanswered, and the table as the game ends, before
+  the result covers it. The opponent's spell sits on the stack for 0.7 to 1.9 s
+  before it resolves. After the play that ends a game the table stays in view
+  about 3 s, the loser's avatar bursting for the first half of it, before the
+  result covers it (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5, IEXcjBn3BXk
+  38:37.0). Beryl: 800 ms, in place.
+- **announce.** A notice passes over the table: the turn banner, the pill that
+  says what a scry did, a coin tossed. Play goes on under the banner and the
+  pill, which fade in, stand and fade out, the banner sinking toward its player
+  as it goes. A coin is waited for: it turns in the air, lands, and only then
+  says who won. "Your Turn" or "Opponent's Turn" glows at the centre for about a
+  second while cards move under it. A pill above an avatar reads "Scry: 1 top, 1
+  bottom." for about 3 s. A coin a card flips is tossed mid-table and lands in
+  about 1.2 s (IEXcjBn3BXk 19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3,
+  IHPV6yRaFlk 52:54.6, SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Beryl: 1200
+  ms, 116 ms after its cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
   attacker to what it attacks, from a blocker to its attacker. An arrow at a
@@ -494,9 +506,9 @@ steps begin. A mark says what a player may do; an effect says what just
 happened, and is gone.
 
 - **glow.** A halo of warm light around a card, bright at once, that spreads and
-  fades: the card is new here, or is leaving whole. On the stack, where the
-  spell that acts on a card lies over it, the light is a rim inside the card's
-  own frame. Drawn under its card. Beryl: 300 ms, ease-out.
+  fades: the card is new here, is leaving whole, or sends a streak. On the
+  stack, where the spell that acts on a card lies over it, the light is a rim
+  inside the card's own frame. Drawn under its card. Beryl: 300 ms, ease-out.
 - **settle.** A wash of light over a card and a halo around it, bright as it
   lands and gone as it settles. Drawn over its card. Beryl: 350 ms, ease-out.
 - **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
@@ -509,9 +521,12 @@ happened, and is gone.
 - **cover.** A veil of light closes over a card, hides it while it changes, and
   clears from what it now is, for as long as its step. Drawn over its card.
   Beryl: linear.
-- **impact.** A burst of hot light on what a creature strikes, a card or a
-  player's life total, whole as the blow lands and spreading as it fades. Drawn
-  over its card. Beryl: 300 ms, ease-out.
+- **impact.** A burst of hot light on what a creature strikes or a streak of
+  damage hits, a card or a player's life total, whole as the blow lands and
+  spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
+- **flash.** A flare of pale light over a spell or ability as the mana that pays
+  for it lands, whole at once and gone as it spreads. Drawn over its card.
+  Beryl: 240 ms, ease-out.
 - **pulse.** A ring of light round a card's frame while its numbers swell and
   settle: a counter put on it or taken off, its loyalty, its power and
   toughness. Drawn over its card. Beryl: 320 ms, ease-out.

@@ -29,18 +29,22 @@ export function StepBanner({
   detail,
   shown,
   coin,
+  staged,
 }: {
   title: string;
   detail: string;
   shown: boolean;
   coin: boolean;
+  /** The stage's announcement of a coin: drawn from how far through its step is
+   * (stage/stage.css `.stage-notice`). */
+  staged?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   return (
     <AnimatePresence>
       {shown && (
         <motion.div
-          className="step-banner"
+          className={staged ? "step-banner stage-notice" : "step-banner"}
           role="status"
           exit={
             reduce ? undefined : { opacity: 0, transition: { duration: 0.4 } }

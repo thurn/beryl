@@ -10,8 +10,9 @@
 // time, so none depends on the machine's speed. It plays the moment in ticks of 16 ms and of
 // 100 ms, which must read the same. Every run also holds the page's sounds to its steps: each
 // asked for at the stage time its step begins or ends, and none otherwise. What each verb's
-// check then asks of its runs is its cases: verb-cases.mjs for cards changing zone, and
-// verb-cases-place.mjs for changes on a card where it lies and to a player. Exits non-zero if
+// check then asks of its runs is its cases: verb-cases.mjs for cards changing zone,
+// verb-cases-place.mjs for changes on a card where it lies and to a player, and
+// verb-cases-rest.mjs for what moves no card (streaks, announcements, waits). Exits non-zero if
 // a check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -29,6 +30,8 @@ import { CASES as ZONES, complete } from "./verb-cases.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
 import { CASES as PILES } from "./verb-cases-piles.mjs";
 import { CASES as SPANS } from "./verb-cases-spans.mjs";
+import { CASES as REST } from "./verb-cases-rest.mjs";
+import { install as installRest } from "./verb-rest.mjs";
 import { install as installSpans } from "./verb-spans.mjs";
 import { install as installMarks } from "./written-marks.mjs";
 
@@ -125,6 +128,11 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     let changes;
     const ticks = [];
     let spans;
+    let rest;
+    /** Whether a sample is to wait on the page for what it shows of the announcements under
+     * way (verb-rest.mjs `noticed`). Like `changes`, only where there is something to read:
+     * a wait lets the recording's next views in, so none is taken idly. */
+    const announcing = () => stage.shown.notices.length > 0;
     const reach = async (time) => {
         while (clock.now < time) {
             const next = Math.min(
@@ -133,10 +141,11 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
                 ...[...wanted].filter((at) => at > clock.now),
             );
             clock.advance(next - clock.now);
-            ticks.push(spans());
+            ticks.push({ ...spans(), ...rest() });
             if (wanted.delete(clock.now) && clock.now < time) {
                 const taken = sample();
                 if (taken.counting.length) taken.changes = await changes();
+                if (announcing()) taken.notices = await window.berylNoticed();
                 extra.push(taken);
             }
         }
@@ -242,6 +251,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     };
     const SIDES = ["you", "opponent"];
     spans = window.berylSpanSampler({ stage, clock, origin, layer, faults });
+    rest = window.berylRestSampler({ stage, clock, origin, layer, faults });
     let lifted = false;
     let done = false;
     sample = () => {
@@ -391,6 +401,9 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
                     at.middle.changes = await changes();
                 }
                 if (verb === "vanish") at.middle.edges = await pileEdges();
+                if (announcing()) {
+                    at.middle.notices = await window.berylNoticed();
+                }
             }
             await reach(to);
             at.to = sample();
@@ -430,6 +443,8 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
         }
         wrote.after = sample().poses;
     }
+    // What passes over the table plays on after its script: to the end of the last of it.
+    if (wanted.size) await reach(Math.max(...wanted) + 1);
     unfollow();
     const shown = stage.shown.view;
     const band = document
@@ -507,7 +522,7 @@ const CASES = Object.fromEntries(
     verbs.map((verb) => [
         verb,
         (runs) =>
-            [ZONES, PLACE, PILES, SPANS].forEach((cases) =>
+            [ZONES, PLACE, PILES, SPANS, REST].forEach((cases) =>
                 cases[verb]?.(runs),
             ),
     ]),
@@ -515,7 +530,7 @@ const CASES = Object.fromEntries(
 assert.deepEqual(
     [
         ...new Set(
-            [ZONES, PLACE, SPANS].flatMap((cases) => Object.keys(cases)),
+            [ZONES, PLACE, SPANS, REST].flatMap((cases) => Object.keys(cases)),
         ),
     ].sort(),
     [...verbs].sort(),
@@ -572,6 +587,7 @@ async function play(context, watch, query, fixture, tick, end, written) {
         );
         await page.evaluate(() => document.fonts.ready.then(() => {}));
         await installSpans(page);
+        await installRest(page);
         if (written) await installMarks(page);
         const run = await page.evaluate(walk, {
             tick,

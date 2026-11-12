@@ -78,14 +78,20 @@ const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
  * lies and to players (`combat`, `place`); and in three of them the arrows and lines the first
  * moment has none of (an arrow at a target, the lines of combat), which are only timed: a
  * line is no card for the tracker to follow. A scry's flips are a library card's, which the
- * stage turns at once (SNAP), not the face-down permanent's flip its values are for. */
+ * stage turns at once (SNAP), not the face-down permanent's flip its values are for. `burn`
+ * has what the others lack of the verbs that move no card: a turn's banner, a coin, and a
+ * streak of damage with the life it takes. */
 const MORE = {
-    zones: new Set(["fly", "vanish", "lift", "point"]),
-    scry: new Set(["fly", "vanish", "lift"]),
+    zones: new Set(["fly", "vanish", "lift", "point", "dwell"]),
+    scry: new Set(["fly", "vanish", "lift", "announce"]),
     look: new Set(["lift"]),
-    combat: new Set(["tap", "strike", "count", "point"]),
+    combat: new Set(["tap", "strike", "count", "point", "streak"]),
     place: new Set(["tap", "count", "flip", "point"]),
+    burn: new Set(["streak", "announce", "count", "set"]),
 };
+/** The verbs that move no card (a streak of light, a notice over the table, a wait, a change
+ * with no motion): each step is timed, and none is shot for the tracker. */
+const UNSEEN = new Set(["streak", "announce", "dwell", "set"]);
 /** How long the stage stands idle before the seat answers, in stage ms (verbs.mjs GAP). */
 const GAP = 250;
 /** The most answers the first moment takes (verbs.mjs ANSWERS). */
@@ -153,6 +159,7 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
             steps.push({ act, subject, case: found, turn, from: at, to: at });
         } else if (open.has(e.step)) {
             steps[open.get(e.step)].to = at;
+            open.delete(e.step);
         }
         lifted ||= e.step.act.verb === "emerge";
     });
@@ -276,8 +283,11 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
     }
     unfollow();
     const shown = stage.shown.view;
+    // An announcement still passing over the table as the walk ends was told no end: it is
+    // not timed.
+    const passing = new Set(open.values());
     return {
-        steps,
+        steps: steps.filter((_, n) => !passing.has(n)),
         ticks,
         done: whole ? !stage.shown.busy : after >= edge,
         shows: shown && [shown.turn.number, shown.turn.step, shown.status],
@@ -459,6 +469,14 @@ function choose(learned, size, moves, taken) {
                 {
                     ...listed,
                     unshot: "it is a line or a mark, no card for the tracker to follow",
+                },
+            ];
+        }
+        if (UNSEEN.has(verb)) {
+            return [
+                {
+                    ...listed,
+                    unshot: "it moves no card for the tracker to follow",
                 },
             ];
         }

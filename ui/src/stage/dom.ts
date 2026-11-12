@@ -10,13 +10,16 @@
 // open. An arrow or line is one path in a drawing of the layer's own, from the step that
 // begins it to the step that ends it: over everything at rest and under what flies, or for a
 // line of combat on the table, under the cards. The stage writes its shape in stage pixels
-// each tick. The elements keep the names the old board gave its
+// each tick. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
+// far through an announcement is (shown.ts) is a number on the layer's parent, which the
+// chrome's banners are drawn in. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import type { Shape } from "./lines.ts";
+import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
 import { transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
@@ -182,7 +185,7 @@ export class DomSurface implements Surface {
       : this.#nodes.get(on);
   }
 
-  line(key: string, arrow?: Arrow, shape?: Shape | null) {
+  line(key: string, arrow?: Arrow, shape?: Pick<Shape, "d"> | null) {
     let path = this.#lines.get(key);
     if (arrow === undefined) {
       path?.remove();
@@ -209,6 +212,28 @@ export class DomSurface implements Surface {
     }
     const d = shape?.d ?? "";
     if (path.getAttribute("d") !== d) path.setAttribute("d", d);
+  }
+
+  streak(key: string, look?: string, shape?: StreakShape | null) {
+    if (look === undefined) return this.line(key);
+    const made = !this.#lines.has(key);
+    // Over everything at rest, as an arrow is.
+    this.line(key, "source", shape);
+    const path = this.#lines.get(key)!;
+    if (made) {
+      path.setAttribute("class", `stage-streak stage-streak-${look}`);
+      delete path.dataset.line;
+      path.dataset.streak = key;
+    }
+    // Its halo is as wide as its head, whatever the layout's size (stage.css).
+    if (shape) path.style.setProperty("--wide", `${shape.wide}px`);
+  }
+
+  notice(kind: string, progress?: number) {
+    // The chrome draws its announcements beside the card layer: both read the number here.
+    const style = this.#layer.parentElement?.style;
+    if (progress === undefined) style?.removeProperty(`--notice-${kind}`);
+    else style?.setProperty(`--notice-${kind}`, String(progress));
   }
 
   mark(on: On, mark: Mark, shown?: number) {

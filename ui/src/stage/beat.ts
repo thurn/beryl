@@ -35,6 +35,8 @@ export interface Run extends Playing {
   ease(progress: number): number;
   each?: number;
   begun: boolean;
+  /** It passes over the table (`Timing.passes`): it may outlast its beat and its script. */
+  passes?: boolean;
   /** The table as the step found it, once it has begun. */
   found?: Table;
   ended: boolean;
@@ -69,7 +71,9 @@ export function under<T>(
  * stagger after. One played `with` the step before it takes that step's turn, and one that is
  * drawn between things at rest (`Timing.after`) waits for the steps of the beat that move
  * them. One that ends a span waits until the span has stood whole for its hold
- * (`Timing.hold`), `whole` saying since when the span a step ends has. */
+ * (`Timing.hold`), `whole` saying since when the span a step ends has. The beat is over
+ * with the last step that does not pass over the table (`Timing.passes`): one that does
+ * holds the beat only until it has begun, and plays on over what follows. */
 export function laid(
   beat: readonly ScriptStep[],
   played: number,
@@ -95,7 +99,7 @@ export function laid(
     if (!timing.with) turn = own + timing.stagger;
     last = own;
     const to = from + timing.duration;
-    end = Math.max(end, to);
+    end = Math.max(end, timing.passes ? from : to);
     const mover = moverOf(step.act);
     if (mover !== undefined) {
       landed.set(mover, Math.max(landed.get(mover) ?? at, to));
@@ -109,6 +113,7 @@ export function laid(
       step,
       ease: timing.ease,
       each: timing.each,
+      passes: timing.passes,
       begun: false,
       ended: false,
     };

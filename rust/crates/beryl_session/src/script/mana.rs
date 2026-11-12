@@ -54,9 +54,11 @@ impl Builder<'_> {
         amount: u8,
         cause: Option<Subject>,
     ) {
-        // A source sacrificed for its mana may have no place left on the table.
+        // A source sacrificed for its mana has no place left on the table: its streak leaves
+        // where it lay while it is going from there in the open beat, and comes from nowhere
+        // otherwise.
         let from = source
-            .filter(|slot| self.table.objects.contains_key(slot))
+            .filter(|slot| self.table.objects.contains_key(slot) || self.leaving(*slot))
             .map(|slot| Subject::Object { slot });
         let events = self.events;
         let to = match told.pays {
@@ -85,6 +87,16 @@ impl Builder<'_> {
             Some(to) => self.streak(from, to, color, amount, cause),
             None => self.pool(player, color, amount, cause),
         }
+    }
+
+    /// Whether the open beat takes the object in `slot` from sight where it lay.
+    fn leaving(&self, slot: u16) -> bool {
+        let gone = Subject::Object { slot };
+        self.open
+            && self.beats.last().is_some_and(|beat| {
+                beat.iter()
+                    .any(|step| matches!(step.act, Act::Vanish { subject, .. } if subject == gone))
+            })
     }
 
     fn on_stack(&self, subject: Subject) -> Option<Subject> {

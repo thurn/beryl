@@ -333,6 +333,55 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
     assert_eq!(second.script.unwrap().to_string(), paid("opponent", true));
 }
 
+/// `streak` of mana from a source sacrificed for it: the Treasure's mana leaves where the
+/// Treasure lay, in the beat that takes it from sight, after the mana of the land tapped
+/// with it.
+#[test]
+fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
+    let name = "Beza's Treasure pays for Counterspell";
+    let [first, second] = scripts(names::BEZA_THE_BOUNDING_SPRING, name).swap_remove(8);
+    let paid = |who: &str| {
+        text(&[
+            format!("fly #1 (Counterspell) hand>stack cast at #258 <- {who}"),
+            "& +point hostile-target #1 > #258".to_owned(),
+            format!("tap #0 (Island) <- {who}"),
+            format!("& tap #512 (Treasure Token) <- {who}"),
+            format!("& streak #0 > #1 blue 1 <- {who}"),
+            format!("vanish #512 battlefield>gone sacrifice <- {who}"),
+            format!("& streak #512 > #1 blue 1 <- {who}"),
+        ])
+    };
+    assert_eq!(first, paid("you"));
+    assert_eq!(second, paid("opponent"));
+}
+
+/// `dwell` at the game's end: the view that ends the game leaves its table to be seen, in a
+/// last beat of its own, before the result covers it. No scenario plays a game out, so the
+/// view after combat damage is told that the damage won the first player the game.
+#[test]
+fn the_games_last_play_is_left_to_be_seen() {
+    use beryl_session::protocol::{LossReason, OutcomeView, Side};
+    let name = "Mana Crypt's flip lost: 3 damage to its controller";
+    let over = |n: usize, seat: u8, view: &mut beryl_session::protocol::PlayerView| {
+        if n == 2 {
+            view.status = beryl_session::protocol::Status::Over {
+                outcome: OutcomeView::Win {
+                    winner: if seat == 0 { Side::Opponent } else { Side::You },
+                    reason: LossReason::Life,
+                    by: None,
+                },
+            };
+        }
+    };
+    let [first, second] = views(names::MANA_CRYPT, name, over).swap_remove(2);
+    let last = |view: beryl_session::protocol::PlayerView| {
+        let script = view.script.expect("a view's script").to_string();
+        script.lines().last().map(str::to_owned)
+    };
+    assert_eq!(last(first).as_deref(), Some("dwell you"));
+    assert_eq!(last(second).as_deref(), Some("dwell opponent"));
+}
+
 /// The table the first player's screen shows before a counterspell is cast at a spell on the
 /// stack, and their script of the cast and its resolution: an arrow that begins as the
 /// counterspell goes on the stack, the mana, the arrow's end in a beat of its own, and both

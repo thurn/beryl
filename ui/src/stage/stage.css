@@ -259,6 +259,110 @@
   stroke-width: 1.7;
   stroke-opacity: 0.8;
 }
+/* A streak (stage/streaks.ts): one closed path in the drawing over everything at rest, a
+   comet whose shape the stage writes each tick. Its fill is a pale core and its edge a wide
+   soft band of what it is made of, a color of mana or the heat of damage, drawn under the
+   core so that the head reads as light with a halo and the tail thins to a thread; the band
+   is as wide as the head the stage gave it (`--wide`), on a phone as on the desktop. No filter:
+   the look is the path's own paint, the same in every browser the stage runs in. */
+.stage-streak {
+  --core: 255 255 255;
+  --glow: 185 180 201;
+  fill: rgb(var(--core));
+  stroke: rgb(var(--glow) / 55%);
+  stroke-width: calc(var(--wide, 5px) * 1.3);
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.stage-streak-white {
+  --core: 255 251 230;
+  --glow: 245 215 110;
+}
+.stage-streak-blue {
+  --core: 227 246 255;
+  --glow: 63 169 245;
+}
+.stage-streak-black {
+  --core: 240 226 255;
+  --glow: 154 92 214;
+}
+.stage-streak-red {
+  --core: 255 233 220;
+  --glow: 242 85 44;
+}
+.stage-streak-green {
+  --core: 232 255 230;
+  --glow: 63 191 79;
+}
+.stage-streak-damage {
+  --core: 255 243 214;
+  --glow: 255 122 46;
+  stroke-width: calc(var(--wide, 5px) * 1.8);
+}
+/* What mana lands on flares: pale light over its face, whole as the streak lands, that
+   spreads past the frame and is gone. */
+.stage-effect-flash {
+  background: radial-gradient(
+    circle at 50% 42%,
+    rgb(var(--light) / 85%),
+    rgb(var(--light) / 0%) 78%
+  );
+  box-shadow: 0 0 calc(var(--frame) * 0.14) calc(var(--frame) * 0.04)
+    rgb(var(--light) / 80%);
+  opacity: calc(1 - var(--flash));
+  transform: scale(calc(1 + 0.08 * var(--flash)));
+}
+/* An announcement (stage/shown.ts `NoticeSurface`): the chrome draws it for as long as its
+   step plays, and the stage writes on the table how far through it is, a number from 0 to 1
+   named for its kind. Each look is drawn from that number alone, as an effect's is, and the
+   skin's own keyframes and exits are off. The turn's banner comes up growing a little,
+   stands, and sinks toward the player whose turn it is as it goes (Arena's own sinks and the
+   opponent's rises, `IEXcjBn3BXk 19:35.2`, `18:35.0`); its rosettes turn against each other
+   throughout. */
+.stage-notice,
+.stage-notice :is(.turn-banner-ring-outer, .turn-banner-ring-inner) {
+  animation: none;
+}
+.turn-banner.stage-notice {
+  --through: var(--notice-turn, 0);
+  --toward: 1;
+  opacity: min(1, var(--through) / 0.28, (1 - var(--through)) / 0.14);
+  scale: calc(0.93 + 0.07 * min(1, var(--through) / 0.28));
+  translate: 0 calc(var(--toward) * max(0, (var(--through) - 0.8) / 0.2) * 30px);
+}
+.turn-banner-opponent.stage-notice {
+  --toward: -1;
+}
+.stage-notice .turn-banner-ring-outer {
+  rotate: calc(var(--through) * 80deg);
+}
+.stage-notice .turn-banner-ring-inner {
+  rotate: calc(var(--through) * -80deg);
+}
+/* The pill that says what a scry did rises into place, stands to be read and fades. */
+.stage-notice-scry {
+  --through: var(--notice-scry, 0);
+  opacity: min(1, var(--through) / 0.05, (1 - var(--through)) / 0.1);
+  translate: 0 calc((1 - min(1, var(--through) / 0.05)) * 8px);
+}
+/* A coin a card flips: the banner comes up with the coin turning in the air over it, rising
+   and falling back, and says who won only once it has landed, half way through. */
+.step-banner.stage-notice {
+  --through: var(--notice-coin, 0);
+  --aloft: min(1, var(--through) / 0.5);
+  opacity: min(
+    1,
+    var(--through) / 0.08,
+    (1 - var(--through)) / 0.12
+  ) !important;
+}
+.stage-notice .step-banner-coin {
+  translate: 0 calc(sin(var(--aloft) * 180deg) * -18px);
+  transform: scaleX(cos(var(--aloft) * 900deg));
+}
+.stage-notice .step-banner-detail {
+  opacity: clamp(0, (var(--through) - 0.5) / 0.1, 1);
+}
 /* The marks (UI Conventions, Marks; stage/spans.ts): each of the six has its one look, here and
    nowhere else, drawn by an element of the stage's inside what is marked, as large as its card,
    over its face and under an effect. The stage writes how far the mark has come to its look,

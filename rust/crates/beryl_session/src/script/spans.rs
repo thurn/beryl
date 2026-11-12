@@ -10,9 +10,10 @@
 
 use super::build::Builder;
 use super::table::{Entry, Table};
-use super::{Arrow, Open, Span, Step, Subject};
+use super::{Act, Arrow, Open, Span, Step, Subject};
 use crate::protocol::{
-    CardHandling, CardType, Combat, ObjectView, Side, StackItem, TargetRef, ZoneName,
+    CardHandling, CardType, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status,
+    TargetRef, ZoneName,
 };
 
 /// The arrows and lines `table` calls for, in the order they begin: each spell's and
@@ -257,11 +258,13 @@ impl Builder<'_> {
     }
 
     /// Closes the script's spans, in a last beat: the arrows and lines its table calls for,
-    /// and the lift of the cards the opponent is now handling.
-    pub(super) fn close(&mut self, handling: Option<CardHandling>) {
+    /// and the lift of the cards the opponent is now handling. A view that ends the game
+    /// then leaves the table to be seen, in a beat of its own, before the result covers it:
+    /// a `dwell` on the player who lost, or on the viewer where no one did.
+    pub(super) fn close(&mut self, view: &PlayerView) {
         self.open = false;
         self.sync();
-        if let Some(handling) = handling {
+        if let Some(handling) = view.handling {
             let span = Open::Lift { handling };
             if !self.spans.contains(&span) {
                 self.span(Span::Begin, span);
@@ -269,6 +272,22 @@ impl Builder<'_> {
         }
         let stack: Vec<Subject> = self.table.stack.iter().map(Entry::subject).collect();
         self.broken.retain(|(from, _)| stack.contains(from));
+        if let Status::Over { outcome } = &view.status {
+            let player = match outcome {
+                OutcomeView::Win {
+                    winner: Side::You, ..
+                } => Side::Opponent,
+                _ => Side::You,
+            };
+            self.open = false;
+            self.emit(
+                Act::Dwell {
+                    subject: Subject::Player { player },
+                },
+                None,
+            );
+            self.open = false;
+        }
     }
 
     /// The script's beats: each beat of steps after the beat of the spans that end before it.

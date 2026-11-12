@@ -18,7 +18,7 @@ export interface Shown {
   busy: boolean;
   /** The announcements passing over the table: the `announce` steps under way, in the order
    * they began. The banners around the table show for as long as their step is here, on the
-   * stage's time. */
+   * stage's time, and the stage writes how far through each is (`NoticeSurface`). */
   notices: readonly ScriptStep[];
   /** The numbers changing now: the `count` steps under way, in the order they began, each
    * with the table it found. What shows that a number changed (the change beside a life
@@ -30,4 +30,12 @@ export interface Shown {
 export interface Counting {
   step: ScriptStep;
   found?: Table;
+}
+
+/** Where what passes over the table is drawn: the chrome around the table draws each
+ * announcement while its step plays (`Shown.notices`), and the stage writes there how far
+ * through the announcement of each kind is, which its look is drawn from; with no progress
+ * it is over. */
+export interface NoticeSurface {
+  notice(kind: string, progress?: number): void;
 }

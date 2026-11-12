@@ -24,8 +24,8 @@ card, each with what it shows, the `layer` it is drawn in (under its card or ove
 own values, a duration of null lasting as long as the step that begins it. A verb's `effects`
 are those its steps begin, each `when` its step starts or ends, or as a strike's `blow` lands:
 every step's, or only those of a `case`, or `into` a zone. One is `on` what the step is about,
-unless it says it is on what the step struck. A case with effects of its own begins none of
-its verb's.
+unless it says it is on what the step `struck` (what a strike or a streak lands on) or on its
+`source` (what a streak leaves). A case with effects of its own begins none of its verb's.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ EFFECT_VALUES = ("duration", "delay", "curve")
 # is about.
 LAYERS = ("under", "over")
 WHENS = ("start", "end", "blow")
-ONS = ("struck",)
+ONS = ("struck", "source")
 
 MOTION: Path = paths.REPO / "data" / "arena-motion.json"
 # How an instance was taken: by `by video measure`, or counted on a filmstrip.
@@ -358,6 +358,12 @@ WHEN_WORDS = {
 }
 
 
+ON_WORDS = {
+    "struck": "(on what it strikes)",
+    "source": "(on what it leaves)",
+}
+
+
 def uses(verb: dict[str, Any]) -> str:
     """The effects a verb's steps begin, in words, to follow its values; empty with none."""
     said = [
@@ -367,7 +373,7 @@ def uses(verb: dict[str, Any]) -> str:
                 WHEN_WORDS[use["when"]],
                 *([f"({use['case']})"] if "case" in use else []),
                 *([f"(into the {use['into']})"] if "into" in use else []),
-                *(["(on what it strikes)"] if use.get("on") == "struck" else []),
+                *([ON_WORDS[use["on"]]] if "on" in use else []),
             ]
         )
         for use in verb.get("effects", [])

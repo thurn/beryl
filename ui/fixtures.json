@@ -152,6 +152,17 @@
       "until": "first priority decision for seat 1 from turn 6"
     },
     {
+      "name": "verbs-burn",
+      "board": "verbs-burn",
+      "until": "first priority decision for seat 0 from turn 3",
+      "where": ["step precombatMain"]
+    },
+    {
+      "name": "verbs-burn-theirs",
+      "board": "verbs-burn",
+      "until": "first priority decision for seat 1 from turn 4"
+    },
+    {
       "name": "verbs-place",
       "board": "verbs-place",
       "until": "first priority decision for seat 0 from turn 5"

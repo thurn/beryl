@@ -43,6 +43,18 @@ export const reachOfLife = ({
   ahead: 0,
 });
 
+/** A player's unspent mana as the place a streak of it leaves, its symbols lying from
+ * `corner` (layout.ts `Anchors.pool`): a point a little way in from there. */
+export const reachOfPool = (corner: Point): Reach => ({
+  middle: { x: corner.x + POOL.x, y: corner.y + POOL.y },
+  half: { x: 0, y: 0 },
+  round: true,
+  toward: 0,
+  ahead: 0,
+});
+/** How far in from its corner a pool's first symbol has its middle, in stage pixels. */
+const POOL = { x: 24, y: 17 };
+
 /** A card or an ability on the stack as an end of a line, as `layout` has what rests as
  * `resting` lying at `pose`: yours faces up the stage and the opponent's down it. */
 export const reachOfCard = (

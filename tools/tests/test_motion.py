@@ -382,6 +382,31 @@ def test_a_change_in_place_is_held_to_its_case() -> None:
     assert counted({"kind": "life", "player": "you", "life": 17}) is None
 
 
+def test_a_step_that_moves_no_card_is_held_to_its_case() -> None:
+    def case(act: dict[str, object]) -> str | None:
+        return motion.case_of(act, "yours")
+
+    assert case({"verb": "streak", "stream": {"kind": "mana"}}) == "mana"
+    assert case({"verb": "streak", "stream": {"kind": "damage"}}) == "damage"
+    assert case({"verb": "announce", "notice": {"kind": "turn"}}) == "turn banner"
+    assert case({"verb": "announce", "notice": {"kind": "scry"}}) == "scry pill"
+    assert case({"verb": "announce", "notice": {"kind": "coin"}}) == "coin"
+    assert case({"verb": "dwell", "subject": {"kind": "player"}}) == "game's end"
+    assert case({"verb": "dwell", "subject": {"kind": "object"}}) is None
+    assert case({"verb": "set", "fact": {"kind": "turn"}}) == "step begins"
+    assert case({"verb": "set", "fact": {"kind": "library"}}) == "library shuffled"
+    assert case({"verb": "set", "fact": {"kind": "object"}}) is None
+    # Each is a case its verb's values have.
+    verbs = {v["name"]: v for v in conventions.load()["verbs"]}
+    for verb, named in (
+        ("streak", ("mana", "damage")),
+        ("announce", ("turn banner", "scry pill", "coin")),
+        ("dwell", ("game's end",)),
+        ("set", ("step begins", "library shuffled")),
+    ):
+        assert set(named) <= set(verbs[verb]["cases"])
+
+
 def test_an_exempt_verb_is_listed() -> None:
     data = {"verbs": [{"name": "tap", "exempt": 2}, {"name": "fly"}]}
     assert motion.exempted(data) == {"tap": 2}

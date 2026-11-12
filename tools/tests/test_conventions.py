@@ -138,12 +138,15 @@ def test_the_page_lists_effects_and_the_verbs_that_begin_them() -> None:
     lands = {"effect": "settle", "when": "end", "into": "battlefield"}
     played = {"effect": "settle", "when": "start", "case": "land played"}
     blow = {"effect": "settle", "when": "blow", "on": "struck"}
-    assert not conventions.problems(affected([lands, played, blow]))
-    page = " ".join(conventions.render(affected([lands, played, blow])).split())
+    sent = {"effect": "settle", "when": "start", "on": "source"}
+    uses = [lands, played, blow, sent]
+    assert not conventions.problems(affected(uses))
+    page = " ".join(conventions.render(affected(uses)).split())
     assert (
         "- **fly.** A card travels. A land glides (UrGalw_f35w 16:14.8). Effects: "
         "settle as it ends (into the battlefield), settle as it begins (land played), "
-        "settle as its blow lands (on what it strikes). "
+        "settle as its blow lands (on what it strikes), "
+        "settle as it begins (on what it leaves). "
     ) in page
     assert (
         "## Effects "

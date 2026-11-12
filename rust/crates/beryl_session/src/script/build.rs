@@ -61,7 +61,7 @@ impl Screen {
                 builder.lower(view.handling);
                 builder.walk(&told, infer::making(view));
                 builder.settle();
-                builder.close(view.handling);
+                builder.close(view);
                 let beats = builder.beats();
                 let Builder {
                     table,

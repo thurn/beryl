@@ -55,14 +55,28 @@ export function TurnBanner({
 }
 
 /** The announcement itself, of `side`'s turn, fading in and out within `ms`: whoever shows it
- * says for how long (the old board a timer, the stage the step that announces the turn). */
-export function TurnAnnouncement({ side, ms }: { side: Side; ms: number }) {
+ * says for how long (the old board a timer). With `staged` it is the stage's: shown for as
+ * long as the step that announces the turn plays, and drawn from how far through that step is
+ * (stage/stage.css `.stage-notice`), with no keyframes of its own. */
+export function TurnAnnouncement({
+  side,
+  ms,
+  staged,
+}: {
+  side: Side;
+  ms?: number;
+  staged?: boolean;
+}) {
   return (
     <div
-      className={`turn-banner turn-banner-${side}`}
+      className={`turn-banner turn-banner-${side}${staged ? " stage-notice" : ""}`}
       role="status"
       data-turn={side}
-      style={{ "--turn-ms": `${ms}ms` } as CSSProperties}
+      style={
+        ms === undefined
+          ? undefined
+          : ({ "--turn-ms": `${ms}ms` } as CSSProperties)
+      }
     >
       <div className="turn-banner-band" />
       <svg

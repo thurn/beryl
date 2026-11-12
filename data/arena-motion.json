@@ -2629,19 +2629,63 @@
           "path": "static",
           "curve": "none",
           "note": "Tersa Lightshatter (creature, a 1.5 s stack entry in the index), no response. At rest 26.20, one flash/sparks beat 26.80-27.00, otherwise dead still to 28.00, first resolution frame 28.10. Much longer than the other two: the holds vary 0.7-1.9 s, not a fixed 1 s. Not clear what made this one longer (a pause for the streamer's possible response is likely, but not visible). 10 fps so +-100 ms. A fourth look at IEXcjBn3BXk 22:48.2 (Overwhelming Surge, a modal spell) sat over 2.4 s with mode effects; not counted."
+        },
+        {
+          "case": "game's end",
+          "recording": "IEXcjBn3BXk",
+          "time": "38:36.5",
+          "span": 7.0,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "tracker not applicable: nothing travels; the timed thing is how long the table stays in view after the play that ends the game",
+          "command": "just video film IEXcjBn3BXk 38:36.5 --span 7 --fps 2 --cols 7 --width 300",
+          "since": "the last blow lands on the opponent's avatar (38:37.0)",
+          "duration_ms": 3000,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "static",
+          "curve": "none",
+          "note": "Stomp for the last 2 life. The avatar bursts red from 37.0 to about 38.5, the table then stands as it was (the resolved card previewed at 39.0) through 40.0, and VICTORY covers it at 40.5. About 1.5 s of burst and 1.5 s of still table. 2 fps, so +-500 ms."
         }
       ],
       "summary": {
         "duration_ms": {
-          "median": 800,
+          "median": 1350,
           "min": 700,
-          "max": 1900
+          "max": 3000
         },
         "delay_ms": null,
         "stagger_ms": null,
         "peak": null,
         "start": null,
-        "curve": "none"
+        "curve": "none",
+        "cases": {
+          "opponent spell resolves unanswered": {
+            "duration_ms": {
+              "median": 800,
+              "min": 700,
+              "max": 1900
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "start": null,
+            "curve": "none"
+          },
+          "game's end": {
+            "duration_ms": {
+              "median": 3000,
+              "min": 3000,
+              "max": 3000
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "start": null,
+            "curve": "none"
+          }
+        }
       }
     },
     {

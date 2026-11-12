@@ -46,6 +46,12 @@ verb as its values say.
   one place to another: its steps are timed, as every verb's are against its own values, and
   never screenshotted, until the motion review wants a measure of a card turning where it
   lies. The two blows of one fight begin at one time (`meets`), not a stagger apart.
+- The verbs that move no card are only timed: a streak is a comet of light drawn between two
+  things (src/stage/streaks.ts), an announcement a banner the chrome draws from a number the
+  stage writes (src/stage/overlay.ts), a dwell a wait, and a set a change with no motion. An
+  announcement still passing over the table when a moment's recording ends is told no end and
+  is not timed. The first moment plays mana's streaks and, from the seat across, the dwell on
+  the opponent's spell; `--more` has the rest (a turn's banner, a scry's pill, a coin, damage).
 - `--more` runs nightly only: its moments add about two minutes to the lane, past the fast
   check's 60 s (by-w8gv.21.38: the capture took 107 to 127 s with the moments of cards
   changing zone and about 20 s without, at loads of 25 to 50 on 18 cores, `zones` nearly all
@@ -96,7 +102,7 @@ CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
 # nightly run: logged as skipped without it.
 MORE_ONLY: dict[str, str] = {
     verb: "only the moments of `--more` play it, captured nightly (`by motion --more`)"
-    for verb in ("lift", "strike", "count", "flip")
+    for verb in ("lift", "strike", "count", "flip", "announce", "set")
 }
 # The verbs whose steps begin and end a span (an arrow, a line, a mark). The stage plays one
 # with the step that calls for it and staggers none (ui/src/stage/timing.ts), and an end's
@@ -384,6 +390,16 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
         tally = act.get("tally") or {}
         if tally.get("kind") == "counters":
             return "loyalty" if tally.get("counter") == "loyalty" else "counter"
+    if verb == "streak":
+        return (act.get("stream") or {}).get("kind")
+    if verb == "announce":
+        kind = (act.get("notice") or {}).get("kind")
+        return {"turn": "turn banner", "scry": "scry pill", "coin": "coin"}.get(kind)
+    if verb == "dwell" and (act.get("subject") or {}).get("kind") == "player":
+        return "game's end"
+    if verb == "set":
+        fact = (act.get("fact") or {}).get("kind")
+        return {"turn": "step begins", "library": "library shuffled"}.get(fact)
     return None
 
 

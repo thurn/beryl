@@ -29,6 +29,9 @@ export interface Timing {
   /** For a step that ends a span: it begins no sooner than this long after the span has
    * come in whole (beat.ts). An arrow whose spell resolves at once is still read. */
   hold?: number;
+  /** It passes over the table: its beat does not wait for it, and it plays on to its own
+   * end over the beats, and the scripts, that follow. The turn's banner. */
+  passes?: boolean;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -405,6 +408,18 @@ export interface Track {
    * drop did has played: a step that moves it starts from there, and otherwise it glides home
    * when the script is over. */
   stays?: boolean;
+}
+
+/** The way home from `from`, begun at stage time `at`, of a card let go, played as `release`
+ * says: none if that takes no time. */
+export function home(
+  release: Timing,
+  from: Pose,
+  at: number,
+): Track | undefined {
+  const { duration, ease } = release;
+  if (duration <= 0) return undefined;
+  return { from: at, to: at + duration, pose: glide(from, ease, true) };
 }
 
 /** How far along `track` stage time `at` is. */

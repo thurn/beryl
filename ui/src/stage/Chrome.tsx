@@ -127,7 +127,7 @@ export function Hud({
       })}
       {scry && (
         <div
-          className="hud library-choice-hud"
+          className="hud library-choice-hud stage-notice-scry"
           role="status"
           style={{ top: SCRY_TOP[scry.notice.player] }}
         >
@@ -154,6 +154,7 @@ export function Hud({
           key={`${banner.title}|${banner.detail}`}
           shown={bannerUp}
           coin={coin !== undefined}
+          staged={coin !== undefined}
           {...banner}
         />
       )}
@@ -162,7 +163,7 @@ export function Hud({
         <TurnAnnouncement
           key={table.turn.number}
           side={turn.notice.active}
-          ms={stage.timings(turn.step.act).duration}
+          staged
         />
       )}
     </>

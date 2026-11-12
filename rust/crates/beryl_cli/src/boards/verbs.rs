@@ -22,6 +22,9 @@ const DRAWS: &[&str] = &[
     ISLAND, PLAINS, ISLAND, PLAINS,
 ];
 
+/// A seed of verbs-burn's game whose one coin flip is lost.
+const BURN_SEED: u64 = 2;
+
 /// What the first seat scries with: Aang's Iceberg and the lands to activate it.
 const ICEBERG: &[Permanent] = &[Permanent::new(AANGS_ICEBERG), PLAINS_, PLAINS_, ISLAND_];
 
@@ -215,6 +218,21 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::cast(P1, OUST),
             choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
         ]),
+    // A coin lost and what it costs: the opponent's turn ends, the first seat's begins under
+    // its banner, and Mana Crypt's upkeep trigger flips a coin. The seed is one that loses
+    // it, so the ability deals its controller three damage: a streak that is no creature's.
+    // Neither seat does anything but pass. Each holds a card it could cast, so that each
+    // is asked at least once before its recording ends: the first seat an instant, and the
+    // opponent a sorcery, which asks them nothing while the trigger is on the stack.
+    Scenario::new("verbs-burn")
+        .seed(BURN_SEED)
+        .at(2, P1, TurnStep::PostcombatMain)
+        .battlefield(P0, &[Permanent::new(MANA_CRYPT), ISLAND_, ISLAND_, ISLAND_])
+        .hand(P0, &[THIRST_FOR_DISCOVERY])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, ISLAND_, ISLAND_])
+        .hand(P1, &[STOCK_UP])
+        .library(P1, LANDS),
     // Changes on a card where it lies: a seventh land piles the first seat's lands; its
     // face-down Snapcaster Mage turns face up, and The Wandering Emperor puts a counter on it;
     // Thieving Skydiver, kicked, takes the opponent's Currency Converter across the table;

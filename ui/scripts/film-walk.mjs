@@ -77,9 +77,20 @@ export async function walk({
             : subject.kind === "ability"
               ? `a${subject.id}`
               : subject.player;
-    /** The two things an arrow or line is between, which a film of it is framed on. */
-    const endsOf = (act) =>
-        act.verb === "point" ? { ends: [named(act.from), named(act.to)] } : {};
+    /** The two things an arrow, a line or a streak is between, which a film of it is framed
+     * on; and for what is about no thing on the table (an announcement over it, a step of the
+     * turn beginning), that its film is of the whole table. */
+    const endsOf = (act) => {
+        if (act.verb === "point") {
+            return { ends: [named(act.from), named(act.to)] };
+        }
+        if (act.verb === "streak") {
+            return { ends: [act.from, act.to].filter(Boolean).map(named) };
+        }
+        return act.verb === "announce" || act.verb === "set"
+            ? { table: true }
+            : {};
+    };
     const stage = window.berylStage;
     const { clock } = stage;
     const live = window.berylTimers;

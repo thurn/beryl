@@ -39,7 +39,8 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * and a drawn card is held up 300 above its place in the hand at twice its width. A card is
  * 1.4 times as tall as it is wide, and a tapped permanent lies on its side; the players' life
  * totals are at x 1000, yours at y 900 and the opponent's at y -400, each orb's corner 80
- * up and to the left of it. A card a prompt holds up lies face up in the row of its pile at
+ * up and to the left of it, and their unspent mana lies from x 1200, yours at y 800 and the
+ * opponent's at y -300. A card a prompt holds up lies face up in the row of its pile at
  * y -1000, the piles 1000 apart and a pile's cards 200, each 150 wide, over everything else. */
 export const row = {
     rest({ view: table, abilities, tray }) {
@@ -109,6 +110,7 @@ export const row = {
             corner: { x: 920, y: side === "you" ? 820 : -480 },
             middle: { x: 1000, y: side === "you" ? 900 : -400 },
         }),
+        pool: (side) => ({ x: 1200, y: side === "you" ? 800 : -300 }),
     }),
     half({ object, dress }, pose) {
         const lies = dress.zone === "battlefield" && object?.tapped;
@@ -135,7 +137,9 @@ export const row = {
  * how it dressed each, as its zone or as a card back (`dressed`), each node's pose, how far
  * through each effect drawn on a node is, by `<node> <effect> <layer>` (`effects`), the path
  * of each line drawn, by its key (`lines`), how far each mark has come in, by `<node>
- * <mark>` (`marks`), and each line and mark made and taken away, in order (`spans`). */
+ * <mark>` (`marks`), and each line and mark made and taken away, in order (`spans`); the
+ * path of each streak drawn, by its key (`streaks`), with each made and taken away, in order
+ * (`streaked`); and how far through the announcement of each kind is (`notices`). */
 export function recorder() {
     const log = [];
     const dressed = [];
@@ -144,6 +148,9 @@ export function recorder() {
     const lines = new Map();
     const marks = new Map();
     const spans = [];
+    const streaks = new Map();
+    const streaked = [];
+    const notices = new Map();
     /** Sets or deletes `key` of `drawn`, and logs it as made or taken away. */
     const span = (drawn, key, value) => {
         if (value === undefined) {
@@ -161,6 +168,21 @@ export function recorder() {
         lines,
         marks,
         spans,
+        streaks,
+        streaked,
+        notices,
+        streak(key, look, shape) {
+            if (look === undefined) {
+                if (streaks.delete(key)) streaked.push(`- ${key}`);
+                return;
+            }
+            if (!streaks.has(key)) streaked.push(`+ ${key}`);
+            streaks.set(key, shape?.d ?? null);
+        },
+        notice(kind, progress) {
+            if (progress === undefined) notices.delete(kind);
+            else notices.set(kind, progress);
+        },
         line: (key, arrow, shape) =>
             span(lines, key, arrow && (shape?.d ?? null)),
         mark: (on, mark, shown) => span(marks, `${on} ${mark}`, shown),

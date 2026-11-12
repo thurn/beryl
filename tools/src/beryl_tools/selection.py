@@ -80,7 +80,9 @@ VERB_CASES = (
     "ui/scripts/verb-cases-place.mjs",
     "ui/scripts/verb-cases-piles.mjs",
     "ui/scripts/verb-cases-spans.mjs",
+    "ui/scripts/verb-cases-rest.mjs",
     "ui/scripts/verb-spans.mjs",
+    "ui/scripts/verb-rest.mjs",
     "ui/scripts/written-marks.mjs",
 )
 VERBS = "ui/verbs.json"

@@ -33,10 +33,8 @@
 // Promises are for those who watch (`idle`), never for sequencing.
 //
 // What follows a step besides motion (a sound) is told its beginning and its end the same way
-// (`follow`): inside the tick, in the order of their stage times, each with its own time. A
-// step also begins its verb's effects on what it is about, played on this clock (effects.ts),
-// and a `point` or `mark` step begins or ends an arrow, a line or a mark, which the stage
-// holds between the two and draws each tick from where its ends are (spans.ts, lines.ts).
+// (`follow`): inside the tick, in the order of their stage times, each with its own time. What
+// a step draws besides nodes (an effect, an arrow, a streak, an announcement) is overlay.ts's.
 //
 // One pose is not the clock's: a card the pointer holds (pointer.ts). What the pointer does
 // enters the model as data, and the held card's pose is computed from it here like any other,
@@ -46,24 +44,23 @@ import type { PlayerView } from "../generated/protocol";
 import { laid, under, type Edge, type Playing, type Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { awaited, entering } from "./enter.ts";
-import {
-  Effects,
-  type Effect,
-  type EffectSurface,
-  type On,
-} from "./effects.ts";
+import type { Effect, On } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
 import type { Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
-import { reachOfCard, reachOfLife, shapeOf, type Reach } from "./lines.ts";
-import { Spans, type Line, type Marked, type SpanSurface } from "./spans.ts";
+import { reachOfCard, reachOfLife, reachOfPool } from "./lines.ts";
+import type { Reach } from "./lines.ts";
+import { Overlay, type OverlaySurface } from "./overlay.ts";
+import type { Line, Marked } from "./spans.ts";
+import type { Streak } from "./streaks.ts";
 import { apply, tabled, tableOf } from "./table.ts";
 import type { Act, Script, Step as ScriptStep, Table } from "./table.ts";
 import {
   dissolve,
   glide,
+  home,
   later,
   litBy,
   makingRoom,
@@ -89,7 +86,7 @@ export { SNAP, type Timing } from "./tracks.ts";
 
 /** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
-export interface Surface extends EffectSurface, SpanSurface {
+export interface Surface extends OverlaySurface {
   make(name: Name): void;
   remove(name: Name): void;
   /** Dresses the node for where its object or ability now rests. */
@@ -128,8 +125,8 @@ export class ScriptStage {
   timings: (act: Act, found?: PlayerView, before?: Act) => Timing;
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
-  readonly #effects = new Effects();
-  readonly #spans = new Spans();
+  /** What is drawn besides the nodes: effects, spans, streaks and announcements. */
+  readonly #over = new Overlay((on, at, pool) => this.#reach(on, at, pool));
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
@@ -199,7 +196,7 @@ export class ScriptStage {
             stays: true,
           };
         } else if (pose) {
-          entry.track = this.#home(pose, this.clock.now);
+          entry.track = home(this.release, pose, this.clock.now);
         }
         this.#draw(name, entry);
       },
@@ -222,7 +219,7 @@ export class ScriptStage {
   unmount(surface = this.#surface) {
     if (!surface || surface !== this.#surface) return;
     for (const name of this.#entries.keys()) surface.remove(name);
-    this.#spans.erase(surface);
+    this.#over.erase(surface);
     this.#surface = undefined;
   }
 
@@ -239,8 +236,7 @@ export class ScriptStage {
     }
     this.#queue = [];
     this.#playback = undefined;
-    this.#effects.clear(this.#surface);
-    this.#spans.clear(this.#surface);
+    this.#over.clear(this.#surface);
     // What was in flight is where it rests, whether or not the view moves that.
     for (const entry of this.#entries.values()) {
       entry.moved ||= entry.track !== undefined;
@@ -251,7 +247,7 @@ export class ScriptStage {
     // A reset's steps are only the spans to show, begun at once.
     for (const { act } of script?.beats.flat() ?? []) {
       table = apply(table, act);
-      this.#span(act, -Infinity, -Infinity);
+      this.#over.play(act, -Infinity, -Infinity);
     }
     this.#set(table);
     this.#view = view;
@@ -313,33 +309,26 @@ export class ScriptStage {
     return entry ? this.#poseOf(name, entry, this.clock.now) : null;
   }
 
-  /** The arrows and lines the stage holds, each as it is drawn at `clock.now` (spans.ts): from
-   * where the model has its two ends, never from the page. The line from an ability to its
-   * source is hidden while the view shown asks the player something other than priority (UI
-   * Conventions, "A line from an ability to its source"). */
+  /** The arrows and lines the stage holds, each as it is drawn at `clock.now` (overlay.ts).
+   * The line from an ability to its source is hidden while the view shown asks the player
+   * something other than priority. */
   lines(now = this.clock.now): Line[] {
-    const status = this.#busy ? undefined : this.#view?.status;
-    const asked = status?.kind === "deciding" && status.decision.kind;
-    const prompt =
-      asked !== undefined && asked !== false && asked !== "priority";
-    return this.#spans.lines(
-      now,
-      (arrow) => prompt && arrow === "source",
-      ({ arrow, from, to, shown }) => {
-        const [a, b] = [this.#reach(from, now), this.#reach(to, now)];
-        return a && b ? shapeOf(arrow, a, b, shown) : null;
-      },
-    );
+    return this.#over.lines(now, this.#prompt);
+  }
+
+  /** The streaks the stage draws at `clock.now` (streaks.ts). */
+  streaks(now = this.clock.now): Streak[] {
+    return this.#over.streaks(now);
   }
 
   /** The marks the stage holds at `clock.now`, on `on` or on anything. */
   marks(on?: On): Marked[] {
-    return this.#spans.marks(this.clock.now, on);
+    return this.#over.marks(this.clock.now, on);
   }
 
   /** The effects under way at `clock.now` on `name`, each as far through as it is. */
-  effect(name: NonNullable<Effect["on"]>): ReturnType<Effects["on"]> {
-    return this.#effects.on(name, this.clock.now);
+  effect(name: NonNullable<Effect["on"]>) {
+    return this.#over.effect(name, this.clock.now);
   }
 
   /** What the stage shows now (`Shown`). */
@@ -385,6 +374,12 @@ export class ScriptStage {
     return this.#playback !== undefined || this.#queue.length > 0;
   }
 
+  /** The view shown, its script played out, asks the player something other than priority. */
+  get #prompt() {
+    const status = this.#busy ? undefined : this.#view?.status;
+    return status?.kind === "deciding" && status.decision.kind !== "priority";
+  }
+
   /** When the next thing happens: a step of the beat under way begins, or the beat ends. */
   #due() {
     const playback = this.#playback;
@@ -412,21 +407,19 @@ export class ScriptStage {
       // that began ends first if its time comes no later than the next one's beginning.
       const next = playback.steps.find((s) => !s.begun);
       const over = playback.steps
-        .filter((s) => s.begun && !s.ended)
+        .filter((s) => s.begun && !s.ended && !s.passes)
         .reduce<Run | undefined>(
           (a, b) => (a && a.to <= b.to ? a : b),
           undefined,
         );
       if (over && over.to <= to && (!next || over.to <= next.from)) {
-        over.ended = true;
-        this.#stale ||= over.verb === "announce" || over.verb === "count";
-        if (over.verb === "vanish") this.#left(over);
-        this.#tell(over, "end");
-        this.#affect(over, "end");
+        this.#pass(over.to);
+        this.#end(over);
         continue;
       }
       if (next) {
         if (next.from > to) break;
+        this.#pass(next.from);
         this.#begin(next);
         continue;
       }
@@ -434,6 +427,7 @@ export class ScriptStage {
       playback.end = closedBy(this.#entries.values(), playback.end);
       if (playback.end > to) break;
       // The beat is over, at its own end and not at this tick's: what follows begins there.
+      this.#pass(playback.end);
       this.#at = playback.end;
       if (playback.beat + 1 < playback.beats.length) {
         this.#beat(playback);
@@ -443,10 +437,8 @@ export class ScriptStage {
         this.#playback = undefined;
         for (const entry of this.#entries.values()) {
           if (!entry.track?.stays) continue;
-          entry.track = this.#home(
-            entry.track.pose(0, entry.resting.pose),
-            this.#at,
-          );
+          const from = entry.track.pose(0, entry.resting.pose);
+          entry.track = home(this.release, from, this.#at);
           entry.moved = true;
         }
         this.#set({ ...this.#table!, view: tabled(playback.view) });
@@ -454,8 +446,26 @@ export class ScriptStage {
         this.#lay(this.#at);
       }
     }
+    this.#pass(to);
     this.#write(to);
     if (!this.#busy) this.#release();
+  }
+
+  /** Ends, each at its own time, the announcements passing over the table that are over by
+   * stage time `to`: before whatever else happens then. */
+  #pass(to: number) {
+    const over = this.#over.notices.filter((run) => run.passes && run.to <= to);
+    for (const run of over.sort((a, b) => a.to - b.to)) this.#end(run);
+  }
+
+  /** Ends the step `run`, at its own time. */
+  #end(run: Run) {
+    run.ended = true;
+    this.#stale ||= run.verb === "announce" || run.verb === "count";
+    if (run.verb === "vanish") this.#left(run);
+    if (run.verb === "announce") this.#over.over(this.#surface, run);
+    this.#tell(run, "end");
+    this.#affect(run, "end");
   }
 
   /** Lays out the next beat's steps in time from where the last beat ended (beat.ts). */
@@ -469,11 +479,13 @@ export class ScriptStage {
       this.#at,
       this.#table!,
       this.timings,
-      (act) => this.#spans.whole(act),
+      (act) => this.#over.whole(act),
     );
     const rests = (name: Name) => this.#entries.get(name)?.resting;
     awaited(steps, this.#layout, this.#table!.view, rests);
-    const end = Math.max(this.#at, ...steps.map((run) => run.to));
+    // What passes over the table holds the beat only until it has begun (beat.ts).
+    const waited = steps.map((run) => (run.passes ? run.from : run.to));
+    const end = Math.max(this.#at, ...waited);
     Object.assign(playback, { steps, end });
   }
 
@@ -482,6 +494,9 @@ export class ScriptStage {
   #begin(run: Run) {
     run.begun = true;
     run.found = this.#table!;
+    if (run.verb === "announce" && run.to > run.from) {
+      this.#over.notices.push(run);
+    }
     this.#tell(run, "start");
     const mover = moverOf(run.step.act);
     const moved = mover === undefined ? undefined : this.#entries.get(mover);
@@ -490,7 +505,7 @@ export class ScriptStage {
       pose: this.#poseOf(mover!, moved, run.from),
     };
     this.#set(apply(this.#table!, run.step.act));
-    this.#span(run.step.act, run.from, run.to, run.ease);
+    this.#over.play(run.step.act, run.from, run.to, run.ease);
     // A step about what an earlier one is still taking from sight finds it gone already.
     const subject = subjectOf(run.step.act);
     const entry =
@@ -513,16 +528,12 @@ export class ScriptStage {
     this.#affect(run, "start");
   }
 
-  /** Begins the effects the step `run` has at this `edge` of it, on what they are on if the
-   * stage holds that: one that lasts its step, for as long as the step. Time passed over
-   * (`skip`) begins none. */
+  /** Begins the effects the step `run` has at this `edge` of it (overlay.ts). Time passed
+   * over (`skip`) begins none. */
   #affect(run: Run, edge: Edge["edge"]) {
     if (this.#skipping) return;
-    const seen = run.to - run.from;
-    const at = edge === "start" ? run.from : run.to;
     const begun = this.effects(run.step.act, run.found!.view);
-    const held = (name: Name) => this.#entries.has(name);
-    this.#effects.begin(litBy(run.step.act), begun, edge, at, seen, held);
+    this.#over.affect(run, edge, begun, (name) => this.#entries.has(name));
   }
 
   /** The `vanish` `run` is over: what it took is where the table has had it since the step
@@ -570,14 +581,17 @@ export class ScriptStage {
   /** Tells those who follow that `run` begins or ends. */
   #tell(run: Run, edge: Edge["edge"]) {
     if (this.#skipping || this.#following.size === 0) return;
-    const steps = this.#playback!.steps;
+    // One that passes over the table may end after its beat, with none earlier in it.
+    const steps = this.#playback?.steps ?? [];
     const told: Edge = {
       edge,
       at: edge === "start" ? run.from : run.to,
       span: { from: run.from, to: run.to, turn: run.turn },
       step: run.step,
       table: run.found!,
-      earlier: steps.slice(0, steps.indexOf(run)).map((s) => s.step),
+      earlier: steps
+        .slice(0, Math.max(0, steps.indexOf(run)))
+        .map((s) => s.step),
     };
     for (const follower of [...this.#following]) follower(told);
   }
@@ -601,8 +615,7 @@ export class ScriptStage {
       if (rest.has(name) || entry.leaving) continue;
       this.#surface?.remove(name);
       this.#entries.delete(name);
-      this.#effects.gone(name);
-      this.#spans.gone(name);
+      this.#over.gone(name);
       this.pointer.gone(name);
       this.#stale = true;
     }
@@ -699,7 +712,7 @@ export class ScriptStage {
   /** Writes the pose at stage time `now` of every entry that moved or is moving, and tells
    * those who draw from `shown` if it changed. */
   #write(now: number) {
-    const stirred = this.#spans.stirred(now);
+    const stirred = this.#over.stirred(now);
     for (const [name, entry] of this.#entries) {
       // It has turned over, or what was turning it is no longer its track.
       if (entry.covered && !turning(entry.track, now)) {
@@ -713,8 +726,7 @@ export class ScriptStage {
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
-    this.#effects.write(this.#surface, now);
-    this.#spans.write(this.#surface, now, this.lines(now));
+    this.#over.write(this.#surface, now, this.#prompt);
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;
@@ -729,7 +741,12 @@ export class ScriptStage {
       ),
       view: this.#view,
       busy,
-      notices: under(steps, "announce", this.#shown.notices, (run) => run.step),
+      notices: under(
+        this.#over.notices,
+        "announce",
+        this.#shown.notices,
+        (run) => run.step,
+      ),
       counts: under(steps, "count", this.#shown.counts, (run) => run),
     };
     for (const listener of [...this.#listeners]) listener();
@@ -745,7 +762,7 @@ export class ScriptStage {
         : poseOn(entry, at);
     const { object, dress } = entry.resting;
     const turns = dress.zone === "battlefield" && object?.tapped === false;
-    const turned = turns ? this.#spans.turned(name, at) : 0;
+    const turned = turns ? this.#over.turned(name, at) : 0;
     if (!turned) return pose;
     // Over its row from the first: turned, it reaches across the card beside it.
     const depth = pose.depth + PAYING;
@@ -753,36 +770,25 @@ export class ScriptStage {
   }
 
   /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, or
-   * a player's life total; none for what the stage does not hold. */
-  #reach(on: On, at: number): Reach | undefined {
+   * a player's life total, or with `pool` their unspent mana; none for what the stage does
+   * not hold. */
+  #reach(on: On, at: number, pool = false): Reach | undefined {
     const layout = this.#layout;
     if (on === "you" || on === "opponent") {
-      return reachOfLife(layout.anchors(this.#table!.view).life(on));
+      const anchors = layout.anchors(this.#table!.view);
+      return pool
+        ? reachOfPool(anchors.pool(on))
+        : reachOfLife(anchors.life(on));
     }
     const entry = this.#entries.get(on);
     const pose = entry && this.#poseOf(on, entry, at);
     return pose && reachOfCard(layout, entry.resting, pose);
   }
 
-  /** Plays `act` if it begins or ends a span, over the stage times `from` to `to`. */
-  #span(act: Act, from: number, to: number, ease = SNAP.ease) {
-    if (act.verb === "point" || act.verb === "mark") {
-      this.#spans.play(act, from, to, ease);
-    }
-  }
-
   /** Writes one entry's pose, as the pointer moves it between ticks. */
   #draw(name: Name, entry: Entry, now = this.clock.now) {
     const pose = this.#poseOf(name, entry, now);
     this.#surface?.draw(name, pose, entry.resting.dress.frame);
-  }
-
-  /** The way home from `from`, begun at stage time `at`, of a card let go: none if that takes
-   * no time. */
-  #home(from: Pose, at: number): Track | undefined {
-    const { duration, ease } = this.release;
-    if (duration <= 0) return undefined;
-    return { from: at, to: at + duration, pose: glide(from, ease, true) };
   }
 
   #release() {

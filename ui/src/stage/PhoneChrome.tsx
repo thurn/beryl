@@ -323,13 +323,14 @@ export function Notices({
             key={`${banner.title}|${banner.detail}`}
             shown={coin !== undefined || combatUp}
             coin={coin !== undefined}
+            staged={coin !== undefined}
             {...banner}
           />
         </div>
       )}
       {scry && (
         <div
-          className="phone-pill"
+          className="phone-pill stage-notice-scry"
           role="status"
           style={{ top: edge(scry.notice.player) }}
         >
@@ -344,7 +345,7 @@ export function Notices({
           <TurnAnnouncement
             key={table.turn.number}
             side={turn.notice.active}
-            ms={stage.timings(turn.step.act).duration}
+            staged
           />
         </div>
       )}

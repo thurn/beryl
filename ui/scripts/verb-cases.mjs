@@ -619,10 +619,11 @@ export const CASES = {
                 .filter((e) => e.verb === "flip" && e.edge === "start")
                 .map((e) => e.act.object.slot);
             assert.equal(looked.length, 2, "the scry looks at two cards");
-            const told = stepOf(scry, "announce");
-            const until = scry.steps.indexOf(told);
+            // Until the scry is announced: its pill then passes over what follows.
+            const told = scry.edges.find((e) => e.verb === "announce");
+            assert.ok(told, "the stage announced no scry");
             const lay = before(scry, scry.steps[0]).poses;
-            for (const step of scry.steps.slice(0, until + 1)) {
+            for (const step of scry.steps.filter((s) => s.to <= told.at)) {
                 for (const sample of [step.before, ...Object.values(step.at)]) {
                     for (const name of looked) {
                         assert.equal(sample.zones[name], "library");
@@ -655,11 +656,17 @@ export const CASES = {
             for (const sample of Object.values(begin.at)) {
                 assert.equal(sample.poses[name].face, "back");
             }
-            assert.deepEqual(
-                before(scry, end).poses[name],
-                up[name],
-                "it lies there while the look lasts",
-            );
+            // Every sample taken between the two steps: none where the look's end follows
+            // at once, the opponent's answer being already in (a library is ordered in no
+            // time).
+            for (const sample of scry.samples) {
+                if (sample.at < begin.to || sample.at >= end.from) continue;
+                assert.deepEqual(
+                    sample.poses[name],
+                    up[name],
+                    "it lies there while the look lasts",
+                );
+            }
             assert.ok(
                 beside(end.at.to.poses[name], lay[name]),
                 `${name} is back on the library as the look ends`,

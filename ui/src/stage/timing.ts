@@ -6,10 +6,10 @@
 // not taken has none, and one with no duration snaps. The effects a step begins are the data's
 // too (`effects`, and each verb's list of those its steps begin): `effectsOf`.
 import { easeIn, easeInOut, easeOut } from "motion";
-import conventions from "../../../data/ui-conventions.json";
+import conventions from "../../../data/ui-conventions.json" with { type: "json" };
 import type { PlayerView } from "../generated/protocol";
 import type { Act } from "./table.ts";
-import type { Effect, Layer } from "./effects.ts";
+import type { Effect, Layer, On } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
 import { meets, STRIKE } from "./tracks.ts";
@@ -163,10 +163,23 @@ export function caseOf(act: Act, found?: PlayerView): string | undefined {
       return act.mark === "friendly-target" || act.mark === "hostile-target"
         ? "target"
         : act.mark;
+    case "streak":
+      return act.stream.kind;
+    case "announce":
+      return NOTICES[act.notice.kind];
+    case "dwell":
+      // On a player, it is the table left to be seen as the game ends (script/spans.rs).
+      return act.subject.kind === "player" ? "game's end" : undefined;
+    case "set":
+      if (act.fact.kind === "turn") return "step begins";
+      return act.fact.kind === "library" ? "library shuffled" : undefined;
     default:
       return undefined;
   }
 }
+
+/** The data's name for the announcement of each kind. */
+const NOTICES = { turn: "turn banner", scry: "scry pill", coin: "coin" };
 
 /** How long after one card of a batch begins to leave for exile the next does (UI
  * Conventions, "A batch exile": one at a time, about 0.3 s apart). Arena's instances are of
@@ -216,8 +229,25 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
       : [];
     return { ...own, with: led, after };
   }
+  // An announcement passes over the table while play goes on under it (UI Conventions, Verbs,
+  // announce; Arena's cards move under its turn banner, `IEXcjBn3BXk 19:35.7`): its beat does
+  // not wait for it. A coin is waited for: what follows it is what it decided.
+  if (act.verb === "announce") {
+    return { ...own, passes: act.notice.kind !== "coin" };
+  }
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };
+  // The life a streak of damage takes from a player goes as the streak lands on them.
+  if (
+    act.verb === "count" &&
+    act.tally.kind === "life" &&
+    before?.verb === "streak" &&
+    before.stream.kind === "damage" &&
+    before.to.kind === "player" &&
+    before.to.player === act.tally.player
+  ) {
+    return { ...own, delay: timingOf(before, table).duration, with: true };
+  }
   // The life a strike takes from a player goes as its blow lands on them, not its own delay
   // after the strike's turn: the total flares on the frame the creature reaches it.
   if (
@@ -251,7 +281,8 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
 
 /** One of the effects a verb's steps begin, as the data says it: at which end of the step or
  * as its blow lands, of which steps, those of a case or those that leave their card in a
- * zone, and on what, where that is not what the step is about. */
+ * zone, and on what, where that is not what the step is about: what it lands on (`struck`),
+ * or what a streak leaves (`source`). */
 interface Use {
   effect: string;
   when: string;
@@ -286,24 +317,23 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
       (use.into === undefined || use.into === into),
   );
   const own = fit.filter((use) => use.case !== undefined);
-  // What a strike lands on: a card, or a player's life total.
-  const struck =
-    act.verb !== "strike"
-      ? undefined
-      : act.to.kind === "object"
-        ? act.to.slot
-        : act.to.kind === "player"
-          ? act.to.player
-          : undefined;
+  // What a strike or a streak lands on: a card, an ability, or a player's life total. And
+  // what a streak leaves, where that is something on the table and no player's pool.
+  const hits = act.verb === "strike" || act.verb === "streak";
+  const struck = hits ? namedBy(act.to) : undefined;
+  const from = act.verb === "streak" ? act.from : undefined;
+  const source = from && from.kind !== "player" ? namedBy(from) : undefined;
+  const elsewhere: Record<string, On | undefined> = { struck, source };
   return (own.length > 0 ? own : fit).flatMap((use): Effect[] => {
     const look = looks.get(use.effect);
-    if (!look || (use.on === "struck" && struck === undefined)) return [];
+    const on = use.on === undefined ? undefined : elsewhere[use.on];
+    if (!look || (use.on !== undefined && on === undefined)) return [];
     return [
       {
         name: use.effect,
         layer: look.layer,
         when: use.when === "end" ? "end" : "start",
-        on: use.on === "struck" ? struck : undefined,
+        on,
         into: use.when === "blow" ? STRIKE.hit : undefined,
         duration: look.duration ?? undefined,
         delay: look.delay ?? 0,

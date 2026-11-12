@@ -1444,7 +1444,7 @@
     },
     {
       "name": "streak",
-      "shows": "A streak leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits.",
+      "shows": "A streak of light leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits. It rises out of its source on a low arc, a bright head with a tail behind it, quickening all the way, and its tail is drawn in as it lands. Several into one spell leave together. A source with no place left on the table sends none: what its mana pays for only flashes.",
       "arena": {
         "does": "Each tapped land sends one streak of its color to the spell on the stack in about 0.3 s. A burn spell or ability glows, and a streak of fire crosses to its target in about 0.25 s, with a burst where it lands; the spell leaves after.",
         "evidence": [
@@ -1478,22 +1478,48 @@
         "duration": 250,
         "delay": 100,
         "stagger": null,
-        "curve": null
+        "curve": "ease-in"
       },
       "cases": {
         "mana": {
           "duration": 275,
           "delay": 100,
           "stagger": null,
-          "curve": null
+          "curve": "ease-in"
         },
         "damage": {
           "duration": 250,
           "delay": 100,
           "stagger": null,
-          "curve": null
+          "curve": "ease-in"
         }
-      }
+      },
+      "effects": [
+        {
+          "effect": "glow",
+          "when": "start",
+          "case": "mana",
+          "on": "source"
+        },
+        {
+          "effect": "flash",
+          "when": "end",
+          "case": "mana",
+          "on": "struck"
+        },
+        {
+          "effect": "glow",
+          "when": "start",
+          "case": "damage",
+          "on": "source"
+        },
+        {
+          "effect": "impact",
+          "when": "end",
+          "case": "damage",
+          "on": "struck"
+        }
+      ]
     },
     {
       "name": "count",
@@ -1634,9 +1660,9 @@
     },
     {
       "name": "dwell",
-      "shows": "Nothing moves while a spell or ability is read: the opponent's, before it resolves unanswered.",
+      "shows": "Nothing moves while something is read: the opponent's spell or ability, before it resolves unanswered, and the table as the game ends, before the result covers it.",
       "arena": {
-        "does": "The opponent's spell sits on the stack for 0.7 to 1.9 s before it resolves.",
+        "does": "The opponent's spell sits on the stack for 0.7 to 1.9 s before it resolves. After the play that ends a game the table stays in view about 3 s, the loser's avatar bursting for the first half of it, before the result covers it.",
         "evidence": [
           {
             "recording": "pE4XSNi-nZc",
@@ -1645,6 +1671,10 @@
           {
             "recording": "pE4XSNi-nZc",
             "time": "23:22.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "38:37.0"
           }
         ]
       },
@@ -1653,11 +1683,19 @@
         "delay": null,
         "stagger": null,
         "curve": "none"
+      },
+      "cases": {
+        "game's end": {
+          "duration": 1600,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        }
       }
     },
     {
       "name": "announce",
-      "shows": "A notice passes over the table while play goes on under it: the turn banner, the pill that says what a scry did, a coin tossed.",
+      "shows": "A notice passes over the table: the turn banner, the pill that says what a scry did, a coin tossed. Play goes on under the banner and the pill, which fade in, stand and fade out, the banner sinking toward its player as it goes. A coin is waited for: it turns in the air, lands, and only then says who won.",
       "arena": {
         "does": "\"Your Turn\" or \"Opponent's Turn\" glows at the centre for about a second while cards move under it. A pill above an avatar reads \"Scry: 1 top, 1 bottom.\" for about 3 s. A coin a card flips is tossed mid-table and lands in about 1.2 s.",
         "evidence": [
@@ -1696,7 +1734,7 @@
       "cases": {
         "turn banner": {
           "duration": 1000,
-          "delay": null,
+          "delay": 0,
           "stagger": null,
           "curve": "none"
         },
@@ -1708,7 +1746,7 @@
         },
         "coin": {
           "duration": 1200,
-          "delay": null,
+          "delay": 0,
           "stagger": null,
           "curve": null
         }
@@ -1880,7 +1918,7 @@
   "effects": [
     {
       "name": "glow",
-      "shows": "A halo of warm light around a card, bright at once, that spreads and fades: the card is new here, or is leaving whole. On the stack, where the spell that acts on a card lies over it, the light is a rim inside the card's own frame.",
+      "shows": "A halo of warm light around a card, bright at once, that spreads and fades: the card is new here, is leaving whole, or sends a streak. On the stack, where the spell that acts on a card lies over it, the light is a rim inside the card's own frame.",
       "layer": "under",
       "values": {
         "duration": 300,
@@ -1940,10 +1978,20 @@
     },
     {
       "name": "impact",
-      "shows": "A burst of hot light on what a creature strikes, a card or a player's life total, whole as the blow lands and spreading as it fades.",
+      "shows": "A burst of hot light on what a creature strikes or a streak of damage hits, a card or a player's life total, whole as the blow lands and spreading as it fades.",
       "layer": "over",
       "values": {
         "duration": 300,
+        "delay": null,
+        "curve": "ease-out"
+      }
+    },
+    {
+      "name": "flash",
+      "shows": "A flare of pale light over a spell or ability as the mana that pays for it lands, whole at once and gone as it spreads.",
+      "layer": "over",
+      "values": {
+        "duration": 240,
         "delay": null,
         "curve": "ease-out"
       }

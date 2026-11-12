@@ -119,9 +119,11 @@ const tickAt = (ticks, at) => {
 };
 
 /** The box a subject of `step` has at tick `t` of `film` (a `reel`): its card's or ability's,
- * or a player's life total, for a count of life or a mark on a player; for an arrow or line,
- * the box about both the things it is between. */
-function boxOf(step, film, t, orbs) {
+ * or a player's life total, for a count of life or a mark on a player; for an arrow, a line
+ * or a streak, the box about both the things it is between; and the whole table, `size`, for
+ * a step about no thing on it. */
+function boxOf(step, film, t, orbs, size) {
+    if (step.table) return [0, 0, size.width, size.height];
     const player = step.act.tally?.kind === "life" && step.act.tally.player;
     if (player) return orbs[player] ?? null;
     const of = (name) => orbs[name] ?? film.box(name, t);
@@ -220,7 +222,7 @@ function plan(take, { ticks, orbs }, film, size) {
         near.push(t);
     }
     const subjects = take.steps.flatMap((step) =>
-        near.map((t) => boxOf(step, film, t, orbs)).filter(Boolean),
+        near.map((t) => boxOf(step, film, t, orbs, size)).filter(Boolean),
     );
     if (!subjects.length) return null;
     const pad = 0.3 * Math.max(...subjects.map((b) => b[2] - b[0]));
@@ -267,7 +269,7 @@ function plan(take, { ticks, orbs }, film, size) {
         ],
         rests: take.steps.map((step) => {
             const box =
-                boxOf(step, film, tickAt(ticks, step.to), orbs) ??
+                boxOf(step, film, tickAt(ticks, step.to), orbs, size) ??
                 subjects.at(-1);
             return [
                 ((box[0] + box[2]) / 2 - close.x) / close.width,
