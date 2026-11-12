@@ -22,12 +22,12 @@ pub enum Amount {
     /// [module](crate::effect) says which instruction that is): the cards it drew or
     /// discarded, the life gained or lost, the counters put or removed, the objects it moved.
     ThatMany,
-    /// The number a delayed triggered ability carries from the effect that made it
-    /// ([`crate::Effect::Delay`]), settled as that effect was applied (CR 608.2h): "that
-    /// much", or "that spell's mana value" of a spell long gone
-    /// ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c)): "A delayed
-    /// triggered ability that refers to a particular object still affects it even if the
-    /// object changes characteristics."
+    /// "That much", or "that spell's mana value" of a spell long gone, in a delayed
+    /// triggered ability: the number it carries from the effect that made it
+    /// ([`crate::Effect::Delay`]), settled as that effect was applied (CR 608.2h).
+    /// [CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c): "A delayed triggered
+    /// ability that refers to a particular object still affects it even if the object
+    /// changes characteristics."
     Carried,
     /// "The number of [objects]", "for each [object]".
     Count(&'static Objects),
