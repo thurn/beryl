@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-from . import card_names
+from . import card_files
 from .changes import changed_paths, git
 
 # The files the exporters and the harnesses are built from: the exporters and the rules they
@@ -54,7 +54,7 @@ def choose(
         return None
     if any(HARNESS.match(p) for p in changed):
         return None
-    chosen = {card: CHANGED for card in card_names.cards_in(changed)}
+    chosen = {card: CHANGED for card in card_files.cards_in(changed)}
     for card in sample(sorted(every), commit):
         chosen.setdefault(card, SAMPLED)
     return chosen

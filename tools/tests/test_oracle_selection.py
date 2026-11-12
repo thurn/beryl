@@ -1,6 +1,6 @@
 from beryl_tools import oracle_selection
 
-COUNTERSPELL = "rust/crates/beryl_cards/src/blue/counterspell.rs"
+COUNTERSPELL = "rust/cards/cards_1993_1994/lea/counterspell.rs"
 EVERY: list[str] = [f"Card {i}" for i in range(40)]
 
 
