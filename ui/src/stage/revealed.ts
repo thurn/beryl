@@ -19,7 +19,7 @@ export interface PileSpace extends Place {
 }
 
 /** The faces of `revealed` the player has not `cleared`, in the order they lie. */
-export const lying = (
+const lying = (
   revealed: Revealed | undefined,
   cleared?: ReadonlySet<ObjectView>,
 ): ObjectView[] =>
