@@ -407,6 +407,24 @@ def test_a_step_that_moves_no_card_is_held_to_its_case() -> None:
         assert set(named) <= set(verbs[verb]["cases"])
 
 
+def test_steps_alone_in_their_beats_are_held_to_no_stagger() -> None:
+    """Two steps of the turn begin one after the other, each a beat of its own: the second
+    is a whole step after the first, which is no stagger of a batch."""
+    act = {"verb": "set", "fact": {"kind": "turn"}}
+    steps = [{"n": n, "verb": "set", "act": act, "case": "step begins"} for n in (0, 1)]
+    captured = {
+        "seat": "yours",
+        "tick": 16,
+        "steps": [
+            {**steps[0], "from": 0, "to": 58},
+            {**steps[1], "from": 58, "to": 116},
+        ],
+    }
+    verdicts = motion.timing_verdicts(conventions.load(), motion.motion(), captured)
+    assert [len(found) for found in verdicts] == [1, 1]
+    assert not any(v.failed for found in verdicts for v in found)
+
+
 def test_an_exempt_verb_is_listed() -> None:
     data = {"verbs": [{"name": "tap", "exempt": 2}, {"name": "fly"}]}
     assert motion.exempted(data) == {"tap": 2}

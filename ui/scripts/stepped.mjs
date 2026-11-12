@@ -169,6 +169,9 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
     // the card the step is about and not the cards beside it (a batch flying the same way, a
     // hand making room), nor the line that joins an ability to its source. Hiding a node
     // moves nothing: the stage's poses are as they were.
+    // Nor what is drawn over the table meanwhile: a line, and an announcement passing over
+    // it (the turn's banner, under which the turn's first cards move).
+    const OVER = ".stage-lines, .stage-notice, .stage-notice-scry";
     const alone = document.head.appendChild(document.createElement("style"));
     const ticks = [];
     let abilities = false;
@@ -223,8 +226,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
         for (const subject of wanted.get(ticks.length) ?? []) {
             alone.textContent =
                 subject === null
-                    ? ".stage-node, .stage-lines { visibility: hidden; }"
-                    : `.stage-node:not([data-stage="${subject}"]), .stage-lines { visibility: hidden; }`;
+                    ? `.stage-node, ${OVER} { visibility: hidden; }`
+                    : `.stage-node:not([data-stage="${subject}"]), ${OVER} { visibility: hidden; }`;
             await window.berylShoot(ticks.length, at, subject);
         }
         alone.textContent = "";
