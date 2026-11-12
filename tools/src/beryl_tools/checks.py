@@ -63,6 +63,7 @@ from . import (
     verdicts,
     warm,
 )
+from .changes import branch_base, changed_paths, git, markdown_files, narrow
 from .clock import MAX_STRETCH, Clock, WallClock, stretch, took
 from .reruns import (
     CANNOT_RUN,
@@ -425,43 +426,6 @@ def load_note() -> str:
     )
 
 
-# What changed.
-
-
-def git(*args: str) -> str:
-    run = subprocess.run(
-        ["git", *args], cwd=paths.REPO, capture_output=True, text=True, check=False
-    )
-    return run.stdout.strip() if run.returncode == 0 else ""
-
-
-def branch_base() -> str:
-    for ref in ("origin/staging", "staging", "origin/master"):
-        base = git("merge-base", ref, "HEAD")
-        if base:
-            return base
-    return git("rev-parse", "--verify", "--quiet", "HEAD^")
-
-
-def changed_paths(base: str) -> list[str] | None:
-    """Paths changed since `base`, committed or not; None when there is no base."""
-    if not base:
-        return None
-    diff = git("diff", "--name-only", "--no-renames", base).splitlines()
-    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
-    return sorted(set(diff + untracked))
-
-
-def markdown_files() -> list[str]:
-    """Every Markdown file but the beads' and the agent skills' (whose YAML front matter
-    mdformat would rewrite)."""
-    return [
-        p
-        for p in git("ls-files", "-co", "--exclude-standard", "*.md").splitlines()
-        if not p.startswith((".beads/", ".agents/"))
-    ]
-
-
 # Lanes.
 
 
@@ -655,7 +619,8 @@ def fast(args: argparse.Namespace) -> int:
     print(
         f"check: {'every lane (no base)' if changed is None else f'{len(changed)} paths changed since {base[:8]}'}"
     )
-    return run_lanes(fast_lanes(changed), "check", FAST_BUDGET, strict=False)
+    lanes = narrow(fast_lanes(changed), base, fast_lanes, lambda l: l.name)
+    return run_lanes(lanes, "check", FAST_BUDGET, strict=False)
 
 
 def fast_lanes(changed: list[str] | None) -> list[Lane]:
