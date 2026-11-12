@@ -579,6 +579,16 @@ pub(crate) const fn pile_word(purpose: Purpose, place: Place) -> &'static str {
     }
 }
 
+/// What the two ends of an order for `purpose` are called, the last and then the first:
+/// Arena writes "Last" under the left of its browser of triggers and "First" under the right
+/// (`UrGalw_f35w 56:30.5`, `iRr-GeSF0lI 1:01:01.0`). None for a purpose that orders nothing.
+pub(crate) const fn end_words(purpose: Purpose) -> Option<[&'static str; 2]> {
+    match purpose {
+        Purpose::TriggerOrder => Some(["Last", "First"]),
+        _ => None,
+    }
+}
+
 /// What fills a template's holes (the module comment lists them): the record's numbers and
 /// cost, and the names and places the view gives.
 #[derive(Clone, Copy, Debug, Default)]

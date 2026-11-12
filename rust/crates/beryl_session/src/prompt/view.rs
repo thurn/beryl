@@ -155,7 +155,8 @@ pub struct Words {
     pub auto: String,
     /// The button that takes the prompt back, where it can be.
     pub cancel: String,
-    /// What each of `places` is called over its pile.
+    /// What each of `places` is called over its pile; or of an order, what its two ends are
+    /// called, the last and then the first.
     pub piles: [String; 2],
 }
 

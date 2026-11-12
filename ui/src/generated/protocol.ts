@@ -709,7 +709,8 @@ auto: string,
  */
 cancel: string, 
 /**
- * What each of `places` is called over its pile.
+ * What each of `places` is called over its pile; or of an order, what its two ends are
+ * called, the last and then the first.
  */
 piles: [string, string], };
 

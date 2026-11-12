@@ -4,7 +4,7 @@
 use beryl_engine::card::{ManaCost, Prompt, Purpose};
 use beryl_engine::{Decision, GameTable, Layout, Observation, Zone};
 
-use super::wording::{Holes, cancel_word, pile_word, wording};
+use super::wording::{Holes, cancel_word, end_words, pile_word, wording};
 use super::{Lies, PromptView, Words};
 use crate::protocol::{mana_text, name, shown, side, slots};
 
@@ -88,9 +88,9 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, cost: Option<String>, holes: &Hol
             no: holes.label(words.no),
             auto: holes.label(words.auto),
             cancel: cancel_word(prompt.purpose).to_owned(),
-            piles: prompt
-                .places
-                .map(|place| pile_word(prompt.purpose, place).to_owned()),
+            piles: end_words(prompt.purpose)
+                .unwrap_or_else(|| prompt.places.map(|place| pile_word(prompt.purpose, place)))
+                .map(str::to_owned),
         },
         count: prompt.count,
         most: prompt.most,

@@ -4,7 +4,8 @@ use beryl_engine::Zone;
 use beryl_engine::card::{Part, Place, Prompt, Purpose, Shape};
 
 use super::{
-    AIMED, Holes, OWN_TARGET, PassLeads, Wording, cancel_word, pass_words, pile_word, wording,
+    AIMED, Holes, OWN_TARGET, PassLeads, Wording, cancel_word, end_words, pass_words, pile_word,
+    wording,
 };
 use crate::protocol::Step;
 
@@ -134,6 +135,12 @@ fn every_purpose_and_button_has_words() {
                 assert!(!words.is_empty(), "{purpose:?} has no words for {button}");
             }
         }
+        // An order's two ends are named, and nothing else has ends.
+        assert_eq!(
+            end_words(purpose).is_some_and(|ends| ends.iter().all(|end| !end.is_empty())),
+            purpose.shape() == Shape::Order,
+            "{purpose:?}"
+        );
         if purpose.shape() == Shape::Split {
             for place in PLACES {
                 // No place has no word, but for the cards that stay where a split found them:
@@ -256,6 +263,7 @@ fn table() -> BTreeSet<&'static str> {
     for &purpose in Purpose::ALL {
         words.extend(entries(purpose).flat_map(|entry| templates(&entry)));
         words.extend(PLACES.map(|place| pile_word(purpose, place)));
+        words.extend(end_words(purpose).into_iter().flatten());
         words.insert(cancel_word(purpose));
     }
     words
