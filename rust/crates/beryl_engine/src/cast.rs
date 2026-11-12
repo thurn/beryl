@@ -1737,29 +1737,3 @@ pub(crate) fn leave_stack<L: Layout>(
     let spell = entry.spell().expect("a spell leaving the stack");
     event::move_one(s, t, sink, spell.slot, to, reason)
 }
-
-/// The objects a pending reference names: stack targets and the sources of abilities on the
-/// stack. They are never interchangeable with another object (§7.2). The effects on an
-/// object are part of what it is compared by ([`State::signature`]).
-///
-/// An ability's source can be its own target: its targets are chosen before its costs are
-/// paid ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c), [CR
-/// 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h), which [CR
-/// 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b) applies to activating: "The
-/// remainder of the process for activating an ability is identical to the process for casting a
-/// spell listed in rules 601.2b-i"). A Strip Mine targeting itself is sacrificed and its ability
-/// does nothing; targeting its twin destroys the twin.
-pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
-    let mut b = Bitboard::EMPTY;
-    for e in s.stack() {
-        if let Some(source) = e.object.filter(|_| !e.is_spell()) {
-            b.insert(source.slot);
-        }
-        for target in e.targets.iter() {
-            if let Some(r) = target.as_object() {
-                b.insert(r.slot);
-            }
-        }
-    }
-    b
-}

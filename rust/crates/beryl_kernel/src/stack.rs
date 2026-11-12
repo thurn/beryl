@@ -9,6 +9,7 @@
 
 use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx, Types};
 
+use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
@@ -193,6 +194,15 @@ impl<L: Layout> StackEntry<L> {
     pub fn spell(&self) -> Option<ObjectRef<L>> {
         self.object.filter(|_| self.is_spell())
     }
+
+    /// The slots it names ([`State::named`]): its spell's card or its ability's source,
+    /// its targets, and the object a triggered ability triggered on.
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        let objects = [self.object, self.info.object].into_iter().flatten();
+        let targets = self.targets.iter().filter_map(|target| target.as_object());
+        objects.chain(targets).map(|r| r.slot).collect()
+    }
 }
 
 /// Last-known information about a permanent that left the battlefield (architecture §5),
@@ -235,7 +245,39 @@ pub struct PendingTrigger<L: Layout = Small> {
     pub info: TriggerInfo<L>,
 }
 
+impl<L: Layout> PendingTrigger<L> {
+    /// The slots it names ([`State::named`]): its source and the object it triggered on.
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        let objects = [self.source, self.info.object].into_iter().flatten();
+        objects.map(|r| r.slot).collect()
+    }
+}
+
 impl<L: Layout> State<L> {
+    /// The slots the stack's entries and the delayed triggered abilities name: a part of
+    /// [`State::named`], which says what the rule is.
+    pub(crate) fn named_by_stack(&self) -> Bitboard<L::Slot> {
+        let mut named = Bitboard::EMPTY;
+        for entry in self.stack.iter() {
+            named |= entry.names();
+        }
+        for trigger in self.delayed.iter() {
+            named |= trigger.names();
+        }
+        named
+    }
+
+    /// The slots the abilities that have triggered and wait to be put on the stack name:
+    /// the other part.
+    pub(crate) fn named_by_waiting_triggers(&self) -> Bitboard<L::Slot> {
+        let mut named = Bitboard::EMPTY;
+        for trigger in self.triggers.iter() {
+            named |= trigger.names();
+        }
+        named
+    }
+
     /// The delayed triggered abilities waiting for their moment
     /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
     #[inline]

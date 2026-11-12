@@ -6,6 +6,34 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Two objects of one card were offered as one candidate when they differed only
+  in what another record of the state said of them: a permanent that exiled a
+  card until it leaves and its twin that exiled none
+  ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103): "Some one-shot
+  effects cause an object to change zones 'until' a specified event occurs"), a
+  permanent with a card exiled with it (CR 607.2a), a creature wearing an
+  attachment that changes none of its layer results, a creature that a triggered
+  ability on the stack, waiting or delayed will act on without targeting it, and
+  two spells of one card on the stack with different targets. So a player
+  bouncing one of two Portable Holes could not choose which, though one returns
+  a card and the other does not, and one countering either of two removal spells
+  was not asked which creature to save. `State::signature` compares what the
+  state holds about an object itself; what holds a reference to it was a list
+  the engine kept by hand (`cast::referenced`, `combat::related`: stack targets,
+  the sources of abilities, combat), which each new reference had to be added to
+  and four were not. Two waiting triggers of twins were compared by signature
+  alone, with no list at all. Found by the audit after milestone 4
+  (by-w8gv.8.1), the spells while fixing it; as old as each reference. The
+  kernel now answers `State::named` beside the fields it reads, each store says
+  which slots its own entries name (`Store::names`), and the engine's lists are
+  gone. Prevention: one query, in the crate that owns the fields, for "what
+  refers to this object"; a store cannot be written without answering it, and
+  the Memos store's invariant holds a new kind of memo that names a slot to it.
+  A field outside the stores that names a slot is still held to it by the
+  query's rustdoc alone; renaming two slots through the `Relayout` walk and
+  comparing the states would hold every field without a list, and was not built
+  (by-w8gv.8.2 says why).
+
 - Two objects of one card were offered as one candidate while different
   continuous effects were on them, whenever the effects came to the same layer
   results today: a creature with +1/+1 until end of turn and its twin with +1/+1

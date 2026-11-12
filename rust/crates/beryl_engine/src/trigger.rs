@@ -1,6 +1,9 @@
 //! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
+use std::cell::OnceCell;
+
+use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, CastingKind, Delayed, Face, FaceAbility, FaceIx, Trigger, Types,
 };
@@ -312,8 +315,10 @@ pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L
         .find(|&p| s.triggers().iter().any(|tr| tr.controller == p))?;
     let mut kept: L::Queue<L::Index, 64> = Default::default();
     let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
+    // Found only once two triggers of one ability have different sources or objects.
+    let named = OnceCell::new();
     for (i, tr) in s.triggers().iter().enumerate() {
-        if tr.controller != player || firsts.iter().any(|k| equivalent(s, k, tr)) {
+        if tr.controller != player || firsts.iter().any(|k| equivalent(s, &named, k, tr)) {
             continue;
         }
         // The waiting triggers never exceed the capacity of these lists, and the layout's
@@ -326,15 +331,69 @@ pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L
 
 /// Triggers of the same ability from interchangeable sources, on the same event with
 /// interchangeable objects, lead to the same game whatever their order (§7.2).
-fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger<L>, b: &PendingTrigger<L>) -> bool {
-    let interchangeable = |x: Option<ObjectRef<L>>, y: Option<ObjectRef<L>>| match (x, y) {
-        (Some(x), Some(y)) => x == y || s.signature(x.slot) == s.signature(y.slot),
+///
+/// Two objects are interchangeable here as two candidates are (`engine::collapse`): alike
+/// in themselves ([`State::signature`]) and named by no other record of the state
+/// ([`State::named`]). A waiting trigger names its own source, so the waiting triggers are
+/// held to that rule another way: with one trigger's source and object renamed to the
+/// other's and back, they must be the same triggers. Two abilities that each watch one of
+/// two twins leave the twins alike; one ability waiting to act on one twin alone tells
+/// them apart, as it will once it is on the stack.
+fn equivalent<L: Layout>(
+    s: &State<L>,
+    named: &OnceCell<Bitboard<L::Slot>>,
+    a: &PendingTrigger<L>,
+    b: &PendingTrigger<L>,
+) -> bool {
+    if (a.card, a.face, a.ability, a.controller) != (b.card, b.face, b.ability, b.controller)
+        || (a.info.player, a.info.amount, a.info.lki) != (b.info.player, b.info.amount, b.info.lki)
+    {
+        return false;
+    }
+    let pairs = [(a.source, b.source), (a.info.object, b.info.object)];
+    if pairs.iter().all(|(x, y)| x == y) {
+        return true;
+    }
+    let named = *named.get_or_init(|| s.named_apart_from_waiting_triggers());
+    let alike = |x: L::Slot, y: L::Slot| {
+        !named.contains(x) && !named.contains(y) && s.signature(x) == s.signature(y)
+    };
+    let interchangeable = |&(x, y): &(Option<ObjectRef<L>>, Option<ObjectRef<L>>)| match (x, y) {
+        (Some(x), Some(y)) => x == y || alike(x.slot, y.slot),
         _ => x == y,
     };
-    interchangeable(a.source, b.source)
-        && interchangeable(a.info.object, b.info.object)
-        && (a.card, a.face, a.ability, a.controller) == (b.card, b.face, b.ability, b.controller)
-        && (a.info.player, a.info.amount, a.info.lki) == (b.info.player, b.info.amount, b.info.lki)
+    if !pairs.iter().all(interchangeable) {
+        return false;
+    }
+    // The renaming that makes each trigger the other: an object of a pair for its partner.
+    let renamed = |r: Option<ObjectRef<L>>| {
+        let partner = |&(x, y): &(Option<ObjectRef<L>>, Option<ObjectRef<L>>)| match r {
+            _ if x == y => None,
+            r if r == x => Some(y),
+            r if r == y => Some(x),
+            _ => None,
+        };
+        pairs.iter().find_map(partner).unwrap_or(r)
+    };
+    let rename = |tr: &PendingTrigger<L>| PendingTrigger {
+        source: renamed(tr.source),
+        info: TriggerInfo {
+            object: renamed(tr.info.object),
+            ..tr.info
+        },
+        ..*tr
+    };
+    // It is one renaming only if it makes each of the other: a creature that saw itself
+    // enter is no twin of one that saw another.
+    if rename(a) != *b || rename(b) != *a {
+        return false;
+    }
+    let waiting = s.triggers();
+    let count = |tr: &PendingTrigger<L>| waiting.iter().filter(|w| *w == tr).count();
+    waiting.iter().all(|tr| {
+        let other = rename(tr);
+        other == *tr || count(tr) == count(&other)
+    })
 }
 
 /// Puts the waiting trigger at `index` on the stack

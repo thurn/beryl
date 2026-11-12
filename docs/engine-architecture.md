@@ -545,12 +545,19 @@ The exact profile offers a choice only across **distinct consequences**:
   two identical tokens with the same counters and nothing attached. The
   signature compared is every field of the object but its incarnation and
   timestamp (card, face, zone, owner, controller, counters, damage, flags,
-  attachment, link, copy, chosen value) and which players know it, with no
-  pending reference to the object: a copy in hand the opponent has seen is not
-  one they haven't.
-- Triggers from the same source card and ability with the same targets are
-  equivalent and ordered silently; non-equivalent simultaneous triggers are
-  ordered by their controller under APNAP.
+  attachment, link, copy, chosen value), what the stores hold about it and which
+  players know it: a copy in hand the opponent has seen is not one they haven't.
+  An object that another record of the state names is never collapsed with a
+  twin, since nothing about the object itself shows it: a target or the source
+  of an ability on the stack, what a triggered ability will act on, a blocked
+  attacker, the permanent an Aura is on, the permanent a card is exiled with.
+  The kernel answers which they are in one query (`State::named`), beside the
+  fields that name them.
+- Triggers of the same ability from interchangeable sources, on the same event
+  with interchangeable objects, are equivalent and ordered silently, where
+  renaming one's source and object to the other's leaves the waiting triggers
+  what they were; non-equivalent simultaneous triggers are ordered by their
+  controller under APNAP.
 - Mana payments and combat damage divisions are offered only when plans differ
   in outcome (§10, §11).
 - Alternative and optional costs are separate cast candidates: Force of Will for

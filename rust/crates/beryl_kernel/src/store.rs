@@ -7,8 +7,8 @@
 //! per-field lists of the state name the store once: [`State::empty`],
 //! [`crate::Large::clone_state`] and [`Relayout`] for `State`. Everything else reaches the
 //! stores through the functions below, [`Stored`] among them for what tells two objects
-//! apart, so a new kind of entry adds a variant to its store's payload and nothing to any
-//! of them.
+//! apart and `Store::names` for the objects an entry about another refers to, so a new
+//! kind of entry adds a variant to its store's payload and nothing to any of them.
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -85,6 +85,12 @@ pub(crate) trait Store<L: Layout>: Clone + Debug + Eq + Hash + Relayout {
     /// The slots it has an entry about as an object, alone or as a member of a set, each
     /// the object's current incarnation.
     fn keys(&self) -> Bitboard<L::Slot>;
+
+    /// The slots an entry names other than as the object it is about: what the store holds
+    /// about one object that refers to another, as a card in exile remembers what exiled
+    /// it. Such an object is never interchangeable with a twin ([`State::named`]), which
+    /// what is stored about the twin itself ([`Stored`]) would not show.
+    fn names(&self) -> Bitboard<L::Slot>;
 
     /// Ends every entry about the object in `slot`, which has left its zone or ceased to
     /// exist ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
@@ -234,6 +240,13 @@ impl<L: Layout> State<L> {
     /// The slots a store has an entry about as an object: what `keyed` holds.
     fn store_keys(&self) -> Bitboard<L::Slot> {
         self.effects.keys() | self.memos.keys() | self.trackers.keys() | self.counters.keys()
+    }
+
+    /// The slots a store's entry names other than as the object it is about
+    /// ([`State::named`]). With no such entry live, one AND.
+    #[inline]
+    pub(crate) fn store_names(&self) -> Bitboard<L::Slot> {
+        self.effects.names() | self.memos.names() | self.trackers.names() | self.counters.names()
     }
 
     /// Whether layout `M` has room for what the stores hold ([`State::fits`]).

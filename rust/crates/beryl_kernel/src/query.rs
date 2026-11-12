@@ -12,6 +12,7 @@
 
 use beryl_card::{CardDef, Face, FaceIx, Rule, Rules, Zone};
 
+use crate::bitboard::Bitboard;
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
 use crate::object::Object;
@@ -343,5 +344,63 @@ impl<L: Layout> State<L> {
         } else {
             Copiable::of_object(o).toughness(t)
         }
+    }
+
+    /// The objects another record of the state names, which are never interchangeable
+    /// with a twin (architecture §7.2). [`State::signature`] compares what the state holds
+    /// about an object itself; this is what it holds about something else that refers to
+    /// the object, so that two objects alike in themselves lead to different games:
+    ///
+    /// - a stack entry names its spell's card or its ability's source, its targets
+    ///   ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
+    ///   announces their choice of an appropriate object or player for each target the
+    ///   spell requires."), and the object a triggered ability triggered on. An
+    ///   ability's source is named though the ability exists apart from it: it can be its
+    ///   own target, chosen before its costs are paid
+    ///   ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder
+    ///   of the process for activating an ability is identical to the process for casting
+    ///   a spell listed in rules 601.2b-i"), so a land sacrificed to destroy target land
+    ///   does nothing aimed at itself and destroys its twin aimed at that;
+    /// - an ability that has triggered and waits to be put on the stack, or a delayed one,
+    ///   names its source and that object
+    ///   ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c): "A delayed
+    ///   triggered ability that refers to a particular object still affects it even if the
+    ///   object changes characteristics.");
+    /// - a permanent names what it is attached to
+    ///   ([CR 701.3](https://yawgatog.com/resources/magic-rules/#R7013)), the planeswalker
+    ///   it attacks and the attacker it blocks
+    ///   ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g));
+    /// - an entry of a store about one object names another, as a card in exile remembers
+    ///   what exiled it ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103),
+    ///   [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): the store says
+    ///   which itself (`Store::names`).
+    ///
+    /// Every field and store that holds a slot is either about that slot's object, and
+    /// then part of its signature, or one of these. A new one that refers to an object
+    /// joins the walk here or its store's answer. The zones' orders, what each player
+    /// knows and the open question of a machine step are no part of it: the first two are
+    /// about the object, and the question names what it asks about, never a candidate
+    /// still to choose.
+    ///
+    /// By slot, whichever object the record meant: one that outlived its object keeps
+    /// apart two objects that might have been one candidate, and merges none that are not
+    /// alike.
+    pub fn named(&self) -> Bitboard<L::Slot> {
+        self.named_apart_from_waiting_triggers() | self.named_by_waiting_triggers()
+    }
+
+    /// [`State::named`] without what the abilities waiting to be put on the stack name:
+    /// for the rule that compares those abilities with one another, to which each one's
+    /// own source would otherwise never be like another's.
+    pub fn named_apart_from_waiting_triggers(&self) -> Bitboard<L::Slot> {
+        let mut named = self.store_names() | self.named_by_stack();
+        // A set, built the same in any order. Only a permanent is attached or in combat
+        // (the invariants hold an object off the battlefield to neither).
+        for &slot in self.battlefield() {
+            for other in self.object(slot).names() {
+                named.insert(other);
+            }
+        }
+        named
     }
 }

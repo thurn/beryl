@@ -11,7 +11,7 @@ use crate::state::{
     Zone, ZoneKey,
 };
 use crate::zone::Place;
-use crate::{Choice, DecisionKind, Opt, Profile};
+use crate::{Candidates, Choice, DecisionKind, Opt, Profile};
 
 #[test]
 fn a_spell_its_caster_cannot_pay_for_is_never_offered() {
@@ -247,6 +247,35 @@ fn a_spell_countered_by_an_exiling_counter_is_exiled() {
     g.pass_both();
     assert_eq!(g.s.object(bear).zone(), Zone::Exile);
     assert_eq!(g.s.object(lies).zone(), Zone::Graveyard);
+}
+
+/// Two spells of one card are two candidates to a spell that targets a spell (§7.2): each
+/// is named by its own stack entry, which says what it targets and when it resolves
+/// ([CR 608.1](https://yawgatog.com/resources/magic-rules/#R6081): "Each time all players
+/// pass in succession, the spell or ability on top of the stack resolves.").
+#[test]
+fn two_spells_of_one_card_with_different_targets_are_not_interchangeable() {
+    let mut g = Game::new(Profile::EXACT);
+    let removals = [(); 2].map(|()| g.give(g.them, "Test Removal", Zone::Hand));
+    for _ in 0..4 {
+        g.give(g.them, "Test Land", Zone::Battlefield);
+    }
+    let creatures = ["Test Bear", "Test Elf"].map(|name| g.give(g.me, name, Zone::Battlefield));
+    let lies = g.give(g.me, "Test Lies", Zone::Hand);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.main(g.them);
+    for (removal, creature) in removals.into_iter().zip(creatures) {
+        g.pick(cast(removal));
+        g.pick_object(creature);
+    }
+    g.choose(Choice(0));
+    g.pick(cast(lies));
+    let d = g.decide();
+    assert_eq!(d.kind, DecisionKind::Target);
+    assert_eq!(
+        d.candidates,
+        Candidates::Objects(removals.into_iter().collect())
+    );
 }
 
 #[test]

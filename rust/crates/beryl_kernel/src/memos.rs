@@ -98,6 +98,17 @@ impl<L: Layout> Memo<L> {
         matches!(self, Memo::Paid(_))
     }
 
+    /// The slot it names beside the object that remembers it: what exiled the card. A
+    /// kind that names one has its bit in [`Kinds::NAMING`], which the store's invariant
+    /// holds it to.
+    #[inline]
+    fn names(self) -> Option<L::Slot> {
+        match self {
+            Memo::Paid(_) | Memo::X(_) => None,
+            Memo::ExiledWith(by) | Memo::ExiledUntil(by) => Some(by),
+        }
+    }
+
     /// Whether it says something, and of an exiler that is where such a memo needs it:
     /// what the store's invariant holds each memo to, given the zone of the object in a
     /// slot.
@@ -139,6 +150,8 @@ impl Kinds {
     const X: u16 = 1 << 0;
     const EXILED_WITH: u16 = 1 << 9;
     const EXILED_UNTIL: u16 = 1 << 10;
+    /// The kinds whose memo names a slot ([`Memo::names`]).
+    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL;
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
@@ -236,6 +249,15 @@ impl<L: Layout> Store<L> for Memos<L> {
         self.entries.iter().map(|e| e.slot).collect()
     }
 
+    /// What exiled each card that remembers it. With no such card in the game, one AND.
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        self.of(Kinds::NAMING)
+            .iter()
+            .filter_map(|e| e.memo.names())
+            .collect()
+    }
+
     fn forget(&mut self, slot: L::Slot) -> Ended {
         self.end(|e| e.slot != slot)
     }
@@ -268,6 +290,11 @@ impl<L: Layout> Store<L> for Memos<L> {
             check(
                 e.memo.holds(zone),
                 "a memo of nothing, or of what exiled it and has gone",
+                at,
+            )?;
+            check(
+                e.memo.names().is_none() || e.memo.kinds() & Kinds::NAMING != 0,
+                "a memo names a slot and its kind is not among those that do",
                 at,
             )?;
             let again = |earlier: &Remembered<L>| {

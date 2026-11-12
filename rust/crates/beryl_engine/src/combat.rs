@@ -63,16 +63,6 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
         .collect()
 }
 
-/// The objects another object's `combat` names: the attacked planeswalkers and the blocked
-/// attackers with a blocker still blocking them. Two Ogres, one blocked by a 2/2 and one by
-/// a 1/3, share a signature but are not interchangeable to a third blocker.
-pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
-    s.battlefield()
-        .iter()
-        .filter_map(|&slot| s.object(slot).combat())
-        .collect()
-}
-
 /// Whether any creature can attack now, so that the declaration is worth starting.
 ///
 /// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player

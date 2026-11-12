@@ -265,6 +265,13 @@ impl<L: Layout> Object<L> {
     pub fn combat(&self) -> Option<L::Slot> {
         self.combat
     }
+
+    /// The slots it names ([`crate::State::named`]): what it is attached to, and what it
+    /// attacks or blocks.
+    #[inline]
+    pub(crate) fn names(&self) -> impl Iterator<Item = L::Slot> {
+        [self.attached_to, self.combat].into_iter().flatten()
+    }
 }
 
 const _: () = assert!(size_of::<Option<Slot>>() == 1 && size_of::<Option<CardIx>>() == 1);

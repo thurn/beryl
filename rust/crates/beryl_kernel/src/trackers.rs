@@ -120,6 +120,12 @@ impl<L: Layout> Store<L> for Trackers<L> {
         Bitboard::EMPTY
     }
 
+    /// None: a tracker is a fact about one permanent.
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        Bitboard::EMPTY
+    }
+
     /// Ends what is tracked of the permanent in `slot`, as it leaves the battlefield. The
     /// state has nothing to settle: the slot was no key, and the layers read no tracker.
     #[inline]

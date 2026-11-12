@@ -132,6 +132,12 @@ impl<L: Layout> Store<L> for CounterTable<L> {
         self.rows.iter().map(|row| row.slot).collect()
     }
 
+    /// None: a row is a count of one kind of counter on one object.
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        Bitboard::EMPTY
+    }
+
     /// No layer input ends here: the layers read the counters of permanents alone, and a
     /// permanent that ends has left the battlefield, which marks their results stale.
     fn forget(&mut self, slot: L::Slot) -> Ended {

@@ -36,6 +36,13 @@ impl<L: Layout> Store<L> for Effects<L> {
         objects | self.sets.all()
     }
 
+    /// None: an effect is about what it affects, alone or as a member of a set, and keeps
+    /// the card it came from and not that card's object ([`ContinuousEffect::source`]).
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        Bitboard::EMPTY
+    }
+
     fn forget(&mut self, slot: L::Slot) -> Ended {
         // The object is a member of no set from here
         // ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): what the slot holds

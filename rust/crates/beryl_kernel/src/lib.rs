@@ -430,6 +430,7 @@
 //! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records, the Effects store's with the words and the order saves hold for a permission to cast and a rule change. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent, as its counters are |
 //! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`], [`Observation::memos`], [`Observation::tracked`], [`Observation::counters`]): an effect is public, a memo and a counter as public as their object, a tracker as public as the battlefield |
 //! | an object ending, a duration ending | `Store::forget` and `Store::expire`, from the two moments above; the Trackers store's `forget` from the move's leaving of the battlefield, since it keys no slot |
+//! | [`State::named`] | `Store::names`: the slots an entry names other than as the object it is about, as a card in exile remembers what exiled it. Three stores answer none; the Memos store answers behind its kinds, and its invariant holds a kind of memo that names a slot to the bit that says so |
 //! | [`State::signature`] | compares what the stores hold about the object (`store::Stored`, which names each keyed store once): behind the keyed bit, its memos ([`memos::MemosOf`]), the counters it keeps in no field ([`counters::CounterRows`]) and the effects on it, alone or as a member of a set ([`effects::EffectsOn`]); for a permanent, what is tracked of it ([`trackers::Tracked`]). So no rule keeps a list of the objects an effect tells apart |
 //!
 //! ### The API
@@ -494,6 +495,7 @@
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
 //! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
+//! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and a copy effect's exception
 //! (CR 707.9b). It answers with the face's characteristics ([`Copiable::face`], the blank

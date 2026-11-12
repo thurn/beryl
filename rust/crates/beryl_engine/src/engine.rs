@@ -752,10 +752,10 @@ fn enter_from_hand<L: Layout>(
 /// Collapses interchangeable objects to one candidate each, the lowest slot (§7.2): objects
 /// that differ only in their incarnation and timestamp lead to the same game. Everything
 /// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
-/// your own), copy, link and chosen value as much as card, counters and flags. An object a
-/// pending reference names, a target on the stack or a cast permission, is never collapsed
-/// with another; nor is one that combat relates another object to, since its signature
-/// doesn't show what attacks or blocks it.
+/// your own), copy, link and chosen value as much as card, counters and flags. An object
+/// another record of the state names ([`State::named`]: a target on the stack, a blocked
+/// attacker, what a card is exiled with) is never collapsed with another, since its
+/// signature doesn't show what refers to it.
 ///
 /// Nor is a face-down permanent: whether two are the same card is hidden from all but their
 /// controller ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
@@ -779,7 +779,7 @@ pub(crate) fn collapse<L: Layout>(
 }
 
 /// Whether two object slots are represented by one candidate (architecture §7.2). Read-only
-/// payment previews use the same equivalence as real decisions, including referenced objects.
+/// payment previews use the same equivalence as real decisions, including named objects.
 pub fn interchangeable<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool {
     collapse(s, Bitboard::single(a) | Bitboard::single(b)).count() == 1
 }
@@ -802,8 +802,8 @@ fn collapse_ordered<L: Layout>(
         matches!(s.object(slot).zone(), Zone::Hand | Zone::Library).then(|| s.who_knows(slot))
     };
     // Found only once two candidates are of one card: until then every one is kept, named by
-    // a reference or not.
-    let referenced = OnceCell::new();
+    // another record or not.
+    let named = OnceCell::new();
     let mut kept = Bitboard::EMPTY;
     for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
@@ -813,11 +813,11 @@ fn collapse_ordered<L: Layout>(
             kept.insert(slot);
             continue;
         }
-        let referenced = *referenced.get_or_init(|| cast::referenced(s) | combat::related(s));
+        let named = *named.get_or_init(|| s.named());
         let own = OnceCell::new();
-        if referenced.contains(slot)
+        if named.contains(slot)
             || !kept.any(|k| {
-                !referenced.contains(k)
+                !named.contains(k)
                     && of_card(k)
                     && known(k) == known(slot)
                     && signature(k) == *own.get_or_init(|| signature(slot))

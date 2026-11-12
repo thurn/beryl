@@ -7,8 +7,9 @@
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed,
-    Face, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Prompt, Purpose,
-    Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Face, FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part,
+    Prompt, Purpose, Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec,
+    Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
@@ -19,7 +20,7 @@ use crate::profile::Breakpoint;
 use crate::query::Copiable;
 use crate::state::{
     CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags, Payload,
-    PendingTrigger, TargetPlace, TurnStep, Zone, ZoneKey,
+    PendingTrigger, StackEntry, TargetPlace, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::two_player::TwoPlayerSeat as _;
 use crate::zone::Place;
@@ -942,19 +943,15 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
 
 /// The trigger-order decisions on the way from the starting player's first main phase to
 /// their next one, with two Crypt Lands of theirs and two Watchers of the opponent's.
-fn order_decisions(distinct: bool) -> (Seat, Vec<(Seat, usize)>) {
+fn order_decisions(tell_apart: impl FnOnce(&mut EffectCtx)) -> (Seat, Vec<(Seat, usize)>) {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let a = put(&t, &mut s, &mut x, p, "Test Crypt Land");
     put(&t, &mut s, &mut x, p, "Test Crypt Land");
     put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
     put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
-    if distinct {
-        let r = s.object_ref(a);
-        with_ctx(&t, &mut s, &mut x, a, |ctx| {
-            ctx.add_counters(r, CounterKind::Story, 1);
-        });
-    }
+    // Done as an ability of the first of the two lands.
+    with_ctx(&t, &mut s, &mut x, a, tell_apart);
     let mut asked = Vec::new();
     let mut turns = 0;
     loop {
@@ -977,13 +974,96 @@ fn order_decisions(distinct: bool) -> (Seat, Vec<(Seat, usize)>) {
 
 #[test]
 fn a_player_orders_their_own_triggers_only_when_they_differ() {
-    let (_, same) = order_decisions(false);
+    let (_, same) = order_decisions(|_| {});
     assert!(
         same.is_empty(),
         "equivalent triggers are ordered silently: {same:?}"
     );
-    let (p, distinct) = order_decisions(true);
+    let (p, distinct) = order_decisions(|ctx| {
+        let source = ctx.source();
+        ctx.add_counters(source, CounterKind::Story, 1);
+    });
     assert_eq!(distinct, vec![(p, 2)]);
+    // Alike in themselves, but one exiled a card until it leaves: which leaves first
+    // decides when the card returns (CR 610.3).
+    let (p, named) = order_decisions(|ctx| {
+        let land = ctx.controller().opponent();
+        let s = ctx.state();
+        let theirs = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| s.controller(slot) == land)
+            .map(|slot| s.object_ref(slot))
+            .expect("a Watcher");
+        ctx.exile_until_source_leaves(theirs);
+    });
+    assert_eq!(named, vec![(p, 2)]);
+}
+
+/// The triggers a player chooses the next from, of those waiting.
+fn firsts(s: &State) -> usize {
+    crate::trigger::next_to_stack(s).expect("a trigger").1.len()
+}
+
+/// Waiting triggers name their own sources, so they are compared by renaming one's to the
+/// other's (§7.2): two abilities that each watch one of two twins leave the twins' own
+/// abilities equivalent, and one that watches one twin alone does not.
+#[test]
+fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let ([first, second], watcher) = twins(&t, &mut s, &mut x, p);
+    let trigger = |s: &State, source: Slot, about: Slot| PendingTrigger {
+        source: Some(s.object_ref(source)),
+        card: s.copiable(source).record(&t).0,
+        controller: p,
+        info: TriggerInfo {
+            object: Some(s.object_ref(about)),
+            ..TriggerInfo::default()
+        },
+        ..PendingTrigger::default()
+    };
+    // Each twin's own ability, on its own entering.
+    for twin in [first, second] {
+        s.queue_trigger(trigger(&s, twin, twin)).unwrap();
+    }
+    assert_eq!(firsts(&s), 1);
+
+    // A third permanent's ability for each of them: one of each kind to choose from.
+    let mut both = s;
+    for twin in [first, second] {
+        both.queue_trigger(trigger(&both, watcher, twin)).unwrap();
+    }
+    assert_eq!(firsts(&both), 2);
+
+    // For one of them alone: the twins' abilities are told apart.
+    let mut one = s;
+    one.queue_trigger(trigger(&one, watcher, first)).unwrap();
+    assert_eq!(firsts(&one), 3);
+
+    // A creature that saw itself enter is no twin of one that saw the other.
+    let mut crossed = s;
+    crossed.take_trigger(1);
+    crossed
+        .queue_trigger(trigger(&crossed, second, first))
+        .unwrap();
+    assert_eq!(firsts(&crossed), 2);
+
+    // One of them named off the stack's waiting list: by an ability on the stack.
+    let mut stacked = s;
+    let tr = trigger(&stacked, watcher, first);
+    stacked
+        .put_on_stack(StackEntry {
+            object: tr.source,
+            controller: p,
+            ability: Some(FaceAbility::Own(tr.ability)),
+            card: tr.card,
+            info: tr.info,
+            ..StackEntry::default()
+        })
+        .unwrap();
+    assert_eq!(firsts(&stacked), 2);
 }
 
 #[test]
@@ -1379,6 +1459,143 @@ fn creatures_alike_today_by_effects_that_end_apart_are_not_interchangeable() {
     });
     assert_eq!(s.derived(first), s.derived(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
+}
+
+/// Two Bears of one player on the battlefield, which nothing tells apart, and a third
+/// permanent of theirs to be the source of what is done to one of them.
+fn twins(t: &GameTable, s: &mut State, x: &mut Scratch, p: Seat) -> ([Slot; 2], Slot) {
+    let twins = [(); 2].map(|()| put(t, s, x, p, "Test Bear"));
+    let other = put(t, s, x, p, "Test Staff");
+    assert!(crate::engine::interchangeable(s, twins[0], twins[1]));
+    (twins, other)
+}
+
+/// Two permanents of one card are one candidate only while no other record of the state
+/// names one of them (§7.2). One that exiled a card until it leaves returns the card as
+/// it does ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103): "Some one-shot
+/// effects cause an object to change zones 'until' a specified event occurs."), and its
+/// twin returns none, or another.
+#[test]
+fn a_permanent_that_exiled_a_card_until_it_leaves_is_not_interchangeable_with_its_twin() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let ([first, second], _) = twins(&t, &mut s, &mut x, p);
+    let q = p.opponent();
+    let [theirs, another] = ["Test Bear", "Test Trainer"].map(|name| {
+        let slot = put(&t, &mut s, &mut x, q, name);
+        s.object_ref(slot)
+    });
+    with_ctx(&t, &mut s, &mut x, first, |ctx| {
+        ctx.exile_until_source_leaves(theirs);
+    });
+    assert_eq!(s.exiled_until(first).count(), 1);
+    assert!(s.exiled_until(second).is_empty());
+    assert_eq!(s.signature(first), s.signature(second));
+    assert!(!crate::engine::interchangeable(&s, first, second));
+    // Each exiled a card, and not the same one.
+    with_ctx(&t, &mut s, &mut x, second, |ctx| {
+        ctx.exile_until_source_leaves(another);
+    });
+    assert!(!crate::engine::interchangeable(&s, first, second));
+}
+
+/// The same for the cards exiled with a permanent, which a linked ability of it finds
+/// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a): "The second ability
+/// refers only to cards in the exile zone that were put there as a result of an
+/// instruction to exile them in the first ability.").
+#[test]
+fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let ([first, second], _) = twins(&t, &mut s, &mut x, p);
+    let [land, another] = ["Test Land", "Test Coast"].map(|name| {
+        let slot = find(&s, &t, p, name);
+        s.object_ref(slot)
+    });
+    with_ctx(&t, &mut s, &mut x, first, |ctx| ctx.exile_linked(land));
+    assert_eq!(s.exiled_with(first).count(), 1);
+    assert_eq!(s.signature(first), s.signature(second));
+    assert!(!crate::engine::interchangeable(&s, first, second));
+    with_ctx(&t, &mut s, &mut x, second, |ctx| ctx.exile_linked(another));
+    assert!(!crate::engine::interchangeable(&s, first, second));
+}
+
+/// A creature with a permanent attached that changes nothing of it today and its twin
+/// lead to different games: the attachment goes where its permanent goes
+/// ([CR 704.5m](https://yawgatog.com/resources/magic-rules/#R7045m): "If an Aura is
+/// attached to an illegal object or player, or is not attached to an object or player,
+/// that Aura is put into its owner's graveyard.").
+#[test]
+fn a_permanent_with_something_attached_is_not_interchangeable_with_its_twin() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let ([first, second], attachment) = twins(&t, &mut s, &mut x, p);
+    s.board().attach(attachment, first);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
+    assert_eq!(s.signature(first), s.signature(second));
+    assert!(!crate::engine::interchangeable(&s, first, second));
+}
+
+/// A creature that an ability on the stack will act on without targeting it, one waiting
+/// to be put there or a delayed one, and its twin lead to different games: the ability
+/// finds the object its event involved
+/// ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c): "A delayed triggered
+/// ability that refers to a particular object still affects it even if the object changes
+/// characteristics.").
+#[test]
+fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let ([first, second], source) = twins(&t, &mut s, &mut x, p);
+    let trigger = |s: &State, about: Slot| PendingTrigger {
+        source: Some(s.object_ref(source)),
+        card: s.copiable(source).record(&t).0,
+        controller: p,
+        info: TriggerInfo {
+            object: Some(s.object_ref(about)),
+            ..TriggerInfo::default()
+        },
+        ..PendingTrigger::default()
+    };
+
+    let mut on_the_stack = s;
+    let tr = trigger(&on_the_stack, first);
+    on_the_stack
+        .put_on_stack(StackEntry {
+            object: tr.source,
+            controller: tr.controller,
+            ability: Some(FaceAbility::Own(tr.ability)),
+            card: tr.card,
+            info: tr.info,
+            ..StackEntry::default()
+        })
+        .unwrap();
+    assert_eq!(
+        on_the_stack.signature(first),
+        on_the_stack.signature(second)
+    );
+    assert!(!crate::engine::interchangeable(
+        &on_the_stack,
+        first,
+        second
+    ));
+
+    let mut waiting = s;
+    waiting.queue_trigger(trigger(&waiting, second)).unwrap();
+    assert!(!crate::engine::interchangeable(&waiting, first, second));
+
+    let mut delayed = s;
+    delayed.delay_trigger(trigger(&delayed, first)).unwrap();
+    assert!(!crate::engine::interchangeable(&delayed, first, second));
+
+    // The source of a waiting ability and its twin, too.
+    let mut sources = s;
+    let own = PendingTrigger {
+        source: Some(sources.object_ref(first)),
+        ..trigger(&sources, source)
+    };
+    sources.queue_trigger(own).unwrap();
+    assert!(!crate::engine::interchangeable(&sources, first, second));
 }
 
 #[test]
