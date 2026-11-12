@@ -155,9 +155,15 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     objects: Objects,
 ) -> Result<Outcome<L>, Full> {
     let objects = run.elsewhere_than(objects, Zone::Graveyard);
+    if objects.is_empty() {
+        return Ok(Outcome::NOTHING);
+    }
     run.remember(objects);
-    let mut moved = Bitboard::EMPTY;
-    for slot in run.state().in_candidate_order(objects) {
+    // A spell among them leaves the stack without resolving, and one that is exiled
+    // instead has moved already.
+    let rest = stack::unstack(run.game(), objects, Zone::Graveyard)?;
+    let mut moved = objects & !rest;
+    for slot in run.state().in_candidate_order(rest) {
         let object = run.state().object_ref(slot);
         move_to(run.game(), object, Zone::Graveyard, Reason::Effect)?;
         if !run.state().is_current(object) {
