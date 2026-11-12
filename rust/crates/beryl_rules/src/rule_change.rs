@@ -10,20 +10,20 @@
 use crate::card::Rule;
 use crate::filter;
 use crate::layout::Layout;
-use crate::state::{Affects, State};
+use crate::state::{State, Subject};
 use crate::table::GameTable;
 
 /// Whether `rule` applies to `to` now, a player or a permanent, by a static ability or a
 /// resolved effect: one AND for a player.
 #[inline]
-pub(crate) fn applies<L: Layout>(s: &State<L>, t: &GameTable, rule: Rule, to: Affects<L>) -> bool {
+pub(crate) fn applies<L: Layout>(s: &State<L>, t: &GameTable, rule: Rule, to: Subject<L>) -> bool {
     let applies = s.rule_applies(t, rule, to);
     // A permanent's rule about itself did what it says as it is read. One for players did
     // as the layers put it in force ([`crate::layers`]): finding its ability again here
     // would walk the battlefield at every read.
     #[cfg(feature = "coverage")]
-    if applies && let Affects::Object { slot, .. } = to {
-        has(s, t, slot, rule);
+    if applies && let Subject::Object(object) = to {
+        has(s, t, object.slot, rule);
     }
     applies
 }
@@ -37,13 +37,13 @@ pub(crate) fn maker<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     rule: Rule,
-    to: Affects<L>,
+    to: Subject<L>,
 ) -> Option<L::Slot> {
     match to {
-        Affects::Object { slot, .. } => {
-            (rule.whose().is_none() && has(s, t, slot, rule)).then_some(slot)
+        Subject::Object(object) => {
+            (rule.whose().is_none() && has(s, t, object.slot, rule)).then_some(object.slot)
         }
-        Affects::Player(player) => {
+        Subject::Player(player) => {
             let whose = rule.whose()?;
             // A permanent's derived characteristics, its controller among them, are at its
             // place in the battlefield list.
@@ -53,8 +53,6 @@ pub(crate) fn maker<L: Layout>(
                 })
                 .map(|(slot, _)| slot)
         }
-        // No rule is changed for a set of objects.
-        Affects::Set(_) => None,
     }
 }
 

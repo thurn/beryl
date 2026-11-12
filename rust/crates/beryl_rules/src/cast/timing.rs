@@ -5,7 +5,7 @@ use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Rule, Typ
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::rule_change;
-use crate::state::{Affects, StackEntry, State, TurnStep, Zone};
+use crate::state::{StackEntry, State, Subject, TurnStep, Zone};
 use crate::table::GameTable;
 
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
@@ -75,7 +75,7 @@ pub(super) fn sorcery_speed_only<L: Layout>(s: &State<L>, t: &GameTable, player:
         s,
         t,
         Rule::OpponentsCastAsSorceries,
-        Affects::Player(player),
+        Subject::Player(player),
     )
 }
 
@@ -92,5 +92,5 @@ pub(super) fn instant_speed<L: Layout>(
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
         || (face.types.intersects(Types::SORCERY)
-            && rule_change::applies(s, t, Rule::SorceriesAsFlash, Affects::Player(player)))
+            && rule_change::applies(s, t, Rule::SorceriesAsFlash, Subject::Player(player)))
 }

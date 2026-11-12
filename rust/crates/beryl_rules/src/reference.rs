@@ -17,7 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
-use crate::state::{Affects, ObjectFlags, State, Zone, ZoneKey};
+use crate::state::{ObjectFlags, State, Subject, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -90,7 +90,7 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
     )?;
     // The players in any order: each is checked alone.
     for player in s.players_in_seat_order(s.players()) {
-        let to = Affects::Player(player);
+        let to = Subject::Player(player);
         check(
             Rules::OF_PLAYERS
                 .iter()

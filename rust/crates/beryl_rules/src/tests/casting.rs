@@ -7,7 +7,7 @@ use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, Rule}
 use crate::event::{self, Reason};
 use crate::ids::Slot;
 use crate::state::{
-    Affects, CounterKind, Duration, ManaPool, ObjectFlags, Payload, Pending, Tracker, TurnStep,
+    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, Pending, Subject, Tracker, TurnStep,
     Zone, ZoneKey,
 };
 use crate::zone::Place;
@@ -564,8 +564,7 @@ fn a_limit_to_sorcery_speed_beats_a_permission_to_cast_as_though_with_flash() {
     g.current();
     with_ctx(&g.t, &mut g.s, &mut g.x, island, |ctx| {
         ctx.add_effect(
-            Affects::Player(me),
-            Payload::Rule(Rule::SorceriesAsFlash),
+            Continuous::Rule(Subject::Player(me), Rule::SorceriesAsFlash),
             Duration::UntilYourNextTurn(me),
         );
     });

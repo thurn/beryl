@@ -6,7 +6,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Subtype, Types};
 use crate::event::{self, Event, Reason};
 use crate::ids::{Seat, SlotId};
-use crate::state::{Affects, Duration, LayerChange, Payload, Zone};
+use crate::state::{Continuous, Duration, LayerChange, Zone};
 use crate::{
     GameTable, Large, Layout, Outcome, Replay, Scratch, StallReason, State, Step, layers, next,
     trigger,
@@ -109,10 +109,8 @@ fn an_effect_on_the_301st_permanent_changes_it_and_no_other() {
     tokens(&mut s, p, card, 300);
     assert_eq!(s.battlefield().len(), 301);
     let pumped = s.battlefield()[300];
-    let object = Affects::object(s.object_ref(pumped));
-    let change = Payload::Layer(LayerChange::ModifyPt(3, 3));
-    s.start_effect(card, object, change, Duration::Indefinite)
-        .unwrap();
+    let change = Continuous::Layer(s.object_ref(pumped), LayerChange::ModifyPt(3, 3));
+    s.start_effect(card, change, Duration::Indefinite).unwrap();
     refresh(&mut s, &t);
     for (position, &slot) in s.battlefield().iter().enumerate() {
         let expected = if slot == pumped { (5, 5) } else { (2, 2) };

@@ -18,7 +18,7 @@ use crate::game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
 use crate::state::{
-    Affects, CounterKind, Duration, Payload, Pending, TargetPlace, TurnStep, Zone, ZoneKey,
+    Continuous, CounterKind, Duration, Pending, Subject, TargetPlace, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::{
@@ -180,8 +180,7 @@ fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.add_effect(
-        Affects::Player(you),
-        Payload::Rule(Rule::SorceriesAsFlash),
+        Continuous::Rule(Subject::Player(you), Rule::SorceriesAsFlash),
         Duration::UntilYourNextTurn(you),
     );
     Ok(())

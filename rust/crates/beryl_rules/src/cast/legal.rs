@@ -8,15 +8,15 @@ use crate::card::{
     Ability, AbilityKind, Castings, Face, FaceIx, ManaCost, Needs, ObjectAbility, Rule, Timing,
     Types,
 };
+use crate::casting;
 use crate::decision::{Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::mana::Funds;
-use crate::permission;
 use crate::rule_change;
-use crate::state::{Affects, ObjectFlags, State, Tracker, Zone, ZoneKey};
+use crate::state::{ObjectFlags, State, Subject, Tracker, Zone, ZoneKey};
 use crate::table::GameTable;
 
 use super::costs::{ExileCost, From, option_sets, spell_cost, x_range_start};
@@ -111,7 +111,7 @@ fn refused<L: Layout>(
     }
     let (increase, free) = match from {
         From::Priority => (
-            permission::of(s, player, slot).map_or(0, |p| p.terms.increase),
+            casting::permission(s, player, slot).map_or(0, |p| p.terms.increase),
             false,
         ),
         From::Resolution { free } => (0, free),
@@ -170,7 +170,7 @@ pub(crate) fn refusal<L: Layout>(
     let Some(def) = s.card_def(t, slot) else {
         return Ok(land);
     };
-    let flashback = permission::of(s, player, slot).is_some_and(|p| p.terms.is_flashback());
+    let flashback = casting::permission(s, player, slot).is_some_and(|p| p.terms.is_flashback());
     let mut most = land;
     for f in def.face_ixs() {
         let face = def.face(f);
@@ -195,7 +195,7 @@ pub(crate) fn refusal<L: Layout>(
         if instant {
             let limit = Rule::OpponentsCastAsSorceries;
             most = Some(Refusal::Timing {
-                by: rule_change::maker(s, t, limit, Affects::Player(player)),
+                by: rule_change::maker(s, t, limit, Subject::Player(player)),
             });
         }
     }
@@ -243,7 +243,7 @@ pub(super) fn cast_options<L: Layout>(
         .filter_map(with_def)
     {
         let flashback = from == From::Priority
-            && permission::of(s, player, slot).is_some_and(|p| p.terms.is_flashback());
+            && casting::permission(s, player, slot).is_some_and(|p| p.terms.is_flashback());
         for f in def.face_ixs() {
             let face = def.face(f);
             if face.transformed {
@@ -368,7 +368,7 @@ fn activatable<L: Layout>(
             && (sorcery_timing(s, player)
                 || (s.tracked(Tracker::EnteredThisTurn, slot)
                     && unused()
-                    && rule_change::applies(s, t, instant, Affects::object(s.object_ref(slot)))))
+                    && rule_change::applies(s, t, instant, Subject::Object(s.object_ref(slot)))))
             && unused()
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the

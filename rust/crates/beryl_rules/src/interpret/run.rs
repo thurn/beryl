@@ -1,26 +1,25 @@
 //! Carrying out effect data's instructions. [`Run::carry_out`] is the table of them: an
-//! entry whose library function is written has its arm in that function's module, named
-//! `instruction` (the crate's contract, "Modules"), and the others (adding mana, continuous
-//! effects) are still done here through the [`EffectCtx`] method a Rust body would call,
-//! until their modules are written.
+//! entry's arm is in its library function's module, named `instruction` (the crate's
+//! contract, "Modules").
 //!
 //! An instruction acts on every object it names at once where the engine has a primitive
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random).
 
-use beryl_card::{Duration, Effect, Objects, Players};
+use beryl_card::{Effect, Objects, Players};
 
 use crate::actions::{counter, destroy, discard, exile, mill, sacrifice, scry};
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, FaceAbility, Flow, ManaSet, Modification};
+use crate::card::{AbilityIx, FaceAbility, Flow};
 use crate::effect::EffectCtx;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
-use crate::state::{self, LayerChange, ObjectRef, PendingTrigger, State, Zone, placed};
-use crate::{choices, costs, counters, drawing, library, life, one_shot, tokens, zones};
+use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
+use crate::{choices, continuous, costs, counters, drawing, library, life, mana, one_shot};
+use crate::{tokens, zones};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -165,12 +164,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 kind,
                 count,
             } => counters::remove_instruction(self, objects, kind, count)?,
-            Effect::AddMana { player, mana } => self.add_mana(player, mana),
+            Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana),
             Effect::Modify {
                 objects,
                 modification,
                 duration,
-            } => self.modify(objects, modification, duration),
+            } => continuous::instruction(self, objects, modification, duration)?,
         };
         Ok(())
     }
@@ -272,47 +271,6 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     pub(crate) fn now_in(&self, objects: Bitboard<L::Slot>, zone: Zone) -> Outcome<L> {
         let s = &*self.ctx.game.state;
         Outcome::acted_on(objects.filter(|slot| s.object(slot).zone() == zone))
-    }
-
-    /// "[Player] adds [mana]" (CR 106.3): "A spell or ability that produces mana instructs a
-    /// player to add that mana", of the kind its activator chose among those it produces.
-    fn add_mana(&mut self, players: Players, mana: ManaSet) -> Outcome<L> {
-        debug_assert!(mana.includes(self.ctx.resolution.mana));
-        let mut added = 0;
-        for player in self.in_turn_order(players) {
-            self.ctx
-                .add_mana(player, self.ctx.resolution.mana, mana.amount);
-            added += u32::from(mana.amount);
-        }
-        Outcome::of(Bitboard::EMPTY, added)
-    }
-
-    /// "[Objects] get, gain or become [modification] [duration]"
-    /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): a continuous effect
-    /// from a resolving ability "lasts as long as stated by the spell or ability creating
-    /// it". It affects the permanents that are there as it begins (CR 611.2c): "After that
-    /// point, the set won't change."
-    fn modify(
-        &mut self,
-        objects: Objects,
-        modification: Modification,
-        duration: Duration,
-    ) -> Outcome<L> {
-        let duration = match duration {
-            Duration::EndOfTurn => state::Duration::EndOfTurn,
-            Duration::UntilYourNextTurn => {
-                state::Duration::UntilYourNextTurn(self.ctx.controller())
-            }
-            Duration::Indefinite => state::Duration::Indefinite,
-        };
-        // "You" in what it says is the ability's controller as it resolves.
-        let change = LayerChange::resolve(modification, self.ctx.controller());
-        // One effect, with one timestamp, on the set as it is now
-        // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an
-        // earlier timestamp is applied before an effect with a later timestamp.").
-        let permanents = self.permanents(objects);
-        self.ctx.add_effect_on_set(permanents, change, duration);
-        Outcome::acted_on(permanents)
     }
 }
 

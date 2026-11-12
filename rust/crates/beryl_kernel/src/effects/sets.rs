@@ -19,7 +19,7 @@ use crate::relayout::bits;
 use crate::state::{State, Zone};
 use crate::store::Duration;
 
-use super::{Affects, ContinuousEffect, Kinds, LayerChange, Payload};
+use super::{Affects, Continuous, ContinuousEffect, Kinds, LayerChange, Payload};
 
 /// The sets of objects a [`Small`] game's effects hold locked in at once. One past it
 /// stalls the game into [`crate::Large`], whose table grows.
@@ -152,15 +152,14 @@ impl<L: Layout> State<L> {
         change: LayerChange,
         duration: Duration,
     ) -> Result<(), Full> {
-        let payload = Payload::Layer(change);
         let mut rest = members.iter();
         match (rest.next(), rest.next()) {
             (None, _) => Ok(()),
             (Some(sole), None) => {
-                let object = Affects::object(self.object_ref(sole));
-                self.start_effect(source, object, payload, duration)
+                let effect = Continuous::Layer(self.object_ref(sole), change);
+                self.start_effect(source, effect, duration)
             }
-            _ => self.lock_in(source, members, payload, duration),
+            _ => self.lock_in(source, members, change, duration),
         }
     }
 
@@ -172,7 +171,7 @@ impl<L: Layout> State<L> {
         &mut self,
         source: L::Card,
         members: Bitboard<L::Slot>,
-        payload: Payload,
+        change: LayerChange,
         duration: Duration,
     ) -> Result<(), Full> {
         debug_assert!(members.all(|slot| self.object(slot).zone() == Zone::Battlefield));
@@ -184,7 +183,7 @@ impl<L: Layout> State<L> {
             timestamp,
             duration,
             affected: Affects::Set(set),
-            payload,
+            payload: Payload::Layer(change),
         });
         if pushed.is_err() {
             // What did not fit is in no index, and holds no place of the table.

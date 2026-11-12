@@ -9,6 +9,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table, index};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
@@ -16,7 +17,7 @@ use crate::state::{
     CastStep, Casting, CounterKind, Pending, StackEntry, State, Target, Tracker, Zone,
 };
 use crate::table::GameTable;
-use crate::{counters, permission};
+use crate::{casting, counters};
 
 use super::costs::{ExileCost, exile_choices, spent_by_entry, total_cost, x_range_start};
 use super::legal::{benders, crew_candidates, power_of, waterbend_payable};
@@ -43,7 +44,7 @@ pub(crate) fn begin_cast<L: Layout>(
     let Opt::Cast { slot, face, costs } = option else {
         unreachable!("a cast option");
     };
-    let permission = permission::of(s, player, slot);
+    let permission = casting::permission(s, player, slot);
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let (card, _) = s.copiable(slot).record(t);
     s.become_spell(slot, face, player);
@@ -57,7 +58,7 @@ pub(crate) fn begin_cast<L: Layout>(
         ..StackEntry::default()
     })?;
     if let Some(permission) = permission {
-        permission::begin_on_spell(s, slot, permission)?;
+        casting::begin_on_spell(s, slot, permission)?;
     }
     let free = resolving.unwrap_or(false);
     let def_face = t.def(card).face(face);
@@ -395,7 +396,7 @@ fn finish<L: Layout>(
                 targets: entry.targets.clone(),
                 x: entry.x,
                 costs: entry.costs,
-                flashback: permission::flashback_paid(s, spell),
+                flashback: flashback::paid(s, spell),
             },
         )?;
     } else {

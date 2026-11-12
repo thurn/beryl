@@ -229,7 +229,24 @@
 //!
 //! ### Affected sides and payloads
 //!
-//! An effect affects one of four sides ([`effects::Affects`]): an object, named by slot and
+//! An effect is started as one value, [`effects::Continuous`]: what it does with what it
+//! does it to. Its variants are the pairs the game has a meaning for (a layer change, a
+//! zone-change replacement, a permission to cast and a cost change on one object; a rule
+//! change on a player or an object, [`effects::Subject`]), so no caller can write another,
+//! and [`State::start_effect`] takes nothing else. The mutators are the only way into the
+//! store, so every entry is one of those pairs or a layer change on a locked-in set, and a
+//! reader meets no other: [`State::layer_effects`] gives the permanents each change is on
+//! ([`effects::Permanents`], one or a set), [`State::rule_applies`] asks about a
+//! [`effects::Subject`], and the queries by kind give what their kind is on.
+//!
+//! An entry keeps the pair as two halves, the affected side ([`effects::Affects`]) and
+//! the payload ([`effects::Payload`]), because the pair as one enum is 32 bytes in
+//! [`Small`] and the two apart are 24 (measured in by-w8gv.9.6: a layer change is 16 bytes
+//! with an alignment of 8, so a variant holding it beside what it is on is 24 before the
+//! entry's source, timestamp and duration). Both stay public to read, for a view, a tool
+//! and a comparison of two games.
+//!
+//! The affected side is one of four: an object, named by slot and
 //! incarnation, a player, and a locked-in set, by its index in the store's table (built);
 //! the game, which joins with its first user, since no card yet changes a rule for
 //! everyone. The fields are the variant's own, so every side fits four bytes.
@@ -245,16 +262,18 @@
 //! effect ends with its duration or with its last member, and its place in the table is
 //! free again. Only an effect on two objects or more takes a place: on one it is an entry
 //! on that object, the same effect, and on none it never begins. A set is affected by a
-//! layer change alone, as a player is by a rule change alone (the store's invariants):
-//! nothing else the cards do is one effect on several objects, and each query by kind
-//! would otherwise search the sets. An effect cannot be started on another's set.
+//! layer change alone, as a player is by a rule change alone (the store's invariants,
+//! which the mutators' arguments keep): nothing else the cards do is one effect on several
+//! objects, and each query by kind would otherwise search the sets. An effect cannot be
+//! started on another's set: only [`State::start_effect_on_set`] names one, and it makes
+//! the set it names.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
 //! rule change, a permission to cast or a cost change (built). A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
 //! rule change is the vocabulary's own `Rule`, which names no player: the affected side is
-//! who it applies to. A player is affected by a rule change alone (the store's invariant). [`effects::LayerChange`] is the resolved form of `beryl_card`'s
+//! who it applies to. [`effects::LayerChange`] is the resolved form of `beryl_card`'s
 //! `Modification`, whose `Control` names no seat: [`effects::LayerChange::resolve`] gives
 //! it the ability's controller. A payload is at most 15 bytes and names no slot, so an
 //! entry stays 24 bytes, which the store's file asserts, and converts to another layout
@@ -420,8 +439,8 @@
 //! `store::Store`, in the store's own file, with `Clone` and equality, which it derives,
 //! `Hash` and [`relayout::Relayout`]. Nothing below grows with a new kind of entry. A new
 //! kind is its own entry and its reader, and the compiler asks for no more (tried with a
-//! scratch kind in each store, by-w8gv.7.11): of effect, a variant of [`effects::Payload`]
-//! and its bit of the store's kinds; of memo, a variant of [`memos::Memo`] and its arm in
+//! scratch kind in each store, by-w8gv.7.11): of effect, a variant of [`effects::Continuous`]
+//! and of [`effects::Payload`], and its bit of the store's kinds; of memo, a variant of [`memos::Memo`] and its arm in
 //! each of the memo's own methods; of tracker, an entry of the list in [`trackers`] and
 //! the [`table::Capability`] of its name, with how a card is found to read it; of counter,
 //! an entry of `beryl_card::counter_kinds`.

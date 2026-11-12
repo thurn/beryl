@@ -24,8 +24,8 @@
 //! `docs/project-50k.md`, "Rules library"). This is the design every bead of milestone 5
 //! (epic by-w8gv.9) builds on, written as it will stand when they land; a bead that builds a
 //! part amends its text. What moves an object between zones, the keyword actions, drawing,
-//! counters, damage, life, tokens, the choices, paying a cost and coins are built. Continuous
-//! effects, emblems and delayed triggers are still methods of the shim ("The shim").
+//! counters, damage, life, tokens, the choices, paying a cost, coins, continuous effects,
+//! permissions to cast, delayed triggers, emblems, winning and adding mana are built.
 //!
 //! ## Game
 //!
@@ -99,8 +99,8 @@
 //! | Rules | Module | Built, and to come |
 //! | --- | --- | --- |
 //! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
-//! | CR 702, keyword abilities | `keywords/`, a file for each | flashback, kicker |
-//! | any other rule | a module named for the rule's title | [`tokens`] (CR 111), [`costs`] (CR 118), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting`] spells as an effect allows (CR 601), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`coins`] (CR 705); emblems (CR 114), continuous effects (CR 611), copies (CR 707) |
+//! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
+//! | any other rule | a module named for the rule's title | [`ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`costs`] (CR 118), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting`] spells as an effect allows (CR 601), [`delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
 //!
 //! A module holds, in this order:
 //!
@@ -148,12 +148,9 @@
 //! ## The shim
 //!
 //! [`effect::EffectCtx`] is how the bodies written before the library reach the game: a
-//! [`Game`], a [`Resolution`], and a method for each thing a body did. A method whose module
-//! is written is a line that calls it, giving the function this ability's source or
-//! controller where a body never named them, and it is gone once no body calls it. The
-//! others still hold their code, and move with the bead that writes their module: it moves
-//! the code into a function, moves the interpreter's arm into an `instruction`, and leaves
-//! the method a delegation.
+//! [`Game`], a [`Resolution`], and a method for each thing a body did. Every method is a
+//! line that calls its library function, giving it this ability's source or controller
+//! where a body never named them, and it is gone once no body calls it.
 //!
 //! The shim's methods that return nothing keep a body's old way with `Full`: they note it on
 //! the shim, and the body plays on until it returns. The bodies are never rewritten against
@@ -169,24 +166,28 @@ pub mod casting;
 pub mod choices;
 pub mod coins;
 mod combat;
+pub mod continuous;
 pub mod costs;
 pub mod counters;
 pub mod coverage;
 pub mod damage;
+pub mod delayed_triggers;
 pub mod drawing;
 pub mod effect;
+pub mod emblems;
+pub mod ending;
 mod engine;
 pub mod event;
 mod face_down;
 pub mod game;
 mod interpret;
+pub mod keywords;
 mod layers;
 pub mod library;
 pub mod life;
 pub mod linked;
-mod mana;
+pub mod mana;
 pub mod one_shot;
-mod permission;
 mod reference;
 pub mod resolution;
 mod resolve;
@@ -232,8 +233,8 @@ pub use engine::{
     paused_events, refusal, view,
 };
 pub use game::Game;
+pub use keywords::flashback::paid as flashback_paid;
 pub use mana::mana_contribution;
-pub use permission::flashback_paid;
 pub use reference::check_references;
 pub use resolution::Resolution;
 

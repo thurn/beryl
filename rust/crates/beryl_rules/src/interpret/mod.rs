@@ -16,10 +16,11 @@ use crate::card::{Ability, Behavior, Flow, ManaColor};
 use crate::effect::EffectCtx;
 use crate::event::Sink;
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::game::Game;
 use crate::layers;
 use crate::layout::{Bodies, Layout};
-use crate::state::{ObjectRef, PendingTrigger, State};
+use crate::mana;
+use crate::state::{PendingTrigger, State};
 use crate::table::GameTable;
 
 pub(crate) use run::{Run, no_primitive};
@@ -78,11 +79,11 @@ pub(crate) fn mana_ability<L: Layout>(
     {
         debug_assert!(mana.includes(color));
         let activation = activation();
-        add_mana(
-            s,
-            sink,
-            activation.controller,
-            activation.source,
+        let (player, source) = (activation.controller, activation.source);
+        mana::add(
+            &mut Game::new(s, t, sink),
+            player,
+            source,
             color,
             mana.amount,
         );
@@ -93,22 +94,6 @@ pub(crate) fn mana_ability<L: Layout>(
     // A mana ability never asks a question, and has no targets (CR 605.1a).
     let flow = resolve(&mut ctx);
     ctx.finish(flow).map(|_| ())
-}
-
-/// Adds mana to a player's mana pool
-/// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
-/// instructs a player to add mana, that mana goes into a player's mana pool." Nothing
-/// triggers on adding mana, so it skips the event pipeline.
-#[inline]
-pub(crate) fn add_mana<L: Layout>(
-    s: &mut State<L>,
-    sink: &mut Sink<L>,
-    player: Seat,
-    source: Option<ObjectRef<L>>,
-    color: ManaColor,
-    amount: u8,
-) {
-    sink.note(s.add_mana(player, source, color, amount));
 }
 
 /// Whether a triggered ability's intervening "if" holds, or it has none

@@ -17,6 +17,16 @@ use crate::{CardIx, LargeCardIx, LargeSlot, Slot};
 const PUMP: Payload = Payload::Layer(LayerChange::ModifyPt(2, 2));
 const EXILE: Payload = Payload::Move(MoveReplacement::ExileInsteadOfGraveyard);
 
+/// [`PUMP`] on `object`, to start.
+fn pump<L: Layout>(object: ObjectRef<L>) -> Continuous<L> {
+    Continuous::Layer(object, LayerChange::ModifyPt(2, 2))
+}
+
+/// [`EXILE`] on `object`, to start.
+fn exile<L: Layout>(object: ObjectRef<L>) -> Continuous<L> {
+    Continuous::Move(object, MoveReplacement::ExileInsteadOfGraveyard)
+}
+
 /// The object in the `i`th slot of a state with no game in it: enough to key a store.
 fn nth<L: Layout>(s: &State<L>, i: usize) -> ObjectRef<L> {
     s.object_ref(L::Slot::from_index(i))
@@ -29,18 +39,12 @@ fn an_effect_survives_small_to_large_and_back() {
     small
         .start_effect(
             CardIx::from_index(3),
-            Affects::object(seventh),
-            PUMP,
+            pump(seventh),
             Duration::UntilYourNextTurn(Seat::P1),
         )
         .unwrap();
     small
-        .start_effect(
-            CardIx::FIRST,
-            Affects::object(nth(&small, 200)),
-            EXILE,
-            Duration::Indefinite,
-        )
+        .start_effect(CardIx::FIRST, exile(nth(&small, 200)), Duration::Indefinite)
         .unwrap();
 
     let large: State<Large> = small.widen();
@@ -84,15 +88,15 @@ fn a_full_store_returns_full_and_a_wide_one_grows() {
     let mut small: State<Small> = State::empty(Profile::EXACT);
     let mut large: State<Large> = State::empty(Profile::EXACT);
     for i in 0..EFFECTS {
-        let object = Affects::object(nth(&small, i));
+        let effect = exile(nth(&small, i));
         assert_eq!(
-            small.start_effect(CardIx::FIRST, object, EXILE, Duration::EndOfTurn),
+            small.start_effect(CardIx::FIRST, effect, Duration::EndOfTurn),
             Ok(())
         );
     }
-    let one_more = Affects::object(nth(&small, EFFECTS));
+    let one_more = pump(nth(&small, EFFECTS));
     assert_eq!(
-        small.start_effect(CardIx::FIRST, one_more, PUMP, Duration::EndOfTurn),
+        small.start_effect(CardIx::FIRST, one_more, Duration::EndOfTurn),
         Err(Full)
     );
     assert_eq!(small.effects().len(), EFFECTS);
@@ -101,9 +105,9 @@ fn a_full_store_returns_full_and_a_wide_one_grows() {
     assert!(!small.keyed.contains(Slot::from_index(EFFECTS)));
 
     for i in 0..=EFFECTS {
-        let object = Affects::object(nth(&large, i));
+        let effect = exile(nth(&large, i));
         assert_eq!(
-            large.start_effect(LargeCardIx::FIRST, object, EXILE, Duration::EndOfTurn),
+            large.start_effect(LargeCardIx::FIRST, effect, Duration::EndOfTurn),
             Ok(())
         );
     }
@@ -124,15 +128,14 @@ static NO_CARDS: crate::table::CardTable = crate::table::CardTable::new(&[]);
 fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
     let t = GameTable::new(&NO_CARDS, [&[], &[]]).unwrap();
     let rule = Rule::SorceriesAsFlash;
-    let (you, other) = (Affects::Player(Seat::P1), Affects::Player(Seat::P0));
+    let (you, other) = (Subject::Player(Seat::P1), Subject::Player(Seat::P0));
     let mut small: State<Small> = State::empty(Profile::EXACT);
     small.flags.derived_dirty = false;
     assert!(!small.rule_applies(&t, rule, you));
     small
         .start_effect(
             CardIx::FIRST,
-            you,
-            Payload::Rule(rule),
+            Continuous::Rule(you, rule),
             Duration::UntilYourNextTurn(Seat::P1),
         )
         .unwrap();
@@ -152,8 +155,8 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
 
     let mut large: State<Large> = small.widen();
     assert_eq!(large.effects()[0].affected, Affects::Player(Seat::P1));
-    assert!(large.rule_applies(&t, rule, Affects::Player(Seat::P1)));
-    assert!(!large.rule_applies(&t, rule, Affects::Player(Seat::P0)));
+    assert!(large.rule_applies(&t, rule, Subject::Player(Seat::P1)));
+    assert!(!large.rule_applies(&t, rule, Subject::Player(Seat::P0)));
     let back: State<Small> = large.relayout();
     assert_eq!(back, small);
 
@@ -166,7 +169,7 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
     small.expire(Duration::UntilYourNextTurn(Seat::P1));
     large.expire(Duration::UntilYourNextTurn(Seat::P1));
     assert!(!small.rule_applies(&t, rule, you));
-    assert!(!large.rule_applies(&t, rule, Affects::Player(Seat::P1)));
+    assert!(!large.rule_applies(&t, rule, Subject::Player(Seat::P1)));
     assert!(small.effects().is_empty());
     assert_eq!(small.stores_lingering(&t), None);
     assert!(!small.is_derived_stale(), "no layer result changed");
@@ -176,16 +179,16 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
 #[test]
 fn two_rule_changes_on_a_player_end_apart() {
     let t = GameTable::new(&NO_CARDS, [&[], &[]]).unwrap();
-    let to = Affects::Player(Seat::P0);
+    let to = Subject::Player(Seat::P0);
     let mut s: State<Small> = State::empty(Profile::EXACT);
     s.flags.derived_dirty = false;
-    let rule = Payload::Rule(Rule::SorceriesAsFlash);
-    s.start_effect(CardIx::FIRST, to, rule, Duration::EndOfTurn)
+    let rule = Continuous::Rule(to, Rule::SorceriesAsFlash);
+    s.start_effect(CardIx::FIRST, rule, Duration::EndOfTurn)
         .unwrap();
-    s.start_effect(CardIx::FIRST, to, rule, Duration::Indefinite)
+    s.start_effect(CardIx::FIRST, rule, Duration::Indefinite)
         .unwrap();
-    let limit = Payload::Rule(Rule::OpponentsCastAsSorceries);
-    s.start_effect(CardIx::FIRST, to, limit, Duration::EndOfTurn)
+    let limit = Continuous::Rule(to, Rule::OpponentsCastAsSorceries);
+    s.start_effect(CardIx::FIRST, limit, Duration::EndOfTurn)
         .unwrap();
     // The one that ends takes its own rule with it and leaves the rule another still
     // changes.
@@ -202,8 +205,7 @@ fn a_rule_change_on_an_object_ends_with_the_object() {
     let rule = Rule::InstantLoyaltyTheTurnItEntered;
     s.start_effect(
         CardIx::FIRST,
-        Affects::object(first),
-        Payload::Rule(rule),
+        Continuous::Rule(Subject::Object(first), rule),
         Duration::Indefinite,
     )
     .unwrap();
@@ -219,13 +221,12 @@ fn a_rule_change_on_an_object_ends_with_the_object() {
 fn effects_end_with_their_duration_and_with_their_object() {
     let mut s: State<Small> = State::empty(Profile::EXACT);
     let (first, second) = (nth(&s, 1), nth(&s, 2));
-    let start = |s: &mut State<Small>, object, payload, duration| {
-        s.start_effect(CardIx::FIRST, Affects::object(object), payload, duration)
-            .unwrap();
+    let start = |s: &mut State<Small>, effect, duration| {
+        s.start_effect(CardIx::FIRST, effect, duration).unwrap();
     };
-    start(&mut s, first, PUMP, Duration::EndOfTurn);
-    start(&mut s, first, EXILE, Duration::Indefinite);
-    start(&mut s, second, PUMP, Duration::UntilYourNextTurn(Seat::P0));
+    start(&mut s, pump(first), Duration::EndOfTurn);
+    start(&mut s, exile(first), Duration::Indefinite);
+    start(&mut s, pump(second), Duration::UntilYourNextTurn(Seat::P0));
     s.flags.derived_dirty = false;
 
     // Another player's turn beginning ends nothing.
@@ -273,15 +274,13 @@ fn a_permission_to_cast_ends_with_its_turn_or_with_its_card() {
     let plain = permission(None);
     s.start_effect(
         CardIx::FIRST,
-        Affects::object(this_turn),
-        Payload::Cast(flashback),
+        Continuous::Cast(this_turn, flashback),
         Duration::EndOfTurn,
     )
     .unwrap();
     s.start_effect(
         CardIx::FIRST,
-        Affects::object(while_there),
-        Payload::Cast(plain),
+        Continuous::Cast(while_there, plain),
         Duration::Indefinite,
     )
     .unwrap();
@@ -333,25 +332,19 @@ fn a_permission_and_a_spells_terms_survive_small_to_large_and_back() {
     small
         .start_effect(
             CardIx::from_index(3),
-            Affects::object(card),
-            Payload::Cast(terms),
+            Continuous::Cast(card, terms),
             Duration::Indefinite,
         )
         .unwrap();
     // What a spell cast on such terms carries: its cost increases, added together, and
     // the replacement of where it goes.
-    for payload in [
-        Payload::Cost(CostChange::Increase(2)),
-        Payload::Cost(CostChange::Increase(1)),
-        Payload::Move(MoveReplacement::Flashback),
+    for terms in [
+        Continuous::Cost(spell, CostChange::Increase(2)),
+        Continuous::Cost(spell, CostChange::Increase(1)),
+        Continuous::Move(spell, MoveReplacement::Flashback),
     ] {
         small
-            .start_effect(
-                CardIx::FIRST,
-                Affects::object(spell),
-                payload,
-                Duration::Indefinite,
-            )
+            .start_effect(CardIx::FIRST, terms, Duration::Indefinite)
             .unwrap();
     }
     assert_eq!(small.cost_increase(spell), 3);
@@ -389,8 +382,7 @@ fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
     let mut s: State<Small> = State::empty(Profile::EXACT);
     s.start_effect(
         CardIx::FIRST,
-        Affects::object(nth(&s, 0)),
-        Payload::Cast(permission(None)),
+        Continuous::Cast(nth(&s, 0), permission(None)),
         Duration::Indefinite,
     )
     .unwrap();
@@ -399,13 +391,8 @@ fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
         Some("player 1's permission to cast Test Card")
     );
     // After an effect on an object, where saves have always had permissions.
-    s.start_effect(
-        CardIx::FIRST,
-        Affects::object(nth(&s, 1)),
-        EXILE,
-        Duration::Indefinite,
-    )
-    .unwrap();
+    s.start_effect(CardIx::FIRST, exile(nth(&s, 1)), Duration::Indefinite)
+        .unwrap();
     assert_eq!(
         s.stores_lingering(&t).as_deref(),
         Some("an effect of Test Card on Test Card lasting indefinitely")
@@ -514,8 +501,8 @@ fn signature_tells_two_objects_apart_by_the_effects_on_them() {
     assert!(!same(&mut s, a, b));
     assert!(same(&mut s, a, c));
     // The same change for longer is another effect, on a set or alone.
-    let alone = Affects::object(s.object_ref(b));
-    s.start_effect(CardIx::FIRST, alone, PUMP, Duration::Indefinite)
+    let alone = pump(s.object_ref(b));
+    s.start_effect(CardIx::FIRST, alone, Duration::Indefinite)
         .unwrap();
     assert!(!same(&mut s, a, b));
     // As the turn ends, the one that lasted is on one of them alone.
@@ -535,14 +522,9 @@ fn signature_tells_two_objects_apart_by_the_effects_on_them() {
             player,
             ..permission(None)
         };
-        let card = Affects::object(s.object_ref(slot));
-        s.start_effect(
-            CardIx::FIRST,
-            card,
-            Payload::Cast(terms),
-            Duration::EndOfTurn,
-        )
-        .unwrap();
+        let permission = Continuous::Cast(s.object_ref(slot), terms);
+        s.start_effect(CardIx::FIRST, permission, Duration::EndOfTurn)
+            .unwrap();
     };
     permit(&mut s, in_hand, Seat::P0);
     assert!(!same(&mut s, in_hand, other));

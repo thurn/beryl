@@ -7,7 +7,7 @@ use crate::card::{
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::{Affects, ObjectFlags, State, TurnStep, Zone, ZoneKey};
+use crate::state::{ObjectFlags, State, Subject, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
@@ -155,7 +155,7 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
         || (face.types.intersects(Types::SORCERY)
-            && s.rule_applies(t, Rule::SorceriesAsFlash, Affects::Player(player)))
+            && s.rule_applies(t, Rule::SorceriesAsFlash, Subject::Player(player)))
 }
 
 /// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as

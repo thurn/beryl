@@ -7,8 +7,8 @@ pub use crate::counters::{
     COUNTERS, CounterRows, CounterTable, Counters, CountersHeld, CountersOf,
 };
 pub use crate::effects::{
-    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange, LockedIn,
-    MoveReplacement, Payload, Permission, Permitted, SETS,
+    Affects, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange,
+    LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted, SETS, Subject,
 };
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{Derived, GrantRef, Object, ObjectFlags, ObjectRef};

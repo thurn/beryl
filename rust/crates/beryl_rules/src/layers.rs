@@ -13,7 +13,9 @@ use crate::filter;
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue, index};
-use crate::state::{Affects, CounterKind, Derived, GrantRef, LayerChange, LockedIn, State, Zone};
+use crate::state::{
+    CounterKind, Derived, GrantRef, LayerChange, LockedIn, Permanents, State, Zone,
+};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -287,9 +289,10 @@ fn resolved_effects<L: Layout>(
     list: &mut Option<Applying<L>>,
 ) -> Result<(), Full> {
     let mut listed = Ok(());
-    for (e, change) in s.layer_effects() {
-        let target = match e.affected {
-            Affects::Object { slot, .. } => {
+    for (e, on, change) in s.layer_effects() {
+        let target = match on {
+            Permanents::One(object) => {
+                let slot = object.slot;
                 if s.object(slot).zone() != Zone::Battlefield {
                     continue;
                 }
@@ -301,9 +304,7 @@ fn resolved_effects<L: Layout>(
             // One effect on the permanents it locked in, with its one timestamp
             // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)); the members
             // are read as it applies.
-            Affects::Set(set) => Target::Set(set),
-            // A player is affected by a rule change alone.
-            Affects::Player(_) => continue,
+            Permanents::Set(set) => Target::Set(set),
         };
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
             layer: change.layer() as u8,

@@ -22,21 +22,19 @@ use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::keywords::flashback;
 use crate::layout::{Layout, Small};
 use crate::query::Copiable;
 use crate::resolution::Resolution;
 use crate::state::{
-    CounterKind, ObjectRef, PendingTrigger, StackEntry, State, Target, TargetPlace, TargetPlaces,
-    TriggerInfo, Zone, ZoneKey,
+    Continuous, CounterKind, Duration, ObjectRef, PendingTrigger, StackEntry, State, Target,
+    TargetPlace, TargetPlaces, TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
-use crate::{casting, choices, coins, costs};
+use crate::{casting, choices, coins, continuous, costs, delayed_triggers, emblems, ending};
 use crate::{counters, damage, drawing, library, life, linked, one_shot, stack, tokens, zones};
-use crate::{layers, trigger};
-
-mod continuous;
-mod permit;
+use crate::{layers, mana, trigger};
 
 /// What a body runs against: the game, and the spell or ability resolving in it.
 pub struct EffectCtx<'a, L: Layout = Small> {
@@ -282,19 +280,42 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         casting::offer(&mut self.resolution, object, player, free);
     }
 
-    /// Adds mana to a player's mana pool
-    /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
-    /// instructs a player to add mana, that mana goes into a player's mana pool."
+    /// [`mana::add`], as an effect of this ability's source.
     pub fn add_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
         let source = self.resolution.entry.object;
-        crate::interpret::add_mana(
-            self.game.state,
-            self.game.sink,
-            player,
-            source,
-            color,
-            amount,
-        );
+        mana::add(&mut self.game, player, source, color, amount);
+    }
+
+    /// [`continuous::start`].
+    pub fn add_effect(&mut self, effect: Continuous<L>, duration: Duration) {
+        let r = continuous::start(&mut self.game, &self.resolution, effect, duration);
+        self.check(r);
+    }
+
+    /// [`continuous::gain_control`].
+    pub fn gain_control(&mut self, object: ObjectRef<L>, duration: Duration) {
+        let r = continuous::gain_control(&mut self.game, &self.resolution, object, duration);
+        self.check(r);
+    }
+
+    /// [`casting::allow`].
+    pub fn allow_cast(
+        &mut self,
+        object: ObjectRef<L>,
+        player: Seat,
+        extra: u8,
+        this_turn: bool,
+        exile: bool,
+    ) {
+        let (game, resolution) = (&mut self.game, &self.resolution);
+        let r = casting::allow(game, resolution, object, player, extra, this_turn, exile);
+        self.check(r);
+    }
+
+    /// [`flashback::grant`].
+    pub fn grant_flashback(&mut self, object: ObjectRef<L>, player: Seat) {
+        let r = flashback::grant(&mut self.game, &self.resolution, object, player);
+        self.check(r);
     }
 
     /// Deals noncombat damage from this ability's source.
@@ -560,49 +581,22 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         tokens::create_attacking(game, &mut self.resolution, you, what, count, whom)
     }
 
-    /// Gives a player an emblem ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)):
-    /// "'[Player] gets an emblem with [ability].' This means that [player] puts an emblem with
-    /// [ability] into the command zone. The emblem is both owned and controlled by that
-    /// player."
+    /// [`emblems::create`], of the emblem `def`.
     pub fn create_emblem(&mut self, player: Seat, def: &'static CardDef) {
         let card = self.game_index(def);
-        let r = self.game.state.add_emblem(player, card);
+        let r = emblems::create(&mut self.game, player, card);
         self.check(r);
     }
 
-    /// Creates a delayed triggered ability: the ability at `ability` on this ability's card,
-    /// triggering once at the step its delayed [`crate::card::Trigger`] names, controlled by
-    /// this ability's controller, carrying `amount`
-    /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
+    /// [`delayed_triggers::create`].
     pub fn delay(&mut self, ability: AbilityIx, amount: u8) {
-        let trigger = PendingTrigger {
-            source: self.resolution.entry.object,
-            card: self.resolution.entry.card,
-            face: self.resolution.entry.face,
-            ability,
-            controller: self.resolution.entry.controller,
-            info: TriggerInfo {
-                amount,
-                ..TriggerInfo::default()
-            },
-        };
-        let r = trigger::delay(self.game.state, trigger);
+        let r = delayed_triggers::create(&mut self.game, &self.resolution, ability, amount);
         self.check(r);
     }
 
-    /// `player` wins the game ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)):
-    /// "An effect may state that a player wins the game." The game ends at once; the body
-    /// asks nothing more.
+    /// [`ending::win`].
     pub fn win_game(&mut self, player: Seat) {
-        if self.game.state.outcome().is_none() {
-            let cause = crate::event::LossCause::Effect {
-                source: self.resolution.entry.object,
-                card: self.resolution.entry.card,
-                face: self.resolution.entry.face,
-                ability: self.resolution.entry.ability,
-            };
-            crate::sba::win_game(self.game.state, self.game.sink, player, cause);
-        }
+        ending::win(&mut self.game, &self.resolution, player);
     }
 
     /// [`tap::untap_up_to`]: this ability's controller untaps up to `n` lands.

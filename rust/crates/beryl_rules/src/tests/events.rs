@@ -21,7 +21,7 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::query::Copiable;
 use crate::state::{
-    CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags, Payload,
+    Continuous, CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags,
     PendingTrigger, StackEntry, TargetPlace, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
@@ -803,8 +803,7 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
     with_ctx(&t, &mut s, &mut x, hurt, |ctx| {
         ctx.deal_damage(Recipient::Permanent(ctx.source()), 2);
         ctx.add_effect(
-            shrunk_ref,
-            Payload::Layer(LayerChange::ModifyPt(0, -2)),
+            Continuous::Layer(shrunk_ref, LayerChange::ModifyPt(0, -2)),
             Duration::EndOfTurn,
         );
         ctx.deal_damage(Recipient::Permanent(walker_ref), 3);
@@ -1239,8 +1238,7 @@ fn exile_instead_of_the_graveyard_replaces_the_move() {
     let a_ref = s.object_ref(a);
     with_ctx(&t, &mut s, &mut x, b, |ctx| {
         ctx.add_effect(
-            a_ref,
-            Payload::Move(MoveReplacement::ExileInsteadOfGraveyard),
+            Continuous::Move(a_ref, MoveReplacement::ExileInsteadOfGraveyard),
             Duration::EndOfTurn,
         );
         ctx.destroy(a_ref);
@@ -1300,8 +1298,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         ctx.add_effect(
-            r,
-            Payload::Layer(LayerChange::AddTypes(Types::CREATURE)),
+            Continuous::Layer(r, LayerChange::AddTypes(Types::CREATURE)),
             Duration::EndOfTurn,
         );
     });
@@ -1429,17 +1426,17 @@ fn creatures_alike_today_by_effects_that_end_apart_are_not_interchangeable() {
     let mut x = Scratch::new();
     let [first, second] = [(); 2].map(|()| put(&t, &mut s, &mut x, p, "Test Bear"));
     let source = put(&t, &mut s, &mut x, p, "Test Adeline");
-    let bigger = Payload::Layer(LayerChange::ModifyPt(1, 1));
-    let [this_turn, for_good] = [first, second].map(|slot| s.object_ref(slot));
+    let [this_turn, for_good] = [first, second]
+        .map(|slot| Continuous::Layer(s.object_ref(slot), LayerChange::ModifyPt(1, 1)));
     // The same bonus for as long on each: still one candidate.
     with_ctx(&t, &mut s, &mut x, source, |ctx| {
-        ctx.add_effect(this_turn, bigger, Duration::EndOfTurn);
-        ctx.add_effect(for_good, bigger, Duration::EndOfTurn);
+        ctx.add_effect(this_turn, Duration::EndOfTurn);
+        ctx.add_effect(for_good, Duration::EndOfTurn);
     });
     assert!(crate::engine::interchangeable(&s, first, second));
     with_ctx(&t, &mut s, &mut x, source, |ctx| {
-        ctx.add_effect(this_turn, bigger, Duration::EndOfTurn);
-        ctx.add_effect(for_good, bigger, Duration::Indefinite);
+        ctx.add_effect(this_turn, Duration::EndOfTurn);
+        ctx.add_effect(for_good, Duration::Indefinite);
     });
     assert_eq!(s.derived(first), s.derived(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
@@ -1666,13 +1663,11 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
         ctx.add_effect(
-            r,
-            Payload::Layer(LayerChange::AddKeywords(Keywords::FIRST_STRIKE)),
+            Continuous::Layer(r, LayerChange::AddKeywords(Keywords::FIRST_STRIKE)),
             Duration::EndOfTurn,
         );
         ctx.add_effect(
-            r,
-            Payload::Layer(LayerChange::ModifyPt(-2, 0)),
+            Continuous::Layer(r, LayerChange::ModifyPt(-2, 0)),
             Duration::UntilYourNextTurn(p),
         );
         ctx.add_counters(r, CounterKind::PlusOne, 1);

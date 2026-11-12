@@ -14,6 +14,7 @@
 //! solver picks one. Plans that leave different mana floating are a decision, and so is
 //! sacrificing more, when it keeps more later costs payable (§10).
 
+mod add;
 mod lookahead;
 mod pay;
 mod pool;
@@ -27,6 +28,8 @@ use crate::layout::Layout;
 #[cfg(doc)]
 use crate::layout::Small;
 
+pub use add::add;
+pub(crate) use add::add_instruction;
 pub(crate) use pay::{
     activate, manual_options, manual_pay, pay, standalone_options, waterbend_mana_options,
 };

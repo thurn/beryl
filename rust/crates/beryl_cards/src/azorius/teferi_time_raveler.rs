@@ -12,7 +12,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{Affects, Duration, Payload};
+use beryl_engine::state::{Continuous, Duration, Subject};
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
@@ -77,8 +77,7 @@ pub static CARD: CardDef = CardDef {
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.add_effect(
-        Affects::Player(you),
-        Payload::Rule(Rule::SorceriesAsFlash),
+        Continuous::Rule(Subject::Player(you), Rule::SorceriesAsFlash),
         Duration::UntilYourNextTurn(you),
     );
     Ok(())
