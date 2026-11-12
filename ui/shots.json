@@ -500,6 +500,13 @@
       "expect": ".inspect"
     },
     {
+      "name": "stage-aim-target",
+      "route": "/?stage&fixture=shape-pick&at=10#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[data-stage]:has(> .stage-mark-eligible)"
+    },
+    {
       "name": "stage-graveyard-viewer",
       "route": "/?stage&fixture=choice-scry&at=1#/game",
       "width": 1600,

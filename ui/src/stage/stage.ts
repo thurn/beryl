@@ -127,7 +127,7 @@ export class ScriptStage {
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
   /** What is drawn besides the nodes: effects, spans, streaks and announcements. */
-  readonly #over = new Overlay((on, at, pool) => this.#reach(on, at, pool));
+  readonly #over = new Overlay((on, at, pool) => this.reach(on, at, pool));
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */
@@ -772,7 +772,7 @@ export class ScriptStage {
   /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, or
    * a player's life total, or with `pool` their unspent mana; none for what the stage does
    * not hold. */
-  #reach(on: On, at: number, pool = false): Reach | undefined {
+  reach(on: On, at = this.clock.now, pool = false): Reach | undefined {
     const layout = this.#layout;
     if (on === "you" || on === "opponent") {
       const anchors = layout.anchors(this.#table!.view);

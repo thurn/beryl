@@ -190,6 +190,14 @@ restore the old behavior.
   size, away from the cursor, with its keywords explained. A card on the stack
   gets none. Estimated from stills, not measured (jD7VqaT8VC8 45:27.5,
   SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8 17:34.0).
+- **An arrow to the pointer.** While a target is chosen, an arrow runs from the
+  spell or ability that asks to the mouse, thin and pale. On something that may
+  be chosen it becomes the arrow the choice will draw, in that arrow's color and
+  along its way, and the click draws the stage's own. It follows the pointer
+  itself, with no lag: only the swing onto a target takes time. Nothing is drawn
+  over a target already chosen, and a touch pulls none (by-w8gv.21.67). As the
+  prompt opens, a cyan arrow runs from the ability that asks to the creature
+  under the cursor, and what may be chosen is outlined (IEXcjBn3BXk 23:13.17).
 
 ## No Arena equivalent
 

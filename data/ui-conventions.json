@@ -728,6 +728,23 @@
       }
     },
     {
+      "kind": "settled",
+      "name": "An arrow to the pointer",
+      "rule": "While a target is chosen, an arrow runs from the spell or ability that asks to the mouse, thin and pale. On something that may be chosen it becomes the arrow the choice will draw, in that arrow's color and along its way, and the click draws the stage's own. It follows the pointer itself, with no lag: only the swing onto a target takes time. Nothing is drawn over a target already chosen, and a touch pulls none.",
+      "reports": [
+        "by-w8gv.21.67"
+      ],
+      "arena": {
+        "does": "As the prompt opens, a cyan arrow runs from the ability that asks to the creature under the cursor, and what may be chosen is outlined.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "23:13.17"
+          }
+        ]
+      }
+    },
+    {
       "kind": "no-equivalent",
       "name": "Undo",
       "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",

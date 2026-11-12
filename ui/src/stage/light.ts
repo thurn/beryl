@@ -15,7 +15,7 @@
 // Arena's does (`IEXcjBn3BXk 22:22.3`).
 import type { Arrow } from "../generated/protocol";
 import type { Point } from "./layout.ts";
-import type { Reach } from "./lines.ts";
+import { wayOf, type Reach } from "./lines.ts";
 
 /** A curve from its first point round its second to its third. */
 export type Curve = readonly [Point, Point, Point];
@@ -414,6 +414,77 @@ export function lightOf(
   for (const fighter of fighters) fighterLight(lit.under, fighter, now);
   for (const line of lines) lineLight(lit[layerOf(line.arrow)], line, now);
   return lit;
+}
+
+/** The arrow a choice of targets pulls toward the pointer (Aim.tsx), over what rests, as it
+ * is at stage time `now`: out of `from`, what asks, to the pointer `at`, thin and pale while
+ * the pointer is on nothing that may be chosen. On what may be (`lock`, since the stage time
+ * the pointer came onto it) it is the arrow the choice will draw, along that arrow's own way
+ * and in its color, which it swings onto in a few hundredths of a second and lands on with a
+ * flash. Nothing while the pointer is on what asks. The pointer itself is never trailed:
+ * only the swing onto a target takes time. */
+export function sought(
+  now: number,
+  from: Reach,
+  at: Point,
+  lock?: { to: Reach; friendly: boolean; since: number },
+): Scene {
+  const scene = dark(now);
+  const [x, y] = [at.x - from.middle.x, at.y - from.middle.y];
+  if (Math.abs(x) <= from.half.x && Math.abs(y) <= from.half.y) return scene;
+  const pointer: Reach = {
+    middle: at,
+    half: { x: 1, y: 1 },
+    round: true,
+    toward: 0,
+    ahead: 0,
+  };
+  const way = wayOf("hostile-target", from, pointer);
+  // Its tip is the pointer's own place, not the edge of a point's reach.
+  const loose: [Point, Point, Point] | null = way && [way[0], way[1], at];
+  const k = sized(from);
+  if (!lock) {
+    if (!loose) return scene;
+    scene.ribbons.push({
+      curve: loose,
+      from: 0,
+      to: 1,
+      cut: "arrow",
+      wide: 3.6 * k,
+      tone: "pale",
+      gain: 0.7,
+      seed: 0.5,
+    });
+    return scene;
+  }
+  const arrow = lock.friendly ? "friendly-target" : "hostile-target";
+  const held = wayOf(arrow, from, lock.to);
+  if (!held) return scene;
+  const age = Math.max(0, now - lock.since);
+  const [swung, snap] = [1 - Math.exp(-age / 30), Math.exp(-age / 150)];
+  const curve = (loose ?? held).map((p, i) => ({
+    x: mix(p.x, held[i]!.x, swung),
+    y: mix(p.y, held[i]!.y, swung),
+  })) as [Point, Point, Point];
+  const tone = lock.friendly ? "friendly" : "hostile";
+  const wide = 7.2 * Math.min(k, sized(lock.to));
+  scene.ribbons.push({
+    curve,
+    from: 0,
+    to: 1,
+    cut: "arrow",
+    wide: wide * mix(0.5, 1, swung) * (1 + 0.25 * snap),
+    tone,
+    gain: 1.05 + 0.9 * snap,
+    seed: 0.5,
+  });
+  motes(scene.dots, curve, now, tone, wide, swung, 0.5);
+  scene.glints.push(
+    flash(curve[2], (50 * wide) / 7.2, tone, snap * 0.9, age / 300),
+    flash(curve[2], (22 * wide) / 7.2, tone, 0.42 * swung, 1),
+  );
+  burst(scene.dots, curve[2], age, tone, 10, 61, wide / 7.2);
+  return scene;
 }
 
 /** The trace a declaration pulls toward the pointer (Aim.tsx): a beam from each of `from`

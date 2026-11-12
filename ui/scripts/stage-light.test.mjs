@@ -5,7 +5,7 @@
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lightOf as layered, widthOf } from "../src/stage/light.ts";
+import { lightOf as layered, sought, widthOf } from "../src/stage/light.ts";
 import { wayOf } from "../src/stage/lines.ts";
 import { move, object, recorder, stage, view } from "./stage-table.mjs";
 
@@ -200,6 +200,52 @@ test("combat is lit under the cards, and an arrow and a source's line over them"
         ["wedge", "crescent"],
     );
     assert.ok(over.glints.every((glint) => glint.kind === "flash"));
+});
+
+test("the arrow a choice of targets pulls runs to the pointer, thin and pale", () => {
+    const spell = card(1000, 300);
+    const { ribbons, glints, dots } = sought(5000, spell, { x: 300, y: 100 });
+    assert.equal(ribbons.length, 1);
+    const [ribbon] = ribbons;
+    assert.deepEqual([ribbon.tone, ribbon.cut], ["pale", "arrow"]);
+    assert.deepEqual(
+        ribbon.curve[2],
+        { x: 300, y: 100 },
+        "to the pointer itself",
+    );
+    assert.equal(ribbon.curve[0].x, 1000, "out of the edge that faces it");
+    assert.deepEqual([glints, dots], [[], []]);
+    // Nothing while the pointer is on what asks.
+    assert.deepEqual(sought(5000, spell, { x: 1050, y: 370 }).ribbons, []);
+});
+
+test("on what may be chosen it becomes the arrow the choice will draw", () => {
+    const [spell, target] = [card(1000, 300), card(0, 0, 1)];
+    const lock = (since, friendly = false) => ({ to: target, friendly, since });
+    const at = { x: 20, y: 30 };
+    // As the pointer comes onto it the arrow is still the pointer's, and then swings.
+    const [first] = sought(5000, spell, at, lock(5000)).ribbons;
+    assert.deepEqual(first.curve[2], at);
+    assert.equal(first.tone, "hostile");
+    const landed = sought(9000, spell, at, lock(5000));
+    const way = wayOf("hostile-target", spell, target);
+    landed.ribbons[0].curve.forEach((p, i) => {
+        assert.ok(Math.hypot(p.x - way[i].x, p.y - way[i].y) < 1e-6);
+    });
+    assert.ok(landed.ribbons[0].wide > first.wide, "and swells to its width");
+    assert.equal(
+        sought(9000, spell, at, lock(5000, true)).ribbons[0].tone,
+        "friendly",
+    );
+    // It lands with a flash and sparks, which are gone a moment later.
+    const fresh = sought(5040, spell, at, lock(5000));
+    assert.ok(fresh.glints[0].gain > 0.5);
+    assert.ok(fresh.dots.length > landed.dots.length);
+    assert.deepEqual(
+        sought(5040, spell, at, lock(5000)),
+        fresh,
+        "the same at the same stage time",
+    );
 });
 
 test("each cut of ribbon comes to a point where it ends", () => {

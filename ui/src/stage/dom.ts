@@ -23,7 +23,7 @@ import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
 import type { Name, Point, Resting } from "./layout.ts";
-import { dark, type Lit, type Ribbon } from "./light.ts";
+import { dark, type Lit } from "./light.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
@@ -46,9 +46,9 @@ export class DomSurface implements Surface {
    * give. */
   readonly #glow: { under?: Glow | null; over?: Glow | null } = {};
   #lit: Lit | undefined;
-  /** The trace a declaration pulls toward the pointer (Aim.tsx), which is no part of the
-   * stage's scene. */
-  #aim: readonly Ribbon[] = [];
+  /** What a prompt pulls toward the pointer (Aim.tsx), as it is at a stage time: no part of
+   * the stage's scene. */
+  #aim: ((now: number) => Lit) | undefined;
   /** Where the browser's pointer was last, in the window. */
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
@@ -239,9 +239,10 @@ export class DomSurface implements Surface {
     delete this.#layer.dataset.light;
   }
 
-  /** Draws the pointer's trace as `ribbons`, at once: it follows the pointer, not the tick. */
-  aim(ribbons: readonly Ribbon[]) {
-    this.#aim = ribbons;
+  /** Draws what the pointer pulls as `trace` has it at each stage time, from now and at once:
+   * it follows the pointer, not the tick. With none, it is gone. */
+  aim(trace?: (now: number) => Lit) {
+    this.#aim = trace;
     this.#paint();
   }
 
@@ -250,12 +251,18 @@ export class DomSurface implements Surface {
     const still = this.#layer.ownerDocument.defaultView?.matchMedia?.(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    // What the pointer pulls is of the same stage time as the scene it is drawn with.
+    const aim = this.#aim?.(this.#lit?.over.now ?? 0);
     for (const where of ["under", "over"] as const) {
-      const drawn = this.#lit?.[where] ?? dark(0);
+      const [held, pulled] = [this.#lit?.[where] ?? dark(0), aim?.[where]];
+      const drawn = {
+        now: held.now,
+        ribbons: [...held.ribbons, ...(pulled?.ribbons ?? [])],
+        glints: [...held.glints, ...(pulled?.glints ?? [])],
+        dots: [...held.dots, ...(pulled?.dots ?? [])],
+      };
       const scene = still ? { ...drawn, now: 0, dots: [] } : drawn;
-      // The pointer's trace lies on the table, as the line the aim will draw does.
-      const ribbons =
-        where === "under" ? [...scene.ribbons, ...this.#aim] : scene.ribbons;
+      const { ribbons } = scene;
       const lit = ribbons.length + scene.glints.length + scene.dots.length > 0;
       // A painter is made with the first light there is to paint in its layer.
       if (this.#glow[where] === undefined && lit) {
@@ -266,7 +273,7 @@ export class DomSurface implements Surface {
         this.#glow[where].gone();
         this.#glow[where] = null;
       }
-      this.#glow[where]?.paint({ ...scene, ribbons });
+      this.#glow[where]?.paint(scene);
     }
     // Which layers are painted, for the styles that hide what the paint stands for.
     const painted = (["under", "over"] as const).filter(
