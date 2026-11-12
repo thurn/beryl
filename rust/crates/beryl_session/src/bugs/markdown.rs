@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use crate::ai::AgentMove;
+use crate::ledger::Counts;
 use crate::protocol::Status;
 
 use super::{BugReport, SpecMoment, body, commit};
@@ -57,6 +58,7 @@ pub(super) struct Markdown<'a> {
     pub(super) screenshot: bool,
     pub(super) game: &'a Game,
     pub(super) files: &'a [(&'a str, String)],
+    pub(super) counts: Option<Counts>,
 }
 
 pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
@@ -91,8 +93,7 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
          turn: {}\n\
          step: {}\n\
          game: {}\n\
-         decision: {}\n\
-         ---\n",
+         decision: {}",
         m.id,
         quote(m.title),
         kind,
@@ -110,6 +111,15 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
         opt(g.decision.map(|d| d.to_string())),
     )
     .expect("a String takes writes");
+    if let Some(counts) = &m.counts {
+        writeln!(
+            out,
+            "games_against_agent: {}\ngames_since_last_report: {}",
+            counts.against_agent, counts.since_report,
+        )
+        .expect("a String takes writes");
+    }
+    out.push_str("---\n\n");
 }
 
 pub(super) fn markdown(m: &Markdown<'_>) -> String {

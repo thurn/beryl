@@ -16,6 +16,7 @@ use ts_rs::TS;
 use crate::ai::{self, AgentMove, AgentMoves};
 use crate::game::Game;
 use crate::ipc::ChooseRequest;
+use crate::ledger::Ledger;
 use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
@@ -54,6 +55,7 @@ type Emit = dyn Fn(GameUpdate) + Send + Sync;
 pub struct Sessions {
     /// Where replay files go, if anywhere.
     replays: Option<PathBuf>,
+    pub(crate) ledger: Option<Arc<Ledger>>,
     emit: Arc<Emit>,
     current: Mutex<Current>,
     /// The latest view emitted, of whichever game emitted last.
@@ -84,10 +86,19 @@ impl Sessions {
     ) -> Sessions {
         Sessions {
             replays,
+            ledger: None,
             emit: Arc::new(emit),
             current: Mutex::default(),
             latest: Arc::default(),
         }
+    }
+
+    /// Records completed human games at `path`. Prepared games and fixture stand-ins are
+    /// excluded. The app enables this for its sessions.
+    #[must_use]
+    pub fn with_ledger(mut self, path: PathBuf) -> Self {
+        self.ledger = Some(Arc::new(Ledger::new(path)));
+        self
     }
 
     /// Starts the game the UI asked for, replacing any game in progress.
@@ -252,20 +263,32 @@ impl Sessions {
         };
         journal::info("session", "game started", about);
         let moves = game.agent_moves();
-        let latest_replay = seeded.then(LatestReplay::default);
+        let latest_replay = seeded.then(|| Arc::new(Mutex::new(Some(game.replay().clone()))));
         let emit = Arc::clone(&self.emit);
         let latest = Arc::clone(&self.latest);
-        let game = GameSession::start(game, first, replay, latest_replay.clone(), move |view| {
-            let update = GameUpdate { session, view };
-            {
-                let mut latest = latest.lock().unwrap_or_else(PoisonError::into_inner);
-                // A replaced game's thread may emit once more as the next one starts.
-                if latest.as_ref().is_none_or(|l| l.session <= session) {
-                    *latest = Some(update.clone());
+        let ledger = if seeded && stand_in.is_none() {
+            self.ledger.clone()
+        } else {
+            None
+        };
+        let game = GameSession::start(
+            game,
+            first,
+            replay,
+            latest_replay.clone(),
+            ledger,
+            move |view| {
+                let update = GameUpdate { session, view };
+                {
+                    let mut latest = latest.lock().unwrap_or_else(PoisonError::into_inner);
+                    // A replaced game's thread may emit once more as the next one starts.
+                    if latest.as_ref().is_none_or(|l| l.session <= session) {
+                        *latest = Some(update.clone());
+                    }
                 }
-            }
-            emit(update);
-        })?;
+                emit(update);
+            },
+        )?;
         current.game = Some((session, game));
         current.replay = latest_replay;
         current.moves = Some(moves);
@@ -286,7 +309,7 @@ impl Sessions {
     }
 
     /// The replay of the game in progress, or of the one that ended last, as of its latest
-    /// decision: none for a prepared game, or before the first decision.
+    /// decision: none for a prepared game, or before a game starts.
     pub fn current_replay(&self) -> Option<ReplayFile> {
         let replay = self.lock().replay.clone()?;
         replay
@@ -414,6 +437,7 @@ impl Sessions {
     }
 
     /// Where a game's replay goes: the replay directory, by start time and seed.
+    /// A concession can finish after the next game starts, even with the same seed.
     fn replay_path(&self, seed: u64) -> Option<PathBuf> {
         let dir = self.replays.as_ref()?;
         if let Err(e) = std::fs::create_dir_all(dir) {
@@ -424,7 +448,12 @@ impl Sessions {
             );
             return None;
         }
-        Some(dir.join(format!("{}-{seed}.json", now().as_secs())))
+        let time = now();
+        Some(dir.join(format!(
+            "{}.{:09}-{seed}.json",
+            time.as_secs(),
+            time.subsec_nanos()
+        )))
     }
 }
 
@@ -438,10 +467,15 @@ fn newest_replay(dir: &Path) -> Option<PathBuf> {
                 return None;
             }
             let (start, _) = path.file_stem()?.to_str()?.split_once('-')?;
-            Some((start.parse::<u64>().ok()?, path))
+            let (seconds, nanos) = start.split_once('.').unwrap_or((start, "0"));
+            Some((
+                seconds.parse::<u64>().ok()?,
+                nanos.parse::<u32>().ok()?,
+                path,
+            ))
         })
         .max()
-        .map(|(_, path)| path)
+        .map(|(_, _, path)| path)
 }
 
 /// The commit of this build, as replay files record it: `-dirty` marks a checkout with

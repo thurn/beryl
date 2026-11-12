@@ -26,6 +26,7 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import paths, system
@@ -55,14 +56,16 @@ SPEC_VIEWER_LABEL = "spec-viewer"
 BANKED = "banked"
 
 
-def bugs_dir() -> Path:
-    root = os.environ.get("BERYL_BUGS")
-    if root:
-        return Path(root)
+def app_data_dir() -> Path:
     appdata = os.environ.get("APPDATA")
     if sys.platform == "win32" and appdata:
-        return Path(appdata) / "ca.thurn.beryl" / "bugs"
-    return Path.home() / "Library" / "Application Support" / "ca.thurn.beryl" / "bugs"
+        return Path(appdata) / "ca.thurn.beryl"
+    return Path.home() / "Library" / "Application Support" / "ca.thurn.beryl"
+
+
+def bugs_dir() -> Path:
+    root = os.environ.get("BERYL_BUGS")
+    return Path(root) if root else app_data_dir() / "bugs"
 
 
 @dataclass
@@ -274,6 +277,7 @@ def file_bead(report: Report, priority: str) -> str:
 
 
 def list_cmd(args: argparse.Namespace) -> int:
+    print_games(app_data_dir() / "games.jsonl")
     root = bugs_dir()
     found = reports(root, done=args.all)
     if not found:
@@ -287,6 +291,32 @@ def list_cmd(args: argparse.Namespace) -> int:
         for r in banked:
             print_report(r)
     return 0
+
+
+def print_games(ledger: Path) -> None:
+    today = datetime.now(timezone.utc).date()
+    days = [
+        (today - timedelta(days=offset)).isoformat() for offset in range(13, -1, -1)
+    ]
+    totals = dict.fromkeys(days, 0)
+    try:
+        with ledger.open("rb") as lines:
+            for line in lines:
+                try:
+                    game = json.loads(line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                day = game.get("date") if isinstance(game, dict) else None
+                if isinstance(day, str) and day in totals:
+                    totals[day] += 1
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        print(f"bugs: could not read {ledger}: {error}", file=sys.stderr)
+        return
+    print("Finished human games (UTC)")
+    for day in days:
+        print(f"  {day}  {totals[day]}")
 
 
 def print_report(r: Report) -> None:

@@ -11,19 +11,21 @@ use serde_json::json;
 
 use crate::game::{Answer, Game, OpenDecision};
 use crate::ipc::ChooseRequest;
+use crate::ledger::Ledger;
 use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{DecisionId, PlayerView, Status, StopsSetting};
 use crate::sessions::LatestReplay;
 use crate::{SessionError, journal};
 
-/// A game against an agent, running on its own thread. Dropping it ends the thread once the
-/// agent has finished its current decision, and nothing is emitted after that.
+/// A game against an agent, running on its own thread. Dropping it detaches the view stream
+/// and stops play at the next decision, where any pending concession is taken.
 pub(crate) struct GameSession {
     commands: Sender<Command>,
     /// The human's open decision, as the thread last emitted it; none once it is answered.
     open: Arc<Mutex<Option<OpenDecision>>>,
     /// The game's stop flag ([`Game::stop_flag`]).
     stop: Arc<AtomicBool>,
+    detached: Arc<AtomicBool>,
     /// Set once the human concedes, so the thread concedes at the next decision even while
     /// the game plays on without them.
     conceded: Arc<AtomicBool>,
@@ -54,16 +56,20 @@ impl GameSession {
         first: Option<PlayerView>,
         replay: Option<PathBuf>,
         latest: Option<LatestReplay>,
+        ledger: Option<Arc<Ledger>>,
         emit: impl FnMut(PlayerView) + Send + 'static,
     ) -> Result<GameSession, SessionError> {
         let stop = game.stop_flag();
         let (commands, received) = channel();
         let open = Arc::new(Mutex::new(None));
         let conceded = Arc::new(AtomicBool::new(false));
+        let detached = Arc::new(AtomicBool::new(false));
         let thread = Shared {
             open: Arc::clone(&open),
             conceded: Arc::clone(&conceded),
+            detached: Arc::clone(&detached),
             latest,
+            ledger,
         };
         std::thread::Builder::new()
             .name(THREAD.to_owned())
@@ -83,6 +89,7 @@ impl GameSession {
             commands,
             open,
             stop,
+            detached,
             conceded,
         })
     }
@@ -177,12 +184,19 @@ impl GameSession {
 struct Shared {
     open: Arc<Mutex<Option<OpenDecision>>>,
     conceded: Arc<AtomicBool>,
+    detached: Arc<AtomicBool>,
     latest: Option<LatestReplay>,
+    ledger: Option<Arc<Ledger>>,
 }
 
 impl Drop for GameSession {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.detached.store(true, Ordering::Relaxed);
+        // Starting another game can follow the concede command before it reaches this thread.
+        // Let the thread save that game's result even after its UI has moved on.
+        if !self.conceded.load(Ordering::Relaxed) {
+            self.stop.store(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -197,7 +211,6 @@ fn run(
     replay: Option<&Path>,
     mut emit: impl FnMut(PlayerView),
 ) -> &'static str {
-    let stop = game.stop_flag();
     // A stops change re-emits the open decision, which may already be answered, so it does
     // not reopen it. Returns whether the session is over: the session was dropped.
     let mut publish = |game: &mut Game, view: PlayerView, reopen: bool| {
@@ -214,13 +227,16 @@ fn run(
         {
             *latest.lock().unwrap_or_else(PoisonError::into_inner) = Some(game.replay().clone());
         }
+        if let Some(ledger) = &shared.ledger {
+            ledger.record_end(game.replay(), &view);
+        }
         journal::debug("view", view_kind(&view), view_summary(game, &view));
         // A concession closes the human's decisions for good.
         if reopen && open.is_some() && !shared.conceded.load(Ordering::Relaxed) {
             *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = open;
         }
-        if stop.load(Ordering::Relaxed) {
-            return true;
+        if shared.detached.load(Ordering::Relaxed) {
+            return !shared.conceded.load(Ordering::Relaxed);
         }
         game.publish_review(&view);
         emit(view);

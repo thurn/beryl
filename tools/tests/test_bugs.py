@@ -1,5 +1,7 @@
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 import pytest
@@ -39,6 +41,37 @@ def report(root: Path, name: str = "20261108-143012-arrow-jumps") -> Path:
         REPORT.replace("20261108-143012-arrow-jumps", name)
     )
     return folder
+
+
+def test_lists_games_per_day_without_reports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(bugs, "app_data_dir", lambda: tmp_path)
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path / "bugs"))
+    now = datetime(2026, 11, 11, tzinfo=timezone.utc)
+    monkeypatch.setattr(bugs, "datetime", SimpleNamespace(now=lambda _zone: now))
+    today = now.date()
+    first = today - timedelta(days=13)
+    outside = first - timedelta(days=1)
+    (tmp_path / "games.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"date": today.isoformat()}),
+                json.dumps({"date": today.isoformat()}),
+                json.dumps({"date": first.isoformat()}),
+                json.dumps({"date": outside.isoformat()}),
+                "interrupted write",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert cli.main(["bugs"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "Finished human games (UTC)"
+    assert lines[1].split() == [str(first), "1"]
+    assert lines[13].split() == [str(today - timedelta(days=1)), "0"]
+    assert lines[14].split() == [str(today), "2"]
+    assert "no reports" in lines[15]
 
 
 def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

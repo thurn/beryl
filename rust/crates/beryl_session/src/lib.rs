@@ -15,6 +15,7 @@ mod fuzz;
 mod game;
 pub mod ipc;
 pub mod journal;
+mod ledger;
 pub mod migrate;
 pub mod perturb;
 pub mod preview;

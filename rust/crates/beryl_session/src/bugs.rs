@@ -346,22 +346,29 @@ pub fn write(
         current.as_ref(),
         replay.as_ref(),
     );
-    let markdown = markdown(&Markdown {
-        id: &id,
-        title: &title,
-        created: &journal::utc(now),
-        report,
-        moves: &moves,
-        screenshot: images.screenshot.is_some(),
-        game: &game,
-        files: &files,
-    });
-    put("report.md", markdown.as_bytes())?;
-    std::fs::rename(folder, &destination).map_err(SessionError::io(&destination))?;
-    Ok(BugSaved {
-        id,
-        path: destination.display().to_string(),
-    })
+    let publish = |counts| {
+        let markdown = markdown(&Markdown {
+            id: &id,
+            title: &title,
+            created: &journal::utc(now),
+            report,
+            moves: &moves,
+            screenshot: images.screenshot.is_some(),
+            game: &game,
+            files: &files,
+            counts,
+        });
+        put("report.md", markdown.as_bytes())?;
+        std::fs::rename(folder, &destination).map_err(SessionError::io(&destination))?;
+        Ok(BugSaved {
+            id,
+            path: destination.display().to_string(),
+        })
+    };
+    match &sessions.ledger {
+        Some(ledger) => ledger.publish(replay.as_ref().map(|r| r.opponent.as_str()), publish),
+        None => publish(None),
+    }
 }
 
 /// The views as a UI fixture: each a `game-update` event, with the answers the fixture

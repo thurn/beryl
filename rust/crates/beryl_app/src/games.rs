@@ -11,13 +11,18 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The sessions, writing replays into the app's data directory and emitting views to the UI.
 pub fn sessions(app: &AppHandle) -> Sessions {
-    let replays = app.path().app_data_dir().ok().map(|d| d.join("replays"));
+    let data = app.path().app_data_dir().ok();
+    let replays = data.as_ref().map(|dir| dir.join("replays"));
     let app = app.clone();
-    Sessions::new(replays, move |update| {
+    let sessions = Sessions::new(replays, move |update| {
         if let Err(e) = app.emit(ipc::GAME_UPDATE, update) {
             beryl_session::journal::error("app", format!("view not sent: {e}"), json!(null));
         }
-    })
+    });
+    match data {
+        Some(dir) => sessions.with_ledger(dir.join("games.jsonl")),
+        None => sessions,
+    }
 }
 
 #[tauri::command]
