@@ -94,6 +94,11 @@ the release pinned in `data/rules-version.json`.
   only when slow CI passes on `staging`; a slow-CI failure files a P0 Steward
   bead. `enact ci --status` shows the runner and its log. Keep the main checkout
   clean: Enact fast-forwards its `staging` and `master`.
+- Slow CI runs on each machine: this Mac and Cygnus, a Windows PC. A pass on
+  either advances `master`. A failure's Steward goes first to a machine on the
+  OS that failed, and to any machine after two hours. `enact ci --wait` lists a
+  failure on the other OS as `other_os_stewards`. `enact ci --schedule install`,
+  run once per machine, has each test `staging` every 30 minutes.
 - The checks are `.enact.toml`'s: `just check` (fast) and `just ci` (slow).
 - Beads live in this repo (`bd`, prefix `by`); publish bead changes with
   `enact sync`. Plans, designs and decisions go in beads, not markdown: a bead's
