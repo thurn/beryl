@@ -48,6 +48,12 @@ pub enum GameEvent {
     LibraryShuffled {
         player: Side,
     },
+    /// The card in `slot` was revealed to every player
+    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+    /// show that card to all players for a brief time."
+    Reveal {
+        slot: u16,
+    },
     LifeGain {
         player: Side,
         amount: u8,
@@ -345,6 +351,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             library_event(obs, e)
         }
         Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
+        Event::Reveal { slot } => GameEvent::Reveal { slot: slot.num() },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {
             player: side(player),
             amount,

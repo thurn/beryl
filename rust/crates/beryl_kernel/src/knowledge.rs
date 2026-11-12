@@ -9,7 +9,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::chance;
-use crate::event::Sink;
+use crate::event::{Event, Sink};
 use crate::ids::Seat;
 use crate::layout::{Layout, Table};
 use crate::state::State;
@@ -24,6 +24,7 @@ impl<L: Layout> State<L> {
         for k in self.knowledge.as_mut_slice() {
             k.insert(slot);
         }
+        sink.note(Event::Reveal { slot });
     }
 
     /// `player` looks at the cards in `cards` and from then on knows them: a library and a

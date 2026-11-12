@@ -439,8 +439,7 @@ impl<'a> Builder<'a> {
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
             &GameEvent::CoinFlip { player, won, .. } => {
-                let notice = Notice::Coin { player, won };
-                self.emit(Act::Announce { notice }, cause);
+                self.announce_notice(Notice::Coin { player, won }, cause);
             }
             &GameEvent::Scry {
                 player,
@@ -452,9 +451,10 @@ impl<'a> Builder<'a> {
                     top,
                     bottom,
                 };
-                self.emit(Act::Announce { notice }, cause);
+                self.announce_notice(notice, cause);
             }
             &GameEvent::LibraryShuffled { player } => self.shuffle(player, cause),
+            &GameEvent::Reveal { slot } => self.reveal(i, slot, cause),
             &GameEvent::Mana {
                 player,
                 source,
@@ -469,6 +469,10 @@ impl<'a> Builder<'a> {
             // How the game ended is chrome.
             GameEvent::TokensCreated { .. } | GameEvent::Lose { .. } | GameEvent::Win { .. } => {}
         }
+    }
+
+    fn announce_notice(&mut self, notice: Notice, cause: Option<Subject>) {
+        self.emit(Act::Announce { notice }, cause);
     }
 
     /// The spell in `slot` is announced: as its cast completed it, if the table has it another

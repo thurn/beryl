@@ -94,6 +94,15 @@
 //! [`ObjectView`]: a card the seat has not seen has no name here either. What the seat may not
 //! see has no step, rather than a masked one.
 //!
+//! # Reveals
+//!
+//! A card an effect reveals is a `showcase` step: it is held up to be read where it lies, and
+//! the stage keeps its face in its "Revealed Cards" pile, which is chrome. The engine says
+//! which cards are revealed ([`GameEvent::Reveal`]); a face-down permanent that leaves for a
+//! hand or a library is revealed as it goes, which its move says (`moves.rs`). A revealed
+//! card whose next move takes it to a zone that shows its face has no step: its flight
+//! shows it.
+//!
 //! # Cause
 //!
 //! [`Step::cause`] names the spell, ability, permanent or player a step comes from; none is
@@ -135,7 +144,7 @@ pub use verb::{Arrow, Mark, Span, Verb};
 
 use crate::protocol::Side;
 #[cfg(doc)]
-use crate::protocol::{ObjectView, PlayerView};
+use crate::protocol::{GameEvent, ObjectView, PlayerView};
 
 /// What one seat's screen does between the view before and the view this came with.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]

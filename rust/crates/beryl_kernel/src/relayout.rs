@@ -549,6 +549,7 @@ impl<L: Layout> Relayout for Event<L> {
             },
             &Event::Draw { player, cards } => Event::Draw { player, cards },
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
+            &Event::Reveal { slot: shown } => Event::Reveal { slot: slot(shown) },
             &Event::Scry {
                 player,
                 top,

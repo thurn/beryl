@@ -52,6 +52,12 @@ impl Builder<'_> {
     ) {
         let was = self.table.objects.get(&slot);
         let token = was.is_some_and(|o| o.token);
+        // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down
+        // permanent or a face-down component of a merged permanent moves from the
+        // battlefield to any other zone, its owner must reveal it to all players as they
+        // move it." Where it goes to a zone that shows no face, it is held up to be read.
+        let unveiled = !public(to)
+            && was.is_some_and(|o| o.zone == ZoneName::Battlefield && o.facing == Facing::Down);
         // A token that leaves the battlefield ceases to exist
         // ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d): "If a token is
         // in a zone other than the battlefield, it ceases to exist"), and a copy of a spell
@@ -96,6 +102,61 @@ impl Builder<'_> {
             }
         }
         self.travel(from, why, object, at, item, still, cause);
+        if unveiled && let Some(object) = self.table.objects.get(&slot).cloned() {
+            self.showcase(object, cause);
+        }
+    }
+
+    /// Event `i` reveals the card in `slot`
+    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+    /// show that card to all players for a brief time." It is held up to be read where it
+    /// lies, named as the seat's view comes to name it. One that goes on to a zone that shows
+    /// its face is not: its flight there shows it.
+    pub(super) fn reveal(&mut self, i: usize, slot: u16, cause: Option<Subject>) {
+        let Some(was) = self.table.objects.get(&slot) else {
+            return;
+        };
+        let mut zone = was.zone;
+        // Where its next move takes it, and whether the view's end still names this card:
+        // a library gives a slot another card when it is shuffled.
+        let (mut next, mut kept) = (None, true);
+        for event in &self.events[i + 1..] {
+            match event {
+                &GameEvent::ZoneChange { slot: s, to, .. } if s == slot => {
+                    next.get_or_insert(to);
+                    zone = to;
+                    kept &= to != ZoneName::Library;
+                }
+                GameEvent::Draw {
+                    slots: Some(slots), ..
+                } if slots.contains(&slot) => {
+                    next.get_or_insert(ZoneName::Hand);
+                    zone = ZoneName::Hand;
+                }
+                &GameEvent::LibraryShuffled { player } => {
+                    kept &= zone != ZoneName::Library || player != was.owner;
+                }
+                _ => {}
+            }
+        }
+        if next.is_some_and(public) {
+            return;
+        }
+        let end = self.after.objects.get(&slot).filter(|_| kept);
+        let name = was.name.clone().or_else(|| end?.name.clone());
+        let object = ObjectView {
+            name,
+            ..was.clone()
+        };
+        self.showcase(object, cause);
+    }
+
+    /// Holds `object` up to be read, if the seat knows its face: what the seat may not see
+    /// has no step.
+    fn showcase(&mut self, object: ObjectView, cause: Option<Subject>) {
+        if object.name.is_some() && object.facing == Facing::Up {
+            self.emit(Act::Showcase { object }, cause);
+        }
     }
 
     /// Writes the step that takes `object` from `from` to where its record puts it, with the
@@ -255,6 +316,18 @@ impl Builder<'_> {
                 paid: Vec::new(),
             })
     }
+}
+
+/// Whether every player sees the faces of the cards in `zone`
+/// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Public zones are zones
+/// in which all players can see the cards' faces, except for those cards that some rule or
+/// effect specifically allow to be face down. Graveyard, battlefield, stack, exile, ante,
+/// and command are public zones."
+fn public(zone: ZoneName) -> bool {
+    matches!(
+        zone,
+        ZoneName::Battlefield | ZoneName::Stack | ZoneName::Graveyard | ZoneName::Exile
+    )
 }
 
 /// `object`, a record from the view's end, as it was before the events of `later`.

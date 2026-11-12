@@ -121,6 +121,13 @@ pub enum Event<L: Layout = Small> {
     LibraryShuffled {
         player: Seat,
     },
+    /// A card was revealed
+    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+    /// show that card to all players for a brief time." For the UI, which holds it up to be
+    /// read; no rule acts on it.
+    Reveal {
+        slot: L::Slot,
+    },
     LifeGain {
         player: Seat,
         amount: u8,

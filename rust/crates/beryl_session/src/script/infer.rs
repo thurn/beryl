@@ -479,7 +479,7 @@ pub(super) fn order(events: &[GameEvent]) -> Vec<usize> {
 /// Whether `event` happens with `previous`, the event before it that shows anything.
 fn together(before: &Table, previous: &GameEvent, event: &GameEvent) -> bool {
     use GameEvent::{
-        Attack, CountersAdded, CountersRemoved, LifeGain, LifeLoss, Tap, Untap, ZoneChange,
+        Attack, CountersAdded, CountersRemoved, LifeGain, LifeLoss, Reveal, Tap, Untap, ZoneChange,
     };
     use ZoneName::{Battlefield, Exile, Library, Stack};
     match (previous, event) {
@@ -518,9 +518,11 @@ fn together(before: &Table, previous: &GameEvent, event: &GameEvent) -> bool {
                     }))
         }
         // Permanents tap together, as attackers do when they are declared, and untap
-        // together; each player's life changes at once.
+        // together; each player's life changes at once; cards revealed one after another
+        // are held up together.
         (Tap { .. } | Attack { .. }, Tap { .. })
         | (Tap { .. }, Attack { .. })
+        | (Reveal { .. }, Reveal { .. })
         | (Untap { .. }, Untap { .. })
         | (LifeLoss { .. }, LifeLoss { .. })
         | (LifeGain { .. }, LifeGain { .. }) => true,

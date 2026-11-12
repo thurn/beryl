@@ -42,6 +42,8 @@ const EVENTS: Sounds = {
   draw: () => "slide",
   scry: () => null,
   libraryShuffled: () => "fan",
+  // A card held up to be read makes no sound: the move that follows it has its own.
+  reveal: () => null,
   lifeGain: () => "gain",
   lifeLoss: () => "drain",
   countersAdded: () => "chip",
