@@ -1,10 +1,25 @@
 {
-  "$comment": "The shape suite's checks (ui/scripts/shapes.mjs, which `just ui-test` runs beside interactions.mjs and verbs.mjs): one for each prompt shape here, seat and layout, logged as `shape:<shape>/<seat>/<layout>` and named so to `just ui-test` to run it alone. A shape's `yours` is a fixture of ui/fixtures.json with `clicks`: the seat that is asked, whose recording holds each click with the session's reply to it, and whose purposes are the shape's cases; the check makes those clicks on the stage by the pointer and holds what the screen draws to what the session sent. Its `theirs` is the same play from the seat across the table, which is shown none of that prompt. `pick` is objects picked on the table: a priority (a land played, a card's ways to be used chosen among, a spell cast, a pass), and a spell's target, the player's own asked about first (the boards shape-pick and shape-pick-theirs). A layout has an entry of its name in the script's LAYOUTS.",
+  "$comment": "The shape suite's checks (ui/scripts/shapes.mjs, which `just ui-test` runs beside interactions.mjs and verbs.mjs): one for each prompt shape here, seat and layout, logged as `shape:<shape>/<seat>/<layout>` and named so to `just ui-test` to run it alone. A shape's `yours` is a fixture of ui/fixtures.json with `clicks`: the seat that is asked, whose recording holds each click with the session's reply to it, and whose purposes are the shape's cases; the check makes those clicks on the stage by the pointer and holds what the screen draws to what the session sent. Its `theirs` is the same play from the seat across the table, which is shown none of that prompt. `pick` is objects picked on the table: a priority (a land played, a card's ways to be used chosen among, a spell cast, a pass), and a spell's target, the player's own asked about first (the boards shape-pick and shape-pick-theirs). `split` is cards dealt into two piles, by clicks and by carrying a card to its place: a scry, whose cards are the library's own from the look to the answer (the scry flight), the top cards of a library of which some are kept, and cards of the hand put back (the boards shape-split and shape-split-theirs). `zone` is cards picked from a zone: laid out from a library searched or looked at and from a graveyard, and where they lie in a hand to discard from (shape-zone and shape-zone-theirs). `order` is waiting triggers put in the order they will resolve, by a click and by carrying one to its place (shape-order and shape-order-theirs). A layout has an entry of its name in the script's LAYOUTS.",
   "shapes": {
     "pick": {
       "yours": "shape-pick",
       "theirs": "shape-pick-theirs"
+    },
+    "split": {
+      "yours": "shape-split",
+      "theirs": "shape-split-theirs"
+    },
+    "zone": {
+      "yours": "shape-zone",
+      "theirs": "shape-zone-theirs"
+    },
+    "order": {
+      "yours": "shape-order",
+      "theirs": "shape-order-theirs"
     }
   },
-  "layouts": ["desktop", "phone"]
+  "layouts": [
+    "desktop",
+    "phone"
+  ]
 }

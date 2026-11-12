@@ -85,9 +85,10 @@ VERB_CASES = (
 )
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"
-# The shape suite, which `ui-test` runs after it: its script, the list of its checks, and the
-# prefix of their ids in the run log.
+# The shape suite, which `ui-test` runs after it: its script, its cases, the list of its checks,
+# and the prefix of their ids in the run log.
 SHAPE_SCRIPT = "ui/scripts/shapes.mjs"
+SHAPE_CASES = ("ui/scripts/shape-cases.mjs",)
 SHAPES = "ui/shapes.json"
 SHAPE_PREFIX = "shape:"
 SHOTS = "ui/shots.json"
@@ -623,7 +624,8 @@ def choose(
     ):
         choice.add((c for c in universe if c.startswith(VERB_PREFIX)), "body")
     if lane == "ui-test" and any(
-        rewritten(p, changed, hunks_now) for p in (SHAPE_SCRIPT, SHAPES)
+        rewritten(p, changed, hunks_now)
+        for p in (SHAPE_SCRIPT, *SHAPE_CASES, SHAPES)
     ):
         choice.add((c for c in universe if c.startswith(SHAPE_PREFIX)), "body")
     if lane == "shots" and SHOTS in changed:

@@ -441,7 +441,19 @@ export function cutText(page) {
                         y >= b.top &&
                         y <= b.bottom;
                     const over = inside && hit.closest(".card-layer .card-el");
-                    if (over && !over.contains(el) && !paintedOver(el, x, y)) {
+                    // A card a prompt holds up lies over the tray's shade, which says that
+                    // the table under it is not what is being read (src/stage/Tray.tsx).
+                    const heldUp =
+                        over &&
+                        document.querySelector(".stage-tray") !== null &&
+                        Number(over.style.zIndex) >= 850 &&
+                        Number(over.style.zIndex) < 900;
+                    if (
+                        over &&
+                        !heldUp &&
+                        !over.contains(el) &&
+                        !paintedOver(el, x, y)
+                    ) {
                         found.push(
                             `"${text}" lies under ${over.dataset.card ?? "a card"}`,
                         );

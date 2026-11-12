@@ -1,5 +1,5 @@
 {
-  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control`, the mirror, or `fuzz:<seed>` decks), or a `board` (rust/crates/beryl_cli/src/boards.rs: a scenario setup whose actions play both seats, so that its game never depends on an agent or a deck), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at the first view in which the human sees the opponent handle cards while their decision is open (`first handling for seat <n>`: looking at their library), or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `targeted spell on the stack`: one targeting a permanent, `player targeted on the stack`, `ability targeting beside its source`: an ability of a permanent targeting another its controller controls, `opponent's spell on the stack`, `castable <card>`, `playable <card>`: the human may play it as a land, `abilities of <card>`: they may activate more than one of its abilities, `namesake candidates`: the decision offers two objects of one name, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves, `casting <card>`: by that spell as it is cast, `playable pair in hand`: a card the human may play has a twin in their hand, `exiled beneath a permanent`: a card lies in exile until the permanent that exiled it leaves, `exiled with a permanent`: a card lies in exile linked to a permanent's abilities, `attached across the table`: an Aura or Equipment one player controls is attached to a permanent the other controls, `castable from exile`, `known card in the opponent's hand`, `token twins`: two tokens one player controls alike in all the table shows, `changed token`: a token differing from another of its name by its types or an attachment, `stolen permanent`: one its owner doesn't control, `mana floating`: the human has unspent mana, `X on the stack`: a spell or ability on the stack was announced with X above 0, `spell on the stack`: at its top, `emblems a side`: each player has an emblem, `<n> nonland permanents a side`: each player controls at least that many, `<mark> beside a twin`: a permanent with `+1/+1 counters`, `damage`, `summoning sickness` or `story or time counters` and no other mark, and another of the same name with none), recording `after` more views past it if given. A board whose scripts end at its stop may give `clicks` instead: the clicks its human then makes on their prompts, each `press confirm|decline|auto|passOn|option <n>`, `player you|opponent` or a card's name (the one of that name the open prompt marks), which the recording sends the session as the UI would and keeps with its replies and the views each led to, so a replay answers those clicks alone (rust/crates/beryl_cli/src/fixture/clicks.rs). Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
+  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control`, the mirror, or `fuzz:<seed>` decks), or a `board` (rust/crates/beryl_cli/src/boards.rs: a scenario setup whose actions play both seats, so that its game never depends on an agent or a deck), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at the first view in which the human sees the opponent handle cards while their decision is open (`first handling for seat <n>`: looking at their library), or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `targeted spell on the stack`: one targeting a permanent, `player targeted on the stack`, `ability targeting beside its source`: an ability of a permanent targeting another its controller controls, `opponent's spell on the stack`, `castable <card>`, `playable <card>`: the human may play it as a land, `abilities of <card>`: they may activate more than one of its abilities, `namesake candidates`: the decision offers two objects of one name, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves, `casting <card>`: by that spell as it is cast, `playable pair in hand`: a card the human may play has a twin in their hand, `exiled beneath a permanent`: a card lies in exile until the permanent that exiled it leaves, `exiled with a permanent`: a card lies in exile linked to a permanent's abilities, `attached across the table`: an Aura or Equipment one player controls is attached to a permanent the other controls, `castable from exile`, `known card in the opponent's hand`, `token twins`: two tokens one player controls alike in all the table shows, `changed token`: a token differing from another of its name by its types or an attachment, `stolen permanent`: one its owner doesn't control, `mana floating`: the human has unspent mana, `X on the stack`: a spell or ability on the stack was announced with X above 0, `spell on the stack`: at its top, `emblems a side`: each player has an emblem, `<n> nonland permanents a side`: each player controls at least that many, `<mark> beside a twin`: a permanent with `+1/+1 counters`, `damage`, `summoning sickness` or `story or time counters` and no other mark, and another of the same name with none), recording `after` more views past it if given. A board whose scripts are done by its stop may give `clicks` instead: the clicks its human then makes on their prompts, each `press confirm|decline|auto|passOn|option <n>`, `player you|opponent`, `drop <pile> <at> <card>` (the card dropped into that pile of a split, before what lies at `at` there), `move <item> <at>` (an order's item moved likewise) or a card's name (the one of that name the open prompt marks), which the recording sends the session as the UI would and keeps with its replies and the views each led to, so a replay answers those clicks alone (rust/crates/beryl_cli/src/fixture/clicks.rs). Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
   "fixtures": [
     {
       "name": "opening-bottom",
@@ -589,6 +589,88 @@
     {
       "name": "shape-pick-theirs",
       "board": "shape-pick-theirs",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
+      "name": "shape-split",
+      "board": "shape-split",
+      "until": "first chooseUpTo decision for seat 0",
+      "clicks": [
+        "Plains",
+        "drop 1 0 Plains",
+        "drop 0 0 Island",
+        "press confirm",
+        "Stock Up",
+        "Mana Drain",
+        "drop 0 0 Oust",
+        "drop 1 0 Damn",
+        "press confirm",
+        "Jace, the Mind Sculptor",
+        "press option 2",
+        "Counterspell",
+        "drop 0 0 Mana Drain",
+        "press confirm"
+      ]
+    },
+    {
+      "name": "shape-split-theirs",
+      "board": "shape-split-theirs",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
+      "name": "shape-zone",
+      "board": "shape-zone",
+      "until": "first priority decision for seat 0",
+      "clicks": [
+        "Trinket Mage",
+        "Mana Crypt",
+        "Currency Converter",
+        "press confirm",
+        "Thundertrap Trainer",
+        "press option 3",
+        "Damn",
+        "press confirm",
+        "Abhorrent Oculus",
+        "Plains",
+        "Island",
+        "Oust",
+        "Reprieve",
+        "Counterspell",
+        "Stock Up",
+        "press confirm",
+        "Jace, Vryn's Prodigy",
+        "Island",
+        "press confirm"
+      ]
+    },
+    {
+      "name": "shape-zone-theirs",
+      "board": "shape-zone-theirs",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
+      "name": "shape-order",
+      "board": "shape-order",
+      "stops": {
+        "fullControl": true
+      },
+      "until": "first priority decision for seat 0",
+      "clicks": [
+        "Thirst for Discovery",
+        "press decline",
+        "Counterspell",
+        "Oust",
+        "press confirm",
+        "move 1 0",
+        "press confirm"
+      ]
+    },
+    {
+      "name": "shape-order-theirs",
+      "board": "shape-order-theirs",
       "until": "first priority decision for seat 1",
       "after": 1
     }

@@ -910,6 +910,48 @@
       "route": "/?fixture=choice-trigger-order&at=5#/game",
       "width": 1600,
       "height": 900
+    },
+    {
+      "name": "stage-split-scry",
+      "route": "/?stage&fixture=shape-split&at=3#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-split-back",
+      "route": "/?stage&fixture=shape-split&at=7#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-split-back",
+      "route": "/?phone&stage&fixture=shape-split&at=7#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-zone-graveyard",
+      "route": "/?stage&fixture=shape-zone&at=6#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-zone-graveyard",
+      "route": "/?phone&stage&fixture=shape-zone&at=6#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-order",
+      "route": "/?stage&fixture=shape-order&at=4#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-order",
+      "route": "/?phone&stage&fixture=shape-order&at=4#/game",
+      "width": 393,
+      "height": 759
     }
   ]
 }

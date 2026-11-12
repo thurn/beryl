@@ -39,9 +39,10 @@ export const view = (battlefield, hand = [], more = {}) => ({
  * and a drawn card is held up 300 above its place in the hand at twice its width. A card is
  * 1.4 times as tall as it is wide, and a tapped permanent lies on its side; the players' life
  * totals are at x 1000, yours at y 900 and the opponent's at y -400, each orb's corner 80
- * up and to the left of it. */
+ * up and to the left of it. A card a prompt holds up lies face up in the row of its pile at
+ * y -1000, the piles 1000 apart and a pile's cards 200, each 150 wide, over everything else. */
 export const row = {
-    rest({ view: table, abilities }) {
+    rest({ view: table, abilities, tray }) {
         const out = new Map();
         const pose = (x, y, depth, face = "front") => ({
             x,
@@ -88,6 +89,19 @@ export const row = {
                 dress: dress("stack"),
             });
         });
+        (tray?.piles ?? []).forEach((pile, at) =>
+            pile.cards.forEach((slot, i) => {
+                const { object } = out.get(slot);
+                out.set(slot, {
+                    object,
+                    pose: {
+                        ...pose(at * 1000 + i * 200, -1000, 850 + i),
+                        width: 150,
+                    },
+                    dress: { ...dress(object.zone), look: "shown" },
+                });
+            }),
+        );
         return out;
     },
     anchors: () => ({

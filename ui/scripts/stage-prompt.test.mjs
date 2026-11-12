@@ -201,19 +201,13 @@ test("a click the prompt had no use for goes on to who listens, and so does one 
 
 test("a prompt answered elsewhere is let be", () => {
     const { made, surface, prompts, sent, click } = prompted();
-    // Cards laid out in a tray, and a shape the stage does not draw yet.
-    const trayed = pick(marked("eligible", 1), {
-        state: {
-            shape: "pick",
-            tray: [1],
-            least: 0,
-            most: 1,
-            picked: [],
-            warned: [],
-        },
+    // A shape the stage does not draw yet, and one the session does not yet hold.
+    const paid = pick(marked("eligible", 1), {
+        shape: "pay",
+        state: { shape: "pay", cost: "{3}", left: "{3}" },
     });
     for (const [seq, prompt] of [
-        trayed,
+        paid,
         { ...pick([]), state: null },
     ].entries()) {
         prompts.play(asking(prompt, seq + 1), { beats: [] });

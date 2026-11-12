@@ -18,6 +18,13 @@
 // a touch and played by carrying, so there the cards are always carried, and a touch on one
 // is held to send nothing.
 //
+// What a prompt holds up off the table is held to the session's state as its marks are: a
+// split's cards lie in the box of their pile, under its name and in its order; a pick's
+// tray is up, each card showing its face; an order lists its triggers as they will resolve;
+// and no card is drawn twice. A card of a split is dropped by carrying it to its place, and
+// a trigger moved the same way, or put first by a click (shape-cases.mjs). The scry flight
+// is a case of the split: the cards a scry looks at, from the look to the library again.
+//
 // The seat across the table is shown none of it: its fixture plays the same game on, and at
 // every tick the stage holds no mark and the dock no button, until the view that asks that
 // seat itself, whose own prompt is then drawn.
@@ -36,6 +43,13 @@ import {
     workers,
 } from "./capture.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
+import {
+    cardsUp,
+    carry as carryTo,
+    heldUp,
+    onTable,
+    scryFlight,
+} from "./shape-cases.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -104,13 +118,8 @@ const TICK = 100;
 const recorded = async (fixture) =>
     JSON.parse(await readFile(join(fixtures, `${fixture}.json`), "utf8"));
 
-/** Whether the stage holds `prompt` (src/stage/prompt.ts `onTable`): where it does not, the
- * screen is held to show none of it. */
-const onTable = (prompt) =>
-    prompt.state?.shape === "pick" && prompt.state.tray.length === 0;
-
-/** What a recording asks of its seat, from its first view on: the prompt its first view
- * opens, then each click with the prompt the screen holds after it (none while the game
+/** What a recording asks of its seat, from its stop on (its first view, or the view its
+ * board's own play led to, the `at`th): the prompt that view opens, then each click with the prompt the screen holds after it (none while the game
  * plays on or asks what the stage does not draw) and the decision that prompt is of. */
 function asked(fixture) {
     const messages = fixture.messages.filter(
@@ -125,7 +134,10 @@ function asked(fixture) {
             ? { decision, prompt: decision.prompt, view }
             : { view };
     };
-    const [first, ...rest] = messages;
+    // The board's own play comes before the stop, where the clicks begin.
+    const stop = messages.findIndex((m) => m.kind !== "event") - 1;
+    const first = messages[stop];
+    const rest = messages.slice(stop + 1);
     let now = held(first.payload.view);
     const clicks = [];
     for (const message of rest) {
@@ -146,14 +158,14 @@ function asked(fixture) {
             answered: reply.kind !== "open",
         });
     }
-    return { opens: held(first.payload.view), clicks };
+    return { opens: held(first.payload.view), clicks, at: stop + 1 };
 }
 
 /** What the screen should draw of `held`, a prompt and its decision, in `layout`: its title,
  * its buttons where each stands, and its marks. */
 function expected(held, layout) {
     const { decision, prompt } = held;
-    if (!prompt) return { title: "", buttons: [], marks: [] };
+    if (!prompt) return { title: "", buttons: [], marks: [], up: heldUp() };
     const where = (button) =>
         button.primary
             ? "forward"
@@ -180,6 +192,7 @@ function expected(held, layout) {
         marks: prompt.marks
             .map(({ on, mark }) => `${mark} ${subject(on)}`)
             .sort(),
+        up: heldUp(prompt),
     };
 }
 
@@ -195,7 +208,9 @@ const byPlace = (a, b) =>
 
 /** In the page: what the screen draws of a prompt now. The title, the dock's buttons where
  * each stands (`forward` in the turn button's place, `passOn` the round one, `other` stacked
- * over), and every mark the page and the stage's model hold, each as `<mark> <on>`. */
+ * over), every mark the page and the stage's model hold, each as `<mark> <on>`, and what is
+ * held up (`heldUp`): the cards lying over everything at rest and under what flies, those in
+ * a pile's box by that box, and the triggers listed. */
 function drawn({ dock, title, captions }) {
     // A label as the session wrote it: a mana symbol is drawn from its `{...}`.
     const words = (element) => {
@@ -245,6 +260,50 @@ function drawn({ dock, title, captions }) {
     });
     const stage = window.berylStage;
     const heading = document.querySelector(title);
+    const nodes = [...document.querySelectorAll("[data-stage]")];
+    const lifted = nodes.filter((node) => {
+        const depth = Number(node.style.zIndex);
+        return depth >= 850 && depth < 900;
+    });
+    const slotOf = (node) => Number(node.dataset.stage);
+    const middle = (node) => {
+        const box = node.getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    };
+    const boxed = new Set();
+    const piles = [...document.querySelectorAll(".stage-tray-pile")].map(
+        (pile) => {
+            const box = pile.getBoundingClientRect();
+            const within = lifted.filter((node) => {
+                const { x, y } = middle(node);
+                return (
+                    x >= box.left &&
+                    x <= box.right &&
+                    y >= box.top &&
+                    y <= box.bottom
+                );
+            });
+            for (const node of within) boxed.add(node);
+            return {
+                label: pile.textContent.trim(),
+                cards: within
+                    .sort((a, b) => middle(a).x - middle(b).x)
+                    .map(slotOf),
+            };
+        },
+    );
+    const up = {
+        piles,
+        loose: lifted
+            .filter((node) => !boxed.has(node))
+            .map(slotOf)
+            .sort((a, b) => a - b),
+        order: [...document.querySelectorAll(".stage-order-item")].map((item) =>
+            Number(item.dataset.item),
+        ),
+        backs: lifted.filter((node) => node.dataset.card === undefined).length,
+        twice: nodes.length - new Set(nodes.map((n) => n.dataset.stage)).size,
+    };
     return {
         title: heading ? words(heading) : "",
         buttons,
@@ -258,6 +317,7 @@ function drawn({ dock, title, captions }) {
             (mark) => mark.style.getPropertyValue("--shown") !== "1",
         ).length,
         busy: stage.shown.busy,
+        up,
     };
 }
 
@@ -274,6 +334,7 @@ async function holds(page, layout, want, what) {
             model: want.marks,
             coming: 0,
             busy: false,
+            up: want.up,
         });
     try {
         await page.waitForFunction(
@@ -296,6 +357,7 @@ async function holds(page, layout, want, what) {
                     model: want.marks,
                     coming: 0,
                     busy: false,
+                    up: want.up,
                 }),
             ],
             { timeout: 15_000 },
@@ -306,7 +368,15 @@ async function holds(page, layout, want, what) {
         if (same(got)) return;
         assert.deepEqual(
             { ...got, buttons: [...got.buttons].sort(byPlace) },
-            { ...want, model: want.marks, coming: 0, busy: false },
+            {
+                title: want.title,
+                buttons: want.buttons,
+                marks: want.marks,
+                model: want.marks,
+                coming: 0,
+                busy: false,
+                up: want.up,
+            },
             what,
         );
     }
@@ -350,13 +420,13 @@ const clicksSent = (page) =>
             .map((call) => call.args.request),
     );
 
-/** Opens `fixture` at its first view in a page of `context` asked for by `query`, with the
+/** Opens `fixture` at its `at`th view in a page of `context` asked for by `query`, with the
  * stage's clock held and settled. */
-async function opened(context, watch, query, fixture) {
+async function opened(context, watch, query, fixture, at = 1) {
     const page = await context.newPage();
     const done = await watch(page);
     await page.goto(
-        new URL(`/?${query}&fixture=${fixture}&at=1#/game`, base).href,
+        new URL(`/?${query}&fixture=${fixture}&at=${at}#/game`, base).href,
     );
     await page.waitForFunction(
         () => window.berylStage && document.querySelector(".stage-node"),
@@ -370,8 +440,14 @@ async function opened(context, watch, query, fixture) {
  * with the pointer, and holds the screen to the session's state before the first and after
  * each. With `carry`, a card of the hand is carried out of it instead of clicked. */
 async function answer(context, watch, layout, fixture, carry) {
-    const { opens, clicks } = asked(await recorded(fixture));
-    const { page, done } = await opened(context, watch, layout.query, fixture);
+    const { opens, clicks, at } = asked(await recorded(fixture));
+    const { page, done } = await opened(
+        context,
+        watch,
+        layout.query,
+        fixture,
+        at,
+    );
     try {
         await holds(page, layout, expected(opens, layout), "as it opens");
         if (!layout.handClicks) {
@@ -402,12 +478,35 @@ async function answer(context, watch, layout, fixture, carry) {
                     .locator(layout.dock)
                     .getByRole("button", { name: label, exact: true })
                     .click();
+            } else if (click.kind === "drop" && click.on.kind === "ability") {
+                // A waiting trigger: put first by a click, or carried to its place.
+                const item = page.locator(
+                    `.stage-order-item[data-item="${click.on.id}"]`,
+                );
+                const box = await item.boundingBox();
+                const from = {
+                    x: box.x + box.width / 2,
+                    y: box.y + box.height / 2,
+                };
+                if (click.at === 0 && !carry)
+                    await page.mouse.click(from.x, from.y);
+                else await carryTo(page, click, before, from);
+            } else if (click.kind === "drop") {
+                await carryTo(
+                    page,
+                    click,
+                    before,
+                    await reach(page, subject(click.on)),
+                );
             } else {
                 const name = subject(click.on);
                 const at = await reach(page, name);
-                const inHand = before.view.objects.some(
-                    (o) => String(o.slot) === name && o.zone === "hand",
-                );
+                // A card held up is clicked where it is, whatever zone it came from.
+                const inHand =
+                    !cardsUp(before.prompt).includes(Number(name)) &&
+                    before.view.objects.some(
+                        (o) => String(o.slot) === name && o.zone === "hand",
+                    );
                 if (inHand && carry) {
                     // Out of the hand, well clear of where the card rests.
                     await page.mouse.move(at.x, at.y);
@@ -428,6 +527,9 @@ async function answer(context, watch, layout, fixture, carry) {
                     ).length === count,
                 i + 1,
             );
+            if (purpose === "scry" && answered) {
+                await scryFlight(page, before, after, TICK);
+            }
             await page.evaluate(settled, SETTLE);
             await holds(page, layout, expected(after, layout), `after ${what}`);
             if (answered) {
@@ -526,6 +628,7 @@ async function watchIt(context, watch, layout, fixture) {
                     caption: layout.captions ? "" : undefined,
                 },
             ],
+            up: heldUp(),
         };
         await holds(page, layout, waits, "as it opens");
         const { seen, done: played } = await page.evaluate(watching, {
