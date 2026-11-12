@@ -1,14 +1,12 @@
 //! Portable Hole. {W} Artifact. "When this artifact enters, exile target nonland permanent an
 //! opponent controls with mana value 2 or less until this artifact leaves the battlefield."
 
-use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
-use beryl_engine::card::{
-    Ability, Behavior, CardDef, Colors, Face, ManaCost, Players, TargetKind, TargetSpec, Trigger,
-    Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, Players, TargetKind, TargetSpec, Trigger, Types, card,
+    mana,
+};
 
 /// "Exile target ... until this artifact leaves the battlefield"
 /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
@@ -16,30 +14,23 @@ use crate::names;
 /// object to its previous zone." A target gone, or no longer matching, by resolution stops
 /// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
 /// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-pub static CARD: CardDef = CardDef {
-    name: names::PORTABLE_HOLE,
-    faces: &[Face {
-        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-        types: Types::ARTIFACT,
-        colors: Colors::WHITE,
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+pub static CARD: CardDef = card(
+    names::PORTABLE_HOLE,
+    &[Face::EMPTY
+        .cost(mana("{W}"))
+        .types(Types::ARTIFACT)
+        .colors(Colors::WHITE)
+        .abilities(&[Ability::triggered(&Trigger::ENTERS)
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[
                     Filter::Not(&Filter::Types(Types::LAND)),
                     Filter::Whose(&Players::EachOpponent),
                     Filter::ManaValueAtMost(2),
                 ]),
-            )],
-            ..Ability::triggered(
-                &Trigger::ENTERS,
-                Behavior::Data(&exile_until_this_leaves(TARGET)),
-            )
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            )])
+            .effect(&exile_until_this_leaves(TARGET))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

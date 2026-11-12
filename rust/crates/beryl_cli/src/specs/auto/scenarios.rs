@@ -322,7 +322,8 @@ fn ways_to_play(def: &'static CardDef) -> bool {
     let front = def.front();
     !front.casting.is_empty()
         || front.abilities.iter().any(|a| {
-            a.kind == AbilityKind::Activated && a.cost.does(beryl_engine::card::CostAction::Discard)
+            a.kind() == AbilityKind::Activated
+                && a.cost().does(beryl_engine::card::CostAction::Discard)
         })
         || def.faces.len() > 1 && !def.faces.iter().skip(1).all(|f| f.transformed)
 }

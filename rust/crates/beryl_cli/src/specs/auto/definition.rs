@@ -67,9 +67,9 @@ pub(super) fn activated(face: &Face) -> Vec<(u8, &'static beryl_engine::card::Ab
     face.abilities
         .iter()
         .enumerate()
-        .filter(|(_, a)| a.kind == AbilityKind::Activated)
-        .filter(|(_, a)| !a.cost.does(CostAction::Discard))
-        .filter(|(_, a)| !matches!(a.cost.measure(), Some(Measure::TotalPower(_))))
+        .filter(|(_, a)| a.kind() == AbilityKind::Activated)
+        .filter(|(_, a)| !a.cost().does(CostAction::Discard))
+        .filter(|(_, a)| !matches!(a.cost().measure(), Some(Measure::TotalPower(_))))
         .filter_map(|(i, a)| Some((u8::try_from(i).ok()?, a)))
         .collect()
 }
@@ -86,14 +86,14 @@ pub fn ability_labels(def: &'static CardDef) -> Vec<(u8, String)> {
 /// An ability's label: its cost, as its card prints it ("{2}{T}", "+2", "−1"), or its index
 /// for a cost that is none of those.
 pub(super) fn cost_label(a: &beryl_engine::card::Ability, k: u8) -> String {
-    if let Some(l) = a.cost.loyalty_change() {
+    if let Some(l) = a.cost().loyalty_change() {
         return match l {
             0 => "0".to_owned(),
             l if l > 0 => format!("+{l}"),
             l => format!("\u{2212}{}", l.unsigned_abs()),
         };
     }
-    let mana = a.cost.mana;
+    let mana = a.cost().mana;
     let mut out = String::new();
     if mana.generic > 0 {
         let _ = write!(out, "{{{}}}", mana.generic);
@@ -103,10 +103,10 @@ pub(super) fn cost_label(a: &beryl_engine::card::Ability, k: u8) -> String {
             let _ = write!(out, "{{{symbol}}}");
         }
     }
-    if a.cost.does(CostAction::Tap) {
+    if a.cost().does(CostAction::Tap) {
         out += "{T}";
     }
-    if a.cost.does(CostAction::Sacrifice) {
+    if a.cost().does(CostAction::Sacrifice) {
         out += if out.is_empty() {
             "Sacrifice"
         } else {
@@ -128,7 +128,7 @@ pub(super) fn lands(abilities: &[(u8, &beryl_engine::card::Ability)]) -> Option<
     let mut most = [0u8; 6];
     let mut total = 0u8;
     for (_, a) in abilities {
-        let cost = a.cost.mana;
+        let cost = a.cost().mana;
         for (m, n) in most.iter_mut().zip(cost.symbols) {
             *m = (*m).max(n);
         }
@@ -156,12 +156,12 @@ pub(super) fn permanent(
 ) -> Permanent {
     let p = Permanent::new(def.name);
     let cost = ability
-        .and_then(|a| a.cost.loyalty_change())
+        .and_then(|a| a.cost().loyalty_change())
         .map_or(0, i8::unsigned_abs);
     if face.loyalty.is_some_and(|l| l < cost) {
         return p.counters(CounterKind::Loyalty, cost);
     }
-    match face.abilities.iter().find_map(|a| a.cost.removes()) {
+    match face.abilities.iter().find_map(|a| a.cost().removes()) {
         Some(kind) => p.counters(kind, 2),
         None => p,
     }
@@ -229,7 +229,7 @@ pub(super) fn stops(
     // the others can stop a player outside their own main phase.
     if abilities
         .iter()
-        .any(|(_, a)| a.timing == Timing::Instant && a.cost.loyalty_change().is_none())
+        .any(|(_, a)| a.timing() == Timing::Instant && a.cost().loyalty_change().is_none())
     {
         let main = table("stops-main", 5, P0, TurnStep::PostcombatMain);
         out.push(probe(
@@ -248,7 +248,7 @@ pub(super) fn stops(
     }
     if abilities
         .iter()
-        .any(|(_, a)| a.cost.mana.generic > 0 || a.cost.mana.symbols.iter().any(|&n| n > 0))
+        .any(|(_, a)| a.cost().mana.generic > 0 || a.cost().mana.symbols.iter().any(|&n| n > 0))
     {
         // A land in hand stops the human here, to see what stays offered unpaid.
         let board = table("lands-tapped", 5, P0, TurnStep::PrecombatMain)
@@ -256,7 +256,7 @@ pub(super) fn stops(
             .hand(P0, LAND_IN_HAND);
         out.push(probe("lands-tapped", "Lands tapped", board, Vec::new()));
     }
-    if abilities.iter().any(|(_, a)| a.needs != Needs::Nothing) {
+    if abilities.iter().any(|(_, a)| a.needs() != Needs::Nothing) {
         // Nothing paid for and nothing for the ability that needs something: no stop.
         let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).battlefield(P0, tapped);
         out.push(probe("nothing-to-do", "Nothing to do", board, Vec::new()));
@@ -264,7 +264,7 @@ pub(super) fn stops(
     // The same board with what the ability needs: it stops the human here.
     for need in abilities
         .iter()
-        .map(|(_, a)| a.needs)
+        .map(|(_, a)| a.needs())
         .filter(|&n| n != Needs::Nothing)
     {
         let (name, title, board) = match need {
@@ -307,7 +307,7 @@ fn activations(
     let bounceable = !def.front().types.intersects(Types::LAND);
     if let Some(&(k, a)) = abilities
         .iter()
-        .find(|(_, a)| a.timing == Timing::Instant && !a.cost.does(CostAction::Sacrifice))
+        .find(|(_, a)| a.timing() == Timing::Instant && !a.cost().does(CostAction::Sacrifice))
         .filter(|_| bounceable)
     {
         let board = table("bounced", 5, P0, TurnStep::PrecombatMain)

@@ -283,8 +283,8 @@ impl RuleChanges {
     /// The rule changes the static abilities of `face` make, by their numbers.
     pub(crate) fn of_face(&self, face: &Face) -> Rules {
         (face.abilities.iter())
-            .filter(|ability| ability.kind == AbilityKind::Static)
-            .filter_map(|ability| self.id(ability.rule?))
+            .filter(|ability| ability.kind() == AbilityKind::Static)
+            .filter_map(|ability| self.id(ability.rule()?))
             .fold(Rules::NONE, Rules::with)
     }
 
@@ -327,18 +327,18 @@ pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<u16, Unch
 /// Numbers the rule change `ability` names, if it names one, and gives
 /// [`kind::RULE_CHANGE`] if it is a static ability's for players.
 fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<u16, Unchecked> {
-    let Some(rule) = ability.rule else {
+    let Some(rule) = ability.rule() else {
         return Ok(0);
     };
     let first = rules.id(rule).is_none();
     let id = rules.number(rule)?;
     let of_players = RuleKind::of(rule)?.of_players();
-    match (ability.kind == AbilityKind::Static, of_players) {
-        (true, true) if ability.condition.is_some() => Err(Unchecked::Condition),
+    match (ability.kind() == AbilityKind::Static, of_players) {
+        (true, true) if ability.condition().is_some() => Err(Unchecked::Condition),
         (true, true) => Ok(kind::RULE_CHANGE),
         // Asked of the permanent, with its condition, as the rule is applied.
         (true, false) => {
-            rules.keep_condition(id, ability.condition, first)?;
+            rules.keep_condition(id, ability.condition(), first)?;
             Ok(0)
         }
         // Started by the ability's effect, on the players it names as it resolves.
@@ -351,8 +351,8 @@ fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<u16, Unchecked
 #[cfg(test)]
 pub(crate) mod fixtures {
     use beryl_card::{
-        Ability, AbilityKind, CardDef, Condition, Cost, Face, Filter, Governed, Objects, Players,
-        RuleChange, Types, When,
+        Ability, CardDef, Condition, Face, Filter, Governed, Objects, Players, RuleChange, Types,
+        When,
     };
 
     use crate::table::{CardTable, GameTable};
@@ -387,23 +387,9 @@ pub(crate) mod fixtures {
             types: Types::PLANESWALKER,
             loyalty: Some(3),
             abilities: &[
-                Ability {
-                    kind: AbilityKind::Static,
-                    rule: Some(&LOYALTY),
-                    condition: Some(&Condition::EnteredThisTurn(Objects::This)),
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Static,
-                    rule: Some(&LIMIT),
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Activated,
-                    cost: Cost::loyalty(1),
-                    rule: Some(&FLASH),
-                    ..Ability::NONE
-                },
+                Ability::rule_change(&LOYALTY).only_if(&Condition::EnteredThisTurn(Objects::This)),
+                Ability::rule_change(&LIMIT),
+                Ability::loyalty(1).starting(&FLASH),
             ],
             ..Face::EMPTY
         }],

@@ -108,7 +108,7 @@ pub(crate) fn begin_activate<L: Layout>(
     })?;
     let c = Casting {
         player,
-        step: if a.cost.mana.x > 0 {
+        step: if a.cost().mana.x > 0 {
             CastStep::X
         } else {
             CastStep::TargetCount
@@ -135,7 +135,7 @@ pub(super) fn top<L: Layout>(s: &State<L>) -> StackEntry<L> {
 
 /// The target specs of the spell or ability being cast.
 pub(super) fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpec] {
-    entry_ability(t, entry).map_or(&[], |a| a.targets)
+    entry_ability(t, entry).map_or(&[], |a| a.targets())
 }
 
 /// Moves the machine on to its next question, or finishes.

@@ -47,11 +47,14 @@ fn draw_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     Ok(())
 }
 
+/// An ability for a context whose test reads none of it.
+static NO_ABILITY: Ability = Ability::spell();
+
 static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -104,10 +107,10 @@ static CRYPT_LAND: CardDef = CardDef {
     name: "Test Crypt Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(
-            &Trigger::step(TurnStep::Upkeep, Players::You),
-            bodies!(crypt_flip),
-        )],
+        abilities: &[
+            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You))
+                .custom(bodies!(crypt_flip)),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -117,10 +120,10 @@ static WATCHER: CardDef = CardDef {
     name: "Test Watcher",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(
-            &Trigger::step(TurnStep::Upkeep, Players::EachOpponent),
-            bodies!(gain_one),
-        )],
+        abilities: &[
+            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
+                .custom(bodies!(gain_one)),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -130,10 +133,10 @@ static ENDER: CardDef = CardDef {
     name: "Test Ender",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(
-            &Trigger::step(TurnStep::End, Players::You),
-            bodies!(draw_one),
-        )],
+        abilities: &[
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::You))
+                .custom(bodies!(draw_one)),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -156,11 +159,9 @@ static DRAIN_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(&Trigger::ENTERS, bodies!(drain_delay)),
-            Ability::triggered(
-                &Trigger::main_phase(Players::You).next(),
-                bodies!(drain_mana),
-            ),
+            Ability::triggered(&Trigger::ENTERS).custom(bodies!(drain_delay)),
+            Ability::triggered(&Trigger::main_phase(Players::You).next())
+                .custom(bodies!(drain_mana)),
         ],
         ..Face::EMPTY
     }],
@@ -175,10 +176,10 @@ fn opponent_loses_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flo
 static EMBLEM: CardDef = CardDef {
     name: "Test Emblem",
     faces: &[Face {
-        abilities: &[Ability::triggered(
-            &Trigger::casts(Players::You, Filter::Any),
-            bodies!(opponent_loses_one),
-        )],
+        abilities: &[
+            Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
+                .custom(bodies!(opponent_loses_one)),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -193,7 +194,7 @@ static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(get_emblem))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(get_emblem))],
         ..Face::EMPTY
     }],
     tokens: &[&EMBLEM],
@@ -228,10 +229,9 @@ static SPHINX: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability {
-            condition: Some(conditions!(not_a_token)),
-            ..Ability::triggered(&Trigger::DIES, bodies!(copy_the_dead))
-        }],
+        abilities: &[Ability::triggered(&Trigger::DIES)
+            .custom(bodies!(copy_the_dead))
+            .only_if(conditions!(not_a_token))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -244,7 +244,7 @@ static TRAINER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -257,8 +257,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(&Trigger::ATTACKS, bodies!(gain_one)),
-            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, bodies!(draw_one)),
+            Ability::triggered(&Trigger::ATTACKS).custom(bodies!(gain_one)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).custom(bodies!(draw_one)),
         ],
         ..Face::EMPTY
     }],
@@ -302,7 +302,7 @@ static ADELINE: CardDef = CardDef {
                 condition: None,
                 modification: Modification::SetPower(&super::static_abilities::CREATURES),
             }),
-            Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking)),
+            Ability::triggered(&Trigger::attack(Players::You)).custom(bodies!(human_attacking)),
         ],
         ..Face::EMPTY
     }],
@@ -352,7 +352,7 @@ static OVERLORD: CardDef = CardDef {
                 )),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
-            Ability::triggered(&Trigger::ENTERS, bodies!(two_insects)),
+            Ability::triggered(&Trigger::ENTERS).custom(bodies!(two_insects)),
         ],
         ..Face::EMPTY
     }],
@@ -376,11 +376,12 @@ static STAFF: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(
-                &Trigger::creates_tokens(Players::You, Filter::Types(Types::CREATURE)),
-                bodies!(story_counter),
-            ),
-            Ability::triggered(&Trigger::main_phase(Players::You).next(), bodies!(two_maps)),
+            Ability::triggered(&Trigger::creates_tokens(
+                Players::You,
+                Filter::Types(Types::CREATURE),
+            ))
+            .custom(bodies!(story_counter)),
+            Ability::triggered(&Trigger::main_phase(Players::You).next()).custom(bodies!(two_maps)),
         ],
         ..Face::EMPTY
     }],
@@ -398,11 +399,7 @@ static WALKER: CardDef = CardDef {
 };
 
 /// The crew ability Swift Reconfiguration grants ("crew 5"): its body is the combat work's.
-const CREW: Ability = Ability {
-    kind: AbilityKind::Activated,
-    cost: Cost::NONE,
-    ..Ability::NONE
-};
+const CREW: Ability = Ability::activated(Cost::NONE);
 
 /// Swift Reconfiguration: "Enchanted permanent is a Vehicle artifact with crew 5 and it loses
 /// all other card types."
@@ -454,10 +451,9 @@ static ICEBERG: CardDef = CardDef {
     name: "Test Iceberg",
     faces: &[Face {
         types: Types::ARTIFACT,
-        abilities: &[Ability::triggered(
-            &Trigger::ENTERS,
-            bodies!(exile_an_opposing_creature),
-        )],
+        abilities: &[
+            Ability::triggered(&Trigger::ENTERS).custom(bodies!(exile_an_opposing_creature))
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -565,7 +561,7 @@ pub(super) fn with_ctx(
         controller: s.controller(slot),
         ..PendingTrigger::default()
     };
-    let mut ctx = EffectCtx::new(s, t, &mut x.events, &trigger, &Ability::NONE);
+    let mut ctx = EffectCtx::new(s, t, &mut x.events, &trigger, &NO_ABILITY);
     body(&mut ctx);
     ctx.finish(Ok(())).unwrap();
 }
@@ -759,7 +755,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
         ..PendingTrigger::default()
     };
     let found = |s: &mut State, x: &mut Scratch| {
-        let ctx = EffectCtx::new(s, &t, &mut x.events, &ability, &Ability::NONE);
+        let ctx = EffectCtx::new(s, &t, &mut x.events, &ability, &NO_ABILITY);
         let found = ctx.exiled_with_source();
         ctx.finish(Ok(())).unwrap();
         found
@@ -1290,7 +1286,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let grant = d.granted[0].unwrap();
     assert_eq!(grant.card, s.copiable(aura).record(&t).0);
     let granted = &t.def(grant.card).front().grants[grant.grant.index()];
-    assert_eq!(granted.kind, AbilityKind::Activated);
+    assert_eq!(granted.kind(), AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     s.board().attach(aura, land);
@@ -1797,10 +1793,9 @@ static CATHAR: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability {
-            may_pause: true,
-            ..Ability::triggered(&Trigger::attack(Players::You), bodies!(cathar_human))
-        }],
+        abilities: &[Ability::triggered(&Trigger::attack(Players::You))
+            .custom(bodies!(cathar_human))
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[&HUMAN],
@@ -1905,14 +1900,13 @@ static THIEF: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(2),
         toughness: Some(1),
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::triggered(&Trigger::ENTERS)
+            .custom(bodies!(steal_target))
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
-            )],
-            condition: Some(conditions!(crate::effect::kicked)),
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(steal_target))
-        }],
+            )])
+            .only_if(conditions!(crate::effect::kicked))],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,
             min_x: 1,

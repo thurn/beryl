@@ -2,7 +2,7 @@
 //! graveyard into their library, then draws seven cards. You untap up to six lands."
 
 use beryl_engine::Zone;
-use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
+use beryl_engine::card::{Ability, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::{Layout, bodies};
@@ -16,12 +16,7 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(4, [0, 2, 0, 0, 0, 0]),
         types: Types::SORCERY,
         colors: Colors::BLUE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(spiral),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(spiral)).pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

@@ -2,8 +2,7 @@
 //! discard a basic land card."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Part, Prompt, Purpose, Supertypes,
-    Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Prompt, Purpose, Supertypes, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Evaluate, Filter};
@@ -18,12 +17,9 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
         types: Types::INSTANT,
         colors: Colors::BLUE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(draw_three_discard),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .custom(bodies!(draw_three_discard))
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

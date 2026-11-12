@@ -9,8 +9,8 @@ use beryl_card::effect::build::{TARGET, exile, put_into_library};
 use beryl_card::{Effect, LibraryPosition, Players};
 use beryl_engine::TurnStep;
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityIx, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -31,35 +31,17 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE.union(Colors::BLUE),
         loyalty: Some(4),
         abilities: &[
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                body: bodies!(draw_and_delay),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-3),
-                targets: &[TargetSpec::one(
+            Ability::loyalty(1).custom(bodies!(draw_and_delay)),
+            Ability::loyalty(-3)
+                .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
-                )],
-                body: Behavior::Data(&THIRD_FROM_THE_TOP),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-8),
-                body: bodies!(emblem),
-                ..Ability::NONE
-            },
-            Ability {
-                may_pause: true,
-                ..Ability::triggered(
-                    &Trigger::step(TurnStep::End, Players::EachPlayer).next(),
-                    bodies!(untap_two_lands),
-                )
-            },
+                )])
+                .effect(&THIRD_FROM_THE_TOP),
+            Ability::loyalty(-8).custom(bodies!(emblem)),
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+                .custom(bodies!(untap_two_lands))
+                .pauses(),
         ],
         ..Face::EMPTY
     }],
@@ -72,13 +54,12 @@ pub static CARD: CardDef = CardDef {
 pub static EMBLEM: CardDef = CardDef {
     name: "Teferi, Hero of Dominaria Emblem",
     faces: &[Face {
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::triggered(&Trigger::draws(Players::You))
+            .effect(&EXILE_TARGET)
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Whose(&Players::EachOpponent),
-            )],
-            ..Ability::triggered(&Trigger::draws(Players::You), Behavior::Data(&EXILE_TARGET))
-        }],
+            )])],
         ..Face::EMPTY
     }],
     tokens: &[],

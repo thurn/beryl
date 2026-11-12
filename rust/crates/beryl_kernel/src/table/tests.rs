@@ -1,8 +1,8 @@
 //! Tests of the card tables.
 
 use beryl_card::{
-    Behavior, Condition, Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet, Modification,
-    Objects, Players, Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
+    Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet, Modification, Objects, Players,
+    Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
 };
 
 use super::*;
@@ -61,21 +61,16 @@ static HERALD: CardDef = CardDef {
     faces: &[
         Face {
             abilities: &[
-                Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
+                Ability::triggered(&Trigger::ENTERS).effect(&Effect::NOTHING),
                 Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-                Ability::triggered(
-                    &Trigger::step(TurnStep::Upkeep, Players::You),
-                    Behavior::Data(&Effect::NOTHING),
-                ),
-                Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
+                Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You))
+                    .effect(&Effect::NOTHING),
+                Ability::triggered(&Trigger::ENTERS).effect(&Effect::NOTHING),
             ],
             ..Face::EMPTY
         },
         Face {
-            abilities: &[Ability::triggered(
-                &Trigger::draws(Players::You),
-                Behavior::Data(&Effect::NOTHING),
-            )],
+            abilities: &[Ability::triggered(&Trigger::draws(Players::You)).effect(&Effect::NOTHING)],
             ..Face::EMPTY
         },
     ],
@@ -86,13 +81,11 @@ static HERALD: CardDef = CardDef {
 static GREETER: CardDef = CardDef {
     name: "Greeter",
     faces: &[Face {
-        abilities: &[Ability::triggered(
-            &Trigger::of(
-                TriggerEvent::Enters,
-                Subject::A(Filter::Types(Types::CREATURE)),
-            ),
-            Behavior::Data(&Effect::NOTHING),
-        )],
+        abilities: &[Ability::triggered(&Trigger::of(
+            TriggerEvent::Enters,
+            Subject::A(Filter::Types(Types::CREATURE)),
+        ))
+        .effect(&Effect::NOTHING)],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -154,30 +147,13 @@ static ANTHEM: CardDef = CardDef {
     }],
     tokens: &[],
 };
-/// Written as a literal: [`Ability::static_ability`] refuses it as it compiles.
-static AFTERTHOUGHT: CardDef = CardDef {
-    name: "Afterthought",
-    faces: &[Face {
-        abilities: &[Ability {
-            layer: Some(&LayerSpec {
-                affected: Objects::This,
-                condition: Some(Condition::Did),
-                modification: Modification::AddKeywords(Keywords::FLYING),
-            }),
-            ..Ability::NONE
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
 /// "Each player sacrifices a land that player controls": a filter read for a player
 /// only a resolution knows.
 static TOLL: CardDef = CardDef {
     name: "Toll",
     faces: &[Face {
-        abilities: &[Ability::triggered(
-            &Trigger::ENTERS,
-            Behavior::Data(&Effect::ForEachPlayer {
+        abilities: &[
+            Ability::triggered(&Trigger::ENTERS).effect(&Effect::ForEachPlayer {
                 players: Players::EachPlayer,
                 effect: &Effect::Sacrifice(Objects::All {
                     zone: Zone::Battlefield,
@@ -187,12 +163,12 @@ static TOLL: CardDef = CardDef {
                     ]),
                 }),
             }),
-        )],
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &AFTERTHOUGHT, &TOLL]);
+static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &TOLL]);
 
 /// A static ability the layers cannot apply would change nothing, and a filter for
 /// players the engine cannot read there would accept nothing: no table is built.
@@ -205,13 +181,6 @@ fn a_table_refuses_what_the_engine_has_no_code_to_read() {
         Some(TableError::Static {
             card: "Anthem",
             unapplied: Unapplied::Affected,
-        })
-    );
-    assert_eq!(
-        refused("Afterthought"),
-        Some(TableError::Static {
-            card: "Afterthought",
-            unapplied: Unapplied::Resolving,
         })
     );
     assert_eq!(refused("Toll"), Some(TableError::Players { card: "Toll" }));

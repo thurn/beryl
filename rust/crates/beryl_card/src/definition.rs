@@ -131,7 +131,9 @@ impl Face {
     /// The spell ability of an instant or sorcery, or the targeting ability of an Aura
     /// spell: what the spell targets and does as it resolves.
     pub fn spell_ability(&self) -> Option<&'static Ability> {
-        self.abilities.iter().find(|a| a.kind == AbilityKind::Spell)
+        self.abilities
+            .iter()
+            .find(|a| a.kind() == AbilityKind::Spell)
     }
 
     /// The spell ability of this face cast with the options `costs`: its overloaded one when
@@ -189,8 +191,147 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
     tokens: &[],
 };
 
+/// A card of these faces: one, or two for a double-faced, modal double-faced, split or
+/// adventure card. Each face starts from [`Face::EMPTY`]:
+///
+/// ```
+/// use beryl_card::effect::build::{TARGET, counter};
+/// use beryl_card::{Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types};
+/// use beryl_card::{card, mana};
+///
+/// // "Counter target spell."
+/// pub static CARD: CardDef = card(
+///     "Counterspell",
+///     &[Face::EMPTY
+///         .cost(mana("{U}{U}"))
+///         .types(Types::INSTANT)
+///         .colors(Colors::BLUE)
+///         .abilities(&[Ability::spell()
+///             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+///             .effect(&counter(TARGET))])],
+/// );
+/// ```
+///
+/// # Panics
+///
+/// As the definition compiles, if it says what no game could carry out
+/// ([`CardDef::check`]): a build failure in the card's own file.
+pub const fn card(name: &'static str, faces: &'static [Face]) -> CardDef {
+    let card = CardDef {
+        name,
+        faces,
+        tokens: &[],
+    };
+    match card.check() {
+        Ok(()) => card,
+        Err(malformed) => panic!("{}", malformed.says()),
+    }
+}
+
+impl CardDef {
+    /// The tokens and emblems the card can create ([`CardDef::tokens`]).
+    #[must_use]
+    pub const fn creating(self, tokens: &'static [&'static CardDef]) -> CardDef {
+        CardDef { tokens, ..self }
+    }
+}
+
+/// What a card file says of a face, starting from [`Face::EMPTY`]. The printed
+/// characteristics are typed here until the card store generates them (plan K2).
 impl Face {
-    /// A face with no cost, types or abilities, for `..Face::EMPTY` in card files.
+    /// The name of a back face ([`Face::name`]).
+    #[must_use]
+    pub const fn named(self, name: &'static str) -> Face {
+        Face { name, ..self }
+    }
+
+    #[must_use]
+    pub const fn cost(self, cost: ManaCost) -> Face {
+        Face { cost, ..self }
+    }
+
+    #[must_use]
+    pub const fn supertypes(self, supertypes: Supertypes) -> Face {
+        Face { supertypes, ..self }
+    }
+
+    #[must_use]
+    pub const fn types(self, types: Types) -> Face {
+        Face { types, ..self }
+    }
+
+    #[must_use]
+    pub const fn subtypes(self, subtypes: Subtypes) -> Face {
+        Face { subtypes, ..self }
+    }
+
+    #[must_use]
+    pub const fn colors(self, colors: Colors) -> Face {
+        Face { colors, ..self }
+    }
+
+    /// A creature's printed power and toughness.
+    #[must_use]
+    pub const fn power_toughness(self, power: i8, toughness: i8) -> Face {
+        Face {
+            power: Some(power),
+            toughness: Some(toughness),
+            ..self
+        }
+    }
+
+    /// A planeswalker's printed loyalty.
+    #[must_use]
+    pub const fn loyalty(self, loyalty: u8) -> Face {
+        Face {
+            loyalty: Some(loyalty),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub const fn keywords(self, keywords: Keywords) -> Face {
+        Face { keywords, ..self }
+    }
+
+    #[must_use]
+    pub const fn abilities(self, abilities: &'static [Ability]) -> Face {
+        Face { abilities, ..self }
+    }
+
+    /// The alternative and additional costs it may be cast with ([`Face::casting`]).
+    #[must_use]
+    pub const fn casting(self, casting: &'static [CastingOption]) -> Face {
+        Face { casting, ..self }
+    }
+
+    /// "As an additional cost to cast this spell, [parts]" ([`Face::additional_cost`]).
+    #[must_use]
+    pub const fn additional_cost(self, additional_cost: &'static [CostPart]) -> Face {
+        Face {
+            additional_cost,
+            ..self
+        }
+    }
+
+    /// The abilities it grants to another object ([`Face::grants`]).
+    #[must_use]
+    pub const fn grants(self, grants: &'static [Ability]) -> Face {
+        Face { grants, ..self }
+    }
+
+    /// The back face of a transforming double-faced card ([`Face::transformed`]).
+    #[must_use]
+    pub const fn transformed(self) -> Face {
+        Face {
+            transformed: true,
+            ..self
+        }
+    }
+}
+
+impl Face {
+    /// A face with no cost, types or abilities: where a card file's face starts.
     pub const EMPTY: Face = Face {
         name: "",
         cost: ManaCost::NONE,

@@ -35,7 +35,7 @@ pub enum Instead {
 /// happen instead of a draw, or why the engine cannot do it. The players are read for the
 /// permanent's controller ([`crate::listener::is_for`]).
 pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
-    let (instead, players) = match ability.body {
+    let (instead, players) = match ability.body() {
         Behavior::Data(&Effect::WinGame(players)) => (Instead::Win(players), players),
         Behavior::Data(&Effect::LoseGame(players)) => (Instead::Lose(players), players),
         _ => return Err(Unreplaced::Instead),
@@ -49,7 +49,7 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
 /// Whether `ability` replaces its controller's draws.
 #[inline]
 pub fn replaces_draws(ability: &Ability) -> bool {
-    ability.kind == AbilityKind::Replacement && ability.replacement == Replacement::WouldDraw
+    ability.kind() == AbilityKind::Replacement && ability.replacement() == Replacement::WouldDraw
 }
 
 /// The bit of a card's listener mask that says a static ability of it replaces its

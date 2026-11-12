@@ -1,32 +1,21 @@
 //! Counterspell. {U}{U} Instant. "Counter target spell."
 
-use beryl_card::effect::build::{TARGET, counter};
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::COUNTERSPELL,
-    faces: &[Face {
-        cost: ManaCost::new(0, [0, 2, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::BLUE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            // CR 701.6a: "To counter a spell or ability means to cancel it, removing it from
-            // the stack. It doesn't resolve and none of its effects occur. A countered spell
-            // is put into its owner's graveyard."
-            body: Behavior::Data(&counter(TARGET)),
-            ..Ability::NONE
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{TARGET, counter};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
 };
+
+pub static CARD: CardDef = card(
+    names::COUNTERSPELL,
+    &[Face::EMPTY
+        .cost(mana("{U}{U}"))
+        .types(Types::INSTANT)
+        .colors(Colors::BLUE)
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .effect(&counter(TARGET))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

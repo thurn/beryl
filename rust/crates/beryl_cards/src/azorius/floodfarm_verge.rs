@@ -1,33 +1,23 @@
 //! Floodfarm Verge. Land. "{T}: Add {W}. {T}: Add {U}. Activate only if you control a Plains
 //! or an Island."
 
-use beryl_engine::card::{Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Types};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::{Ability, CardDef, Face, Filter, ManaColor, ManaSet, Subtype, Types, card};
 
 /// The {U} ability's restriction reads the land's subtypes, so a Tundra, a Plains Island,
 /// counts, as a basic does
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "The basic land types are
 /// Plains, Island, Swamp, Mountain, and Forest."
-pub static CARD: CardDef = CardDef {
-    name: names::FLOODFARM_VERGE,
-    faces: &[Face {
-        types: Types::LAND,
-        abilities: &[
-            Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
-            Ability {
-                only_if_you_control: Some(&Filter::AnyOf(&[
-                    Filter::Subtype(Subtype::Plains),
-                    Filter::Subtype(Subtype::Island),
-                ])),
-                ..Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))
-            },
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::FLOODFARM_VERGE,
+    &[Face::EMPTY.types(Types::LAND).abilities(&[
+        Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)).if_you_control(&Filter::AnyOf(&[
+            Filter::Subtype(Subtype::Plains),
+            Filter::Subtype(Subtype::Island),
+        ])),
+    ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

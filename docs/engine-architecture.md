@@ -596,7 +596,7 @@ example, the three cards Brainstorm just drew.
 Only an ability that may ask a question runs on the scratch copy, which costs
 about 170 ns. An ability written as effect data says so itself: its effect
 contains an instruction that asks (`Effect::asks`). A Rust body, which nothing
-can read, declares `may_pause` beside it, and a debug assertion catches a body
+can read, declares it with `Ability::pauses`, and a debug assertion catches a body
 that asks a question without declaring it. `Ability::asks` answers for both. The
 alternative, a hand-written step enum per multi-step card, was rejected (**D1**)
 as the error-prone half of the work for no measurable speed.

@@ -7,8 +7,8 @@
 use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, mill, sequence, win_game};
 use beryl_card::{Amount, Comparison, Condition, Effect, Objects, Players, Zone};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Replacement,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Replacement, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -42,24 +42,13 @@ pub static CARD: CardDef = CardDef {
             // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
             // "Effects that use the word 'instead' are replacement effects." The draw
             // machinery offers it each draw, an empty library or not (CR 614.11).
-            Ability {
-                condition: Some(&LIBRARY_IS_EMPTY),
-                body: Behavior::Data(&YOU_WIN),
-                ..Ability::replacing(Replacement::WouldDraw)
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                targets: &[TargetSpec::one(TargetKind::Player, Filter::Any)],
-                body: Behavior::Data(&MILL_TWO_AND_DRAW),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-8),
-                body: bodies!(draw_seven),
-                ..Ability::NONE
-            },
+            Ability::replacing(Replacement::WouldDraw)
+                .only_if(&LIBRARY_IS_EMPTY)
+                .effect(&YOU_WIN),
+            Ability::loyalty(1)
+                .targeting(&[TargetSpec::one(TargetKind::Player, Filter::Any)])
+                .effect(&MILL_TWO_AND_DRAW),
+            Ability::loyalty(-8).custom(bodies!(draw_seven)),
         ],
         ..Face::EMPTY
     }],

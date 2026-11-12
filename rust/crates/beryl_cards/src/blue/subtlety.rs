@@ -47,14 +47,13 @@ pub static CARD: CardDef = CardDef {
         toughness: Some(3),
         keywords: Keywords::FLASH.union(Keywords::FLYING),
         abilities: &[
-            Ability {
-                targets: &[TargetSpec::up_to_one(
+            Ability::triggered(&Trigger::ENTERS)
+                .custom(bodies!(tuck))
+                .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Spell,
                     Filter::Types(Types::CREATURE.union(Types::PLANESWALKER)),
-                )],
-                may_pause: true,
-                ..Ability::triggered(&Trigger::ENTERS, bodies!(tuck))
-            },
+                )])
+                .pauses(),
             Ability::evoke(),
         ],
         casting: &[CastingOption::Evoke {

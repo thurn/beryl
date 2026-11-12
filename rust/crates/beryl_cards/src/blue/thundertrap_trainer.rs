@@ -53,10 +53,9 @@ pub static CARD: CardDef = CardDef {
         toughness: Some(2),
         abilities: &[
             Ability::offspring(),
-            Ability {
-                may_pause: true,
-                ..Ability::triggered(&Trigger::ENTERS, bodies!(dig))
-            },
+            Ability::triggered(&Trigger::ENTERS)
+                .custom(bodies!(dig))
+                .pauses(),
         ],
         casting: &[CastingOption::Offspring(ManaCost::generic(4))],
         ..Face::EMPTY

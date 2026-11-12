@@ -1,27 +1,21 @@
 //! Seachrome Coast. Land. "This land enters tapped unless you control two or fewer other
 //! lands. {T}: Add {W} or {U}."
 
-use beryl_engine::card::{Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Types};
-
 use crate::names;
+use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Types, card};
 
 /// The entering replacement ([CR 614.1d](https://yawgatog.com/resources/magic-rules/#R6141d)):
 /// "Continuous effects that read "[This permanent] enters . . ." ... are replacement
 /// effects." It counts the lands its controller controls as it would enter, which are all
 /// other lands.
-pub static CARD: CardDef = CardDef {
-    name: names::SEACHROME_COAST,
-    faces: &[Face {
-        types: Types::LAND,
-        abilities: &[
-            Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),
-            Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
-            Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::SEACHROME_COAST,
+    &[Face::EMPTY.types(Types::LAND).abilities(&[
+        Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+    ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

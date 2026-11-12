@@ -92,7 +92,7 @@ pub const fn sequence(effects: &'static [Effect]) -> Effect {
 }
 
 /// [`Effect::If`] with nothing otherwise: "if [condition], [then]".
-pub const fn when(condition: Condition, then: &'static Effect) -> Effect {
+pub const fn if_then(condition: Condition, then: &'static Effect) -> Effect {
     Effect::If {
         condition,
         then,

@@ -34,35 +34,35 @@ impl Ability {
     /// cost, what triggers it, what it needs to be activated, its conditions, its continuous
     /// effect, the rule change it names and its effect data. A Rust body holds none anything can read.
     pub fn filters(&self, visit: Visit) {
-        for spec in self.targets {
+        for spec in self.targets() {
             spec.filter.filters(visit);
         }
-        for part in self.cost.parts() {
+        for part in self.cost().parts() {
             part.filters(visit);
         }
-        if let Some(trigger) = self.trigger {
+        if let Some(trigger) = self.trigger() {
             if let Subject::A(filter) = &trigger.subject {
                 filter.filters(visit);
             }
             trigger.whose.filters(visit);
         }
-        if let Some(condition) = self.condition {
+        if let Some(condition) = self.condition() {
             condition.filters(visit);
         }
-        if let Some(layer) = self.layer {
+        if let Some(layer) = self.layer() {
             layer.filters(visit);
         }
-        if let Some(rule) = self.rule {
+        if let Some(rule) = self.rule() {
             rule.players.filters(visit);
             match &rule.what {
                 Governed::CastSpells(filter) => filter.filters(visit),
                 Governed::ActivateLoyaltyAbilities(objects) => objects.filters(visit),
             }
         }
-        if let Some(filter) = &self.only_if_you_control {
+        if let Some(filter) = &self.only_if_you_control() {
             filter.filters(visit);
         }
-        if let Behavior::Data(effect) = self.body {
+        if let Behavior::Data(effect) = self.body() {
             effect.filters(visit);
         }
     }
@@ -286,30 +286,26 @@ mod tests {
 
     /// "Whenever an opponent casts a noncreature spell, if you control an artifact, destroy
     /// target tapped land": a filter in each place an ability holds one, some nested.
-    static ABILITY: Ability = Ability {
-        targets: &[TargetSpec::one(
-            TargetKind::Permanent,
-            Filter::All(&[Filter::Tapped, Filter::Types(Types::LAND)]),
-        )],
-        condition: Some(&Condition::Compare(
-            Amount::Count(&Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::Whose(&Players::You),
-            }),
-            Comparison::AtLeast,
-            Amount::Fixed(1),
-        )),
-        ..Ability::triggered(
-            &Trigger::casts(
-                Players::EachOpponent,
-                Filter::Not(&Filter::Types(Types::CREATURE)),
-            ),
-            Behavior::Data(&Effect::Destroy(Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::ManaValueAtMost(2),
-            })),
-        )
-    };
+    static ABILITY: Ability = Ability::triggered(&Trigger::casts(
+        Players::EachOpponent,
+        Filter::Not(&Filter::Types(Types::CREATURE)),
+    ))
+    .effect(&Effect::Destroy(Objects::All {
+        zone: Zone::Battlefield,
+        filter: Filter::ManaValueAtMost(2),
+    }))
+    .targeting(&[TargetSpec::one(
+        TargetKind::Permanent,
+        Filter::All(&[Filter::Tapped, Filter::Types(Types::LAND)]),
+    )])
+    .only_if(&Condition::Compare(
+        Amount::Count(&Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Whose(&Players::You),
+        }),
+        Comparison::AtLeast,
+        Amount::Fixed(1),
+    ));
 
     #[test]
     fn a_walk_meets_every_filter_of_an_ability_and_those_inside_them() {

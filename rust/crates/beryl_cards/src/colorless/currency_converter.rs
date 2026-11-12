@@ -6,8 +6,8 @@
 use beryl_card::effect::build::{YOU, discard, draw, sequence};
 use beryl_card::{Effect, Players};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Needs,
-    Place, Prompt, Purpose, Subtype, Subtypes, Trigger, Types,
+    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Needs, Place, Prompt, Purpose,
+    Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
@@ -94,24 +94,14 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::generic(1),
         types: Types::ARTIFACT,
         abilities: &[
-            Ability {
-                may_pause: true,
-                ..Ability::triggered(&Trigger::discards(Players::You), bodies!(exile_discarded))
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::of(ManaCost::generic(2), &[CostPart::TAP]),
-                body: Behavior::Data(&LOOT),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::TAP,
-                may_pause: true,
-                body: bodies!(convert),
-                needs: Needs::ExiledWithSource,
-                ..Ability::NONE
-            },
+            Ability::triggered(&Trigger::discards(Players::You))
+                .custom(bodies!(exile_discarded))
+                .pauses(),
+            Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP])).effect(&LOOT),
+            Ability::activated(Cost::TAP)
+                .custom(bodies!(convert))
+                .pauses()
+                .needing(Needs::ExiledWithSource),
         ],
         ..Face::EMPTY
     }],

@@ -9,7 +9,7 @@ use beryl_engine::card::{Ability, Behavior, SpecIx, Takes};
 
 /// Whether `ability` counters what is chosen for one of its targets.
 fn counters(ability: &Ability) -> bool {
-    (0..ability.targets.len()).any(|target| {
+    (0..ability.targets().len()).any(|target| {
         let target = u8::try_from(target).expect("a few targets");
         ability.takes_target(SpecIx::new(target), Takes::Counter)
     })
@@ -27,7 +27,7 @@ fn a_card_counters_its_target_exactly_where_its_text_says_so() {
             let countering: Vec<&Ability> = face.abilities.iter().filter(|a| counters(a)).collect();
             assert_eq!(!countering.is_empty(), says, "{}: {text:?}", printed.name);
             for ability in countering {
-                match ability.body {
+                match ability.body() {
                     Behavior::Data(_) => read.push(card.name),
                     Behavior::Custom(_) => declared.push(card.name),
                 }

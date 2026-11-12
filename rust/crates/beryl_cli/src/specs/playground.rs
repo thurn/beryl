@@ -175,7 +175,7 @@ fn fold_loyalty_abilities(
         let Some(ability) = def.front().abilities.get(index.index()) else {
             return true;
         };
-        let Some(loyalty) = ability.cost.loyalty_change() else {
+        let Some(loyalty) = ability.cost().loyalty_change() else {
             return true;
         };
         if loyalty < 0 && loyalty.unsigned_abs() > def.front().loyalty.unwrap_or(0) {
@@ -432,7 +432,7 @@ fn support_cards() -> &'static [&'static CardDef] {
                     .front()
                     .abilities
                     .iter()
-                    .any(|a| matches!(a.kind, AbilityKind::Static | AbilityKind::Replacement))
+                    .any(|a| matches!(a.kind(), AbilityKind::Static | AbilityKind::Replacement))
             })
             .collect();
         supports.sort_by_key(|d| (d.front().abilities.len(), d.front().cost.generic, d.name));
@@ -448,7 +448,7 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
         .faces
         .iter()
         .flat_map(|f| f.abilities)
-        .flat_map(|a| a.targets)
+        .flat_map(beryl_engine::card::Ability::targets)
         .filter(|t| matches!(t.kind, TargetKind::Permanent | TargetKind::SpellOrPermanent))
     {
         let Ok((table, state)) = target_position(&board) else {

@@ -96,7 +96,7 @@ pub(super) fn total_cost<L: Layout>(
             spell_cost(face, entry.costs, entry.x, increase, c.free)
         }
         Some(ability) => {
-            let mut cost = face.ability(ability).cost.mana.with_x(entry.x);
+            let mut cost = face.ability(ability).cost().mana.with_x(entry.x);
             cost.generic -= c.substituted;
             cost
         }

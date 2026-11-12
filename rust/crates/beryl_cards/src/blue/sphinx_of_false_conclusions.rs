@@ -48,14 +48,12 @@ pub static CARD: CardDef = CardDef {
         toughness: Some(2),
         keywords: Keywords::FLASH.union(Keywords::FLYING),
         abilities: &[
-            Ability {
-                may_pause: true,
-                ..Ability::triggered(&Trigger::ATTACKS, bodies!(loot))
-            },
-            Ability {
-                condition: Some(conditions!(not_a_token)),
-                ..Ability::triggered(&Trigger::DIES, bodies!(copy_of_it))
-            },
+            Ability::triggered(&Trigger::ATTACKS)
+                .custom(bodies!(loot))
+                .pauses(),
+            Ability::triggered(&Trigger::DIES)
+                .custom(bodies!(copy_of_it))
+                .only_if(conditions!(not_a_token)),
         ],
         ..Face::EMPTY
     }],

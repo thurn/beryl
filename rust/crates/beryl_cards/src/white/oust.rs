@@ -1,14 +1,12 @@
 //! Oust. {W} Sorcery. "Put target creature into its owner's library second from the top. Its
 //! controller gains 3 life."
 
-use beryl_card::LibraryPosition;
-use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, gain_life, put_into_library, sequence};
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, gain_life, put_into_library, sequence};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, LibraryPosition, TargetKind, TargetSpec, Types, card,
+    mana,
+};
 
 /// "Second from the top" is under one card, or the top of an empty library. "Its controller"
 /// is the creature's as it was on the battlefield: in a library it has no controller
@@ -16,28 +14,22 @@ use crate::names;
 /// the controller of a card that doesn't have one (because it's not a permanent or spell),
 /// use its owner instead." Owner and controller differ only for a stolen creature, which
 /// goes to its owner's library while its controller gains the life.
-pub static CARD: CardDef = CardDef {
-    name: names::OUST,
-    faces: &[Face {
-        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+pub static CARD: CardDef = card(
+    names::OUST,
+    &[Face::EMPTY
+        .cost(mana("{W}"))
+        .types(Types::SORCERY)
+        .colors(Colors::WHITE)
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Types(Types::CREATURE),
-            )],
-            body: Behavior::Data(&sequence(&[
+            )])
+            .effect(&sequence(&[
                 put_into_library(TARGET, LibraryPosition::FromTop(2)),
                 gain_life(ITS_CONTROLLER, 3),
-            ])),
-            ..Ability::NONE
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            ]))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

@@ -7,8 +7,8 @@
 use beryl_engine::Zone;
 use beryl_engine::bitboard::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Players,
-    Supertypes, TargetKind, TargetSpec, Types,
+    Ability, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Players, Supertypes, TargetKind,
+    TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -97,21 +97,13 @@ pub static CARD: CardDef = CardDef {
         types: Types::SORCERY,
         colors: Colors::WHITE,
         abilities: &[
-            Ability {
-                kind: AbilityKind::Spell,
-                targets: &[
+            Ability::spell()
+                .targeting(&[
                     TargetSpec::one(TargetKind::Permanent, CREATURES_YOU_DONT_CONTROL).removal(),
-                ],
-                may_pause: true,
-                body: bodies!(exile_target),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Spell,
-                may_pause: true,
-                body: bodies!(exile_each),
-                ..Ability::NONE
-            },
+                ])
+                .custom(bodies!(exile_target))
+                .pauses(),
+            Ability::spell().custom(bodies!(exile_each)).pauses(),
         ],
         casting: &[CastingOption::overload(
             ManaCost::new(4, [2, 0, 0, 0, 0, 0]),

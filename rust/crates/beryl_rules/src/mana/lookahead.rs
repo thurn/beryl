@@ -48,9 +48,9 @@ pub(super) fn later_costs<L: Layout>(
                 });
             }
             for a in face.abilities {
-                if a.kind == AbilityKind::Activated && a.cost.does(CostAction::Discard) {
+                if a.kind() == AbilityKind::Activated && a.cost().does(CostAction::Discard) {
                     add(Later {
-                        cost: a.cost.mana.with_x(0),
+                        cost: a.cost().mana.with_x(0),
                         taps: None,
                     });
                 }
@@ -63,10 +63,10 @@ pub(super) fn later_costs<L: Layout>(
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {
-            if a.kind == AbilityKind::Activated && !a.is_loyalty() {
+            if a.kind() == AbilityKind::Activated && !a.is_loyalty() {
                 add(Later {
-                    cost: a.cost.mana.with_x(0),
-                    taps: a.cost.does(CostAction::Tap).then_some(slot),
+                    cost: a.cost().mana.with_x(0),
+                    taps: a.cost().does(CostAction::Tap).then_some(slot),
                 });
             }
         }
@@ -167,8 +167,8 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
 fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
     face.abilities
         .iter()
-        .filter(|a| a.kind == AbilityKind::Replacement)
-        .all(|a| match a.replacement {
+        .filter(|a| a.kind() == AbilityKind::Replacement)
+        .all(|a| match a.replacement() {
             Replacement::EntersTapped => false,
             Replacement::EntersTappedUnlessFewLands(n) => {
                 // As [`event`] counts them: every land is another land.
@@ -204,7 +204,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             && !face.types.intersects(Types::LAND)
             && (sorcery || instant_speed(s, t, face, player))
     };
-    let activatable = |a: &Ability| sorcery || a.timing == Timing::Instant;
+    let activatable = |a: &Ability| sorcery || a.timing() == Timing::Instant;
     // The hand by card, not by slot: [`Lookahead::together`]'s search is bounded, so the order
     // it meets the costs in can decide, and the slots are where the game's randomness dealt
     // the cards.
@@ -231,11 +231,11 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
                 ahead.lands.push_if_room((kinds, amount)); // A heuristic's sample.
             }
             for a in face.abilities {
-                if a.kind == AbilityKind::Activated
-                    && a.cost.does(CostAction::Discard)
+                if a.kind() == AbilityKind::Activated
+                    && a.cost().does(CostAction::Discard)
                     && activatable(a)
                 {
-                    ahead.add(a.cost.mana, None);
+                    ahead.add(a.cost().mana, None);
                 }
             }
         }
@@ -262,8 +262,11 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {
-            if a.kind == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
-                ahead.add(a.cost.mana, a.cost.does(CostAction::Tap).then_some(slot));
+            if a.kind() == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
+                ahead.add(
+                    a.cost().mana,
+                    a.cost().does(CostAction::Tap).then_some(slot),
+                );
             }
         }
     }

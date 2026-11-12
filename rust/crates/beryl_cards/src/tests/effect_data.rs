@@ -11,7 +11,7 @@ use beryl_card::effect::build::{
     gain_life, put_into_library, return_to_hand, sequence, unless_pays,
 };
 use beryl_card::{Effect, LibraryPosition, SpecIx, Takes};
-use beryl_engine::card::{Ability, Behavior, CardDef, Face, Flow, ManaCost, TargetSpec, mana};
+use beryl_engine::card::{Behavior, CardDef, Face, Flow, ManaCost, TargetSpec, mana};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Event, TokenEntry};
 use beryl_engine::state::TargetPlace;
@@ -156,17 +156,17 @@ const TWINS: &[Twin] = &[
 fn written_as(card: &'static CardDef, body: Behavior, declares: Declares) -> &'static CardDef {
     let front = &card.faces[0];
     let original = &front.abilities[0];
-    let targets: Vec<TargetSpec> = (original.targets.iter())
+    let targets: Vec<TargetSpec> = (original.targets().iter())
         .map(|&spec| TargetSpec {
             takes: declares.takes,
             ..spec
         })
         .collect();
-    let ability = Ability {
-        body,
-        may_pause: declares.may_pause,
-        targets: targets.leak(),
-        ..*original
+    let ability = original.targeting(targets.leak());
+    let ability = match body {
+        Behavior::Data(effect) => ability.effect(effect),
+        Behavior::Custom(_) if declares.may_pause => ability.custom(body).pauses(),
+        Behavior::Custom(_) => ability.custom(body),
     };
     let face = Face {
         abilities: Box::leak(Box::new([ability])),

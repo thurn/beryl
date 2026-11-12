@@ -142,12 +142,12 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unapplied> {
     // A resolving ability's effect cannot set a power to an amount either: it would lock
     // the number in as it begins, in a layer the engine does not have.
     if abilities()
-        .any(|ability| matches!(ability.body, Behavior::Data(effect) if sets_power(effect)))
+        .any(|ability| matches!(ability.body(), Behavior::Data(effect) if sets_power(effect)))
     {
         return Err(Unapplied::SetPower);
     }
     abilities()
-        .filter_map(|ability| ability.layer)
+        .filter_map(beryl_card::Ability::layer)
         .try_for_each(applied)
 }
 

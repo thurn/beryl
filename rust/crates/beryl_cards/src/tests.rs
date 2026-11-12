@@ -185,6 +185,17 @@ fn every_card_file_is_in_the_table_under_its_own_name() {
     }
 }
 
+/// The definition check, for the cards whose files write `CardDef` literals: one built with
+/// `beryl_card::card` was checked as it compiled.
+#[test]
+fn every_card_and_token_is_well_formed() {
+    for &card in CARDS.cards() {
+        for def in std::iter::once(card).chain(card.tokens.iter().copied()) {
+            assert_eq!(def.check(), Ok(()), "{}", def.name);
+        }
+    }
+}
+
 #[test]
 fn tundra_is_a_plains_island_with_both_mana_abilities() {
     let tundra = CARDS.get(names::TUNDRA).unwrap().front();
@@ -196,11 +207,11 @@ fn tundra_is_a_plains_island_with_both_mana_abilities() {
         .abilities
         .iter()
         .map(|a| {
-            assert_eq!(a.kind, AbilityKind::Mana);
-            assert!(a.cost.does(CostAction::Tap));
+            assert_eq!(a.kind(), AbilityKind::Mana);
+            assert!(a.cost().does(CostAction::Tap));
             (
-                a.produces.includes(ManaColor::White),
-                a.produces.includes(ManaColor::Blue),
+                a.produces().includes(ManaColor::White),
+                a.produces().includes(ManaColor::Blue),
             )
         })
         .collect();
@@ -212,7 +223,7 @@ fn tundra_is_a_plains_island_with_both_mana_abilities() {
         let basic = CARDS.get(name).unwrap().front();
         assert!(basic.supertypes.contains(Supertypes::BASIC));
         assert_eq!(basic.abilities.len(), 1);
-        assert!(basic.abilities[0].produces.includes(color));
+        assert!(basic.abilities[0].produces().includes(color));
     }
 }
 

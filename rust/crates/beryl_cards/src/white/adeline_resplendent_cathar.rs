@@ -70,10 +70,9 @@ pub static CARD: CardDef = CardDef {
                 condition: None,
                 modification: Modification::SetPower(&CREATURES_YOU_CONTROL),
             }),
-            Ability {
-                may_pause: true,
-                ..Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking))
-            },
+            Ability::triggered(&Trigger::attack(Players::You))
+                .custom(bodies!(human_attacking))
+                .pauses(),
         ],
         ..Face::EMPTY
     }],

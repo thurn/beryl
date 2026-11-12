@@ -8,18 +8,15 @@
 //! −1: Create a 2/2 white Samurai creature token with vigilance.
 //! −2: Exile target tapped creature. You gain 2 life."
 
+use crate::names;
 use beryl_card::effect::build::{
     TARGET, YOU, add_counters, create_tokens, exile, gain_life, modify, sequence,
 };
-use beryl_card::{Condition, Duration, Effect, Governed, Objects, Players, RuleChange, When};
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Keywords, ManaCost, Modification,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+use beryl_card::{
+    Ability, CardDef, Colors, Condition, CounterKind, Duration, Effect, Face, Filter, Governed,
+    Keywords, Modification, Objects, Players, RuleChange, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Types, When, card, mana,
 };
-use beryl_engine::filter::Filter;
-use beryl_engine::state::CounterKind;
-
-use crate::names;
 
 /// "You may activate her loyalty abilities any time you could cast an instant."
 static LOYALTY_AS_INSTANT: RuleChange = RuleChange {
@@ -31,54 +28,33 @@ static LOYALTY_AS_INSTANT: RuleChange = RuleChange {
 /// "As long as The Wandering Emperor entered this turn".
 static ENTERED_THIS_TURN: Condition = Condition::EnteredThisTurn(Objects::This);
 
-pub static CARD: CardDef = CardDef {
-    name: names::THE_WANDERING_EMPEROR,
-    faces: &[Face {
-        cost: ManaCost::new(2, [2, 0, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::PLANESWALKER,
-        colors: Colors::WHITE,
-        loyalty: Some(3),
-        keywords: Keywords::FLASH,
-        abilities: &[
-            // The exception to CR 606.3's timing, which the casting machine reads.
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Some(&LOYALTY_AS_INSTANT),
-                condition: Some(&ENTERED_THIS_TURN),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                targets: &[TargetSpec::up_to_one(
+pub static CARD: CardDef = card(
+    names::THE_WANDERING_EMPEROR,
+    &[Face::EMPTY
+        .cost(mana("{2}{W}{W}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::PLANESWALKER)
+        .colors(Colors::WHITE)
+        .loyalty(3)
+        .keywords(Keywords::FLASH)
+        .abilities(&[
+            Ability::rule_change(&LOYALTY_AS_INSTANT).only_if(&ENTERED_THIS_TURN),
+            Ability::loyalty(1)
+                .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Permanent,
                     Filter::Types(Types::CREATURE),
-                )],
-                body: Behavior::Data(&COUNTER_AND_FIRST_STRIKE),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-1),
-                body: Behavior::Data(&CREATE_SAMURAI),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-2),
-                targets: &[TargetSpec::one(
+                )])
+                .effect(&COUNTER_AND_FIRST_STRIKE),
+            Ability::loyalty(-1).effect(&CREATE_SAMURAI),
+            Ability::loyalty(-2)
+                .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::CREATURE), Filter::Tapped]),
-                )],
-                body: Behavior::Data(&EXILE_AND_GAIN),
-                ..Ability::NONE
-            },
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[&SAMURAI],
-};
+                )])
+                .effect(&EXILE_AND_GAIN),
+        ])],
+)
+.creating(&[&SAMURAI]);
 
 /// The Samurai token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
 /// "If the spell or ability doesn't specify the name of the token, its name is the same as
@@ -86,19 +62,15 @@ pub static CARD: CardDef = CardDef {
 pub const SAMURAI_TOKEN: &str = "Samurai Token";
 
 /// "A 2/2 white Samurai creature token with vigilance"
-pub static SAMURAI: CardDef = CardDef {
-    name: SAMURAI_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Samurai]),
-        colors: Colors::WHITE,
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::VIGILANCE,
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static SAMURAI: CardDef = card(
+    SAMURAI_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Samurai]))
+        .colors(Colors::WHITE)
+        .power_toughness(2, 2)
+        .keywords(Keywords::VIGILANCE)],
+);
 
 /// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of
 /// turn." [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is

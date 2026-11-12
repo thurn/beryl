@@ -38,7 +38,7 @@ fn part_at<L: Layout>(
 ) -> Option<&'static CostPart> {
     let index = usize::from(index);
     if entry.ability.is_some() {
-        return entry_ability_of(t, entry).cost.parts().get(index);
+        return entry_ability_of(t, entry).cost().parts().get(index);
     }
     let face = t.def(entry.card).face(entry.face);
     // Most spells cost mana alone.
@@ -312,7 +312,7 @@ fn pay_substitutes<L: Layout>(
     entry: &StackEntry<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
-    if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost.parts()) {
+    if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost().parts()) {
         c.part = part;
         c.left = most.min(total_cost(s, t, entry, &c).generic);
         if c.left > 0 && !substitute_options(s, t, &c)?.is_empty() {

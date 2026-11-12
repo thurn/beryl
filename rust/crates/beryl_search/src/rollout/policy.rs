@@ -177,7 +177,7 @@ impl<L: Layout> Policy<'_, L> {
                 ..
             } => {
                 let a = &f.abilities[i.index()];
-                if main && a.cost.loyalty_change().is_some() {
+                if main && a.cost().loyalty_change().is_some() {
                     return false;
                 }
                 (Some(a), false)
@@ -191,9 +191,9 @@ impl<L: Layout> Policy<'_, L> {
                 && ability.is_some_and(|a| self.values.get(card).draws(index_of(f, a))));
         }
 
-        let target = ability.and_then(|a| a.targets.first());
+        let target = ability.and_then(|a| a.targets().first());
         let enters_target = if permanent_spell {
-            targeted_enters(f).next().and_then(|a| a.targets.first())
+            targeted_enters(f).next().and_then(|a| a.targets().first())
         } else {
             None
         };
@@ -245,7 +245,7 @@ impl<L: Layout> Policy<'_, L> {
             && f.abilities
                 .iter()
                 .enumerate()
-                .any(|(i, a)| a.kind == AbilityKind::Triggered && info.draws(i as u8));
+                .any(|(i, a)| a.kind() == AbilityKind::Triggered && info.draws(i as u8));
         if face == FaceIx::FRONT && drains && !self.may_draw() {
             return 0;
         }
@@ -272,7 +272,7 @@ impl<L: Layout> Policy<'_, L> {
             .paid(f)
             .any(|o| matches!(o, CastingOption::Overload { .. }));
         if overloaded
-            && let Some(spec) = f.spell_ability().and_then(|a| a.targets.first())
+            && let Some(spec) = f.spell_ability().and_then(|a| a.targets().first())
             && self.sweep(spec) < REMOVAL_MIN
         {
             return 0;
@@ -324,11 +324,11 @@ impl<L: Layout> Policy<'_, L> {
             };
         }
         let a = &self.t.def(card).face(o.face()).abilities[usize::from(i)];
-        let v = match a.cost.loyalty_change() {
+        let v = match a.cost().loyalty_change() {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
             Some(l) => 20 + 5 * i32::from(-l),
-            None if a.cost.does(beryl_engine::card::CostAction::Discard) => 3,
+            None if a.cost().does(beryl_engine::card::CostAction::Discard) => 3,
             None => 15,
         };
         self.worth_targeting(a, info.friendly(i), v, false)
@@ -381,7 +381,7 @@ impl<L: Layout> Policy<'_, L> {
     /// opponent's object worth the removal or counter threshold, unless it may target
     /// nothing and `require_target` is false. A helpful one needs one of ours.
     fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32, require_target: bool) -> i32 {
-        let Some(spec) = a.targets.first() else {
+        let Some(spec) = a.targets().first() else {
             return v;
         };
         let friendly = friendly || matches!(whose(&spec.filter), Some(Players::You));
@@ -484,7 +484,7 @@ impl<L: Layout> Policy<'_, L> {
             Some(ability) => face.ability(ability),
             None => face.spell_ability_with(e.costs)?,
         };
-        let spec = a.targets.first()?;
+        let spec = a.targets().first()?;
         let index = match e.ability {
             Some(FaceAbility::Own(i)) => i.get(),
             Some(FaceAbility::Grant(_)) => u8::MAX,
@@ -654,9 +654,9 @@ impl<L: Layout> Policy<'_, L> {
 
 fn targeted_enters(face: &Face) -> impl Iterator<Item = &'static Ability> {
     face.abilities.iter().filter(|a| {
-        a.kind == AbilityKind::Triggered
-            && a.trigger.is_some_and(|t| t.is_this(TriggerEvent::Enters))
-            && !a.targets.is_empty()
+        a.kind() == AbilityKind::Triggered
+            && a.trigger().is_some_and(|t| t.is_this(TriggerEvent::Enters))
+            && !a.targets().is_empty()
     })
 }
 

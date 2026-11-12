@@ -272,10 +272,10 @@ fn enter_replacements<L: Layout>(
     let face = s.copiable(slot).turned(entry.face).face(t);
     let controller = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
-        if ability.kind != AbilityKind::Replacement {
+        if ability.kind() != AbilityKind::Replacement {
             continue;
         }
-        match ability.replacement {
+        match ability.replacement() {
             // Not about entering: the draw machinery reads it.
             Replacement::None | Replacement::WouldDraw => continue,
             Replacement::EntersTapped => entry.tapped = true,
@@ -322,7 +322,7 @@ fn pay_life_to_enter<L: Layout>(
     let face = s.copiable(slot).turned(entry.face).face(t);
     let player = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
-        if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement {
+        if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement() {
             life::lose(&mut Game::new(s, t, sink), player, n)?;
         }
     }
@@ -335,7 +335,7 @@ pub(crate) fn life_to_enter<L: Layout>(t: &GameTable, entering: Copiable<L>) -> 
         .face(t)
         .abilities
         .iter()
-        .find_map(|a| match a.replacement {
+        .find_map(|a| match a.replacement() {
             Replacement::EntersTappedUnlessPayLife(n) => Some(n),
             _ => None,
         })

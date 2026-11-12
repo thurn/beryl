@@ -34,7 +34,7 @@ macro_rules! listener {
             name: $text,
             faces: &[Face {
                 types: Types::ARTIFACT,
-                abilities: &[Ability::triggered(&$trigger, bodies!(gain_one))],
+                abilities: &[Ability::triggered(&$trigger).custom(bodies!(gain_one))],
                 ..Face::EMPTY
             }],
             tokens: &[],

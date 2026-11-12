@@ -1,12 +1,10 @@
 //! Reprieve. {1}{W} Instant. "Return target spell to its owner's hand. Draw a card."
 
-use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
+};
 
 /// The spell leaves the stack without resolving, to its owner's hand
 /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
@@ -19,22 +17,16 @@ use crate::names;
 /// A copy of a spell returned this way would cease to exist
 /// ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell
 /// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
-pub static CARD: CardDef = CardDef {
-    name: names::REPRIEVE,
-    faces: &[Face {
-        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
-        types: Types::INSTANT,
-        colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: Behavior::Data(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
-            ..Ability::NONE
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::REPRIEVE,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}"))
+        .types(Types::INSTANT)
+        .colors(Colors::WHITE)
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

@@ -7,8 +7,8 @@
 //! cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, CostPart, Face, Flow, Keywords, ManaCost,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, Keywords, ManaCost, TargetKind,
+    TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -25,22 +25,17 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         keywords: Keywords::FLASH,
         abilities: &[
-            Ability {
-                targets: &[TargetSpec::up_to_one(
+            Ability::triggered(&Trigger::ENTERS)
+                .custom(bodies!(exile_until_this_leaves))
+                .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )
                 .other()
-                .removal()],
-                ..Ability::triggered(&Trigger::ENTERS, bodies!(exile_until_this_leaves))
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)]),
-                may_pause: true,
-                body: bodies!(sacrifice_and_scry),
-                ..Ability::NONE
-            },
+                .removal()]),
+            Ability::activated(Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)]))
+                .custom(bodies!(sacrifice_and_scry))
+                .pauses(),
         ],
         ..Face::EMPTY
     }],

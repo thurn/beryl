@@ -3,8 +3,8 @@
 
 use beryl_card::Players;
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CardDef, Colors, Face, Flow, ManaColor, ManaCost, TargetKind,
-    TargetSpec, Trigger, Types,
+    Ability, AbilityIx, CardDef, Colors, Face, Flow, ManaColor, ManaCost, TargetKind, TargetSpec,
+    Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -20,16 +20,11 @@ pub static CARD: CardDef = CardDef {
         types: Types::INSTANT,
         colors: Colors::BLUE,
         abilities: &[
-            Ability {
-                kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()],
-                body: bodies!(counter_and_delay),
-                ..Ability::NONE
-            },
-            Ability::triggered(
-                &Trigger::main_phase(Players::You).next(),
-                bodies!(add_colorless),
-            ),
+            Ability::spell()
+                .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
+                .custom(bodies!(counter_and_delay)),
+            Ability::triggered(&Trigger::main_phase(Players::You).next())
+                .custom(bodies!(add_colorless)),
         ],
         ..Face::EMPTY
     }],

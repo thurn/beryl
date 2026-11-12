@@ -9,9 +9,9 @@ use beryl_card::{Condition, Governed, Objects, RuleChange, When};
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, CostPart, Face, FaceIx, Flow,
-    Keywords, ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, CastingOption, Castings, Cost, CostPart, Face, FaceIx, Flow, Keywords,
+    ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::Reason;
@@ -222,11 +222,7 @@ pub(crate) static SAGE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 2),
         types: Types::SORCERY,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            body: bodies!(draw),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(draw))],
         ..Face::EMPTY
     }],
 };
@@ -251,13 +247,13 @@ pub(crate) static TREASURE: CardDef = CardDef {
     tokens: &[],
     faces: &[Face {
         types: Types::ARTIFACT,
-        abilities: &[Ability {
-            cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
-            ..Ability::tap_for_mana(ManaSet {
+        abilities: &[Ability::mana(
+            Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
+            ManaSet {
                 colors: 0b1_1111,
                 amount: 1,
-            })
-        }],
+            },
+        )],
         ..Face::EMPTY
     }],
 };
@@ -269,13 +265,9 @@ pub(crate) static STRIP: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[
             Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
-                targets: &[TargetSpec::one(TargetKind::Permanent, LANDS)],
-                body: bodies!(destroy_target),
-                ..Ability::NONE
-            },
+            Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
+                .targeting(&[TargetSpec::one(TargetKind::Permanent, LANDS)])
+                .custom(bodies!(destroy_target)),
         ],
         ..Face::EMPTY
     }],
@@ -312,12 +304,9 @@ pub(crate) static REMOVAL: CardDef = CardDef {
     faces: &[Face {
         cost: mana(1, 1, 0),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Permanent, CREATURE)],
-            body: custom_body::<DestroyTarget>(),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURE)])
+            .custom(custom_body::<DestroyTarget>())],
         ..Face::EMPTY
     }],
 };
@@ -328,13 +317,10 @@ pub(crate) static TITHE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 1, 0),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            may_pause: true,
-            body: bodies!(tithe),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .custom(bodies!(tithe))
+            .pauses()],
         ..Face::EMPTY
     }],
 };
@@ -345,12 +331,9 @@ pub(crate) static LIES: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: bodies!(counter_exile),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .custom(bodies!(counter_exile))],
         ..Face::EMPTY
     }],
 };
@@ -361,12 +344,7 @@ pub(crate) static PONDER: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::SORCERY,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(ponder),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(ponder)).pauses()],
         ..Face::EMPTY
     }],
 };
@@ -377,12 +355,7 @@ pub(crate) static RUMMAGE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 0),
         types: Types::SORCERY,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(rummage),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(rummage)).pauses()],
         ..Face::EMPTY
     }],
 };
@@ -452,15 +425,12 @@ pub(crate) static STUPOR: CardDef = CardDef {
         Face {
             cost: mana(1, 0, 1),
             types: Types::INSTANT,
-            abilities: &[Ability {
-                kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(
+            abilities: &[Ability::spell()
+                .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Not(&LANDS), Filter::Whose(&Players::EachOpponent)]),
-                )],
-                body: bodies!(bounce_target),
-                ..Ability::NONE
-            }],
+                )])
+                .custom(bodies!(bounce_target))],
             ..Face::EMPTY
         },
         Face {
@@ -500,25 +470,13 @@ pub(crate) static RAVELER: CardDef = CardDef {
         types: Types::PLANESWALKER,
         loyalty: Some(4),
         abilities: &[
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Some(&ONLY_AS_SORCERIES),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                body: bodies!(sorceries_as_flash),
-                rule: Some(&SORCERIES_AS_FLASH),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-3),
-                targets: &[TargetSpec::up_to_one(TargetKind::Permanent, CREATURE)],
-                body: bodies!(bounce_target),
-                ..Ability::NONE
-            },
+            Ability::rule_change(&ONLY_AS_SORCERIES),
+            Ability::loyalty(1)
+                .starting(&SORCERIES_AS_FLASH)
+                .custom(bodies!(sorceries_as_flash)),
+            Ability::loyalty(-3)
+                .targeting(&[TargetSpec::up_to_one(TargetKind::Permanent, CREATURE)])
+                .custom(bodies!(bounce_target)),
         ],
         ..Face::EMPTY
     }],
@@ -533,28 +491,15 @@ pub(crate) static EMPEROR: CardDef = CardDef {
         keywords: Keywords::FLASH,
         loyalty: Some(3),
         abilities: &[
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Some(&LOYALTY_AS_INSTANT),
-                condition: Some(&Condition::EnteredThisTurn(Objects::This)),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                body: bodies!(draw),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-2),
-                targets: &[TargetSpec::one(
+            Ability::rule_change(&LOYALTY_AS_INSTANT)
+                .only_if(&Condition::EnteredThisTurn(Objects::This)),
+            Ability::loyalty(1).custom(bodies!(draw)),
+            Ability::loyalty(-2)
+                .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[CREATURE, Filter::Tapped]),
-                )],
-                body: bodies!(destroy_target),
-                ..Ability::NONE
-            },
+                )])
+                .custom(bodies!(destroy_target)),
         ],
         ..Face::EMPTY
     }],
@@ -566,18 +511,15 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::SORCERY,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
                     Filter::Whose(&Players::You),
                 ]),
-            )],
-            body: bodies!(flashback),
-            ..Ability::NONE
-        }],
+            )])
+            .custom(bodies!(flashback))],
         ..Face::EMPTY
     }],
 };
@@ -588,18 +530,15 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
                     Filter::Whose(&Players::You),
                 ]),
-            )],
-            body: bodies!(snapback),
-            ..Ability::NONE
-        }],
+            )])
+            .custom(bodies!(snapback))],
         ..Face::EMPTY
     }],
 };
@@ -610,12 +549,9 @@ pub(crate) static BOUNCE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: bodies!(bounce_spell),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+            .custom(bodies!(bounce_spell))],
         ..Face::EMPTY
     }],
 };
@@ -626,16 +562,13 @@ pub(crate) static BINDER: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 1, 0),
         types: Types::SORCERY,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::Player,
                 Filter::Whose(&Players::EachOpponent),
-            )],
-            may_pause: true,
-            body: bodies!(binder),
-            ..Ability::NONE
-        }],
+            )])
+            .custom(bodies!(binder))
+            .pauses()],
         ..Face::EMPTY
     }],
 };
@@ -646,12 +579,7 @@ pub(crate) static LOOTER: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::INSTANT,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(loot_and_cast),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(loot_and_cast)).pauses()],
         ..Face::EMPTY
     }],
 };
@@ -664,13 +592,12 @@ pub(crate) static STINGER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::triggered(&Trigger::ENTERS)
+            .custom(bodies!(destroy_target))
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),
-            )],
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(destroy_target))
-        }],
+            )])],
         ..Face::EMPTY
     }],
 };

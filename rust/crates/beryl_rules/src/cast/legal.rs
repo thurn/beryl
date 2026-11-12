@@ -269,7 +269,7 @@ pub(super) fn cast_options<L: Layout>(
 /// mana.
 pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
     let mut b = Bitboard::EMPTY;
-    if a.cost.does(CostAction::Tap) || a.cost.does(CostAction::Sacrifice) {
+    if a.cost().does(CostAction::Tap) || a.cost().does(CostAction::Sacrifice) {
         b.insert(slot);
     }
     b
@@ -292,13 +292,13 @@ fn activatable<L: Layout>(
         return false;
     };
     let a = source.face(t).ability(index);
-    if a.kind != AbilityKind::Activated {
+    if a.kind() != AbilityKind::Activated {
         return false;
     }
     // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
     // can activate its activated ability". CR 702.29a: cycling "functions only while the card
     // with cycling is in a player's hand."
-    let in_place = if a.cost.does(CostAction::Discard) {
+    let in_place = if a.cost().does(CostAction::Discard) {
         o.zone() == Zone::Hand && o.owner() == player
     } else {
         o.zone() == Zone::Battlefield && s.controller(slot) == player
@@ -306,7 +306,7 @@ fn activatable<L: Layout>(
     if !in_place {
         return false;
     }
-    if a.cost.does(CostAction::Tap) {
+    if a.cost().does(CostAction::Tap) {
         // CR 118.3: "a permanent that's already tapped can't be tapped to pay a cost". CR
         // 602.5a: "A creature's activated ability with the tap symbol ... in its activation
         // cost can't be activated unless the creature has been under its controller's control
@@ -320,13 +320,13 @@ fn activatable<L: Layout>(
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if a.cost.chooses() && !parts::ability_payable(s, t, player, slot, a.cost.parts()) {
+    if a.cost().chooses() && !parts::ability_payable(s, t, player, slot, a.cost().parts()) {
         return false;
     }
-    if matches!(a.cost.removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
+    if matches!(a.cost().removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
         return false;
     }
-    let timely = if let Some(loyalty) = a.cost.loyalty_change() {
+    let timely = if let Some(loyalty) = a.cost().loyalty_change() {
         // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
         // unless the permanent has at least that many loyalty counters on it."
         let payable = i16::from(o.counters().loyalty) + i16::from(loyalty) >= 0;
@@ -342,16 +342,16 @@ fn activatable<L: Layout>(
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".
-        a.timing != Timing::Sorcery || sorcery_timing(s, player)
+        a.timing() != Timing::Sorcery || sorcery_timing(s, player)
     };
     if !timely {
         return false;
     }
     // The mana before the targets, which read the battlefield: both checks are pure.
-    let cost = a.cost.mana.with_x(0);
+    let cost = a.cost().mana.with_x(0);
     let spent = spent_by_cost(slot, a);
-    let substitute = if a.cost.chooses() {
-        parts::substitute(a.cost.parts())
+    let substitute = if a.cost().chooses() {
+        parts::substitute(a.cost().parts())
     } else {
         None
     };
@@ -378,7 +378,7 @@ pub fn pointless<L: Layout>(
     let Some((source, index)) = activated(s, slot, ability) else {
         return false;
     };
-    match source.face(t).ability(index).needs {
+    match source.face(t).ability(index).needs() {
         Needs::Nothing => false,
         // CR 607.2a: a linked ability finds only the cards exiled with its own source.
         Needs::ExiledWithSource => s.exiled_with(slot).is_empty(),

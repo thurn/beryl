@@ -185,7 +185,7 @@ impl Capability {
             if asks_what_entered_this_turn(a) {
                 found |= Capability::EnteredThisTurn.bit();
             }
-            if a.cost.is_loyalty() {
+            if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
         }
@@ -220,8 +220,8 @@ fn asks_what_entered_this_turn(ability: &Ability) -> bool {
     let asks = |condition: &Condition| {
         condition.any(&|condition| matches!(condition, Condition::EnteredThisTurn(_)))
     };
-    ability.condition.is_some_and(asks)
-        || matches!(ability.body, Behavior::Data(effect) if effect.any(&|effect| {
+    ability.condition().is_some_and(asks)
+        || matches!(ability.body(), Behavior::Data(effect) if effect.any(&|effect| {
             matches!(effect, Effect::If { condition, .. } if asks(condition))
         }))
 }
@@ -298,7 +298,7 @@ impl GameTable {
             d.faces
                 .iter()
                 .flat_map(|f| f.abilities)
-                .any(|a| a.needs != Needs::Nothing)
+                .any(|a| a.needs() != Needs::Nothing)
         });
         let faces = defs
             .iter()
@@ -570,7 +570,7 @@ impl FaceFacts {
             activated: 0,
         };
         for (i, a) in face.abilities.iter().enumerate() {
-            if a.kind == AbilityKind::Activated {
+            if a.kind() == AbilityKind::Activated {
                 facts.activated |= 1 << i;
             }
         }
@@ -602,11 +602,11 @@ impl ManaFace {
         {
             return ManaFace::Not;
         }
-        if simple().next().is_none() || simple().any(|a| a.only_if_you_control.is_some()) {
+        if simple().next().is_none() || simple().any(|a| a.only_if_you_control().is_some()) {
             return ManaFace::Read;
         }
-        let kinds = simple().fold(0, |k, a| k | a.produces.colors);
-        let amount = simple().next_back().map_or(0, |a| a.produces.amount);
+        let kinds = simple().fold(0, |k, a| k | a.produces().colors);
+        let amount = simple().next_back().map_or(0, |a| a.produces().amount);
         if kinds == 0 {
             return ManaFace::Read;
         }
@@ -622,18 +622,18 @@ impl ManaFace {
 /// mana would cost. Abilities that work only from a hand, such as cycling, don't count.
 pub fn has_other_ability(face: &Face) -> bool {
     face.abilities.iter().any(|a| {
-        matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
+        matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana)
             && !is_simple(a)
-            && !a.cost.does(CostAction::Discard)
+            && !a.cost().does(CostAction::Discard)
     })
 }
 
 /// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
 #[inline]
 pub fn is_simple(a: &Ability) -> bool {
-    a.kind == AbilityKind::Mana
-        && a.cost.mana.is_zero()
-        && matches!(a.cost.parts(), [CostPart::This(CostAction::Tap)])
+    a.kind() == AbilityKind::Mana
+        && a.cost().mana.is_zero()
+        && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])
 }
 
 /// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
@@ -643,10 +643,10 @@ pub fn is_simple(a: &Ability) -> bool {
 /// or when sacrificing it keeps more later costs payable.
 #[inline]
 pub fn is_sacrificed(a: &Ability) -> bool {
-    a.kind == AbilityKind::Mana
-        && a.cost.mana.is_zero()
+    a.kind() == AbilityKind::Mana
+        && a.cost().mana.is_zero()
         && matches!(
-            a.cost.parts(),
+            a.cost().parts(),
             [
                 CostPart::This(CostAction::Tap),
                 CostPart::This(CostAction::Sacrifice)

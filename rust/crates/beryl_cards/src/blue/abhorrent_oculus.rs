@@ -43,13 +43,11 @@ pub static CARD: CardDef = CardDef {
         power: Some(5),
         toughness: Some(5),
         keywords: Keywords::FLYING,
-        abilities: &[Ability {
-            may_pause: true,
-            ..Ability::triggered(
-                &Trigger::step(TurnStep::Upkeep, Players::EachOpponent),
-                bodies!(manifest_dread),
-            )
-        }],
+        abilities: &[
+            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
+                .custom(bodies!(manifest_dread))
+                .pauses(),
+        ],
         additional_cost: &[CostPart::exile(6, Zone::Graveyard, Filter::Any)],
         ..Face::EMPTY
     }],

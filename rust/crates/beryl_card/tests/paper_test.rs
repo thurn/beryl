@@ -11,10 +11,10 @@ use beryl_card::effect::build::{
     draw, sequence,
 };
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost,
-    CostAction, CostPart, CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification,
-    Objects, Subject, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Timing, Trigger,
-    TriggerEvent, TurnStep, Types, Zone, mana,
+    Ability, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost, CostAction, CostPart,
+    CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subject,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types,
+    Zone, mana,
 };
 
 /// Fire Nation Warship {3}, Artifact — Vehicle 4/4. "Reach / When this Vehicle dies, create a
@@ -29,10 +29,7 @@ static FIRE_NATION_WARSHIP: CardDef = CardDef {
         toughness: Some(4),
         keywords: Keywords::REACH,
         abilities: &[
-            Ability::triggered(
-                &Trigger::DIES,
-                Behavior::Data(&create_tokens(YOU, &CLUE, 1)),
-            ),
+            Ability::triggered(&Trigger::DIES).effect(&create_tokens(YOU, &CLUE, 1)),
             Ability::crew(2),
         ],
         ..Face::EMPTY
@@ -44,12 +41,9 @@ static CLUE: CardDef = CardDef {
     name: "Clue Token",
     faces: &[Face {
         types: Types::ARTIFACT,
-        abilities: &[Ability {
-            kind: AbilityKind::Activated,
-            cost: Cost::of(mana("{2}"), &[CostPart::SACRIFICE]),
-            body: Behavior::Data(&draw(YOU, 1)),
-            ..Ability::NONE
-        }],
+        abilities: &[
+            Ability::activated(Cost::of(mana("{2}"), &[CostPart::SACRIFICE])).effect(&draw(YOU, 1)),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -63,20 +57,17 @@ static SERENE_OFFERING: CardDef = CardDef {
         cost: mana("{1}{W}"),
         types: Types::INSTANT,
         colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[
+        abilities: &[Ability::spell()
+            .targeting(&[
                 TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::ENCHANTMENT)).removal(),
-            ],
-            body: Behavior::Data(&sequence(&[
+            ])
+            .effect(&sequence(&[
                 destroy(TARGET),
                 Effect::GainLife {
                     player: YOU,
                     amount: Amount::ManaValue(TARGET),
                 },
-            ])),
-            ..Ability::NONE
-        }],
+            ]))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -91,14 +82,11 @@ static DEMONIC_LORE: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         colors: Colors::BLACK,
         abilities: &[
-            Ability::triggered(&Trigger::ENTERS, Behavior::Data(&draw(YOU, 3))),
-            Ability::triggered(
-                &Trigger::step(TurnStep::End, YOU),
-                Behavior::Data(&Effect::LoseLife {
-                    player: YOU,
-                    amount: Amount::Times(2, &Amount::Count(&CARDS_IN_YOUR_HAND)),
-                }),
-            ),
+            Ability::triggered(&Trigger::ENTERS).effect(&draw(YOU, 3)),
+            Ability::triggered(&Trigger::step(TurnStep::End, YOU)).effect(&Effect::LoseLife {
+                player: YOU,
+                amount: Amount::Times(2, &Amount::Count(&CARDS_IN_YOUR_HAND)),
+            }),
         ],
         ..Face::EMPTY
     }],
@@ -154,18 +142,14 @@ static SLAGDRILL_SCRAPPER: CardDef = CardDef {
         colors: Colors::RED,
         power: Some(2),
         toughness: Some(2),
-        abilities: &[Ability {
-            kind: AbilityKind::Activated,
-            cost: Cost::of(
-                mana("{2}"),
-                &[
-                    CostPart::TAP,
-                    CostPart::sacrifice_another(Filter::Types(Types::ARTIFACT.union(Types::LAND))),
-                ],
-            ),
-            body: Behavior::Data(&draw(YOU, 1)),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::activated(Cost::of(
+            mana("{2}"),
+            &[
+                CostPart::TAP,
+                CostPart::sacrifice_another(Filter::Types(Types::ARTIFACT.union(Types::LAND))),
+            ],
+        ))
+        .effect(&draw(YOU, 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -181,26 +165,22 @@ static SEVERED_STRANDS: CardDef = CardDef {
         types: Types::SORCERY,
         colors: Colors::BLACK,
         additional_cost: &[CostPart::sacrifice(Filter::Types(Types::CREATURE))],
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            timing: Timing::Sorcery,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[
                     Filter::Types(Types::CREATURE),
                     Filter::Whose(&EACH_OPPONENT),
                 ]),
             )
-            .removal()],
-            body: Behavior::Data(&sequence(&[
+            .removal()])
+            .effect(&sequence(&[
                 Effect::GainLife {
                     player: YOU,
                     amount: Amount::Toughness(SACRIFICED),
                 },
                 destroy(TARGET),
-            ])),
-            ..Ability::NONE
-        }],
+            ]))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -215,29 +195,19 @@ static TEFERIS_CARE: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         colors: Colors::WHITE,
         abilities: &[
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::of(
-                    mana("{W}"),
-                    &[CostPart::sacrifice(Filter::Types(Types::ENCHANTMENT))],
-                ),
-                targets: &[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::Types(Types::ENCHANTMENT),
-                )
-                .removal()],
-                body: Behavior::Data(&destroy(TARGET)),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::mana(mana("{3}{U}{U}")),
-                targets: &[
+            Ability::activated(Cost::of(
+                mana("{W}"),
+                &[CostPart::sacrifice(Filter::Types(Types::ENCHANTMENT))],
+            ))
+            .targeting(&[
+                TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::ENCHANTMENT)).removal(),
+            ])
+            .effect(&destroy(TARGET)),
+            Ability::activated(Cost::mana(mana("{3}{U}{U}")))
+                .targeting(&[
                     TargetSpec::one(TargetKind::Spell, Filter::Types(Types::ENCHANTMENT)).counter(),
-                ],
-                body: Behavior::Data(&counter(TARGET)),
-                ..Ability::NONE
-            },
+                ])
+                .effect(&counter(TARGET)),
         ],
         ..Face::EMPTY
     }],
@@ -272,7 +242,7 @@ const COSTS: [(&str, &str, Cost); 8] = [
     (
         "Slagdrill Scrapper",
         "{2}, {T}, Sacrifice another artifact or land",
-        SLAGDRILL_SCRAPPER.faces[0].abilities[0].cost,
+        *SLAGDRILL_SCRAPPER.faces[0].abilities[0].cost(),
     ),
     (
         "Camellia, the Seedmiser",
@@ -300,7 +270,7 @@ const COSTS: [(&str, &str, Cost); 8] = [
     (
         "Teferi's Care",
         "{W}, Sacrifice an enchantment",
-        TEFERIS_CARE.faces[0].abilities[0].cost,
+        *TEFERIS_CARE.faces[0].abilities[0].cost(),
     ),
     (
         "Lluwen, Exchange Student",
@@ -523,7 +493,7 @@ fn the_cards_that_fit_are_written_wholly_as_data() {
     for card in cards {
         for ability in card.faces.iter().flat_map(|face| face.abilities) {
             assert!(
-                matches!(ability.body, Behavior::Data(_)),
+                matches!(ability.body(), Behavior::Data(_)),
                 "{} needs a Rust body",
                 card.name
             );

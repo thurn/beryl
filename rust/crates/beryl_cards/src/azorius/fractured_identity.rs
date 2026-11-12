@@ -3,7 +3,7 @@
 
 use beryl_engine::Zone;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
@@ -19,16 +19,13 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(3, [1, 1, 0, 0, 0, 0]),
         types: Types::SORCERY,
         colors: Colors::WHITE.union(Colors::BLUE),
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Not(&Filter::Types(Types::LAND)),
             )
-            .removal()],
-            body: bodies!(fracture),
-            ..Ability::NONE
-        }],
+            .removal()])
+            .custom(bodies!(fracture))],
         ..Face::EMPTY
     }],
     tokens: &[],

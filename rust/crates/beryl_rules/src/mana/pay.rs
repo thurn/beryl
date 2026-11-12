@@ -217,7 +217,7 @@ pub(crate) fn activate<L: Layout>(
         .enumerate()
         .find(|(_, a)| {
             (is_simple(a) || is_sacrificed(a))
-                && a.produces.includes(color)
+                && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot))
         })
         .expect("a mana ability that makes the chosen mana");
@@ -228,7 +228,7 @@ pub(crate) fn activate<L: Layout>(
     // [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost."
     event::set_tapped(s, t, sink, source, true)?;
-    if ability.cost.does(CostAction::Sacrifice) {
+    if ability.cost().does(CostAction::Sacrifice) {
         event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
     }
     let activation = || PendingTrigger {

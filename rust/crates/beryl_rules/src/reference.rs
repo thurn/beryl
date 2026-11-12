@@ -124,8 +124,8 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
             face(s, t, slot)
                 .abilities
                 .iter()
-                .filter(|a| a.kind == AbilityKind::Activated)
-                .map(|a| a.cost.mana)
+                .filter(|a| a.kind() == AbilityKind::Activated)
+                .map(|a| a.cost().mana)
         });
     let Ok(funds) = Funds::of(s, t, player) else {
         return Ok(());
@@ -203,22 +203,22 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         let mut amount = None;
         for a in face(s, t, slot).abilities {
             // {T}, or {T} and sacrificing it, and nothing else.
-            let tap_only = a.cost.mana.is_zero()
-                && a.cost.does(CostAction::Tap)
-                && a.cost.parts().iter().all(|part| {
+            let tap_only = a.cost().mana.is_zero()
+                && a.cost().does(CostAction::Tap)
+                && a.cost().parts().iter().all(|part| {
                     matches!(
                         part,
                         CostPart::This(CostAction::Tap | CostAction::Sacrifice)
                     )
                 });
-            if a.kind != AbilityKind::Mana || !tap_only || !controls(s, t, player, a) {
+            if a.kind() != AbilityKind::Mana || !tap_only || !controls(s, t, player, a) {
                 continue;
             }
-            if amount.is_some_and(|n| n != a.produces.amount) {
+            if amount.is_some_and(|n| n != a.produces().amount) {
                 return None;
             }
-            amount = Some(a.produces.amount);
-            kinds |= a.produces.colors;
+            amount = Some(a.produces().amount);
+            kinds |= a.produces().colors;
         }
         if let Some(n) = amount.filter(|_| kinds != 0) {
             for _ in 0..n {
@@ -237,7 +237,7 @@ fn controls<L: Layout>(
     player: Seat,
     a: &crate::card::Ability,
 ) -> bool {
-    a.only_if_you_control.is_none_or(|f| {
+    a.only_if_you_control().is_none_or(|f| {
         s.battlefield()
             .iter()
             .any(|&slot: &L::Slot| s.controller(slot) == player && f.matches(s, t, slot, player))

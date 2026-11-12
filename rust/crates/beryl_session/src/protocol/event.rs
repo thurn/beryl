@@ -186,7 +186,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
             .def(card)
             .face(face)
             .ability(ability)
-            .cost
+            .cost()
             .loyalty_change(),
     }
 }

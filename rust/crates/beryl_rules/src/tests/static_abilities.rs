@@ -12,9 +12,7 @@ use beryl_kernel::rule_changes::Unchecked;
 use beryl_kernel::static_ability::Unapplied;
 use beryl_kernel::table::TableError;
 
-use crate::card::{
-    Ability, AbilityKind, Behavior, CardDef, Face, LayerSpec, Modification, Replacement, Types,
-};
+use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Replacement, Types};
 use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
@@ -95,17 +93,14 @@ static REFORGE: CardDef = CardDef {
     name: "Test Reforge",
     faces: &[Face {
         types: Types::INSTANT,
-        abilities: &[Ability {
-            body: Behavior::Data(&sequence(&[
-                draw(YOU, 1),
-                modify(
-                    TARGET,
-                    Modification::SetPower(&ARTIFACTS),
-                    Duration::EndOfTurn,
-                ),
-            ])),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().effect(&sequence(&[
+            draw(YOU, 1),
+            modify(
+                TARGET,
+                Modification::SetPower(&ARTIFACTS),
+                Duration::EndOfTurn,
+            ),
+        ]))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -168,20 +163,18 @@ const fn face(abilities: &'static [Ability]) -> Face {
 /// "If you would draw a card, you lose the game instead": no condition, and a loss.
 static DOOM: CardDef = CardDef {
     name: "Test Doom",
-    faces: &[face(&[Ability {
-        body: Behavior::Data(&lose_game(YOU)),
-        ..Ability::replacing(Replacement::WouldDraw)
-    }])],
+    faces: &[face(&[
+        Ability::replacing(Replacement::WouldDraw).effect(&lose_game(YOU))
+    ])],
     tokens: &[],
 };
 
 /// "If you would draw a card, each opponent wins the game instead."
 static GIFT: CardDef = CardDef {
     name: "Test Gift",
-    faces: &[face(&[Ability {
-        body: Behavior::Data(&win_game(Players::EachOpponent)),
-        ..Ability::replacing(Replacement::WouldDraw)
-    }])],
+    faces: &[face(&[
+        Ability::replacing(Replacement::WouldDraw).effect(&win_game(Players::EachOpponent))
+    ])],
     tokens: &[],
 };
 
@@ -189,10 +182,9 @@ static GIFT: CardDef = CardDef {
 /// ending the game.
 static WINDFALL: CardDef = CardDef {
     name: "Test Windfall",
-    faces: &[face(&[Ability {
-        body: Behavior::Data(&draw(YOU, 2)),
-        ..Ability::replacing(Replacement::WouldDraw)
-    }])],
+    faces: &[face(&[
+        Ability::replacing(Replacement::WouldDraw).effect(&draw(YOU, 2))
+    ])],
     tokens: &[],
 };
 
@@ -200,10 +192,8 @@ static WINDFALL: CardDef = CardDef {
 /// no target.
 static FAVOR: CardDef = CardDef {
     name: "Test Favor",
-    faces: &[face(&[Ability {
-        body: Behavior::Data(&Effect::WinGame(Players::Target(SpecIx::new(0)))),
-        ..Ability::replacing(Replacement::WouldDraw)
-    }])],
+    faces: &[face(&[Ability::replacing(Replacement::WouldDraw)
+        .effect(&Effect::WinGame(Players::Target(SpecIx::new(0))))])],
     tokens: &[],
 };
 
@@ -280,11 +270,7 @@ static CREATURE: Face = spell(Types::CREATURE);
 
 /// A static ability that makes `rule`.
 const fn makes(rule: &'static RuleChange) -> Ability {
-    Ability {
-        kind: AbilityKind::Static,
-        rule: Some(rule),
-        ..Ability::NONE
-    }
+    Ability::rule_change(rule)
 }
 
 /// "Each player can cast spells only any time they could cast a sorcery."
@@ -320,11 +306,9 @@ static HUSH_RULE: RuleChange = RuleChange {
 };
 static HUSH: CardDef = CardDef {
     name: "Test Hush",
-    faces: &[face(&[Ability {
-        kind: AbilityKind::Activated,
-        rule: Some(&HUSH_RULE),
-        ..Ability::NONE
-    }])],
+    faces: &[face(&[
+        Ability::activated(beryl_card::Cost::NONE).starting(&HUSH_RULE)
+    ])],
     tokens: &[],
 };
 
@@ -338,27 +322,23 @@ static REGENT_RULE: RuleChange = RuleChange {
 /// "As long as you have no cards in hand": read of its controller's own zone.
 static REGENT: CardDef = CardDef {
     name: "Test Regent",
-    faces: &[face(&[Ability {
-        condition: Some(&Condition::Compare(
-            Amount::Count(&Objects::All {
-                zone: Zone::Hand,
-                filter: Filter::Whose(&Players::You),
-            }),
-            Comparison::Equal,
-            Amount::Fixed(0),
-        )),
-        ..makes(&REGENT_RULE)
-    }])],
+    faces: &[face(&[makes(&REGENT_RULE).only_if(&Condition::Compare(
+        Amount::Count(&Objects::All {
+            zone: Zone::Hand,
+            filter: Filter::Whose(&Players::You),
+        }),
+        Comparison::Equal,
+        Amount::Fixed(0),
+    ))])],
     tokens: &[],
 };
 /// "As long as this permanent is tapped": read in a scene.
 static SLEEPER_RULE: RuleChange = REGENT_RULE;
 static SLEEPER: CardDef = CardDef {
     name: "Test Sleeper",
-    faces: &[face(&[Ability {
-        condition: Some(&Condition::Is(Objects::This, Filter::Tapped)),
-        ..makes(&SLEEPER_RULE)
-    }])],
+    faces: &[face(&[
+        makes(&SLEEPER_RULE).only_if(&Condition::Is(Objects::This, Filter::Tapped))
+    ])],
     tokens: &[],
 };
 
@@ -479,19 +459,13 @@ static REFUSED_RULES: [(&str, Ability, Unchecked); 6] = [
     // A rule for players, as long as a condition the layers do not read holds.
     (
         "Test Vigil",
-        Ability {
-            condition: Some(&Condition::EnteredThisTurn(Objects::This)),
-            ..makes(&CURFEW_RULE)
-        },
+        makes(&CURFEW_RULE).only_if(&Condition::EnteredThisTurn(Objects::This)),
         Unchecked::Condition,
     ),
     // An effect that would start a rule change asked of a permanent.
     (
         "Test Decree",
-        Ability {
-            kind: AbilityKind::Activated,
-            ..makes(&REGENT_RULE)
-        },
+        Ability::activated(beryl_card::Cost::NONE).starting(&REGENT_RULE),
         Unchecked::Rule,
     ),
 ];

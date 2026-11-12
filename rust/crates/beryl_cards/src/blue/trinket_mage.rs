@@ -46,10 +46,9 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::BLUE,
         power: Some(2),
         toughness: Some(2),
-        abilities: &[Ability {
-            may_pause: true,
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(tutor))
-        }],
+        abilities: &[Ability::triggered(&Trigger::ENTERS)
+            .custom(bodies!(tutor))
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

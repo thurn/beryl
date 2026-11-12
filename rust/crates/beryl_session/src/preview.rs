@@ -279,7 +279,7 @@ pub(crate) fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTab
         let face = before.copiable(slot).face(t);
         face.abilities
             .iter()
-            .any(|a| a.kind == AbilityKind::Mana && a.cost.does(CostAction::Sacrifice))
+            .any(|a| a.kind() == AbilityKind::Mana && a.cost().does(CostAction::Sacrifice))
     };
     before
         .battlefield()

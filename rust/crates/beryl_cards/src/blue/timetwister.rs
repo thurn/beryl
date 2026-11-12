@@ -1,7 +1,7 @@
 //! Timetwister. {2}{U} Sorcery. "Each player shuffles their hand and graveyard into their
 //! library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)"
 
-use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
+use beryl_engine::card::{Ability, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::{Layout, bodies};
@@ -16,11 +16,7 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
         types: Types::SORCERY,
         colors: Colors::BLUE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            body: bodies!(twist),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(twist))],
         ..Face::EMPTY
     }],
     tokens: &[],

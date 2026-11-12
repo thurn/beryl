@@ -168,8 +168,10 @@ fn maker_of<L: Layout>(
     let rule = t.rule(id);
     let abilities = s.copiable(slot).face(t).abilities;
     (0u8..).zip(abilities).find_map(|(index, ability)| {
-        let makes = ability.kind == AbilityKind::Static
-            && ability.rule.is_some_and(|named| std::ptr::eq(named, rule));
+        let makes = ability.kind() == AbilityKind::Static
+            && ability
+                .rule()
+                .is_some_and(|named| std::ptr::eq(named, rule));
         makes.then_some((AbilityIx::new(index), ability))
     })
 }

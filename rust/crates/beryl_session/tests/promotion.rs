@@ -12,8 +12,7 @@ use beryl_cards::names::{
 };
 use beryl_cards::tokens::TREASURE;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Players,
-    Trigger, Types,
+    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Players, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
@@ -126,11 +125,7 @@ static OPEN_VAULT: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::SORCERY,
         colors: Colors::NONE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            body: bodies!(permit_over_and_over),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(permit_over_and_over))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -317,7 +312,7 @@ const fn chorus(name: &'static str) -> CardDef {
 
 /// A chorus's ability: "Whenever you cast a spell, nothing happens."
 const VOICE: Ability =
-    Ability::triggered(&Trigger::casts(Players::You, Filter::Any), bodies!(silence));
+    Ability::triggered(&Trigger::casts(Players::You, Filter::Any)).custom(bodies!(silence));
 
 #[allow(clippy::unnecessary_wraps)] // a body's signature
 fn silence<L: Layout>(_: &mut EffectCtx<'_, L>) -> Flow {
@@ -440,7 +435,7 @@ static HOARD: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,
         colors: Colors::NONE,
-        abilities: &[Ability::triggered(&Trigger::ENTERS, bodies!(hoard))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(hoard))],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE],

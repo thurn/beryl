@@ -265,7 +265,7 @@ pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: L::Slot, base: i32) -
                 .face(o.face())
                 .abilities
                 .iter()
-                .filter_map(|a| a.cost.loyalty_change())
+                .filter_map(|a| a.cost().loyalty_change())
                 .min()
         });
         let near = ultimate.is_some_and(|u| u <= -6 && loyalty >= -i32::from(u) - 3);
@@ -1704,7 +1704,7 @@ impl<L: Layout> Expert<'_, L> {
             .face(face)
             .spell_ability()
             .or_else(|| self.etb_targets(card))?;
-        let spec = a.targets.first()?;
+        let spec = a.targets().first()?;
         let target = self
             .permanents(self.opp())
             .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
@@ -1847,7 +1847,7 @@ impl<L: Layout> Expert<'_, L> {
             ) && e.ability.is_some_and(|a| {
                 def.face(e.face)
                     .ability(a)
-                    .cost
+                    .cost()
                     .loyalty_change()
                     .is_some_and(|l| l < 0)
             });
@@ -1914,7 +1914,7 @@ impl<L: Layout> Expert<'_, L> {
             .front()
             .abilities
             .iter()
-            .find(|a| !a.targets.is_empty())
+            .find(|a| !a.targets().is_empty())
     }
 
     fn main_activate(&self, slot: L::Slot, i: u8, precombat: bool) -> i32 {
@@ -1939,7 +1939,7 @@ impl<L: Layout> Expert<'_, L> {
         let a = &def.face(o.face()).abilities[usize::from(i)];
         match def.name {
             // "{T}, Sacrifice Strip Mine: Destroy target land."
-            names::STRIP_MINE if !a.targets.is_empty() => {
+            names::STRIP_MINE if !a.targets().is_empty() => {
                 if self.strip_worth(self.lands(self.me())) {
                     900
                 } else {
@@ -1975,7 +1975,7 @@ impl<L: Layout> Expert<'_, L> {
             );
         let keeps = |i: u8| {
             face.abilities[usize::from(i)]
-                .cost
+                .cost()
                 .loyalty_change()
                 .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -8 || lethal)
         };
@@ -1991,7 +1991,7 @@ impl<L: Layout> Expert<'_, L> {
                     .iter()
                     .enumerate()
                     .position(|(i, a)| {
-                        a.cost.loyalty_change().is_some_and(|l| l > 0) && !draws(i as u8)
+                        a.cost().loyalty_change().is_some_and(|l| l > 0) && !draws(i as u8)
                     })
                     .map(|i| i as u8)
             })
@@ -2007,7 +2007,7 @@ impl<L: Layout> Expert<'_, L> {
         let by_cost = |cost: i8| {
             face.abilities
                 .iter()
-                .position(|a| a.cost.loyalty_change() == Some(cost))
+                .position(|a| a.cost().loyalty_change() == Some(cost))
                 .map(|i| i as u8)
         };
         let threatened = self.threat_past(None);
@@ -2089,7 +2089,7 @@ impl<L: Layout> Expert<'_, L> {
             _ => face
                 .abilities
                 .iter()
-                .position(|a| a.cost.loyalty_change().is_some_and(|l| l >= 0))
+                .position(|a| a.cost().loyalty_change().is_some_and(|l| l >= 0))
                 .map(|i| i as u8),
         }
     }
@@ -2451,7 +2451,7 @@ impl<L: Layout> Expert<'_, L> {
             Some(ability) => face.ability(ability),
             None => face.spell_ability_with(e.costs)?,
         };
-        a.targets.first()
+        a.targets().first()
     }
 
     /// Whether the spell or ability being cast or activated returns a permanent to its
@@ -2497,7 +2497,7 @@ impl<L: Layout> Expert<'_, L> {
                 .def(e.card)
                 .face(e.face)
                 .ability(ability)
-                .cost
+                .cost()
                 .loyalty_change()
                 == Some(-3)
         {

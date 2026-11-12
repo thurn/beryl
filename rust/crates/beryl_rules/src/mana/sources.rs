@@ -53,7 +53,7 @@ pub(crate) struct Sources<L: Layout = Small> {
 /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
 pub(super) fn allowed<L: Layout>(s: &State<L>, t: &GameTable, a: &Ability, player: Seat) -> bool {
-    a.only_if_you_control.is_none_or(|f| {
+    a.only_if_you_control().is_none_or(|f| {
         s.battlefield()
             .iter()
             .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player))
@@ -144,13 +144,13 @@ fn read_source<L: Layout>(
     // different mana for later.
     let mut conditional = false;
     for a in face.abilities.iter().filter(|a| is_simple(a)) {
-        conditional |= a.only_if_you_control.is_some();
+        conditional |= a.only_if_you_control().is_some();
         if !allowed(s, t, a, player) {
             continue;
         }
-        kinds |= a.produces.colors;
-        debug_assert!(amount == 0 || amount == a.produces.amount);
-        amount = a.produces.amount;
+        kinds |= a.produces().colors;
+        debug_assert!(amount == 0 || amount == a.produces().amount);
+        amount = a.produces().amount;
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.
@@ -159,10 +159,10 @@ fn read_source<L: Layout>(
             .iter()
             .find(|a| is_sacrificed(a) && allowed(s, t, a, player))?;
         debug_assert!(
-            a.produces.amount == 1 || a.produces.colors.is_power_of_two(),
+            a.produces().amount == 1 || a.produces().colors.is_power_of_two(),
             "a source of several mana makes one kind"
         );
-        return Some((a.produces.colors, a.produces.amount, false, true));
+        return Some((a.produces().colors, a.produces().amount, false, true));
     }
     debug_assert!(
         amount == 1 || kinds.is_power_of_two(),

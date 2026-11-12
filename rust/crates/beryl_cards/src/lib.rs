@@ -245,10 +245,10 @@ pub fn parts() -> Vec<(String, usize)> {
         for (f, face) in def.faces.iter().enumerate() {
             let name = if f == 0 { def.name } else { face.name };
             for (i, a) in face.abilities.iter().enumerate() {
-                parts.push((format!("{name}: ability {i} ({:?})", a.kind), address(a)));
+                parts.push((format!("{name}: ability {i} ({:?})", a.kind()), address(a)));
             }
             for (i, a) in face.grants.iter().enumerate() {
-                let what = format!("{name}: granted ability {i} ({:?})", a.kind);
+                let what = format!("{name}: granted ability {i} ({:?})", a.kind());
                 parts.push((what, address(a)));
             }
             for (i, option) in face.casting.iter().enumerate() {

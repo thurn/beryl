@@ -2,8 +2,7 @@
 //! into your hand and the rest on the bottom of your library in any order."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose,
-    Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -18,12 +17,7 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
         types: Types::SORCERY,
         colors: Colors::BLUE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            may_pause: true,
-            body: bodies!(stock_up),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell().custom(bodies!(stock_up)).pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

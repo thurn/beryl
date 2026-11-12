@@ -56,8 +56,8 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability::impending(),
             Ability::impending_countdown(),
-            Ability::triggered(&Trigger::ENTERS, bodies!(two_insects)),
-            Ability::triggered(&Trigger::ATTACKS, bodies!(two_insects)),
+            Ability::triggered(&Trigger::ENTERS).custom(bodies!(two_insects)),
+            Ability::triggered(&Trigger::ATTACKS).custom(bodies!(two_insects)),
         ],
         casting: &[CastingOption::Impending {
             cost: ManaCost::new(2, [2, 0, 0, 0, 0, 0]),

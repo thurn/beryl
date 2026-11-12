@@ -54,10 +54,11 @@ pub static CARD: CardDef = CardDef {
         power: Some(2),
         toughness: Some(1),
         keywords: Keywords::FLASH.union(Keywords::FLYING),
-        abilities: &[Ability {
-            may_pause: true,
-            ..Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, bodies!(chorus))
-        }],
+        abilities: &[
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER)
+                .custom(bodies!(chorus))
+                .pauses(),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],

@@ -1,7 +1,7 @@
 //! Mana Tithe. {W} Instant. "Counter target spell unless its controller pays {1}."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -16,13 +16,10 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
         types: Types::INSTANT,
         colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()],
-            may_pause: true,
-            body: bodies!(counter_unless_pays_one),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
+            .custom(bodies!(counter_unless_pays_one))
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

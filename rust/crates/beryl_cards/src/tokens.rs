@@ -1,9 +1,6 @@
 //! Predefined tokens more than one card creates.
 
-use beryl_engine::card::{
-    Ability, CardDef, Cost, CostPart, Face, ManaSet, Subtype, Subtypes, Types,
-};
-
+use beryl_card::{Ability, CardDef, Cost, CostPart, Face, ManaSet, Subtype, Subtypes, Types, card};
 /// The Treasure token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
 pub const TREASURE_TOKEN: &str = "Treasure Token";
@@ -15,20 +12,17 @@ pub const TREASURE_TOKEN: &str = "Treasure Token";
 /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): "it doesn't require a
 /// target ..., it could add mana to a player's mana pool when it resolves, it's not a loyalty
 /// ability ..., and its cost and effect don't move any card to or from a library."
-pub static TREASURE: CardDef = CardDef {
-    name: TREASURE_TOKEN,
-    faces: &[Face {
-        types: Types::ARTIFACT,
-        subtypes: Subtypes::of(&[Subtype::Treasure]),
-        abilities: &[Ability {
-            cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
+pub static TREASURE: CardDef = card(
+    TREASURE_TOKEN,
+    &[Face::EMPTY
+        .types(Types::ARTIFACT)
+        .subtypes(Subtypes::of(&[Subtype::Treasure]))
+        .abilities(&[Ability::mana(
+            Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
             // W, U, B, R and G.
-            ..Ability::tap_for_mana(ManaSet {
+            ManaSet {
                 colors: 0b1_1111,
                 amount: 1,
-            })
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            },
+        )])],
+);

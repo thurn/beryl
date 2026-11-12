@@ -2,16 +2,12 @@
 //! regenerated. Overload {2}{W}{W} (You may cast this spell for its overload cost. If you do,
 //! change "target" in its text to "each.")"
 
-use beryl_card::Objects;
-use beryl_card::effect::build::{TARGET, destroy};
-use beryl_engine::Zone;
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, CastingOption, Colors, Face, ManaCost, TargetKind,
-    TargetSpec, Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, destroy};
+use beryl_card::{
+    Ability, CardDef, CastingOption, Colors, Face, Filter, Objects, TargetKind, TargetSpec, Types,
+    Zone, card, mana,
+};
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
 
@@ -19,46 +15,23 @@ const CREATURES: Filter = Filter::Types(Types::CREATURE);
 /// ([CR 202.2](https://yawgatog.com/resources/magic-rules/#R2022)): "An object is the color or
 /// colors of the mana symbols in its mana cost". The cube lists it with white for its
 /// overload.
-pub static CARD: CardDef = CardDef {
-    name: names::DAMN,
-    faces: &[Face {
-        cost: ManaCost::new(0, [0, 0, 2, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::BLACK,
-        abilities: &[
-            // "Can't be regenerated"
-            // ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): such
-            // effects "cause regeneration shields to not be applied." No card in the cube
-            // regenerates, so destroying is all it takes.
-            Ability {
-                kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES)],
-                body: Behavior::Data(&destroy(TARGET)),
-                ..Ability::NONE
-            },
-            // Overloaded, "Destroy each creature"
-            // ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)). It targets
-            // nothing, so hexproof and protection don't stop it
-            // ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)): "If a
-            // player chooses to pay the overload cost of a spell, that spell won't require
-            // any targets." The creatures are destroyed at once.
-            Ability {
-                kind: AbilityKind::Spell,
-                body: Behavior::Data(&destroy(Objects::All {
-                    zone: Zone::Battlefield,
-                    filter: CREATURES,
-                })),
-                ..Ability::NONE
-            },
-        ],
-        casting: &[CastingOption::overload(
-            ManaCost::new(2, [2, 0, 0, 0, 0, 0]),
-            1,
-        )],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::DAMN,
+    &[Face::EMPTY
+        .cost(mana("{B}{B}"))
+        .types(Types::SORCERY)
+        .colors(Colors::BLACK)
+        .abilities(&[
+            Ability::spell()
+                .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURES)])
+                .effect(&destroy(TARGET)),
+            Ability::spell().effect(&destroy(Objects::All {
+                zone: Zone::Battlefield,
+                filter: CREATURES,
+            })),
+        ])
+        .casting(&[CastingOption::overload(mana("{2}{W}{W}"), 1)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

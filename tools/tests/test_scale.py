@@ -24,13 +24,11 @@ def test_the_pool_is_real_cards_that_reach_only_names_and_tokens() -> None:
 def test_a_clone_renames_only_its_own_card() -> None:
     counterspell = next(s for s in scale.sources() if s.name == "Counterspell")
     text = scale.clone(counterspell, 7)
-    assert "name: names::COUNTERSPELL_7," in text
+    assert "    names::COUNTERSPELL_7,\n" in text
     assert "hand(P0, &[names::COUNTERSPELL_7])" in text
     assert not re.search(r"names::COUNTERSPELL\b", text)
     assert "props::ARTIFACT" in text  # the other cards stay what they are
-    assert (
-        "Behavior::Data(&counter(TARGET))" in text
-    )  # its body and scenarios come along
+    assert ".effect(&counter(TARGET))" in text  # its body and scenarios come along
 
 
 def test_shard_counts_split_evenly_and_never_leave_one_empty() -> None:

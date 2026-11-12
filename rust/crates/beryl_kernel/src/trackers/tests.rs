@@ -1,7 +1,7 @@
 //! The Trackers store's tests: which games keep a tracker, what ends one, what it tells
 //! apart and what it keeps across layouts.
 
-use beryl_card::{Ability, AbilityKind, CardDef, Condition, Cost, Face, Objects, Types};
+use beryl_card::{Ability, CardDef, Condition, Face, Objects, Types};
 
 use super::*;
 use crate::event::Sink;
@@ -32,17 +32,8 @@ static WALKER: CardDef = CardDef {
         types: Types::PLANESWALKER,
         loyalty: Some(3),
         abilities: &[
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Some(&LOYALTY),
-                condition: Some(&Condition::EnteredThisTurn(Objects::This)),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                ..Ability::NONE
-            },
+            Ability::rule_change(&LOYALTY).only_if(&Condition::EnteredThisTurn(Objects::This)),
+            Ability::loyalty(1),
         ],
         ..Face::EMPTY
     }],

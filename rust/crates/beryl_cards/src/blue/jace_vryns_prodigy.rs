@@ -13,8 +13,8 @@
 use beryl_card::effect::build::{TARGET, TARGET_PLAYER, mill, modify};
 use beryl_card::{Duration, Effect, Players};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification, Subtype, Subtypes,
+    Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -37,13 +37,9 @@ pub static CARD: CardDef = CardDef {
             colors: Colors::BLUE,
             power: Some(0),
             toughness: Some(2),
-            abilities: &[Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::TAP,
-                may_pause: true,
-                body: bodies!(loot_and_transform),
-                ..Ability::NONE
-            }],
+            abilities: &[Ability::activated(Cost::TAP)
+                .custom(bodies!(loot_and_transform))
+                .pauses()],
             ..Face::EMPTY
         },
         Face {
@@ -56,35 +52,22 @@ pub static CARD: CardDef = CardDef {
             colors: Colors::BLUE,
             loyalty: Some(5),
             abilities: &[
-                Ability {
-                    kind: AbilityKind::Activated,
-                    cost: Cost::loyalty(1),
-                    targets: &[TargetSpec::up_to_one(
+                Ability::loyalty(1)
+                    .targeting(&[TargetSpec::up_to_one(
                         TargetKind::Permanent,
                         Filter::Types(Types::CREATURE),
-                    )],
-                    body: Behavior::Data(&WEAKEN),
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Activated,
-                    cost: Cost::loyalty(-3),
-                    targets: &[TargetSpec::one(
+                    )])
+                    .effect(&WEAKEN),
+                Ability::loyalty(-3)
+                    .targeting(&[TargetSpec::one(
                         TargetKind::GraveyardCard,
                         Filter::All(&[
                             Filter::Types(Types::INSTANT.union(Types::SORCERY)),
                             Filter::Whose(&Players::You),
                         ]),
-                    )],
-                    body: bodies!(recast),
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Activated,
-                    cost: Cost::loyalty(-9),
-                    body: bodies!(emblem),
-                    ..Ability::NONE
-                },
+                    )])
+                    .custom(bodies!(recast)),
+                Ability::loyalty(-9).custom(bodies!(emblem)),
             ],
             transformed: true,
             ..Face::EMPTY
@@ -99,16 +82,14 @@ pub static CARD: CardDef = CardDef {
 pub static EMBLEM: CardDef = CardDef {
     name: "Jace, Telepath Unbound Emblem",
     faces: &[Face {
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
-                TargetKind::Player,
-                Filter::Whose(&Players::EachOpponent),
-            )],
-            ..Ability::triggered(
-                &Trigger::casts(Players::You, Filter::Any),
-                Behavior::Data(&MILL_FIVE),
-            )
-        }],
+        abilities: &[
+            Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
+                .effect(&MILL_FIVE)
+                .targeting(&[TargetSpec::one(
+                    TargetKind::Player,
+                    Filter::Whose(&Players::EachOpponent),
+                )]),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[],

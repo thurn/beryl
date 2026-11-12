@@ -144,7 +144,7 @@ fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
         FaceAbility::Own(i) => (face.abilities, i.index()),
         FaceAbility::Grant(i) => (face.grants, i.index()),
     };
-    let class = |a: &Ability| match a.kind {
+    let class = |a: &Ability| match a.kind() {
         AbilityKind::Triggered => Some(AbilityClass::Triggered),
         AbilityKind::Activated | AbilityKind::Mana => Some(AbilityClass::Activated),
         AbilityKind::Static | AbilityKind::Replacement => Some(AbilityClass::Static),

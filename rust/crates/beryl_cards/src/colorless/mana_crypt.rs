@@ -15,10 +15,8 @@ pub static CARD: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(
-                &Trigger::step(TurnStep::Upkeep, Players::You),
-                bodies!(flip),
-            ),
+            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You))
+                .custom(bodies!(flip)),
             Ability::tap_for_mana(ManaSet {
                 colors: 1 << ManaColor::Colorless as u8,
                 amount: 2,

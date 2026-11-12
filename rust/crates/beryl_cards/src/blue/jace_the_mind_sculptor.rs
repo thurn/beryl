@@ -11,8 +11,8 @@ use beryl_card::Effect;
 use beryl_card::effect::build::{TARGET, return_to_hand};
 use beryl_engine::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Part, Place,
-    Prompt, Purpose, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Part, Place, Prompt, Purpose, Subtype,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -35,38 +35,20 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::BLUE,
         loyalty: Some(3),
         abilities: &[
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(2),
-                targets: TARGET_PLAYER,
-                may_pause: true,
-                body: bodies!(fateseal),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(0),
-                may_pause: true,
-                body: bodies!(brainstorm),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-1),
-                targets: &[TargetSpec::one(
+            Ability::loyalty(2)
+                .targeting(TARGET_PLAYER)
+                .custom(bodies!(fateseal))
+                .pauses(),
+            Ability::loyalty(0).custom(bodies!(brainstorm)).pauses(),
+            Ability::loyalty(-1)
+                .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::Types(Types::CREATURE),
-                )],
-                body: Behavior::Data(&BOUNCE),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-12),
-                targets: TARGET_PLAYER,
-                body: bodies!(exile_library),
-                ..Ability::NONE
-            },
+                )])
+                .effect(&BOUNCE),
+            Ability::loyalty(-12)
+                .targeting(TARGET_PLAYER)
+                .custom(bodies!(exile_library)),
         ],
         ..Face::EMPTY
     }],

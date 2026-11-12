@@ -472,7 +472,7 @@ impl Act {
                 ability: s.triggers().get(Into::<usize>::into(i)).map(|tr| {
                     let triggered = t.def(tr.card).face(tr.face).abilities[..tr.ability.index()]
                         .iter()
-                        .filter(|a| matches!(a.kind, AbilityKind::Triggered))
+                        .filter(|a| matches!(a.kind(), AbilityKind::Triggered))
                         .count();
                     u8::try_from(triggered).expect("a face's abilities number under 256")
                 }),
@@ -706,7 +706,7 @@ impl AbilityRef {
                 let face = s.copiable(slot).face(t);
                 let before = face.abilities[..i.index()]
                     .iter()
-                    .filter(|a| matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana))
+                    .filter(|a| matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana))
                     .count();
                 AbilityRef {
                     granted: false,

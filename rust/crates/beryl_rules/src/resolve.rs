@@ -183,10 +183,10 @@ fn condition_fails<L: Layout>(
     entry: &StackEntry<L>,
     ability: &Ability,
 ) -> bool {
-    if ability.kind != AbilityKind::Triggered {
+    if ability.kind() != AbilityKind::Triggered {
         return false;
     }
-    if ability.condition.is_none() {
+    if ability.condition().is_none() {
         return false;
     }
     let Some(FaceAbility::Own(index)) = entry.ability else {

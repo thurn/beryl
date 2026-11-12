@@ -367,7 +367,7 @@ impl Policy<'_> {
             .abilities
             .iter()
             .enumerate()
-            .any(|(i, a)| a.kind == AbilityKind::Triggered && info.draws(i as u8));
+            .any(|(i, a)| a.kind() == AbilityKind::Triggered && info.draws(i as u8));
         if face == FaceIx::FRONT && drains && !self.may_draw() {
             return 0;
         }
@@ -387,7 +387,7 @@ impl Policy<'_> {
             .paid(f)
             .any(|o| matches!(o, CastingOption::Overload { .. }));
         if overloaded
-            && let Some(spec) = f.spell_ability().and_then(|a| a.targets.first())
+            && let Some(spec) = f.spell_ability().and_then(|a| a.targets().first())
             && self.sweep(spec) < REMOVAL_MIN
         {
             return 0;
@@ -419,11 +419,11 @@ impl Policy<'_> {
             };
         }
         let a = &self.t.def(card).face(o.face()).abilities[usize::from(i)];
-        let v = match a.cost.loyalty_change() {
+        let v = match a.cost().loyalty_change() {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
             Some(l) => 20 + 5 * i32::from(-l),
-            None if a.cost.does(beryl_engine::card::CostAction::Discard) => 3,
+            None if a.cost().does(beryl_engine::card::CostAction::Discard) => 3,
             None => 15,
         };
         self.worth_targeting(a, info.friendly(i), v)
@@ -465,7 +465,7 @@ impl Policy<'_> {
     /// opponent's object worth the removal or counter threshold, unless it may target
     /// nothing; a helpful one needs one of ours.
     pub(crate) fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32) -> i32 {
-        let Some(spec) = a.targets.first() else {
+        let Some(spec) = a.targets().first() else {
             return v;
         };
         let friendly = friendly || matches!(whose(&spec.filter), Some(Players::You));
@@ -558,7 +558,7 @@ impl Policy<'_> {
             Some(ability) => face.ability(ability),
             None => face.spell_ability_with(e.costs)?,
         };
-        let spec = a.targets.first()?;
+        let spec = a.targets().first()?;
         let index = match e.ability {
             Some(FaceAbility::Own(i)) => i.get(),
             Some(FaceAbility::Grant(_)) => u8::MAX,

@@ -90,7 +90,7 @@ pub(crate) fn of(def: &CardDef) -> Result<Vec<Listener>, Unmatched> {
     let mut listeners = Vec::new();
     for (face, at) in def.face_ixs().zip(def.faces) {
         for (index, ability) in at.abilities.iter().enumerate() {
-            let Some(trigger) = ability.trigger else {
+            let Some(trigger) = ability.trigger() else {
                 continue;
             };
             let kind = listens_to(trigger)?;

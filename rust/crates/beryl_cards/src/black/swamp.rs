@@ -1,25 +1,21 @@
 //! Swamp. Basic Land — Swamp.
 
-use beryl_engine::card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types,
-};
-
 use crate::names;
+use beryl_card::{
+    Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types, card,
+};
 
 /// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land
 /// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' ... for
 /// Swamps, {B}".
-pub static CARD: CardDef = CardDef {
-    name: names::SWAMP,
-    faces: &[Face {
-        supertypes: Supertypes::BASIC,
-        types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Swamp]),
-        abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static CARD: CardDef = card(
+    names::SWAMP,
+    &[Face::EMPTY
+        .supertypes(Supertypes::BASIC)
+        .types(Types::LAND)
+        .subtypes(Subtypes::of(&[Subtype::Swamp]))
+        .abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

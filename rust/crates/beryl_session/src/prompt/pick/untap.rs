@@ -82,8 +82,8 @@ fn colors<L: Layout>(table: &Table<'_, L>, slot: u16) -> u8 {
     };
     let face = table.shown.copiable(slot).face(table.t);
     (face.abilities.iter())
-        .filter(|a| a.kind == AbilityKind::Mana)
-        .fold(0, |kinds, a| kinds | a.produces.colors)
+        .filter(|a| a.kind() == AbilityKind::Mana)
+        .fold(0, |kinds, a| kinds | a.produces().colors)
 }
 
 /// How many of the nonland cards in `viewer`'s hand they could pay for, at a time they may

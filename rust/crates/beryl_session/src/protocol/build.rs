@@ -383,7 +383,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
 pub(super) fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
     // Triggered, or activated (mana abilities are written as activated ones are); the other
     // kinds have no paragraph of their own to find.
-    let class = |a: &Ability| match a.kind {
+    let class = |a: &Ability| match a.kind() {
         AbilityKind::Triggered => Some(true),
         AbilityKind::Activated | AbilityKind::Mana => Some(false),
         _ => None,
@@ -473,7 +473,7 @@ pub(super) fn stack_item_cast<L: Layout>(
                 name: t.def(e.card).face_name(e.face).to_owned(),
                 triggered: kind,
                 taps_to_pay: matches!(
-                    face.ability(ability).cost.measure(),
+                    face.ability(ability).cost().measure(),
                     Some(Measure::ForGeneric(_))
                 )
                 .then_some(true),

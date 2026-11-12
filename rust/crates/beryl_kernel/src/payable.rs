@@ -68,15 +68,15 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
 /// solver, which taps its source or taps and sacrifices it, and pays nothing else
 /// ([`is_simple`], [`is_sacrificed`]).
 fn ability(a: &Ability) -> Result<(), Unpayable> {
-    if a.kind == AbilityKind::Mana && !is_simple(a) && !is_sacrificed(a) {
+    if a.kind() == AbilityKind::Mana && !is_simple(a) && !is_sacrificed(a) {
         return Err(Unpayable::ManaAbility);
     }
-    if let Some(part) = a.cost.parts().iter().find(|part| !pays_for_ability(part)) {
+    if let Some(part) = a.cost().parts().iter().find(|part| !pays_for_ability(part)) {
         return Err(Unpayable::Part(*part));
     }
     // At most one part is paid rather than generic mana: the casting steps keep one count.
     let substitutes = |part: &&CostPart| matches!(part, CostPart::Chosen(_, chosen) if matches!(chosen.measure, Measure::ForGeneric(_)));
-    if let Some(part) = a.cost.parts().iter().filter(substitutes).nth(1) {
+    if let Some(part) = a.cost().parts().iter().filter(substitutes).nth(1) {
         return Err(Unpayable::Part(*part));
     }
     if a.names_paid() {
@@ -108,8 +108,8 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unpayable> {
 #[cfg(test)]
 mod tests {
     use beryl_card::{
-        Amount, Behavior, Cost, CounterKind, Effect, Face, Filter, ManaColor, ManaCost, ManaSet,
-        Objects, Players, Types,
+        Amount, Cost, CounterKind, Effect, Face, Filter, ManaColor, ManaCost, ManaSet, Objects,
+        Players, Types,
     };
 
     use super::*;
@@ -118,11 +118,7 @@ mod tests {
     const CREATURE: Filter = Filter::Types(Types::CREATURE);
 
     const fn activated(cost: Cost) -> Ability {
-        Ability {
-            kind: AbilityKind::Activated,
-            cost,
-            ..Ability::NONE
-        }
+        Ability::activated(cost)
     }
 
     static FILLER: CardDef = CardDef {
@@ -216,10 +212,10 @@ mod tests {
     static FILTER_LAND: CardDef = CardDef {
         name: "Filter Land",
         faces: &[Face {
-            abilities: &[Ability {
-                cost: Cost::of(ManaCost::generic(1), &[CostPart::TAP]),
-                ..Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))
-            }],
+            abilities: &[Ability::mana(
+                Cost::of(ManaCost::generic(1), &[CostPart::TAP]),
+                ManaSet::one(ManaColor::Blue),
+            )],
             ..Face::EMPTY
         }],
         tokens: &[],
@@ -228,13 +224,10 @@ mod tests {
     static REMEMBERER: CardDef = CardDef {
         name: "Rememberer",
         faces: &[Face {
-            abilities: &[Ability {
-                body: Behavior::Data(&Effect::GainLife {
-                    player: Players::You,
-                    amount: Amount::Power(Objects::Paid(CostAction::Tap)),
-                }),
-                ..Ability::crew(1)
-            }],
+            abilities: &[Ability::crew(1).effect(&Effect::GainLife {
+                player: Players::You,
+                amount: Amount::Power(Objects::Paid(CostAction::Tap)),
+            })],
             ..Face::EMPTY
         }],
         tokens: &[],

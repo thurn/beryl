@@ -53,14 +53,13 @@ pub static CARD: CardDef = CardDef {
         power: Some(3),
         toughness: Some(1),
         keywords: Keywords::FLYING,
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::triggered(&Trigger::ENTERS)
+            .custom(bodies!(spellbind))
+            .targeting(&[TargetSpec::one(
                 TargetKind::Player,
                 Filter::Whose(&Players::EachOpponent),
-            )],
-            may_pause: true,
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(spellbind))
-        }],
+            )])
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

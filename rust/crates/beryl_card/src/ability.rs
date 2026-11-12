@@ -139,57 +139,72 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
 
 /// One ability of a face: its interface as data, and what it does.
 ///
+/// Its fields are private: an ability is made by the builder for its kind and the methods
+/// that say more of it, each of which refuses, as the definition compiles, what its kind does
+/// not have. So a static ability has no trigger and no targets, and what a mana ability
+/// produces is what its effect adds.
+///
+/// ```
+/// use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
+/// use beryl_card::{Ability, Filter, TargetKind, TargetSpec};
+///
+/// // "Return target spell to its owner's hand. Draw a card."
+/// const REPRIEVE: Ability = Ability::spell()
+///     .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+///     .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]));
+/// ```
+///
 /// The engine scans a face's abilities for every decision it builds, so the size is kept a
 /// power of two, which makes stepping through them a shift: at 120 bytes the rollout
 /// benchmark counted 0.11% more instructions than at 128. The alignment is what rounds it
 /// up: the fields fill 105 bytes.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[repr(align(32))]
 pub struct Ability {
-    pub kind: AbilityKind,
-    pub cost: Cost,
-    pub timing: Timing,
-    pub targets: &'static [TargetSpec],
+    kind: AbilityKind,
+    cost: Cost,
+    timing: Timing,
+    targets: &'static [TargetSpec],
     /// Mana abilities: what they produce.
-    pub produces: ManaSet,
+    produces: ManaSet,
     /// For a Rust body: whether it may ask a player a question mid-resolution. Effect data
     /// says so itself; read [`Ability::asks`].
-    pub may_pause: bool,
-    pub body: Behavior,
+    may_pause: bool,
+    body: Behavior,
     /// Triggered abilities: what they trigger on. Held by reference, as the body and the
     /// condition are: a [`Trigger`] names a filter and players, and an ability has 23 bytes
     /// to spare before it is 256.
-    pub trigger: Option<&'static Trigger>,
+    trigger: Option<&'static Trigger>,
     /// A static or replacement ability: its "as long as" or "while", read as often as the
     /// ability is. Triggered abilities: an intervening "if" clause, checked when the ability
     /// triggers and again as it resolves
     /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
-    pub condition: Option<&'static Condition>,
+    condition: Option<&'static Condition>,
     /// Replacement abilities: the event they modify.
-    pub replacement: Replacement,
+    replacement: Replacement,
     /// Static abilities: the continuous effect they generate on the battlefield. Held by
     /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
-    pub layer: Option<&'static LayerSpec>,
+    layer: Option<&'static LayerSpec>,
     /// The rule the ability changes
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): a static ability
     /// all the time, as long as its [`condition`](Ability::condition) holds, and any other
     /// by its effect, for as long as that says. A game numbers the rule changes its cards
     /// name here, so one a body starts is named here too.
-    pub rule: Option<&'static RuleChange>,
+    rule: Option<&'static RuleChange>,
     /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
     /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
     /// to activate an ability that's prohibited from being activated." Held by reference, as
     /// the trigger is: the ability's size is a power of two with its cost's parts in it.
-    pub only_if_you_control: Option<&'static Filter>,
-    /// Activated abilities: what the effect needs to do anything, so that a human isn't
-    /// offered an activation that would do nothing ([`Needs`]).
-    pub needs: Needs,
+    only_if_you_control: Option<&'static Filter>,
+    /// For a Rust body on an activated ability: what the effect needs to do anything, so
+    /// that a human isn't offered an activation that would do nothing ([`Needs`]).
+    needs: Needs,
 }
 
-/// What an activated ability's effect needs to do anything. Ability bodies are code, which
-/// nothing can read, so a card says it as data: one variant for each way an effect can be
+/// What an activated ability's effect needs to do anything. A Rust body is code, which
+/// nothing can read, so its card says it as data: one variant for each way an effect can be
 /// empty, shared by every card whose effect is empty that way.
 ///
 /// Activating such an ability is legal whatever it would do
@@ -214,32 +229,85 @@ pub enum Needs {
 
 const _: () = assert!(size_of::<Ability>().is_power_of_two());
 
+/// The builders: one for each kind of ability.
 impl Ability {
-    /// An ability with no cost, interface or effect, for `..Ability::NONE` in card files.
-    pub const NONE: Ability = Ability {
-        kind: AbilityKind::Static,
-        cost: Cost::NONE,
-        timing: Timing::Instant,
-        targets: &[],
-        produces: ManaSet::NONE,
-        may_pause: false,
-        body: Behavior::Data(&Effect::NOTHING),
-        trigger: None,
-        condition: None,
-        replacement: Replacement::None,
-        layer: None,
-        rule: None,
-        only_if_you_control: None,
-        needs: Needs::Nothing,
-    };
-
-    /// A triggered ability.
-    pub const fn triggered(trigger: &'static Trigger, body: Behavior) -> Ability {
+    /// An ability of `kind` with nothing else said of it.
+    const fn of(kind: AbilityKind) -> Ability {
         Ability {
-            kind: AbilityKind::Triggered,
+            kind,
+            cost: Cost::NONE,
+            timing: Timing::Instant,
+            targets: &[],
+            produces: ManaSet::NONE,
+            may_pause: false,
+            body: Behavior::Data(&Effect::NOTHING),
+            trigger: None,
+            condition: None,
+            replacement: Replacement::None,
+            layer: None,
+            rule: None,
+            only_if_you_control: None,
+            needs: Needs::Nothing,
+        }
+    }
+
+    /// The spell ability of an instant or sorcery
+    /// ([CR 113.3a](https://yawgatog.com/resources/magic-rules/#R1133a)): "Spell abilities
+    /// are abilities that are followed as instructions while an instant or sorcery spell is
+    /// resolving." Of an Aura spell, what it targets, with no effect
+    /// ([CR 303.4a](https://yawgatog.com/resources/magic-rules/#R3034a)): "An Aura spell
+    /// requires a target, which is defined by its enchant ability."
+    pub const fn spell() -> Ability {
+        Ability::of(AbilityKind::Spell)
+    }
+
+    /// An activated ability
+    /// ([CR 602.1](https://yawgatog.com/resources/magic-rules/#R6021)): "Activated abilities
+    /// have a cost and an effect. They are written as '[Cost]: [Effect.] [Activation
+    /// instructions (if any).]'"
+    pub const fn activated(cost: Cost) -> Ability {
+        Ability {
+            cost,
+            ..Ability::of(AbilityKind::Activated)
+        }
+    }
+
+    /// A loyalty ability, which adds or removes `n` loyalty counters as its cost
+    /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
+    pub const fn loyalty(n: i8) -> Ability {
+        Ability::activated(Cost::loyalty(n))
+    }
+
+    /// A mana ability
+    /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): "An activated
+    /// ability is a mana ability if it meets all of the following criteria: it doesn't
+    /// require a target (see rule 115.6), it could add mana to a player's mana pool when it
+    /// resolves, and it's not a loyalty ability." Its effect is "Add [produces]", so what it
+    /// is known to produce and what it adds cannot disagree.
+    pub const fn mana(cost: Cost, produces: ManaSet) -> Ability {
+        Ability {
+            cost,
+            produces,
+            body: Behavior::Data(add_mana(produces)),
+            ..Ability::of(AbilityKind::Mana)
+        }
+    }
+
+    /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
+    /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the
+    /// land card type and a basic land type has the intrinsic ability '{T}: Add [mana
+    /// symbol],' even if the text box doesn't actually contain that text".
+    pub const fn tap_for_mana(produces: ManaSet) -> Ability {
+        Ability::mana(Cost::TAP, produces)
+    }
+
+    /// A triggered ability
+    /// ([CR 603.1](https://yawgatog.com/resources/magic-rules/#R6031)): "Triggered abilities
+    /// have a trigger condition and an effect."
+    pub const fn triggered(trigger: &'static Trigger) -> Ability {
+        Ability {
             trigger: Some(trigger),
-            body,
-            ..Ability::NONE
+            ..Ability::of(AbilityKind::Triggered)
         }
     }
 
@@ -256,16 +324,24 @@ impl Ability {
         );
         Ability {
             layer: Some(layer),
-            ..Ability::NONE
+            ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// A static ability changing a rule (CR 613.11), all the time or
+    /// [only if](Ability::only_if) a condition holds.
+    pub const fn rule_change(rule: &'static RuleChange) -> Ability {
+        Ability {
+            rule: Some(rule),
+            ..Ability::of(AbilityKind::Static)
         }
     }
 
     /// A static ability creating a replacement effect.
     pub const fn replacing(replacement: Replacement) -> Ability {
         Ability {
-            kind: AbilityKind::Replacement,
             replacement,
-            ..Ability::NONE
+            ..Ability::of(AbilityKind::Replacement)
         }
     }
 
@@ -273,15 +349,10 @@ impl Ability {
     /// is an activated ability that functions only while the card with cycling is in a
     /// player's hand. 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"
     pub const fn cycling(mana: ManaCost) -> Ability {
-        Ability {
-            kind: AbilityKind::Activated,
-            cost: Cost::of(mana, &[CostPart::DISCARD]),
-            body: Behavior::Data(&Effect::Draw {
-                player: Players::You,
-                count: Amount::Fixed(1),
-            }),
-            ..Ability::NONE
-        }
+        Ability::activated(Cost::of(mana, &[CostPart::DISCARD])).effect(&Effect::Draw {
+            player: Players::You,
+            count: Amount::Fixed(1),
+        })
     }
 
     /// Crew N (CR 702.122a), an activated ability any time its controller has priority:
@@ -291,12 +362,7 @@ impl Ability {
     /// that an object becomes an 'artifact creature'; these effects also allow the object to
     /// retain all of its prior card types and subtypes."
     pub const fn crew(n: u8) -> Ability {
-        Ability {
-            kind: AbilityKind::Activated,
-            cost: Cost::crew(n),
-            body: Behavior::Data(&BECOME_ARTIFACT_CREATURE),
-            ..Ability::NONE
-        }
+        Ability::activated(Cost::crew(n)).effect(&BECOME_ARTIFACT_CREATURE)
     }
 
     /// Offspring's triggered ability
@@ -304,18 +370,14 @@ impl Ability {
     /// permanent enters, if its offspring cost was paid, create a token that's a copy of it,
     /// except it's 1/1." The face lists [`CastingOption::Offspring`] too.
     pub const fn offspring() -> Ability {
-        Ability {
-            condition: Some(&Condition::Paid(CastingKind::Offspring)),
-            ..Ability::triggered(
-                &Trigger::ENTERS,
-                Behavior::Data(&Effect::CreateCopies {
-                    player: Players::You,
-                    of: Objects::This,
-                    count: Amount::Fixed(1),
-                    except: CopyException::PowerToughness(1, 1),
-                }),
-            )
-        }
+        Ability::triggered(&Trigger::ENTERS)
+            .only_if(&Condition::Paid(CastingKind::Offspring))
+            .effect(&Effect::CreateCopies {
+                player: Players::You,
+                of: Objects::This,
+                count: Amount::Fixed(1),
+                except: CopyException::PowerToughness(1, 1),
+            })
     }
 
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
@@ -334,17 +396,13 @@ impl Ability {
     /// this permanent's impending cost was paid and it has a time counter on it, remove a
     /// time counter from it."
     pub const fn impending_countdown() -> Ability {
-        Ability {
-            condition: Some(&IMPENDING),
-            ..Ability::triggered(
-                &YOUR_END_STEP,
-                Behavior::Data(&Effect::RemoveCounters {
-                    objects: Objects::This,
-                    kind: CounterKind::Time,
-                    count: Amount::Fixed(1),
-                }),
-            )
-        }
+        Ability::triggered(&YOUR_END_STEP)
+            .only_if(&IMPENDING)
+            .effect(&Effect::RemoveCounters {
+                objects: Objects::This,
+                kind: CounterKind::Time,
+                count: Amount::Fixed(1),
+            })
     }
 
     /// Evoke's triggered ability
@@ -352,18 +410,231 @@ impl Ability {
     /// permanent enters, if its evoke cost was paid, its controller sacrifices it." The face
     /// lists [`CastingOption::Evoke`] too.
     pub const fn evoke() -> Ability {
+        Ability::triggered(&Trigger::ENTERS)
+            .only_if(&Condition::Paid(CastingKind::Evoke))
+            .effect(&Effect::Sacrifice(Objects::This))
+    }
+}
+
+/// What more a card says of an ability. Each method refuses, as the definition compiles, an
+/// ability of a kind that does not have what it says.
+impl Ability {
+    /// Whether this goes on the stack and resolves: a spell, activated or triggered ability
+    /// ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)).
+    const fn resolves(&self) -> bool {
+        matches!(
+            self.kind,
+            AbilityKind::Spell | AbilityKind::Activated | AbilityKind::Triggered
+        )
+    }
+
+    /// Its targets, one [`TargetSpec`] for each instance of the word "target"
+    /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)). A mana ability has
+    /// none (CR 605.1a), and a static ability targets nothing
+    /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)): "only ... a spell or
+    /// ability" on the stack has targets.
+    #[must_use]
+    pub const fn targeting(self, targets: &'static [TargetSpec]) -> Ability {
+        assert!(
+            self.resolves(),
+            "only a spell, activated or triggered ability has targets"
+        );
+        Ability { targets, ..self }
+    }
+
+    /// What it does as it resolves, as effect data. Of a replacement ability, what happens
+    /// instead of the event it replaces.
+    #[must_use]
+    pub const fn effect(self, effect: &'static Effect) -> Ability {
+        assert!(
+            self.resolves() || matches!(self.kind, AbilityKind::Replacement),
+            "a static ability has no effect to carry out, and a mana ability's is what it \
+             produces"
+        );
         Ability {
-            condition: Some(&Condition::Paid(CastingKind::Evoke)),
-            ..Ability::triggered(
-                &Trigger::ENTERS,
-                Behavior::Data(&Effect::Sacrifice(Objects::This)),
-            )
+            body: Behavior::Data(effect),
+            ..self
         }
+    }
+
+    /// What it does as it resolves, as a Rust body, where the vocabulary cannot say it: the
+    /// engine's `custom_body` of the card file's type. What data says of itself the card then
+    /// declares: [`Ability::pauses`], [`Ability::needing`] and
+    /// [`TargetSpec::removal`].
+    #[must_use]
+    pub const fn custom(self, body: Behavior) -> Ability {
+        assert!(
+            !matches!(self.kind, AbilityKind::Static),
+            "a static ability has no effect to carry out"
+        );
+        assert!(
+            matches!(body, Behavior::Custom(_)),
+            "effect data is given with `effect`"
+        );
+        Ability { body, ..self }
+    }
+
+    /// Declares that its Rust body may ask a player a question mid-resolution. Effect data
+    /// says so itself ([`Ability::asks`]), so this goes when the last body does.
+    #[must_use]
+    pub const fn pauses(self) -> Ability {
+        assert!(
+            matches!(self.body, Behavior::Custom(_)),
+            "effect data says whether it asks: declare it only of a Rust body"
+        );
+        Ability {
+            may_pause: true,
+            ..self
+        }
+    }
+
+    /// Declares what its Rust body needs to do anything ([`Needs`]). Effect data says so
+    /// itself ([`Ability::needs`]), so this goes when the last body does.
+    #[must_use]
+    pub const fn needing(self, needs: Needs) -> Ability {
+        assert!(
+            matches!(self.body, Behavior::Custom(_)),
+            "effect data says what it needs: declare it only of a Rust body"
+        );
+        Ability { needs, ..self }
+    }
+
+    /// A triggered ability's intervening "if" (CR 603.4), or the "as long as" of a static
+    /// ability that changes a rule or of a replacement effect. A static ability generating a
+    /// continuous effect says its own in its [`LayerSpec`].
+    #[must_use]
+    pub const fn only_if(self, condition: &'static Condition) -> Ability {
+        assert!(
+            matches!(self.kind, AbilityKind::Triggered | AbilityKind::Replacement)
+                || matches!(self.kind, AbilityKind::Static) && self.rule.is_some(),
+            "only a triggered ability, a rule change or a replacement has a condition"
+        );
+        Ability {
+            condition: Some(condition),
+            ..self
+        }
+    }
+
+    /// The rule its effect changes for a while (CR 613.11), as "Until your next turn, your
+    /// opponents can cast spells only any time they could cast a sorcery." A static ability
+    /// that changes one is a [`Ability::rule_change`].
+    #[must_use]
+    pub const fn starting(self, rule: &'static RuleChange) -> Ability {
+        assert!(
+            self.resolves(),
+            "only an ability that resolves starts a rule change: a static one is `rule_change`"
+        );
+        Ability {
+            rule: Some(rule),
+            ..self
+        }
+    }
+
+    /// "Activate only if you control a [permanent `filter` accepts]" (CR 602.5), of a mana
+    /// ability.
+    #[must_use]
+    pub const fn if_you_control(self, filter: &'static Filter) -> Ability {
+        assert!(
+            matches!(self.kind, AbilityKind::Mana),
+            "only a mana ability is restricted by what you control"
+        );
+        Ability {
+            only_if_you_control: Some(filter),
+            ..self
+        }
+    }
+
+    /// "Activate only as a sorcery"
+    /// ([CR 602.5d](https://yawgatog.com/resources/magic-rules/#R6025d)): "Activated
+    /// abilities that read 'Activate only as a sorcery' mean the player must follow the
+    /// timing rules for casting a sorcery spell".
+    #[must_use]
+    pub const fn as_a_sorcery(self) -> Ability {
+        assert!(
+            matches!(self.kind, AbilityKind::Activated),
+            "only an activated ability is activated as a sorcery"
+        );
+        Ability {
+            timing: Timing::Sorcery,
+            ..self
+        }
+    }
+}
+
+/// What an ability is and says, for whoever reads a definition.
+impl Ability {
+    #[inline]
+    pub const fn kind(&self) -> AbilityKind {
+        self.kind
+    }
+
+    /// What activating it costs. [`Cost::NONE`] for an ability that is not activated.
+    #[inline]
+    pub const fn cost(&self) -> &Cost {
+        &self.cost
+    }
+
+    #[inline]
+    pub const fn timing(&self) -> Timing {
+        self.timing
+    }
+
+    #[inline]
+    pub const fn targets(&self) -> &'static [TargetSpec] {
+        self.targets
+    }
+
+    /// A mana ability: what it produces.
+    #[inline]
+    pub const fn produces(&self) -> ManaSet {
+        self.produces
+    }
+
+    #[inline]
+    pub const fn body(&self) -> Behavior {
+        self.body
+    }
+
+    /// A triggered ability: what it triggers on.
+    #[inline]
+    pub const fn trigger(&self) -> Option<&'static Trigger> {
+        self.trigger
+    }
+
+    /// Its intervening "if" or "as long as" ([`Ability::only_if`]).
+    #[inline]
+    pub const fn condition(&self) -> Option<&'static Condition> {
+        self.condition
+    }
+
+    /// A replacement ability: the event it modifies.
+    #[inline]
+    pub const fn replacement(&self) -> Replacement {
+        self.replacement
+    }
+
+    /// A static ability: the continuous effect it generates.
+    #[inline]
+    pub const fn layer(&self) -> Option<&'static LayerSpec> {
+        self.layer
+    }
+
+    /// The rule it changes ([`Ability::rule_change`], [`Ability::starting`]).
+    #[inline]
+    pub const fn rule(&self) -> Option<&'static RuleChange> {
+        self.rule
+    }
+
+    /// A mana ability: what its controller must control to activate it
+    /// ([`Ability::if_you_control`]).
+    #[inline]
+    pub const fn only_if_you_control(&self) -> Option<&'static Filter> {
+        self.only_if_you_control
     }
 
     /// Whether resolving this may ask a player to choose: what its effect data says
     /// ([`Effect::asks`]), or for a Rust body, which nothing can read, what its card declared
-    /// in [`Ability::may_pause`].
+    /// with [`Ability::pauses`].
     pub const fn asks(&self) -> bool {
         match self.body {
             Behavior::Data(effect) => effect.asks(),
@@ -371,22 +642,37 @@ impl Ability {
         }
     }
 
+    /// What its effect needs to do anything ([`Needs`]): for a Rust body, what its card
+    /// declared with [`Ability::needing`]. No instruction of the vocabulary is empty in a way
+    /// [`Needs`] names, so effect data needs nothing.
+    #[inline]
+    pub const fn needs(&self) -> Needs {
+        match self.body {
+            Behavior::Data(_) => Needs::Nothing,
+            Behavior::Custom(_) => self.needs,
+        }
+    }
+
     /// Whether this takes what is chosen for its `target`th instance of the word "target"
     /// from its controller in the way `how` names, a permanent removed from the battlefield
     /// or a spell countered: what its effect data does to a target that may be one
-    /// ([`Effect::takes`]), or what its card declared with [`TargetSpec::removal`] or
-    /// [`TargetSpec::counter`].
+    /// ([`Effect::takes`]), or for a Rust body what its card declared with
+    /// [`TargetSpec::removal`] or [`TargetSpec::counter`].
     pub fn takes_target(&self, target: SpecIx, how: Takes) -> bool {
         let Some(spec) = self.targets.get(target.index()) else {
             return false;
         };
-        let may_be = match how {
-            Takes::Removal => TargetKind::Permanent,
-            Takes::Counter => TargetKind::Spell,
-        };
-        spec.takes == Some(how)
-            || (spec.kind == may_be || spec.kind == TargetKind::SpellOrPermanent)
-                && matches!(self.body, Behavior::Data(effect) if effect.takes(target, how))
+        match self.body {
+            Behavior::Data(effect) => {
+                let may_be = match how {
+                    Takes::Removal => TargetKind::Permanent,
+                    Takes::Counter => TargetKind::Spell,
+                };
+                (spec.kind == may_be || spec.kind == TargetKind::SpellOrPermanent)
+                    && effect.takes(target, how)
+            }
+            Behavior::Custom(_) => spec.takes == Some(how),
+        }
     }
 
     /// Whether its effect or its intervening "if" reads what its cost took
@@ -408,20 +694,6 @@ impl Ability {
     pub fn is_loyalty(&self) -> bool {
         self.cost.is_loyalty()
     }
-
-    /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
-    /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the
-    /// land card type and a basic land type has the intrinsic ability '{T}: Add [mana
-    /// symbol],' even if the text box doesn't actually contain that text".
-    pub const fn tap_for_mana(produces: ManaSet) -> Ability {
-        Ability {
-            kind: AbilityKind::Mana,
-            cost: Cost::TAP,
-            produces,
-            body: Behavior::Data(add_mana(produces)),
-            ..Ability::NONE
-        }
-    }
 }
 
 #[cfg(test)]
@@ -439,6 +711,36 @@ mod tests {
             condition: Some(Condition::Did),
             modification: Modification::AddKeywords(Keywords::FLYING),
         });
+    }
+
+    /// A kind holds only what it has: each of these is a build failure in a card's `static`.
+    #[test]
+    #[should_panic(expected = "only a spell, activated or triggered ability has targets")]
+    fn a_replacement_with_targets_is_refused() {
+        let _ = Ability::replacing(Replacement::EntersTapped).targeting(&[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "a mana ability's is what it")]
+    fn a_mana_ability_with_another_effect_is_refused() {
+        let _ =
+            Ability::tap_for_mana(ManaSet::one(crate::ManaColor::Blue)).effect(&Effect::NOTHING);
+    }
+
+    #[test]
+    #[should_panic(expected = "declare it only of a Rust body")]
+    fn pausing_is_not_declared_of_effect_data() {
+        let _ = Ability::spell().effect(&Effect::NOTHING).pauses();
+    }
+
+    #[test]
+    fn a_mana_ability_adds_what_it_produces() {
+        let produces = ManaSet::one(crate::ManaColor::Green);
+        let ability = Ability::tap_for_mana(produces);
+        assert!(matches!(
+            ability.body(),
+            Behavior::Data(Effect::AddMana { mana, .. }) if *mana == produces
+        ));
     }
 
     #[test]

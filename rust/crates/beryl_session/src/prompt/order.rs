@@ -131,7 +131,7 @@ fn resolves<L: Layout>(s: &State<L>, t: &GameTable, opt: Opt<L>) -> (u8, L::Inde
     let group = if ability.asks() {
         2
     } else {
-        u8::from(!ability.targets.is_empty())
+        u8::from(!ability.targets().is_empty())
     };
     (group, i)
 }

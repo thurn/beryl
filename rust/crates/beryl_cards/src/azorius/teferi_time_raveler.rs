@@ -8,8 +8,8 @@
 use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
 use beryl_card::{Governed, Players, RuleChange, When};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
-    Supertypes, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Supertypes, TargetKind,
+    TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -49,37 +49,25 @@ pub static CARD: CardDef = CardDef {
             // A prohibition the casting machine reads: a "can't" beats a "can"
             // ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)), so even a
             // spell with flash waits for sorcery timing.
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Some(&ONLY_AS_SORCERIES),
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                body: bodies!(sorceries_as_flash),
-                // The rule change its effect starts, which the game numbers.
-                rule: Some(&SORCERIES_AS_FLASH),
-                ..Ability::NONE
-            },
+            Ability::rule_change(&ONLY_AS_SORCERIES),
+            // The rule change its effect starts, which the game numbers.
+            Ability::loyalty(1)
+                .starting(&SORCERIES_AS_FLASH)
+                .custom(bodies!(sorceries_as_flash)),
             // "−3: Return up to one target artifact, creature, or enchantment to its owner's
             // hand. Draw a card." With no target chosen it still draws; with its one target
             // illegal, it doesn't resolve at all
             // ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(-3),
-                targets: &[TargetSpec::up_to_one(
+            Ability::loyalty(-3)
+                .targeting(&[TargetSpec::up_to_one(
                     TargetKind::Permanent,
                     Filter::Types(
                         Types::ARTIFACT
                             .union(Types::CREATURE)
                             .union(Types::ENCHANTMENT),
                     ),
-                )],
-                body: Behavior::Data(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
-                ..Ability::NONE
-            },
+                )])
+                .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
         ],
         ..Face::EMPTY
     }],

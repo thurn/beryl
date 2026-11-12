@@ -4,66 +4,49 @@
 //! Whenever you create one or more creature tokens, put a story counter on this artifact.
 //! {W}, {T}, Remove a story counter from this artifact: Draw a card."
 
-use beryl_card::effect::build::{THIS, YOU, add_counters, create_tokens, draw};
-use beryl_card::{Effect, Players};
-use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, CostPart, Face, Keywords, ManaCost,
-    Subtype, Subtypes, Trigger, Types,
-};
-use beryl_engine::filter::Filter;
-use beryl_engine::state::CounterKind;
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::STAFF_OF_THE_STORYTELLER,
-    faces: &[Face {
-        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
-        types: Types::ARTIFACT,
-        colors: Colors::WHITE,
-        abilities: &[
-            Ability::triggered(&Trigger::ENTERS, Behavior::Data(&CREATE_SPIRIT)),
-            // "Whenever you create one or more creature tokens, put a story counter on this
-            // artifact." One event creating several tokens triggers it once
-            // ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability
-            // triggers only once each time its trigger event occurs."
-            Ability::triggered(
-                &Trigger::creates_tokens(Players::You, Filter::Types(Types::CREATURE)),
-                Behavior::Data(&add_counters(THIS, CounterKind::Story, 1)),
-            ),
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::of(
-                    ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-                    &[CostPart::TAP, CostPart::remove(CounterKind::Story)],
-                ),
-                body: Behavior::Data(&draw(YOU, 1)),
-                ..Ability::NONE
-            },
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[&SPIRIT],
+use beryl_card::effect::build::{THIS, YOU, add_counters, create_tokens, draw};
+use beryl_card::{
+    Ability, CardDef, Colors, Cost, CostPart, CounterKind, Effect, Face, Filter, Keywords, Players,
+    Subtype, Subtypes, Trigger, Types, card, mana,
 };
+
+pub static CARD: CardDef = card(
+    names::STAFF_OF_THE_STORYTELLER,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}"))
+        .types(Types::ARTIFACT)
+        .colors(Colors::WHITE)
+        .abilities(&[
+            Ability::triggered(&Trigger::ENTERS).effect(&CREATE_SPIRIT),
+            Ability::triggered(&Trigger::creates_tokens(
+                Players::You,
+                Filter::Types(Types::CREATURE),
+            ))
+            .effect(&add_counters(THIS, CounterKind::Story, 1)),
+            Ability::activated(Cost::of(
+                mana("{W}"),
+                &[CostPart::TAP, CostPart::remove(CounterKind::Story)],
+            ))
+            .effect(&draw(YOU, 1)),
+        ])],
+)
+.creating(&[&SPIRIT]);
 
 /// The Spirit token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
 /// its subtype plus the word "Token".
 pub const SPIRIT_TOKEN: &str = "Spirit Token";
 
 /// "A 1/1 white Spirit creature token with flying"
-pub static SPIRIT: CardDef = CardDef {
-    name: SPIRIT_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Spirit]),
-        colors: Colors::WHITE,
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::FLYING,
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static SPIRIT: CardDef = card(
+    SPIRIT_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Spirit]))
+        .colors(Colors::WHITE)
+        .power_toughness(1, 1)
+        .keywords(Keywords::FLYING)],
+);
 
 /// "When this artifact enters, create a 1/1 white Spirit creature token with flying."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a

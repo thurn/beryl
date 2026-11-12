@@ -7,8 +7,8 @@
 //! tapped. {T}: Add {U}."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaColor, ManaCost, ManaSet, Players,
-    Replacement, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaColor, ManaCost, ManaSet, Players, Replacement,
+    TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -29,19 +29,16 @@ pub static CARD: CardDef = CardDef {
             cost: ManaCost::new(1, [0, 2, 0, 0, 0, 0]),
             types: Types::INSTANT,
             colors: Colors::BLUE,
-            abilities: &[Ability {
-                kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(
+            abilities: &[Ability::spell()
+                .targeting(&[TargetSpec::one(
                     TargetKind::SpellOrPermanent,
                     Filter::All(&[
                         Filter::Whose(&Players::EachOpponent),
                         Filter::Not(&Filter::Types(Types::LAND)),
                     ]),
                 )
-                .removal()],
-                body: bodies!(bounce),
-                ..Ability::NONE
-            }],
+                .removal()])
+                .custom(bodies!(bounce))],
             ..Face::EMPTY
         },
         Face {

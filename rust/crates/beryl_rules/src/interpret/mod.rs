@@ -35,7 +35,7 @@ use scene::{Registers, Scene};
 #[inline]
 pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let ability: &'static Ability = ctx.resolution.ability;
-    match ability.body {
+    match ability.body() {
         Behavior::Custom(custom) => {
             let bodies = custom.get::<Bodies>().expect("a body made by bodies!");
             bodies.of::<L>()(ctx)
@@ -49,10 +49,6 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// [`mana_ability`] does without coming here.
 #[inline(never)]
 fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect) -> Flow {
-    debug_assert!(
-        !ctx.resolution.ability.may_pause || effect.asks(),
-        "an ability declares may_pause, but its effect never asks"
-    );
     Run::new(ctx).carry_out(effect)
 }
 
@@ -77,7 +73,7 @@ pub(crate) fn mana_ability<L: Layout>(
     if let Behavior::Data(&Effect::AddMana {
         player: Players::You,
         mana,
-    }) = ability.body
+    }) = ability.body()
     {
         debug_assert!(mana.includes(color));
         let activation = activation();
@@ -124,7 +120,7 @@ pub(crate) fn static_condition_holds<L: Layout>(
     index: AbilityIx,
     ability: &Ability,
 ) -> bool {
-    let Some(condition) = ability.condition else {
+    let Some(condition) = ability.condition() else {
         return true;
     };
     if let Some(holds) = without_a_scene(s, slot, condition) {
@@ -192,7 +188,7 @@ pub(crate) fn condition_holds<L: Layout>(
     subject: &PendingTrigger<L>,
     ability: &Ability,
 ) -> bool {
-    ability.condition.is_none_or(|condition| {
+    ability.condition().is_none_or(|condition| {
         let scene = Scene {
             s,
             t,

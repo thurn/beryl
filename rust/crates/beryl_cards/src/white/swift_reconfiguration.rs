@@ -5,13 +5,11 @@
 //! Enchanted permanent is a Vehicle artifact with crew 5 and it loses all other card types.
 //! (It's not a creature unless it's crewed.)"
 
-use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost, Modification,
-    Objects, Subtype, Subtypes, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::filter::Filter;
-
 use crate::names;
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subtype,
+    Subtypes, TargetKind, TargetSpec, Types, card, mana,
+};
 
 /// What a static ability of the Aura does to the permanent it enchants.
 const fn enchanted(modification: Modification) -> LayerSpec {
@@ -22,43 +20,28 @@ const fn enchanted(modification: Modification) -> LayerSpec {
     }
 }
 
-pub static CARD: CardDef = CardDef {
-    name: names::SWIFT_RECONFIGURATION,
-    faces: &[Face {
-        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-        types: Types::ENCHANTMENT,
-        subtypes: Subtypes::of(&[Subtype::Aura]),
-        colors: Colors::WHITE,
-        keywords: Keywords::FLASH,
-        abilities: &[
-            // Enchant creature or Vehicle: the Aura spell's target
-            // ([CR 303.4a](https://yawgatog.com/resources/magic-rules/#R3034a)): "An Aura
-            // spell requires a target, which is defined by its enchant ability." It resolves
-            // attached to it (CR 608.3c).
-            Ability {
-                kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::AnyOf(&[
-                        Filter::Types(Types::CREATURE),
-                        Filter::Subtype(Subtype::Vehicle),
-                    ]),
-                )],
-                ..Ability::NONE
-            },
-            // Layer 4 ([CR 205.1a](https://yawgatog.com/resources/magic-rules/#R2051a)): the
-            // new card type replaces the others, and the subtypes of the types it loses go
-            // with them.
+pub static CARD: CardDef = card(
+    names::SWIFT_RECONFIGURATION,
+    &[Face::EMPTY
+        .cost(mana("{W}"))
+        .types(Types::ENCHANTMENT)
+        .subtypes(Subtypes::of(&[Subtype::Aura]))
+        .colors(Colors::WHITE)
+        .keywords(Keywords::FLASH)
+        .abilities(&[
+            Ability::spell().targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::AnyOf(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Subtype(Subtype::Vehicle),
+                ]),
+            )]),
             Ability::static_ability(&enchanted(Modification::SetTypes(Types::ARTIFACT))),
             Ability::static_ability(&enchanted(Modification::AddSubtype(Subtype::Vehicle))),
-            // Layer 6: "with crew 5".
             Ability::static_ability(&enchanted(Modification::grant(0))),
-        ],
-        grants: &[Ability::crew(5)],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+        ])
+        .grants(&[Ability::crew(5)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

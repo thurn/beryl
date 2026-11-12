@@ -2,7 +2,7 @@
 //! spell is countered this way, exile it instead of putting it into its owner's graveyard."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -17,13 +17,10 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(0, [1, 1, 0, 0, 0, 0]),
         types: Types::INSTANT,
         colors: Colors::WHITE.union(Colors::BLUE),
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()],
-            may_pause: true,
-            body: bodies!(counter_unless_pays_three),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any).counter()])
+            .custom(bodies!(counter_unless_pays_three))
+            .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

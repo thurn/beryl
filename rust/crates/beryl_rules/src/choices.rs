@@ -60,7 +60,7 @@
 //!   record is all that carries over, and only these functions read it.
 //!
 //! The ability must say that it asks: effect data does by what it holds
-//! ([`Effect::asks`]), a Rust body by `may_pause`.
+//! ([`Effect::asks`]), a Rust body by `Ability::pauses`.
 //!
 //! How many questions an effect asks, in what order and with which candidates is part of
 //! every save and every rollout, which replay the answers by their place. A change to any of

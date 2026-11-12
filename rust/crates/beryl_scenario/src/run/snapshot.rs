@@ -103,7 +103,7 @@ impl Runner {
             });
             let makes_mana = named.iter().any(|&slot| {
                 let face = s.copiable(slot).face(&self.t);
-                face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
+                face.abilities.iter().any(|a| a.kind() == AbilityKind::Mana)
             });
             if !makes_mana {
                 out.push(Assertion::Tapped {

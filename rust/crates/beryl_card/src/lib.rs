@@ -19,6 +19,7 @@
 
 pub mod ability;
 pub mod characteristics;
+pub mod check;
 pub mod continuous;
 pub mod cost;
 pub mod counter;
@@ -35,6 +36,7 @@ mod walk;
 
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
+pub use check::Malformed;
 pub use continuous::{
     Duration, Governed, Layer, LayerSpec, Modification, Replacement, RuleChange, When,
 };
@@ -43,7 +45,7 @@ pub use cost::{
 };
 pub use counter::CounterKind;
 pub use definition::{
-    CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility,
+    CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
 };
 pub use effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,

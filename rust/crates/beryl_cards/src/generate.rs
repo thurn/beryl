@@ -87,7 +87,7 @@ impl Pools {
 /// starts there with it done, so such a trigger would go off in an oracle alone.
 fn triggers_before_main(face: &Face) -> bool {
     face.abilities.iter().any(|a| {
-        a.trigger.is_some_and(|trigger| {
+        a.trigger().is_some_and(|trigger| {
             !trigger.delayed
                 && matches!(trigger.event, TriggerEvent::Step(step)
                     if (step as u8) < TurnStep::PrecombatMain as u8)
@@ -180,8 +180,8 @@ fn taps_a_mana_source(
             let face = s.copiable(slot).face(live.table());
             face.abilities
                 .get(i.index())
-                .is_some_and(|a| a.cost.does(CostAction::Tap))
-                && face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
+                .is_some_and(|a| a.cost().does(CostAction::Tap))
+                && face.abilities.iter().any(|a| a.kind() == AbilityKind::Mana)
         })
 }
 

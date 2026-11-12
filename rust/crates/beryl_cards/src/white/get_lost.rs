@@ -5,8 +5,8 @@
 //! explores. Activate only as a sorcery."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Players, Subtype,
-    Subtypes, TargetKind, TargetSpec, Timing, Types,
+    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Players, Subtype, Subtypes,
+    TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
@@ -23,9 +23,8 @@ pub static CARD: CardDef = CardDef {
         cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
         types: Types::INSTANT,
         colors: Colors::WHITE,
-        abilities: &[Ability {
-            kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Types(
                     Types::CREATURE
@@ -33,10 +32,8 @@ pub static CARD: CardDef = CardDef {
                         .union(Types::PLANESWALKER),
                 ),
             )
-            .removal()],
-            body: bodies!(destroy_and_map),
-            ..Ability::NONE
-        }],
+            .removal()])
+            .custom(bodies!(destroy_and_map))],
         ..Face::EMPTY
     }],
     tokens: &[&MAP],
@@ -54,18 +51,17 @@ pub static MAP: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         subtypes: Subtypes::of(&[Subtype::Map]),
-        abilities: &[Ability {
-            kind: AbilityKind::Activated,
-            cost: Cost::of(ManaCost::generic(1), &[CostPart::TAP, CostPart::SACRIFICE]),
-            timing: Timing::Sorcery,
-            targets: &[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-            )],
-            may_pause: true,
-            body: bodies!(explore),
-            ..Ability::NONE
-        }],
+        abilities: &[Ability::activated(Cost::of(
+            ManaCost::generic(1),
+            &[CostPart::TAP, CostPart::SACRIFICE],
+        ))
+        .targeting(&[TargetSpec::one(
+            TargetKind::Permanent,
+            Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+        )])
+        .as_a_sorcery()
+        .custom(bodies!(explore))
+        .pauses()],
         ..Face::EMPTY
     }],
     tokens: &[],

@@ -40,16 +40,15 @@ pub static CARD: CardDef = CardDef {
         power: Some(2),
         toughness: Some(1),
         keywords: Keywords::FLASH,
-        abilities: &[Ability {
-            targets: &[TargetSpec::one(
+        abilities: &[Ability::triggered(&Trigger::ENTERS)
+            .custom(bodies!(grant))
+            .targeting(&[TargetSpec::one(
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
                     Filter::Whose(&Players::You),
                 ]),
-            )],
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(grant))
-        }],
+            )])],
         ..Face::EMPTY
     }],
     tokens: &[],

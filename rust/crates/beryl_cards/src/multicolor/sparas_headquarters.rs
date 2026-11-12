@@ -1,33 +1,33 @@
 //! Spara's Headquarters. Land — Forest Plains Island. "({T}: Add {G}, {W}, or {U}.) This land
 //! enters tapped. Cycling {3} ({3}, Discard this card: Draw a card.)"
 
-use beryl_engine::card::{
-    Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Replacement, Subtype, Subtypes, Types,
-};
-
 use crate::names;
+use beryl_card::{
+    Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Subtype, Subtypes, Types, card, mana,
+};
 
 /// Its three basic land types give it their intrinsic mana abilities
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
 /// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],'".
 /// Cycling ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)) "functions
 /// only while the card with cycling is in a player's hand."
-pub static CARD: CardDef = CardDef {
-    name: names::SPARAS_HEADQUARTERS,
-    faces: &[Face {
-        types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Forest, Subtype::Plains, Subtype::Island]),
-        abilities: &[
+pub static CARD: CardDef = card(
+    names::SPARAS_HEADQUARTERS,
+    &[Face::EMPTY
+        .types(Types::LAND)
+        .subtypes(Subtypes::of(&[
+            Subtype::Forest,
+            Subtype::Plains,
+            Subtype::Island,
+        ]))
+        .abilities(&[
             Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
             Ability::replacing(Replacement::EntersTapped),
-            Ability::cycling(ManaCost::generic(3)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            Ability::cycling(mana("{3}")),
+        ])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

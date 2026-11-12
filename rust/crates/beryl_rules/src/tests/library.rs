@@ -4,7 +4,7 @@
 
 use crate::actions::{manifest, tap, transform};
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, Behavior, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
+use crate::card::{Ability, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
 use crate::decision::Candidates;
 use crate::event::{self, Event, Reason};
 use crate::filter::Filter;
@@ -23,10 +23,7 @@ use beryl_kernel::two_player::TwoPlayerSeat as _;
 use super::events::{CARDS, DECK, INSECT, PRODIGY_CARDS, find, game, put};
 
 /// An ability that may ask, as data that asks says of itself.
-static ASKS: Ability = Ability {
-    body: Behavior::Data(&scry(YOU, 1)),
-    ..Ability::NONE
-};
+static ASKS: Ability = Ability::spell().effect(&scry(YOU, 1));
 
 /// Does `act` as a step of an ability of `source` resolving, its questions answered from
 /// `answers` in turn. Returns what it came to, and the question it stopped at if it did.

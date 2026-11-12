@@ -34,15 +34,16 @@ pub static CARD: CardDef = CardDef {
         power: Some(2),
         toughness: Some(1),
         keywords: Keywords::FLYING,
-        abilities: &[Ability {
+        abilities: &[
             // X is the kicker's (CR 107.3m), the trigger's own.
-            targets: &[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
-            )],
-            condition: Some(conditions!(effect::kicked)),
-            ..Ability::triggered(&Trigger::ENTERS, bodies!(steal))
-        }],
+            Ability::triggered(&Trigger::ENTERS)
+                .custom(bodies!(steal))
+                .targeting(&[TargetSpec::one(
+                    TargetKind::Permanent,
+                    Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
+                )])
+                .only_if(conditions!(effect::kicked)),
+        ],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,
             min_x: 1,

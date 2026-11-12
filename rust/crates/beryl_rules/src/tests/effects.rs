@@ -4,15 +4,15 @@
 use beryl_card::effect::build::{
     EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
     THOSE, YOU, add_counters, controller_of, create_copy, destroy, discard, draw, exile,
-    exile_until_this_leaves, for_each_player, gain_life, if_else, lose_life, may, mill, modify,
-    put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence, target,
-    target_player, when,
+    exile_until_this_leaves, for_each_player, gain_life, if_else, if_then, lose_life, may, mill,
+    modify, put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence, target,
+    target_player,
 };
 use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects};
 
 use crate::card::{
-    Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Players, Prompt,
-    Purpose, SpecIx, Takes, TargetKind, TargetSpec, Types,
+    Ability, FaceAbility, Modification, Part, Place, Players, Prompt, Purpose, SpecIx, Takes,
+    TargetKind, TargetSpec, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
@@ -35,19 +35,12 @@ const A_PLAYER: TargetSpec = TargetSpec::one(TargetKind::Player, Filter::Any);
 
 /// An ability that does `effect`.
 const fn does(effect: &'static Effect) -> Ability {
-    Ability {
-        kind: AbilityKind::Activated,
-        body: Behavior::Data(effect),
-        ..Ability::NONE
-    }
+    Ability::activated(beryl_card::Cost::NONE).effect(effect)
 }
 
 /// An ability that does `effect` to `targets`.
 const fn does_to(targets: &'static [TargetSpec], effect: &'static Effect) -> Ability {
-    Ability {
-        targets,
-        ..does(effect)
-    }
+    does(effect).targeting(targets)
 }
 
 /// Resolves `ability` as one of the object `source` names, with `targets`, answering its
@@ -261,7 +254,7 @@ fn each_player_takes_their_turn_at_an_effect_from_the_active_player() {
 fn a_choice_in_the_data_pauses_until_it_is_answered() {
     static MAY: Ability = does(&sequence(&[
         may(YOU, &draw(YOU, 1)),
-        when(Condition::Not(&IF_YOU_DO), &lose_life(YOU, 2)),
+        if_then(Condition::Not(&IF_YOU_DO), &lose_life(YOU, 2)),
     ]));
     static DISCARD: Ability = does(&discard(EACH_OPPONENT, 1));
     static SCRY: Ability = does(&scry(YOU, 2));
@@ -396,7 +389,7 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
     const STORY: Amount = Amount::Counters(THIS, CounterKind::Story);
     static COUNT_UP: Ability = does(&sequence(&[
         add_counters(THIS, CounterKind::Story, 2),
-        when(
+        if_then(
             Condition::Compare(STORY, Comparison::AtLeast, Amount::Fixed(2)),
             &Effect::CreateTokens {
                 player: YOU,
@@ -405,10 +398,10 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
             },
         ),
         // The tokens just created are creatures.
-        when(Condition::Is(THOSE, CREATURES), &gain_life(YOU, 1)),
+        if_then(Condition::Is(THOSE, CREATURES), &gain_life(YOU, 1)),
         // As many as it has: two, not five (CR 609.3).
         remove_counters(THIS, CounterKind::Story, 5),
-        when(
+        if_then(
             Condition::Compare(THAT_MANY, Comparison::Equal, Amount::Fixed(2)),
             &Effect::LoseLife {
                 player: EACH_OPPONENT,

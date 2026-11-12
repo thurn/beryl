@@ -132,7 +132,7 @@ pub(super) fn targetable<L: Layout>(
     source: Option<L::Slot>,
 ) -> bool {
     ability.is_none_or(|a| {
-        a.targets
+        a.targets()
             .iter()
             .all(|spec| spec.optional || enough_candidates(s, t, spec, you, itself, x, source))
     })
@@ -155,7 +155,7 @@ pub(crate) fn still_legal<L: Layout>(
     ability: &Ability,
     target: Target<L>,
 ) -> bool {
-    let spec = &ability.targets[target.spec().index()];
+    let spec = &ability.targets()[target.spec().index()];
     let you = entry.controller;
     let Some(r) = target.as_object() else {
         return target
@@ -188,7 +188,7 @@ pub(crate) fn target_trigger<L: Layout>(
     let Some(ability) = entry_ability(t, &entry) else {
         return Ok(());
     };
-    if ability.targets.is_empty() {
+    if ability.targets().is_empty() {
         // The trigger is already on the stack, with no choices to announce first
         // ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)):
         // "its controller puts it on the stack as an object that's not a card".

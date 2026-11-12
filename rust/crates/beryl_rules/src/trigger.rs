@@ -352,7 +352,7 @@ fn fire_delayed<L: Layout>(
     step: TurnStep,
     active: Seat,
 ) -> Result<(), Full> {
-    s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger {
+    s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger() {
         Some(trigger) if trigger.delayed => {
             begins(trigger.event, step) && is_for(&trigger.whose, active, d.controller)
         }
@@ -466,7 +466,7 @@ pub(crate) fn put_on_stack<L: Layout>(
     let tr = s.take_trigger(index.into());
     // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
     let entering = ability(t, tr.card, tr.face, tr.ability)
-        .trigger
+        .trigger()
         .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
     s.put_on_stack(StackEntry {
         object: tr.source,

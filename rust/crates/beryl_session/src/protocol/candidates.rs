@@ -148,16 +148,16 @@ fn mana_candidate<L: Layout>(
             .face(obs.object(slot).face())
             .abilities
             .iter()
-            .filter(|a| a.kind == AbilityKind::Mana && a.produces.includes(color))
-            .find(|a| a.cost.does(CostAction::Tap) || a.cost.does(CostAction::Sacrifice))
+            .filter(|a| a.kind() == AbilityKind::Mana && a.produces().includes(color))
+            .find(|a| a.cost().does(CostAction::Tap) || a.cost().does(CostAction::Sacrifice))
     });
-    let verb = if ability.is_some_and(|a| a.cost.does(CostAction::Sacrifice)) {
+    let verb = if ability.is_some_and(|a| a.cost().does(CostAction::Sacrifice)) {
         "Sacrifice"
     } else {
         "Tap"
     };
     let symbol =
-        MANA_SYMBOLS[color.index()].repeat(ability.map_or(1, |a| a.produces.amount).into());
+        MANA_SYMBOLS[color.index()].repeat(ability.map_or(1, |a| a.produces().amount).into());
     (
         format!("{verb} {name} for {symbol}"),
         Candidate::Mana {
@@ -354,7 +354,7 @@ fn activated_cost<L: Layout>(
             (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
         }
     };
-    Some(cost_text(&t.def(card).face(face).ability(ability).cost))
+    Some(cost_text(t.def(card).face(face).ability(ability).cost()))
 }
 
 /// An activation cost as Oracle text writes it: "{W}, {T}, Remove a story counter".

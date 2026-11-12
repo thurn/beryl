@@ -128,7 +128,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
     ) -> Result<Choice, Stop> {
         debug_assert!(
             self.ability.asks(),
-            "a body asked a question without declaring may_pause"
+            "a body asked a question without declaring that it pauses"
         );
         debug_assert!(!d.is_empty(), "a question with no answer");
         if game.state.outcome().is_some() {
