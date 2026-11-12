@@ -124,6 +124,7 @@ impl Display for PromptButton {
             ButtonId::Auto => f.write_str("auto")?,
             ButtonId::PassOn => f.write_str("passOn")?,
             ButtonId::Option { index } => write!(f, "{index}")?,
+            ButtonId::Ability { nth } => write!(f, "ability{nth}")?,
         }
         f.write_char(open)?;
         f.write_str(&self.label)?;

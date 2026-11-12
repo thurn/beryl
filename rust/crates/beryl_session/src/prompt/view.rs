@@ -202,6 +202,11 @@ pub enum ButtonId {
     /// One of the answers a mode, a yes or no or a number offers as buttons: a candidate of
     /// the open decision, by index.
     Option { index: u16 },
+    /// On the choice among a card's ways, an activated ability of the card that the priority
+    /// does not offer now, by how many activated abilities its face lists before it
+    /// ([`CandidateView::nth`](crate::protocol::CandidateView::nth)): shown in the card's
+    /// order, never enabled.
+    Ability { nth: u8 },
 }
 
 /// A shape's own state, tagged by its [`Shape`].

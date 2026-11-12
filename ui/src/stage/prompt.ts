@@ -97,12 +97,14 @@ export function onTable(prompt: PromptView) {
   return prompt.state !== null && !OPENING.has(prompt.purpose);
 }
 
-/** The ways to use a card that `prompt` offers, where it is the choice among them a click on
+/** The ways to use a card that `prompt` shows, where it is the choice among them a click on
  * the card opened: each is drawn as the card or its ability (Choose.tsx), not as a button of
- * the bar. None for any other prompt. */
+ * the bar, those it offers and the abilities it cannot use now. None for any other prompt. */
 export function waysOf(prompt: PromptView | undefined): PromptButton[] {
   if (prompt?.state?.shape !== "mode" || prompt.purpose !== "act") return [];
-  return prompt.buttons.filter(({ id }) => id.kind === "option");
+  return prompt.buttons.filter(
+    ({ id }) => id.kind === "option" || id.kind === "ability",
+  );
 }
 
 /** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, a

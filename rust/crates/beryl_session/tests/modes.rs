@@ -9,7 +9,7 @@ mod play;
 
 use beryl_cards::names::{
     COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, PLAINS,
-    THIEVING_SKYDIVER,
+    SNAPCASTER_MAGE, TEFERI_TIME_RAVELER, THIEVING_SKYDIVER,
 };
 use beryl_engine::card::Purpose;
 use beryl_engine::state::CounterKind;
@@ -108,6 +108,45 @@ fn a_card_with_several_ways_opens_the_choice_among_them() {
             .len(),
         1
     );
+}
+
+/// The human's main phase with a Teferi, Time Raveler at 1 loyalty, whose −3 it cannot pay,
+/// and an opponent's creature for the −3 to return.
+const WALKER: Scenario = Scenario::new("walker low")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .battlefield(
+        P0,
+        &[Permanent::new(TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 1)],
+    )
+    .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE)])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// A click on a planeswalker whose loyalty pays only its +1 opens the choice among its
+/// abilities all the same, the −3 it cannot activate shown in the card's order and never
+/// enabled, as Arena's "Choose One" dims it (`2VW6ZzmS8U4 6:24.5`). A press of the −3 does
+/// nothing; the +1 activates.
+#[test]
+fn a_planeswalker_shows_the_abilities_it_cannot_use() {
+    let mut play = Play::scenario(&WALKER);
+    let teferi = play.named(TEFERI_TIME_RAVELER, ZoneName::Battlefield, Side::You)[0];
+    let plus = index(&play, |c| matches!(c, Candidate::Activate { .. }));
+    let ways = format!(
+        "mode act: Choose One\n\
+         about #{teferi}\n\
+         {plus}[Teferi, Time Raveler: +1] ability1(Teferi, Time Raveler: \u{2212}3) \
+         decline[Cancel]\n"
+    );
+    assert_eq!(play.on(teferi).as_deref(), Some(ways.as_str()));
+    assert_eq!(
+        play.press(ButtonId::Ability { nth: 1 }).as_deref(),
+        Some(ways.as_str())
+    );
+    // The +1 answers the priority with its activation, as picking that candidate does.
+    let mut picked = Play::scenario(&WALKER);
+    picked.choose(|c| matches!(c, Candidate::Activate { .. }));
+    assert_eq!(play.press(option(plus)), None);
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
 }
 
 /// The value of X opens at the least the decision offers, says the cost each value makes and

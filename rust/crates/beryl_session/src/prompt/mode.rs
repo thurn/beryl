@@ -30,6 +30,21 @@ pub(crate) struct Mode {
     buttons: Vec<PromptButton>,
 }
 
+/// A way to use a card, on the choice among them.
+#[derive(Clone, Debug)]
+pub(crate) enum Way {
+    /// A candidate of the priority, by index.
+    Offered(u16),
+    /// An activated ability of the card that the priority does not offer, as a planeswalker's
+    /// loyalty ability that would take more loyalty than it has
+    /// ([CR 606.6](https://yawgatog.com/resources/magic-rules/#R6066): "A loyalty ability
+    /// with a negative loyalty cost ... can't be activated unless the permanent has at least
+    /// that many loyalty counters on it"), by its
+    /// [`CandidateView::nth`](crate::protocol::CandidateView::nth) and what an activation of
+    /// it is called.
+    Unusable { nth: u8, label: String },
+}
+
 /// What a click on a mode prompt did.
 pub(crate) enum Chosen {
     /// Nothing.
@@ -72,13 +87,18 @@ impl Mode {
         }
     }
 
-    /// The choice among `ways`, candidates of a priority whose candidates are called
-    /// `labels`, to use the card in `slot`: a button for each, under its candidate's label,
-    /// and `cancel` to go back.
-    pub(crate) fn act(labels: &[String], slot: u16, ways: &[u16], cancel: &str) -> Mode {
-        let way = |&index: &u16| {
-            let label = &labels[usize::from(index)];
-            button(ButtonId::Option { index }, label, true, false)
+    /// The choice among `ways` to use the card in `slot`, at a priority whose candidates are
+    /// called `labels`: a button for each, under its candidate's label or, for an ability the
+    /// priority does not offer, its own and never enabled; and `cancel` to go back.
+    pub(crate) fn act(labels: &[String], slot: u16, ways: &[Way], cancel: &str) -> Mode {
+        let way = |way: &Way| match *way {
+            Way::Offered(index) => {
+                let label = &labels[usize::from(index)];
+                button(ButtonId::Option { index }, label, true, false)
+            }
+            Way::Unusable { nth, ref label } => {
+                button(ButtonId::Ability { nth }, label, false, false)
+            }
         };
         Mode {
             answers: Purpose::Priority,

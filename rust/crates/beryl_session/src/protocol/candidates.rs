@@ -183,6 +183,47 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
     Some(ability_order(face.abilities, i.get()).1)
 }
 
+/// An activated ability of an object's own face that is not a mana ability, as an activation
+/// of it would be offered.
+pub(crate) struct OwnActivated {
+    /// Its index among the face's abilities, as [`Candidate::Activate`] names it.
+    pub ability: u8,
+    /// [`CandidateView::nth`].
+    pub nth: u8,
+    /// What an activation of it is called.
+    pub label: String,
+}
+
+/// Each activated ability of the face the object in `slot` has up that is not a mana
+/// ability, in the order the face lists them, whether or not it may be activated now
+/// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
+/// activate an ability that's prohibited from being activated").
+pub(crate) fn own_activated<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+) -> Vec<OwnActivated> {
+    let Some(card) = obs.card(slot) else {
+        return Vec::new();
+    };
+    let abilities = t.def(card).face(obs.object(slot).face()).abilities;
+    (abilities.iter().enumerate())
+        .filter(|(_, a)| a.kind == AbilityKind::Activated)
+        .map(|(i, _)| {
+            let ability = u8::try_from(i).expect("a face has fewer than 256 abilities");
+            let activate = Opt::Activate {
+                slot,
+                ability: ObjectAbility::own(ability),
+            };
+            OwnActivated {
+                ability,
+                nth: ability_order(abilities, ability).1,
+                label: candidate(t, obs, activate).label,
+            }
+        })
+        .collect()
+}
+
 /// The name of the face of the card in `slot` it is played with as a land, if the viewer knows
 /// it: its first land face ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129):
 /// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a

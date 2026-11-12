@@ -32,23 +32,25 @@ import "./choose.css";
 
 type Candidate = DecisionView["candidates"][number];
 
-/** An ability of `object` as the stack will show it: its source's frame, wearing the words
- * of the ability. */
+/** The `nth` activated ability of `object`, called `label`, as the stack will show it: its
+ * source's frame, wearing the words of the ability. */
 function Ability({
   object,
-  candidate,
+  nth,
+  label,
   width,
 }: {
   object: ObjectView;
-  candidate: Candidate;
+  nth: number;
+  label: string;
   width: number;
 }) {
-  const face = useAbilityFace(object.name ?? candidate.label, object, BLANK);
+  const face = useAbilityFace(object.name ?? label, object, BLANK);
   return (
     <StackItem
       source={face}
       label="Activated Ability"
-      text={abilityText(face.text ?? "", false, candidate.nth ?? 0)}
+      text={abilityText(face.text ?? "", false, nth)}
       width={width}
       showArt
     />
@@ -79,7 +81,14 @@ function Way({
         ? cardEntry(name)?.faces[option.face]?.name
         : undefined;
   if (!shows(candidate)) {
-    return <Ability object={object} candidate={candidate} width={width} />;
+    return (
+      <Ability
+        object={object}
+        nth={candidate.nth ?? 0}
+        label={candidate.label}
+        width={width}
+      />
+    );
   }
   return (
     <Look
@@ -95,8 +104,10 @@ const frame = ({ card, gap, width }: TraySpace, count: number) =>
   Math.max(card.least, Math.min(card.most, (width - gap) / count - gap));
 
 /** The ways to use the card the open prompt is about, in a row over the table in `space`,
- * where a layout holds a prompt's cards up: a press of one chooses it. Nothing for any other
- * prompt. */
+ * where a layout holds a prompt's cards up: a press of one chooses it. An ability the card
+ * cannot use now is drawn among them, dimmed and taking no press, as Arena shows a
+ * planeswalker's ability its loyalty cannot pay (`2VW6ZzmS8U4 6:24.5`). Nothing for any
+ * other prompt. */
 export function Ways({
   asked: { prompt, decision, sending },
   prompts,
@@ -125,6 +136,20 @@ export function Ways({
         disabled={sending || !way.enabled}
         onClick={() => prompts.press(way.id)}
       >
+        {object && way.id.kind === "ability" && (
+          <span
+            className="stage-way-face"
+            style={{ width, height: width / CARD_ASPECT }}
+            aria-hidden
+          >
+            <Ability
+              object={object}
+              nth={way.id.nth}
+              label={way.label}
+              width={width}
+            />
+          </span>
+        )}
         {object && candidate && (
           <span
             className="stage-way-face"

@@ -272,14 +272,14 @@
     {
       "kind": "settled",
       "name": "Choosing how to cast",
-      "rule": "A card or permanent with more than one way to cast or use it opens a modal, \"Choose One\", showing the card once per option, with Cancel: an adventure, an alternative cost, a land's abilities.",
+      "rule": "A card or permanent with more than one way to cast or use it opens a modal, \"Choose One\", showing the card once per option, with Cancel: an adventure, an alternative cost, a land's abilities. A permanent with two or more activated abilities that are not mana abilities, as a planeswalker, opens it on every click, with each of those abilities in the card's order: one it cannot activate now, as a loyalty ability its loyalty cannot pay, is shown dimmed and takes no press.",
       "twice": "mode",
       "reports": [
         "by-lzl",
         "by-9fb"
       ],
       "arena": {
-        "does": "Brazen Borrower, Bonecrusher Giant and Force of Will open it from hand, Wasteland on the battlefield.",
+        "does": "Brazen Borrower, Bonecrusher Giant and Force of Will open it from hand, Wasteland on the battlefield. Liliana of the Veil at 3 loyalty opens it with all three loyalty abilities, the +1 and −2 outlined and the −6 without the outline, dimmed.",
         "evidence": [
           {
             "recording": "SN9QFe2kM4Y",
@@ -296,6 +296,14 @@
           {
             "recording": "MnhyzykajXw",
             "time": "35:43"
+          },
+          {
+            "recording": "2VW6ZzmS8U4",
+            "time": "6:24.5"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "1:10:20.5"
           }
         ]
       }

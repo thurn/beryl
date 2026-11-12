@@ -78,12 +78,18 @@ restore the old behavior.
   5UHzpVvUkfI 58:17.0, 3sEoP_s4DQE 24:49.6).
 - **Choosing how to cast.** A card or permanent with more than one way to cast
   or use it opens a modal, "Choose One", showing the card once per option, with
-  Cancel: an adventure, an alternative cost, a land's abilities (by-lzl,
-  by-9fb). Brazen Borrower, Bonecrusher Giant and Force of Will open it from
-  hand, Wasteland on the battlefield (SN9QFe2kM4Y 42:44.2, 3sEoP_s4DQE 50:44.3,
-  3sEoP_s4DQE 46:50.2, MnhyzykajXw 35:43). The cards a `mode` prompt is about
-  are the one thing on screen twice: the duplicate audit allows them while it is
-  open.
+  Cancel: an adventure, an alternative cost, a land's abilities. A permanent
+  with two or more activated abilities that are not mana abilities, as a
+  planeswalker, opens it on every click, with each of those abilities in the
+  card's order: one it cannot activate now, as a loyalty ability its loyalty
+  cannot pay, is shown dimmed and takes no press (by-lzl, by-9fb). Brazen
+  Borrower, Bonecrusher Giant and Force of Will open it from hand, Wasteland on
+  the battlefield. Liliana of the Veil at 3 loyalty opens it with all three
+  loyalty abilities, the +1 and −2 outlined and the −6 without the outline,
+  dimmed (SN9QFe2kM4Y 42:44.2, 3sEoP_s4DQE 50:44.3, 3sEoP_s4DQE 46:50.2,
+  MnhyzykajXw 35:43, 2VW6ZzmS8U4 6:24.5, TbrYIs2juCw 1:10:20.5). The cards a
+  `mode` prompt is about are the one thing on screen twice: the duplicate audit
+  allows them while it is open.
 - **A finished ability.** It is removed at once, with no fade (by-c8b).
 - **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
   attackers." Every prompt's title and buttons are one table in the session

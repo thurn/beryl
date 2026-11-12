@@ -1,15 +1,15 @@
 //! A priority as a prompt: a pick of what to play, cast or activate, with passing its button.
 
-use beryl_engine::Layout;
 use beryl_engine::card::Purpose;
+use beryl_engine::{Layout, Scratch, SlotId as _, observe};
 
 use super::button;
 use crate::prompt::held::{Clicked, Run, Step, Table};
-use crate::prompt::mode::{Chosen, Mode};
+use crate::prompt::mode::{Chosen, Mode, Way};
 use crate::prompt::open::act_prompt;
 use crate::prompt::wording::{PassLeads, pass_words};
 use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeView};
-use crate::protocol::{Candidate, DecisionView, PassTo, Side};
+use crate::protocol::{Candidate, DecisionView, PassTo, Side, own_activated};
 use crate::script::{Mark, Subject};
 
 /// What the player may do with their priority, or at a halt, where passing is all.
@@ -39,8 +39,8 @@ pub(crate) struct Priority {
 struct Used {
     slot: u16,
     name: Option<String>,
-    /// The candidates that use it, by index.
-    ways: Vec<u16>,
+    /// The ways to use it, in the order the choice among them shows them.
+    ways: Vec<Way>,
     /// Whether a way does more than tap it for mana
     /// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
     /// activate an activated mana ability whenever they have priority"): every untapped
@@ -79,16 +79,19 @@ impl Priority {
             };
             match cards.iter_mut().find(|card| card.slot == slot) {
                 Some(card) => {
-                    card.ways.push(i);
+                    card.ways.push(Way::Offered(i));
                     card.plays |= plays;
                 }
                 None => cards.push(Used {
                     slot,
                     name: name(slot),
-                    ways: vec![i],
+                    ways: vec![Way::Offered(i)],
                     plays,
                 }),
             }
+        }
+        for card in &mut cards {
+            card.ways = in_face_order(table, decision, card.slot, std::mem::take(&mut card.ways));
         }
         // Either of two interchangeable cards uses the one the engine offers for both.
         let offered: Vec<u16> = cards.iter().map(|card| card.slot).collect();
@@ -165,7 +168,7 @@ impl Priority {
             Click::On {
                 on: Subject::Object { slot },
             } => match self.cards.iter().find(|card| card.slot == slot) {
-                Some(Used { ways, .. }) if ways.len() == 1 => answers(ways[0]),
+                Some(Used { ways, .. }) if let [Way::Offered(way)] = ways[..] => answers(way),
                 // Several ways to use it: the choice among them opens over the priority.
                 Some(card) => {
                     let prompt = act_prompt(slot, card.name.as_deref());
@@ -218,4 +221,70 @@ impl Priority {
             warned: Vec::new(),
         });
     }
+}
+
+/// The ways to use the card in `slot` that the priority `decision` offers, `offered`, as the
+/// choice among them shows them. A permanent with two or more activated abilities that are not
+/// mana abilities shows each of those in the order its face lists them, those it cannot
+/// activate now among them, and then its other ways: Arena's "Choose One" for a planeswalker
+/// has a frame for every loyalty ability, one its loyalty cannot pay dimmed
+/// (`2VW6ZzmS8U4 6:24.5`), so that a click on such a permanent always opens the choice. Any
+/// other card shows what is offered.
+fn in_face_order<L: Layout>(
+    table: &Table<'_, L>,
+    decision: &DecisionView,
+    slot: u16,
+    offered: Vec<Way>,
+) -> Vec<Way> {
+    let activates = |way: &Way, ability: u8| match *way {
+        Way::Offered(i) => {
+            decision.candidates[usize::from(i)].option
+                == Candidate::Activate {
+                    slot,
+                    ability,
+                    granted: false,
+                }
+        }
+        Way::Unusable { .. } => false,
+    };
+    let own = |way: &Way| match *way {
+        Way::Offered(i) => matches!(
+            decision.candidates[usize::from(i)].option,
+            Candidate::Activate { granted: false, .. }
+        ),
+        Way::Unusable { .. } => false,
+    };
+    let (Some(d), Some(object)) = (table.d, L::Slot::from_num(slot)) else {
+        return offered;
+    };
+    if !offered.iter().any(own) {
+        return offered;
+    }
+    let mut scratch = Scratch::new();
+    let abilities = own_activated(
+        table.t,
+        observe(table.shown, table.t, &mut scratch, d.player),
+        object,
+    );
+    if abilities.len() < 2 {
+        return offered;
+    }
+    let mut ways = Vec::with_capacity(abilities.len() + offered.len());
+    for ability in &abilities {
+        let before = ways.len();
+        ways.extend(
+            (offered.iter())
+                .filter(|w| activates(w, ability.ability))
+                .cloned(),
+        );
+        if ways.len() == before {
+            ways.push(Way::Unusable {
+                nth: ability.nth,
+                label: ability.label.clone(),
+            });
+        }
+    }
+    let shown = |way: &Way| abilities.iter().any(|a| activates(way, a.ability));
+    ways.extend(offered.into_iter().filter(|way| !shown(way)));
+    ways
 }

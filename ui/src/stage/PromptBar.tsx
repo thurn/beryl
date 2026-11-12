@@ -256,7 +256,11 @@ function standing(prompt: PromptView) {
 }
 
 const keyOf = ({ id }: PromptButton) =>
-  id.kind === "option" ? `option-${id.index}` : id.kind;
+  id.kind === "option"
+    ? `option-${id.index}`
+    : id.kind === "ability"
+      ? `ability-${id.nth}`
+      : id.kind;
 
 /** The keys that answer the open prompt, as the old board has them: Space or Enter presses
  * the button put forward, Shift with either the one that passes on, and Escape takes a cast

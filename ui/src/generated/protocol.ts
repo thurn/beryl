@@ -731,7 +731,7 @@ enabled: boolean,
  */
 primary: boolean, };
 
-export type ButtonId = { "kind": "confirm" } | { "kind": "decline" } | { "kind": "auto" } | { "kind": "passOn" } | { "kind": "option", index: number, };
+export type ButtonId = { "kind": "confirm" } | { "kind": "decline" } | { "kind": "auto" } | { "kind": "passOn" } | { "kind": "option", index: number, } | { "kind": "ability", nth: number, };
 
 export type ShapeView = { "shape": "pick", 
 /**

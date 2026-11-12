@@ -26,8 +26,10 @@ const WATCHERS: &[Permanent] = &[Permanent::new(ELITE_SPELLBINDER), ISLAND_];
 
 /// Picking on the table: the human's main phase with a land to play, of two alike in hand;
 /// a Tundra, whose two ways to tap open the choice among them; a Counterspell with nothing
-/// to counter; a planeswalker whose ability targets a player; and an Oust, whose targets are
-/// a creature of each player's, their own asked about before it is taken.
+/// to counter; a planeswalker whose +1 targets a player, a click on which opens the choice
+/// among its abilities, its −8, which its loyalty cannot pay, shown and never enabled (the
+/// shape suite holds every way's enabled to the session's); and an Oust, whose targets are a
+/// creature of each player's, their own asked about before it is taken.
 const fn pick(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
