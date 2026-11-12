@@ -101,6 +101,11 @@ STORE_FACE_FIELDS: tuple[str, ...] = (
     "defense",
 )
 NOT_LEGAL = "not legal in Vintage"
+# Scryfall's set type for the un-sets (Unglued to Unfinity). The pool leaves out a card
+# printed only there, tournament-legal ones included (docs/project-50k.md, the card pool);
+# an un-set printing of a card printed elsewhere stays, and so do the un-sets' basic lands.
+UN_SET = "funny"
+IN_UN_SETS_ONLY = "printed only in un-sets"
 
 # Prefer the Double Masters Copy illustration over the generic token Scryfall links.
 TOKEN_PRINTINGS = {
@@ -344,6 +349,12 @@ def read_pool(
             if oracle in chosen:
                 raise LookupError(f"two pinned printings of {card['name']}")
             chosen[oracle] = card
+    for oracle, found in list(groups.items()):
+        basic = str(found[0].get("type_line", "")).startswith("Basic")
+        if not basic and all(c.get("set_type") == UN_SET for c in found):
+            del groups[oracle]
+            chosen.pop(oracle, None)
+            out[oracle] = (IN_UN_SETS_ONLY, UN_SET)
     for oracle, (reason, set_type) in out.items():
         if oracle not in groups:
             pool.dropped[reason] += 1

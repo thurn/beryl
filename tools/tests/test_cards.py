@@ -141,6 +141,24 @@ def test_the_pool_is_vintage_legality_less_the_exclusions() -> None:
     assert pool.not_legal["alchemy"] == 1 and pool.not_legal["funny"] == 1
 
 
+def test_a_card_printed_only_in_un_sets_is_out_of_the_pool() -> None:
+    sample = {str(c["name"]): c for c in scryfall.objects(SAMPLE)}
+    # Tournament legal, as most of Unfinity is, but printed only in an un-set.
+    unset_only = {**sample["Goblin Bowling Team"], "legalities": {"vintage": "legal"}}
+    # Unstable's Island stays, though the sample has no other printing of it: a basic land.
+    printings = [
+        unset_only,
+        *(c for n, c in sample.items() if n != "Goblin Bowling Team"),
+    ]
+    pool = cards.read_pool(
+        printings, cards.printings(cards.PRINTINGS), cards.exclusions(cards.EXCLUSIONS)
+    )
+    names = {str(c["name"]) for c in pool.shown.values()}
+    assert "Goblin Bowling Team" not in names
+    assert "Island" in names
+    assert pool.dropped[cards.IN_UN_SETS_ONLY] == 1
+
+
 def printing(set_code: str, number: str, released: str, **extra: object) -> cards.Json:
     return {
         "id": f"{set_code}-{number}",
