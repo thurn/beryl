@@ -35,6 +35,32 @@ def test_a_saved_worktree_seeds_the_next_one(
     assert (second / "ui" / "node_modules" / "react").read_text() == "react"
 
 
+def test_a_clone_forgets_the_swift_module_caches_built_elsewhere(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    first = checkout(tmp_path / "first", "lock-v1")
+    target = first / "rust" / "target"
+    swift = Path("build/tauri-0123/out/swift-rs/Tauri/arm64-apple-macosx/debug")
+    places = ["debug", "aarch64-apple-ios-sim/debug", f"{warm.TAURI}/release/debug"]
+    for place in places:
+        (target / place / swift / "ModuleCache" / "ABC").mkdir(parents=True)
+        (target / place / swift / "ModuleCache" / "ABC" / "Shims.pcm").write_text("")
+        (target / place / swift / "Tauri.build").mkdir()
+    modules = first / "ui" / "node_modules"
+    modules.mkdir()
+    (modules / warm.STAMP).write_text(warm.lock_key(first))
+    warm.save(first)
+
+    second = checkout(tmp_path / "second", "lock-v1")
+    assert warm.ensure(second, tauri=True) is False
+    for place in places:
+        built = second / "rust" / "target" / place / swift
+        # The cache names the path it was built at; the rest of the build moves with it.
+        assert not (built / "ModuleCache").exists()
+        assert (built / "Tauri.build").is_dir()
+
+
 def test_a_new_checkouts_clone_first_prunes_a_full_disk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

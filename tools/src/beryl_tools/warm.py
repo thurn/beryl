@@ -206,6 +206,25 @@ def clone_into(source: Path, dest: Path, leave_out: str | None = None) -> bool:
     return True
 
 
+def forget_module_caches(target: Path) -> int:
+    """Removes the Swift module caches a build script left under its output in `target`, a
+    clone of another checkout's, and says how many. A module cache holds the path it was built
+    at, and the compiler refuses one it finds anywhere else ("was compiled with module cache
+    path ..., but the path is currently ..."), which fails the build script (Tauri's, through
+    swift-rs) whenever cargo runs it again in the clone. Swift builds a missing one afresh.
+    """
+    found = [
+        cache
+        for depth in ("*", "*/*", "*/*/*")
+        for cache in target.glob(f"{depth}/build/*/out/swift-rs/*/*/*/ModuleCache")
+    ]
+    for cache in found:
+        shutil.rmtree(cache, ignore_errors=True)
+    if found:
+        log(f"forgot {len(found)} Swift module caches built elsewhere")
+    return len(found)
+
+
 def ensure_target(checkout: Path, tauri: bool) -> bool:
     """Whether it left cargo to build `rust/target` cold: there was none and nothing to clone
     it from."""
@@ -225,9 +244,11 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
         leave_out = None if tauri else TAURI
         if not any(clone_into(source, target, leave_out) for source in sources):
             return True
+        forget_module_caches(target)
     if tauri and not (target / TAURI).exists():
         for source in sources:
             if (source / TAURI).is_dir() and clone_into(source / TAURI, target / TAURI):
+                forget_module_caches(target)
                 return False
         return True
     return False
