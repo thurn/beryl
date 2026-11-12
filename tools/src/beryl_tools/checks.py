@@ -88,9 +88,19 @@ FAST_BUDGET = 60
 SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
 # the phone toolchains are set up on macOS; the app and the browser lanes hung headless Chrome
-# on Windows (by-xppd) and are the Mac's to judge. A Windows pass can then advance master with
-# them unrun, until the Mac's next run catches a break.
-WINDOWS_SKIPS: tuple[str, ...] = ("counts", "mobile", "app", "shots", "ui-test")
+# on Windows (by-xppd) and are the Mac's to judge. The oracle lane took 400-600 s there alone,
+# over the budget, while its JVMs and its own build of the scenarios starved the rust lane
+# beside it (by-50vi); what it checks, Beryl against XMage and Forge, is the same on either OS,
+# and the fast check still runs it there on the cards a change touches. A Windows pass can then
+# advance master with them unrun, until the Mac's next run catches a break.
+WINDOWS_SKIPS: tuple[str, ...] = (
+    "counts",
+    "mobile",
+    "app",
+    "shots",
+    "ui-test",
+    "oracle",
+)
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 

@@ -136,7 +136,10 @@ def rust_tests_step(
     cargo = ["cargo", "test", "--locked", *scope, "-q"]
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
+    started = time.perf_counter()
     build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
+    # The build's share of the step, which says whether a slow run compiled or tested slowly.
+    print(f"rust-tests: built in {time.perf_counter() - started:.0f} s", flush=True)
     if build.returncode != 0:
         return CANNOT_RUN
     # Every test runs past a failure, so that a rerun of those named failed covers the run:
