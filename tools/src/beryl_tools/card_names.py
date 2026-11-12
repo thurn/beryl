@@ -278,7 +278,10 @@ def name_constants() -> set[str]:
 CARD_FILE: re.Pattern[str] = re.compile(
     r"^rust/crates/beryl_cards/src/[a-z]+/(\w+)\.rs$"
 )
-DEFINITION_NAME: re.Pattern[str] = re.compile(r"^    name: names::([A-Z0-9_]+),", re.M)
+# Either form of a definition: the `card` builder's first argument, or a literal's `name`.
+DEFINITION_NAME: re.Pattern[str] = re.compile(
+    r"(?:^    name: |\bcard\(\s*)names::([A-Z0-9_]+),", re.M
+)
 
 
 def cards_in(files: Iterable[str], root: Path = paths.REPO) -> list[str]:

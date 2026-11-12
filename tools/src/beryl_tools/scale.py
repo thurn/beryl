@@ -59,9 +59,10 @@ REEXPORTED = ("tokens", "props")
 CRATE_PATH: re.Pattern[str] = re.compile(r"\b(?:crate|super)::(\w+)")
 # The same reached in a group: `use crate::{names, props};`.
 CRATE_GROUP: re.Pattern[str] = re.compile(r"\b(?:crate|super)::\{([^}]*)\}")
-# A card's own name: the constant its `CardDef` gives as `name`.
+# A card's own name: the constant its definition gives as its name, the `card` builder's
+# first argument or a literal's `name`.
 NAME_FIELD: re.Pattern[str] = re.compile(
-    r"^\s*name: names::([A-Z0-9_]+),", re.MULTILINE
+    r"(?:^\s*name: |\bcard\(\s*)names::([A-Z0-9_]+),", re.MULTILINE
 )
 NAME_CONST: re.Pattern[str] = re.compile(r'pub const ([A-Z0-9_]+): &str = "(.*)";')
 MAX_LINE = 100

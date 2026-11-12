@@ -279,11 +279,9 @@ impl Ability {
     }
 
     /// A mana ability
-    /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): "An activated
-    /// ability is a mana ability if it meets all of the following criteria: it doesn't
-    /// require a target (see rule 115.6), it could add mana to a player's mana pool when it
-    /// resolves, and it's not a loyalty ability." Its effect is "Add [produces]", so what it
-    /// is known to produce and what it adds cannot disagree.
+    /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): an activated
+    /// ability that "could add mana to a player's mana pool when it resolves". Its effect is
+    /// "Add [produces]", so what it is known to produce and what it adds cannot disagree.
     pub const fn mana(cost: Cost, produces: ManaSet) -> Ability {
         Ability {
             cost,
@@ -430,9 +428,7 @@ impl Ability {
 
     /// Its targets, one [`TargetSpec`] for each instance of the word "target"
     /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)). A mana ability has
-    /// none (CR 605.1a), and a static ability targets nothing
-    /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)): "only ... a spell or
-    /// ability" on the stack has targets.
+    /// none (CR 605.1a), and neither has a static ability, which is never on the stack.
     #[must_use]
     pub const fn targeting(self, targets: &'static [TargetSpec]) -> Ability {
         assert!(
