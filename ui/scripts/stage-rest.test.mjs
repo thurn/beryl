@@ -343,6 +343,38 @@ test("a coin is waited for, and a reset takes down what was announced", () => {
     assert.deepEqual(made.shown.notices, []);
 });
 
+test("a coin has the table to itself: it waits for the turn's banner to go", () => {
+    const { stage: made } = stage((act) =>
+        act.verb !== "announce"
+            ? { duration: 100 }
+            : act.notice.kind === "coin"
+              ? { duration: 300, alone: true }
+              : { duration: 1000, passes: true },
+    );
+    made.play(view([1, 2]));
+    const told = [];
+    made.follow(({ edge, at, step }) => told.push([edge, at, step.act.verb]));
+    made.play(view([2, 1]), { beats: [[banner], [move(2, 0)], [coin]] });
+    made.clock.advance(2000);
+    assert.deepEqual(told, [
+        ["start", 0, "announce"],
+        ["start", 0, "fly"],
+        ["end", 100, "fly"],
+        ["end", 1000, "announce"],
+        ["start", 1000, "announce"],
+        ["end", 1300, "announce"],
+    ]);
+    // With no banner up it is thrown at once.
+    told.length = 0;
+    made.play(view([2, 1]), { beats: [[coin]] });
+    made.clock.advance(1000);
+    assert.deepEqual(told, [
+        ["start", 2000, "announce"],
+        ["end", 2300, "announce"],
+    ]);
+    assert.equal(timingOf(coin.act, view([])).alone, true);
+});
+
 test("the design language says which announcements pass and how long each wait is", () => {
     const table = view([]);
     assert.equal(timingOf(banner.act, table).passes, true);

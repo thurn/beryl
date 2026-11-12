@@ -73,7 +73,9 @@ export function under<T>(
  * them. One that ends a span waits until the span has stood whole for its hold
  * (`Timing.hold`), `whole` saying since when the span a step ends has. The beat is over
  * with the last step that does not pass over the table (`Timing.passes`): one that does
- * holds the beat only until it has begun, and plays on over what follows. */
+ * holds the beat only until it has begun, and plays on over what follows; and a step that
+ * has the table to itself (`Timing.alone`) waits until `passed`, the stage time by which
+ * everything that passes over the table now is over. */
 export function laid(
   beat: readonly ScriptStep[],
   played: number,
@@ -81,6 +83,7 @@ export function laid(
   table: Table,
   timings: (act: Act, found?: PlayerView, before?: Act) => Timing,
   whole: (act: Act) => number | undefined,
+  passed = at,
 ): { steps: Run[]; end: number } {
   let [from, turn, last, end] = [at, at, at, at];
   /** When each thing a step of the beat moves has come to rest. */
@@ -94,6 +97,7 @@ export function laid(
       timing.with ? from : own,
       ...(timing.after ?? []).map((name) => landed.get(name) ?? at),
       held === undefined ? at : held + timing.hold!,
+      timing.alone ? passed : at,
     );
     from = Math.max(from, rested + timing.delay);
     if (!timing.with) turn = own + timing.stagger;

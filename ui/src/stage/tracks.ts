@@ -32,6 +32,9 @@ export interface Timing {
   /** It passes over the table: its beat does not wait for it, and it plays on to its own
    * end over the beats, and the scripts, that follow. The turn's banner. */
   passes?: boolean;
+  /** It has the table to itself: it begins no sooner than everything passing over the table
+   * has gone (beat.ts). A coin, which is not thrown under the turn's banner. */
+  alone?: boolean;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */

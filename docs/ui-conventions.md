@@ -451,15 +451,17 @@ held to by `just motion`.
 - **announce.** A notice passes over the table: the turn banner, the pill that
   says what a scry did, a coin tossed. Play goes on under the banner and the
   pill, which are drawn over the cards in flight and fade in, stand and fade
-  out, the banner sinking toward its player as it goes. A coin is waited for: it
-  is thrown mid-table, rises toward the viewer turning fast, slows as it falls
-  back onto its plate, lands with a swell and a flare, and only then says who
-  won, which stands for the rest of its step. "Your Turn" or "Opponent's Turn"
-  glows at the centre for about a second while cards move under it. A pill above
-  an avatar reads "Scry: 1 top, 1 bottom." for about 3 s. A coin a card flips is
-  tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk 19:35.7, WCknTZNbraE
-  16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6, SN9QFe2kM4Y 14:52.7,
-  WCknTZNbraE 16:42.0). Beryl: 1200 ms, 116 ms after its cause, in place.
+  out, the banner sinking toward its player as it goes. A coin is waited for,
+  and has the table to itself: it is thrown only once the turn's banner has
+  gone, mid-table, rises a diameter and a half toward the viewer turning fast,
+  falls back onto its plate quickening, lands with a swell and a flare, and only
+  then says who won, which stands for the rest of its step. "Your Turn" or
+  "Opponent's Turn" glows at the centre for about a second while cards move
+  under it. A pill above an avatar reads "Scry: 1 top, 1 bottom." for about 3 s.
+  A coin a card flips is tossed mid-table and lands in about 1.2 s (IEXcjBn3BXk
+  19:35.7, WCknTZNbraE 16:39.7, 0VsYGs88NXA 41:27.3, IHPV6yRaFlk 52:54.6,
+  SN9QFe2kM4Y 14:52.7, WCknTZNbraE 16:42.0). Beryl: 1200 ms, 116 ms after its
+  cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
   attacker to what it attacks, from a blocker to its attacker. An arrow at a

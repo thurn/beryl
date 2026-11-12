@@ -130,6 +130,13 @@ export class Overlay {
     this.#spans.gone(name);
   }
 
+  /** The stage time by which every announcement now passing over the table is over; none
+   * passing, the beginning of time. */
+  passed(): number {
+    const passing = this.notices.filter((run) => run.passes);
+    return Math.max(-Infinity, ...passing.map((run) => run.to));
+  }
+
   /** The announcement `run` makes is over. */
   over(surface: OverlaySurface | undefined, run: Run) {
     this.notices = this.notices.filter((other) => other !== run);

@@ -285,7 +285,7 @@ export function MiddleEnd({
 }
 
 /** How wide a scry's pill is at most, and how far it stands off the row it lies beside. */
-const PILL = { width: 156, gap: 8 };
+const PILL = { width: 132, gap: 8 };
 
 /** What is announced, over the table: the turn across the middle band, a combat step or a coin's
  * flip under the opponent's strip, and what a scry did beside its player's lands. The combat
@@ -316,9 +316,8 @@ export function Notices({
   const banner = coin ? coinBanner(coin, table) : combat;
   const middle = bands.middle.top + bands.middle.height / 2;
   /** Where a pill lies beside `side`'s lands: past the end of their row, on whichever side
-   * of it has the room, so that it covers no permanent while play goes on under it. None
-   * where the row leaves no room, when it lies at the strip's edge as before. */
-  const beside = (side: Side): CSSProperties | undefined => {
+   * of it has the room, so that it covers no permanent while play goes on under it. */
+  const beside = (side: Side): CSSProperties => {
     const band = side === "you" ? bands.yourLands : bands.opponentLands;
     let [left, right] = [Infinity, -Infinity];
     for (const { pose, dress, object } of resting.values()) {
@@ -338,7 +337,12 @@ export function Notices({
     if (left - PILL.gap - PILL.width >= 0) {
       return { ...row, left: left - PILL.gap, translate: "-100% -50%" };
     }
-    return undefined;
+    // No room beside the row: at the edge of the middle band nearest its player, which
+    // holds no permanent.
+    const { top: band0, height } = bands.middle;
+    return side === "you"
+      ? { top: band0 + height, left: "50%", translate: "-50% -110%" }
+      : { top: band0, left: "50%", translate: "-50% 10%" };
   };
   const edge = (side: Side) =>
     side === "you"
@@ -351,7 +355,7 @@ export function Notices({
           className="phone-announce phone-announce-step"
           // A coin is tossed mid-table, just above where the turn is announced; a combat
           // step's banner lies under the opponent's strip.
-          style={{ top: coin ? middle - 80 : edge("opponent") }}
+          style={{ top: coin ? middle - 95 : edge("opponent") }}
         >
           <StepBanner
             key={`${banner.title}|${banner.detail}`}
@@ -366,9 +370,7 @@ export function Notices({
         <div
           className="phone-pill stage-notice-scry"
           role="status"
-          style={
-            beside(scry.notice.player) ?? { top: edge(scry.notice.player) }
-          }
+          style={beside(scry.notice.player)}
         >
           {scryWords(scry.notice)}
         </div>

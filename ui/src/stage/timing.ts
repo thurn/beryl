@@ -231,9 +231,12 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
   }
   // An announcement passes over the table while play goes on under it (UI Conventions, Verbs,
   // announce; Arena's cards move under its turn banner, `IEXcjBn3BXk 19:35.7`): its beat does
-  // not wait for it. A coin is waited for: what follows it is what it decided.
+  // not wait for it. A coin is waited for: what follows it is what it decided. And it has
+  // the table to itself: it is thrown only once the turn's banner has gone, so that its
+  // flight is all that moves mid-table (Arena's outlasts its banner, `WCknTZNbraE 17:22.13`).
   if (act.verb === "announce") {
-    return { ...own, passes: act.notice.kind !== "coin" };
+    const coin = act.notice.kind === "coin";
+    return { ...own, passes: !coin, alone: coin };
   }
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };

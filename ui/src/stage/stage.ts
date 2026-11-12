@@ -480,6 +480,7 @@ export class ScriptStage {
       this.#table!,
       this.timings,
       (act) => this.#over.whole(act),
+      this.#over.passed(),
     );
     const rests = (name: Name) => this.#entries.get(name)?.resting;
     awaited(steps, this.#layout, this.#table!.view, rests);
