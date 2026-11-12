@@ -18,7 +18,7 @@ use crate::card::{
 };
 use crate::card::{CastingKind, Flow};
 use crate::damage;
-use crate::event::{self, Event, Reason, Recipient, TokenEntry};
+use crate::event::{self, Event, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
@@ -40,6 +40,8 @@ use crate::{continuous, counters, linked, one_shot, tokens};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{LAND, begin};
+
+mod causes;
 
 /// An ability for a resolution whose test reads none of it.
 static NO_ABILITY: Ability = Ability::spell();
@@ -1063,14 +1065,17 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
     let mut stacked = s;
     let tr = trigger(&stacked, watcher, first);
     stacked
-        .put_on_stack(StackEntry {
-            object: tr.source,
-            controller: p,
-            ability: Some(FaceAbility::Own(tr.ability)),
-            card: tr.card,
-            info: tr.info,
-            ..StackEntry::default()
-        })
+        .put_on_stack(
+            &mut Sink::off(),
+            StackEntry {
+                object: tr.source,
+                controller: p,
+                ability: Some(FaceAbility::Own(tr.ability)),
+                card: tr.card,
+                info: tr.info,
+                ..StackEntry::default()
+            },
+        )
         .unwrap();
     assert_eq!(firsts(&stacked), 2);
 }
@@ -1582,14 +1587,17 @@ fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() 
     let mut on_the_stack = s;
     let tr = trigger(&on_the_stack, first);
     on_the_stack
-        .put_on_stack(StackEntry {
-            object: tr.source,
-            controller: tr.controller,
-            ability: Some(FaceAbility::Own(tr.ability)),
-            card: tr.card,
-            info: tr.info,
-            ..StackEntry::default()
-        })
+        .put_on_stack(
+            &mut Sink::off(),
+            StackEntry {
+                object: tr.source,
+                controller: tr.controller,
+                ability: Some(FaceAbility::Own(tr.ability)),
+                card: tr.card,
+                info: tr.info,
+                ..StackEntry::default()
+            },
+        )
         .unwrap();
     assert_eq!(
         on_the_stack.signature(first),

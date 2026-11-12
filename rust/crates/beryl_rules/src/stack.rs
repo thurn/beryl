@@ -42,11 +42,11 @@ pub(crate) fn unstack<L: Layout>(
 ) -> Result<Bitboard<L::Slot>, Full> {
     let mut flashback = Bitboard::EMPTY;
     let spells = objects & cast::spells(game.state);
-    // Each spell's entry comes off on its own, with no event, and the spells left on the
-    // stack keep their order, so the order these come off in is nothing.
+    // Each spell's entry comes off on its own, and the spells left on the stack keep their
+    // order, so the order these come off in is nothing.
     for slot in game.state.in_candidate_order(spells) {
         let spell = game.state.object_ref(slot);
-        let taken = game.state.take_off_stack(spell).is_some();
+        let taken = game.state.take_off_stack(game.sink, spell).is_some();
         if taken && event::exiled_instead(game.state, spell, to) {
             flashback.insert(slot);
         }

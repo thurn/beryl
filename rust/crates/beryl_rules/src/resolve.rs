@@ -16,7 +16,7 @@ use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};
 use crate::cast::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Decision};
-use crate::event::{self, Entry, Event, Reason, Sink};
+use crate::event::{self, Entry, Event, Reason, Sink, Tagged};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret;
@@ -57,7 +57,7 @@ pub(crate) fn resolve<L: Layout>(
             &entry,
             ability,
         );
-        x.events.revealed = Bitboard::EMPTY;
+        unwind(&mut x.events);
         let paused = paused?;
         debug_assert!(
             paused.is_none() || s.outcome().is_some(),
@@ -70,7 +70,7 @@ pub(crate) fn resolve<L: Layout>(
     // Events of a run that ends paused are discarded with the copy (§7.3).
     let mark = sink.len();
     let paused = run(spare, t, sink, Some(a), record.as_slice(), &entry, ability);
-    sink.revealed = Bitboard::EMPTY;
+    unwind(sink);
     match paused? {
         None => {
             s.clone_from(spare);
@@ -92,9 +92,16 @@ pub(crate) fn resolve<L: Layout>(
 /// question open, with what players knew as the resolution began, which a paused resolution
 /// keeps ([`State::resume_resolution`]), and with the cards its earlier runs revealed beyond
 /// that in the sink, so chance does not count them as revealed again ([`chance`]). The
-/// caller empties `sink.revealed` once the run returns.
+/// caller [`unwind`]s the sink once the run returns.
 fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
     sink.revealed = s.resume_resolution();
+}
+
+/// Leaves the sink as it was before a run [`rewind`] readied it for: forgets the cards the
+/// earlier runs revealed, and closes the scope [`run`] opened.
+fn unwind<L: Layout>(sink: &mut Sink<L>) {
+    sink.revealed = Bitboard::EMPTY;
+    sink.leave();
 }
 
 /// What a paused run showed a player stays known in the committed state (architecture
@@ -127,12 +134,12 @@ fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool
 
 /// Replays a paused resolution into the scratch state up to its question, so a viewer sees
 /// the position the question is asked in (§7.3): the cards Brainstorm drew, for example. Its
-/// events go to `seen` if given, and are not kept otherwise.
+/// events go to `seen` with their tags if given, and are not kept otherwise.
 pub(crate) fn replay_to_question<'a, L: Layout>(
     s: &State<L>,
     t: &GameTable,
     x: &'a mut Scratch<L>,
-    seen: Option<&mut Vec<Event<L>>>,
+    seen: Option<&mut Vec<Tagged<L>>>,
 ) -> Result<&'a State<L>, Full> {
     let Pending::Resolving(r) = s.pending().clone() else {
         unreachable!("a paused resolution");
@@ -143,7 +150,7 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     rewind(spare, sink);
     let mark = sink.len();
     let paused = run(spare, t, sink, None, r.record.as_slice(), &entry, ability);
-    sink.revealed = Bitboard::EMPTY;
+    unwind(sink);
     paused?;
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
@@ -204,6 +211,11 @@ fn condition_fails<L: Layout>(
 
 /// Resolves `entry`, the top of `s`'s stack, answering from `record` and then `answers`.
 /// Returns the question it paused at, if it did.
+///
+/// Everything it does is the resolving spell's or ability's doing, down to its leaving the
+/// stack ([`Cause::Effect`](crate::event::Cause::Effect)). It opens the sink's scope as it
+/// takes the entry off the stack and returns with it open, however it ends: the caller
+/// closes it ([`unwind`]), so that the question comes back through no frame of its own.
 fn run<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -214,6 +226,7 @@ fn run<L: Layout>(
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision<L>>, Full> {
     s.take_top_of_stack();
+    sink.enter_resolution(|| s.stack().len());
     let face = t.def(entry.card).face(entry.face);
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
@@ -270,6 +283,12 @@ fn run<L: Layout>(
     if !entry.is_spell() {
         sink.note(Event::AbilityFinished);
     }
+    // The entry leaves the stack last, whatever became of a spell's card: one its own effect
+    // moved resolved on without it
+    // ([CR 608.2m](https://yawgatog.com/resources/magic-rules/#R6082m): "If an instant spell,
+    // sorcery spell, or ability that can legally resolve leaves the stack once it starts to
+    // resolve, it will continue to resolve fully.").
+    sink.resolved();
     // CR 117.3b: "The active player receives priority after a spell or ability (other than a
     // mana ability) resolves."
     s.give_priority(s.turn().active());

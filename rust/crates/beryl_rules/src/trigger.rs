@@ -468,16 +468,19 @@ pub(crate) fn put_on_stack<L: Layout>(
     let entering = ability(t, tr.card, tr.face, tr.ability)
         .trigger()
         .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
-    s.put_on_stack(StackEntry {
-        object: tr.source,
-        controller: tr.controller,
-        ability: Some(FaceAbility::Own(tr.ability)),
-        card: tr.card,
-        face: tr.face,
-        info: tr.info,
-        x: if entering { tr.info.amount } else { 0 },
-        ..StackEntry::default()
-    })?;
+    s.put_on_stack(
+        sink,
+        StackEntry {
+            object: tr.source,
+            controller: tr.controller,
+            ability: Some(FaceAbility::Own(tr.ability)),
+            card: tr.card,
+            face: tr.face,
+            info: tr.info,
+            x: if entering { tr.info.amount } else { 0 },
+            ..StackEntry::default()
+        },
+    )?;
     crate::cast::target_trigger(s, t, sink)
 }
 

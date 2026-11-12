@@ -4,8 +4,9 @@
 //! Whether a whole game fits another layout is [`State::try_relayout`]'s to say.
 
 use crate::bitboard::Bitboard;
+use crate::cause::{Cause, Tag};
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
-use crate::event::{Event, LossCause, Recipient};
+use crate::event::{Event, LossCause, Recipient, Tagged};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
@@ -518,6 +519,42 @@ fn resolution_payment<L: Layout, M: Layout>(event: &Event<L>) -> Event<M> {
     }
 }
 
+/// A stack entry's arrival in another layout.
+fn arrival<L: Layout, M: Layout>(entry: &StackEntry<L>) -> Event<M> {
+    Event::StackArrival {
+        entry: entry.relayout(),
+    }
+}
+
+impl<L: Layout> Relayout for Tag<L> {
+    type In<M: Layout> = Tag<M>;
+
+    fn relayout<M: Layout>(&self) -> Tag<M> {
+        Tag {
+            cause: match self.cause {
+                Cause::Rules => Cause::Rules,
+                Cause::Player { player, entry } => Cause::Player { player, entry },
+                Cause::Effect { entry } => Cause::Effect { entry },
+                Cause::Object { source, entry } => Cause::Object {
+                    source: source.relayout(),
+                    entry,
+                },
+            },
+        }
+    }
+}
+
+impl<L: Layout> Relayout for Tagged<L> {
+    type In<M: Layout> = Tagged<M>;
+
+    fn relayout<M: Layout>(&self) -> Tagged<M> {
+        Tagged {
+            event: self.event.relayout(),
+            tag: self.tag.relayout(),
+        }
+    }
+}
+
 impl<L: Layout> Relayout for Event<L> {
     type In<M: Layout> = Event<M>;
 
@@ -589,6 +626,8 @@ impl<L: Layout> Relayout for Event<L> {
             Event::Mana { .. } => mana(self),
             Event::ResolutionPayment { .. } => resolution_payment(self),
             Event::AbilityFinished => Event::AbilityFinished,
+            Event::StackArrival { entry } => arrival(entry),
+            &Event::StackDeparture { entry } => Event::StackDeparture { entry },
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {
                 controller,
                 tokens: bits(tokens),

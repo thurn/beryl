@@ -205,6 +205,7 @@ pub(crate) fn target_trigger<L: Layout>(
         source_of(&entry),
     ) {
         s.take_top_of_stack();
+        sink.departed(|| s.stack().len());
         return Ok(());
     }
     let c = Casting {

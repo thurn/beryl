@@ -37,8 +37,13 @@ pub(crate) fn offer_options<L: Layout>(
 /// Takes a spell off the stack for an effect that moves its card to `to` without its
 /// resolving: where the card goes ([`event::exiled_instead`]), or nothing if the spell is
 /// not on the stack.
-pub(crate) fn unstack<L: Layout>(s: &mut State<L>, spell: ObjectRef<L>, to: Zone) -> Option<Zone> {
-    s.take_off_stack(spell)?;
+pub(crate) fn unstack<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    spell: ObjectRef<L>,
+    to: Zone,
+) -> Option<Zone> {
+    s.take_off_stack(sink, spell)?;
     let exiled = event::exiled_instead(s, spell, to);
     Some(if exiled { Zone::Exile } else { to })
 }

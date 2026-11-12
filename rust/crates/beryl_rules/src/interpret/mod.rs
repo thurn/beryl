@@ -19,7 +19,6 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::Layout;
-use crate::mana;
 use crate::resolution::Resolution;
 use crate::state::{PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
 use crate::table::GameTable;
@@ -78,6 +77,10 @@ pub(crate) fn finish<L: Layout>(game: &mut Game<'_, L>, flow: Flow) -> Result<bo
 /// One whose whole effect is to add mana, as a land's is, needs none of what resolving an
 /// ability sets up, so it is done here directly: the mana solver taps for these in every
 /// payment. `activation` describes the ability for any other.
+///
+/// What it does is the effect of an ability of its source, where its costs were its
+/// controller's doing ([`Cause::Object`](crate::event::Cause::Object)). The mana added
+/// directly is tagged so as it is noted, which opens no scope.
 #[inline]
 pub(crate) fn mana_ability<L: Layout>(
     s: &mut State<L>,
@@ -96,21 +99,24 @@ pub(crate) fn mana_ability<L: Layout>(
         debug_assert!(mana.includes(color));
         let activation = activation();
         let (player, source) = (activation.controller, activation.source);
-        mana::add(
-            &mut Game::new(s, t, sink),
-            player,
-            source,
-            color,
-            mana.amount,
-        );
+        let added = s.add_mana(player, source, color, mana.amount);
+        sink.note_from(source, added);
         return layers::refresh(s, t, sink);
     }
     // A mana ability never asks a question, and has no targets (CR 605.1a).
-    let mut resolution = Resolution::of_trigger(&activation(), ability);
+    let activation = activation();
+    let mut resolution = Resolution::of_trigger(&activation, ability);
     resolution.mana = color;
+    if let Some(source) = activation.source {
+        sink.enter_source(|| source);
+    }
     let mut game = Game::new(s, t, sink);
     let flow = resolve(&mut game, &mut resolution);
-    finish(&mut game, flow).map(|_| ())
+    let done = finish(&mut game, flow).map(|_| ());
+    if activation.source.is_some() {
+        sink.leave();
+    }
+    done
 }
 
 /// Whether a triggered ability's intervening "if" holds, or it has none

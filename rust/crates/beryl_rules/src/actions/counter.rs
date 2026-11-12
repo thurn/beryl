@@ -22,7 +22,7 @@ pub fn counter<L: Layout>(
     spell: ObjectRef<L>,
     to: Zone,
 ) -> Result<bool, Full> {
-    let Some(entry) = game.state.take_off_stack(spell) else {
+    let Some(entry) = game.state.take_off_stack(game.sink, spell) else {
         return Ok(false);
     };
     let reason = Reason::Counter;

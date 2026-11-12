@@ -1,11 +1,12 @@
 //! Events: what a game action did, as the rules match triggers against it and as the UI or a
 //! replay reads it (architecture §8.1, §8.2, decision D10), and the [`Sink`] executed events
-//! go to. The pipeline that executes an event (replacements, the layer refresh, trigger
+//! go to, which keeps beside each what it came from ([`crate::cause`]). The pipeline that executes an event (replacements, the layer refresh, trigger
 //! matching) is the rules', in `beryl_engine`'s `event` module.
 
 use beryl_card::{Castings, CounterKind, FaceAbility, FaceIx, ManaColor, TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
+use crate::cause::{Cause, Scopes, StackIx, Tag};
 use crate::chance::Chance;
 use crate::ids::Seat;
 use crate::layout::{Layout, Small};
@@ -175,6 +176,31 @@ pub enum Event<L: Layout = Small> {
     /// ability is removed from the stack and ceases to exist." Playback needs
     /// this boundary even when the next trigger arrives in the same view.
     AbilityFinished,
+    /// A spell or ability arrived on the stack, on top
+    /// ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052): "Each time an object
+    /// is put on the stack, it's put on top of all objects already there."), as it stood
+    /// then: a spell or an activated ability before anything is announced for it (CR 601.2a,
+    /// 602.2a), a triggered ability before its targets are chosen (CR 603.3d). For whoever
+    /// follows the stack through the events ([`StackIx`]); no rule acts on it.
+    StackArrival {
+        entry: StackEntry<L>,
+    },
+    /// The spell or ability at `entry` left the stack: resolved or failed to (CR 608.2n,
+    /// 608.3), countered
+    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
+    /// or ability means to cancel it, removing it from the stack."), removed as a triggered
+    /// ability with nothing legal to choose
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "the ability is
+    /// simply removed from the stack"), or its card moved elsewhere by an effect. A spell's
+    /// card moves in an event of its own, before this one; a resolving spell whose own effect
+    /// moved its card leaves only as its resolution ends
+    /// ([CR 608.2m](https://yawgatog.com/resources/magic-rules/#R6082m): "If an instant
+    /// spell, sorcery spell, or ability that can legally resolve leaves the stack once it
+    /// starts to resolve, it will continue to resolve fully."). The entries above it fall by
+    /// one place. For whoever follows the stack; no rule acts on it.
+    StackDeparture {
+        entry: StackIx,
+    },
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
         controller: Seat,
@@ -196,9 +222,9 @@ pub enum Event<L: Layout = Small> {
     /// ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
     /// process for activating an ability is identical to the process for casting a spell
     /// listed in rules 601.2b-i"), or a triggered one once its targets are chosen
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)). A triggered ability
-    /// without targets goes unsaid: what it does says it. The ability as it stood on the
-    /// stack then, which it may have left by the time anyone looks.
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)), or at once if it
+    /// has none. The ability as it stood on the stack then, which it may have left by the
+    /// time anyone looks.
     Ability {
         source: Option<ObjectRef<L>>,
         controller: Seat,
@@ -289,10 +315,25 @@ impl<L: Layout> Event<L> {
     }
 }
 
+/// An event a recording sink kept, with what the rules were doing as it happened.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Tagged<L: Layout = Small> {
+    pub event: Event<L>,
+    pub tag: Tag<L>,
+}
+
 /// Where executed events go for the UI or a replay (§8.2, step 6). Search leaves it off.
+///
+/// A recording sink keeps a [`Tag`] beside each event, written from the scope the rules have
+/// open ([`Sink::enter`]). Tags are no part of an [`Event`], so trigger matching never reads
+/// one, and a sink that is off keeps neither: a scope costs it one branch to open and one to
+/// close, and an event nothing more than it did.
 #[derive(Debug, Default)]
 pub struct Sink<L: Layout = Small> {
     events: Vec<Event<L>>,
+    /// The tag of each event, in step with `events`.
+    tags: Vec<Tag<L>>,
+    scopes: Scopes<L>,
     on: bool,
     /// The work done since the scratch last took the counts: the sink goes everywhere the
     /// engine does it.
@@ -342,13 +383,24 @@ impl<L: Layout> Sink<L> {
         self.chance.take().map(|c| *c)
     }
 
-    /// The events since the last drain, oldest first.
+    /// The events since the last drain, oldest first, without their tags.
     pub fn drain(&mut self) -> std::vec::Drain<'_, Event<L>> {
+        self.tags.clear();
         self.events.drain(..)
+    }
+
+    /// The events since the last drain, oldest first, each with its tag.
+    pub fn drain_tagged(&mut self) -> impl Iterator<Item = Tagged<L>> + '_ {
+        self.take_from(0)
     }
 
     pub fn events(&self) -> &[Event<L>] {
         &self.events
+    }
+
+    /// The tag of each of [`Sink::events`], in step with them.
+    pub fn tags(&self) -> &[Tag<L>] {
+        &self.tags
     }
 
     /// How many events it holds.
@@ -360,21 +412,30 @@ impl<L: Layout> Sink<L> {
         self.events.is_empty()
     }
 
-    /// Takes the events after the first `len`, those of a body run replayed (§7.3).
-    pub fn take_from(&mut self, len: usize) -> std::vec::Drain<'_, Event<L>> {
-        self.events.drain(len..)
+    /// Takes the events after the first `len`, those of a body run replayed (§7.3), with
+    /// their tags.
+    pub fn take_from(&mut self, len: usize) -> impl Iterator<Item = Tagged<L>> + '_ {
+        let tags = self.tags.drain(len..);
+        let events = self.events.drain(len..);
+        events.zip(tags).map(|(event, tag)| Tagged { event, tag })
     }
 
-    /// Drops the events after the first `len`: those of a body run discarded (§7.3), or of a
-    /// game run on until a capacity of its layout ran out, to be run again in a wider one.
+    /// Drops the events after the first `len`, and their tags: those of a body run discarded
+    /// (§7.3), or of a game run on until a capacity of its layout ran out, to be run again in
+    /// a wider one.
     pub fn truncate(&mut self, len: usize) {
         self.events.truncate(len);
+        self.tags.truncate(len);
     }
 
-    /// The same events in layout `M`, recorded or not as this sink records them.
+    /// The same events and tags in layout `M`, recorded or not as this sink records them. No
+    /// scope is open between the engine's calls, and a game run on until a capacity ran out
+    /// left its own behind, so the new sink starts with none.
     pub fn relayout<M: Layout>(&self) -> Sink<M> {
         Sink {
             events: self.events.iter().map(Relayout::relayout).collect(),
+            tags: self.tags.iter().map(Relayout::relayout).collect(),
+            scopes: Scopes::default(),
             on: self.on,
             work: self.work,
             chance: self.chance.clone(),
@@ -382,18 +443,159 @@ impl<L: Layout> Sink<L> {
         }
     }
 
+    /// Opens a scope: until [`Sink::leave`], the events kept are tagged with `cause`, which
+    /// is given the spell or ability the scope around this one names, if any. Scopes nest,
+    /// and with none open the cause is [`Cause::Rules`]. A sink that is off never asks for
+    /// the cause.
+    #[inline]
+    pub fn enter(&mut self, cause: impl FnOnce(Option<StackIx>) -> Cause<L>) {
+        if self.on {
+            self.open(cause(self.scopes.entry()));
+        }
+    }
+
+    /// Opens the scope of `player`'s own action, about the spell or ability the scope around
+    /// it names: a cost paid as that one resolves.
+    #[inline]
+    pub fn enter_action(&mut self, player: Seat) {
+        self.enter(|entry| Cause::Player { player, entry });
+    }
+
+    /// Opens the scope of an effect of an ability of `source` that is not on the stack,
+    /// about the spell or ability the scope around it names.
+    #[inline]
+    pub fn enter_source(&mut self, source: impl FnOnce() -> ObjectRef<L>) {
+        self.enter(|entry| Cause::Object {
+            source: source(),
+            entry,
+        });
+    }
+
+    /// Opens the scope of the resolution of the spell or ability the state has just taken
+    /// off the top of its stack, which then holds `below` entries
+    /// ([CR 608.1](https://yawgatog.com/resources/magic-rules/#R6081)). The entry keeps its
+    /// place until [`Sink::resolved`] says it left.
+    #[inline]
+    pub fn enter_resolution(&mut self, below: impl FnOnce() -> usize) {
+        if self.on {
+            self.open_resolution(below());
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn open(&mut self, cause: Cause<L>) {
+        self.scopes.enter(cause);
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn open_resolution(&mut self, below: usize) {
+        self.scopes.resolve(below);
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn close(&mut self) {
+        self.scopes.leave();
+    }
+
+    /// Closes the innermost scope.
+    #[inline]
+    pub fn leave(&mut self) {
+        if self.on {
+            self.close();
+        }
+    }
+
+    /// Whether no scope is open, as between the engine's calls.
+    pub fn is_idle(&self) -> bool {
+        self.scopes.is_empty()
+    }
+
+    /// Notes that the entry now on top of the stack, which `entry` gives, arrived there.
+    #[inline]
+    pub fn arrived(&mut self, entry: impl FnOnce() -> StackEntry<L>) {
+        if self.on {
+            self.keep(Event::StackArrival { entry: entry() });
+        }
+    }
+
+    /// Notes that the entry the state has just taken from `index` of its stack left it.
+    #[inline]
+    pub fn departed(&mut self, index: impl FnOnce() -> usize) {
+        if self.on {
+            let entry = self.scopes.place(index());
+            self.depart(entry);
+        }
+    }
+
+    /// Notes that the spell or ability that is resolving left the stack, as the last part
+    /// of its resolution
+    /// ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n): "As the final part
+    /// of an ability's resolution, the ability is removed from the stack and ceases to
+    /// exist.").
+    #[inline]
+    pub fn resolved(&mut self) {
+        if self.on
+            && let Some(entry) = self.scopes.resolving()
+        {
+            self.depart(entry);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn depart(&mut self, entry: StackIx) {
+        self.keep(Event::StackDeparture { entry });
+        self.scopes.departed(entry);
+    }
+
+    /// Out of line, so that a sink that is off pays for a kept event only the branch around
+    /// the call: the callers stay as small as when there was no tag to write.
+    #[cold]
+    #[inline(never)]
+    fn keep(&mut self, e: Event<L>) {
+        self.events.push(e);
+        self.tags.push(self.scopes.tag());
+    }
+
     /// Keeps an event only the UI reads, which no rule acts on and so counts as no work of
     /// the pipeline's: search pays one branch for it.
     pub fn note(&mut self, e: Event<L>) {
         if self.on {
-            self.events.push(e);
+            self.keep(e);
+        }
+    }
+
+    /// Keeps an event as [`Sink::note`] does, as the effect of an ability of `source` that is
+    /// not on the stack ([`Cause::Object`]), about the spell or ability the open scope names:
+    /// the one event of a scope, without opening it.
+    pub fn note_from(&mut self, source: Option<ObjectRef<L>>, e: Event<L>) {
+        if self.on {
+            self.keep_from(source, e);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn keep_from(&mut self, source: Option<ObjectRef<L>>, e: Event<L>) {
+        if let Some(source) = source {
+            self.scopes.enter(Cause::Object {
+                source,
+                entry: self.scopes.entry(),
+            });
+            self.keep(e);
+            self.scopes.leave();
+        } else {
+            self.keep(e);
         }
     }
 
     pub fn push(&mut self, e: Event<L>) {
         self.work.events += 1;
         if self.on {
-            self.events.push(e);
+            self.keep(e);
         }
     }
 }

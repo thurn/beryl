@@ -45,15 +45,18 @@ pub(crate) fn begin_cast<L: Layout>(
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let (card, _) = s.copiable(slot).record(t);
     s.become_spell(slot, face, player);
-    s.put_on_stack(StackEntry {
-        object: Some(s.object_ref(slot)),
-        controller: player,
-        ability: None,
-        card,
-        face,
-        costs,
-        ..StackEntry::default()
-    })?;
+    s.put_on_stack(
+        sink,
+        StackEntry {
+            object: Some(s.object_ref(slot)),
+            controller: player,
+            ability: None,
+            card,
+            face,
+            costs,
+            ..StackEntry::default()
+        },
+    )?;
     if let Some(permission) = permission {
         casting::begin_on_spell(s, slot, permission)?;
     }
@@ -98,14 +101,17 @@ pub(crate) fn begin_activate<L: Layout>(
     if a.is_loyalty() {
         s.track(t, Tracker::LoyaltyActivated, slot);
     }
-    s.put_on_stack(StackEntry {
-        object: Some(s.object_ref(slot)),
-        controller: player,
-        ability: Some(index),
-        card,
-        face,
-        ..StackEntry::default()
-    })?;
+    s.put_on_stack(
+        sink,
+        StackEntry {
+            object: Some(s.object_ref(slot)),
+            controller: player,
+            ability: Some(index),
+            card,
+            face,
+            ..StackEntry::default()
+        },
+    )?;
     let c = Casting {
         player,
         step: if a.cost().mana.x > 0 {

@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use beryl_engine::card::Purpose;
 use beryl_engine::chance::Chance;
-use beryl_engine::event::{Event, LossCause};
+use beryl_engine::event::{Event, LossCause, Tagged};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectRef, Pending, StackEntry};
 use beryl_engine::{
@@ -238,11 +238,11 @@ pub struct Game {
     stop: Arc<AtomicBool>,
     /// What each seat's screen last showed, which its next script starts from.
     screens: [crate::script::Screen; 2],
-    /// The engine's events the latest view reported.
-    events: Vec<Event<Large>>,
+    /// The engine's events the latest view reported, each with its tag.
+    events: Vec<Tagged<Large>>,
     /// The events of the paused resolution the latest view was in, which it reported: the
     /// body executes them again as it goes on (architecture §7.3).
-    paused: Vec<Event<Large>>,
+    paused: Vec<Tagged<Large>>,
     /// For each player, the source of the damage that last lowered their life, if damage
     /// rather than a loss of life did, among the events the views reported: what the end
     /// names when a player's life reaches 0.
@@ -690,8 +690,8 @@ impl Game {
     }
 
     /// The engine's events the latest view reported, for tests.
-    pub fn events(&self) -> &[Event<Large>] {
-        &self.events
+    pub fn events(&self) -> Vec<Event<Large>> {
+        self.events.iter().map(|e| e.event.clone()).collect()
     }
 
     fn change_stops(&mut self, stops: StopsSetting) {

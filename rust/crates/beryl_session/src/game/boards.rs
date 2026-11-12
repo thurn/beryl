@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use beryl_engine::chance::Chance;
-use beryl_engine::event::Event;
+use beryl_engine::event::Tagged;
 use beryl_engine::state::{ObjectFlags, Pending, StackEntry, Turn};
 use beryl_engine::{
     Choice, GameTable, Large, Layout, Outcome, Profile, Relayout, Replay, Scratch, Small,
@@ -188,9 +188,9 @@ impl Boards {
         }
     }
 
-    /// The events the engine recorded since the last drain.
-    pub(super) fn drain_events(&mut self) -> Vec<Event<Large>> {
-        on_board!(self, b => b.scratch.events.drain().map(|e| e.relayout()).collect())
+    /// The events the engine recorded since the last drain, each with its tag.
+    pub(super) fn drain_events(&mut self) -> Vec<Tagged<Large>> {
+        on_board!(self, b => b.scratch.events.drain_tagged().map(|e| e.relayout()).collect())
     }
 
     /// Whether a spell is being cast or an ability activated or put on the stack, and if so

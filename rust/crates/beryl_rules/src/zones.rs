@@ -58,7 +58,7 @@ pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -
     }
     let to = match game.state.object(object.slot).zone() {
         Zone::Battlefield => Some(Zone::Hand),
-        Zone::Stack => cast::unstack(game.state, object, Zone::Hand),
+        Zone::Stack => cast::unstack(game.state, game.sink, object, Zone::Hand),
         _ => None,
     };
     match to {

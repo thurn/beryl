@@ -49,7 +49,7 @@ pub fn put_into<L: Layout>(
     }
     match game.state.object(object.slot).zone() {
         Zone::Library => return game.state.reorder_library(object.slot, place),
-        Zone::Stack => match cast::unstack(game.state, object, Zone::Library) {
+        Zone::Stack => match cast::unstack(game.state, game.sink, object, Zone::Library) {
             Some(Zone::Library) => {}
             Some(to) => return zones::move_to(game, object, to, Reason::Effect),
             None => return Ok(()),

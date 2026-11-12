@@ -7,7 +7,8 @@
 //! [`settle`]d the same way. The cube's other replacement and prevention effects (damage,
 //! most draws) arrive with the cards that create them.
 
-pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, kind};
+pub use beryl_kernel::cause::{Cause, StackIx, Tag};
+pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Tagged, Work, kind};
 
 pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
@@ -323,7 +324,14 @@ fn pay_life_to_enter<L: Layout>(
     let player = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
         if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement() {
-            life::lose(&mut Game::new(s, t, sink), player, n)?;
+            // The life is lost to the permanent's own replacement effect
+            // ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c): "Effects that
+            // read ... "As [this permanent] enters . . . ," ... are replacement effects."),
+            // not to whatever puts the permanent onto the battlefield.
+            sink.enter_source(|| s.object_ref(slot));
+            let lost = life::lose(&mut Game::new(s, t, sink), player, n);
+            sink.leave();
+            lost?;
         }
     }
     Ok(())

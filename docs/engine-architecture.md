@@ -642,6 +642,29 @@ rules treat happenings as simultaneous, one event carries a set: a Wrath is one
 per player. That keeps "whenever one or more" and simultaneous-death rules
 exact. Flag writes and cache updates never go through events.
 
+An event does not say what made it happen. A recording sink keeps a `Tag` beside
+each event it keeps, whose `Cause` does:
+
+- `Rules`: a turn-based or state-based action, or a step of starting the game.
+- `Player`: a player's own action, a special action or any step of casting a
+  spell, activating an ability or putting a triggered ability on the stack, with
+  the spell or ability it casts or pays for. A cost's taps and sacrifices so
+  name what they pay for.
+- `Effect`: the effect of the spell or ability that is resolving, down to its
+  leaving the stack.
+- `Object`: the effect of an ability that never was on the stack, a mana ability
+  or a static ability's replacement, with its source and the spell or ability
+  whose payment the mana ability was activated in.
+
+A cause names a spell or ability by its place on the stack (`StackIx`), since
+`State` gives its stack's entries no identity of their own: a field there is
+copied in every rollout. A reader follows the stack through two events only a
+recording sink ever keeps: `StackArrival` puts an entry on top, and
+`StackDeparture` takes the one at its place out, the last event of a resolution
+for the spell or ability resolving, which keeps its place until then though the
+state has taken it off its stack. The tag is no part of the event, so trigger
+matching never reads one.
+
 ### 8.2 The pipeline
 
 For each event a primitive builds:
@@ -660,7 +683,16 @@ For each event a primitive builds:
 5. **Trigger matching** for everything else through the same kind of index, then
    enqueueing with the event payload.
 6. **Sink.** If a `Scratch` event buffer is attached, the executed event is
-   appended for the UI or a replay. Search attaches none.
+   appended for the UI or a replay, with its tag. Search attaches none.
+
+The tag is written from a register in the sink, not at the sites that emit
+events. The rules open a scope around what they do (a player's action, a
+resolution, a mana ability's effect) and close it on the way out; scopes nest,
+as a mana ability activated to pay a cost an effect asks for sits inside that
+payment, inside the resolution; and with none open the cause is the rules.
+Search pays nothing per event for this and one branch to open or close a scope:
+a sink that is off never builds a cause, and the code that records sits out of
+line. A body run that is discarded (§7.3) drops its tags with its events.
 
 ### 8.3 Triggers
 

@@ -60,6 +60,12 @@ pub fn may_pay<L: Layout>(
 /// `player` pays the mana cost `cost`, which they can pay, under the profile's payment rules
 /// (§10): by hand, one source tapped or one floating mana spent with each answer until
 /// nothing is left to pay, or else by one of the whole payments the engine worked out.
+///
+/// The mana abilities they activate for it are their own doing, inside the resolution that
+/// asks ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
+/// activate an activated mana ability ... whenever a rule or effect asks for a mana payment,
+/// even if it's in the middle of casting or resolving a spell or activating or resolving an
+/// ability."), and name the spell or ability resolving as what they pay for.
 pub fn pay<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
@@ -74,7 +80,10 @@ pub fn pay<L: Layout>(
             let (options, step) = (options.as_slice(), mana.cost(remaining));
             let option = choices::pay(game, resolution, player, options, step)?;
             let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-            remaining = mana::manual_pay(s, t, sink, player, remaining, option)?;
+            sink.enter_action(player);
+            let left = mana::manual_pay(s, t, sink, player, remaining, option);
+            sink.leave();
+            remaining = left?;
         }
         return Ok(());
     }
@@ -91,8 +100,10 @@ pub fn pay<L: Layout>(
     };
     let plan = &plans.as_slice()[Into::<usize>::into(i)];
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-    mana::pay(s, t, sink, player, cost, none, plan)?;
-    Ok(())
+    sink.enter_action(player);
+    let paid = mana::pay(s, t, sink, player, cost, none, plan);
+    sink.leave();
+    Ok(paid?)
 }
 
 /// `player` discards one of `cards`, cards in their hand, or does not, as an effect offers

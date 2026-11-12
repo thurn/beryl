@@ -52,7 +52,7 @@ fn play_out(game: &mut Game) -> Vec<(PlayerView, Vec<Event<Large>>)> {
     let mut views = Vec::new();
     while let Some(view) = game.next_view() {
         answer(game, &view);
-        views.push((view, game.events().to_vec()));
+        views.push((view, game.events()));
     }
     views
 }
@@ -192,7 +192,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
         before = Some(view);
         game.answer_by_stand_in();
     };
-    assert_eq!(draws(game.events()), 1, "the draw comes with the question");
+    assert_eq!(draws(&game.events()), 1, "the draw comes with the question");
     let slot = *before.unwrap().players.you.library.last().unwrap();
     assert!(loot.events.iter().any(|e| matches!(
         e,
@@ -206,7 +206,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
     game.answer_by_stand_in();
     let after = game.next_view().unwrap();
     assert!(!looting(&after));
-    assert_eq!(draws(game.events()), 0, "the draw is not reported again");
+    assert_eq!(draws(&game.events()), 0, "the draw is not reported again");
     assert!(game.events().iter().any(|e| matches!(
         e,
         Event::ZoneChange {

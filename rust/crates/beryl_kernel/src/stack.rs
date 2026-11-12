@@ -10,6 +10,7 @@
 use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx, Types};
 
 use crate::bitboard::Bitboard;
+use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
@@ -290,14 +291,22 @@ impl<L: Layout> State<L> {
     /// is put on the stack, it's put on top of all objects already there." A spell's card is
     /// in the stack zone already ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)).
     #[inline]
-    pub fn put_on_stack(&mut self, entry: StackEntry<L>) -> Result<(), Full> {
+    pub fn put_on_stack(&mut self, sink: &mut Sink<L>, entry: StackEntry<L>) -> Result<(), Full> {
         debug_assert!(
             entry
                 .spell()
                 .is_none_or(|spell| self.is_current(spell) && self.zones.stack.contains(spell.slot)),
             "a spell's entry without its card on the stack"
         );
-        self.stack.push(entry)
+        self.stack.push(entry)?;
+        sink.arrived(|| {
+            self.stack
+                .as_slice()
+                .last()
+                .cloned()
+                .expect("the entry just put")
+        });
+        Ok(())
     }
 
     /// Takes the top of the stack, to resolve it
@@ -306,7 +315,8 @@ impl<L: Layout> State<L> {
     /// ability going on it
     /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "the ability is
     /// simply removed from the stack"). A spell's card stays in the stack zone until the
-    /// rules move it.
+    /// rules move it. The caller tells the sink which it was ([`Sink::enter_resolution`],
+    /// [`Sink::departed`]).
     #[inline]
     pub fn take_top_of_stack(&mut self) -> Option<StackEntry<L>> {
         self.stack.pop()
@@ -316,10 +326,15 @@ impl<L: Layout> State<L> {
     /// move its card elsewhere without its resolving: countered, returned to a hand, put
     /// into a library, exiled. Nothing if the spell is not on the stack. The entry says where
     /// such a spell goes, which is the rules' to read; its card leaves the stack zone with
-    /// the move that must follow.
+    /// the move that must follow. The sink is told it left.
     #[inline]
-    pub fn take_off_stack(&mut self, spell: ObjectRef<L>) -> Option<StackEntry<L>> {
+    pub fn take_off_stack(
+        &mut self,
+        sink: &mut Sink<L>,
+        spell: ObjectRef<L>,
+    ) -> Option<StackEntry<L>> {
         let i = self.stack.iter().position(|e| e.spell() == Some(spell))?;
+        sink.departed(|| i);
         Some(self.stack.remove(i))
     }
 

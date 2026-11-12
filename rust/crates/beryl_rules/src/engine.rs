@@ -6,7 +6,7 @@ use crate::card::{FaceIx, Prompt, Purpose, Types};
 use crate::decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, StallReason, Step,
 };
-use crate::event::{self, Entry, Event, Reason, Sink};
+use crate::event::{self, Cause, Entry, Reason, Sink, StackIx, Tagged};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
@@ -44,15 +44,21 @@ pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>
 /// game wins the game if that player's opponents have all left the game."
 pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
     if s.outcome().is_none() {
+        x.events.enter(|_| Cause::Player {
+            player,
+            entry: None,
+        });
         sba::end_game(s, &mut x.events, player, crate::event::LossCause::Concede);
+        x.events.leave();
     }
 }
 
 /// The events a paused resolution's body executes on its way to its question (§7.3), which
 /// [`view`]'s position shows done: the card a loot draws before it asks for the discard, the
 /// card an explore reveals before it asks where it goes. None while no resolution is paused.
-/// They are executed again, and so emitted, once the answers let the body finish.
-pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Event<L>> {
+/// They are executed again, and so emitted, once the answers let the body finish. Each comes
+/// with its tag, as the sink keeps it.
+pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Tagged<L>> {
     let mut seen = Vec::new();
     if matches!(s.pending(), Pending::Resolving(_)) {
         let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
@@ -499,6 +505,45 @@ pub fn refusal<L: Layout>(
     cast::refusal(s, t, player, slot, land).ok().flatten()
 }
 
+/// Opens the scope of `player`'s own action, which answering the open decision with `option`
+/// is: until the caller closes it, the events come from that player, but for those of the
+/// mana abilities' effects, which open scopes of their own.
+///
+/// A player's own action is taking a special action
+/// ([CR 116.1](https://yawgatog.com/resources/magic-rules/#R1161): "Special actions are
+/// actions a player may take when they have priority that don't use the stack."), activating
+/// a mana ability, or any step of casting a spell, activating an ability
+/// ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
+/// process for activating an ability is identical to the process for casting a spell listed
+/// in rules 601.2b-i.") or putting a triggered ability on the stack
+/// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
+/// order, puts each triggered ability they control ... on the stack in any order they
+/// choose"), which names that spell or ability: the top of the stack once it is there, the
+/// place above the top as it is put there.
+///
+/// Every other answer is the game's and opens no scope: passing priority resolves the top of
+/// the stack or ends the step, declaring attackers and blockers and dealing combat damage are turn-based actions
+/// ([CR 703.1](https://yawgatog.com/resources/magic-rules/#R7031): "Turn-based actions are
+/// game actions that happen automatically when certain steps or phases begin, or when each
+/// step and phase ends."), as is the cleanup step's discard, the legend rule is a
+/// state-based action, and the mulligans are the game's procedure for starting (CR 103).
+///
+/// No resolution is under way while a decision is carried out as a player's action, so a
+/// place on the stack is the state's index there ([`StackIx`]).
+#[inline]
+fn act<L: Layout>(s: &State<L>, sink: &mut Sink<L>, player: Seat, option: Option<Opt<L>>) {
+    sink.enter(|_| {
+        let top = StackIx::at(s.stack().len().saturating_sub(1));
+        let next = StackIx::at(s.stack().len());
+        let entry = match (s.pending(), option) {
+            (Pending::Casting(_), _) => Some(top),
+            (_, Some(Opt::Cast { .. } | Opt::Activate { .. } | Opt::Trigger(_))) => Some(next),
+            _ => None,
+        };
+        Cause::Player { player, entry }
+    });
+}
+
 /// Answers a question of the casting machine, a paused resolution or a resolution's offer
 /// to cast, if one is open, or one of the rules' own questions that a general kind asks: the
 /// pending state says which question it is, where the kind says only the form of its answer.
@@ -514,35 +559,40 @@ fn perform_machine<L: Layout>(
         Pending::Resolving(_) => s
             .record_answer(index::<L>(usize::from(c.0)))
             .and_then(|()| resolve::resolve(s, t, x, a)),
-        Pending::Casting(casting) => cast::perform(
-            s,
-            t,
-            &mut x.events,
-            casting,
-            d.candidates.option(c),
-            d.candidates.object(c),
-        ),
-        Pending::TurningFaceUp { slot, remaining } => face_down::perform(
-            s,
-            t,
-            &mut x.events,
-            slot,
-            remaining,
-            d.candidates.option(c).expect("a payment"),
-        ),
+        Pending::Casting(casting) => {
+            let (option, object) = (d.candidates.option(c), d.candidates.object(c));
+            act(s, &mut x.events, d.player, option);
+            let done = cast::perform(s, t, &mut x.events, casting, option, object);
+            x.events.leave();
+            done
+        }
+        Pending::TurningFaceUp { slot, remaining } => {
+            let option = d.candidates.option(c).expect("a payment");
+            act(s, &mut x.events, d.player, None);
+            let done = face_down::perform(s, t, &mut x.events, slot, remaining, option);
+            x.events.leave();
+            done
+        }
         Pending::CastOffer { player, free, .. } => {
             s.settle_question();
             match d.candidates.option(c).expect("an option choice") {
                 Opt::Pass => Ok(()),
                 cast_option => {
-                    cast::begin_cast(s, t, &mut x.events, player, cast_option, Some(free))
+                    act(s, &mut x.events, player, Some(cast_option));
+                    let done =
+                        cast::begin_cast(s, t, &mut x.events, player, cast_option, Some(free));
+                    x.events.leave();
+                    done
                 }
             }
         }
         Pending::EnterPayingLife { slot, .. } => {
             s.settle_question();
             let pay = d.candidates.option(c) == Some(Opt::Yes);
-            enter_from_hand(s, t, &mut x.events, slot, pay)
+            act(s, &mut x.events, d.player, None);
+            let done = enter_from_hand(s, t, &mut x.events, slot, pay);
+            x.events.leave();
+            done
         }
         // The other question of a mulligan, keep or mulligan, has a kind of its own.
         Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
@@ -566,12 +616,36 @@ fn perform_machine<L: Layout>(
     })
 }
 
-/// Takes a priority action.
+/// Takes a priority action: passing, or an action of the player's own ([`act`]).
 fn perform_priority<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
+    player: Seat,
+    option: Opt<L>,
+) -> Result<(), Full> {
+    match option {
+        Opt::PlayLand(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::TurnFaceUp(_)
+        | Opt::Mana { .. } => {
+            act(s, &mut x.events, player, Some(option));
+            let done = take_action(s, t, x, player, option);
+            x.events.leave();
+            done
+        }
+        _ => pass(s, t, x, a),
+    }
+}
+
+/// Takes the action `option` of `player`'s own with priority.
+#[inline]
+fn take_action<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
     player: Seat,
     option: Opt<L>,
 ) -> Result<(), Full> {
@@ -593,7 +667,7 @@ fn perform_priority<L: Layout>(
             s.reset_passes();
             Ok(())
         }
-        _ => pass(s, t, x, a),
+        _ => unreachable!("an action of the player's own"),
     }
 }
 
@@ -617,7 +691,12 @@ fn perform<L: Layout>(
     match d.kind {
         DecisionKind::Priority => unreachable!("handled above"),
         DecisionKind::TriggerOrder => match option() {
-            Opt::Trigger(i) => trigger::put_on_stack(s, t, sink, i),
+            Opt::Trigger(i) => {
+                act(s, sink, d.player, Some(option()));
+                let done = trigger::put_on_stack(s, t, sink, i);
+                sink.leave();
+                done
+            }
             _ => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),

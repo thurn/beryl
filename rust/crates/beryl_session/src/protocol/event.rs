@@ -312,6 +312,11 @@ pub(super) fn game_events<L: Layout>(
                 drawn.push(slot.num());
                 return None;
             }
+            // Said for whoever follows the stack through the events, which no view does yet:
+            // a view shows the stack itself.
+            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
+                return None;
+            }
             let mut event = game_event(t, obs, e);
             if let GameEvent::Draw { slots, .. } = &mut event {
                 *slots = (!drawn.is_empty()).then(|| std::mem::take(&mut drawn));
@@ -378,6 +383,9 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             item: stack_item(t, obs, item),
         },
         Event::AbilityFinished => GameEvent::AbilityFinished,
+        Event::StackArrival { .. } | Event::StackDeparture { .. } => {
+            unreachable!("the stack's arrivals and departures are in no view")
+        }
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(obs.in_candidate_order(tokens)),

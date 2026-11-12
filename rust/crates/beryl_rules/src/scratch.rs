@@ -79,6 +79,7 @@ impl<L: Layout> Scratch<L> {
 
     /// Moves the work the sink counted into the counts.
     pub(crate) fn settle_counts(&mut self) {
+        debug_assert!(self.events.is_idle(), "a cause's scope left open");
         let work = std::mem::take(&mut self.events.work);
         self.counts.events += work.events;
         self.counts.layer_recomputes += work.layer_recomputes;

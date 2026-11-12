@@ -290,7 +290,8 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
         x: 3,
         ..StackEntry::default()
     };
-    s.put_on_stack(entry).unwrap();
+    s.put_on_stack(&mut beryl_kernel::event::Sink::off(), entry)
+        .unwrap();
     assert_eq!(s.mana_value(&t, blast), 4);
 }
 

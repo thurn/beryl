@@ -1,6 +1,6 @@
 //! Drawing the views of the game that the human and the agent's seat are shown.
 
-use beryl_engine::event::{Event, Recipient};
+use beryl_engine::event::{Event, Recipient, Tagged};
 use beryl_engine::{
     Large, Observation, Outcome, Relayout, Seat, paused_events, two_player::TwoPlayerSeat as _,
     view,
@@ -27,7 +27,7 @@ impl Game {
         {
             fresh.drain(at..at + seen);
         }
-        let paused: Vec<Event<Large>> = on_board!(&mut self.board, b => {
+        let paused: Vec<Tagged<Large>> = on_board!(&mut self.board, b => {
             paused_events(&b.state, &self.table, &mut b.scratch)
                 .iter()
                 .map(Relayout::relayout)
@@ -39,7 +39,7 @@ impl Game {
                 .unwrap_or(&paused),
         );
         for e in &fresh {
-            match *e {
+            match e.event {
                 Event::Damage {
                     source,
                     to: Recipient::Player(player),
@@ -57,7 +57,7 @@ impl Game {
         } = &mut self.at
         {
             let loser = winner.opponent();
-            *cause = fresh.iter().find_map(|e| match *e {
+            *cause = fresh.iter().find_map(|e| match e.event {
                 Event::Lose { player, cause } if player == loser => Some(cause),
                 _ => None,
             });
@@ -91,7 +91,7 @@ impl Game {
                 _ => None,
             };
             let resolving = resolving.as_ref().map(Relayout::relayout);
-            let events: Vec<_> = self.events.iter().map(Relayout::relayout).collect();
+            let events: Vec<_> = self.events.iter().map(|e| e.event.relayout()).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
                 (At::Human(id, Open::Decision(_)), Some(d)) if d.player == viewer => {
