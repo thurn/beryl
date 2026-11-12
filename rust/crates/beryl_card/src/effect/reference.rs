@@ -102,7 +102,7 @@ pub enum Players {
 
 /// What damage is dealt to
 /// ([CR 120.1](https://yawgatog.com/resources/magic-rules/#R1201)): "Objects can deal damage
-/// to creatures, planeswalkers, battles, and players."
+/// to battles, creatures, planeswalkers, and players."
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Recipients {
     /// "To you", "to each opponent", "to that player".

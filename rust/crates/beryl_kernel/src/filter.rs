@@ -71,16 +71,18 @@ impl Evaluate for Filter {
         let o = s.object(slot);
         let face = || s.copiable(slot).face(t);
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
+        // A permanent's characteristics are the layers' results; its face is read only for
+        // an object that is none.
         match *self {
             Filter::Any => true,
             Filter::Types(types) => derived()
-                .map_or(face().types, |d| d.types)
+                .map_or_else(|| face().types, |d| d.types)
                 .intersects(types),
             Filter::Supertypes(supertypes) => derived()
-                .map_or(face().supertypes, |d| d.supertypes)
+                .map_or_else(|| face().supertypes, |d| d.supertypes)
                 .intersects(supertypes),
             Filter::Subtype(subtype) => derived()
-                .map_or(face().subtypes, |d| d.subtypes)
+                .map_or_else(|| face().subtypes, |d| d.subtypes)
                 .contains(subtype),
             Filter::Colors(colors) => derived()
                 .map_or_else(|| face().colors, |d| d.colors)

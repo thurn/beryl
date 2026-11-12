@@ -166,14 +166,14 @@ pub enum Effect {
     /// graveyard."
     Explore(Objects),
     /// "[Player] flips a coin"
-    /// ([CR 705.1](https://yawgatog.com/resources/magic-rules/#R7051)): "To flip a coin for an
-    /// object that cares whether a player wins or loses the flip, the affected player flips
-    /// the coin and calls 'heads' or 'tails.'" Whether they won is what
+    /// ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "the player that
+    /// flips the coin calls 'heads' or 'tails.' If the call matches the result, the player
+    /// wins the flip. Otherwise, the player loses the flip." Whether they won is what
     /// [`Condition::WonFlip`] then reads.
     FlipCoin(Players),
     /// "This deals [amount] damage to [recipients]", to each of them
     /// ([CR 120.1](https://yawgatog.com/resources/magic-rules/#R1201)): "Objects can deal
-    /// damage to creatures, planeswalkers, battles, and players." The source is the object
+    /// damage to battles, creatures, planeswalkers, and players." The source is the object
     /// the ability is on, or the spell
     /// ([CR 120.2b](https://yawgatog.com/resources/magic-rules/#R1202b)).
     DealDamage { to: Recipients, amount: Amount },

@@ -9,8 +9,7 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::actions::{
-    counter, destroy, discard, explore, manifest_dread, reveal, sacrifice, scry, search, shuffle,
-    tap, transform,
+    counter, destroy, discard, manifest_dread, reveal, search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
 use crate::card::{
@@ -32,7 +31,7 @@ use crate::state::{
 };
 use crate::table::GameTable;
 use crate::zone::Place;
-use crate::{casting, choices, coins, continuous, costs, delayed_triggers, emblems, ending};
+use crate::{casting, choices, coins, continuous, costs, delayed_triggers, emblems};
 use crate::{counters, damage, drawing, library, life, linked, one_shot, stack, tokens, zones};
 use crate::{layers, mana, trigger};
 
@@ -404,11 +403,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         reveal::reveal(&mut self.game, slot);
     }
 
-    /// [`explore::explore`].
-    pub fn explore(&mut self, object: ObjectRef<L>) -> Flow {
-        explore::explore(&mut self.game, &mut self.resolution, object)
-    }
-
     /// [`library::top`].
     pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard<L::Slot> {
         library::top(self.game.state, player, n)
@@ -430,11 +424,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
         let r = library::put_into(&mut self.game, object, Place::Bottom);
         self.check(r);
-    }
-
-    /// [`scry::scry`].
-    pub fn scry(&mut self, player: Seat, n: u8) -> Flow {
-        scry::scry(&mut self.game, &mut self.resolution, player, n)
     }
 
     /// [`manifest_dread::manifest_dread`].
@@ -476,12 +465,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// [`zones::put_onto_battlefield_tapped`].
     pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard<L::Slot>) {
         let r = zones::put_onto_battlefield_tapped(&mut self.game, cards);
-        self.check(r);
-    }
-
-    /// [`sacrifice::sacrifice`].
-    pub fn sacrifice(&mut self, object: ObjectRef<L>) {
-        let r = sacrifice::sacrifice(&mut self.game, object);
         self.check(r);
     }
 
@@ -599,11 +582,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn delay(&mut self, ability: AbilityIx, amount: u8) {
         let r = delayed_triggers::create(&mut self.game, &self.resolution, ability, amount);
         self.check(r);
-    }
-
-    /// [`ending::win`].
-    pub fn win_game(&mut self, player: Seat) {
-        ending::win(&mut self.game, &self.resolution, player);
     }
 
     /// [`tap::untap_up_to`]: this ability's controller untaps up to `n` lands.
