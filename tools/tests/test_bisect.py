@@ -259,6 +259,49 @@ def test_over_budget_under_load_with_no_time_to_rerun_is_excused(
     assert "excused: over budget under load, with no time left to rerun" in out
 
 
+def test_a_rerun_under_load_cut_off_by_the_wall_limit_is_excused(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    deadline: None,
+    tmp_path: Path,
+) -> None:
+    # by-5fnf: the first run passed over budget; its rerun ran into Enact's wall clock.
+    monkeypatch.setattr(os, "cpu_count", lambda: 18)
+    monkeypatch.setattr(checks.system, "loadavg", lambda: (40.0, 40.0, 40.0))
+    monkeypatch.setattr(bisect, "after", lambda *args: pytest.fail("bisected"))
+    # The first run's limit, the gate on rerunning, then the rerun's limit, all but spent.
+    left = iter([600.0, 600.0, 1.0])
+    monkeypatch.setattr(bisect, "time_left", lambda *args: next(left, 0.0))
+    # The step passes at once the first time and outlasts the wall limit the second.
+    count = tmp_path / "runs"
+    script = (
+        "import pathlib, sys, time; p = pathlib.Path(sys.argv[1]);"
+        " n = int(p.read_text()) if p.exists() else 0; p.write_text(str(n + 1));"
+        " time.sleep(30 * n)"
+    )
+    lane = checks.Lane("slow").step("sleep", [sys.executable, "-c", script, str(count)])
+    started = time.monotonic()
+    assert checks.slow_run([lane], 0, started) == 0
+    assert time.monotonic() - started < 20
+    out = capsys.readouterr().out
+    assert "ci: over budget under load: rerunning the whole run once" in out
+    assert "the wall limit of 1 s before Enact's kill" in out
+    assert "excused: the rerun under load reached the wall limit (slow)" in out
+
+
+def test_a_wall_limit_kill_on_a_quiet_machine_still_fails(
+    monkeypatch: pytest.MonkeyPatch, deadline: None
+) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: 18)
+    monkeypatch.setattr(checks.system, "loadavg", lambda: (2.0, 2.0, 2.0))
+    monkeypatch.setattr(bisect, "time_left", lambda *args: 1.0)
+    monkeypatch.setattr(bisect, "after", lambda *args: None)
+    lane = checks.Lane("slow").step(
+        "sleep", [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    assert checks.slow_run([lane], 300, time.monotonic()) == 1
+
+
 def test_narrowing_arguments_name_their_checks() -> None:
     assert bisect.names("plays a land", "ui-test:plays a land")
     assert not bisect.names("plays a land", "ui-test:plays a land twice")

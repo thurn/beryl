@@ -160,6 +160,8 @@ class Outcome:
     failure: Failure | None = None
     # Whether the run's deadline killed a step of the lane (`run_all` reruns it once).
     timed_out: bool = False
+    # Whether that kill was the wall limit's (`Steps.walled`) rather than the deadline's.
+    walled: bool = False
 
 
 class Steps:
@@ -191,9 +193,13 @@ class Steps:
             left = min(left, self.wall_limit - self.clock.wall())
         return left
 
+    def walled(self) -> bool:
+        """Whether the wall limit has passed, so a step killed now was cut off by it."""
+        return self.wall_limit is not None and self.wall_limit - self.clock.wall() <= 0
+
     def limit(self) -> str:
         """What a step that timed out ran into, for its line in the log."""
-        if self.wall_limit is not None and self.wall_limit - self.clock.wall() <= 0:
+        if self.wall_limit is not None and self.walled():
             return f"the wall limit of {self.wall_limit:.0f} s before Enact's kill"
         return f"deadline {self.deadline:.0f} s"
 
@@ -326,6 +332,7 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
                 excused,
                 failure,
                 timed_out=code is None,
+                walled=code is None and steps.walled(),
             )
         rerun = " after a rerun" if len(flaky) > flakes else ""
         timings.append(f"{step.name} {clock.now() - t:.0f} s{rerun}")
@@ -732,6 +739,14 @@ def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
         failed = [o for o in report.outcomes if not o.ok]
         if report.over and not failed and report.loaded:
             print("excused: over budget under load")
+            return 0
+        # by-5fnf: the rerun only confirms an overrun, and the first run passed every check.
+        # A rerun the load stretched into Enact's wall clock proves nothing either way.
+        if failed and report.loaded and all(o.walled for o in failed):
+            print(
+                f"excused: the rerun under load reached the wall limit"
+                f" ({', '.join(o.lane for o in failed)}); the first run passed every check"
+            )
             return 0
     if failed:
         bisect.after(failed, started)
