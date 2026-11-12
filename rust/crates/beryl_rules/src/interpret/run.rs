@@ -14,7 +14,6 @@ use crate::actions::{
 };
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow, Stop};
-use crate::effect::EffectCtx;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -27,19 +26,20 @@ use crate::zones;
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
 use crate::{delayed_triggers, emblems, layers, library, life, linked, mana, one_shot, tokens};
 
-/// One resolution of an ability written as data: its context, and what it keeps between
-/// instructions.
+/// One resolution of an ability written as data: the game, what is resolving in it, and
+/// what it keeps between instructions.
 pub(crate) struct Run<'c, 'a, L: Layout> {
-    ctx: &'c mut EffectCtx<'a, L>,
+    game: &'c mut Game<'a, L>,
+    resolving: &'c mut Resolution<'a, L>,
     subject: PendingTrigger<L>,
     registers: Registers<L>,
 }
 
 impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
-    /// Begins resolving the ability `ctx` was made for.
-    pub(crate) fn new(ctx: &'c mut EffectCtx<'a, L>) -> Self {
-        let legal = ctx.resolution.legal;
-        let entry = &ctx.resolution.entry;
+    /// Begins resolving the ability `resolving` is of, in `game`.
+    pub(crate) fn new(game: &'c mut Game<'a, L>, resolving: &'c mut Resolution<'a, L>) -> Self {
+        let legal = resolving.legal;
+        let entry = &resolving.entry;
         let subject = PendingTrigger {
             source: entry.object,
             card: entry.card,
@@ -52,7 +52,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             info: entry.info,
         };
         Run {
-            ctx,
+            game,
+            resolving,
             subject,
             registers: Registers {
                 legal,
@@ -63,30 +64,30 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// The game the ability resolves in, to change.
     pub(crate) fn game(&mut self) -> &mut Game<'a, L> {
-        &mut self.ctx.game
+        &mut *self.game
     }
 
     /// The game and the resolution, for a library function that asks.
     pub(crate) fn resolving(&mut self) -> (&mut Game<'a, L>, &mut Resolution<'a, L>) {
-        (&mut self.ctx.game, &mut self.ctx.resolution)
+        (&mut *self.game, &mut *self.resolving)
     }
 
     /// What is resolving, to read.
     pub(crate) fn resolution(&self) -> &Resolution<'a, L> {
-        &self.ctx.resolution
+        &*self.resolving
     }
 
     /// The state as it is now, to read.
     pub(crate) fn state(&self) -> &State<L> {
-        self.ctx.game.state
+        self.game.state
     }
 
     /// What the ability's expressions are read against, as the game is now.
     pub(crate) fn scene(&self) -> Scene<'_, L> {
-        let entry = &self.ctx.resolution.entry;
+        let entry = &self.resolving.entry;
         Scene {
-            s: self.ctx.game.state,
-            t: self.ctx.game.table,
+            s: self.game.state,
+            t: self.game.table,
             subject: &self.subject,
             costs: entry.is_spell().then_some(entry.costs),
             x: entry.x,
@@ -300,7 +301,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The players `players` names, in the order they act (CR 101.4).
     pub(crate) fn in_turn_order(&self, players: Players) -> impl Iterator<Item = Seat> + use<L> {
         let who = self.scene().players(players);
-        self.ctx.game.state.players_in_turn_order(who)
+        self.game.state.players_in_turn_order(who)
     }
 
     /// The one player who makes a choice the effect offers `players`.
@@ -312,13 +313,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// ([CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
     /// card or token on the battlefield."
     pub(crate) fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
-        let s = &*self.ctx.game.state;
+        let s = &*self.game.state;
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() == Zone::Battlefield)
     }
 
     /// The objects `objects` names that are not in `zone` already.
     pub(crate) fn elsewhere_than(&self, objects: Objects, zone: Zone) -> Bitboard<L::Slot> {
-        let s = &*self.ctx.game.state;
+        let s = &*self.game.state;
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() != zone)
     }
 
@@ -329,17 +330,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// A controller is read through the layers, which an instruction before may have
     /// changed, so they are brought up to date first, as the move itself would.
     pub(crate) fn remember(&mut self, leaving: Bitboard<L::Slot>) -> Result<(), Full> {
-        let game = &mut self.ctx.game;
+        let game = &mut *self.game;
         layers::refresh(game.state, game.table, game.sink)?;
-        let s = &*self.ctx.game.state;
+        let s = &*self.game.state;
         self.registers.controlled =
             Table::from_fn(|player| leaving.filter(|slot| s.controller(slot).index() == player));
-        for (place, target) in placed(self.ctx.resolution.entry.targets.as_slice()) {
+        for (place, target) in placed(self.resolving.entry.targets.as_slice()) {
             let Some(object) = target.as_object() else {
                 continue;
             };
             if self.registers.legal.contains(place)
-                && self.ctx.game.state.is_current(object)
+                && self.game.state.is_current(object)
                 && leaving.contains(object.slot)
             {
                 self.registers.known[place.index()] = self.scene().known(object.slot);
@@ -355,7 +356,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// causes an object to move to a public zone, other parts of that effect can find that
     /// object."
     pub(crate) fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
-        let s = &*self.ctx.game.state;
+        let s = &*self.game.state;
         Outcome::acted_on(permanents.filter(|slot| s.object(slot).zone() != Zone::Battlefield))
     }
 
@@ -374,7 +375,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// The outcome of an instruction that moved `objects` to `zone`: those that are there.
     pub(crate) fn now_in(&self, objects: Bitboard<L::Slot>, zone: Zone) -> Outcome<L> {
-        let s = &*self.ctx.game.state;
+        let s = &*self.game.state;
         Outcome::acted_on(objects.filter(|slot| s.object(slot).zone() == zone))
     }
 }

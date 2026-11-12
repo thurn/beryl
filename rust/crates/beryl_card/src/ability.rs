@@ -55,21 +55,52 @@ pub enum Behavior {
     Custom(Custom),
 }
 
-/// A value this crate carries without knowing its type: the engine's function pointers for
-/// an ability's Rust body or condition, which take engine types this crate cannot name. The
-/// crate that made one reads it back with [`Custom::get`].
+/// An ability's Rust body: a value this crate carries without knowing its type, the engine's
+/// function pointers, which take engine types this crate cannot name, and what the body's
+/// registration says of it, since nothing can read code. The crate that made one reads the
+/// value back with [`Custom::get`].
 #[derive(Clone, Copy)]
-pub struct Custom(&'static (dyn Any + Send + Sync + RefUnwindSafe));
+pub struct Custom {
+    body: &'static (dyn Any + Send + Sync + RefUnwindSafe),
+    says: &'static Says,
+}
+
+/// What a Rust body's registration says of it, which effect data says of itself.
+#[derive(Clone, Copy, Debug)]
+pub struct Says {
+    /// Whether it may ask a player a question mid-resolution ([`Ability::asks`]).
+    pub asks: bool,
+    /// How it takes what is chosen for each instance of the word "target" from its
+    /// controller, in the order of the ability's targets, with none for one it leaves alone
+    /// and for any past the list's end ([`Ability::takes_target`]).
+    pub takes: &'static [Option<Takes>],
+}
+
+impl Says {
+    /// A body that asks nothing and takes no target.
+    pub const NOTHING: Says = Says {
+        asks: false,
+        takes: &[],
+    };
+}
 
 impl Custom {
-    pub const fn new<T: Any + Send + Sync + RefUnwindSafe>(value: &'static T) -> Custom {
-        Custom(value)
+    pub const fn new<T: Any + Send + Sync + RefUnwindSafe>(
+        body: &'static T,
+        says: &'static Says,
+    ) -> Custom {
+        Custom { body, says }
     }
 
     /// The value, if it is a `T`.
     pub fn get<T: Any>(self) -> Option<&'static T> {
-        let value: &'static dyn Any = self.0;
-        value.downcast_ref()
+        let body: &'static dyn Any = self.body;
+        body.downcast_ref()
+    }
+
+    /// What its registration says of it.
+    pub const fn says(self) -> &'static Says {
+        self.says
     }
 }
 
@@ -167,9 +198,6 @@ pub struct Ability {
     targets: &'static [TargetSpec],
     /// Mana abilities: what they produce.
     produces: ManaSet,
-    /// For a Rust body: whether it may ask a player a question mid-resolution. Effect data
-    /// says so itself; read [`Ability::asks`].
-    may_pause: bool,
     /// Whether its effect data needs something to do anything ([`Ability::needs`]), settled
     /// as the effect is given: the engine asks of every activated ability at every priority.
     needy: bool,
@@ -222,7 +250,6 @@ impl Ability {
             timing: Timing::Instant,
             targets: &[],
             produces: ManaSet::NONE,
-            may_pause: false,
             needy: false,
             body: Behavior::Data(&Effect::NOTHING),
             trigger: None,
@@ -450,9 +477,8 @@ impl Ability {
     }
 
     /// What it does as it resolves, as a Rust body, where the vocabulary cannot say it: the
-    /// engine's `custom_body` of the card file's type. What data says of itself the card then
-    /// declares: [`Ability::pauses`], [`Ability::needing`] and
-    /// [`TargetSpec::removal`].
+    /// engine's `custom_body` of the card file's type, whose registration says what data says
+    /// of itself ([`Says`]).
     #[must_use]
     pub const fn custom(self, body: Behavior) -> Ability {
         assert!(
@@ -464,20 +490,6 @@ impl Ability {
             "effect data is given with `effect`"
         );
         Ability { body, ..self }
-    }
-
-    /// Declares that its Rust body may ask a player a question mid-resolution. Effect data
-    /// says so itself ([`Ability::asks`]), so this goes when the last body does.
-    #[must_use]
-    pub const fn pauses(self) -> Ability {
-        assert!(
-            matches!(self.body, Behavior::Custom(_)),
-            "effect data says whether it asks: declare it only of a Rust body"
-        );
-        Ability {
-            may_pause: true,
-            ..self
-        }
     }
 
     /// Declares that its card's rules text says it in the paragraph of the ability before it
@@ -632,12 +644,12 @@ impl Ability {
     }
 
     /// Whether resolving this may ask a player to choose: what its effect data says
-    /// ([`Effect::asks`]), or for a Rust body, which nothing can read, what its card declared
-    /// with [`Ability::pauses`].
+    /// ([`Effect::asks`]), or for a Rust body, which nothing can read, what its registration
+    /// says ([`Says::asks`]).
     pub const fn asks(&self) -> bool {
         match self.body {
             Behavior::Data(effect) => effect.asks(),
-            Behavior::Custom(_) => self.may_pause,
+            Behavior::Custom(custom) => custom.says().asks,
         }
     }
 
@@ -663,8 +675,8 @@ impl Ability {
     /// Whether this takes what is chosen for its `target`th instance of the word "target"
     /// from its controller in the way `how` names, a permanent removed from the battlefield
     /// or a spell countered: what its effect data does to a target that may be one
-    /// ([`Effect::takes`]), or for a Rust body what its card declared with
-    /// [`TargetSpec::removal`] or [`TargetSpec::counter`].
+    /// ([`Effect::takes`]), or for a Rust body what its registration says
+    /// ([`Says::takes`]).
     pub fn takes_target(&self, target: SpecIx, how: Takes) -> bool {
         let Some(spec) = self.targets.get(target.index()) else {
             return false;
@@ -678,7 +690,9 @@ impl Ability {
                 (spec.kind == may_be || spec.kind == TargetKind::SpellOrPermanent)
                     && effect.takes(target, how)
             }
-            Behavior::Custom(_) => spec.takes == Some(how),
+            Behavior::Custom(custom) => {
+                custom.says().takes.get(target.index()).copied().flatten() == Some(how)
+            }
         }
     }
 
@@ -735,12 +749,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "declare it only of a Rust body")]
-    fn pausing_is_not_declared_of_effect_data() {
-        let _ = Ability::spell().effect(&Effect::NOTHING).pauses();
-    }
-
-    #[test]
     fn a_mana_ability_adds_what_it_produces() {
         let produces = ManaSet::one(crate::ManaColor::Green);
         let ability = Ability::tap_for_mana(produces);
@@ -753,7 +761,7 @@ mod tests {
     #[test]
     fn custom_gives_back_only_the_type_it_was_made_of() {
         static BODY: fn() -> u8 = || 7;
-        let custom = Custom::new(&BODY);
+        let custom = Custom::new(&BODY, &Says::NOTHING);
         assert_eq!(custom.get::<fn() -> u8>().map(|body| body()), Some(7));
         assert!(custom.get::<u8>().is_none());
     }

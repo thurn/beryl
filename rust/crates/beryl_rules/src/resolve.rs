@@ -16,7 +16,6 @@ use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};
 use crate::cast::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Decision};
-use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::game::Game;
@@ -239,13 +238,13 @@ fn run<L: Layout>(
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
-            let resolution = Resolution::new(entry.clone(), ability, legal, answers, record);
-            let mut ctx = EffectCtx::resolving(Game::new(s, t, sink), resolution);
+            let mut resolution = Resolution::new(entry.clone(), ability, legal, answers, record);
+            let mut game = Game::new(s, t, sink);
             crate::coverage::hit(ability);
-            let flow = interpret::resolve(&mut ctx);
-            let question = ctx.resolution.question.take();
-            offer = ctx.resolution.offer;
-            let paused = ctx.finish(flow)?;
+            let flow = interpret::resolve(&mut game, &mut resolution);
+            let question = resolution.question.take();
+            offer = resolution.offer;
+            let paused = interpret::finish(&mut game, flow)?;
             if s.outcome().is_some() {
                 return Ok(None);
             }

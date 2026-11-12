@@ -5,6 +5,8 @@
 
 use std::collections::VecDeque;
 
+use beryl_card::effect::build::{YOU, create_tokens, permit_cast, sequence};
+use beryl_card::{CastTerms, Duration, Effect};
 use beryl_cards::CARDS;
 use beryl_cards::names::{
     COUNTERSPELL, ISLAND, OVERLORD_OF_THE_MISTMOORS, PLAINS, SNAPCASTER_MAGE, STRIP_MINE,
@@ -12,15 +14,13 @@ use beryl_cards::names::{
 };
 use beryl_cards::tokens::TREASURE;
 use beryl_engine::card::{
-    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Players, Trigger, Types,
+    Ability, CardDef, Castings, Colors, Face, FaceIx, ManaCost, Objects, Players, Trigger, Types,
 };
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::TokenEntry;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{EFFECTS, ObjectFlags, Pending};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Observation, Opt, State,
-    TurnStep, Zone, ZoneKey, bodies,
+    TurnStep, Zone,
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, Budget, GameAgent};
@@ -125,24 +125,22 @@ static OPEN_VAULT: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::SORCERY,
         colors: Colors::NONE,
-        abilities: &[Ability::spell().custom(bodies!(permit_over_and_over))],
+        abilities: &[Ability::spell().effect(&sequence(&[PERMIT; EFFECTS + 1]))],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn permit_over_and_over<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    let graveyard = ctx.state().zone(ZoneKey::Of(you, Zone::Graveyard));
-    for slot in ctx.state().in_candidate_order(graveyard) {
-        let card = ctx.state().object_ref(slot);
-        for _ in 0..=EFFECTS {
-            ctx.allow_cast(card, you, 0, true, false);
-        }
-    }
-    Ok(())
-}
+/// "You may cast each card in your graveyard this turn", once.
+const PERMIT: Effect = permit_cast(
+    YOU,
+    Objects::All {
+        zone: Zone::Graveyard,
+        filter: Filter::Whose(&YOU),
+    },
+    Duration::EndOfTurn,
+    CastTerms::PLAIN,
+);
 
 /// The Counterspell in the human's graveyard is what the vault permits. Short libraries end
 /// the game soon after.
@@ -312,12 +310,7 @@ const fn chorus(name: &'static str) -> CardDef {
 
 /// A chorus's ability: "Whenever you cast a spell, nothing happens."
 const VOICE: Ability =
-    Ability::triggered(&Trigger::casts(Players::You, Filter::Any)).custom(bodies!(silence));
-
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn silence<L: Layout>(_: &mut EffectCtx<'_, L>) -> Flow {
-    Ok(())
-}
+    Ability::triggered(&Trigger::casts(Players::You, Filter::Any)).effect(&Effect::NOTHING);
 
 const CHORUSES: Scenario = Scenario::new("choruses")
     .at(1, P0, TurnStep::PrecombatMain)
@@ -435,17 +428,13 @@ static HOARD: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,
         colors: Colors::NONE,
-        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(hoard))],
+        abilities: &[
+            Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(YOU, &TREASURE, TREASURES))
+        ],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE],
 };
-
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn hoard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens(&TREASURE, TREASURES, TokenEntry::default());
-    Ok(())
-}
 
 const HOARDER: Scenario = Scenario::new("hoarder")
     .at(1, P0, TurnStep::PrecombatMain)

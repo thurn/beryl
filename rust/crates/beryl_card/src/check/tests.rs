@@ -100,14 +100,6 @@ fn mana_added_outside_a_mana_ability_is_refused() {
 }
 
 #[test]
-fn effect_data_declares_nothing_of_its_targets() {
-    const DECLARED: &[Ability] = &[Ability::spell()
-        .targeting(&[A_CREATURE.removal()])
-        .effect(&destroy(TARGET))];
-    assert_eq!(checked(DECLARED), Err(Malformed::Declared));
-}
-
-#[test]
 fn a_countered_spell_put_anywhere_but_exile_is_refused() {
     const A_SPELL: TargetSpec = TargetSpec::one(TargetKind::Spell, Filter::Any);
     const REMAND: &[Ability] =

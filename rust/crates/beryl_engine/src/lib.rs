@@ -17,11 +17,9 @@ pub use beryl_kernel::{
     table, two_player,
 };
 // The rules' modules, among them `layout` and `profile`: the kernel's layouts and restriction
-// profiles with the rules' per-layout function tables and stops beside them.
-pub use beryl_rules::{card, coverage, effect, event, layout, profile};
-// The macros card files write a Rust body or condition with. They expand to `beryl_rules`'
-// own paths, so a card file needs only this crate.
-pub use beryl_rules::{bodies, conditions};
+// profiles, with the rules' stops beside the profiles. A card file with a Rust body takes the
+// rules library, `CustomBody` and `custom_body` from `beryl_rules` itself.
+pub use beryl_rules::{card, coverage, event, layout, profile};
 
 pub use beryl_kernel::Misfit;
 pub use beryl_kernel::invariants::{At, Violation};

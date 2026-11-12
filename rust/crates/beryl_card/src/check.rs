@@ -41,10 +41,6 @@ pub enum Malformed {
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
     /// names the kind it adds ([`Effect::AddManaOfKind`]).
     AddMana,
-    /// [`crate::TargetSpec::removal`] or [`crate::TargetSpec::counter`] declared of an
-    /// ability whose effect is data, which says what it takes itself
-    /// ([`Ability::takes_target`]).
-    Declared,
     /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
     /// puts a countered spell instead of its owner's graveyard.
     Countered,
@@ -87,9 +83,6 @@ impl Malformed {
             Malformed::Grant => "a modification grants an ability its face does not list",
             Malformed::Copy => "a copy's exception is a power and toughness other than 1/1",
             Malformed::AddMana => "an effect adds mana outside a mana ability",
-            Malformed::Declared => {
-                "a target of effect data declares what it takes: the data says so itself"
-            }
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",
             Malformed::Fateseal => "an effect fateseals a number of cards other than one",
@@ -191,22 +184,10 @@ impl Scope<'_> {
             None => Ok(()),
         };
         let body = match self.ability.body() {
-            Behavior::Data(effect) => both(self.declares_nothing(), self.effect(effect)),
+            Behavior::Data(effect) => self.effect(effect),
             Behavior::Custom(_) => Ok(()),
         };
         both(condition, both(layer, body))
-    }
-
-    const fn declares_nothing(self) -> Checked {
-        let targets = self.ability.targets();
-        let mut i = 0;
-        while i < targets.len() {
-            if targets[i].takes.is_some() {
-                return Err(Malformed::Declared);
-            }
-            i += 1;
-        }
-        Ok(())
     }
 
     const fn layer(self, layer: &LayerSpec) -> Checked {
@@ -452,7 +433,7 @@ impl Scope<'_> {
 
     const fn condition(self, condition: &Condition) -> Checked {
         match condition {
-            Condition::Did | Condition::WonFlip | Condition::Custom(_) => Ok(()),
+            Condition::Did | Condition::WonFlip => Ok(()),
             Condition::Paid(kind) => {
                 let casting = self.face.casting;
                 let mut i = 0;

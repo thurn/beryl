@@ -219,16 +219,18 @@ tables with an entry per slot; it is `Clone`, not `Copy`. A player game starts
 in `Small`. When an engine call stalls it for a capacity, the session widens the
 state as it stood before the call (`State::widen`, which keeps every slot, queue
 order and knowledge bit) and makes the call again in `Large`, where the game
-stays. Card bodies are generic functions, instantiated once per layout
-(`bodies!`). The slot and index types are the layout's too (`Layout::Slot`,
-`Layout::Index`): `Large` has four times the slots, 1,024 (`LargeSlot`, a `u16`,
-with 1,024-bit bitboards), and grows the queues nested in other values (a stack
-entry's targets, a player's emblems, a paused resolution's choice record, a
-decision's options). So `ObjectRef`, `Decision`, `Opt`, `Pending` and `Event`
-take the layout as a parameter, and `Relayout` moves any of them to the other
-layout by slot number; the session keeps its own copies in `Large`. The mana
-solver (§10) grows too: in `Large` a payment holds any number of classes of
-interchangeable sources, plans and spent units.
+stays. Effect data is the same for every layout, and only its interpreter is
+compiled for each; a Rust body, where a card has one, is a generic function
+instantiated once per layout (`custom_body`). The slot and index types are the
+layout's too (`Layout::Slot`, `Layout::Index`): `Large` has four times the
+slots, 1,024 (`LargeSlot`, a `u16`, with 1,024-bit bitboards), and grows the
+queues nested in other values (a stack entry's targets, a player's emblems, a
+paused resolution's choice record, a decision's options). So `ObjectRef`,
+`Decision`, `Opt`, `Pending` and `Event` take the layout as a parameter, and
+`Relayout` moves any of them to the other layout by slot number; the session
+keeps its own copies in `Large`. The mana solver (§10) grows too: in `Large` a
+payment holds any number of classes of interchangeable sources, plans and spent
+units.
 
 ### 4.2 Objects and slots
 
@@ -409,9 +411,9 @@ pub struct Ability {
     pub matches: Filter,                 // triggered and replacement: which events
     pub layer: Option<LayerSpec>,        // static: layer, sublayer, affected set, modification
     pub produces: ManaSet,               // mana abilities: colors, amount, restriction
-    pub body: fn(&mut EffectCtx) -> Flow,
+    pub body: Behavior,                  // effect data, or a Rust function (§6.3)
 }
-pub type Flow = Result<(), Pending>; // Err carries the question to ask
+pub type Flow = Result<(), Stop>;    // Err: paused at a question, or out of room
 ```
 
 - `Filter` is a small enum over bitboard-backed predicates: creature, controlled
@@ -428,33 +430,38 @@ pub type Flow = Result<(), Pending>; // Err carries the question to ask
 
 ### 6.3 Bodies
 
-Bodies are straight-line Rust against `EffectCtx`, which wraps the working
-state, the tables, the scratch space and the answer source (§3):
+What an ability does as it resolves is a `Behavior`: effect data, or a Rust
+function where the vocabulary cannot say it (`docs/project-50k.md`, K1). Every
+card of the pool is effect data, written with `beryl_card`'s `const fn`
+builders:
 
 ```rust
-fn lightning_bolt(ctx: &mut EffectCtx) -> Flow {
-    let target = ctx.target(0); // legality and fizzling are the caller's job
-    ctx.deal_damage(ctx.source(), target, 3);
-    Ok(())
-}
-
-fn brainstorm(ctx: &mut EffectCtx) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 3);
-    for _ in 0..2 {
-        let card = ctx.choose_card(you, Zone::Hand, Filter::Any)?;
-        ctx.put_on_top(card);
-    }
-    Ok(())
-}
+// "Return target spell to its owner's hand. Draw a card."
+Ability::spell()
+    .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+    .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))
 ```
 
-Every `ctx.choose_*` call asks the answer source (§3): `Replay` pops the next
-recorded answer or, when the record has none, returns `Err(Pending)` through
-`?`, carrying the question to ask; the rollout policy answers inline. The
-primitives (`deal_damage`, `draw`, `move_to`, `create_token`, `add_counters`,
-`gain_control`, `search_library`, `each_player`, `reveal`, `shuffle`, ...) are
-the only way a body touches the state, and each builds the event that flows
+The interpreter (`beryl_rules`' `interpret`) carries the instructions out in
+order. Each entry's arm calls a function of the rules library: free functions
+over a `Game` (the state, the tables and the event sink) and, where what they do
+makes sense only while something resolves, a `Resolution` (the source, the
+controller, the targets and the record of answers), in modules named for the
+Comprehensive Rules they implement (`actions::scry`, `zones`, `tokens`).
+`beryl_rules`' `lib.rs` is the contract. What the engine, the AI and the UI need
+to know of an ability (whether it asks, what it takes from a target) they read
+from its data.
+
+The escape hatch is a `CustomBody`: a unit type in the card's file whose
+`resolve` is generic over the layout and takes the game and the resolution, made
+the ability's body by `custom_body`. It calls the same library, and says of
+itself what nothing can read from code (`CustomBody::SAYS`). No card has one.
+
+A question asked while resolving goes through `choices`, which asks the answer
+source (§3): the record answers it or, when the record has none, the resolution
+stops with `Err(Stop::Pause)` through `?` and the question stays on the
+`Resolution`; the rollout policy answers inline. The library's functions are the
+only way an effect touches the state, and each builds the event that flows
 through §8. The cost modifiers of Elite Spellbinder, Thalia and Leyline Binding
 are reached through explicit engine hooks rather than the battlefield layer
 pass.
@@ -1008,24 +1015,27 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                                                                                                                                                                                                                                                            | Depends on                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `beryl_card`     | The card vocabulary: `CardDef` and the definition types, filters, costs, and effect data (`Effect`, `Objects`, `Players`, `Amount`, `Condition`) with its `const fn` builders                                                                                                                                                                    | nothing in the workspace                                         |
-| `beryl_kernel`   | `State` and its layouts, slots, bitboards and fixed queues, the zone-move and chance chokepoints, invariants, decisions, events and their sink, `GameTable`, the Observation view and determinization; its `lib.rs` is the contract for how other crates read and write the state                                                                | `beryl_card`                                                     |
-| `beryl_rules`    | Events' pipeline, layers, mana, combat, turn structure, casting, `EffectCtx` and the interpreter of effect data, with their tests (`cargo test -p beryl_rules`); it re-exports the card vocabulary (`card`) and, beside its own items, the kernel's layouts, profiles and events (`layout`, `profile`, `event`), and no other part of the kernel | `beryl_card`, `beryl_kernel`                                     |
-| `beryl_engine`   | The facade other crates import until the last caller has moved: one `lib.rs` that re-exports `beryl_rules` and the kernel's modules at the paths they had as one crate, and defines nothing                                                                                                                                                      | `beryl_kernel`, `beryl_rules`                                    |
-| `beryl_cards`    | One file per card under color directories (so far the WU Control mirror's cards and a few more), the generated `names` module, the static table, per-card scenarios, `beryl_scenario dump`                                                                                                                                                       | `beryl_engine`, `beryl_scenario`                                 |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                                                                                                                                                                                                                  | `beryl_engine`                                                   |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                                                                                                                                                                                                          | `beryl_engine`                                                   |
-| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                                                                                                                                                                                              | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
-| `beryl_cli`      | Headless games between agents, tournaments, the long-think ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                                                                                                                                                                         | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session` |
-| `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                                                                                                                                                                                              | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
-| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                                                                                                                                                                              | all of the above                                                 |
+| Crate              | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Depends on                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `beryl_card`       | The card vocabulary: `CardDef` and the definition types, filters, costs, and effect data (`Effect`, `Objects`, `Players`, `Amount`, `Condition`) with its `const fn` builders                                                                                                                                                                                                                                                                                                                    | nothing in the workspace                                          |
+| `beryl_kernel`     | `State` and its layouts, slots, bitboards and fixed queues, the zone-move and chance chokepoints, invariants, decisions, events and their sink, `GameTable`, the Observation view and determinization; its `lib.rs` is the contract for how other crates read and write the state                                                                                                                                                                                                                | `beryl_card`                                                      |
+| `beryl_rules`      | Events' pipeline, layers, mana, combat, turn structure, casting, the rules library (free functions over `Game` and `Resolution`, in modules named for the Comprehensive Rules), the interpreter of effect data and the `CustomBody` escape hatch, with their tests (`cargo test -p beryl_rules`); it re-exports the card vocabulary (`card`) and the kernel's layouts, profiles and events (`layout`, `profile`, `event`, the last two beside items of its own), and no other part of the kernel | `beryl_card`, `beryl_kernel`                                      |
+| `beryl_engine`     | The facade other crates import until the last caller has moved: one `lib.rs` that re-exports `beryl_rules` and the kernel's modules at the paths they had as one crate, and defines nothing                                                                                                                                                                                                                                                                                                      | `beryl_kernel`, `beryl_rules`                                     |
+| `beryl_cards`      | One file per card under color directories (so far the WU Control mirror's cards and a few more), the generated `names` module, the static table, per-card scenarios, `beryl_scenario dump`                                                                                                                                                                                                                                                                                                       | `beryl_card`, `beryl_engine`, `beryl_scenario`                    |
+| `beryl_scenario`   | Scenario value types, the strict runner, the JSON serialization                                                                                                                                                                                                                                                                                                                                                                                                                                  | `beryl_engine`                                                    |
+| `beryl_search`     | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                                                                                                                                                                                                                                                                                                                                                          | `beryl_cards`, `beryl_engine`                                     |
+| `beryl_card_store` | The card store embedded from `data/card-store.tsv`: a record for every card in the pool and every token, looked up by name without a scan                                                                                                                                                                                                                                                                                                                                                        | nothing in the workspace                                          |
+| `beryl_session`    | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                                                                                                                                                                                                                                                                                                                                              | `beryl_card_store`, `beryl_cards`, `beryl_engine`, `beryl_search` |
+| `beryl_cli`        | Headless games between agents, tournaments, the long-think ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                                                                                                                                                                                                                                                                                                                         | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session`  |
+| `beryl_bench`      | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                                                                                                                                                                                                                                                                                                                                              | `beryl_cards`, `beryl_engine`, `beryl_search`                     |
+| `beryl_app`        | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                                                                                                                                                                                                                                                                                                                              | all of the above                                                  |
 
-The engine knows no card and no card knows the engine's internals: cards use
-`EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,
-not the engine's tests. Exporters that turn dumped scenarios into XMage and
-Forge inputs are Python in `tools/`, per AGENTS.md.
+The engine knows no card and no card knows the engine's internals: a card is
+effect data in `beryl_card`'s vocabulary, and `beryl_cards` takes from the
+engine only the table types, the decklists and, for scenarios, what a scenario
+names. One card edit recompiles `beryl_cards`, not the engine's tests. Exporters
+that turn dumped scenarios into XMage and Forge inputs are Python in `tools/`,
+per AGENTS.md.
 
 ## 17. Testing and verification (D13)
 

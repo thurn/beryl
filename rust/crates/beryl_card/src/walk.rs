@@ -182,7 +182,7 @@ impl Amount {
 impl Condition {
     fn filters(&self, visit: Visit) {
         match self {
-            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Custom(_) => {}
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) => {}
             Condition::Compare(left, _, right) => {
                 left.filters(visit);
                 right.filters(visit);

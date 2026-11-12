@@ -241,6 +241,7 @@ dependencies = [
 name = "beryl_session"
 version = "0.1.0"
 dependencies = [
+ "beryl_card",
  "beryl_card_store",
  "beryl_cards",
  "beryl_engine",

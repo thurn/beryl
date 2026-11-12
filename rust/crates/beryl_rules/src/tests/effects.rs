@@ -16,7 +16,6 @@ use crate::card::{
     Ability, FaceAbility, Modification, Part, Place, Players, Prompt, Purpose, SpecIx, Takes,
     TargetKind, TargetSpec, Types,
 };
-use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
 use crate::filter::Filter;
 use crate::fixed::Full;
@@ -29,7 +28,8 @@ use crate::state::{
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
-use super::events::{INSECT, advance_to, game, put, with_ctx};
+use super::events::{INSECT, advance_to, game, put, with_game};
+use crate::continuous;
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
 const A_CREATURE: TargetSpec = TargetSpec::one(TargetKind::Permanent, CREATURES);
@@ -82,11 +82,11 @@ fn run(
         entry.targets.push(target).unwrap();
     }
     let legal = crate::resolve::legal_targets(s, t, &entry, ability);
-    let resolution = Resolution::new(entry, ability, legal, None, answers);
-    let mut ctx = EffectCtx::resolving(Game::new(s, t, &mut x.events), resolution);
-    let flow = crate::interpret::resolve(&mut ctx);
-    let question = ctx.resolution.question.take();
-    (question, ctx.finish(flow))
+    let mut resolution = Resolution::new(entry, ability, legal, None, answers);
+    let mut game = Game::new(s, t, &mut x.events);
+    let flow = crate::interpret::resolve(&mut game, &mut resolution);
+    let question = resolution.question.take();
+    (question, crate::interpret::finish(&mut game, flow))
 }
 
 /// A game with a land of `p`'s on the battlefield to be the source of abilities.
@@ -318,8 +318,9 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
     // Its owner's opponent controls it: the controller, not the owner, loses the life.
     let stolen = s.object_ref(bear);
-    with_ctx(&t, &mut s, &mut x, source.slot, |ctx| {
-        ctx.gain_control(stolen, crate::state::Duration::Indefinite);
+    with_game(&t, &mut s, &mut x, source.slot, |game, resolution| {
+        continuous::gain_control(game, resolution, stolen, crate::state::Duration::Indefinite)
+            .unwrap();
     });
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &SWORDS, &targets, &[]).is_none());

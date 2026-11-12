@@ -1,17 +1,15 @@
 //! A trigger is an event, a subject and players (`beryl_card::Trigger`): the products no
 //! printed card of the pool says, each matched by the code that matches the pool's.
 
-// Bodies share the `Flow` signature of `Ability::body`, whether or not they can pause.
-#![allow(clippy::unnecessary_wraps)]
+use beryl_card::effect::build::{YOU, gain_life};
 
 use super::begin;
 use super::events::{advance_to, put, resolve_all};
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, Castings, Face, Flow, Players, Subject, Subtype, Subtypes, Trigger,
-    TriggerEvent, Types,
+    Ability, CardDef, Castings, Face, Players, Subject, Subtype, Subtypes, Trigger, TriggerEvent,
+    Types,
 };
-use crate::effect::EffectCtx;
 use crate::event::{self, Event};
 use crate::filter::Filter;
 use crate::fixed::Fixed;
@@ -19,13 +17,7 @@ use crate::ids::Seat;
 use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
-use crate::{Layout, bodies};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
-
-fn gain_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.gain_life(ctx.controller(), 1);
-    Ok(())
-}
 
 /// A permanent with one triggered ability: "[trigger], you gain 1 life."
 macro_rules! listener {
@@ -34,7 +26,7 @@ macro_rules! listener {
             name: $text,
             faces: &[Face {
                 types: Types::ARTIFACT,
-                abilities: &[Ability::triggered(&$trigger).custom(bodies!(gain_one))],
+                abilities: &[Ability::triggered(&$trigger).effect(&gain_life(YOU, 1))],
                 ..Face::EMPTY
             }],
             tokens: &[],

@@ -45,10 +45,6 @@ pub struct TargetSpec {
     pub optional: bool,
     /// "Other target": not the object whose ability this is.
     pub other: bool,
-    /// How this effect takes what it targets from its controller, declared for an effect
-    /// nothing can read ([`crate::Ability::takes_target`]). Presentation metadata for
-    /// confirming a player's own target, independent of target legality (CR 115.1).
-    pub takes: Option<Takes>,
 }
 
 impl TargetSpec {
@@ -60,7 +56,6 @@ impl TargetSpec {
             count: 1,
             optional: false,
             other: false,
-            takes: None,
         }
     }
 
@@ -69,24 +64,6 @@ impl TargetSpec {
         TargetSpec {
             optional: true,
             ..TargetSpec::one(kind, filter)
-        }
-    }
-
-    /// Marks effects such as destroy, exile, or bounce that remove the target from play.
-    #[must_use]
-    pub const fn removal(self) -> Self {
-        Self {
-            takes: Some(Takes::Removal),
-            ..self
-        }
-    }
-
-    /// Marks effects that counter the target.
-    #[must_use]
-    pub const fn counter(self) -> Self {
-        Self {
-            takes: Some(Takes::Counter),
-            ..self
         }
     }
 

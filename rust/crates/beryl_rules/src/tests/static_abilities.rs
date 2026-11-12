@@ -20,7 +20,8 @@ use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::{CardTable, GameTable, Outcome, Profile, Scratch, State, drawing, layers, rule_change};
 
 use super::LAND;
-use super::events::{find, with_ctx};
+use super::events::{find, with_game};
+use crate::continuous;
 
 /// "The number of creatures you control".
 pub(super) static CREATURES: Amount = Amount::Count(&Objects::All {
@@ -372,8 +373,14 @@ fn a_static_rule_change_governs_the_players_and_the_spells_it_names() {
 fn an_effect_starts_any_rule_change_its_ability_names() {
     let (t, mut s, hush) = with_permanent_of(&RULE_CARDS, "Test Hush");
     let mut x = Scratch::new();
-    with_ctx(&t, &mut s, &mut x, hush, |ctx| {
-        ctx.change_rule(&HUSH_RULE, crate::state::Duration::EndOfTurn);
+    with_game(&t, &mut s, &mut x, hush, |game, resolution| {
+        continuous::change_rule(
+            game,
+            resolution,
+            &HUSH_RULE,
+            crate::state::Duration::EndOfTurn,
+        )
+        .unwrap();
     });
     assert!(rule_change::cast_only_as_sorcery(
         &s,

@@ -89,7 +89,7 @@
 //! a `Full` into it. No function notes either on a flag, puts a default in its place or goes
 //! on: a push is followed by `?`, or is a `push_bounded` whose bound is argued (the
 //! `discarded-push` check). The engine turns `Full` into the stall in one place, where the
-//! resolution ends (`resolve.rs`).
+//! resolution ends (`interpret::finish`).
 //!
 //! ## Modules
 //!
@@ -142,21 +142,17 @@
 //! and names no layout. The body calls the library and the resolution's questions and reads
 //! the state; it has no other way to the game.
 //!
+//! Nothing can read code, so the type also says what effect data says of itself
+//! ([`CustomBody::SAYS`]): whether the body may ask a player a question, and how it takes
+//! each of its targets from its controller. Everything else the engine, the AI and the UI
+//! know of the ability comes from its data: its cost, its targets, its trigger.
+//!
+//! No card has one today: every card of the pool is effect data, and a test body keeps the
+//! hatch compiled and run.
+//!
 //! An intervening "if" is condition data. One that data cannot say is written the same way
 //! when the first is needed: a trait whose method reads the state, and a `const fn` beside
 //! [`custom_body`].
-//!
-//! ## The shim
-//!
-//! [`effect::EffectCtx`] is how the bodies written before the library reach the game: a
-//! [`Game`], a [`Resolution`], and a method for each thing a body did. Every method is a
-//! line that calls its library function, giving it this ability's source or controller
-//! where a body never named them, and it is gone once no body calls it.
-//!
-//! The shim's methods that return nothing keep a body's old way with `Full`: they note it on
-//! the shim, and the body plays on until it returns. The bodies are never rewritten against
-//! the library. The card port turns them into data, and the milestone's closing bead deletes
-//! `EffectCtx`, its flag, `bodies!` and `conditions!`. No new code calls the shim.
 
 pub mod actions;
 mod announced;
@@ -174,7 +170,6 @@ pub mod coverage;
 pub mod damage;
 pub mod delayed_triggers;
 pub mod drawing;
-pub mod effect;
 pub mod emblems;
 pub mod ending;
 mod engine;
@@ -212,9 +207,8 @@ pub(crate) use beryl_kernel::{
     replacement, state, static_ability, table, zone,
 };
 
-/// The kernel's storage layouts, and the rules' per-layout function tables beside them.
+/// The kernel's storage layouts.
 pub mod layout {
-    pub use crate::bodies::{Bodies, Body, Condition, Conditions};
     pub use beryl_kernel::layout::*;
 }
 

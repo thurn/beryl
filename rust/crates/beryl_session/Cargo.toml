@@ -24,6 +24,8 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
+# The promotion tests write test cards as effect data.
+beryl_card = { path = "../beryl_card" }
 # The tests play cards' scenarios.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }

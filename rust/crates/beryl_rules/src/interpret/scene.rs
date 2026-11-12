@@ -14,7 +14,7 @@ use crate::card::Castings;
 use crate::cast;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
-use crate::layout::{Conditions, Layout, PerPlayer, Table};
+use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
     CountersHeld, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
@@ -456,12 +456,6 @@ impl<L: Layout> Scene<'_, L> {
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),
             Condition::Any(conditions) => conditions.iter().any(|c| self.holds(c)),
-            Condition::Custom(custom) => {
-                let conditions = custom
-                    .get::<Conditions>()
-                    .expect("a condition made by conditions!");
-                conditions.of::<L>()(self.s, self.t, self.subject)
-            }
         }
     }
 

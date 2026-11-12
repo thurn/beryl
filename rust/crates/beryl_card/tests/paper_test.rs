@@ -58,9 +58,10 @@ static SERENE_OFFERING: CardDef = CardDef {
         types: Types::INSTANT,
         colors: Colors::WHITE,
         abilities: &[Ability::spell()
-            .targeting(&[
-                TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::ENCHANTMENT)).removal(),
-            ])
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::ENCHANTMENT),
+            )])
             .effect(&sequence(&[
                 destroy(TARGET),
                 Effect::GainLife {
@@ -172,8 +173,7 @@ static SEVERED_STRANDS: CardDef = CardDef {
                     Filter::Types(Types::CREATURE),
                     Filter::Whose(&EACH_OPPONENT),
                 ]),
-            )
-            .removal()])
+            )])
             .effect(&sequence(&[
                 Effect::GainLife {
                     player: YOU,
@@ -199,14 +199,16 @@ static TEFERIS_CARE: CardDef = CardDef {
                 mana("{W}"),
                 &[CostPart::sacrifice(Filter::Types(Types::ENCHANTMENT))],
             ))
-            .targeting(&[
-                TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::ENCHANTMENT)).removal(),
-            ])
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::ENCHANTMENT),
+            )])
             .effect(&destroy(TARGET)),
             Ability::activated(Cost::mana(mana("{3}{U}{U}")))
-                .targeting(&[
-                    TargetSpec::one(TargetKind::Spell, Filter::Types(Types::ENCHANTMENT)).counter(),
-                ])
+                .targeting(&[TargetSpec::one(
+                    TargetKind::Spell,
+                    Filter::Types(Types::ENCHANTMENT),
+                )])
                 .effect(&counter(TARGET)),
         ],
         ..Face::EMPTY

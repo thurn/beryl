@@ -1,30 +1,33 @@
 //! Events, triggers, replacement effects, state-based actions and layers, on positions built
 //! through the event pipeline with test-only cards.
 
-// Bodies share the `Flow` signature of `Ability::body`, whether or not they can pause.
-#![allow(clippy::unnecessary_wraps)]
+use beryl_card::effect::build::{
+    CARRIED, EACH_OPPONENT, IF_YOU_LOSE_THE_FLIP, TARGET, THAT_PLAYER, THIS, YOU, add_counters,
+    add_mana_of_kind, create_attacking_tokens, create_copy, create_tokens as create_tokens_of_kind,
+    deal_damage_to, delay_carrying, draw, flip_coin, for_each_player, gain_life, get_emblem,
+    if_then, lose_life, modify, sequence,
+};
+use beryl_card::{Amount, Comparison, Effect};
 
-use beryl_card::{Amount, Comparison};
-
+use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face,
-    FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part,
-    Players, Prompt, Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger,
-    Types,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face, FaceAbility,
+    FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt,
+    Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
+use crate::card::{CastingKind, Flow};
 use crate::damage;
-use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
-use crate::query::Copiable;
+use crate::resolution::Resolution;
 use crate::state::{
     Continuous, CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags,
-    PendingTrigger, StackEntry, TargetPlace, TriggerInfo, TurnStep, Zone, ZoneKey,
+    PendingTrigger, StackEntry, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::zones;
@@ -32,29 +35,20 @@ use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
     Scratch, State, Step, apply, next,
 };
-use crate::{Layout, bodies, conditions};
+use crate::{CustomBody, Layout, custom_body};
+use crate::{continuous, counters, linked, one_shot, tokens};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{LAND, begin};
 
-fn gain_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.gain_life(ctx.controller(), 1);
-    Ok(())
-}
-
-fn draw_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.draw(ctx.controller(), 1);
-    Ok(())
-}
-
-/// An ability for a context whose test reads none of it.
+/// An ability for a resolution whose test reads none of it.
 static NO_ABILITY: Ability = Ability::spell();
 
 static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(YOU, 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -94,13 +88,11 @@ static SPRINGS: CardDef = CardDef {
     tokens: &[],
 };
 
-fn crypt_flip<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    let you = ctx.controller();
-    if !ctx.flip_coin(you) {
-        ctx.deal_damage(Recipient::Player(you), 3);
-    }
-    Ok(())
-}
+/// "Flip a coin. If you lose the flip, this deals 3 damage to you."
+const CRYPT_FLIP: Effect = sequence(&[
+    flip_coin(YOU),
+    if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),
+]);
 
 /// Mana Crypt's upkeep trigger, on a land so random games can play it.
 static CRYPT_LAND: CardDef = CardDef {
@@ -108,8 +100,7 @@ static CRYPT_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You))
-                .custom(bodies!(crypt_flip)),
+            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&CRYPT_FLIP),
         ],
         ..Face::EMPTY
     }],
@@ -122,7 +113,7 @@ static WATCHER: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[
             Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-                .custom(bodies!(gain_one)),
+                .effect(&gain_life(YOU, 1)),
         ],
         ..Face::EMPTY
     }],
@@ -134,24 +125,12 @@ static ENDER: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(&Trigger::step(TurnStep::End, Players::You))
-                .custom(bodies!(draw_one)),
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::You)).effect(&draw(YOU, 1)),
         ],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-fn drain_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.delay(AbilityIx::new(1), 2);
-    Ok(())
-}
-
-fn drain_mana<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    let amount = ctx.trigger().amount;
-    ctx.add_mana(ctx.controller(), ManaColor::Colorless, amount);
-    Ok(())
-}
 
 /// Mana Drain's delayed trigger, created by a land's enters trigger.
 static DRAIN_LAND: CardDef = CardDef {
@@ -159,42 +138,32 @@ static DRAIN_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(&Trigger::ENTERS).custom(bodies!(drain_delay)),
+            Ability::triggered(&Trigger::ENTERS).effect(&delay_carrying(1, Amount::Fixed(2))),
             Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .custom(bodies!(drain_mana)),
+                .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED)),
         ],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-fn opponent_loses_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.lose_life(ctx.controller().opponent(), 1);
-    Ok(())
-}
 
 static EMBLEM: CardDef = CardDef {
     name: "Test Emblem",
     faces: &[Face {
         abilities: &[
             Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
-                .custom(bodies!(opponent_loses_one)),
+                .effect(&lose_life(EACH_OPPONENT, 1)),
         ],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
-fn get_emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.create_emblem(ctx.controller(), &EMBLEM);
-    Ok(())
-}
-
 static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(get_emblem))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&get_emblem(YOU, &EMBLEM))],
         ..Face::EMPTY
     }],
     tokens: &[&EMBLEM],
@@ -211,16 +180,6 @@ static BEAR: CardDef = CardDef {
     tokens: &[],
 };
 
-fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
-    !tr.info.lki.token
-}
-
-fn copy_the_dead<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    let dead = Copiable::of_card(ctx.trigger().lki.card);
-    ctx.create_tokens_of(dead, 1, TokenEntry::default());
-    Ok(())
-}
-
 /// Sphinx of False Conclusions's dies trigger: "if it wasn't a token, create a token that's a
 /// copy of it".
 static SPHINX: CardDef = CardDef {
@@ -230,8 +189,8 @@ static SPHINX: CardDef = CardDef {
         power: Some(3),
         toughness: Some(3),
         abilities: &[Ability::triggered(&Trigger::DIES)
-            .custom(bodies!(copy_the_dead))
-            .only_if(conditions!(not_a_token))],
+            .only_if(&Condition::Not(&Condition::Token(THIS)))
+            .effect(&create_copy(YOU, THIS))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -244,7 +203,7 @@ static TRAINER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability::triggered(&Trigger::ENTERS).custom(bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(YOU, 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -257,8 +216,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(&Trigger::ATTACKS).custom(bodies!(gain_one)),
-            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).custom(bodies!(draw_one)),
+            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&draw(YOU, 1)),
         ],
         ..Face::EMPTY
     }],
@@ -276,17 +235,29 @@ static HUMAN: CardDef = CardDef {
     tokens: &[],
 };
 
-fn human_attacking<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.create_tokens(
-        &HUMAN,
-        1,
-        TokenEntry {
+/// "Create a 1/1 Human that's tapped and attacking", put there attacking whatever the step
+/// and with nothing chosen for it to attack: the tests declare attackers with no combat.
+struct HumanAttacking;
+
+impl CustomBody for HumanAttacking {
+    fn resolve<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>) -> Flow {
+        let (what, you) = (
+            tokens::predefined(game.table(), &HUMAN),
+            resolution.controller(),
+        );
+        let how = TokenEntry {
             tapped: true,
             attacking: true,
-        },
-    );
-    Ok(())
+        };
+        tokens::create(game, you, what, 1, how)?;
+        Ok(())
+    }
 }
+
+/// Adeline's trigger as the card has it: a Human for each opponent, attacking that player
+/// or a planeswalker of theirs.
+const A_HUMAN_ATTACKING: Effect = for_each_player(EACH_OPPONENT, &A_HUMAN_ATTACKING_THEM);
+const A_HUMAN_ATTACKING_THEM: Effect = create_attacking_tokens(YOU, &HUMAN, 1, THAT_PLAYER);
 
 /// Adeline, Resplendent Cathar: power equal to the creatures you control; whenever you
 /// attack, a 1/1 Human tapped and attacking.
@@ -302,7 +273,8 @@ static ADELINE: CardDef = CardDef {
                 condition: None,
                 modification: Modification::SetPower(&super::static_abilities::CREATURES),
             }),
-            Ability::triggered(&Trigger::attack(Players::You)).custom(bodies!(human_attacking)),
+            Ability::triggered(&Trigger::attack(Players::You))
+                .custom(custom_body::<HumanAttacking>()),
         ],
         ..Face::EMPTY
     }],
@@ -329,11 +301,6 @@ static MAP: CardDef = CardDef {
     tokens: &[],
 };
 
-fn two_insects<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.create_tokens(&INSECT, 2, TokenEntry::default());
-    Ok(())
-}
-
 /// Overlord of the Mistmoors: not a creature while it has a time counter (impending); when
 /// it enters, two Insects.
 static OVERLORD: CardDef = CardDef {
@@ -352,22 +319,12 @@ static OVERLORD: CardDef = CardDef {
                 )),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
-            Ability::triggered(&Trigger::ENTERS).custom(bodies!(two_insects)),
+            Ability::triggered(&Trigger::ENTERS).effect(&create_tokens_of_kind(YOU, &INSECT, 2)),
         ],
         ..Face::EMPTY
     }],
     tokens: &[&INSECT],
 };
-
-fn story_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.add_counters(ctx.source(), CounterKind::Story, 1);
-    Ok(())
-}
-
-fn two_maps<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.create_tokens(&MAP, 2, TokenEntry::default());
-    Ok(())
-}
 
 /// Staff of the Storyteller: a story counter whenever you create one or more creature
 /// tokens. Its second ability makes noncreature tokens, for the test that they don't count.
@@ -380,8 +337,9 @@ static STAFF: CardDef = CardDef {
                 Players::You,
                 Filter::Types(Types::CREATURE),
             ))
-            .custom(bodies!(story_counter)),
-            Ability::triggered(&Trigger::main_phase(Players::You).next()).custom(bodies!(two_maps)),
+            .effect(&add_counters(THIS, CounterKind::Story, 1)),
+            Ability::triggered(&Trigger::main_phase(Players::You).next())
+                .effect(&create_tokens_of_kind(YOU, &MAP, 2)),
         ],
         ..Face::EMPTY
     }],
@@ -431,19 +389,26 @@ static RECONFIG: CardDef = CardDef {
     tokens: &[],
 };
 
-fn exile_an_opposing_creature<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    let them = ctx.controller().opponent();
-    let s = ctx.state();
-    let target = s
-        .battlefield()
-        .iter()
-        .copied()
-        .find(|&slot| s.controller(slot) == them && s.derived(slot).types.contains(Types::CREATURE))
-        .map(|slot| s.object_ref(slot));
-    if let Some(target) = target {
-        ctx.exile_until_source_leaves(target);
+/// "Exile a creature an opponent controls until this leaves the battlefield", with no target:
+/// the first there is.
+struct ExileAnOpposingCreature;
+
+impl CustomBody for ExileAnOpposingCreature {
+    fn resolve<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>) -> Flow {
+        let (s, you) = (game.state(), resolution.controller());
+        let target = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| {
+                s.controller(slot) != you && s.derived(slot).types.contains(Types::CREATURE)
+            })
+            .map(|slot| s.object_ref(slot));
+        if let Some(target) = target {
+            one_shot::exile_until_leaves(game, target, resolution.source())?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 /// Aang's Iceberg: "exile ... until this leaves the battlefield".
@@ -452,7 +417,7 @@ static ICEBERG: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(&Trigger::ENTERS).custom(bodies!(exile_an_opposing_creature))
+            Ability::triggered(&Trigger::ENTERS).custom(custom_body::<ExileAnOpposingCreature>())
         ],
         ..Face::EMPTY
     }],
@@ -547,23 +512,38 @@ pub(super) fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: Seat, n
     slot
 }
 
-/// Runs `body` as an ability of the permanent in `slot`.
-pub(super) fn with_ctx(
+/// Changes the game as an ability of the permanent in `slot` does while it resolves: `body`
+/// calls the library with the game and that resolution.
+pub(super) fn with_game(
     t: &GameTable,
     s: &mut State,
     x: &mut Scratch,
     slot: Slot,
-    body: impl FnOnce(&mut EffectCtx),
+    body: impl FnOnce(&mut Game, &mut Resolution),
 ) {
-    let trigger = PendingTrigger {
+    let ability = PendingTrigger {
         source: Some(s.object_ref(slot)),
         card: s.copiable(slot).record(t).0,
         controller: s.controller(slot),
         ..PendingTrigger::default()
     };
-    let mut ctx = EffectCtx::new(s, t, &mut x.events, &trigger, &NO_ABILITY);
-    body(&mut ctx);
-    ctx.finish(Ok(())).unwrap();
+    let mut resolution = Resolution::of_trigger(&ability, &NO_ABILITY);
+    let mut game = Game::new(s, t, &mut x.events);
+    body(&mut game, &mut resolution);
+    crate::interpret::finish(&mut game, Ok(())).unwrap();
+}
+
+/// Creates `count` tokens of a predefined kind under the control of the resolving ability's
+/// controller.
+pub(super) fn create_tokens(
+    game: &mut Game,
+    resolution: &Resolution,
+    def: &'static CardDef,
+    count: u8,
+    how: TokenEntry,
+) -> Bitboard<Slot> {
+    let what = tokens::predefined(game.table(), def);
+    tokens::create(game, resolution.controller(), what, count, how).unwrap()
 }
 
 /// Advances to the next decision.
@@ -693,8 +673,15 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let sphinx = put(&t, &mut s, &mut x, p, "Test Sphinx");
-    with_ctx(&t, &mut s, &mut x, sphinx, |ctx| {
-        ctx.deal_damage(Recipient::Permanent(ctx.source()), 3);
+    with_game(&t, &mut s, &mut x, sphinx, |game, resolution| {
+        damage::deal(
+            game,
+            resolution.source(),
+            Recipient::Permanent(resolution.source()),
+            3,
+            false,
+        )
+        .unwrap();
     });
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(sphinx).zone(), Zone::Graveyard);
@@ -707,7 +694,9 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (3, 3));
     // The copy is a token: when it dies it triggers nothing, and then ceases to exist.
     let token_ref = s.object_ref(token);
-    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
+    with_game(&t, &mut s, &mut x, token, |game, _| {
+        destroy(game, token_ref).unwrap();
+    });
     assert!(s.triggers().is_empty());
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
@@ -721,18 +710,28 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let values = s.copiable(bear);
     let mut token = None;
-    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
-        token = ctx
-            .create_tokens_of(values, 1, TokenEntry::default())
-            .sole();
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        token = tokens::create(
+            game,
+            resolution.controller(),
+            values,
+            1,
+            TokenEntry::default(),
+        )
+        .unwrap()
+        .sole();
     });
     let token = token.expect("a token copy");
     let land = find(&s, &t, p, "Test Land");
     let land_ref = s.object_ref(land);
-    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.exile_linked(land_ref));
+    with_game(&t, &mut s, &mut x, token, |game, resolution| {
+        linked::exile_linked(game, land_ref, resolution.source()).unwrap();
+    });
     assert_eq!(s.memos(land).exiled_with(), Some(token));
     let token_ref = s.object_ref(token);
-    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
+    with_game(&t, &mut s, &mut x, token, |game, _| {
+        destroy(game, token_ref).unwrap();
+    });
     // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
@@ -754,21 +753,20 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
         controller: p,
         ..PendingTrigger::default()
     };
-    let found = |s: &mut State, x: &mut Scratch| {
-        let ctx = EffectCtx::new(s, &t, &mut x.events, &ability, &NO_ABILITY);
-        let found = ctx.exiled_with_source();
-        ctx.finish(Ok(())).unwrap();
-        found
-    };
-    with_ctx(&t, &mut s, &mut x, bear, |ctx| ctx.exile_linked(land_ref));
-    assert_eq!(found(&mut s, &mut x), Bitboard::single(land));
+    let found = |s: &State| linked::exiled_with(s, ability.source.expect("the bear"));
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        linked::exile_linked(game, land_ref, resolution.source()).unwrap();
+    });
+    assert_eq!(found(&s), Bitboard::single(land));
 
     // The bear dies with the ability still to resolve: it finds the card (CR 607.2a).
     let bear_ref = s.object_ref(bear);
-    with_ctx(&t, &mut s, &mut x, bear, |ctx| ctx.destroy(bear_ref));
+    with_game(&t, &mut s, &mut x, bear, |game, _| {
+        destroy(game, bear_ref).unwrap();
+    });
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
-    assert_eq!(found(&mut s, &mut x), Bitboard::single(land));
+    assert_eq!(found(&s), Bitboard::single(land));
 
     // The card returns as a new object (CR 400.7), which exiled nothing: the card in exile
     // stays there, exiled with nothing any more.
@@ -781,7 +779,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
         Reason::Effect,
     )
     .unwrap();
-    assert!(found(&mut s, &mut x).is_empty());
+    assert!(found(&s).is_empty());
     assert!(s.exiled_with(bear).is_empty());
     assert_eq!(s.object(land).zone(), Zone::Exile);
     assert_eq!(s.memos(land).exiled_with(), None);
@@ -802,17 +800,41 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
     );
     let shrunk_ref = s.object_ref(shrunk);
     let walker_ref = s.object_ref(walker);
-    with_ctx(&t, &mut s, &mut x, hurt, |ctx| {
-        ctx.deal_damage(Recipient::Permanent(ctx.source()), 2);
-        ctx.add_effect(
+    with_game(&t, &mut s, &mut x, hurt, |game, resolution| {
+        damage::deal(
+            game,
+            resolution.source(),
+            Recipient::Permanent(resolution.source()),
+            2,
+            false,
+        )
+        .unwrap();
+        continuous::start(
+            game,
+            resolution,
             Continuous::Layer(shrunk_ref, LayerChange::ModifyPt(0, -2)),
             Duration::EndOfTurn,
-        );
-        ctx.deal_damage(Recipient::Permanent(walker_ref), 3);
+        )
+        .unwrap();
+        damage::deal(
+            game,
+            resolution.source(),
+            Recipient::Permanent(walker_ref),
+            3,
+            false,
+        )
+        .unwrap();
     });
     let healthy_ref = s.object_ref(healthy);
-    with_ctx(&t, &mut s, &mut x, healthy, |ctx| {
-        ctx.deal_damage(Recipient::Permanent(healthy_ref), 1);
+    with_game(&t, &mut s, &mut x, healthy, |game, resolution| {
+        damage::deal(
+            game,
+            resolution.source(),
+            Recipient::Permanent(healthy_ref),
+            1,
+            false,
+        )
+        .unwrap();
     });
     resolve_all(&t, &mut s, &mut x);
     for slot in [hurt, shrunk, walker] {
@@ -928,7 +950,9 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
 
 /// The trigger-order decisions on the way from the starting player's first main phase to
 /// their next one, with two Crypt Lands of theirs and two Watchers of the opponent's.
-fn order_decisions(tell_apart: impl FnOnce(&mut EffectCtx)) -> (Seat, Vec<(Seat, usize)>) {
+fn order_decisions(
+    tell_apart: impl FnOnce(&mut Game, &mut Resolution),
+) -> (Seat, Vec<(Seat, usize)>) {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let a = put(&t, &mut s, &mut x, p, "Test Crypt Land");
@@ -936,7 +960,7 @@ fn order_decisions(tell_apart: impl FnOnce(&mut EffectCtx)) -> (Seat, Vec<(Seat,
     put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
     put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
     // Done as an ability of the first of the two lands.
-    with_ctx(&t, &mut s, &mut x, a, tell_apart);
+    with_game(&t, &mut s, &mut x, a, tell_apart);
     let mut asked = Vec::new();
     let mut turns = 0;
     loop {
@@ -959,21 +983,21 @@ fn order_decisions(tell_apart: impl FnOnce(&mut EffectCtx)) -> (Seat, Vec<(Seat,
 
 #[test]
 fn a_player_orders_their_own_triggers_only_when_they_differ() {
-    let (_, same) = order_decisions(|_| {});
+    let (_, same) = order_decisions(|_, _| {});
     assert!(
         same.is_empty(),
         "equivalent triggers are ordered silently: {same:?}"
     );
-    let (p, distinct) = order_decisions(|ctx| {
-        let source = ctx.source();
-        ctx.add_counters(source, CounterKind::Story, 1);
+    let (p, distinct) = order_decisions(|game, resolution| {
+        let source = resolution.source();
+        counters::add(game, source, CounterKind::Story, 1).unwrap();
     });
     assert_eq!(distinct, vec![(p, 2)]);
     // Alike in themselves, but one exiled a card until it leaves: which leaves first
     // decides when the card returns (CR 610.3).
-    let (p, named) = order_decisions(|ctx| {
-        let land = ctx.controller().opponent();
-        let s = ctx.state();
+    let (p, named) = order_decisions(|game, resolution| {
+        let land = resolution.controller().opponent();
+        let s = game.state();
         let theirs = s
             .battlefield()
             .iter()
@@ -981,7 +1005,7 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
             .find(|&slot| s.controller(slot) == land)
             .map(|slot| s.object_ref(slot))
             .expect("a Watcher");
-        ctx.exile_until_source_leaves(theirs);
+        one_shot::exile_until_leaves(game, theirs, resolution.source()).unwrap();
     });
     assert_eq!(named, vec![(p, 2)]);
 }
@@ -1110,7 +1134,9 @@ fn an_emblem_triggers_from_the_command_zone() {
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.player(p).emblems().len(), 1);
     // The emblem stays when its creator leaves.
-    with_ctx(&t, &mut s, &mut x, land, |ctx| ctx.destroy(ctx.source()));
+    with_game(&t, &mut s, &mut x, land, |game, resolution| {
+        destroy(game, resolution.source()).unwrap();
+    });
     let spell = s.object_ref(find(&s, &t, p, "Test Land"));
     event::settle(
         &mut s,
@@ -1150,8 +1176,8 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.counters_of(staff, CounterKind::Story), 1);
     // Noncreature tokens don't count.
-    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
-        ctx.create_tokens(&MAP, 2, TokenEntry::default());
+    with_game(&t, &mut s, &mut x, staff, |game, resolution| {
+        create_tokens(game, resolution, &MAP, 2, TokenEntry::default());
     });
     assert!(s.triggers().is_empty());
     let insects = s
@@ -1238,13 +1264,16 @@ fn exile_instead_of_the_graveyard_replaces_the_move() {
     let a = put(&t, &mut s, &mut x, p, "Test Bear");
     let b = put(&t, &mut s, &mut x, p, "Test Bear");
     let a_ref = s.object_ref(a);
-    with_ctx(&t, &mut s, &mut x, b, |ctx| {
-        ctx.add_effect(
+    with_game(&t, &mut s, &mut x, b, |game, resolution| {
+        continuous::start(
+            game,
+            resolution,
             Continuous::Move(a_ref, MoveReplacement::ExileInsteadOfGraveyard),
             Duration::EndOfTurn,
-        );
-        ctx.destroy(a_ref);
-        ctx.destroy(ctx.source());
+        )
+        .unwrap();
+        destroy(game, a_ref).unwrap();
+        destroy(game, resolution.source()).unwrap();
     });
     assert_eq!(s.object(a).zone(), Zone::Exile);
     assert_eq!(s.object(b).zone(), Zone::Graveyard);
@@ -1263,8 +1292,8 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     assert_eq!(s.counters_of(overlord, CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
     let r = s.object_ref(overlord);
-    with_ctx(&t, &mut s, &mut x, land, |ctx| {
-        ctx.remove_counters(r, CounterKind::Time, 4);
+    with_game(&t, &mut s, &mut x, land, |game, _| {
+        counters::remove(game, r, CounterKind::Time, 4).unwrap();
     });
     assert_eq!(
         types(&s, overlord),
@@ -1298,11 +1327,14 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
-    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
-        ctx.add_effect(
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        continuous::start(
+            game,
+            resolution,
             Continuous::Layer(r, LayerChange::AddTypes(Types::CREATURE)),
             Duration::EndOfTurn,
-        );
+        )
+        .unwrap();
     });
     assert_eq!(types(&s, bear), Types::ARTIFACT.union(Types::CREATURE));
     advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PrecombatMain);
@@ -1320,10 +1352,10 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(bear);
-    with_ctx(&t, &mut s, &mut x, aura, |ctx| {
-        ctx.destroy(r);
-        let r = ctx.state().object_ref(bear);
-        zones::put_onto_battlefield(&mut ctx.game, r, p, FaceIx::FRONT, None).unwrap();
+    with_game(&t, &mut s, &mut x, aura, |game, _| {
+        destroy(game, r).unwrap();
+        let r = game.state().object_ref(bear);
+        zones::put_onto_battlefield(game, r, p, FaceIx::FRONT, None).unwrap();
     });
     assert_eq!(s.object(aura).attached_to(), None);
     assert_eq!(types(&s, bear), Types::CREATURE);
@@ -1335,14 +1367,16 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let mut x = Scratch::new();
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     let mut token = Bitboard::EMPTY;
-    with_ctx(&t, &mut s, &mut x, aura, |ctx| {
-        token = ctx.create_tokens(&MAP, 1, TokenEntry::default());
+    with_game(&t, &mut s, &mut x, aura, |game, resolution| {
+        token = create_tokens(game, resolution, &MAP, 1, TokenEntry::default());
     });
     let token = token.sole().unwrap();
     s.board().attach(aura, token);
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(token);
-    with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
+    with_game(&t, &mut s, &mut x, aura, |game, _| {
+        destroy(game, r).unwrap();
+    });
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert_eq!(s.object(aura).zone(), Zone::Graveyard);
@@ -1358,9 +1392,9 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     let sphinx = put(&t, &mut s, &mut x, q, "Test Sphinx");
     let thief = put(&t, &mut s, &mut x, p, "Test Bear");
     let r = s.object_ref(sphinx);
-    with_ctx(&t, &mut s, &mut x, thief, |ctx| {
-        ctx.gain_control(r, Duration::Indefinite);
-        ctx.destroy(r);
+    with_game(&t, &mut s, &mut x, thief, |game, resolution| {
+        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
+        destroy(game, r).unwrap();
     });
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].controller, p);
@@ -1380,12 +1414,12 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
     let mut x = Scratch::recording();
     let staff = put(&t, &mut s, &mut x, p, "Test Staff");
     let r = s.object_ref(staff);
-    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
-        ctx.add_counters(r, CounterKind::Story, 2);
+    with_game(&t, &mut s, &mut x, staff, |game, _| {
+        counters::add(game, r, CounterKind::Story, 2).unwrap();
     });
     x.events.drain();
-    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
-        ctx.remove_counters(r, CounterKind::Time, 1);
+    with_game(&t, &mut s, &mut x, staff, |game, _| {
+        counters::remove(game, r, CounterKind::Time, 1).unwrap();
     });
     assert_eq!(s.counters_of(staff, CounterKind::Story), 2);
     assert!(x.events.events().is_empty());
@@ -1399,13 +1433,13 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
     let mut x = Scratch::recording();
     let staff = put(&t, &mut s, &mut x, p, "Test Staff");
     let r = s.object_ref(staff);
-    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
-        ctx.add_counters(r, CounterKind::Story, 2);
-        ctx.add_counters(r, CounterKind::Time, 3);
-        ctx.add_counters(r, CounterKind::Loyalty, 1);
-        ctx.remove_counters(r, CounterKind::Story, 1);
+    with_game(&t, &mut s, &mut x, staff, |game, _| {
+        counters::add(game, r, CounterKind::Story, 2).unwrap();
+        counters::add(game, r, CounterKind::Time, 3).unwrap();
+        counters::add(game, r, CounterKind::Loyalty, 1).unwrap();
+        counters::remove(game, r, CounterKind::Story, 1).unwrap();
         // No more than it has (CR 609.3).
-        ctx.remove_counters(r, CounterKind::Time, 5);
+        counters::remove(game, r, CounterKind::Time, 5).unwrap();
     });
     let counts = [CounterKind::Story, CounterKind::Time, CounterKind::Loyalty]
         .map(|kind| s.counters_of(staff, kind));
@@ -1431,14 +1465,14 @@ fn creatures_alike_today_by_effects_that_end_apart_are_not_interchangeable() {
     let [this_turn, for_good] = [first, second]
         .map(|slot| Continuous::Layer(s.object_ref(slot), LayerChange::ModifyPt(1, 1)));
     // The same bonus for as long on each: still one candidate.
-    with_ctx(&t, &mut s, &mut x, source, |ctx| {
-        ctx.add_effect(this_turn, Duration::EndOfTurn);
-        ctx.add_effect(for_good, Duration::EndOfTurn);
+    with_game(&t, &mut s, &mut x, source, |game, resolution| {
+        continuous::start(game, resolution, this_turn, Duration::EndOfTurn).unwrap();
+        continuous::start(game, resolution, for_good, Duration::EndOfTurn).unwrap();
     });
     assert!(crate::engine::interchangeable(&s, first, second));
-    with_ctx(&t, &mut s, &mut x, source, |ctx| {
-        ctx.add_effect(this_turn, Duration::EndOfTurn);
-        ctx.add_effect(for_good, Duration::Indefinite);
+    with_game(&t, &mut s, &mut x, source, |game, resolution| {
+        continuous::start(game, resolution, this_turn, Duration::EndOfTurn).unwrap();
+        continuous::start(game, resolution, for_good, Duration::Indefinite).unwrap();
     });
     assert_eq!(s.derived(first), s.derived(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
@@ -1468,16 +1502,16 @@ fn a_permanent_that_exiled_a_card_until_it_leaves_is_not_interchangeable_with_it
         let slot = put(&t, &mut s, &mut x, q, name);
         s.object_ref(slot)
     });
-    with_ctx(&t, &mut s, &mut x, first, |ctx| {
-        ctx.exile_until_source_leaves(theirs);
+    with_game(&t, &mut s, &mut x, first, |game, resolution| {
+        one_shot::exile_until_leaves(game, theirs, resolution.source()).unwrap();
     });
     assert_eq!(s.exiled_until(first).count(), 1);
     assert!(s.exiled_until(second).is_empty());
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
     // Each exiled a card, and not the same one.
-    with_ctx(&t, &mut s, &mut x, second, |ctx| {
-        ctx.exile_until_source_leaves(another);
+    with_game(&t, &mut s, &mut x, second, |game, resolution| {
+        one_shot::exile_until_leaves(game, another, resolution.source()).unwrap();
     });
     assert!(!crate::engine::interchangeable(&s, first, second));
 }
@@ -1495,11 +1529,15 @@ fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin()
         let slot = find(&s, &t, p, name);
         s.object_ref(slot)
     });
-    with_ctx(&t, &mut s, &mut x, first, |ctx| ctx.exile_linked(land));
+    with_game(&t, &mut s, &mut x, first, |game, resolution| {
+        linked::exile_linked(game, land, resolution.source()).unwrap();
+    });
     assert_eq!(s.exiled_with(first).count(), 1);
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
-    with_ctx(&t, &mut s, &mut x, second, |ctx| ctx.exile_linked(another));
+    with_game(&t, &mut s, &mut x, second, |game, resolution| {
+        linked::exile_linked(game, another, resolution.source()).unwrap();
+    });
     assert!(!crate::engine::interchangeable(&s, first, second));
 }
 
@@ -1590,8 +1628,8 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
     assert_eq!(s.derived(mine).power, 1);
     let r = s.object_ref(theirs);
-    with_ctx(&t, &mut s, &mut x, mine, |ctx| {
-        ctx.gain_control(r, Duration::Indefinite);
+    with_game(&t, &mut s, &mut x, mine, |game, resolution| {
+        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
     });
     assert_eq!(s.controller(theirs), p);
     assert_eq!(s.object(theirs).owner(), q);
@@ -1607,7 +1645,9 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
     assert!(!s.object(theirs).flags().has(ObjectFlags::TAPPED));
     assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
-    with_ctx(&t, &mut s, &mut x, mine, |ctx| ctx.destroy(r));
+    with_game(&t, &mut s, &mut x, mine, |game, _| {
+        destroy(game, r).unwrap();
+    });
     assert_eq!(s.object(theirs).zone(), Zone::Graveyard);
     assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(theirs));
     assert!(s.effects().is_empty(), "the effect ended with its object");
@@ -1621,8 +1661,8 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
     let theirs = put(&t, &mut s, &mut x, q, "Test Bear");
     let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
     let r = s.object_ref(theirs);
-    with_ctx(&t, &mut s, &mut x, mine, |ctx| {
-        ctx.gain_control(r, Duration::Indefinite);
+    with_game(&t, &mut s, &mut x, mine, |game, resolution| {
+        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
     });
     // The source goes into its owner's library, whose shuffle may put another card in its
     // slot (`zone::rebind`), as the deal decides what a hidden slot holds.
@@ -1663,16 +1703,22 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let r = s.object_ref(bear);
-    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
-        ctx.add_effect(
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        continuous::start(
+            game,
+            resolution,
             Continuous::Layer(r, LayerChange::AddKeywords(Keywords::FIRST_STRIKE)),
             Duration::EndOfTurn,
-        );
-        ctx.add_effect(
+        )
+        .unwrap();
+        continuous::start(
+            game,
+            resolution,
             Continuous::Layer(r, LayerChange::ModifyPt(-2, 0)),
             Duration::UntilYourNextTurn(p),
-        );
-        ctx.add_counters(r, CounterKind::PlusOne, 1);
+        )
+        .unwrap();
+        counters::add(game, r, CounterKind::PlusOne, 1).unwrap();
     });
     let d = s.derived(bear);
     assert!(d.keywords.contains(Keywords::FIRST_STRIKE));
@@ -1695,8 +1741,15 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     assert_eq!(s.player(p).life(), 21);
     let values = s.copiable(trainer).except_one_one();
     let mut token = Bitboard::EMPTY;
-    with_ctx(&t, &mut s, &mut x, trainer, |ctx| {
-        token = ctx.create_tokens_of(values, 1, TokenEntry::default());
+    with_game(&t, &mut s, &mut x, trainer, |game, resolution| {
+        token = tokens::create(
+            game,
+            resolution.controller(),
+            values,
+            1,
+            TokenEntry::default(),
+        )
+        .unwrap();
     });
     let token = token.sole().unwrap();
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (1, 1));
@@ -1714,7 +1767,9 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Exile);
     let r = s.object_ref(iceberg);
-    with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
+    with_game(&t, &mut s, &mut x, iceberg, |game, _| {
+        destroy(game, r).unwrap();
+    });
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(s.controller(bear), q);
     assert_eq!(s.memos(bear).exiled_until(), None);
@@ -1726,7 +1781,9 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     let bear = put(&t, &mut s, &mut x, q, "Test Bear");
     let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
     let r = s.object_ref(iceberg);
-    with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
+    with_game(&t, &mut s, &mut x, iceberg, |game, _| {
+        destroy(game, r).unwrap();
+    });
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
 }
@@ -1781,11 +1838,6 @@ fn random_games_with_triggers_never_read_derived_dirty() {
     }
 }
 
-fn cathar_human<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    ctx.create_attacking_tokens(&HUMAN, 1)?;
-    Ok(())
-}
-
 /// Adeline's trigger as the card has it: the Human attacks what its controller chooses.
 static CATHAR: CardDef = CardDef {
     name: "Test Cathar",
@@ -1793,9 +1845,7 @@ static CATHAR: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::attack(Players::You))
-            .custom(bodies!(cathar_human))
-            .pauses()],
+        abilities: &[Ability::triggered(&Trigger::attack(Players::You)).effect(&A_HUMAN_ATTACKING)],
         ..Face::EMPTY
     }],
     tokens: &[&HUMAN],
@@ -1884,13 +1934,6 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
     assert_eq!(s.object(cathar).combat(), None);
 }
 
-fn steal_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
-    if let Some(artifact) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.gain_control(artifact, Duration::Indefinite);
-    }
-    Ok(())
-}
-
 /// Thieving Skydiver: kicker {X}, X can't be 0; "When this creature enters, if it was
 /// kicked, gain control of target artifact with mana value X or less."
 static THIEF: CardDef = CardDef {
@@ -1901,12 +1944,16 @@ static THIEF: CardDef = CardDef {
         power: Some(2),
         toughness: Some(1),
         abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .custom(bodies!(steal_target))
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
             )])
-            .only_if(conditions!(crate::effect::kicked))],
+            .only_if(&Condition::Paid(CastingKind::Kicker))
+            .effect(&modify(
+                TARGET,
+                Modification::Control,
+                beryl_card::Duration::Indefinite,
+            ))],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,
             min_x: 1,
@@ -2051,10 +2098,10 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     let mut x = Scratch::new();
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut copy = None;
-    with_ctx(&t, &mut s, &mut x, prodigy, |ctx| {
-        let values = ctx.state().copiable(prodigy);
-        copy = ctx
-            .create_tokens_of_for(Seat::P1, values, 1, TokenEntry::default())
+    with_game(&t, &mut s, &mut x, prodigy, |game, _| {
+        let values = game.state().copiable(prodigy);
+        copy = tokens::create(game, Seat::P1, values, 1, TokenEntry::default())
+            .unwrap()
             .sole();
     });
     let copy = copy.expect("a token copy");

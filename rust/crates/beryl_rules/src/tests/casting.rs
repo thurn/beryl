@@ -1,9 +1,10 @@
 //! Casting, activation, timing permissions, the stack and resolution, through `next` and
 //! `apply` on positions set up with the cards of [`super::cast`].
 
-use super::cast::{Game, SORCERIES_AS_FLASH, cast, index_of};
-use super::events::with_ctx;
-use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility};
+use super::cast::{Game, PONDER, REMOVAL, SORCERIES_AS_FLASH, cast, index_of};
+use super::events::with_game;
+use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, SpecIx, Takes};
+use crate::continuous;
 use crate::event::{self, Reason};
 use crate::ids::Slot;
 use crate::state::{
@@ -11,6 +12,18 @@ use crate::state::{
 };
 use crate::zone::Place;
 use crate::{Candidates, Choice, DecisionKind, Opt, Profile};
+
+/// Nothing reads code, so a Rust body says of itself what effect data would
+/// (`CustomBody::SAYS`): the removal spell here is one, and so is the spell that draws and
+/// puts a card back.
+#[test]
+fn a_rust_body_says_what_it_asks_and_what_it_takes() {
+    let removal = &REMOVAL.front().abilities[0];
+    assert!(removal.takes_target(SpecIx::new(0), Takes::Removal));
+    assert!(!removal.takes_target(SpecIx::new(0), Takes::Counter));
+    assert!(!removal.asks());
+    assert!(PONDER.front().abilities[0].asks());
+}
 
 #[test]
 fn a_spell_its_caster_cannot_pay_for_is_never_offered() {
@@ -492,8 +505,8 @@ fn a_static_rule_change_follows_its_permanents_controller_and_ends_with_it() {
     assert!(g.offers_cast(flasher), "mine limits my opponents, not me");
     // A control effect and no change to the object: layer 2 says whose opponents.
     let stolen = g.s.object_ref(raveler);
-    with_ctx(&g.t, &mut g.s, &mut g.x, thief, |ctx| {
-        ctx.gain_control(stolen, Duration::EndOfTurn);
+    with_game(&g.t, &mut g.s, &mut g.x, thief, |game, resolution| {
+        continuous::gain_control(game, resolution, stolen, Duration::EndOfTurn).unwrap();
     });
     assert_eq!(g.s.base_controller(raveler), g.me);
     assert!(!g.offers_cast(flasher), "under their control it limits me");
@@ -561,8 +574,14 @@ fn a_limit_to_sorcery_speed_beats_a_permission_to_cast_as_though_with_flash() {
     let island = g.give(g.me, "Test Island", Zone::Battlefield);
     let me = g.me;
     g.current();
-    with_ctx(&g.t, &mut g.s, &mut g.x, island, |ctx| {
-        ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(me));
+    with_game(&g.t, &mut g.s, &mut g.x, island, |game, resolution| {
+        continuous::change_rule(
+            game,
+            resolution,
+            &SORCERIES_AS_FLASH,
+            Duration::UntilYourNextTurn(me),
+        )
+        .unwrap();
     });
     g.at(g.me, TurnStep::Upkeep);
     assert!(g.offers_cast(ponder), "as though it had flash");

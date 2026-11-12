@@ -1,13 +1,16 @@
 //! Combat (CR 506 to 511) with test-only creatures: declarations one pick at a time,
 //! evasion, damage and its division, first strike, planeswalkers and combat triggers.
 
+use beryl_card::effect::build::{
+    EACH_OPPONENT, THAT_PLAYER, YOU, create_attacking_tokens, for_each_player, gain_life,
+};
+
 use super::begin;
 use crate::card::{
-    Ability, CardDef, Face, Flow, Keywords, ObjectAbility, Part, Players, Prompt, Purpose, Subtype,
+    Ability, CardDef, Face, Keywords, ObjectAbility, Part, Players, Prompt, Purpose, Subtype,
     Subtypes, Trigger, Types,
 };
-use crate::effect::EffectCtx;
-use crate::event::{Event, TokenEntry};
+use crate::event::Event;
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
 use crate::state::{CounterKind, ObjectFlags, Zone, ZoneKey};
@@ -16,7 +19,6 @@ use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next,
 };
-use crate::{Layout, bodies};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// A vanilla creature card with keywords.
@@ -54,18 +56,6 @@ static WALKER: CardDef = CardDef {
     tokens: &[],
 };
 
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn gain_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.gain_life(ctx.controller(), 1);
-    Ok(())
-}
-
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn gain_ten<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.gain_life(ctx.controller(), 10);
-    Ok(())
-}
-
 /// "Whenever this attacks, you gain 1 life. Whenever this deals combat damage to a player,
 /// you gain 10 life."
 static RAIDER: CardDef = CardDef {
@@ -75,8 +65,9 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(&Trigger::ATTACKS).custom(bodies!(gain_one)),
-            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).custom(bodies!(gain_ten)),
+            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER)
+                .effect(&gain_life(YOU, 10)),
         ],
         ..Face::EMPTY
     }],
@@ -90,24 +81,11 @@ static RECRUIT: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::ATTACKS).custom(bodies!(gain_one))],
+        abilities: &[Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
-
-#[allow(clippy::unnecessary_wraps)] // a body's signature
-fn recruit<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_tokens(
-        &RECRUIT,
-        1,
-        TokenEntry {
-            tapped: true,
-            attacking: true,
-        },
-    );
-    Ok(())
-}
 
 /// "Whenever you attack, create a 1/1 Recruit token that's tapped and attacking."
 static CAPTAIN: CardDef = CardDef {
@@ -116,7 +94,12 @@ static CAPTAIN: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::attack(Players::You)).custom(bodies!(recruit))],
+        abilities: &[
+            Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
+                EACH_OPPONENT,
+                &create_attacking_tokens(YOU, &RECRUIT, 1, THAT_PLAYER),
+            )),
+        ],
         ..Face::EMPTY
     }],
     tokens: &[&RECRUIT],

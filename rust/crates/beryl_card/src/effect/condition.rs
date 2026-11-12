@@ -1,6 +1,5 @@
 //! Conditions: whether an instruction is carried out, or an ability triggers.
 
-use crate::ability::Custom;
 use crate::cost::CastingKind;
 use crate::effect::{Amount, Objects};
 use crate::filter::Filter;
@@ -49,8 +48,6 @@ pub enum Condition {
     All(&'static [Condition]),
     /// At least one of them: "if ... or ...".
     Any(&'static [Condition]),
-    /// The escape hatch: a Rust function only the engine can run and nothing can read.
-    Custom(Custom),
 }
 
 impl Condition {
@@ -61,7 +58,7 @@ impl Condition {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Condition::Did | Condition::WonFlip => true,
-            Condition::Paid(_) | Condition::Custom(_) => false,
+            Condition::Paid(_) => false,
             Condition::Compare(left, _, right) => {
                 left.needs_a_resolution() || right.needs_a_resolution()
             }
@@ -87,13 +84,10 @@ impl Condition {
 }
 
 impl Condition {
-    /// Whether it reads what a cost took ([`Objects::Paid`]). A [`Condition::Custom`] is
-    /// Rust, which names nothing of the vocabulary.
+    /// Whether it reads what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
         match self {
-            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Custom(_) => {
-                false
-            }
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) => false,
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
             Condition::Is(objects, _)
             | Condition::EnteredThisTurn(objects)

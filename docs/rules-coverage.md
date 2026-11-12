@@ -40,7 +40,7 @@ means adding variants and teaching the pipeline about each one.
 | Rule changes           | Statics that change what players may do                    | Teferi's sorcery-speed lock, The Wandering Emperor's instant loyalty                                                   | Draw limits, cost taxes, "can't" effects, casting from other zones                      |
 | Triggers               | Indexed by event kind, APNAP ordering, LKI                 | Enters, dies, attacks, steps, cast, tokens, discard and more                                                           | Opponent-scoped and "one or more" triggers; delayed and state triggers at scale         |
 | Copy                   | A token pointing at the copied definition, exception flags | Token copies                                                                                                           | Copying a copy with exceptions; copying spells                                          |
-| Mid-resolution choices | Transactional replay, inline answers in rollouts           | Implemented (`may_pause`)                                                                                              | Stress cases such as Balance                                                            |
+| Mid-resolution choices | Transactional replay, inline answers in rollouts           | Implemented (`Ability::asks`)                                                                                          | Stress cases such as Balance                                                            |
 | Capacities             | `Small` stalls into `Large`                                | Implemented                                                                                                            | Loop shortcuts                                                                          |
 
 Two choices shape everything below. The state is one flat `Copy` value with no
@@ -159,7 +159,7 @@ effect become copiable values (CR 707.9). Copying a spell copies its choices
 - When a copy effect starts, resolve the full copiable values once and store
   them. Never walk a chain of copies at query time.
 - Spell copies are stack entries that copy the original's choices. A body asks
-  for new targets through the normal `may_pause` path.
+  for new targets through the normal mid-resolution choice path.
 
 ### 5. Control changes
 

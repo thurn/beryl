@@ -1,27 +1,26 @@
 //! The interpreter: what an ability's [`Behavior`] does to a game (plan K1).
 //!
-//! A [`Behavior::Custom`] is a Rust body, called as it always was. A [`Behavior::Data`] is
-//! effect data: [`run`] carries out its instructions with the library's functions, and where
-//! one is not written yet through the [`EffectCtx`] method a body calls, so an ability written
-//! as data makes the events its body made, and [`scene`] reads its expressions. The data is
-//! the same for every layout; only the interpreter is compiled for each, so an ability
-//! written as data needs no `bodies!`.
+//! A [`Behavior::Custom`] is a Rust body, called with the game and the resolution. A
+//! [`Behavior::Data`] is effect data: [`run`] carries out its instructions with the
+//! library's functions, and [`scene`] reads its expressions. The data is the same for every
+//! layout; only the interpreter is compiled for each.
 
 mod run;
 mod scene;
 
 use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
 
-use crate::card::{Ability, AbilityIx, Behavior, Flow, ManaColor};
-use crate::effect::EffectCtx;
+use crate::bodies::Bodies;
+use crate::card::{Ability, AbilityIx, Behavior, Flow, ManaColor, Stop};
 use crate::event::Sink;
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
-use crate::layout::{Bodies, Layout};
+use crate::layout::Layout;
 use crate::mana;
+use crate::resolution::Resolution;
 use crate::state::{PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
 use crate::table::GameTable;
 
@@ -29,18 +28,20 @@ pub(crate) use run::{Run, no_primitive};
 pub(crate) use scene::Outcome;
 use scene::{Registers, Scene};
 
-/// Resolves the ability `ctx` was made for
+/// Resolves the ability `resolution` is of
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of the
 /// spell or ability follows its instructions in the order written."
 #[inline]
-pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let ability: &'static Ability = ctx.resolution.ability;
-    match ability.body() {
+pub(crate) fn resolve<'a, L: Layout>(
+    game: &mut Game<'a, L>,
+    resolution: &mut Resolution<'a, L>,
+) -> Flow {
+    match resolution.ability.body() {
         Behavior::Custom(custom) => {
-            let bodies = custom.get::<Bodies>().expect("a body made by bodies!");
-            bodies.of::<L>()(ctx)
+            let bodies = custom.get::<Bodies>().expect("a body made by custom_body");
+            bodies.of::<L>()(game, resolution)
         }
-        Behavior::Data(effect) => data(ctx, effect),
+        Behavior::Data(effect) => data(game, resolution, effect),
     }
 }
 
@@ -48,8 +49,25 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// a permanent spell, which has no ability to run, or a mana ability, which
 /// [`mana_ability`] does without coming here.
 #[inline(never)]
-fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect) -> Flow {
-    Run::new(ctx).carry_out(effect)
+fn data<'a, L: Layout>(
+    game: &mut Game<'a, L>,
+    resolution: &mut Resolution<'a, L>,
+    effect: &'static Effect,
+) -> Flow {
+    Run::new(game, resolution).carry_out(effect)
+}
+
+/// Ends a resolution that came to `flow`, with a layer refresh for what follows. Returns
+/// whether it paused at a question, or [`Full`] if a capacity ran out: the one place a
+/// resolution's `Full` becomes the engine's (the crate's contract, "How a resolution stops").
+#[inline]
+pub(crate) fn finish<L: Layout>(game: &mut Game<'_, L>, flow: Flow) -> Result<bool, Full> {
+    layers::refresh(game.state, game.table, game.sink)?;
+    match flow {
+        Ok(()) => Ok(false),
+        Err(Stop::Pause) => Ok(true),
+        Err(Stop::Full) => Err(Full),
+    }
 }
 
 /// Carries out a mana ability whose costs are paid, making mana of the kind `color` its
@@ -87,11 +105,12 @@ pub(crate) fn mana_ability<L: Layout>(
         );
         return layers::refresh(s, t, sink);
     }
-    let mut ctx = EffectCtx::new(s, t, sink, &activation(), ability);
-    ctx.resolution.mana = color;
     // A mana ability never asks a question, and has no targets (CR 605.1a).
-    let flow = resolve(&mut ctx);
-    ctx.finish(flow).map(|_| ())
+    let mut resolution = Resolution::of_trigger(&activation(), ability);
+    resolution.mana = color;
+    let mut game = Game::new(s, t, sink);
+    let flow = resolve(&mut game, &mut resolution);
+    finish(&mut game, flow).map(|_| ())
 }
 
 /// Whether a triggered ability's intervening "if" holds, or it has none

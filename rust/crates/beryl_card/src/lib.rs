@@ -34,7 +34,7 @@ pub mod target;
 pub mod trigger;
 mod walk;
 
-pub use ability::{Ability, AbilityKind, Behavior, Custom, Timing};
+pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{

@@ -2,7 +2,7 @@
 //! answered from (the crate's contract, "Resolution"; architecture §7.3). The questions
 //! themselves are [`crate::choices`]'.
 
-use crate::card::{Ability, CastingIx, ManaColor, Stop};
+use crate::card::{Ability, CastingIx, FaceAbility, ManaColor, Stop};
 use crate::cast;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::game::Game;
@@ -10,7 +10,9 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::profile::Stops;
-use crate::state::{ObjectRef, StackEntry, Target, TargetPlace, TargetPlaces, TriggerInfo};
+use crate::state::{
+    ObjectRef, PendingTrigger, StackEntry, Target, TargetPlace, TargetPlaces, TriggerInfo,
+};
 
 /// One resolution of a spell or ability: what is resolving, and the record its questions are
 /// answered from. A library function takes it, beside the [`Game`], only when what it does
@@ -62,6 +64,22 @@ impl<'a, L: Layout> Resolution<'a, L> {
             mana: ManaColor::Colorless,
             offer: None,
         }
+    }
+
+    /// The resolution of `ability` as what `trigger` describes, with no targets and no
+    /// answer source: a question pauses it. A mana ability resolves so, never having been
+    /// on the stack ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)).
+    pub(crate) fn of_trigger(trigger: &PendingTrigger<L>, ability: &'static Ability) -> Self {
+        let entry = StackEntry {
+            object: trigger.source,
+            controller: trigger.controller,
+            card: trigger.card,
+            face: trigger.face,
+            ability: Some(FaceAbility::Own(trigger.ability)),
+            info: trigger.info,
+            ..StackEntry::default()
+        };
+        Resolution::new(entry, ability, TargetPlaces::NONE, None, &[])
     }
 
     /// The spell's card or the ability's source.

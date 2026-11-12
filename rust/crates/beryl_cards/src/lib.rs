@@ -1,9 +1,6 @@
 //! Beryl's cards: one file per card under color directories (by the cube list's color
 //! groups), the generated [`names`], the static [`CARDS`] table and the [`decks`].
 
-// Bodies share the `Flow` signature of `Ability::body`, whether or not they can pause.
-#![allow(clippy::unnecessary_wraps)]
-
 pub mod azorius;
 pub mod black;
 pub mod blue;

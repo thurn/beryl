@@ -15,7 +15,6 @@ use beryl_engine::{
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};
 
-mod effect_data;
 mod knowledge;
 mod props;
 

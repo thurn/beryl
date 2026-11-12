@@ -2,10 +2,11 @@
 
 use super::{DUAL, LANDS, MIXED, begin, decide, table};
 use crate::card::{ManaColor, Players, Purpose, Types};
-use crate::effect::EffectCtx;
 use crate::event::Sink;
 use crate::filter::{Evaluate, Filter};
+use crate::game::Game;
 use crate::ids::{CardIx, Seat, Slot};
+use crate::resolution::Resolution;
 use crate::state::{PendingTrigger, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
@@ -255,9 +256,10 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
             source: Some(source),
             ..PendingTrigger::default()
         };
-        let mut ctx = EffectCtx::new(&mut s, &t, &mut sink, &trigger, ability);
-        ctx.resolution.mana = color;
-        crate::interpret::resolve(&mut ctx).unwrap();
+        let mut resolution = Resolution::of_trigger(&trigger, ability);
+        resolution.mana = color;
+        let mut game = Game::new(&mut s, &t, &mut sink);
+        crate::interpret::resolve(&mut game, &mut resolution).unwrap();
     }
     assert_eq!(s.player(Seat::P0).mana().amounts(), [1, 1, 0, 0, 0, 0]);
 }

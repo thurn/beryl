@@ -1,10 +1,11 @@
 //! Test-only cards for casting, mana, the stack and resolution, and a harness that sets up
 //! positions with them.
 
-// Bodies have the `Flow` signature whether or not they can pause.
-#![allow(clippy::unnecessary_wraps)]
-
-use beryl_card::{Condition, Governed, Objects, RuleChange, When};
+use beryl_card::effect::build::{
+    ITS_CONTROLLER, TARGET, YOU, change_rule, counter, counter_and_exile, destroy as destroy_it,
+    discard, draw, gain_flashback, permit_cast, return_to_hand, sequence, unless_pays,
+};
+use beryl_card::{CastTerms, Condition, Effect, Governed, Objects, RuleChange, Says, Takes, When};
 
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
@@ -13,19 +14,19 @@ use crate::card::{
     ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Subtype, Subtypes, Supertypes,
     TargetKind, TargetSpec, Trigger, Types,
 };
-use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter};
 use crate::game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{CounterKind, Duration, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
+use crate::state::{CounterKind, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
 };
-use crate::{CustomBody, Layout, bodies, custom_body};
+use crate::{CustomBody, Layout, custom_body};
+use crate::{casting, choices, drawing, zones};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};
@@ -37,17 +38,16 @@ const fn mana(generic: u8, w: u8, u: u8) -> ManaCost {
 const CREATURE: Filter = Filter::Types(Types::CREATURE);
 const LANDS: Filter = Filter::Types(Types::LAND);
 
-fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.destroy(target);
-    }
-    Ok(())
-}
-
-/// "Destroy target creature" written against the library, registered with no macro.
+/// "Destroy target creature" as a Rust body: the escape hatch, written against the library
+/// and registered with no macro (the crate's contract, "Custom bodies").
 struct DestroyTarget;
 
 impl CustomBody for DestroyTarget {
+    const SAYS: Says = Says {
+        asks: false,
+        takes: &[Some(Takes::Removal)],
+    };
+
     fn resolve<L: Layout>(
         game: &mut game::Game<'_, L>,
         resolution: &mut Resolution<'_, L>,
@@ -59,135 +59,107 @@ impl CustomBody for DestroyTarget {
     }
 }
 
-fn bounce_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(target) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.move_to(target, Zone::Hand, Reason::Effect);
-    }
-    Ok(())
-}
-
 /// "Counter target spell unless its controller pays {1}."
-fn tithe<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(spell) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let controller = ctx.spell_controller(spell).expect("a spell on the stack");
-    if !ctx.unless_pays(controller, ManaCost::generic(1))? {
-        ctx.counter(spell, false);
-    }
-    Ok(())
-}
-
-/// "Counter target spell. Exile it instead of putting it into its owner's graveyard."
-fn counter_exile<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.counter(spell, true);
-    }
-    Ok(())
-}
+const COUNTER_UNLESS_PAID: Effect =
+    unless_pays(&counter(TARGET), ITS_CONTROLLER, ManaCost::generic(1));
 
 /// A choice of one object, for nothing a purpose names.
 const CHOOSE: Prompt = Prompt::new(Purpose::Choose).most(1);
 
 /// "Draw two cards, then put a card from your hand on top of your library."
-fn ponder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 2);
-    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
-    if !hand.is_empty() {
-        let card = ctx.choose_object(you, hand, CHOOSE)?;
-        let card = ctx.state().object_ref(card);
-        ctx.move_to(card, Zone::Library, Reason::Effect);
+struct Ponder;
+
+impl CustomBody for Ponder {
+    const SAYS: Says = ASKS;
+
+    fn resolve<L: Layout>(
+        game: &mut game::Game<'_, L>,
+        resolution: &mut Resolution<'_, L>,
+    ) -> Flow {
+        let you = resolution.controller();
+        drawing::draw(game, you, 2)?;
+        let hand = game.state().zone(ZoneKey::Of(you, Zone::Hand));
+        if !hand.is_empty() {
+            let card = choices::pick(game, resolution, you, hand, CHOOSE)?;
+            let card = game.state().object_ref(card);
+            zones::move_to(game, card, Zone::Library, Reason::Effect)?;
+        }
+        Ok(())
     }
-    Ok(())
 }
+
+/// A body that may ask and takes no target.
+const ASKS: Says = Says {
+    asks: true,
+    takes: &[],
+};
 
 /// "You may cast target instant or sorcery card from your graveyard this turn. If that spell
 /// would be put into your graveyard, exile it instead."
-fn flashback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
-        let you = ctx.controller();
-        ctx.allow_cast(card, you, 0, true, true);
-    }
-    Ok(())
-}
-
-/// "Target instant or sorcery card in your graveyard gains flashback until end of turn. The
-/// flashback cost is equal to its mana cost."
-fn snapback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
-        let you = ctx.controller();
-        ctx.grant_flashback(card, you);
-    }
-    Ok(())
-}
-
-/// "Return target spell to its owner's hand."
-fn bounce_spell<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(spell) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.return_to_hand(spell);
-    }
-    Ok(())
-}
+const CAST_THIS_TURN: Effect = permit_cast(
+    YOU,
+    TARGET,
+    beryl_card::Duration::EndOfTurn,
+    CastTerms::PLAIN.exiled_instead(),
+);
 
 /// "Look at target opponent's hand. You may exile a nonland card from it. For as long as that
 /// card remains exiled, its owner may cast it. A spell cast this way costs {2} more to cast."
-fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(opponent) = ctx.target_player(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let s = ctx.state();
-    let nonland: Bitboard<L::Slot> = s
-        .zone(ZoneKey::Of(opponent, Zone::Hand))
-        .filter(|slot| !LANDS.matches(s, ctx.table(), slot, opponent));
-    let may = Prompt::new(Purpose::May);
-    if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), may, Bitboard::EMPTY)? {
-        return Ok(());
+struct Binder;
+
+impl CustomBody for Binder {
+    const SAYS: Says = ASKS;
+
+    fn resolve<L: Layout>(
+        game: &mut game::Game<'_, L>,
+        resolution: &mut Resolution<'_, L>,
+    ) -> Flow {
+        let Some(opponent) = resolution.target_player(game, TargetPlace::FIRST) else {
+            return Ok(());
+        };
+        let (s, you) = (game.state(), resolution.controller());
+        let nonland: Bitboard<L::Slot> = s
+            .zone(ZoneKey::Of(opponent, Zone::Hand))
+            .filter(|slot| !LANDS.matches(s, game.table(), slot, opponent));
+        let may = Prompt::new(Purpose::May);
+        if nonland.is_empty() || !choices::yes_no(game, resolution, you, may, Bitboard::EMPTY)? {
+            return Ok(());
+        }
+        let card = choices::pick(game, resolution, you, nonland, CHOOSE)?;
+        let card = game.state().object_ref(card);
+        zones::move_to(game, card, Zone::Exile, Reason::Exile)?;
+        let exiled = game.state().object_ref(card.slot);
+        casting::allow(game, resolution, exiled, opponent, 2, false, false)?;
+        Ok(())
     }
-    let card = ctx.choose_object(ctx.controller(), nonland, CHOOSE)?;
-    ctx.move_to(ctx.state().object_ref(card), Zone::Exile, Reason::Exile);
-    let exiled = ctx.state().object_ref(card);
-    ctx.allow_cast(exiled, opponent, 2, false, false);
-    Ok(())
 }
 
 /// "Discard a card. You may cast it without paying its mana cost."
-fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    let hand = ctx.state().zone(ZoneKey::Of(you, Zone::Hand));
-    if hand.is_empty() {
-        return Ok(());
+struct LootAndCast;
+
+impl CustomBody for LootAndCast {
+    const SAYS: Says = ASKS;
+
+    fn resolve<L: Layout>(
+        game: &mut game::Game<'_, L>,
+        resolution: &mut Resolution<'_, L>,
+    ) -> Flow {
+        let you = resolution.controller();
+        let hand = game.state().zone(ZoneKey::Of(you, Zone::Hand));
+        if hand.is_empty() {
+            return Ok(());
+        }
+        let card = choices::pick(game, resolution, you, hand, CHOOSE)?;
+        let card = game.state().object_ref(card);
+        zones::move_to(game, card, Zone::Graveyard, Reason::Discard)?;
+        let discarded = game.state().object_ref(card.slot);
+        casting::offer(resolution, discarded, you, true);
+        Ok(())
     }
-    let card = ctx.choose_object(you, hand, CHOOSE)?;
-    ctx.move_to(
-        ctx.state().object_ref(card),
-        Zone::Graveyard,
-        Reason::Discard,
-    );
-    let discarded = ctx.state().object_ref(card);
-    ctx.offer_cast(discarded, you, true);
-    Ok(())
 }
 
 /// "Draw a card, then discard two cards."
-fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 1);
-    ctx.discard_cards(you, 2)?;
-    Ok(())
-}
-
-fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(you));
-    Ok(())
-}
-
-fn draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 1);
-    Ok(())
-}
+const DRAW_THEN_DISCARD_TWO: Effect = sequence(&[draw(YOU, 1), discard(YOU, 2)]);
 
 pub(crate) static ISLAND: CardDef = CardDef {
     name: "Test Island",
@@ -222,7 +194,7 @@ pub(crate) static SAGE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 2),
         types: Types::SORCERY,
-        abilities: &[Ability::spell().custom(bodies!(draw))],
+        abilities: &[Ability::spell().effect(&draw(YOU, 1))],
         ..Face::EMPTY
     }],
 };
@@ -267,7 +239,7 @@ pub(crate) static STRIP: CardDef = CardDef {
             Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
             Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
                 .targeting(&[TargetSpec::one(TargetKind::Permanent, LANDS)])
-                .custom(bodies!(destroy_target)),
+                .effect(&destroy_it(TARGET)),
         ],
         ..Face::EMPTY
     }],
@@ -319,8 +291,7 @@ pub(crate) static TITHE: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .custom(bodies!(tithe))
-            .pauses()],
+            .effect(&COUNTER_UNLESS_PAID)],
         ..Face::EMPTY
     }],
 };
@@ -333,7 +304,7 @@ pub(crate) static LIES: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .custom(bodies!(counter_exile))],
+            .effect(&counter_and_exile(TARGET))],
         ..Face::EMPTY
     }],
 };
@@ -344,7 +315,7 @@ pub(crate) static PONDER: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::SORCERY,
-        abilities: &[Ability::spell().custom(bodies!(ponder)).pauses()],
+        abilities: &[Ability::spell().custom(custom_body::<Ponder>())],
         ..Face::EMPTY
     }],
 };
@@ -355,7 +326,7 @@ pub(crate) static RUMMAGE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 0),
         types: Types::SORCERY,
-        abilities: &[Ability::spell().custom(bodies!(rummage)).pauses()],
+        abilities: &[Ability::spell().effect(&DRAW_THEN_DISCARD_TWO)],
         ..Face::EMPTY
     }],
 };
@@ -430,7 +401,7 @@ pub(crate) static STUPOR: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Not(&LANDS), Filter::Whose(&Players::EachOpponent)]),
                 )])
-                .custom(bodies!(bounce_target))],
+                .effect(&return_to_hand(TARGET))],
             ..Face::EMPTY
         },
         Face {
@@ -473,10 +444,13 @@ pub(crate) static RAVELER: CardDef = CardDef {
             Ability::rule_change(&ONLY_AS_SORCERIES),
             Ability::loyalty(1)
                 .starting(&SORCERIES_AS_FLASH)
-                .custom(bodies!(sorceries_as_flash)),
+                .effect(&change_rule(
+                    &SORCERIES_AS_FLASH,
+                    beryl_card::Duration::UntilYourNextTurn,
+                )),
             Ability::loyalty(-3)
                 .targeting(&[TargetSpec::up_to_one(TargetKind::Permanent, CREATURE)])
-                .custom(bodies!(bounce_target)),
+                .effect(&return_to_hand(TARGET)),
         ],
         ..Face::EMPTY
     }],
@@ -493,13 +467,13 @@ pub(crate) static EMPEROR: CardDef = CardDef {
         abilities: &[
             Ability::rule_change(&LOYALTY_AS_INSTANT)
                 .only_if(&Condition::EnteredThisTurn(Objects::This)),
-            Ability::loyalty(1).custom(bodies!(draw)),
+            Ability::loyalty(1).effect(&draw(YOU, 1)),
             Ability::loyalty(-2)
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[CREATURE, Filter::Tapped]),
                 )])
-                .custom(bodies!(destroy_target)),
+                .effect(&destroy_it(TARGET)),
         ],
         ..Face::EMPTY
     }],
@@ -519,7 +493,7 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
                     Filter::Whose(&Players::You),
                 ]),
             )])
-            .custom(bodies!(flashback))],
+            .effect(&CAST_THIS_TURN)],
         ..Face::EMPTY
     }],
 };
@@ -538,7 +512,7 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
                     Filter::Whose(&Players::You),
                 ]),
             )])
-            .custom(bodies!(snapback))],
+            .effect(&gain_flashback(TARGET))],
         ..Face::EMPTY
     }],
 };
@@ -551,7 +525,7 @@ pub(crate) static BOUNCE: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .custom(bodies!(bounce_spell))],
+            .effect(&return_to_hand(TARGET))],
         ..Face::EMPTY
     }],
 };
@@ -567,8 +541,7 @@ pub(crate) static BINDER: CardDef = CardDef {
                 TargetKind::Player,
                 Filter::Whose(&Players::EachOpponent),
             )])
-            .custom(bodies!(binder))
-            .pauses()],
+            .custom(custom_body::<Binder>())],
         ..Face::EMPTY
     }],
 };
@@ -579,7 +552,7 @@ pub(crate) static LOOTER: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 1),
         types: Types::INSTANT,
-        abilities: &[Ability::spell().custom(bodies!(loot_and_cast)).pauses()],
+        abilities: &[Ability::spell().custom(custom_body::<LootAndCast>())],
         ..Face::EMPTY
     }],
 };
@@ -593,7 +566,7 @@ pub(crate) static STINGER: CardDef = CardDef {
         power: Some(1),
         toughness: Some(1),
         abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .custom(bodies!(destroy_target))
+            .effect(&destroy_it(TARGET))
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),
