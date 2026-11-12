@@ -109,9 +109,9 @@ pub struct CandidateView {
     /// each set of interchangeable attackers (architecture §7.2). None otherwise.
     pub blocks: Vec<u16>,
     /// For a candidate that activates an ability of the object's own face, or puts a waiting
-    /// trigger on the stack: how many abilities of its kind (activated, mana abilities among
-    /// them, or triggered) its face lists before it, as [`StackItem::Ability`]'s `nth` counts
-    /// them, so the UI finds the ability's paragraph.
+    /// trigger on the stack: how many paragraphs of its face's text say abilities of its kind
+    /// (activated, mana abilities among them, or triggered) before the one that says it, as
+    /// [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
     pub nth: Option<u8>,
     /// For a candidate that announces one or more targets: what the first of them may be, one
     /// of each set of interchangeable objects (§7.2), so the UI can take the count and the

@@ -154,13 +154,8 @@ fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
         .get(index)
         .and_then(class)
         .unwrap_or(AbilityClass::Static);
-    let nth = list
-        .iter()
-        .take(index)
-        .filter(|a| class(a) == Some(kind))
-        .count();
     AbilityRef {
         kind,
-        nth: u8::try_from(nth).expect("a face has fewer than 256 abilities"),
+        nth: super::build::paragraphs_before(list, index, |a| class(a) == Some(kind)),
     }
 }

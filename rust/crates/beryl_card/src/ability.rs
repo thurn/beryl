@@ -201,6 +201,13 @@ pub struct Ability {
     /// For a Rust body on an activated ability: what the effect needs to do anything, so
     /// that a human isn't offered an activation that would do nothing ([`Needs`]).
     needs: Needs,
+    /// Whether its card's rules text says it in the paragraph of the ability before it, as
+    /// "Whenever this creature enters or attacks" says the two triggered abilities a face
+    /// lists for it, so that a view finds its words. The rules make a paragraph one ability
+    /// ([CR 113.2c](https://yawgatog.com/resources/magic-rules/#R1132c): "each paragraph
+    /// break in a card's text marks a separate ability"); a face lists one ability for each
+    /// event it triggers on. Read [`Ability::shares_paragraph`].
+    shares_paragraph: bool,
 }
 
 /// What an activated ability's effect needs to do anything. A Rust body is code, which
@@ -248,6 +255,7 @@ impl Ability {
             rule: None,
             only_if_you_control: None,
             needs: Needs::Nothing,
+            shares_paragraph: false,
         }
     }
 
@@ -495,6 +503,17 @@ impl Ability {
         Ability { needs, ..self }
     }
 
+    /// Declares that its card's rules text says it in the paragraph of the ability before it
+    /// in the face's list, as "Whenever this creature enters or attacks" says an enters
+    /// trigger and an attacks trigger.
+    #[must_use]
+    pub const fn in_paragraph_before(self) -> Ability {
+        Ability {
+            shares_paragraph: true,
+            ..self
+        }
+    }
+
     /// A triggered ability's intervening "if" (CR 603.4), or the "as long as" of a static
     /// ability that changes a rule or of a replacement effect. A static ability generating a
     /// continuous effect says its own in its [`LayerSpec`].
@@ -626,6 +645,13 @@ impl Ability {
     #[inline]
     pub const fn only_if_you_control(&self) -> Option<&'static Filter> {
         self.only_if_you_control
+    }
+
+    /// Whether its card's rules text says it in the paragraph of the ability before it
+    /// ([`Ability::in_paragraph_before`]).
+    #[inline]
+    pub const fn shares_paragraph(&self) -> bool {
+        self.shares_paragraph
     }
 
     /// Whether resolving this may ask a player to choose: what its effect data says

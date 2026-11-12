@@ -322,8 +322,8 @@ triggered: boolean,
  */
 tapsToPay?: boolean, 
 /**
- * How many abilities of its kind (triggered, or activated) come before it in its
- * list: the face's text says them in that order, so the UI finds its paragraph.
+ * How many paragraphs of its face's text say abilities of its kind (triggered, or
+ * activated) before the one that says it, so the UI finds its paragraph.
  */
 nth: number, controller: Side, targets: Array<TargetRef>, 
 /**
@@ -423,9 +423,9 @@ payments: Array<Payment>,
 blocks: Array<number>, 
 /**
  * For a candidate that activates an ability of the object's own face, or puts a waiting
- * trigger on the stack: how many abilities of its kind (activated, mana abilities among
- * them, or triggered) its face lists before it, as [`StackItem::Ability`]'s `nth` counts
- * them, so the UI finds the ability's paragraph.
+ * trigger on the stack: how many paragraphs of its face's text say abilities of its kind
+ * (activated, mana abilities among them, or triggered) before the one that says it, as
+ * [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
  */
 nth: number | null, 
 /**

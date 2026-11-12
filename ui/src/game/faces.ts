@@ -181,9 +181,9 @@ export function useAbilityFace(
 /** The paragraph of a card's rules text that says one of its abilities: the `nth` triggered
  * ability ("When", "Whenever", "At", or a keyword whose reminder text says one, as offspring
  * and impending do) or activated one (a cost and a colon, loyalty abilities included),
- * counting as the engine lists them; the whole text when no paragraph matches, as for the
- * second of two triggers one paragraph says ("Whenever this enchantment enters or
- * attacks"). */
+ * counting paragraphs as the session does (one that says two triggers, as "Whenever this
+ * enchantment enters or attacks" does, is counted once); the whole text when no paragraph
+ * matches. */
 export function abilityText(
   text: string,
   triggered: boolean,

@@ -282,8 +282,8 @@ pub enum StackItem {
         #[serde(default, rename = "tapsToPay", skip_serializing_if = "Option::is_none")]
         #[ts(optional, rename = "tapsToPay")]
         taps_to_pay: Option<bool>,
-        /// How many abilities of its kind (triggered, or activated) come before it in its
-        /// list: the face's text says them in that order, so the UI finds its paragraph.
+        /// How many paragraphs of its face's text say abilities of its kind (triggered, or
+        /// activated) before the one that says it, so the UI finds its paragraph.
         nth: u8,
         controller: Side,
         targets: Vec<TargetRef>,

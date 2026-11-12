@@ -377,9 +377,9 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
     }
 }
 
-/// Whether ability `index` of `list` is triggered, and how many abilities of its kind
-/// (triggered, or activated) come before it: the face's text says them in that order, so the
-/// UI finds its paragraph.
+/// Whether ability `index` of `list` is triggered, and how many paragraphs of the face's text
+/// say abilities of its kind (triggered, or activated) before the one that says it, so the UI
+/// finds its paragraph.
 pub(super) fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
     // Triggered, or activated (mana abilities are written as activated ones are); the other
     // kinds have no paragraph of their own to find.
@@ -389,15 +389,26 @@ pub(super) fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
         _ => None,
     };
     let kind = list.get(usize::from(index)).and_then(class) == Some(true);
-    let nth = list
-        .iter()
-        .take(usize::from(index))
-        .filter(|a| class(a) == Some(kind))
-        .count();
-    (
-        kind,
-        u8::try_from(nth).expect("a face has fewer than 256 abilities"),
-    )
+    let nth = paragraphs_before(list, usize::from(index), |a| class(a) == Some(kind));
+    (kind, nth)
+}
+
+/// How many paragraphs of a face's text say abilities of one kind (those `of_kind` accepts)
+/// before the one that says ability `index` of `list`: an ability said in the paragraph of
+/// the one before it ([`Ability::shares_paragraph`]) has none of its own, as the attack
+/// trigger of "Whenever this creature enters or attacks" does.
+pub(super) fn paragraphs_before(
+    list: &[Ability],
+    index: usize,
+    of_kind: impl Fn(&Ability) -> bool,
+) -> u8 {
+    let own = |a: &&Ability| of_kind(a) && !a.shares_paragraph();
+    let before = list.iter().take(index).filter(own).count();
+    // Said in the paragraph before its own, it is the last of those counted.
+    let shares = list
+        .get(index)
+        .is_some_and(|a| of_kind(a) && a.shares_paragraph());
+    u8::try_from(before - usize::from(shares)).expect("a face has fewer than 256 abilities")
 }
 
 /// The costs the spell `e` was cast with: a flashback cost, which is an alternative cost
