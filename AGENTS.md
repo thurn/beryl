@@ -250,7 +250,14 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   say why in a comment (`docs/project-50k.md`, K20).
 - Budgets and deadlines count load-adjusted seconds: while the load average is
   over the core count, the clock runs slower in proportion, up to 8x. A check
-  passes on a busy machine if it would on a quiet one.
+  passes on a busy machine if it would on a quiet one. A lane the deadline kills
+  reruns once by itself with a fresh deadline, so a push that still times out
+  has a slow or hung step: find it before pushing again.
+- The machine runs at most half its cores' worth of browser pages at once,
+  across every run (`ui/scripts/slots.mjs`); a run that is no check shares a
+  third of them. Headless WebKit runs above every build's priority, so prefer
+  the checks a change needs (`just ui-test <title>`, `just specs <card>`) to a
+  full sweep.
 - A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write); removing it saves them back.
 
