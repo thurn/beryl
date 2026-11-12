@@ -5,12 +5,12 @@
 //! explores. Activate only as a sorcery."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
+    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Players, Subtype, Subtypes,
     TargetKind, TargetSpec, Timing, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
 
@@ -65,7 +65,7 @@ pub static MAP: CardDef = CardDef {
             timing: Timing::Sorcery,
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
-                Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(Whose::You)]),
+                Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
             )],
             may_pause: true,
             body: bodies!(explore),

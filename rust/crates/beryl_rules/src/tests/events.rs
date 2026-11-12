@@ -4,12 +4,14 @@
 // Bodies share the `Flow` signature of `Ability::body`, whether or not they can pause.
 #![allow(clippy::unnecessary_wraps)]
 
+use beryl_card::{Amount, Comparison};
+
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Face,
-    FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Part, Players,
-    Prompt, Purpose, Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec,
-    Trigger, Types,
+    Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face,
+    FaceAbility, FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part,
+    Players, Prompt, Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger,
+    Types,
 };
 use crate::damage;
 use crate::effect::EffectCtx;
@@ -295,9 +297,9 @@ static ADELINE: CardDef = CardDef {
         power: Some(0),
         toughness: Some(4),
         abilities: &[
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Itself,
-                condition: StaticCondition::Always,
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::This,
+                condition: None,
                 modification: Modification::PowerIsCreaturesYouControl,
             }),
             Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking)),
@@ -341,9 +343,13 @@ static OVERLORD: CardDef = CardDef {
         power: Some(5),
         toughness: Some(5),
         abilities: &[
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Itself,
-                condition: StaticCondition::HasCounter(CounterKind::Time),
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::This,
+                condition: Some(Condition::Compare(
+                    Amount::Counters(Objects::This, CounterKind::Time),
+                    Comparison::AtLeast,
+                    Amount::Fixed(1),
+                )),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
             Ability::triggered(&Trigger::ENTERS, bodies!(two_insects)),
@@ -406,19 +412,19 @@ static RECONFIG: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         subtypes: Subtypes::of(&[Subtype::Aura]),
         abilities: &[
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Enchanted,
-                condition: StaticCondition::Always,
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::AttachedTo,
+                condition: None,
                 modification: Modification::SetTypes(Types::ARTIFACT),
             }),
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Enchanted,
-                condition: StaticCondition::Always,
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::AttachedTo,
+                condition: None,
                 modification: Modification::AddSubtype(Subtype::Vehicle),
             }),
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Enchanted,
-                condition: StaticCondition::Always,
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::AttachedTo,
+                condition: None,
                 modification: Modification::grant(0),
             }),
         ],

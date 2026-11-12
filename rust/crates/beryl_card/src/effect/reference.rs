@@ -25,6 +25,11 @@ pub enum Objects {
     /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "A target that's no
     /// longer in the zone it was in when it was targeted is illegal."
     Target(SpecIx),
+    /// The object this one is attached to: "enchanted creature", "equipped creature"
+    /// ([CR 303.4b](https://yawgatog.com/resources/magic-rules/#R3034b)): "The object or
+    /// player an Aura is attached to is called enchanted." Nothing while this is attached to
+    /// nothing, or is no longer on the battlefield.
+    AttachedTo,
     /// What the instruction before acted on: "it", "them", "that card", "those tokens" (the
     /// [module](crate::effect) says which instruction that is).
     Those,
@@ -56,8 +61,8 @@ pub enum Players {
     EachPlayer,
     /// The players chosen for the `n`th instance of the word "target", counting from 0 (CR
     /// 115.1): "target player", "target opponent". Its [`crate::TargetSpec`] says which
-    /// players may be chosen: any for "target player", and for "target opponent" those
-    /// [`crate::Whose::AnOpponent`] accepts.
+    /// players may be chosen: any for "target player", and for "target opponent" those a
+    /// [`Filter::Whose`] of [`Players::EachOpponent`] accepts.
     Target(SpecIx),
     /// "Its controller", "their controllers"
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's
@@ -72,4 +77,33 @@ pub enum Players {
     /// "That player", "they": the player an [`crate::Effect::ForEachPlayer`] is being done
     /// for.
     ThatPlayer,
+}
+
+impl Objects {
+    /// Whether this means something only a resolving spell or ability has: its targets, or
+    /// what an instruction before acted on. An expression that does can be read for a
+    /// resolution and for nothing else, a static ability least of all
+    /// ([`crate::LayerSpec::needs_a_resolution`]).
+    pub const fn needs_a_resolution(&self) -> bool {
+        match self {
+            Objects::This | Objects::AttachedTo => false,
+            Objects::Target(_) | Objects::Those => true,
+            Objects::All { filter, .. } => filter.needs_a_resolution(),
+        }
+    }
+}
+
+impl Players {
+    /// Whether this means something only a resolving spell or ability has
+    /// ([`Objects::needs_a_resolution`]): its targets, or the player an instruction is being
+    /// done for.
+    pub const fn needs_a_resolution(&self) -> bool {
+        match self {
+            Players::You | Players::EachOpponent | Players::EachPlayer => false,
+            Players::Target(_) | Players::ThatPlayer => true,
+            Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
+                objects.needs_a_resolution()
+            }
+        }
+    }
 }

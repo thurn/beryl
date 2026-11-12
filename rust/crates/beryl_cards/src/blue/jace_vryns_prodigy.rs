@@ -17,7 +17,7 @@ use beryl_engine::card::{
     Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
 
@@ -73,7 +73,7 @@ pub static CARD: CardDef = CardDef {
                         TargetKind::GraveyardCard,
                         Filter::All(&[
                             Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                            Filter::Whose(Whose::You),
+                            Filter::Whose(&Players::You),
                         ]),
                     )],
                     body: bodies!(recast),
@@ -102,7 +102,7 @@ pub static EMBLEM: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::AnOpponent),
+                Filter::Whose(&Players::EachOpponent),
             )],
             ..Ability::triggered(
                 &Trigger::casts(Players::You, Filter::Any),

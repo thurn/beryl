@@ -3,9 +3,10 @@
 
 use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
 use beryl_engine::card::{
-    Ability, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Trigger, Types,
+    Ability, Behavior, CardDef, Colors, Face, ManaCost, Players, TargetKind, TargetSpec, Trigger,
+    Types,
 };
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 
 use crate::names;
 
@@ -26,7 +27,7 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[
                     Filter::Not(&Filter::Types(Types::LAND)),
-                    Filter::Whose(Whose::AnOpponent),
+                    Filter::Whose(&Players::EachOpponent),
                     Filter::ManaValueAtMost(2),
                 ]),
             )],

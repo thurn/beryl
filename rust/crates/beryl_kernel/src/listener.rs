@@ -5,13 +5,13 @@
 //! engine matches. What it matches is said here, in one place: [`listens_to`] gives a
 //! trigger's kind or refuses it, and a game's card table is built only from triggers it
 //! gives a kind ([`crate::table::TableError::Trigger`]). The rules' matcher then reads a
-//! subject with no case for what was refused, and the players through [`is_for`].
+//! subject with no case for what was refused, and the players through
+//! [`crate::filter::is_for`].
 
 use beryl_card::{AbilityIx, CardDef, FaceIx, Filter, Players, Subject, Trigger, TriggerEvent};
 
 use crate::event::kind;
-use crate::filter::is_an_opponent;
-use crate::ids::Seat;
+use crate::filter::reads;
 
 /// One triggered ability of a card of the game, under the kind of event it listens to.
 #[derive(Clone, Copy, Debug)]
@@ -73,7 +73,7 @@ pub fn listens_to(trigger: &Trigger) -> Result<u16, Unmatched> {
     };
     let whose = match trigger.whose {
         Players::EachPlayer => Ok(()),
-        Players::You | Players::EachOpponent if has_player => Ok(()),
+        ref players if has_player && reads(players) => Ok(()),
         _ => Err(Unmatched::Whose),
     };
     subject.and(whose)?;
@@ -81,24 +81,6 @@ pub fn listens_to(trigger: &Trigger) -> Result<u16, Unmatched> {
         (false, kind) => Ok(kind),
         (true, kind::STEP) => Ok(0),
         (true, _) => Err(Unmatched::Delayed),
-    }
-}
-
-/// Whether `player` is one of the players a trigger is for, read for `you`, its ability's
-/// controller ([`Trigger::whose`]).
-///
-/// # Panics
-///
-/// For players [`listens_to`] refuses, which no trigger of a game's table has.
-#[inline]
-pub fn is_for(whose: Players, player: Seat, you: Seat) -> bool {
-    match whose {
-        // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
-        // controller".
-        Players::You => player == you,
-        Players::EachOpponent => is_an_opponent(player, you),
-        Players::EachPlayer => true,
-        _ => unreachable!("the card table refuses a trigger for other players"),
     }
 }
 
@@ -212,16 +194,5 @@ mod tests {
         ] {
             assert_eq!(listens_to(&trigger), Err(Unmatched::Whose), "{trigger:?}");
         }
-    }
-
-    #[test]
-    fn a_trigger_is_for_the_players_it_names() {
-        let (you, other) = (Seat::BOTH[0], Seat::BOTH[1]);
-        assert!(is_for(Players::You, you, you));
-        assert!(!is_for(Players::You, other, you));
-        assert!(is_for(Players::EachOpponent, other, you));
-        assert!(!is_for(Players::EachOpponent, you, you));
-        assert!(is_for(Players::EachPlayer, you, you));
-        assert!(is_for(Players::EachPlayer, other, you));
     }
 }

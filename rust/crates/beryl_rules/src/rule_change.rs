@@ -49,7 +49,7 @@ pub(crate) fn maker<L: Layout>(
             // place in the battlefield list.
             s.permanents()
                 .find(|&(slot, d)| {
-                    filter::is_whose(whose, player, d.controller) && has(s, t, slot, rule)
+                    filter::is_for(&whose, player, d.controller) && has(s, t, slot, rule)
                 })
                 .map(|(slot, _)| slot)
         }

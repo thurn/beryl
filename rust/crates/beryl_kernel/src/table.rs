@@ -10,6 +10,7 @@ use crate::event::kind;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
+use crate::static_ability::{self, Unapplied};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
 #[derive(Debug)]
@@ -64,6 +65,17 @@ pub enum TableError {
         card: &'static str,
         unmatched: Unmatched,
     },
+    /// A card of the game, or a token or emblem one makes, has a static ability whose
+    /// continuous effect the layers have no code to apply ([`static_ability::applied`]): it
+    /// would change nothing, so no game is played with it.
+    Static {
+        card: &'static str,
+        unapplied: Unapplied,
+    },
+    /// A filter of a card of the game, or of a token or emblem one makes, names players the
+    /// engine does not read in a filter ([`crate::filter::reads`]): "that player controls",
+    /// "its owner controls".
+    Players { card: &'static str },
 }
 
 /// The cards one game can contain, under dense game-local indices: what `State` stores for
@@ -200,6 +212,13 @@ impl GameTable {
                 card: def.name,
                 unmatched,
             })?;
+            static_ability::check(def).map_err(|unapplied| TableError::Static {
+                card: def.name,
+                unapplied,
+            })?;
+            if !crate::filter::reads_players_of(def) {
+                return Err(TableError::Players { card: def.name });
+            }
             listens.push(of.iter().fold(rule_change(def), |mask, l| mask | l.kind));
             listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
             listeners.extend(of);
@@ -540,177 +559,4 @@ pub fn is_sacrificed(a: &Ability) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use beryl_card::{
-        Behavior, Effect, Filter, ManaColor, ManaSet, Players, Subject, Trigger, TriggerEvent,
-        TurnStep, Types,
-    };
-
-    use super::*;
-
-    static ALPHA: CardDef = CardDef {
-        name: "Alpha",
-        faces: &[],
-        tokens: &[],
-    };
-    static BETA: CardDef = CardDef {
-        name: "Beta",
-        faces: &[],
-        tokens: &[],
-    };
-    /// A second definition under Alpha's name.
-    static ALPHA_AGAIN: CardDef = CardDef {
-        name: "Alpha",
-        faces: &[],
-        tokens: &[],
-    };
-    static TABLE: CardTable = CardTable::new(&[&ALPHA, &BETA, &ALPHA_AGAIN]);
-
-    /// A planeswalker whose static abilities read the turn it entered and change a rule
-    /// for its controller's opponents.
-    static WALKER: CardDef = CardDef {
-        name: "Walker",
-        faces: &[Face {
-            abilities: &[
-                Ability {
-                    kind: AbilityKind::Static,
-                    rule: Rule::InstantLoyaltyTheTurnItEntered,
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Static,
-                    rule: Rule::OpponentsCastAsSorceries,
-                    ..Ability::NONE
-                },
-                Ability {
-                    kind: AbilityKind::Activated,
-                    cost: Cost::loyalty(1),
-                    ..Ability::NONE
-                },
-            ],
-            ..Face::EMPTY
-        }],
-        tokens: &[],
-    };
-    static WALKERS: CardTable = CardTable::new(&[&ALPHA, &WALKER]);
-
-    #[test]
-    fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
-        let all = [Capability::EnteredThisTurn, Capability::LoyaltyActivated];
-        let plain = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(4, "Alpha")]]).unwrap();
-        assert!(all.iter().all(|&c| !plain.can(c)));
-        // One deck's card is enough: both players' games read the same table.
-        let walker = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
-        assert!(all.iter().all(|&c| walker.can(c)));
-    }
-
-    #[test]
-    fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
-        let t = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
-        let (alpha, walker) = (CardIx::from_index(0), CardIx::from_index(1));
-        assert_eq!(t.listens(alpha) & kind::RULE_CHANGE, 0);
-        assert_eq!(t.listens(walker), kind::RULE_CHANGE);
-        assert_eq!(t.listens_any(), kind::RULE_CHANGE);
-        // Its rule about itself is none of the players' rules.
-        assert_eq!(
-            t.may_have_rules(walker).common(Rules::OF_PLAYERS),
-            Rules::NONE.with(Rule::OpponentsCastAsSorceries)
-        );
-    }
-
-    /// "When this enters" and "at the beginning of your upkeep" on the front, "whenever you
-    /// draw a card" on the back.
-    static HERALD: CardDef = CardDef {
-        name: "Herald",
-        faces: &[
-            Face {
-                abilities: &[
-                    Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
-                    Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-                    Ability::triggered(
-                        &Trigger::step(TurnStep::Upkeep, Players::You),
-                        Behavior::Data(&Effect::NOTHING),
-                    ),
-                    Ability::triggered(&Trigger::ENTERS, Behavior::Data(&Effect::NOTHING)),
-                ],
-                ..Face::EMPTY
-            },
-            Face {
-                abilities: &[Ability::triggered(
-                    &Trigger::draws(Players::You),
-                    Behavior::Data(&Effect::NOTHING),
-                )],
-                ..Face::EMPTY
-            },
-        ],
-        tokens: &[],
-    };
-    /// "Whenever another creature enters", which the engine has no code to match, on a
-    /// token a card makes.
-    static GREETER: CardDef = CardDef {
-        name: "Greeter",
-        faces: &[Face {
-            abilities: &[Ability::triggered(
-                &Trigger::of(
-                    TriggerEvent::Enters,
-                    Subject::A(Filter::Types(Types::CREATURE)),
-                ),
-                Behavior::Data(&Effect::NOTHING),
-            )],
-            ..Face::EMPTY
-        }],
-        tokens: &[],
-    };
-    static HOST: CardDef = CardDef {
-        name: "Host",
-        faces: &[],
-        tokens: &[&GREETER],
-    };
-    static TRIGGERS: CardTable = CardTable::new(&[&ALPHA, &HERALD, &GREETER, &HOST]);
-
-    #[test]
-    fn an_event_reads_only_the_listeners_of_its_kind_on_the_face_that_is_up() {
-        let t = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], &[(1, "Herald")]]).unwrap();
-        let (alpha, herald) = (CardIx::from_index(0), CardIx::from_index(1));
-        let listening = |card, face, kind| -> Vec<u8> {
-            t.listeners(card, face, kind)
-                .map(|l| l.ability.get())
-                .collect()
-        };
-        assert_eq!(t.listens(herald), kind::ENTERS | kind::STEP | kind::DRAW);
-        assert_eq!(t.listens_any(), t.listens(herald));
-        assert_eq!(listening(herald, FaceIx::FRONT, kind::ENTERS), [0, 3]);
-        assert_eq!(listening(herald, FaceIx::FRONT, kind::STEP), [2]);
-        assert_eq!(listening(herald, FaceIx::FRONT, kind::DRAW), [0u8; 0]);
-        assert_eq!(listening(herald, FaceIx::BACK, kind::DRAW), [0]);
-        assert_eq!(listening(herald, FaceIx::DOWN, kind::ENTERS), [0u8; 0]);
-        assert_eq!(listening(alpha, FaceIx::FRONT, kind::ENTERS), [0u8; 0]);
-    }
-
-    /// A trigger no code matches would never trigger: the table is not built, whether the
-    /// card is in a deck or is a token a deck's card makes.
-    #[test]
-    fn a_table_refuses_a_trigger_the_engine_cannot_match() {
-        let refused = TableError::Trigger {
-            card: "Greeter",
-            unmatched: Unmatched::Subject,
-        };
-        for deck in [&[(1, "Greeter")], &[(1, "Host")]] {
-            let table = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], deck]);
-            assert_eq!(table.err(), Some(refused.clone()));
-        }
-    }
-
-    #[test]
-    fn get_finds_each_name_and_misses_unknown() {
-        assert!(std::ptr::eq(TABLE.get("Beta").unwrap(), &raw const BETA));
-        assert!(TABLE.get("Gamma").is_none());
-        assert!(TABLE.get("").is_none());
-    }
-
-    #[test]
-    fn get_returns_the_first_definition_of_a_name() {
-        assert!(std::ptr::eq(TABLE.get("Alpha").unwrap(), &raw const ALPHA));
-        assert_eq!(TABLE.cards().len(), 3);
-    }
-}
+mod tests;

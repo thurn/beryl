@@ -5,9 +5,7 @@ use std::fmt;
 use std::panic::RefUnwindSafe;
 
 use crate::characteristics::Types;
-use crate::continuous::{
-    Affected, Duration, LayerSpec, Modification, Replacement, Rule, StaticCondition,
-};
+use crate::continuous::{Duration, LayerSpec, Modification, Replacement, Rule};
 use crate::cost::{CastingKind, Cost};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
@@ -92,6 +90,17 @@ const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
 /// "At the beginning of your end step", for [`Ability::impending_countdown`].
 const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);
 
+/// Impending's "if this permanent's impending cost was paid and it has a time counter on
+/// it" (CR 702.176a), which its static ability and its triggered one both say.
+const IMPENDING: Condition = Condition::All(&[
+    Condition::Paid(CastingKind::Impending),
+    Condition::Compare(
+        Amount::Counters(Objects::This, CounterKind::Time),
+        Comparison::AtLeast,
+        Amount::Fixed(1),
+    ),
+]);
+
 /// The most mana of one kind [`Ability::tap_for_mana`] makes.
 const MOST_MANA: usize = 3;
 
@@ -132,9 +141,10 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
 ///
 /// The engine scans a face's abilities for every decision it builds, so the size is kept a
 /// power of two, which makes stepping through them a shift: at 120 bytes the rollout
-/// benchmark counted 0.11% more instructions than at 128.
+/// benchmark counted 0.11% more instructions than at 128. The alignment is what rounds it
+/// up: the fields fill 105 bytes.
 #[derive(Debug)]
-#[repr(align(16))]
+#[repr(align(32))]
 pub struct Ability {
     pub kind: AbilityKind,
     pub cost: Cost,
@@ -147,7 +157,7 @@ pub struct Ability {
     pub may_pause: bool,
     pub body: Behavior,
     /// Triggered abilities: what they trigger on. Held by reference, as the body and the
-    /// condition are: a [`Trigger`] names a filter and players, and an ability has 13 bytes
+    /// condition are: a [`Trigger`] names a filter and players, and an ability has 23 bytes
     /// to spare before it is 256.
     pub trigger: Option<&'static Trigger>,
     /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
@@ -158,8 +168,9 @@ pub struct Ability {
     pub condition: Option<&'static Condition>,
     /// Replacement abilities: the event they modify.
     pub replacement: Replacement,
-    /// Static abilities: the continuous effect they generate on the battlefield.
-    pub layer: Option<LayerSpec>,
+    /// Static abilities: the continuous effect they generate on the battlefield. Held by
+    /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
+    pub layer: Option<&'static LayerSpec>,
     /// Static abilities: the rule they change.
     pub rule: Rule,
     /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
@@ -227,7 +238,16 @@ impl Ability {
     }
 
     /// A static ability generating a continuous effect.
-    pub const fn static_ability(layer: LayerSpec) -> Ability {
+    ///
+    /// # Panics
+    ///
+    /// As the definition compiles, if the effect says something only a resolving spell or
+    /// ability has ([`LayerSpec::needs_a_resolution`]).
+    pub const fn static_ability(layer: &'static LayerSpec) -> Ability {
+        assert!(
+            !layer.needs_a_resolution(),
+            "a static ability has no targets, no X and no instruction before it"
+        );
         Ability {
             layer: Some(layer),
             ..Ability::NONE
@@ -304,9 +324,9 @@ impl Ability {
     /// [`CastingOption::Impending`], whose counters the permanent enters with, and
     /// [`Ability::impending_countdown`].
     pub const fn impending() -> Ability {
-        Ability::static_ability(LayerSpec {
-            affected: Affected::Itself,
-            condition: StaticCondition::Impending,
+        Ability::static_ability(&LayerSpec {
+            affected: Objects::This,
+            condition: Some(IMPENDING),
             modification: Modification::RemoveTypes(Types::CREATURE),
         })
     }
@@ -316,14 +336,7 @@ impl Ability {
     /// time counter from it."
     pub const fn impending_countdown() -> Ability {
         Ability {
-            condition: Some(&Condition::All(&[
-                Condition::Paid(CastingKind::Impending),
-                Condition::Compare(
-                    Amount::Counters(Objects::This, CounterKind::Time),
-                    Comparison::AtLeast,
-                    Amount::Fixed(1),
-                ),
-            ])),
+            condition: Some(&IMPENDING),
             ..Ability::triggered(
                 &YOUR_END_STEP,
                 Behavior::Data(&Effect::RemoveCounters {
@@ -400,7 +413,20 @@ impl Ability {
 
 #[cfg(test)]
 mod tests {
-    use super::Custom;
+    use super::*;
+    use crate::characteristics::Keywords;
+
+    /// "As long as you do" is no static ability: nothing was done before it. In a card's
+    /// `static` the same assertion stops the build.
+    #[test]
+    #[should_panic(expected = "a static ability has no targets")]
+    fn a_static_ability_that_needs_a_resolution_is_refused() {
+        let _ = Ability::static_ability(&LayerSpec {
+            affected: Objects::This,
+            condition: Some(Condition::Did),
+            modification: Modification::AddKeywords(Keywords::FLYING),
+        });
+    }
 
     #[test]
     fn custom_gives_back_only_the_type_it_was_made_of() {

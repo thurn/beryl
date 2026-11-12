@@ -6,20 +6,20 @@
 //! (It's not a creature unless it's crewed.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, Affected, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost,
-    Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost, Modification,
+    Objects, Subtype, Subtypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
 
 use crate::names;
 
-/// A static ability of the Aura over the permanent it enchants.
-const fn enchanted(modification: Modification) -> Ability {
-    Ability::static_ability(LayerSpec {
-        affected: Affected::Enchanted,
-        condition: StaticCondition::Always,
+/// What a static ability of the Aura does to the permanent it enchants.
+const fn enchanted(modification: Modification) -> LayerSpec {
+    LayerSpec {
+        affected: Objects::AttachedTo,
+        condition: None,
         modification,
-    })
+    }
 }
 
 pub static CARD: CardDef = CardDef {
@@ -49,10 +49,10 @@ pub static CARD: CardDef = CardDef {
             // Layer 4 ([CR 205.1a](https://yawgatog.com/resources/magic-rules/#R2051a)): the
             // new card type replaces the others, and the subtypes of the types it loses go
             // with them.
-            enchanted(Modification::SetTypes(Types::ARTIFACT)),
-            enchanted(Modification::AddSubtype(Subtype::Vehicle)),
+            Ability::static_ability(&enchanted(Modification::SetTypes(Types::ARTIFACT))),
+            Ability::static_ability(&enchanted(Modification::AddSubtype(Subtype::Vehicle))),
             // Layer 6: "with crew 5".
-            enchanted(Modification::grant(0)),
+            Ability::static_ability(&enchanted(Modification::grant(0))),
         ],
         grants: &[Ability::crew(5)],
         ..Face::EMPTY

@@ -24,7 +24,7 @@ pub(crate) enum TargetSet<L: Layout = Small> {
 fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
     match filter {
         Filter::Any => true,
-        Filter::Whose(whose) => filter::is_whose(whose, player, you),
+        Filter::Whose(players) => filter::is_for(players, player, you),
         _ => unreachable!("a player filter is Any or Whose"),
     }
 }

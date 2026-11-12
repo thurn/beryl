@@ -6,7 +6,7 @@
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
 
-use beryl_card::{Amount, CastingKind, Comparison, Condition, Objects, Players, SpecIx};
+use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx};
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -131,7 +131,7 @@ impl<L: Layout> Scene<'_, L> {
     fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known> + '_ {
         let spec = match objects {
             Objects::Target(spec) => Some(spec),
-            Objects::This | Objects::Those | Objects::All { .. } => None,
+            Objects::This | Objects::AttachedTo | Objects::Those | Objects::All { .. } => None,
         };
         spec.into_iter()
             .flat_map(|spec| self.targets(spec))
@@ -161,6 +161,15 @@ impl<L: Layout> Scene<'_, L> {
                 .filter(|&object| s.is_current(object))
                 .map(|object| object.slot)
                 .collect(),
+            // CR 303.4b: "The object or player an Aura is attached to is called enchanted."
+            // Asked of the source where it is now: once it has left the battlefield it is
+            // attached to nothing.
+            Objects::AttachedTo => self
+                .subject
+                .source
+                .filter(|&source| s.is_current(source))
+                .and_then(|source| s.object(source.slot).attached_to())
+                .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
             Objects::All { zone, filter } => {
                 let within = match zone {
@@ -298,14 +307,7 @@ impl<L: Layout> Scene<'_, L> {
             Condition::Did => self.registers.outcome.did,
             Condition::Paid(kind) => self.paid(kind),
             Condition::Compare(left, comparison, right) => {
-                let (left, right) = (self.amount(left), self.amount(right));
-                match comparison {
-                    Comparison::AtLeast => left >= right,
-                    Comparison::AtMost => left <= right,
-                    Comparison::Equal => left == right,
-                    Comparison::MoreThan => left > right,
-                    Comparison::LessThan => left < right,
-                }
+                comparison.holds(self.amount(left), self.amount(right))
             }
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds

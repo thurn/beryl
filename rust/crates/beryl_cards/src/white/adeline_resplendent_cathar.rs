@@ -5,8 +5,8 @@
 
 use beryl_card::Players;
 use beryl_engine::card::{
-    Ability, Affected, CardDef, Colors, Face, Flow, Keywords, LayerSpec, ManaCost, Modification,
-    StaticCondition, Subtype, Subtypes, Supertypes, Trigger, Types,
+    Ability, CardDef, Colors, Face, Flow, Keywords, LayerSpec, ManaCost, Modification, Objects,
+    Subtype, Subtypes, Supertypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::{Layout, bodies};
@@ -59,9 +59,9 @@ pub static CARD: CardDef = CardDef {
             // layer 7a ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)):
             // "Effects from characteristic-defining abilities that define power and/or
             // toughness are applied."
-            Ability::static_ability(LayerSpec {
-                affected: Affected::Itself,
-                condition: StaticCondition::Always,
+            Ability::static_ability(&LayerSpec {
+                affected: Objects::This,
+                condition: None,
                 modification: Modification::PowerIsCreaturesYouControl,
             }),
             Ability {

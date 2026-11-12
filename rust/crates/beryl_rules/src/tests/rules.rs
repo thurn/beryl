@@ -1,10 +1,10 @@
 //! State-based actions, shuffles, filters and mana abilities on hand-built positions.
 
 use super::{DUAL, LANDS, MIXED, begin, decide, table};
-use crate::card::{ManaColor, Purpose, Types};
+use crate::card::{ManaColor, Players, Purpose, Types};
 use crate::effect::EffectCtx;
 use crate::event::Sink;
-use crate::filter::{Evaluate, Filter, Whose};
+use crate::filter::{Evaluate, Filter};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{PendingTrigger, Zone, ZoneKey};
 use crate::zone::Place;
@@ -220,16 +220,23 @@ fn filters_select_by_type_and_owner() {
     assert_eq!((lands | others), hand);
     assert!((lands & others).is_empty());
     assert!(lands.all(|slot| s.definition_name(&t, slot) == "Test Land"));
-    assert_eq!(Filter::Whose(Whose::You).select(&s, &t, hand, p), hand);
+    assert_eq!(Filter::Whose(&Players::You).select(&s, &t, hand, p), hand);
     assert!(
-        Filter::Whose(Whose::AnOpponent)
+        Filter::Whose(&Players::EachOpponent)
             .select(&s, &t, hand, p)
             .is_empty()
     );
     assert_eq!(
-        Filter::Whose(Whose::AnOpponent).select(&s, &t, hand, p.opponent()),
+        Filter::Whose(&Players::EachOpponent).select(&s, &t, hand, p.opponent()),
         hand
     );
+    // "A player's": whoever reads it.
+    for you in [p, p.opponent()] {
+        assert_eq!(
+            Filter::Whose(&Players::EachPlayer).select(&s, &t, hand, you),
+            hand
+        );
+    }
 }
 
 #[test]

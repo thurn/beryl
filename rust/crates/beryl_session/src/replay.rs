@@ -181,6 +181,16 @@ impl ReplayFile {
                             "{card} has a trigger the engine cannot match: {unmatched:?}"
                         ),
                     },
+                    TableError::Static { card, unapplied } => SessionError::Deck {
+                        reason: format!(
+                            "{card} has a static ability the engine cannot apply: {unapplied:?}"
+                        ),
+                    },
+                    TableError::Players { card } => SessionError::Deck {
+                        reason: format!(
+                            "{card} has a filter naming players the engine cannot read"
+                        ),
+                    },
                 }
             })?;
         let profile = with_stops(

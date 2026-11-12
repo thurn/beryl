@@ -4,12 +4,12 @@
 //! to cast."
 
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Place, Prompt, Purpose, Subtype,
-    Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Place, Players, Prompt, Purpose,
+    Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::filter::{Evaluate, Filter, Whose};
+use beryl_engine::filter::{Evaluate, Filter};
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
 use beryl_engine::{Zone, ZoneKey};
@@ -56,7 +56,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::AnOpponent),
+                Filter::Whose(&Players::EachOpponent),
             )],
             may_pause: true,
             ..Ability::triggered(&Trigger::ENTERS, bodies!(spellbind))

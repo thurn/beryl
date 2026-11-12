@@ -27,9 +27,9 @@
 
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ObjectAbility, Purpose, Replacement, TargetKind, TargetSpec, Types,
+    ObjectAbility, Players, Purpose, Replacement, TargetKind, TargetSpec, Types,
 };
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -468,7 +468,7 @@ impl Policy<'_> {
         let Some(spec) = a.targets.first() else {
             return v;
         };
-        let friendly = friendly || whose(&spec.filter) == Some(Whose::You);
+        let friendly = friendly || matches!(whose(&spec.filter), Some(Players::You));
         let min = match spec.kind {
             _ if friendly => 0,
             TargetKind::Spell => COUNTER_MIN,
@@ -564,8 +564,8 @@ impl Policy<'_> {
             Some(FaceAbility::Grant(_)) => u8::MAX,
             None => index_of(face, a),
         };
-        let friendly =
-            self.values.get(e.card).friendly(index) || whose(&spec.filter) == Some(Whose::You);
+        let friendly = self.values.get(e.card).friendly(index)
+            || matches!(whose(&spec.filter), Some(Players::You));
         Some((spec, friendly))
     }
 
@@ -727,9 +727,9 @@ impl Policy<'_> {
 }
 
 /// Whose objects a filter requires, if it says.
-pub(crate) fn whose(f: &Filter) -> Option<Whose> {
+pub(crate) fn whose(f: &Filter) -> Option<&'static Players> {
     match f {
-        Filter::Whose(w) => Some(*w),
+        Filter::Whose(players) => Some(players),
         Filter::All(fs) => fs.iter().find_map(whose),
         _ => None,
     }

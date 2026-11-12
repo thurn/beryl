@@ -40,3 +40,20 @@ pub enum Amount {
     /// "The number of [kind] counters on [objects]".
     Counters(Objects, CounterKind),
 }
+
+impl Amount {
+    /// Whether this means something only a resolving spell or ability has
+    /// ([`Objects::needs_a_resolution`]): its X, or how much an instruction before did.
+    pub const fn needs_a_resolution(&self) -> bool {
+        match self {
+            Amount::Fixed(_) => false,
+            Amount::X | Amount::ThatMany => true,
+            Amount::Count(objects) => objects.needs_a_resolution(),
+            Amount::Times(_, amount) => amount.needs_a_resolution(),
+            Amount::Power(objects)
+            | Amount::Toughness(objects)
+            | Amount::ManaValue(objects)
+            | Amount::Counters(objects, _) => objects.needs_a_resolution(),
+        }
+    }
+}

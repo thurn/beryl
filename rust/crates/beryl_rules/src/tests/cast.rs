@@ -8,12 +8,12 @@ use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, Face, FaceIx, Flow, Keywords,
-    ManaColor, ManaCost, ManaSet, Prompt, Purpose, Rule, Subtype, Subtypes, Supertypes, TargetKind,
-    TargetSpec, Trigger, Types,
+    ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Rule, Subtype, Subtypes, Supertypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::Reason;
-use crate::filter::{Evaluate, Filter, Whose};
+use crate::filter::{Evaluate, Filter};
 use crate::game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
@@ -466,7 +466,7 @@ pub(crate) static STUPOR: CardDef = CardDef {
                 kind: AbilityKind::Spell,
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
-                    Filter::All(&[Filter::Not(&LANDS), Filter::Whose(Whose::AnOpponent)]),
+                    Filter::All(&[Filter::Not(&LANDS), Filter::Whose(&Players::EachOpponent)]),
                 )],
                 body: bodies!(bounce_target),
                 ..Ability::NONE
@@ -559,7 +559,7 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                    Filter::Whose(Whose::You),
+                    Filter::Whose(&Players::You),
                 ]),
             )],
             body: bodies!(flashback),
@@ -581,7 +581,7 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                    Filter::Whose(Whose::You),
+                    Filter::Whose(&Players::You),
                 ]),
             )],
             body: bodies!(snapback),
@@ -617,7 +617,7 @@ pub(crate) static BINDER: CardDef = CardDef {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(
                 TargetKind::Player,
-                Filter::Whose(Whose::AnOpponent),
+                Filter::Whose(&Players::EachOpponent),
             )],
             may_pause: true,
             body: bodies!(binder),
@@ -654,7 +654,7 @@ pub(crate) static STINGER: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
-                Filter::All(&[CREATURE, Filter::Whose(Whose::AnOpponent)]),
+                Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),
             )],
             ..Ability::triggered(&Trigger::ENTERS, bodies!(destroy_target))
         }],

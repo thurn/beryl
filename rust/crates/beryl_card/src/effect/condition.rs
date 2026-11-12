@@ -37,6 +37,36 @@ pub enum Condition {
     Custom(Custom),
 }
 
+impl Condition {
+    /// Whether this means something only a resolving spell or ability has
+    /// ([`Objects::needs_a_resolution`]): whether an instruction before did anything, or an
+    /// expression of it that does. A cost paid is none: a permanent remembers what its spell
+    /// paid.
+    pub const fn needs_a_resolution(&self) -> bool {
+        match self {
+            Condition::Did => true,
+            Condition::Paid(_) | Condition::Custom(_) => false,
+            Condition::Compare(left, _, right) => {
+                left.needs_a_resolution() || right.needs_a_resolution()
+            }
+            Condition::Is(objects, filter) => {
+                objects.needs_a_resolution() || filter.needs_a_resolution()
+            }
+            Condition::Not(condition) => condition.needs_a_resolution(),
+            Condition::All(conditions) | Condition::Any(conditions) => {
+                let mut i = 0;
+                while i < conditions.len() {
+                    if conditions[i].needs_a_resolution() {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+        }
+    }
+}
+
 /// How one [`Amount`] is held against another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Comparison {
@@ -50,4 +80,18 @@ pub enum Comparison {
     MoreThan,
     /// "Fewer than", "less than".
     LessThan,
+}
+
+impl Comparison {
+    /// Whether `left` is this to `right`: 3 is [`Comparison::AtLeast`] 2.
+    #[inline]
+    pub const fn holds(self, left: u8, right: u8) -> bool {
+        match self {
+            Comparison::AtLeast => left >= right,
+            Comparison::AtMost => left <= right,
+            Comparison::Equal => left == right,
+            Comparison::MoreThan => left > right,
+            Comparison::LessThan => left < right,
+        }
+    }
 }

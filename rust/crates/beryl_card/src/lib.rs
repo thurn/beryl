@@ -31,12 +31,11 @@ pub mod mana;
 pub mod prompt;
 pub mod target;
 pub mod trigger;
+mod walk;
 
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
-pub use continuous::{
-    Affected, Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules, StaticCondition,
-};
+pub use continuous::{Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules};
 pub use cost::{CastingKind, CastingKinds, CastingOption, Castings, Cost};
 pub use counter::CounterKind;
 pub use definition::{
@@ -45,7 +44,7 @@ pub use definition::{
 pub use effect::{
     Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
 };
-pub use filter::{Filter, Whose};
+pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone};
 pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};

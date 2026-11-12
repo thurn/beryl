@@ -13,7 +13,7 @@ use beryl_engine::card::{
     Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
@@ -75,7 +75,7 @@ pub static EMBLEM: CardDef = CardDef {
         abilities: &[Ability {
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
-                Filter::Whose(Whose::AnOpponent),
+                Filter::Whose(&Players::EachOpponent),
             )],
             ..Ability::triggered(&Trigger::draws(Players::You), Behavior::Data(&EXILE_TARGET))
         }],

@@ -7,12 +7,12 @@
 use beryl_engine::Zone;
 use beryl_engine::bitboard::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Supertypes,
-    TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Players,
+    Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::filter::{Evaluate, Filter, Whose};
+use beryl_engine::filter::{Evaluate, Filter};
 use beryl_engine::layout::{PerPlayer, Table};
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
@@ -25,7 +25,7 @@ use crate::names;
 /// are all players not on their team."
 const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[
     Filter::Types(Types::CREATURE),
-    Filter::Not(&Filter::Whose(Whose::You)),
+    Filter::Not(&Filter::Whose(&Players::You)),
 ]);
 
 const BASIC_LANDS: Filter = Filter::All(&[

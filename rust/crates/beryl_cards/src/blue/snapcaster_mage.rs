@@ -3,11 +3,11 @@
 //! flashback cost is equal to its mana cost."
 
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, TargetKind,
-    TargetSpec, Trigger, Types,
+    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Players, Subtype, Subtypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::{Filter, Whose};
+use beryl_engine::filter::Filter;
 use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
 
@@ -45,7 +45,7 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                    Filter::Whose(Whose::You),
+                    Filter::Whose(&Players::You),
                 ]),
             )],
             ..Ability::triggered(&Trigger::ENTERS, bodies!(grant))

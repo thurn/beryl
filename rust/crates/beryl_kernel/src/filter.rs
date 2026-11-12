@@ -1,7 +1,8 @@
 //! Evaluating a [`Filter`], the predicates targets and affected sets are written in
 //! (architecture §6.2), against a game state.
 
-pub use beryl_card::{Filter, Whose};
+pub use beryl_card::Filter;
+use beryl_card::{CardDef, Players};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
@@ -83,7 +84,7 @@ impl Evaluate for Filter {
                 .contains(subtype),
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
-            Filter::Whose(whose) => is_whose(whose, s.controller(slot), you),
+            Filter::Whose(players) => is_for(players, s.controller(slot), you),
             Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
@@ -94,20 +95,54 @@ impl Evaluate for Filter {
     }
 }
 
-/// Whether `player` is the one `whose` means, read for `you`. Every reading of a [`Whose`]
-/// comes here: the controller or owner of an object ([`Filter::Whose`]) and a player a
-/// target may choose.
+/// Whether the engine reads `players` where no spell or ability is resolving: in a filter, a
+/// trigger or a rule a static ability changes. It reads "you", "each opponent" and "each
+/// player", which a player and the reader's controller settle. The rest need a resolution
+/// (a target, "that player") or an object to ask (its controller, its owner), and are read by
+/// the interpreter alone; a game's card table is built only from cards that say none of them
+/// here ([`crate::table::TableError::Players`], [`crate::listener::Unmatched::Whose`]).
 #[inline]
-pub fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
-    match whose {
+pub const fn reads(players: &Players) -> bool {
+    matches!(
+        players,
+        Players::You | Players::EachOpponent | Players::EachPlayer
+    )
+}
+
+/// Whether `player` is one of the players `players` names, read for `you`. Every reading of
+/// a [`Players`] outside a resolution comes here: the controller or owner of an object
+/// ([`Filter::Whose`]), a player a target may choose, the player of a trigger's event and a
+/// player a rule is changed for.
+///
+/// # Panics
+///
+/// For players [`reads`] refuses, which nothing in a game's table says here.
+#[inline]
+pub fn is_for(players: &Players, player: Seat, you: Seat) -> bool {
+    match players {
         // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
         // controller".
-        Whose::You => player == you,
-        Whose::AnOpponent => is_an_opponent(player, you),
+        Players::You => player == you,
+        Players::EachOpponent => is_an_opponent(player, you),
+        // CR 102.1: "A player is one of the people in the game."
+        Players::EachPlayer => true,
+        _ => unreachable!("the card table refuses these players outside a resolution"),
     }
 }
 
-/// [`Whose::AnOpponent`]: whether `player` is one of `you`'s opponents
+/// Whether every filter of a card names only players the engine reads there ([`reads`]):
+/// the filters of its targets, triggers, conditions and effect data, at any depth.
+pub(crate) fn reads_players_of(def: &CardDef) -> bool {
+    let mut read = true;
+    def.filters(&mut |filter| {
+        if let Filter::Whose(players) = filter {
+            read &= reads(players);
+        }
+    });
+    read
+}
+
+/// [`Players::EachOpponent`]: whether `player` is one of `you`'s opponents
 /// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
 /// player's opponent is the other player."
 ///
@@ -119,4 +154,20 @@ pub fn is_whose(whose: Whose, player: Seat, you: Seat) -> bool {
 #[inline]
 pub fn is_an_opponent(player: Seat, you: Seat) -> bool {
     player != you
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_player_is_among_the_players_named_for_you() {
+        let (you, other) = (Seat::BOTH[0], Seat::BOTH[1]);
+        assert!(is_for(&Players::You, you, you));
+        assert!(!is_for(&Players::You, other, you));
+        assert!(is_for(&Players::EachOpponent, other, you));
+        assert!(!is_for(&Players::EachOpponent, you, you));
+        assert!(is_for(&Players::EachPlayer, you, you));
+        assert!(is_for(&Players::EachPlayer, other, you));
+    }
 }

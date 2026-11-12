@@ -9,12 +9,11 @@ use crate::card::{
     Types,
 };
 use crate::event::{Event, Recipient, Sink, kind};
-use crate::filter::{Evaluate, Filter};
+use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
 use crate::layers;
 use crate::layout::{Layout, Queue, index};
-use crate::listener::is_for;
 use crate::query::Copiable;
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
@@ -150,7 +149,7 @@ fn begins(event: TriggerEvent, step: TurnStep) -> bool {
 ///
 /// Each kind of event says what it is about, and the subject and the players are read the
 /// same way for every one ([`about`], [`how_many`], [`is_for`]). The card table has refused
-/// every trigger this would not match ([`crate::listener::listens_to`]).
+/// every trigger this would not match ([`beryl_kernel::listener::listens_to`]).
 fn fires<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -165,7 +164,7 @@ fn fires<L: Layout>(
         amount,
         lki: Lki::default(),
     };
-    let whose = |player: Seat| is_for(trigger.whose, player, you);
+    let whose = |player: Seat| is_for(&trigger.whose, player, you);
     let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, object);
     match (trigger.event, e) {
         // The amount is the X its spell was cast with
@@ -355,7 +354,7 @@ fn fire_delayed<L: Layout>(
 ) -> Result<(), Full> {
     s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger {
         Some(trigger) if trigger.delayed => {
-            begins(trigger.event, step) && is_for(trigger.whose, active, d.controller)
+            begins(trigger.event, step) && is_for(&trigger.whose, active, d.controller)
         }
         _ => unreachable!("a delayed trigger's ability is a delayed one"),
     })

@@ -11,12 +11,12 @@ use beryl_card::effect::build::{
 use beryl_card::{Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects};
 
 use crate::card::{
-    Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Prompt, Purpose,
-    SpecIx, Takes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, FaceAbility, Modification, Part, Place, Players, Prompt,
+    Purpose, SpecIx, Takes, TargetKind, TargetSpec, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
-use crate::filter::{Filter, Whose};
+use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
@@ -165,7 +165,7 @@ fn those_are_the_objects_the_instruction_before_moved_as_they_are_now() {
         put_into_library(
             Objects::All {
                 zone: Zone::Graveyard,
-                filter: Filter::Whose(Whose::You),
+                filter: Filter::Whose(&Players::You),
             },
             LibraryPosition::Bottom,
         ),
@@ -183,6 +183,20 @@ fn those_are_the_objects_the_instruction_before_moved_as_they_are_now() {
     assert!(under.zone(ZoneKey::Of(p, Zone::Graveyard)).is_empty());
     assert_eq!(under.library(p).len(), s.library(p).len());
     assert!(under.library(p)[..2].iter().all(|card| top.contains(card)));
+}
+
+#[test]
+fn attached_to_is_the_permanent_the_source_is_attached_to() {
+    // "Destroy enchanted creature": the permanent the ability's source is attached to, and
+    // nothing while it is attached to nothing (CR 303.4b).
+    static DESTROY_ENCHANTED: Ability = does(&destroy(Objects::AttachedTo));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    assert!(resolve(&t, &mut s, &mut x, source, &DESTROY_ENCHANTED, &[], &[]).is_none());
+    assert_eq!(zone_of(&s, bear), Zone::Battlefield);
+    s.board().attach(source.slot, bear);
+    assert!(resolve(&t, &mut s, &mut x, source, &DESTROY_ENCHANTED, &[], &[]).is_none());
+    assert_eq!(zone_of(&s, bear), Zone::Graveyard);
 }
 
 #[test]
@@ -402,7 +416,7 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
                     2,
                     &Amount::Count(&Objects::All {
                         zone: Zone::Battlefield,
-                        filter: Filter::All(&[CREATURES, Filter::Whose(Whose::You)]),
+                        filter: Filter::All(&[CREATURES, Filter::Whose(&Players::You)]),
                     }),
                 ),
             },
