@@ -509,3 +509,27 @@ test("replaying a step changes the table as the script module says", () => {
         false,
     );
 });
+
+test("a card held up joins its cause's Revealed Cards, and another's take their place", () => {
+    let table = tableOf(view([1, 2, 3], []), { abilities: [] });
+    const cause = (id) => ({ kind: "ability", id });
+    const show = (slot, by) =>
+        (table = apply(
+            table,
+            { verb: "showcase", object: object(slot, "hand") },
+            by,
+        ));
+    const held = () => table.revealed.cards.map((o) => o.slot);
+    assert.equal(table.revealed, undefined, "a table starts with none");
+    show(1, cause(1));
+    show(2, cause(1));
+    assert.deepEqual(held(), [1, 2], "one ability's reveals lie together");
+    show(1, cause(1));
+    assert.deepEqual(held(), [2, 1], "a card held up again is there once");
+    show(3, cause(2));
+    assert.deepEqual(held(), [3], "another's reveal takes their place");
+    show(2);
+    assert.deepEqual(held(), [2], "and so does one the rules make");
+    // The card itself lies where the table had it: only its record is the step's.
+    assert.equal(table.view.objects.find((o) => o.slot === 2).zone, "hand");
+});

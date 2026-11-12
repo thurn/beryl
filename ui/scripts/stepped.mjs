@@ -80,7 +80,7 @@ const LAYOUTS = { desktop: { query: "stage", width: 1600, height: 900 } };
  * line is no card for the tracker to follow. A scry's flips are a library card's, which the
  * stage turns at once (SNAP), not the face-down permanent's flip its values are for. `burn`
  * has what the others lack of the verbs that move no card: a turn's banner, a coin, and a
- * streak of damage with the life it takes. */
+ * streak of damage with the life it takes. `reveal` has the cards held up to be read. */
 const MORE = {
     zones: new Set(["fly", "vanish", "lift", "point", "dwell"]),
     scry: new Set(["fly", "vanish", "lift", "announce"]),
@@ -88,10 +88,12 @@ const MORE = {
     combat: new Set(["tap", "strike", "count", "point", "streak"]),
     place: new Set(["tap", "count", "flip", "point"]),
     burn: new Set(["streak", "announce", "count", "set"]),
+    reveal: new Set(["showcase"]),
 };
 /** The verbs that move no card (a streak of light, a notice over the table, a wait, a change
- * with no motion): each step is timed, and none is shot for the tracker. */
-const UNSEEN = new Set(["streak", "announce", "dwell", "set"]);
+ * with no motion, a face that comes to be seen in the Revealed Cards pile where it rests):
+ * each step is timed, and none is shot for the tracker. */
+const UNSEEN = new Set(["streak", "announce", "dwell", "set", "showcase"]);
 /** How long the stage stands idle before the seat answers, in stage ms (verbs.mjs GAP). */
 const GAP = 250;
 /** The most answers the first moment takes (verbs.mjs ANSWERS). */

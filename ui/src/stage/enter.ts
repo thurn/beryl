@@ -25,6 +25,7 @@ import {
   heldUp,
   lunge,
   meets,
+  shownUp,
   STRIKE,
   struck,
   turned,
@@ -276,10 +277,13 @@ function enters(
       return { name, track: own(glide(start, ease, true)) };
     }
     case "showcase": {
-      // Its face comes to be seen in the Revealed Cards pile, where the layout rests it:
-      // Arena's fades in there (`I3Te0m1bBFw 22:08.4`). The card itself lies where it was.
+      // Its face comes to be seen in the Revealed Cards pile, growing where the layout
+      // rests it, as Arena's does (`I3Te0m1bBFw 22:08.4`). The card itself lies where it
+      // was.
       const name = revealedName(act.object.slot);
-      return placed(name) ? { name, track: own(fade(ease)) } : undefined;
+      const face = placed(name);
+      if (!face) return undefined;
+      return { name, track: own(shownUp(sized(layout, face.resting), ease)) };
     }
     case "appear":
       // No flight, wherever it was before.

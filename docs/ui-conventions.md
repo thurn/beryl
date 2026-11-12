@@ -213,11 +213,12 @@ recordings do not show them.
   after their tutor puts a card on top, and after a look (gIhJjyoJ0_M 29:48,
   SswBO8aOOgc 20:15).
 - **A card turning face up.** A face-down permanent turning face up enlarges in
-  place and flips; one leaving reveals its face during its flight. Nothing turns
-  face up in the recordings, and one face-down card is seen leaving (by-5hcb,
-  by-thod). Killed, Arena's face-down card dissolves as a card back and a
-  "Revealed Cards" panel then shows its face at the top left (I3Te0m1bBFw
-  29:42.9).
+  place and flips; one leaving reveals its face during its flight, and one that
+  leaves for a hand or a library, where no face shows, joins the Revealed Cards
+  as it goes. Nothing turns face up in the recordings, and one face-down card is
+  seen leaving (by-5hcb, by-thod). Killed, Arena's face-down card dissolves as a
+  card back and a "Revealed Cards" panel then shows its face at the top left
+  (I3Te0m1bBFw 29:42.9).
 - **Cards a look returns.** Cards a look puts back into a library fly straight
   to it. No look at several cards with the rest returned is filmed (by-ubgt).
 - **A linked exile returning.** The exiled card returns as its source departs,
@@ -234,6 +235,14 @@ recordings do not show them.
   is. No mulligan is filmed.
 - **Milled cards.** They fly from the library to the graveyard face up, one
   after another as draws do. None is held up large first. No mill is seen.
+- **The Revealed Cards between reveals.** The pile holds what one spell or
+  ability revealed, and what another reveals takes its place; a card revealed
+  and then put where its face shows (a graveyard, exile, the battlefield, the
+  stack) is not held up, since its flight shows it. The pile opens into the
+  viewer every pile opens into. The recordings show the pile with one effect's
+  cards at a time, dismissed before the next. One spell's four revealed cards
+  lie in the pile together; the next reveal seen comes after the pile was
+  dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
 - **Cards leaving a graveyard.** A card returned to the battlefield or to a hand
   flies there from its pile. None is seen.
 - **An ability with no source on the battlefield.** It emerges from the pile its
@@ -331,7 +340,9 @@ recordings do not show them.
   it; what it asks is a pill over that strip, and its other buttons are stacked
   over the turn button. A touch on a card the prompt can use uses it, and one it
   has no use for shows the card whole; a card in your hand is read by a touch
-  and played by carrying it out of the hand.
+  and played by carrying it out of the hand. The Revealed Cards lie in the
+  opponent's strip beside their graveyard, at a pile's size with no pill, and a
+  touch opens them as it opens a pile.
 
 ## Verbs
 
@@ -441,10 +452,14 @@ held to by `just motion`.
   library is shuffled, a permanent's characteristics change. Nothing animates as
   a step begins, and nothing shows on a library when it is shuffled (IEXcjBn3BXk
   19:36.5, IEXcjBn3BXk 28:10.5). Beryl: 25 ms, in place.
-- **showcase.** A card is held up for both players to read: it joins the
-  "Revealed Cards" pile at the top left. Revealed cards gather under a "Revealed
-  Cards" pill at the top left, which opens into a browser of them and stays
-  afterward (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 29:42.9). Beryl: 200 ms, ease-out.
+- **showcase.** A card an effect reveals is held up for both players to read:
+  its face joins the "Revealed Cards" pile at the top left, growing into its
+  place there, and the card itself lies where it was. Revealed cards gather
+  under a "Revealed Cards" pill at the top left, each growing into place in
+  about 0.2 s. A click on the pile opens a browser of them under the same words,
+  with a Done button, and the pile stays afterward until the cross on its pill
+  puts it away (I3Te0m1bBFw 22:08.5, I3Te0m1bBFw 22:09.3, I3Te0m1bBFw 29:42.9,
+  I3Te0m1bBFw 29:46.5). Beryl: 200 ms, ease-out.
 - **dwell.** Nothing moves while something is read: the opponent's spell or
   ability, before it resolves unanswered, and the table as the game ends, before
   the result covers it. The opponent's spell sits on the stack for 0.7 to 1.9 s

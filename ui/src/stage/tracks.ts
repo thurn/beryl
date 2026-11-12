@@ -82,6 +82,24 @@ export const fade =
   (ease: Timing["ease"]): Path =>
   (progress, rest) => ({ ...rest, opacity: rest.opacity * ease(progress) });
 
+/** How a face of the Revealed Cards pile comes to be seen: how large it is at first, against
+ * its size at rest, and how far through its step it is whole to the eye. Arena's grows in
+ * place from a speck and is opaque from the first (`I3Te0m1bBFw 22:08.40` to `22:08.53`);
+ * Beryl's starts at over half its size, so that a face is a card from its first frame. */
+export const SHOWN = { size: 0.6, seen: 0.5 };
+
+/** An entry that comes to be seen where it rests, growing to its size there: `about` is a
+ * pose so many times as large about its card's middle. */
+export const shownUp =
+  (about: (pose: Pose, size: number) => Pose, ease: Timing["ease"]): Path =>
+  (progress, rest) => {
+    const through = ease(progress);
+    return {
+      ...about(rest, SHOWN.size + (1 - SHOWN.size) * through),
+      opacity: rest.opacity * Math.min(1, through / SHOWN.seen),
+    };
+  };
+
 /** How long what a card that leaves made room for takes to close up once it has gone, as a
  * share of the step that took it. The step is the card's going and no more: as it ends the
  * card is at its new place, and only what then has room to close up moves after it, so that

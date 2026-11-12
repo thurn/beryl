@@ -48,7 +48,8 @@ verb as its values say.
   lies. The two blows of one fight begin at one time (`meets`), not a stagger apart.
 - The verbs that move no card are only timed: a streak is a comet of light drawn between two
   things (src/stage/streaks.ts), an announcement a banner the chrome draws from a number the
-  stage writes (src/stage/overlay.ts), a dwell a wait, and a set a change with no motion. An
+  stage writes (src/stage/overlay.ts), a dwell a wait, a set a change with no motion, and a
+  showcase a face that grows where it rests in the Revealed Cards pile, as Arena's does. An
   announcement still passing over the table when a moment's recording ends is told no end and
   is not timed. The first moment plays mana's streaks and, from the seat across, the dwell on
   the opponent's spell; `--more` has the rest (a turn's banner, a scry's pill, a coin, damage).
@@ -102,7 +103,7 @@ CAPTURE_SCRIPT = "ui/scripts/stepped.mjs"
 # nightly run: logged as skipped without it.
 MORE_ONLY: dict[str, str] = {
     verb: "only the moments of `--more` play it, captured nightly (`by motion --more`)"
-    for verb in ("lift", "strike", "count", "flip", "announce")
+    for verb in ("lift", "strike", "count", "flip", "announce", "showcase")
 }
 # The verbs whose steps begin and end a span (an arrow, a line, a mark). The stage plays one
 # with the step that calls for it and staggers none (ui/src/stage/timing.ts), and an end's

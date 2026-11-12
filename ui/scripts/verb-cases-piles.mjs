@@ -329,18 +329,27 @@ export const CASES = {
                 !(face in before(reveal, step).poses),
                 "it was not there",
             );
-            assert.equal(from.poses[face].opacity, 0, "it is unseen at first");
-            const half = middle.poses[face].opacity;
-            assert.ok(half > 0.5 && half < 1, `half way it is ${half} seen`);
-            assert.equal(to.poses[face].opacity, 1);
-            for (const sample of [from, middle]) {
-                assert.deepEqual(
-                    where({ ...sample.poses[face], opacity: 1 }),
-                    where(to.poses[face]),
-                    "it comes to be seen where it rests",
+            const lies = to.poses[face];
+            const [first, half] = [from.poses[face], middle.poses[face]];
+            assert.equal(first.opacity, 0, "it is unseen at first");
+            assert.ok(first.width < half.width, "it grows");
+            assert.ok(half.width < lies.width, "half way it is not whole");
+            assert.ok(
+                half.opacity > 0.5,
+                `half way it is ${half.opacity} seen`,
+            );
+            assert.equal(lies.opacity, 1);
+            for (const pose of [first, half]) {
+                const [here, there] = [pose, lies].map(({ x, y, width }) => [
+                    x + width / 2,
+                    y + width / CARD_ASPECT / 2,
+                ]);
+                assert.ok(
+                    Math.abs(here[0] - there[0]) < 0.01 &&
+                        Math.abs(here[1] - there[1]) < 0.01,
+                    `it grows about its middle: ${here} to ${there}`,
                 );
             }
-            const lies = to.poses[face];
             assert.equal(lies.face, "front");
             assert.ok(lies.depth < ALOFT, "at rest, under what flies");
             assert.ok(
