@@ -36,11 +36,41 @@ import {
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import type { Table } from "./table.ts";
+import { laidOut, type TraySpace } from "./tray.ts";
 
 /** What each kind of thing at rest is drawn over, all under what flies (pose.ts ALOFT): the
  * piles, the opponent's hand, the permanents in the order their rows overlap, your hand, and
  * the stack. */
-const DEPTH = { pile: 1, backs: 2, field: 10, hand: 600, stack: 700 };
+const DEPTH = {
+  pile: 1,
+  backs: 2,
+  field: 10,
+  hand: 600,
+  stack: 700,
+  tray: 850,
+};
+
+/** Where the cards a prompt holds up lie on a phone the size of `viewport`: over the
+ * opponent's rows, and the second of two piles over the player's own, so that the middle
+ * band and what stands in it (the stack, the way back) stay clear; at the size of a card of
+ * the hand, smaller where there are many. */
+export function phoneTray(view: PlayerView, viewport: Viewport): TraySpace {
+  const { bands } = phoneLayout(view, viewport);
+  const [x, width] = [SIDE, viewport.width - 2 * SIDE];
+  const top = bands.opponentLands.top + 4;
+  const foot = bands.middle.top + bands.middle.height + 4;
+  return {
+    x,
+    y: top,
+    width,
+    height: bands.middle.top - 4 - top,
+    card: { most: 104, least: 54, aspect: CARD_ASPECT },
+    gap: 6,
+    heading: 18,
+    // Clear of what the prompt asks, which is written over the player's strip.
+    second: { x, y: foot, width, height: bands.yourStrip.top - 40 - foot },
+  };
+}
 
 /** The life orb's size (phone.css `.phone-orb`: Player.tsx's 272 by 116 art at 0.37px). */
 const ORB = { width: 272 * 0.37, height: 116 * 0.37 };
@@ -87,10 +117,14 @@ const pileOf = (zone: ObjectView["zone"]) =>
   zone === "library" ? "library" : "graveyard";
 
 function rest(
-  { view, abilities, handled }: Table,
+  { view, abilities, handled, tray }: Table,
   viewport: Viewport,
-  leaving?: ReadonlySet<Name>,
+  left?: ReadonlySet<Name>,
 ) {
+  // A card a prompt holds up is off its pile as one still leaving for it is.
+  const leaving = tray
+    ? new Set([...(left ?? []), ...tray.piles.flatMap((pile) => pile.cards)])
+    : left;
   const { bands, cards, stack } = phoneLayout(view, viewport);
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out = new Map<Name, Resting>();
@@ -208,6 +242,19 @@ function rest(
     const source =
       spot.item.source === null ? undefined : out.get(spot.item.source)?.object;
     out.set(abilityName(id), { ability: spot.item, source, pose, dress });
+  }
+  // The cards a prompt holds up, face up where it lays them out: each the node of its card.
+  let depth = DEPTH.tray;
+  const laid = tray ? laidOut(tray, phoneTray(view, viewport)).cards : [];
+  for (const [slot, place] of laid) {
+    const lies = out.get(slot);
+    if (!lies?.object) continue;
+    const face = faceOf(lies.object);
+    out.set(slot, {
+      object: lies.object,
+      pose: upright(place, depth++, face),
+      dress: dressed(lies.dress.zone, "hand", place.width, face === "back"),
+    });
   }
   return out;
 }

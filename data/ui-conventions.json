@@ -532,7 +532,7 @@
     {
       "kind": "settled",
       "name": "The local player's scry",
-      "rule": "A full-screen overlay, \"Scry\", shows the cards face up in one fan before a card back, BOTTOM on the left and TOP on the right, and Done; surveil's has Graveyard and Library boxes instead. On Done the overlay closes at once and nothing flies out of it: the cards show at the library at its size for a moment, and a pill reads \"Scry: 1 top, 1 bottom.\"",
+      "rule": "The table is shaded and \"Scry\" shows the cards face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's has Graveyard and Library boxes instead. The cards are the library's own: they come up from it as the prompt opens, and on Done the shade lifts at once and they go back to it at its size, none shown large on its way to the top or the bottom. A pill reads \"Scry: 1 top, 1 bottom.\"",
       "reports": [
         "by-8qq",
         "by-2wn7",
@@ -1841,7 +1841,7 @@
     },
     {
       "name": "lift",
-      "shows": "Cards the opponent is handling come away from their pile, face down, from the step that begins the look to the step that ends it.",
+      "shows": "Cards the opponent is handling come away from their pile, face down, from the step that begins the look to the step that ends it. Cards the player's own prompt holds up come away from where they lie into its tray, face up, as the prompt opens; lie as each click sorts them; and go back to where the table has them as the first steps of what the answer did begin.",
       "arena": {
         "does": "Cards the opponent scries come off their library face down at its size and lie beside it.",
         "evidence": [
@@ -1860,6 +1860,20 @@
         "delay": null,
         "stagger": 500,
         "curve": "ease-out"
+      },
+      "cases": {
+        "tray": {
+          "duration": 300,
+          "delay": null,
+          "stagger": 0,
+          "curve": "ease-out"
+        },
+        "sort": {
+          "duration": 200,
+          "delay": null,
+          "stagger": 0,
+          "curve": "ease-out"
+        }
       }
     }
   ],

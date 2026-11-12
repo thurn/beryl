@@ -3,9 +3,19 @@
 // time the beat before it ended. The times are a function of the script and of the design
 // language's timings alone, worked out before any step of the beat plays, so a script's
 // timeline is the same however the clock reaches it (stage.ts).
-import type { Act, PlayerView, ScriptStep, Verb } from "../generated/protocol";
+import type {
+  PlayerView,
+  ScriptStep as Sent,
+  Verb,
+} from "../generated/protocol";
 import type { Name } from "./layout.ts";
-import { apply, type Table } from "./table.ts";
+import {
+  apply,
+  sent,
+  type Act,
+  type Step as ScriptStep,
+  type Table,
+} from "./table.ts";
 import { moverOf, type Timing } from "./tracks.ts";
 
 /** The step playing now: its place in its script counting every step, its verb, its start
@@ -28,6 +38,28 @@ export interface Run extends Playing {
   /** The table as the step found it, once it has begun. */
   found?: Table;
   ended: boolean;
+}
+
+/** A step of the beat under way that the session sent. */
+export type Told = Run & { step: Sent };
+
+/** The steps of `verb` under way among `steps`, each as `of` gives it: `before`, the list
+ * last shown, while none begins or ends. */
+export function under<T>(
+  steps: readonly Run[] = [],
+  verb: Verb,
+  before: readonly T[],
+  of: (run: Told) => T,
+) {
+  const now = steps
+    .filter(
+      (run): run is Told =>
+        run.verb === verb && run.begun && !run.ended && sent(run.step),
+    )
+    .map(of);
+  return now.length === before.length && now.every((x, i) => x === before[i])
+    ? before
+    : now;
 }
 
 /** The steps of `beat` as they play from stage time `at`, over the `table` the first of them

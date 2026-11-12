@@ -2,6 +2,7 @@
 // mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
 // the open decision through `choose`. A reloaded page takes up the game in progress.
+import { onTable } from "../stage/prompt";
 import { Board, PhoneBoard, useAsked } from "../stage/switch";
 import { Button, Dock } from "../components/Controls";
 import {
@@ -343,7 +344,10 @@ function Playing({ playback }: { playback: Playback }) {
     );
     return () => clearTimeout(wait);
   }, [view, live]);
-  const asked = held?.choice ?? (waiting ? undefined : choiceOf(view));
+  // A prompt the stage holds is drawn and answered there, and opens no choice over it.
+  const staged = onStage !== undefined && decision && onTable(decision.prompt);
+  const asked =
+    held?.choice ?? (waiting || staged ? undefined : choiceOf(view));
   const choice = held?.choice ?? (seen === view ? asked : undefined);
   const plan = (picks: Intent[]) => {
     if (!decision || !choice) return;

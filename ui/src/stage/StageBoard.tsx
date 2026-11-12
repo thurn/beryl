@@ -3,8 +3,9 @@
 // stage has it (playback.ts), and the chrome around them (Chrome.tsx, game/Corner.tsx). The
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out
 // for what stands around it, and hears the pointer. The prompt picked on the table is the
-// session's, drawn and answered through prompt.ts and PromptBar.tsx; the other shapes come
-// with their own beads, and are answered over the table until then.
+// session's, drawn and answered through prompt.ts and PromptBar.tsx, as are the cards a prompt
+// holds up to be sorted or picked and the triggers it has put in order (Tray.tsx); the other
+// shapes come with their own beads, and are answered over the table until then.
 import {
   useCallback,
   useEffect,
@@ -17,7 +18,7 @@ import type { Board } from "../game/Board";
 import { Corner, UndoButton } from "../game/Corner";
 import { useStageWidth } from "../game/Stage";
 import { Controls, Hud } from "./Chrome.tsx";
-import { desktopWith } from "./desktop.ts";
+import { desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { pageStage } from "./playback.ts";
@@ -27,6 +28,8 @@ import {
   usePrompt,
   usePromptKeys,
 } from "./PromptBar.tsx";
+import { OrderRow, TrayUnder } from "./Tray.tsx";
+import { landing } from "./tray.ts";
 import "./stage.css";
 
 export function StageBoard({
@@ -59,6 +62,13 @@ export function StageBoard({
     () => stage.relayout(desktopWith({ hold, logOpen })),
     [stage, width, hold, logOpen],
   );
+  // A card carried between a tray's piles lands where the desktop lays the tray out.
+  useEffect(() => {
+    prompts.lands = (tray, at) => landing(tray, desktopTray(), at);
+    return () => {
+      prompts.lands = () => undefined;
+    };
+  }, [prompts]);
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
@@ -113,6 +123,22 @@ export function StageBoard({
         />
         <div className="card-layer" ref={layer} />
         {surface && <Faces stage={stage} surface={surface} skin={DESKTOP} />}
+        {surface && (
+          // Keyed by the width its places are read at (game/layout.ts STAGE).
+          <TrayUnder
+            key={width}
+            asked={asked}
+            space={desktopTray()}
+            layer={layer.current}
+          />
+        )}
+        <OrderRow
+          key={`order-${width}`}
+          asked={asked}
+          prompts={prompts}
+          view={view}
+          space={desktopTray()}
+        />
         <Controls
           stage={stage}
           prompts={prompts}

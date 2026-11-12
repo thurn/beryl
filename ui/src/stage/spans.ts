@@ -10,7 +10,8 @@
 // that none is left on a card that moves. Like an effect, how far a span has come in at a
 // stage time is a function of that time alone. It comes in over its beginning step (a line
 // is drawn out, a mark's light comes up) and is cut as its end begins, as Arena cuts its own.
-import type { Act, Arrow, Mark } from "../generated/protocol";
+import type { Arrow, Mark } from "../generated/protocol";
+import type { Act } from "./table.ts";
 import type { On } from "./effects.ts";
 import { abilityName } from "./layout.ts";
 import type { Shape } from "./lines.ts";

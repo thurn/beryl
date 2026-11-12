@@ -12,6 +12,16 @@
 // from what asks for a target to each target picked while the prompt waits on a button, and
 // the script that then casts at it takes the arrow over where it draws the same one.
 //
+// The cards a prompt lays out off the table (the top of a library to sort, a graveyard to
+// pick from) are the stage's own nodes too, held up in a tray by a `lift` of the stage's own
+// (table.ts `Hold`): begun as the prompt opens with the piles the session sent, begun again
+// as each reply sorts them, and ended with the first steps of the script that plays what the
+// answer did, so that a card kept flies from where it was held up and the rest go home.
+// A click on a card in a tray is a click on that card; one carried from pile to pile of a
+// split is a drop, where the layout says it landed (`lands`). An order's items are waiting
+// triggers, which the table has no node of: the screen draws them (Tray.tsx) and sends each
+// move through `drop`.
+//
 // The stage is asked through this for what feeds it (feed.ts), so that no view's script
 // begins under an old prompt's marks, and its pointer has this for its one listener: the
 // chrome around the table hears through `listen` what the prompt had no use for.
@@ -24,12 +34,14 @@ import type {
   DecisionView,
   PlayerView,
   PromptView,
-  Script,
 } from "../generated/protocol";
 import type { Name, Point } from "./layout.ts";
 import type { Drop, PointerEvents } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
+import type { Script, Step, Tray } from "./table.ts";
+import { subjectOf as aboutOf } from "./tracks.ts";
+import type { Landing } from "./tray.ts";
 
 type Subject = Extract<Click, { kind: "on" }>["on"];
 
@@ -62,11 +74,49 @@ export interface Asked {
 
 const IDLE: Asked = { sending: false, answered: false };
 
-/** Whether the stage holds `prompt`: one the session holds the state of, picked on the table
- * as it lies. The other shapes come with their own beads, and are answered over the table
- * until then. */
-export const onTable = (prompt: PromptView) =>
-  prompt.state?.shape === "pick" && prompt.state.tray.length === 0;
+/** Whether the stage holds `prompt`: one the session holds the state of, whose objects are
+ * picked where they lie or from a tray, split between two piles, or put in an order. The
+ * other shapes come with their own beads, and are answered over the table until then. */
+export function onTable(prompt: PromptView) {
+  const shape = prompt.state?.shape;
+  return shape === "pick" || shape === "split" || shape === "order";
+}
+
+/** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, or a
+ * split's two piles, each laid out for as many cards as it must come to hold. */
+export function trayOf(prompt: PromptView | undefined): Tray | undefined {
+  const state = prompt?.state;
+  if (state?.shape === "pick" && state.tray.length > 0) {
+    return { piles: [{ cards: state.tray }] };
+  }
+  if (state?.shape !== "split") return undefined;
+  return {
+    piles: state.piles.map(({ cards, exactly }) => ({
+      cards,
+      ...(exactly === null ? {} : { room: exactly }),
+    })),
+  };
+}
+
+const sameTray = (a: Tray | undefined, b: Tray | undefined) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+/** `script` with the cards of `tray` let go as its first steps about any of them begin, or
+ * with none about them, as its first steps do. */
+function lowered(script: Script, tray: Tray): Script {
+  const held = new Set<Name>(tray.piles.flatMap((pile) => pile.cards));
+  const about = script.beats.findIndex((beat) =>
+    beat.some(({ act }) => {
+      const subject = aboutOf(act);
+      return subject !== undefined && held.has(subject);
+    }),
+  );
+  const at = Math.max(0, about);
+  const end: Step = { act: { verb: "lift", span: "end", tray } };
+  const beats = script.beats.length > 0 ? [...script.beats] : [[]];
+  beats[at] = [end, ...beats[at]!];
+  return { ...script, beats };
+}
 
 /** What a click on the node `name` is on. */
 export const subjectOf = (name: Name): Subject =>
@@ -90,11 +140,16 @@ export class Prompts {
   /** Which nodes a click on is the prompt's: all, until a board says otherwise (a phone's
    * hand is read by a touch and played by a drag). */
   clicks: (name: Name) => boolean = () => true;
+  /** Where in `tray` a card let go at `at` lands, as the board's layout has it laid out:
+   * nowhere, until a board says. */
+  lands: (tray: Tray, at: Point) => Landing | undefined = () => undefined;
   /** The view last played out, whose prompt this has opened or let be. */
   #view: PlayerView | undefined;
   #asked: Asked = IDLE;
   /** The spans this has begun on the stage and not ended, by what each is. */
   readonly #drawn = new Map<string, SpanAct>();
+  /** The tray this has lifted on the stage and not let go. */
+  #up: Tray | undefined;
   /** All the stage is playing is a script of marks. */
   #marking = false;
   /** A card waits where a drop left it for what its click did. */
@@ -146,15 +201,17 @@ export class Prompts {
   /** Gives the stage `view` and its script to play (`ScriptStage.play`), the open prompt's
    * marks ended first: but for the open decision shown again, as a change of stops shows
    * it, whose prompt stays as it is. */
-  play(view: PlayerView, script?: Script) {
+  play(view: PlayerView, sent?: Script) {
+    let script = sent;
     // A script of marks alone is not waited out: the game's own steps begin now.
     if (this.#marking) this.#stage.skip();
     const before = this.#stage.shown.view;
     const next = view.status.kind === "deciding" && view.status.decision;
     const again = next && sameDecision(next.id, this.#asked.decision?.id);
     if (!script || script.reset) {
-      // The stage starts over, with no span.
+      // The stage starts over, with no span and nothing held up.
       this.#drawn.clear();
+      this.#up = undefined;
     } else if (!again && before) {
       // An arrow the script draws itself is the script's from here on.
       const begun = new Set(
@@ -169,6 +226,8 @@ export class Prompts {
         .map(([, act]) => ({ act: { ...act, span: "end" as const } }));
       this.#drawn.clear();
       if (ends.length > 0) this.#stage.play(before, { beats: [ends] });
+      if (this.#up) script = lowered(script, this.#up);
+      this.#up = undefined;
     }
     if (!again) this.#set(IDLE);
     this.#stage.play(view, script);
@@ -195,6 +254,12 @@ export class Prompts {
   /** Presses the button `button` of the open prompt. */
   press(button: ButtonId) {
     this.#click({ kind: "button", button });
+  }
+
+  /** Drops `on` into the pile `pile` of the open prompt, before what lies at `at` there:
+   * for what the stage has no node of, an order's waiting trigger. */
+  drop(on: Subject, pile: number, at: number) {
+    this.#click({ kind: "drop", on, pile, at });
   }
 
   /** A view played out, or the stage went idle: the prompt of a view newly shown opens. */
@@ -225,29 +290,54 @@ export class Prompts {
     for (const to of [...this.#pointing]) each(to);
   }
 
-  /** Whether a press may pick the node `name` up: a card the prompt marks, in a hand. */
+  /** The tray held up, if it has piles to carry a card between and `name` is in one. */
+  #sorted(name: Name): Tray | undefined {
+    const tray = this.#up;
+    const piled = tray && tray.piles.length > 1;
+    return piled &&
+      tray.piles.some((pile) => pile.cards.includes(name as number))
+      ? tray
+      : undefined;
+  }
+
+  /** Whether a press may pick the node `name` up: a card the prompt marks, in a hand or in
+   * a tray of piles. */
   #lifts(name: Name) {
     const { prompt, sending } = this.#asked;
     if (!prompt || sending) return false;
     const resting = this.#stage.shown.resting.get(name);
     return (
-      resting?.dress.zone === "hand" &&
+      (resting?.dress.zone === "hand" || this.#sorted(name) !== undefined) &&
       prompt.marks.some(({ on }) => namedBy(on) === name)
     );
   }
 
   #clicked(name: Name, at: Point) {
     const elsewhere = () => this.#tell((to) => to.click?.(name, at));
-    if (!this.#asked.prompt || !this.clicks(name)) return elsewhere();
+    // A card held up is the prompt's to click, wherever it came from.
+    const held = this.#up?.piles.some((pile) =>
+      pile.cards.includes(name as number),
+    );
+    if (!this.#asked.prompt || !(held || this.clicks(name))) return elsewhere();
     this.#click({ kind: "on", on: subjectOf(name) }, elsewhere);
   }
 
   /** A card carried out of the hand is used as a click on it uses it; let go over where it
-   * rests, it goes back. A drop taken waits where it was let go for what the click did. */
+   * rests, it goes back. One carried in a tray of piles is dropped where it lands, and goes
+   * back let go outside every pile. A drop taken waits where it was let go for what the
+   * click did. */
   #dropped({ name, at }: Drop) {
     const rests = this.#stage.shown.resting.get(name);
-    if (!rests || at.y >= rests.pose.y || !this.#asked.prompt) return false;
-    this.#carried = this.#click({ kind: "on", on: subjectOf(name) });
+    if (!rests || !this.#asked.prompt) return false;
+    const tray = this.#sorted(name);
+    const on = subjectOf(name);
+    if (tray) {
+      const landed = this.lands(tray, at);
+      if (!landed) return false;
+      this.#carried = this.#click({ kind: "drop", on, ...landed });
+    } else if (at.y < rests.pose.y) {
+      this.#carried = this.#click({ kind: "on", on });
+    }
     return this.#carried;
   }
 
@@ -314,17 +404,27 @@ export class Prompts {
       };
       wanted.set(keyOf(aimed), aimed);
     }
-    const ends = [...this.#drawn]
+    const ends: Step[] = [...this.#drawn]
       .filter(([key]) => !wanted.has(key))
       .map(([, act]) => ({ act: { ...act, span: "end" as const } }));
-    const begins = [...wanted]
+    const begins: Step[] = [...wanted]
       .filter(([key]) => !this.#drawn.has(key))
       .map(([, act]) => ({ act }));
     this.#drawn.clear();
     for (const [key, act] of wanted) this.#drawn.set(key, act);
     const { view, busy } = this.#stage.shown;
-    const steps = [...ends, ...begins];
+    // The cards held up are lifted as the prompt has them now, or let go with it.
+    const tray = trayOf(prompt);
+    const up = this.#up;
+    const sorted = up !== undefined;
+    const held: Step[] = sameTray(tray, up)
+      ? []
+      : tray
+        ? [{ act: { verb: "lift", span: "begin", tray, sorted } }]
+        : [{ act: { verb: "lift", span: "end", tray: up! } }];
+    const steps = [...ends, ...held, ...begins];
     if (!view || busy || (steps.length === 0 && !this.#carried)) return;
+    this.#up = tray;
     this.#carried = false;
     this.#marking = true;
     this.#stage.play(view, { beats: [steps] });

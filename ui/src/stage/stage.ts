@@ -42,14 +42,8 @@
 // enters the model as data, and the held card's pose is computed from it here like any other,
 // so `pose` returns it, a step that moves the card starts from where it is held, and a card
 // let go glides home on the stage's clock.
-import type {
-  Act,
-  PlayerView,
-  Script,
-  ScriptStep,
-  Verb,
-} from "../generated/protocol";
-import { laid, type Edge, type Playing, type Run } from "./beat.ts";
+import type { PlayerView } from "../generated/protocol";
+import { laid, under, type Edge, type Playing, type Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { awaited, entering } from "./enter.ts";
 import {
@@ -65,7 +59,8 @@ import type { Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { reachOfCard, reachOfLife, shapeOf, type Reach } from "./lines.ts";
 import { Spans, type Line, type Marked, type SpanSurface } from "./spans.ts";
-import { apply, tabled, tableOf, type Table } from "./table.ts";
+import { apply, tabled, tableOf } from "./table.ts";
+import type { Act, Script, Step as ScriptStep, Table } from "./table.ts";
 import {
   dissolve,
   glide,
@@ -74,6 +69,7 @@ import {
   makingRoom,
   roomIn,
   shareOf,
+  shownUntil,
   moverOf,
   PAYING,
   QUARTER,
@@ -651,23 +647,32 @@ export class ScriptStage {
         // elsewhere), travels over what rests; what another verb's change moves goes there as
         // what makes room does. It turns over on the way if it lands face up from face down.
         // What makes room waits for a card to turn, or closes up after one has left (tracks.ts).
+        // A card a `lift` lets go to lie face down or out of sight shows the face it had
+        // until it is there.
+        const kept =
+          run!.verb === "lift" ? shownUntil(before, resting) : undefined;
         const toward = resting.object?.controller === "opponent" ? -1 : 1;
         const about = run!.verb === "fly" || run!.verb === "count";
         const flies = about && litBy(run!.step.act) === name;
         const turns =
           flies && start.face === "back" && resting.pose.face === "front";
         const [from, to] = roomIn(run!.verb, at, run!.to);
-        this.#fly(name, entry, {
-          from,
-          to,
-          closes: to > run!.to,
-          pose: run!.each
-            ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
-            : (makingRoom(run!.verb, start, run!.ease, toward) ??
-              glide(start, run!.ease, flies, turns)),
-          turn: turns ? TURN : undefined,
-          own: flies,
-        });
+        this.#fly(
+          name,
+          entry,
+          {
+            from,
+            to,
+            closes: to > run!.to,
+            pose: run!.each
+              ? later(start, run!.ease, ...shareOf(run!, this.#table!, name))
+              : (makingRoom(run!.verb, start, run!.ease, toward) ??
+                glide(start, run!.ease, flies, turns)),
+            turn: turns ? TURN : kept && 1,
+            own: flies,
+          },
+          kept,
+        );
       }
       entry.moved ||= !still;
     }
@@ -713,6 +718,7 @@ export class ScriptStage {
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;
+    const steps = this.#playback?.steps;
     this.#shown = {
       table: this.#table?.view,
       resting: new Map(
@@ -723,8 +729,8 @@ export class ScriptStage {
       ),
       view: this.#view,
       busy,
-      notices: this.#under("announce", this.#shown.notices, (run) => run.step),
-      counts: this.#under("count", this.#shown.counts, (run) => run),
+      notices: under(steps, "announce", this.#shown.notices, (run) => run.step),
+      counts: under(steps, "count", this.#shown.counts, (run) => run),
     };
     for (const listener of [...this.#listeners]) listener();
   }
@@ -777,17 +783,6 @@ export class ScriptStage {
     const { duration, ease } = this.release;
     if (duration <= 0) return undefined;
     return { from: at, to: at + duration, pose: glide(from, ease, true) };
-  }
-
-  /** The steps of `verb` under way, each as `of` gives it: `before`, the list last shown,
-   * while none begins or ends. */
-  #under<T>(verb: Verb, before: readonly T[], of: (run: Run) => T) {
-    const now = (this.#playback?.steps ?? [])
-      .filter((run) => run.verb === verb && run.begun && !run.ended)
-      .map(of);
-    return now.length === before.length && now.every((x, i) => x === before[i])
-      ? before
-      : now;
   }
 
   #release() {

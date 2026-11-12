@@ -38,7 +38,7 @@ import "../mobile/phone.css";
 import { Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { lifeChange } from "./notices.ts";
-import { phone } from "./phone.ts";
+import { phone, phoneTray } from "./phone.ts";
 import {
   Inspected,
   LogSheet,
@@ -58,6 +58,8 @@ import {
   PlayerTarget,
   usePrompt,
 } from "./PromptBar.tsx";
+import { OrderRow, TrayUnder } from "./Tray.tsx";
+import { landing } from "./tray.ts";
 import "./stage.css";
 
 /** What the phone's board on the stage takes: the old phone board's, and what the chrome it
@@ -127,6 +129,18 @@ export function PhoneStageBoard({
       prompts.clicks = () => true;
     };
   }, [stage, prompts]);
+  // A card carried between a tray's piles lands where the phone lays the tray out.
+  useEffect(() => {
+    prompts.lands = (tray, at) => {
+      const table = stage.shown.table;
+      return table && viewport
+        ? landing(tray, phoneTray(table, viewport), at)
+        : undefined;
+    };
+    return () => {
+      prompts.lands = () => undefined;
+    };
+  }, [stage, prompts, viewport]);
   useEffect(
     () =>
       prompts.listen({
@@ -228,6 +242,21 @@ export function PhoneStageBoard({
       )}
       <div className="card-layer phone-cards" ref={layer} />
       {surface && <Faces stage={stage} surface={surface} skin={PHONE} />}
+      {surface && table && viewport && (
+        <TrayUnder
+          asked={asked}
+          space={phoneTray(table, viewport)}
+          layer={layer.current}
+        />
+      )}
+      {table && viewport && (
+        <OrderRow
+          asked={asked}
+          prompts={prompts}
+          view={view}
+          space={phoneTray(table, viewport)}
+        />
+      )}
       {bands && table && (
         <>
           <PileButtons

@@ -353,3 +353,84 @@
 .phone-orb > .stage-mark {
   font-size: 6px;
 }
+/* What lies under the cards a prompt holds up (Tray.tsx): a shade over the table, and for a
+   split a box a pile under its name. In the stage's own layer, over everything at rest
+   (the Revealed Cards among it) and under the cards held up, which the layout rests from 850
+   (desktop.ts TRAY_DEPTH, phone.ts DEPTH.tray). */
+.stage-tray {
+  position: absolute;
+  inset: 0;
+  z-index: 840;
+  background: rgb(6 9 12 / 62%);
+  pointer-events: none;
+}
+.stage-tray-pile {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgb(233 173 74 / 45%);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 55%);
+}
+.stage-tray-label {
+  display: block;
+  height: var(--heading);
+  color: var(--gold);
+  font: 600 max(12px, calc(var(--heading) * 0.5)) / var(--heading)
+    var(--font-sans);
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: nowrap;
+}
+/* An order's waiting triggers (Tray.tsx), in the space a layout holds a prompt's cards up
+   in: over the tray's shade, the first to resolve at the right and the last at the
+   left, the session's word for each end under it. Over the cards at rest and under what
+   flies. */
+.stage-order {
+  position: absolute;
+  z-index: 870;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.stage-order-row {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stage-order-item {
+  position: relative;
+  border-radius: 8px;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.stage-order-item > .stack-item {
+  position: relative;
+  pointer-events: none;
+}
+.stage-order-item:hover {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+.stage-order-item.lifted {
+  z-index: 1;
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 18px 30px rgb(0 0 0 / 60%);
+  cursor: grabbing;
+}
+.stage-order-ends {
+  display: flex;
+  justify-content: space-between;
+  width: min(100%, 640px);
+  color: var(--gold);
+  font: 600 italic 18px var(--font-sans);
+  letter-spacing: 0.04em;
+}

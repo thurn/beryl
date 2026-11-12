@@ -8,9 +8,7 @@
 // or a share of the step after (a strike's hit, as its lunge lands): nothing waits a fixed
 // time. This is audio/events.ts for the stage, which takes its place at the cut-over.
 import type {
-  Act,
   ObjectView,
-  ScriptStep,
   Side,
   Subject,
   Verb,
@@ -18,7 +16,7 @@ import type {
   ZoneName,
 } from "../generated/protocol";
 import type { Edge, ScriptStage } from "../stage/stage.ts";
-import type { Table } from "../stage/table.ts";
+import type { Act, Step as ScriptStep, Table } from "../stage/table.ts";
 import { STRIKE } from "../stage/tracks.ts";
 import { ARRIVING, THEIRS_DB } from "./events";
 import { play, type Sound } from "./sound";

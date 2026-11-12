@@ -7,7 +7,8 @@
 // too (`effects`, and each verb's list of those its steps begin): `effectsOf`.
 import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json";
-import type { Act, PlayerView } from "../generated/protocol";
+import type { PlayerView } from "../generated/protocol";
+import type { Act } from "./table.ts";
 import type { Effect, Layer } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
@@ -105,6 +106,9 @@ export function caseOf(act: Act, found?: PlayerView): string | undefined {
         default:
           return undefined;
       }
+    // The stage's own, of the cards a prompt holds up (table.ts `Hold`).
+    case "lift":
+      return "tray" in act ? (act.sorted ? "sort" : "tray") : undefined;
     case "appear":
       if (act.from === "nowhere") return "token";
       return act.why === "draw" ? "opening hand" : undefined;
@@ -228,7 +232,11 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
   }
   // A look at several cards of a library takes them off it one after another, each as long
   // as one alone (Arena's leave about 0.5 s apart: the data's stagger).
-  const look = act.verb === "lift" && act.span === "begin" && act.handling;
+  const look =
+    act.verb === "lift" &&
+    act.span === "begin" &&
+    "handling" in act &&
+    act.handling;
   const count = look && look.zone === "library" ? (look.count ?? 0) : 0;
   if (count > 1 && own.duration > 0) {
     const duration = own.duration + (count - 1) * own.stagger;

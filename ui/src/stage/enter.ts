@@ -4,7 +4,8 @@
 // is made from the model as the step begins (where things are and how they are dressed, and
 // how they were before the step's act), whatever the scripts before it were and however they
 // were cut: nothing here reads a view. The geometry is the layout's.
-import type { Act, PlayerView } from "../generated/protocol";
+import type { PlayerView } from "../generated/protocol";
+import type { Act } from "./table.ts";
 import {
   abilityName,
   type Name,

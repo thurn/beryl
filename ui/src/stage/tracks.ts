@@ -2,9 +2,9 @@
 // step, given where it now rests, which a later step may have moved. Each is a function of
 // the poses it is made from and of progress alone, so a pose is the same however its stage
 // time is reached.
-import type { Act } from "../generated/protocol";
+import type { Act } from "./table.ts";
 import type { On } from "./effects.ts";
-import { abilityName, type Name, type Point } from "./layout.ts";
+import { abilityName, type Name, type Point, type Resting } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import type { Table } from "./table.ts";
 
@@ -56,6 +56,20 @@ export const glide =
     const pose = between(start, rest, ease(progress), aloft);
     return turns && progress < TURN ? { ...pose, face: "back" } : pose;
   };
+
+/** What a card that showed its face at `before` is drawn as on its way to `after`, where it
+ * lies face down or out of sight: as it was, there. None for any other move, which is
+ * dressed as it will rest from the first. */
+export function shownUntil(
+  before: Resting,
+  after: Resting,
+): Resting | undefined {
+  const hid = ({ dress }: Resting) =>
+    dress.back || dress.rim || dress.look === "hidden";
+  return hid(after) && !hid(before)
+    ? { ...before, pose: after.pose }
+    : undefined;
+}
 
 /** An entry that is at its resting place from the first, and comes to be seen there. */
 export const fade =

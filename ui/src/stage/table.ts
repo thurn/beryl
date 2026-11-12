@@ -2,16 +2,66 @@
 // (rust/crates/beryl_session/src/script/mod.rs, "The table and replay"). `apply` is that
 // module's replay, one step at a time: each step carries all of what it changes, so the stage
 // shows the table after every step without the view that follows.
+//
+// A step is the session's but for one the stage plays of its own: the `lift` of the cards a
+// prompt holds up for its player to handle (`Hold`), which the prompt on the stage plays as
+// it plays a prompt's marks (prompt.ts), from the state the session sent it.
 import type {
-  Act,
+  Act as Sent,
   ObjectView,
   PlayerView,
   Reset,
+  ScriptStep as SentStep,
   Side,
+  Span,
   StackItem,
   Subject,
   ZoneName,
 } from "../generated/protocol";
+
+/** The cards a prompt holds up off the table for its player to handle, in the piles it lays
+ * them out in, each in its order: one pile to pick from, or the two a split deals them into.
+ * A card in a tray rests there, wherever the table has it, until the tray lets it go. */
+export interface Tray {
+  piles: readonly Heap[];
+}
+
+/** One pile of a tray. */
+export interface Heap {
+  cards: readonly number[];
+  /** How many cards it is laid out for where that is not as many as the tray holds: what
+   * it must come to hold. */
+  room?: number;
+}
+
+/** The stage's own `lift`: the cards of `tray` come away from where they lie into it as the
+ * span begins, lie as each later beginning has it, and go back to where the table has them
+ * as it ends. `sorted` is a beginning that only moves cards within a tray already up. */
+export interface Hold {
+  verb: "lift";
+  span: Span;
+  tray: Tray;
+  sorted?: boolean;
+}
+
+/** What a step does: an act the session sent, or the stage's own. */
+export type Act = Sent | Hold;
+
+/** One step of a script the stage plays. */
+export interface Step {
+  act: Act;
+  /** The spell, ability, permanent or player responsible; none for the rules of the game. */
+  cause?: Subject;
+}
+
+/** Whether `step` is one the session sent. */
+export const sent = (step: Step): step is SentStep => !("tray" in step.act);
+
+/** A script the stage plays: the session's, or one of the prompt's own steps. */
+export interface Script {
+  reset?: Reset;
+  beats: Step[][];
+}
 
 /** A view whose table the steps so far have changed, and the numbers its scripts gave the
  * abilities on its stack, bottom first: a view's stack does not name them. The rest of the
@@ -22,6 +72,8 @@ export interface Table {
   /** The cards the opponent is handling, as they were when the look began: the same cards
    * stay lifted while it lasts, whatever order it leaves their pile in. */
   handled?: readonly number[];
+  /** The cards the open prompt holds up for its player. */
+  tray?: Tray;
 }
 
 /** The cards a look that begins at `view` handles: the top `count` of a library, top first,
@@ -231,6 +283,7 @@ export function apply(table: Table, act: Act): Table {
         const index = stackIndex(table, act.subject);
         const id = act.subject.id;
         return {
+          ...table,
           view: { ...view, stack: without(view.stack, index) },
           abilities: table.abilities.filter((a) => a !== id),
         };
@@ -249,6 +302,7 @@ export function apply(table: Table, act: Act): Table {
     }
     case "emerge":
       return {
+        ...table,
         view: { ...view, stack: [...view.stack, act.item] },
         abilities: [...table.abilities, act.id],
       };
@@ -300,6 +354,10 @@ export function apply(table: Table, act: Act): Table {
     // The cards the opponent is handling, from the step that begins the look to the one that
     // ends it: the view's own word for it (`PlayerView.handling`), and which cards they are.
     case "lift": {
+      if ("tray" in act) {
+        const { tray: _, ...lowered } = table;
+        return act.span === "begin" ? { ...table, tray: act.tray } : lowered;
+      }
       const { handling: _, ...rest } = view;
       const { handled: __, ...other } = table;
       return act.span === "begin"

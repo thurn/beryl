@@ -135,14 +135,15 @@ restore the old behavior.
   its color straight to the spell on the stack, which flashes as they land, in
   about 0.3 s. Mana does not stop at a pool (by-p1j). Seen for casts paid with
   lands (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85).
-- **The local player's scry.** A full-screen overlay, "Scry", shows the cards
-  face up in one fan before a card back, BOTTOM on the left and TOP on the
-  right, and Done; surveil's has Graveyard and Library boxes instead. On Done
-  the overlay closes at once and nothing flies out of it: the cards show at the
-  library at its size for a moment, and a pill reads "Scry: 1 top, 1 bottom."
-  (by-8qq, by-2wn7, by-kyig, by-1mrh). Seen for a scry of two and for surveil;
-  no card changes face (SN9QFe2kM4Y 14:50.5, SN9QFe2kM4Y 14:52.7, SN9QFe2kM4Y
-  13:08.5, iRr-GeSF0lI 21:16.5).
+- **The local player's scry.** The table is shaded and "Scry" shows the cards
+  face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's
+  has Graveyard and Library boxes instead. The cards are the library's own: they
+  come up from it as the prompt opens, and on Done the shade lifts at once and
+  they go back to it at its size, none shown large on its way to the top or the
+  bottom. A pill reads "Scry: 1 top, 1 bottom." (by-8qq, by-2wn7, by-kyig,
+  by-1mrh). Seen for a scry of two and for surveil; no card changes face
+  (SN9QFe2kM4Y 14:50.5, SN9QFe2kM4Y 14:52.7, SN9QFe2kM4Y 13:08.5, iRr-GeSF0lI
+  21:16.5).
 - **A card a look puts in the graveyard.** It appears on the graveyard at pile
   size once the chooser closes; it is not shown large first (by-2ma). A
   surveilled card lands on the graveyard as the overlay closes; kept cards close
@@ -475,6 +476,9 @@ held to by `just motion`.
   0 ms after its cause, 0 ms apart, in place.
 - **lift.** Cards the opponent is handling come away from their pile, face down,
   from the step that begins the look to the step that ends it. Cards the
+  player's own prompt holds up come away from where they lie into its tray, face
+  up, as the prompt opens; lie as each click sorts them; and go back to where
+  the table has them as the first steps of what the answer did begin. Cards the
   opponent scries come off their library face down at its size and lie beside it
   (IHPV6yRaFlk 52:54.6, qF4GF-vfc8Y 52:59.9). Beryl: 433 ms, 500 ms apart,
   ease-out.

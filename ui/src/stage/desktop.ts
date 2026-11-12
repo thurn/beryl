@@ -6,7 +6,7 @@ import type { HandHold } from "../game/handLayout";
 import { layout, STACK_Z } from "../game/layout";
 import { fromMiddle } from "../game/perspective";
 import { FULL_WIDTH, type Placement } from "../game/placement";
-import { stackPlace } from "../game/stackLayout";
+import { STACK, stackPlace } from "../game/stackLayout";
 import { MANA_POOLS } from "../game/tableRows";
 import {
   emblemObjects,
@@ -24,12 +24,64 @@ import {
   type StageLayout,
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
-import type { Table } from "./table.ts";
+import type { Table, Tray } from "./table.ts";
+import { laidOut, type TraySpace } from "./tray.ts";
 
 /** Each life orb's corner on the base stage, held to the stage's middle, and its size
  * (screens.css `.table .life-orb`: Player.tsx's 272 by 116 art, a little smaller). */
 const LIFE = { x: 670, y: { opponent: 48, you: 618 } };
 const ORB = { width: 272 / 1.045, height: 116 / 1.045 };
+
+/** Where the cards a prompt holds up lie: over the middle of the table, clear of the hands,
+ * the dock and the stack, where what asks stays in sight; at the size of a card read in a
+ * browser of Arena's (UI Conventions, "The local player's scry"), smaller where there are
+ * many. */
+export function desktopTray(): TraySpace {
+  const x = fromMiddle(150);
+  return {
+    x,
+    y: 152,
+    width: STACK.x - 16 - x,
+    height: 420,
+    card: { most: 200, least: 104, aspect: CARD_ASPECT },
+    gap: 14,
+    heading: 30,
+  };
+}
+
+/** What a card held up in a tray is drawn over: everything at rest, the Revealed Cards
+ * among it, and under what flies (pose.ts ALOFT). */
+const TRAY_DEPTH = 850;
+
+/** `rest` with the cards of `tray` where it lays them out, face up at full frame: each is
+ * the node of its card, whatever zone the table has it in. */
+function held(rest: Map<Name, Resting>, tray: Tray) {
+  let depth = TRAY_DEPTH;
+  for (const [slot, place] of laidOut(tray, desktopTray()).cards) {
+    const lies = rest.get(slot);
+    if (!lies?.object) continue;
+    const known = lies.object.name !== null;
+    rest.set(slot, {
+      object: lies.object,
+      pose: {
+        ...place,
+        rotation: 0,
+        skew: 0,
+        turn: 0,
+        opacity: 1,
+        depth: depth++,
+        face: known ? "front" : "back",
+      },
+      dress: {
+        zone: lies.dress.zone,
+        look: "shown",
+        frame: FULL_WIDTH,
+        back: !known,
+        rim: false,
+      },
+    });
+  }
+}
 
 /** No order of arrival is kept yet: a hand lies in its cards' slot order. */
 const NO_ORDER: ReadonlyMap<number, number> = new Map();
@@ -117,12 +169,16 @@ export interface Around {
 }
 
 function rest(
-  { view, abilities, handled }: Table,
+  { view, abilities, handled, tray }: Table,
   { hold, logOpen }: Around,
   leaving: ReadonlySet<Name> = NONE,
 ): Map<Name, Resting> {
   // A card still leaving for a pile is off it as a borrowed one is: the pile lies as it did,
-  // its top showing, and the card has its place on it for when it lands.
+  // its top showing, and the card has its place on it for when it lands. So is a card a
+  // prompt holds up.
+  const away = tray
+    ? new Set([...leaving, ...tray.piles.flatMap((pile) => pile.cards)])
+    : leaving;
   const placements = layout(
     view,
     hold,
@@ -130,7 +186,7 @@ function rest(
     {},
     NO_ORDER,
     // An ability's name is no card's slot.
-    leaving as ReadonlySet<number>,
+    away as ReadonlySet<number>,
     zonePiles(view, NO_ORDER),
     handled ?? [],
   );
@@ -150,6 +206,7 @@ function rest(
     const source = from === undefined ? undefined : out.get(from)?.object;
     out.set(abilityName(id), ability(item, source, index, view.stack.length));
   });
+  if (tray) held(out, tray);
   return out;
 }
 
