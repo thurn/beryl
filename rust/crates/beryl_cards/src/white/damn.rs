@@ -35,10 +35,10 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::card::{Castings, FaceIx};
+    use beryl_card::{Castings, FaceIx};
 
-    use beryl_engine::{DecisionKind, Zone};
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use beryl_card::{DecisionKind, Zone};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use crate::white::adeline_resplendent_cathar::HUMAN_TOKEN;
     use crate::{names, props};
@@ -47,7 +47,7 @@ pub mod scenarios {
 
     const TWO_DROP: &str = props::SMALL_CREATURE;
 
-    const fn creatures(player: beryl_engine::Seat, card: &'static str, count: u8) -> Action {
+    const fn creatures(player: beryl_card::Seat, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Controls {
             player,
             card,

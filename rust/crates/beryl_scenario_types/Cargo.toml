@@ -1,0 +1,15 @@
+[package]
+name = "beryl_scenario_types"
+version = "0.1.0"
+description = "Scenario value types: what a card file writes, naming the vocabulary alone"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The vocabulary, and nothing else: a card crate's scenarios must not rebuild on a rules edit
+# (plan, Crates).
+beryl_card = { path = "../beryl_card" }

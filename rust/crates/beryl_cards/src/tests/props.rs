@@ -54,7 +54,7 @@ fn named(scenario: &Scenario, known: &BTreeSet<&'static str>) -> BTreeSet<String
             _ => {}
         }
     }
-    let json = serde_json::to_value(scenario).expect("a scenario serializes");
+    let json = serde_json::to_value(beryl_scenario::Json(scenario)).expect("a scenario serializes");
     let mut into = BTreeSet::new();
     walk(&json["setup"], known, &mut into);
     walk(&json["actions"], known, &mut into);

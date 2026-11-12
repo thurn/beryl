@@ -59,12 +59,12 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::card::{Castings, FaceIx};
+    use beryl_card::{Castings, FaceIx};
 
-    use beryl_engine::state::CounterKind;
-    use beryl_engine::{DecisionKind, TurnStep};
+    use beryl_card::CounterKind;
+    use beryl_card::{DecisionKind, TurnStep};
 
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::INSECT_TOKEN;
     use crate::names;

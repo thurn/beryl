@@ -34,6 +34,7 @@ SCOPE = (
     "rust/crates/beryl_engine/src",
     "rust/crates/beryl_session/src",
     "rust/crates/beryl_scenario/src",
+    "rust/crates/beryl_scenario_types/src",
     "rust/crates/beryl_search/src",
     "rust/crates/beryl_app/src",
     "ui/src",

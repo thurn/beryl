@@ -89,11 +89,11 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::card::ManaColor;
+    use beryl_card::ManaColor;
 
-    use beryl_engine::{DecisionKind, Seat, Zone};
+    use beryl_card::{DecisionKind, Seat, Zone};
 
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use super::FISH_TOKEN;
     use crate::tokens::TREASURE_TOKEN;

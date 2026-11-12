@@ -13,8 +13,11 @@ workspace = true
 # The vocabulary a card's effect data is written in (plan K1).
 beryl_card = { path = "../beryl_card" }
 beryl_engine = { path = "../beryl_engine" }
-# The scenarios' value types, behind the `scenarios` feature (plan, Crates).
+# Behind the `scenarios` feature (plan, Crates): the scenarios' value types, all a card file's
+# scenarios name, and the runner, for the rules library's scenarios, the generators and the
+# dump binary.
 beryl_scenario = { path = "../beryl_scenario", optional = true }
+beryl_scenario_types = { path = "../beryl_scenario_types", optional = true }
 
 [dev-dependencies]
 # Tests read every card's scenarios: the crate's own, with the feature on.
@@ -27,7 +30,7 @@ serde_json = "1"
 # Every card's scenarios, the `SCENARIOS` table, the generated positions and the dump binary.
 # Tests and tools turn it on; the app never does (plan, Crates: "Scenarios compile only for
 # tests and tools").
-scenarios = ["dep:beryl_scenario"]
+scenarios = ["dep:beryl_scenario", "dep:beryl_scenario_types"]
 
 [[bin]]
 name = "beryl_scenario"

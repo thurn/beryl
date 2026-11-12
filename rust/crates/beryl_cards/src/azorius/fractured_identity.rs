@@ -41,10 +41,10 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::state::CounterKind;
+    use beryl_card::CounterKind;
 
-    use beryl_engine::{Seat, Zone};
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use beryl_card::{Seat, Zone};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use crate::white::the_wandering_emperor::SAMURAI_TOKEN;
     use crate::{names, props};
@@ -184,7 +184,7 @@ pub mod scenarios {
                 Action::Resolve,
                 controls(P0, SAMURAI_TOKEN, 1),
                 Action::cast(P0, IDENTITY),
-                Action::choose(P0, beryl_engine::DecisionKind::Target, SAMURAI_TOKEN),
+                Action::choose(P0, beryl_card::DecisionKind::Target, SAMURAI_TOKEN),
                 Action::Resolve,
                 controls(P0, SAMURAI_TOKEN, 0),
                 controls(P0, EMPEROR, 1),

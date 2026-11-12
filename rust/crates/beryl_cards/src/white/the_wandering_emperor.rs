@@ -96,9 +96,9 @@ static EXILE_AND_GAIN: Effect = sequence(&[exile(TARGET), gain_life(YOU, 2)]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::state::CounterKind;
-    use beryl_engine::{DecisionKind, TurnStep, Zone};
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    use beryl_card::CounterKind;
+    use beryl_card::{DecisionKind, TurnStep, Zone};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::SAMURAI_TOKEN;
     use crate::{names, props};

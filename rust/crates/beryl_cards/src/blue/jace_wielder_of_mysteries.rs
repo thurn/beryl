@@ -66,10 +66,10 @@ static DRAW_SEVEN: Effect = sequence(&[draw(YOU, 7), if_then(LIBRARY_IS_EMPTY, &
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::state::CounterKind;
-    use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+    use beryl_card::CounterKind;
+    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
 
-    use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
+    use beryl_scenario_types::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
     use crate::{names, props};
 

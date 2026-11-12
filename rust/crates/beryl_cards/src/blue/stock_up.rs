@@ -25,9 +25,9 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::{DecisionKind, Zone};
+    use beryl_card::{DecisionKind, Zone};
 
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
 
     use crate::{names, props};
 

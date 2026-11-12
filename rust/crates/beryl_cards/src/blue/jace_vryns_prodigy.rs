@@ -149,10 +149,10 @@ const TELEPATH: &str = "Jace, Telepath Unbound";
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::state::CounterKind;
-    use beryl_engine::{DecisionKind, TurnStep, Zone};
+    use beryl_card::CounterKind;
+    use beryl_card::{DecisionKind, TurnStep, Zone};
 
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::TELEPATH;
     use crate::{names, props};

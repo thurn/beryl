@@ -4,7 +4,7 @@
 
 use beryl_engine::card::CardDef;
 use beryl_engine::coverage::{self, address};
-use beryl_scenario::Scenario;
+use beryl_scenario::{Json, Scenario};
 
 use super::plays_alike_in_every_slot_order;
 use crate::{CARDS, derive};
@@ -107,7 +107,10 @@ fn generated_scenarios_pass_in_every_slot_order() {
 /// are the same.
 #[test]
 fn generating_twice_gives_the_same_scenarios() {
-    let json = |scenarios: &[Scenario]| serde_json::to_string(scenarios).expect("serializes");
+    let json = |scenarios: &[Scenario]| {
+        let scenarios: Vec<Json<Scenario>> = scenarios.iter().map(Json).collect();
+        serde_json::to_string(&scenarios).expect("serializes")
+    };
     let failures = each_card(|def, scenarios| {
         let again = derive::for_card(def).scenarios;
         if json(&again) == json(scenarios) {

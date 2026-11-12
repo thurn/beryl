@@ -220,7 +220,10 @@ fn interaction_signature(variant: &Variant) -> Option<String> {
     })
     .ok()?;
     let mut seen = BTreeSet::new();
-    seen.insert(format!("action:{}", json!(variant.moment.play.first())));
+    seen.insert(format!(
+        "action:{}",
+        json!(variant.moment.play.first().map(beryl_scenario::Json))
+    ));
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
     loop {
         let (updates, live) = rx

@@ -173,6 +173,7 @@ dependencies = [
  "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
+ "beryl_scenario_types",
  "serde_json",
 ]
 
@@ -219,8 +220,16 @@ name = "beryl_scenario"
 version = "0.1.0"
 dependencies = [
  "beryl_engine",
+ "beryl_scenario_types",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "beryl_scenario_types"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
 ]
 
 [[package]]

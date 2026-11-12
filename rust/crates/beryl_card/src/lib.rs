@@ -23,6 +23,7 @@ pub mod check;
 pub mod continuous;
 pub mod cost;
 pub mod counter;
+pub mod decision;
 pub mod definition;
 pub mod effect;
 pub mod filter;
@@ -44,6 +45,7 @@ pub use cost::{
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,
 };
 pub use counter::CounterKind;
+pub use decision::DecisionKind;
 pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
 };

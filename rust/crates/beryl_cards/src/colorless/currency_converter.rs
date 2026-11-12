@@ -75,9 +75,9 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_engine::{DecisionKind, TurnStep, Zone};
+    use beryl_card::{DecisionKind, TurnStep, Zone};
 
-    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
     use super::ROGUE_TOKEN;
     use crate::tokens::TREASURE_TOKEN;
@@ -85,12 +85,7 @@ pub mod scenarios {
 
     const CONVERTER: &str = names::CURRENCY_CONVERTER;
 
-    const fn count(
-        player: beryl_engine::Seat,
-        zone: Zone,
-        card: &'static str,
-        count: u8,
-    ) -> Action {
+    const fn count(player: beryl_card::Seat, zone: Zone, card: &'static str, count: u8) -> Action {
         Action::assert(Assertion::Count {
             player,
             zone,
