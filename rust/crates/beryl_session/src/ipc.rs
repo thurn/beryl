@@ -139,6 +139,11 @@ pub enum FixtureMessage {
     Response {
         #[ts(type = "keyof Commands")]
         command: String,
+        /// The request it answered, where a replay holds the UI to it: a click on a prompt,
+        /// whose reply is the state after that click and no other.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "unknown")]
+        request: Option<serde_json::Value>,
         #[ts(type = "unknown")]
         value: serde_json::Value,
     },
@@ -154,6 +159,21 @@ impl FixtureMessage {
     pub fn response(command: &str, value: &impl Serialize) -> FixtureMessage {
         FixtureMessage::Response {
             command: command.to_owned(),
+            request: None,
+            value: serde_json::to_value(value).expect("a response serializes"),
+        }
+    }
+
+    /// The response `value` to `command` asked with `request`, which a replay answers that
+    /// request alone with.
+    pub fn asked(
+        command: &str,
+        request: &impl Serialize,
+        value: &impl Serialize,
+    ) -> FixtureMessage {
+        FixtureMessage::Response {
+            command: command.to_owned(),
+            request: Some(serde_json::to_value(request).expect("a request serializes")),
             value: serde_json::to_value(value).expect("a response serializes"),
         }
     }

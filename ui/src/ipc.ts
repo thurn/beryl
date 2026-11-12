@@ -73,7 +73,9 @@ export interface FixtureCall {
  * goes back to the priority the cast began at, shown again with nothing happening in it, and
  * the next `choose` plays the recording on from there; an `undo` goes back to the decision before
  * the latest, shown again as undone; a `pass_on` plays on as a `choose` does, and so does a `click`
- * whose recorded reply says it answered its prompt. The events a listener gets as it
+ * whose recorded reply says it answered its prompt. A response recorded with its request (a
+ * click's, which is the prompt after that click) answers that request alone: any other is
+ * refused. The events a listener gets as it
  * starts listening are past; those released by `choose` and `cancel` happen live.
  * `card_records` alone is answered by what it asks: the records the fixture recorded for those
  * names (`cards`), which the recording holds for every name its events show.
@@ -87,11 +89,13 @@ export function fixtureTransport(
   view(): Events["game-update"]["view"] | undefined;
   cards(names: string[]): CardRecords;
 } {
-  const responses = new Map<Command, unknown[]>();
+  const responses = new Map<Command, { value: unknown; request?: unknown }[]>();
   const events: { event: keyof Events; payload: unknown }[] = [];
   for (const m of fixture.messages) {
     if (m.kind === "response") {
-      responses.set(m.command, [...(responses.get(m.command) ?? []), m.value]);
+      const { value, request } = m;
+      const recorded = responses.get(m.command) ?? [];
+      responses.set(m.command, [...recorded, { value, request }]);
     } else {
       events.push(m);
     }
@@ -180,7 +184,7 @@ export function fixtureTransport(
     return showAgain(at, false);
   };
   const cards = (names: string[]): CardRecords => {
-    const recorded = responses.get("card_records")?.[0] as
+    const recorded = responses.get("card_records")?.[0]?.value as
       CardRecords | undefined;
     const among = (records?: CardRecords["cards"]) =>
       Object.fromEntries(
@@ -218,12 +222,21 @@ export function fixtureTransport(
       }
       // A recording holds one line of play: passing on plays it on as its next answer did.
       const queue = responses.get(command === "pass_on" ? "choose" : command);
-      if (!queue || queue.length === 0) {
+      const recorded = queue?.[0];
+      if (!queue || !recorded) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
       }
-      const response = (
-        queue.length > 1 ? queue.shift() : queue[0]
-      ) as Result<C>;
+      const { request } = args as { request?: unknown };
+      if (recorded.request !== undefined && !alike(recorded.request, request)) {
+        const [was, is] = [recorded.request, request].map((r) =>
+          JSON.stringify(r),
+        );
+        return Promise.reject(
+          new Error(`fixture: ${command} was recorded for ${was}, not ${is}`),
+        );
+      }
+      if (queue.length > 1) queue.shift();
+      const response = recorded.value as Result<C>;
       // A click whose recorded reply says it answered plays on as an answer does.
       const answers =
         command === "choose" ||
@@ -263,6 +276,20 @@ export function fixtureTransport(
     },
   };
 }
+
+/** Whether two values of a recording are the same, whatever order their fields are in. */
+const alike = (a: unknown, b: unknown): boolean => {
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) {
+    return a === b;
+  }
+  const [x, y] = [a, b] as Record<string, unknown>[];
+  const keys = Object.keys(x!);
+  return (
+    Array.isArray(a) === Array.isArray(b) &&
+    keys.length === Object.keys(y!).length &&
+    keys.every((key) => key in y! && alike(x![key], y![key]))
+  );
+};
 
 /** Whether a recorded event is a view of the game playing on without the player, which the
  * next view follows unasked. */

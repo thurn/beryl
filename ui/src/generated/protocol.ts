@@ -13,7 +13,12 @@ mobile: boolean, };
 
 export type Fixture = { messages: Array<FixtureMessage>, };
 
-export type FixtureMessage = { "kind": "response", command: keyof Commands, value: unknown, } | { "kind": "event", event: keyof Events, payload: unknown, };
+export type FixtureMessage = { "kind": "response", command: keyof Commands, 
+/**
+ * The request it answered, where a replay holds the UI to it: a click on a prompt,
+ * whose reply is the state after that click and no other.
+ */
+request?: unknown, value: unknown, } | { "kind": "event", event: keyof Events, payload: unknown, };
 
 export type StartRequest = { agent: string, 
 /**
