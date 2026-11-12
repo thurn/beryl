@@ -7,6 +7,12 @@ folders behind when it is removed: 70 GB of screenshots alone on 2026-11-10. The
 A folder goes when no worktree of the repository has its name and nothing in it changed for
 [`MIN_AGE`]: a tree that is being made, or one git no longer lists while its run finishes,
 keeps its output.
+
+Low-disk mode: with less than [`LOW_DISK`] free on the cache's volume, the age falls to
+[`LOW_DISK_AGE`], and the shared target loses what a clone can do without ([`spare`]). Incident
+by-64fx: Arq's hourly snapshot keeps every deleted file that predates it for hours, while each
+worktree writes about 15 GB of rust/target, so the disk filled between nightlies. warm.py runs
+this before a new checkout's first clone, so it frees space without waiting for the nightly.
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import IO
 
-from . import paths
+from . import paths, warm
 
 # The cache folders that hold one folder per checkout, named for it (`paths.REPO.name`):
 # shots.py's, specs.py's and motion.py's output.
@@ -38,6 +44,10 @@ PER_CHECKOUT: tuple[str, ...] = (
     "motion",
 )
 MIN_AGE = timedelta(days=1)
+# Low-disk mode's threshold and age. An hour still spares the output of a run whose tree git
+# stopped listing while it finishes.
+LOW_DISK = 60_000_000_000
+LOW_DISK_AGE = timedelta(hours=1)
 
 
 @dataclass(frozen=True)
@@ -114,28 +124,79 @@ def prune(
     return removed
 
 
+def spare(target: Path) -> list[Path]:
+    """What the shared `target` can lose in low-disk mode and still seed a worktree: the debug
+    profile's incremental sessions, which a clone rebuilds its workspace crates without, and
+    the other targets' directories (the Tauri CLI's, the phones'), which only the app and the
+    phone builds use."""
+    found = [
+        target / "debug" / "incremental",
+        target / warm.TAURI,
+        *sorted(target.glob("aarch64-*")),
+    ]
+    return [path for path in found if path.is_dir() and not path.is_symlink()]
+
+
+def prune_target(target: Path, dry_run: bool = False) -> list[Removed] | None:
+    """Removes [`spare`] (unless `dry_run`) and returns it with its sizes; None, touching
+    nothing, while a clone or a save holds the warm lock (warm.py), for a clone could copy a
+    half-removed folder."""
+    with warm.try_locked() as held:
+        if not held:
+            return None
+        removed: list[Removed] = []
+        for path in spare(target):
+            removed.append(Removed(path, size(path)))
+            if not dry_run:
+                shutil.rmtree(path, ignore_errors=True)
+        return removed
+
+
+def free_space(path: Path) -> int:
+    """The bytes free on the volume that holds `path`."""
+    return shutil.disk_usage(path).free
+
+
 def gigabytes(count: int) -> str:
     return f"{count / 1e9:.1f} GB"
 
 
-def report(removed: list[Removed], out: IO[str], dry_run: bool) -> None:
+def report(removed: list[Removed], out: IO[str], dry_run: bool, what: str) -> None:
     verb = "would remove" if dry_run else "removed"
     for r in removed:
         out.write(f"prune-caches: {verb} {r.path} ({gigabytes(r.size)})\n")
     total = sum(r.size for r in removed)
-    out.write(
-        f"prune-caches: {verb} {len(removed)} folders of checkouts that are gone, "
-        f"{gigabytes(total)}\n"
-    )
+    out.write(f"prune-caches: {verb} {len(removed)} {what}, {gigabytes(total)}\n")
 
 
-def run(out: IO[str], dry_run: bool = False) -> int:
+def run(
+    out: IO[str],
+    dry_run: bool = False,
+    threshold: int = LOW_DISK,
+    only_when_low: bool = False,
+) -> int:
+    """Prunes the cache, in low-disk mode when its volume has less than `threshold` free;
+    with `only_when_low`, does nothing otherwise (warm.py)."""
+    cache = paths.cache_root()
+    free = free_space(cache)
+    low = free < threshold
+    if only_when_low and not low:
+        return 0
+    if low:
+        out.write(f"prune-caches: {gigabytes(free)} free: low-disk mode\n")
     live = set(paths.worktree_names())
     if not live:
         out.write("prune-caches: git could not list the worktrees; nothing removed\n")
         return 1
-    removed = prune(paths.cache_root(), live, time.time(), dry_run=dry_run)
-    report(removed, out, dry_run)
+    age = LOW_DISK_AGE if low else MIN_AGE
+    removed = prune(cache, live, time.time(), age, dry_run=dry_run)
+    report(removed, out, dry_run, "folders of checkouts that are gone")
+    if low:
+        target = prune_target(cache / "target", dry_run=dry_run)
+        if target is None:
+            out.write("prune-caches: a clone holds the shared target; left it\n")
+        else:
+            report(target, out, dry_run, "folders of the shared target")
     return 0
 
 
@@ -152,15 +213,23 @@ def prune_step(commit: str, out: IO[str]) -> int:
 
 
 def prune_command(args: argparse.Namespace) -> int:
-    return run(sys.stdout, dry_run=args.dry_run)
+    return run(sys.stdout, dry_run=args.dry_run, threshold=int(args.low_disk * 1e9))
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "prune-caches",
-        help="remove the cache folders of checkouts that are gone, unchanged for a day",
+        help="remove the cache folders of checkouts that are gone, unchanged for a day "
+        "(an hour, with the shared target's spare folders, when the disk is low)",
     )
     p.add_argument(
         "--dry-run", action="store_true", help="list what would go, removing nothing"
+    )
+    p.add_argument(
+        "--low-disk",
+        type=float,
+        default=LOW_DISK / 1e9,
+        metavar="GB",
+        help="prune harder below this much free space (default %(default).0f)",
     )
     p.set_defaults(func=prune_command)

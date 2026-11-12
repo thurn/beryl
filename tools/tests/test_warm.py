@@ -1,10 +1,11 @@
 import os
+import shutil
 import time
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import warm
+from beryl_tools import caches, paths, warm
 
 
 def checkout(root: Path, lock: str) -> Path:
@@ -32,6 +33,32 @@ def test_a_saved_worktree_seeds_the_next_one(
     assert warm.ensure(second) is False
     assert (second / "rust" / "target" / "debug" / "beryl").read_text() == "binary"
     assert (second / "ui" / "node_modules" / "react").read_text() == "react"
+
+
+def test_a_new_checkouts_clone_first_prunes_a_full_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = tmp_path / "cache"
+    monkeypatch.setenv("BERYL_CACHE", str(cache))
+    monkeypatch.setattr(paths, "worktree_names", lambda: ["tree"])
+    write(cache / "target" / "debug" / "beryl", "binary")
+    incremental = write(
+        cache / "target" / "debug" / "incremental" / "s-1" / "dep-graph"
+    )
+    gone = write(cache / "ui-shots" / "gone" / "shot.png", age=7200).parent
+    os.utime(gone, (time.time() - 7200,) * 2)
+    tree = checkout(tmp_path / "tree", "lock-v1")
+    write(tree / "ui" / "node_modules" / warm.STAMP, warm.lock_key(tree))
+
+    monkeypatch.setattr(caches, "free_space", lambda _: caches.LOW_DISK)
+    warm.ensure(tree)
+    assert gone.exists() and incremental.exists()
+
+    shutil.rmtree(tree / "rust" / "target")
+    monkeypatch.setattr(caches, "free_space", lambda _: caches.LOW_DISK - 1)
+    warm.ensure(tree)
+    assert not gone.exists() and not incremental.parent.parent.exists()
+    assert (tree / "rust" / "target" / "debug" / "beryl").read_text() == "binary"
 
 
 def write(path: Path, text: str = "", age: float = 0) -> Path:

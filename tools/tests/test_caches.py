@@ -1,11 +1,14 @@
+import io
 import os
+import shutil
 import time
 from datetime import timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
-from beryl_tools import caches
+from beryl_tools import caches, paths, warm
 
 NOW: float = time.time()
 DAY: float = timedelta(days=1).total_seconds()
@@ -63,3 +66,75 @@ def test_no_live_checkouts_refuses_rather_than_removing_everything(
     with pytest.raises(ValueError):
         caches.prune(tmp_path, set(), NOW)
     assert live.exists()
+
+
+class Usage(NamedTuple):
+    total: int
+    used: int
+    free: int
+
+
+def low_disk_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, free: int
+) -> dict[str, Path]:
+    """A cache whose volume has `free` bytes free (a faked `shutil.disk_usage`), with gone
+    checkouts' folders of several ages and a shared target, keyed by what each is."""
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
+    monkeypatch.setattr(paths, "worktree_names", lambda: ["beryl"])
+    monkeypatch.setattr(shutil, "disk_usage", lambda _: Usage(10**12, 10**12, free))
+    target = tmp_path / "target"
+    made = {
+        "hours old": folder(tmp_path, "ui-shots", "by-x.1", days_old=2 / 24),
+        "minutes old": folder(tmp_path, "ui-shots", "by-x.2", days_old=0.5 / 24),
+        "days old": folder(tmp_path, "spec-film", "by-x.3", days_old=2),
+        "live": folder(tmp_path, "ui-shots", "beryl", days_old=0),
+        "incremental": target / "debug" / "incremental",
+        "deps": target / "debug" / "deps",
+        "tauri": target / warm.TAURI,
+        "ios": target / "aarch64-apple-ios-sim",
+    }
+    for kind in ("incremental", "deps", "tauri", "ios"):
+        made[kind].mkdir(parents=True)
+        (made[kind] / "file").write_bytes(b"x" * 1000)
+    return made
+
+
+def present(made: dict[str, Path]) -> set[str]:
+    return {kind for kind, path in made.items() if path.exists()}
+
+
+def test_low_on_disk_it_prunes_recent_folders_and_the_shared_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = low_disk_cache(tmp_path, monkeypatch, free=caches.LOW_DISK - 1)
+    assert caches.run(io.StringIO()) == 0
+    # A gone checkout's folder last written within the hour may belong to a run finishing.
+    assert present(made) == {"minutes old", "live", "deps"}
+
+
+def test_with_room_on_disk_it_prunes_only_day_old_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = low_disk_cache(tmp_path, monkeypatch, free=caches.LOW_DISK)
+    assert caches.run(io.StringIO()) == 0
+    assert present(made) == set(made) - {"days old"}
+    assert caches.run(io.StringIO(), only_when_low=True) == 0
+    assert present(made) == set(made) - {"days old"}
+
+
+def test_low_on_disk_it_leaves_the_shared_target_to_a_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = low_disk_cache(tmp_path, monkeypatch, free=0)
+    out = io.StringIO()
+    with warm.locked():
+        assert caches.run(out) == 0
+    assert present(made) == {
+        "minutes old",
+        "live",
+        "incremental",
+        "deps",
+        "tauri",
+        "ios",
+    }
+    assert "a clone holds the shared target" in out.getvalue()

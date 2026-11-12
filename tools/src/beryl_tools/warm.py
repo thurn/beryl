@@ -88,6 +88,36 @@ def locked() -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+@contextmanager
+def try_locked() -> Iterator[bool]:
+    """Holds the lock [`locked`] takes if nobody holds it, yielding whether it got it: for work
+    that must not run beside a clone or a save but need not wait for one (`caches.py`).
+    """
+    with open(cache_root() / "warm.lock", "w") as handle:
+        try:
+            if WINDOWS:
+                import msvcrt
+
+                # pyre-ignore[16]: Windows only
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            if WINDOWS:
+                handle.seek(0)
+                # pyre-ignore[16]: Windows only
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def lock_key(checkout: Path) -> str:
     lock = checkout / "ui" / "package-lock.json"
     data = lock.read_bytes() if lock.exists() else b"<missing>"
@@ -220,10 +250,26 @@ def ensure_node_modules(checkout: Path) -> bool:
     return True
 
 
+def make_room() -> None:
+    """Before a new checkout's first clone, frees what `by prune-caches` can when the disk is
+    nearly full (`caches.py`, low-disk mode), so a burst of worktrees does not wait for the
+    nightly. Best effort, outside the lock, which the prune takes for the shared target only if
+    no clone or save holds it. Imported here: the remove hook, which never gets here, runs this
+    file alone."""
+    from . import caches
+
+    try:
+        caches.run(sys.stderr, only_when_low=True)
+    except (OSError, ValueError) as error:
+        log(f"could not prune the caches: {error}")
+
+
 def ensure(checkout: Path = REPO, tauri: bool = False) -> bool:
     """Gives the checkout a `rust/target`, with the Tauri CLI's target directory if `tauri`, and
     an up-to-date `ui/node_modules`. Whether either was built cold, with nothing to clone: a run
     over budget then reruns once (checks.py, `slow`)."""
+    if not (checkout / "rust" / "target").exists():
+        make_room()
     with locked():
         cold_target = ensure_target(checkout, tauri)
         return ensure_node_modules(checkout) or cold_target
