@@ -52,10 +52,12 @@ import {
   type PhonePile,
 } from "./PhoneChrome.tsx";
 import { pageStage } from "./playback.ts";
+import { onTable } from "./prompt.ts";
 import {
   PhonePromptDock,
   PhonePromptOver,
   PlayerTarget,
+  usePaying,
   usePrompt,
 } from "./PromptBar.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
@@ -91,7 +93,9 @@ export function PhoneStageBoard({
 }: PhoneStageProps) {
   const { stage, feed, prompts } = pageStage();
   const asked = usePrompt(prompts);
-  const answers = { waiting, press: prompts.press.bind(prompts), cancel };
+  const { pay, suggest } = usePaying(asked);
+  const press = prompts.press.bind(prompts);
+  const answers = { waiting, press, cancel, suggest };
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
   const { table, counts, resting } = useSyncExternalStore(
@@ -106,8 +110,8 @@ export function PhoneStageBoard({
     () => viewport && table && phoneLayout(table, viewport).bands,
     [table, viewport],
   );
-  // What the stage does not yet draw the prompt of (a declaration, a division of damage)
-  // keeps the old phone board's dock, which answers through the screen.
+  // What the stage does not yet draw the prompt of (a division of damage) keeps the old
+  // phone board's dock, which answers through the screen.
   const can = useMemo(() => interactions(view), [view]);
   const objects = useMemo(
     () => new Map(view.objects.map((o) => [o.slot, o])),
@@ -176,6 +180,7 @@ export function PhoneStageBoard({
   return (
     <div
       className="phone-board"
+      data-pay={pay}
       ref={ref}
       onPointerDown={(e) => {
         feed.skip();
@@ -205,7 +210,12 @@ export function PhoneStageBoard({
                 <PlayerTarget prompts={prompts} asked={asked} side={side} />
               </Orb>
               {side === "you" ? (
-                asked.prompt || waiting || decision?.kind === "priority" ? (
+                // A prompt the stage holds is its dock's from the view that asks it, while
+                // the steps that led to it still play.
+                asked.prompt ||
+                waiting ||
+                decision?.kind === "priority" ||
+                (decision && onTable(decision.prompt)) ? (
                   <PhonePromptDock asked={asked} {...answers} />
                 ) : (
                   <PhoneDock

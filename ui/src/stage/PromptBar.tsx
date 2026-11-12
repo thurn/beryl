@@ -3,8 +3,17 @@
 // pressed are the session's (prompt.ts); a press goes back to it. What is laid out here is
 // only where each stands: the button put forward at the foot of the desktop's dock, where the
 // turn button is, with what it says under it; the button that passes on to a later stop as the
-// round one beside it; and the others stacked over, in the order they came.
-import { useEffect, useRef, useSyncExternalStore } from "react";
+// round one beside it; and the others stacked over, in the order they came. A cost paid with
+// permanents says after what it asks how much is still to pay, and its Auto Pay shows what
+// it would tap while the pointer is over it or a touch is held on it (UI Conventions,
+// "Paying with permanents").
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ButtonHTMLAttributes,
+} from "react";
 import {
   Button,
   Dock,
@@ -14,7 +23,12 @@ import {
   TurnButton,
 } from "../components/Controls";
 import { RulesText } from "../components/Mana";
-import type { ButtonId, PromptButton, Side } from "../generated/protocol";
+import type {
+  ButtonId,
+  PromptButton,
+  PromptView,
+  Side,
+} from "../generated/protocol";
 import type { Asked, Prompts } from "./prompt.ts";
 
 /** What the page's stage asks, as the screen draws it. */
@@ -28,6 +42,90 @@ interface Answers {
   press(button: ButtonId): void;
   /** Takes back the cast the open decision is part of, where it may be. */
   cancel?: () => void;
+  /** Shows or hides what the open payment's Auto Pay would tap (`usePaying`). */
+  suggest?: (on: boolean) => void;
+}
+
+/** What a board shows of a cost paid with permanents: `pay`, for its `data-pay`, is `quiet`
+ * while the open prompt is such a payment and `suggesting` while it shows what Auto Pay would
+ * tap (stage.css), and `suggest` is the dock's to call. */
+export function usePaying({ prompt }: Asked) {
+  const [suggesting, suggest] = useState(false);
+  const paying = prompt?.state?.shape === "pay";
+  // A button that goes while the pointer is on it never says the pointer left.
+  useEffect(() => {
+    if (!paying) suggest(false);
+  }, [paying]);
+  const pay = !paying ? undefined : suggesting ? "suggesting" : "quiet";
+  return { pay, suggest } as const;
+}
+
+/** How long a touch is held on Auto Pay before it shows what it would tap, in ms. */
+const HELD = 450;
+
+/** What each button of `prompt` does with the pointer: a press of it, and for a payment's Auto
+ * Pay the showing of what it would tap, while the pointer is over it or a touch is held on
+ * it. A touch held only shows: letting go of it presses nothing. */
+function usePresses(
+  prompt: PromptView | undefined,
+  { press, suggest }: Pick<Answers, "press" | "suggest">,
+) {
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const held = useRef(false);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return ({ id }: PromptButton): ButtonHTMLAttributes<HTMLButtonElement> => {
+    const shows =
+      suggest && id.kind === "auto" && prompt?.state?.shape === "pay";
+    if (!shows) return { onClick: () => press(id) };
+    const end = () => {
+      clearTimeout(timer.current);
+      suggest(false);
+    };
+    return {
+      onPointerEnter: (e) => {
+        if (e.pointerType === "mouse") suggest(true);
+      },
+      onPointerLeave: end,
+      onPointerDown: (e) => {
+        held.current = false;
+        if (e.pointerType === "mouse") return;
+        timer.current = setTimeout(() => {
+          held.current = true;
+          suggest(true);
+        }, HELD);
+      },
+      onPointerUp: (e) => {
+        if (e.pointerType !== "mouse") end();
+      },
+      onPointerCancel: end,
+      onContextMenu: (e) => e.preventDefault(),
+      onClick: (e) => {
+        // A key's press has no touch behind it.
+        if (!held.current || e.detail === 0) {
+          suggest(false);
+          press(id);
+        }
+        held.current = false;
+      },
+    };
+  };
+}
+
+/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay, as
+ * the session wrote each. */
+function Asks({ prompt: { title, state } }: { prompt: PromptView }) {
+  return (
+    <>
+      <RulesText text={title} />
+      {state?.shape === "pay" && (
+        <span className="prompt-left">
+          {" ("}
+          <RulesText text={state.left} />
+          {")"}
+        </span>
+      )}
+    </>
+  );
 }
 
 /** A prompt's buttons by where they stand: the one put forward, the one that passes on to a
@@ -145,7 +243,9 @@ export function PromptDock({
   waiting,
   press,
   cancel,
+  suggest,
 }: { asked: Asked } & Answers) {
+  const presses = usePresses(prompt, { press, suggest });
   if (!prompt) {
     return waiting ? (
       <Dock className="stage-prompt">
@@ -161,7 +261,7 @@ export function PromptDock({
   return (
     <Dock
       className="stage-prompt"
-      title={prompt.title ? <RulesText text={prompt.title} /> : undefined}
+      title={prompt.title ? <Asks prompt={prompt} /> : undefined}
     >
       {(others.length > 0 || takesBack) && (
         <DockButtons>
@@ -170,7 +270,7 @@ export function PromptDock({
               key={keyOf(button)}
               variant="secondary"
               disabled={off(button)}
-              onClick={() => press(button.id)}
+              {...presses(button)}
             >
               <RulesText text={button.label} />
             </Button>
@@ -187,7 +287,7 @@ export function PromptDock({
           <TurnButton
             label={forward.label}
             disabled={off(forward)}
-            onClick={() => press(forward.id)}
+            {...presses(forward)}
           />
           {passOn && (
             <PassOn button={passOn} disabled={off(passOn)} press={press} tip />
@@ -207,7 +307,9 @@ export function PhonePromptDock({
   asked: { prompt, sending },
   waiting,
   press,
+  suggest,
 }: { asked: Asked } & Answers) {
+  const presses = usePresses(prompt, { press, suggest });
   if (!prompt) {
     return waiting ? (
       <div className="phone-dock">
@@ -223,7 +325,7 @@ export function PhonePromptDock({
         <TurnButton
           label={forward.label}
           disabled={sending || !forward.enabled}
-          onClick={() => press(forward.id)}
+          {...presses(forward)}
         />
       )}
       {passOn && (
@@ -243,8 +345,10 @@ export function PhonePromptOver({
   asked: { prompt, decision, sending },
   press,
   cancel,
+  suggest,
   top,
 }: { asked: Asked; top: number } & Answers) {
+  const presses = usePresses(prompt, { press, suggest });
   if (!prompt) return null;
   const { others } = standing(prompt.buttons);
   const takesBack = decision?.cancellable && cancel;
@@ -252,7 +356,7 @@ export function PhonePromptOver({
     <>
       {prompt.title && (
         <div className="phone-pill" role="status" style={{ top: top - 30 }}>
-          <RulesText text={prompt.title} />
+          <Asks prompt={prompt} />
         </div>
       )}
       {(others.length > 0 || takesBack) && (
@@ -265,7 +369,7 @@ export function PhonePromptOver({
               key={keyOf(button)}
               variant="secondary"
               disabled={sending || !button.enabled}
-              onClick={() => press(button.id)}
+              {...presses(button)}
             >
               <RulesText text={button.label} />
             </Button>

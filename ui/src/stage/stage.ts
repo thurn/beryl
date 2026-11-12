@@ -68,8 +68,7 @@ import {
   shareOf,
   shownUntil,
   moverOf,
-  PAYING,
-  QUARTER,
+  paying,
   subjectOf,
   closedBy,
   poseOn,
@@ -754,7 +753,7 @@ export class ScriptStage {
   }
 
   /** Where an entry is at stage time `at`: where the pointer holds it, if it does; and turned
-   * as a mark on it turns it, an untapped permanent picked to pay a cost (spans.ts). */
+   * as a mark on it turns it, a permanent picked to pay a cost (spans.ts). */
   #poseOf(name: Name, entry: Entry, at: number): Pose {
     const held = this.pointer.held;
     const pose =
@@ -762,12 +761,9 @@ export class ScriptStage {
         ? heldPose(this.#lifted.from, held.start, held.at)
         : poseOn(entry, at);
     const { object, dress } = entry.resting;
-    const turns = dress.zone === "battlefield" && object?.tapped === false;
-    const turned = turns ? this.#over.turned(name, at) : 0;
-    if (!turned) return pose;
-    // Over its row from the first: turned, it reaches across the card beside it.
-    const depth = pose.depth + PAYING;
-    return { ...pose, turn: pose.turn + QUARTER * turned, depth };
+    if (dress.zone !== "battlefield" || !object) return pose;
+    const turned = this.#over.turned(name, at);
+    return turned ? paying(pose, entry.resting.pose, object, turned) : pose;
   }
 
   /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, or

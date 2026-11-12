@@ -176,6 +176,21 @@ export const QUARTER = 90;
  * every permanent, whose rows it reaches across as it lies turned, and under the stack. */
 export const PAYING = 200;
 
+/** The `pose` of a permanent whose mark says it is picked to pay a cost, `turned` of the way
+ * to that mark's look (spans.ts): untapped, it turns as far as it would to tap; once the
+ * script has tapped it under the mark it lies turned as it rests, `rest`, from the tap's
+ * first tick, and so is not seen to stand up and turn again. Over its row from the first:
+ * turned, it reaches across the card beside it. */
+export function paying(
+  pose: Pose,
+  rest: Pose,
+  { tapped }: { tapped: boolean },
+  turned: number,
+): Pose {
+  const turn = tapped ? rest.turn : pose.turn + QUARTER * turned;
+  return { ...pose, turn, depth: pose.depth + PAYING };
+}
+
 /** How much of its step a permanent that taps or untaps turns in. It turns where it lies, and
  * only then do it and its row go to where they now rest, the tapped apart from the untapped
  * (game/battlefield.ts), so that nothing crosses a card while it turns. */

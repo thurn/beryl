@@ -10,7 +10,12 @@
 // would draw them: a prompt that opens begins its marks, each reply ends those gone and
 // begins those new, and the marks left end before the next view's script plays. An arrow runs
 // from what asks for a target to each target picked while the prompt waits on a button, and
-// the script that then casts at it takes the arrow over where it draws the same one.
+// the script that then casts at it takes the arrow over where it draws the same one. A
+// declaration's lines are drawn the same way, one from each attacker or blocker to what the
+// session has it aimed at, from the click that aims it: the script that plays the declaration
+// begins the same lines, so each is one line from that click until the script that ends it
+// after the damage. A permanent picked to pay a cost carries its mark until the script has
+// tapped it, so that it lies turned from the pick on and is not seen to turn twice.
 //
 // The cards a prompt lays out off the table (the top of a library to sort, a graveyard to
 // pick from) are the stage's own nodes too, held up in a tray by a `lift` of the stage's own
@@ -74,12 +79,15 @@ export interface Asked {
 
 const IDLE: Asked = { sending: false, answered: false };
 
-/** Whether the stage holds `prompt`: one the session holds the state of, whose objects are
- * picked where they lie or from a tray, split between two piles, or put in an order. The
- * other shapes come with their own beads, and are answered over the table until then. */
+/** The shapes the stage holds, of those the session holds the state of: objects picked where
+ * they lie or from a tray, split between two piles or put in an order, a cost paid with
+ * permanents, and attackers and blockers declared. */
+const HELD = new Set(["pick", "split", "order", "pay", "declare"]);
+
+/** Whether the stage holds `prompt`. The other shapes come with their own beads, and are
+ * answered over the table until then. */
 export function onTable(prompt: PromptView) {
-  const shape = prompt.state?.shape;
-  return shape === "pick" || shape === "split" || shape === "order";
+  return prompt.state !== null && HELD.has(prompt.state.shape);
 }
 
 /** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, or a
@@ -115,6 +123,25 @@ function lowered(script: Script, tray: Tray): Script {
   const end: Step = { act: { verb: "lift", span: "end", tray } };
   const beats = script.beats.length > 0 ? [...script.beats] : [[]];
   beats[at] = [end, ...beats[at]!];
+  return { ...script, beats };
+}
+
+/** `script` with the marks `paying` ended once it has tapped what they are on: in the beat
+ * after the last that taps one of them, or in one more. */
+function paid(script: Script, paying: readonly SpanAct[]): Script {
+  if (paying.length === 0) return script;
+  const marked = new Set(paying.map(keyOf));
+  const taps = ({ act }: Step) =>
+    act.verb === "tap" && marked.has(`paying ${act.object.slot}`);
+  let after = 0;
+  for (const [i, beat] of script.beats.entries()) {
+    if (beat.some(taps)) after = i + 1;
+  }
+  const ends = paying.map((act) => ({
+    act: { ...act, span: "end" as const },
+  }));
+  const beats = [...script.beats];
+  beats[after] = [...ends, ...(beats[after] ?? [])];
   return { ...script, beats };
 }
 
@@ -221,11 +248,24 @@ export class Prompts {
             act.verb === "point" && act.span === "begin" ? [keyOf(act)] : [],
           ),
       );
-      const ends = [...this.#drawn]
+      // What the script taps keeps the mark that turned it until it has.
+      const taps = new Set(
+        script.beats
+          .flat()
+          .flatMap(({ act }) =>
+            act.verb === "tap" ? [`paying ${act.object.slot}`] : [],
+          ),
+      );
+      const kept = (act: SpanAct) => taps.has(keyOf(act));
+      const over = [...this.#drawn]
         .filter(([key]) => !begun.has(key))
-        .map(([, act]) => ({ act: { ...act, span: "end" as const } }));
+        .map(([, act]) => act);
+      const ends = over
+        .filter((act) => !kept(act))
+        .map((act) => ({ act: { ...act, span: "end" as const } }));
       this.#drawn.clear();
       if (ends.length > 0) this.#stage.play(before, { beats: [ends] });
+      script = paid(script, over.filter(kept));
       if (this.#up) script = lowered(script, this.#up);
       this.#up = undefined;
     }
@@ -399,6 +439,21 @@ export class Prompts {
         arrow,
         from: source,
         to: on,
+      };
+      wanted.set(keyOf(aimed), aimed);
+    }
+    // A declaration's line, from each attacker or blocker to what it is aimed at.
+    const state = prompt?.state;
+    const declared = state?.shape === "declare" ? state : undefined;
+    for (const { from, to } of declared?.pairs ?? []) {
+      const source: Subject = { kind: "object", slot: from };
+      const { arrow } = declared!;
+      const aimed: SpanAct = {
+        verb: "point",
+        span: "begin",
+        arrow,
+        from: source,
+        to,
       };
       wanted.set(keyOf(aimed), aimed);
     }

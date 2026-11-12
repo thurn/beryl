@@ -3,9 +3,10 @@
 // stage has it (playback.ts), and the chrome around them (Chrome.tsx, game/Corner.tsx). The
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out
 // for what stands around it, and hears the pointer. The prompt picked on the table is the
-// session's, drawn and answered through prompt.ts and PromptBar.tsx, as are the cards a prompt
-// holds up to be sorted or picked and the triggers it has put in order (Tray.tsx); the other
-// shapes come with their own beads, and are answered over the table until then.
+// session's, drawn and answered through prompt.ts and PromptBar.tsx, as are a cost paid with
+// permanents, a declaration of attackers or blockers, the cards a prompt holds up to be sorted
+// or picked and the triggers it has put in order (Tray.tsx); the other shapes come with their
+// own beads, and are answered over the table until then.
 import {
   useCallback,
   useEffect,
@@ -25,6 +26,7 @@ import { pageStage } from "./playback.ts";
 import {
   PlayerTarget,
   PromptDock,
+  usePaying,
   usePrompt,
   usePromptKeys,
 } from "./PromptBar.tsx";
@@ -72,7 +74,9 @@ export function StageBoard({
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
-  const answers = { waiting, press: prompts.press.bind(prompts), cancel };
+  const { pay, suggest } = usePaying(asked);
+  const press = prompts.press.bind(prompts);
+  const answers = { waiting, press, cancel, suggest };
   // A prompt's keys answer it while nothing else takes them.
   usePromptKeys(asked, answers, !settings && !onSkip && !inert);
   // The keys that are not a prompt's: Escape closes the settings, the platform's undo takes
@@ -104,6 +108,7 @@ export function StageBoard({
       <div
         className={dimmed ? "table table-dimmed" : "table"}
         data-opening={view.turn.number === 0 || undefined}
+        data-pay={pay}
         onPointerDown={() => setSettings(false)}
         // Before the card under it hears the press, so that the card's click or drag is one
         // on the newest view.
