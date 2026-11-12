@@ -81,6 +81,9 @@ async function payment(page, dock, before, after) {
         "eligible",
     ].map((mark) => marked(prompt, mark));
     const read = (slots, mark) => page.evaluate(looks, { slots, mark });
+    // A button that comes up under the pointer has it over it: off it first.
+    await page.mouse.move(2, 2);
+    await page.waitForSelector('[data-pay="quiet"]');
     for (const look of await read(paying, "paying")) {
         assert.equal(look.turned, 90, `${what}: ${look.slot} lies turned`);
         assert.notEqual(look.symbol, "none", `${what}: ${look.slot}'s symbol`);

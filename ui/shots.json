@@ -952,6 +952,48 @@
       "route": "/?phone&stage&fixture=shape-order&at=4#/game",
       "width": 393,
       "height": 759
+    },
+    {
+      "name": "stage-pay-crew",
+      "route": "/?stage&fixture=shape-pay&at=6#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-pay-crew",
+      "route": "/?phone&stage&fixture=shape-pay&at=6#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-pay-waterbend",
+      "route": "/?stage&fixture=shape-pay&at=8#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-declare-block",
+      "route": "/?stage&fixture=shape-declare&at=9#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-declare-block",
+      "route": "/?phone&stage&fixture=shape-declare&at=9#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "stage-declare-attack",
+      "route": "/?stage&fixture=shape-declare&at=25#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-declare-attack",
+      "route": "/?phone&stage&fixture=shape-declare&at=25#/game",
+      "width": 393,
+      "height": 759
     }
   ]
 }

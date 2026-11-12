@@ -51,6 +51,7 @@ import {
     carry as carryTo,
     heldUp,
     onTable,
+    reach,
     scryFlight,
 } from "./shape-cases.mjs";
 import {
@@ -402,31 +403,6 @@ const settled = (limit) =>
     new Promise((resolve) => setTimeout(resolve)).then(() =>
         window.berylStage.settle(limit),
     );
-
-/** A point of the stage's node `name` the pointer reaches: nearest its middle, where no other
- * card or control lies over it. */
-const reach = (page, name) =>
-    page.evaluate((name) => {
-        const node =
-            document.querySelector(`[data-stage="${name}"]`) ??
-            document.querySelector(`[data-life="${name}"]`);
-        const box = node.getBoundingClientRect();
-        const at = (fx, fy) => ({
-            x: box.left + box.width * fx,
-            y: box.top + box.height * fy,
-        });
-        const shares = [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9];
-        for (const fy of shares) {
-            for (const fx of shares) {
-                const { x, y } = at(fx, fy);
-                const hit = document.elementFromPoint(x, y);
-                if (hit && (hit === node || node.contains(hit))) {
-                    return { x, y, top: box.top };
-                }
-            }
-        }
-        throw new Error(`nothing of ${name} can be reached`);
-    }, name);
 
 const clicksSent = (page) =>
     page.evaluate(() =>

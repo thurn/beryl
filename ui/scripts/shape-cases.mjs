@@ -1,7 +1,7 @@
 // What the shape suite (shapes.mjs) needs for the shapes that hold cards up off the table or
-// list what the table has no card of: what the session's state says is held up, the gesture
-// that carries a card or a trigger to its place, and the scry flight, a case of the split
-// shape played tick by tick.
+// list what the table has no card of: what the session's state says is held up, where the
+// pointer reaches a node, the gesture that carries a card or a trigger to its place, and the
+// scry flight, a case of the split shape played tick by tick.
 import assert from "node:assert/strict";
 
 /** Whether the stage holds `prompt` (src/stage/prompt.ts `onTable`): where it does not, the
@@ -66,6 +66,31 @@ function placeFor({ selectors, at, axis, within, backward }) {
         : frame[cross] + frame[girth] * 0.6;
     return axis === "x" ? { x: along, y: across } : { x: across, y: along };
 }
+
+/** A point of the stage's node `name` the pointer reaches: nearest its middle, where no other
+ * card or control lies over it. */
+export const reach = (page, name) =>
+    page.evaluate((name) => {
+        const node =
+            document.querySelector(`[data-stage="${name}"]`) ??
+            document.querySelector(`[data-life="${name}"]`);
+        const box = node.getBoundingClientRect();
+        const at = (fx, fy) => ({
+            x: box.left + box.width * fx,
+            y: box.top + box.height * fy,
+        });
+        const shares = [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9];
+        for (const fy of shares) {
+            for (const fx of shares) {
+                const { x, y } = at(fx, fy);
+                const hit = document.elementFromPoint(x, y);
+                if (hit && (hit === node || node.contains(hit))) {
+                    return { x, y, top: box.top };
+                }
+            }
+        }
+        throw new Error(`nothing of ${name} can be reached`);
+    }, name);
 
 const node = (name) => `[data-stage="${name}"]`;
 

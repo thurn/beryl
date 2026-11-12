@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Feed } from "../src/stage/feed.ts";
 import { Prompts } from "../src/stage/prompt.ts";
-import { move, stage, view } from "./stage-table.mjs";
+import { move, object, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
 const marked = (mark, ...slots) =>
@@ -202,12 +202,12 @@ test("a click the prompt had no use for goes on to who listens, and so does one 
 test("a prompt answered elsewhere is let be", () => {
     const { made, surface, prompts, sent, click } = prompted();
     // A shape the stage does not draw yet, and one the session does not yet hold.
-    const paid = pick(marked("eligible", 1), {
-        shape: "pay",
-        state: { shape: "pay", cost: "{3}", left: "{3}" },
+    const number = pick(marked("eligible", 1), {
+        shape: "number",
+        state: { shape: "number", values: [0, 1], value: 0, detail: null },
     });
     for (const [seq, prompt] of [
-        paid,
+        number,
         { ...pick([]), state: null },
     ].entries()) {
         prompts.play(asking(prompt, seq + 1), { beats: [] });
@@ -311,6 +311,107 @@ test("an arrow runs from what asks to a target picked, and the script that casts
     made.clock.advance(0);
     assert.deepEqual(surface.spans, ["- 1 friendly-target", "- 2 eligible"]);
     assert.deepEqual([...surface.lines.keys()], ["friendly-target 3 1"]);
+});
+
+/** A prompt of the declare shape as the session sends it: blockers, each aimed at an attacker. */
+const declare = (marks, pairs, revision = 0) => ({
+    revision,
+    shape: "declare",
+    purpose: "block",
+    title: "Choose blockers.",
+    marks,
+    buttons: [],
+    state: { shape: "declare", arrow: "block", pairs, aiming: [] },
+});
+
+test("a declaration draws a line from each creature aimed, and the script that plays it takes them over", async () => {
+    const { made, surface, prompts, reply, click } = prompted();
+    prompts.play(asking(declare(marked("eligible", 1), [])));
+    made.clock.advance(0);
+    assert.equal(surface.lines.size, 0);
+    const aimed = declare(marked("selected", 1), [{ from: 1, to: card(2) }], 1);
+    click(1);
+    await reply({ kind: "open", prompt: aimed });
+    made.clock.advance(0);
+    assert.deepEqual([...surface.lines.keys()], ["block 1 2"]);
+    // Taken back, its line goes with its mark; declared again, it is drawn again.
+    click(1);
+    await reply({
+        kind: "open",
+        prompt: declare(marked("eligible", 1), [], 2),
+    });
+    made.clock.advance(0);
+    assert.equal(surface.lines.size, 0);
+    click(1);
+    await reply({ kind: "open", prompt: { ...aimed, revision: 3 } });
+    made.clock.advance(0);
+    assert.deepEqual([...surface.lines.keys()], ["block 1 2"]);
+    // Confirmed: the view it answers into draws the same line, which is never taken away.
+    prompts.press({ kind: "confirm" });
+    await reply({ kind: "answered" });
+    surface.spans.length = 0;
+    const blocks = {
+        act: {
+            verb: "point",
+            span: "begin",
+            arrow: "block",
+            from: card(1),
+            to: card(2),
+        },
+    };
+    prompts.play(asking(pick([]), 2), { beats: [[blocks]] });
+    made.clock.advance(0);
+    assert.deepEqual(surface.spans, ["- 1 selected"]);
+    assert.deepEqual([...surface.lines.keys()], ["block 1 2"]);
+});
+
+/** A prompt of the pay shape as the session sends it: a cost of 3, with `left` to pay. */
+const pay = (marks, left, revision = 0) => ({
+    revision,
+    shape: "pay",
+    purpose: "crew",
+    title: "",
+    marks,
+    buttons: [],
+    state: { shape: "pay", cost: "3", left },
+});
+
+test("a permanent picked to pay lies turned from the pick until the script has tapped it", async () => {
+    const { made, surface, prompts, reply, click } = prompted({
+        tap: { duration: 100 },
+    });
+    prompts.play(asking(pay(marked("eligible", 1, 2), "3")));
+    made.clock.advance(0);
+    click(1);
+    await reply({
+        kind: "open",
+        prompt: pay([...marked("paying", 1), ...marked("eligible", 2)], "0", 1),
+    });
+    made.clock.advance(0);
+    assert.equal(made.pose(1).turn, 90);
+    assert.equal(made.pose(2).turn, 0);
+    prompts.press({ kind: "confirm" });
+    await reply({ kind: "answered" });
+    // The view it answers into taps it. What may no longer be picked loses its mark at
+    // once; the one that pays keeps its own while it taps, lying as it will rest, and
+    // never stands up to turn again.
+    const tapped = object(1, "battlefield", { tapped: true });
+    const after = asking(pick([]), 2);
+    const paid = {
+        ...after,
+        objects: after.objects.map((o) => (o.slot === 1 ? tapped : o)),
+    };
+    prompts.play(paid, { beats: [[{ act: { verb: "tap", object: tapped } }]] });
+    for (const at of [0, 30, 60, 99]) {
+        made.clock.advance(at - made.clock.now);
+        assert.deepEqual(drawn(surface), ["1 paying"], `at ${at} ms`);
+        assert.equal(made.pose(1).turn, 0, `at ${at} ms`);
+    }
+    made.clock.advance(1);
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), []);
+    assert.equal(made.pose(1).turn, 0);
+    assert.equal(made.shown.busy, false);
 });
 
 test("the marks coming up hold up neither the screen nor the next view", () => {
