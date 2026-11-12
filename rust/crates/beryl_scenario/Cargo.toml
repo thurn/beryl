@@ -10,6 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
+beryl_card = { path = "../beryl_card" }
 beryl_engine = { path = "../beryl_engine" }
 # The value types, which card crates name without the rules.
 beryl_scenario_types = { path = "../beryl_scenario_types" }

@@ -10,6 +10,7 @@
 //! (§17.2), each with its [`trace`].
 
 mod exhaust;
+pub mod facts;
 mod json;
 mod run;
 mod script;

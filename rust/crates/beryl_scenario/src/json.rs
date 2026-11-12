@@ -6,7 +6,7 @@
 //! with the type's fields and the dump's attributes. The compiler holds a mirror to its type:
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.
 
-use crate::{Live, Position, trace};
+use crate::{Live, Position, facts, trace};
 use beryl_engine::card::{Castings, FaceIx, ManaColor, ObjectAbility, Purpose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
@@ -388,6 +388,8 @@ struct Entry<'a> {
     trace: Option<Vec<Position>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<String>,
+    /// What each card the scenario names is, from its definition ([`facts::named`]).
+    cards: std::collections::BTreeMap<&'static str, facts::CardFacts>,
 }
 
 /// The scenarios of every card, each played on `table`, as a JSON array of `{card, name,
@@ -400,6 +402,7 @@ pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> Stri
         .iter()
         .flat_map(|&(card, scenarios)| {
             scenarios.iter().map(move |scenario| {
+                let cards = facts::named(table, card, scenario);
                 let (scenario, snapshot) = with_snapshot(table, scenario);
                 let (trace, failure) = match trace(table, &scenario) {
                     Ok(t) => (Some(t), None),
@@ -411,6 +414,7 @@ pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> Stri
                     snapshot,
                     trace,
                     failure,
+                    cards,
                 }
             })
         })

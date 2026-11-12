@@ -16,6 +16,7 @@ use beryl_engine::{
 use crate::{CARDS, SCENARIOS, blue, decks, names};
 
 mod derive;
+mod facts;
 mod knowledge;
 mod props;
 mod vocabulary;

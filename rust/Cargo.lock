@@ -219,6 +219,7 @@ dependencies = [
 name = "beryl_scenario"
 version = "0.1.0"
 dependencies = [
+ "beryl_card",
  "beryl_engine",
  "beryl_scenario_types",
  "serde",
