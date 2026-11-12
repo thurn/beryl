@@ -34,23 +34,6 @@ pub(crate) fn offer_options<L: Layout>(
     Ok(out)
 }
 
-/// Removes a spell from the stack to its owner's graveyard, or to exile when `exile` or its
-/// entry says so. Returns whether it was there.
-pub(crate) fn counter<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    spell: ObjectRef<L>,
-    exile: bool,
-) -> Result<bool, Full> {
-    let Some(entry) = s.take_off_stack(spell) else {
-        return Ok(false);
-    };
-    let to = if exile { Zone::Exile } else { Zone::Graveyard };
-    leave_stack(s, t, sink, &entry, to, Reason::Counter)?;
-    Ok(true)
-}
-
 /// Takes a spell off the stack for an effect that moves its card to `to` without its
 /// resolving: where the card goes ([`event::exiled_instead`]), or nothing if the spell is
 /// not on the stack.

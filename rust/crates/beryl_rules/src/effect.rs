@@ -8,16 +8,19 @@
 //! reference to an object that has since changed zones does nothing to it
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
-use crate::actions::{destroy, scry};
+use crate::actions::{
+    counter, destroy, explore, manifest_dread, reveal, sacrifice, scry, search, shuffle, tap,
+    transform,
+};
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, FaceIx, Flow, ManaColor,
-    ManaCost, Part, Prompt, Purpose, Stop, Types,
+    Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, Flow, ManaColor, ManaCost,
+    Part, Prompt, Purpose, Stop, Types,
 };
 use crate::chance;
 use crate::decision::{DecisionKind, Opt};
-use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
-use crate::filter::{Evaluate, Filter};
+use crate::event::{self, Reason, Recipient, Sink, TokenEntry};
+use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -27,15 +30,13 @@ use crate::profile::Payment;
 use crate::query::Copiable;
 use crate::resolution::Resolution;
 use crate::state::{
-    CounterKind, Memo, ObjectRef, PendingTrigger, StackEntry, State, Target, TargetPlace,
-    TargetPlaces, TriggerInfo, Zone, ZoneKey,
+    CounterKind, ObjectRef, PendingTrigger, StackEntry, State, Target, TargetPlace, TargetPlaces,
+    TriggerInfo, Zone,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
-use crate::{cast, face_down};
-use crate::{counters, damage, library, life, tokens};
+use crate::{counters, damage, drawing, library, life, linked, one_shot, stack, tokens, zones};
 use crate::{layers, trigger};
-use beryl_card::prompt;
 
 mod ask;
 mod continuous;
@@ -173,42 +174,20 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         })
     }
 
-    /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):
-    /// "To counter a spell or ability means to cancel it, removing it from the stack. It
-    /// doesn't resolve and none of its effects occur. A countered spell is put into its
-    /// owner's graveyard." With `exile`, it is exiled instead. Returns whether it was
-    /// countered.
+    /// [`counter::counter`].
     pub fn counter(&mut self, spell: ObjectRef<L>, exile: bool) -> bool {
-        let r = cast::counter(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            spell,
-            exile,
-        );
+        let r = counter::counter(&mut self.game, spell, exile);
         self.checked(r)
     }
 
-    /// The controller of a spell on the stack.
+    /// [`stack::spell_controller`].
     pub fn spell_controller(&self, spell: ObjectRef<L>) -> Option<Seat> {
-        self.spell_entry(spell).map(|e| e.controller)
+        stack::spell_controller(self.game.state, spell)
     }
 
-    fn spell_entry(&self, spell: ObjectRef<L>) -> Option<&StackEntry<L>> {
-        self.game
-            .state
-            .stack()
-            .iter()
-            .find(|e| e.spell() == Some(spell))
-    }
-
-    /// The mana value of a spell on the stack, X included
-    /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
-    /// number chosen for it while the object is on the stack."
+    /// [`stack::spell_mana_value`].
     pub fn spell_mana_value(&self, spell: ObjectRef<L>) -> Option<u8> {
-        let e = self.spell_entry(spell)?;
-        let cost = self.game.table.def(e.card).face(e.face).cost;
-        Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
+        stack::spell_mana_value(self.game.state, self.game.table, spell)
     }
 
     /// "[Effect] unless [player] pays [cost]"
@@ -358,14 +337,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.check(r);
     }
 
+    /// [`drawing::draw`].
     pub fn draw(&mut self, player: Seat, cards: u8) {
-        let r = event::draw(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            player,
-            cards,
-        );
+        let r = drawing::draw(&mut self.game, player, cards);
         self.check(r);
     }
 
@@ -379,492 +353,156 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.check(r);
     }
 
-    pub fn tap(&mut self, object: ObjectRef<L>) {
-        let r = event::set_tapped(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            object,
-            true,
-        );
-        self.check(r);
-    }
-
-    pub fn untap(&mut self, object: ObjectRef<L>) {
-        let r = event::set_tapped(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            object,
-            false,
-        );
-        self.check(r);
-    }
-
-    /// Moves an object to a zone, to the top of an ordered one.
+    /// [`zones::move_to`].
     pub fn move_to(&mut self, object: ObjectRef<L>, to: Zone, reason: Reason) {
-        if !self.game.state.is_current(object) {
-            return;
-        }
-        let r = event::move_one(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            object.slot,
-            to,
-            reason,
-        );
+        let r = zones::move_to(&mut self.game, object, to, reason);
         self.check(r);
     }
 
-    /// Returns a spell or a permanent to its owner's hand
-    /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go
-    /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
-    /// corresponding zone." A spell leaves the stack without resolving, or is exiled instead
-    /// ([`event::exiled_instead`]).
+    /// [`zones::return_to_hand`].
     pub fn return_to_hand(&mut self, object: ObjectRef<L>) {
-        if !self.game.state.is_current(object) {
-            return;
-        }
-        let to = match self.game.state.object(object.slot).zone() {
-            Zone::Battlefield => Some(Zone::Hand),
-            Zone::Stack => cast::unstack(self.game.state, object, Zone::Hand),
-            _ => None,
-        };
-        if let Some(to) = to {
-            self.move_to(object, to, Reason::Effect);
-        }
+        let r = zones::return_to_hand(&mut self.game, object);
+        self.check(r);
     }
 
-    /// Puts a spell on top of its owner's library, or on the bottom unless `top`. It leaves
-    /// the stack without resolving, or is exiled instead ([`event::exiled_instead`]).
+    /// [`library::put_into`] for a spell: on top of its owner's library, or on the bottom
+    /// unless `top`.
     pub fn put_spell_into_library(&mut self, spell: ObjectRef<L>, top: bool) {
-        if !self.game.state.is_current(spell) {
-            return;
-        }
-        match cast::unstack(self.game.state, spell, Zone::Library) {
-            Some(Zone::Library) => {}
-            Some(to) => return self.move_to(spell, to, Reason::Effect),
-            None => return,
-        }
-        let r = event::move_batch_to(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            Bitboard::single(spell.slot),
-            Zone::Library,
-            if top { Place::Top } else { Place::Bottom },
-            Reason::Effect,
-            Entry::default(),
-        );
+        let place = if top { Place::Top } else { Place::Bottom };
+        let r = library::put_into(&mut self.game, spell, place);
         self.check(r);
     }
 
-    /// Puts a permanent into its owner's library under `under` cards from the top, or at the
-    /// bottom of a library with fewer, as Oust's "second from the top" is under one.
+    /// [`library::put_into`], under `under` cards from the top.
     pub fn put_into_library(&mut self, object: ObjectRef<L>, under: u8) {
-        if !self.on_battlefield(object) {
-            return;
-        }
-        let r = event::move_batch_to(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            Bitboard::single(object.slot),
-            Zone::Library,
-            Place::UnderTop(under),
-            Reason::Effect,
-            Entry::default(),
-        );
+        let r = library::put_into(&mut self.game, object, Place::UnderTop(under));
         self.check(r);
     }
 
-    /// Moves a set of objects to one zone simultaneously, each to its owner's (CR 400.3).
+    /// [`zones::move_all`].
     pub fn move_all(&mut self, objects: Bitboard<L::Slot>, to: Zone, reason: Reason) {
-        let r = event::move_batch(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            objects,
-            to,
-            reason,
-            Entry::default(),
-        );
+        let r = zones::move_all(&mut self.game, objects, to, reason);
         self.check(r);
     }
 
-    /// Shuffles a player's library
-    /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
-    /// library or a face-down pile of cards, randomize the cards within it so that no player
-    /// knows their order."
+    /// [`shuffle::shuffle`].
     pub fn shuffle(&mut self, player: Seat) {
-        self.game.state.shuffle_library(player);
-        self.game
-            .sink
-            .note(event::Event::LibraryShuffled { player });
+        shuffle::shuffle(&mut self.game, player);
     }
 
-    /// Reveals a card to every player
-    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
-    /// show that card to all players for a brief time." Each player knows it from then on,
-    /// until it is shuffled or otherwise hidden anew.
+    /// [`reveal::reveal`].
     pub fn reveal(&mut self, slot: L::Slot) {
-        self.game.state.reveal(self.game.sink, slot);
+        reveal::reveal(&mut self.game, slot);
     }
 
-    /// A permanent explores ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)):
-    /// "that permanent's controller reveals the top card of their library. If a land card is
-    /// revealed this way, that player puts that card into their hand. Otherwise, that player
-    /// puts a +1/+1 counter on the exploring permanent and may put the revealed card into
-    /// their graveyard."
-    ///
-    /// [CR 701.44b](https://yawgatog.com/resources/magic-rules/#R70144b): it "explores ... even
-    /// if some or all of those actions were impossible": with an empty library no land is
-    /// revealed, so it gets the counter. [CR 701.44c](https://yawgatog.com/resources/magic-rules/#R70144c):
-    /// "If a permanent is no longer on the battlefield as an effect instructs it to explore,
-    /// its last known information is used to determine which object explored and who
-    /// controlled it." The only explorer here is a target, which this ability's controller
-    /// controls, so that is the controller once it is gone.
+    /// [`explore::explore`].
     pub fn explore(&mut self, object: ObjectRef<L>) -> Flow {
-        let player = if self.on_battlefield(object) {
-            self.game.state.controller(object.slot)
-        } else {
-            self.resolution.entry.controller
-        };
-        let top = self.game.state.library(player).last().copied();
-        if let Some(slot) = top {
-            self.reveal(slot);
-            // A card in a library has its front face's characteristics (CR 712.6a).
-            if self
-                .game
-                .state
-                .copiable(slot)
-                .face(self.game.table)
-                .types
-                .contains(Types::LAND)
-            {
-                self.move_to(self.game.state.object_ref(slot), Zone::Hand, Reason::Effect);
-                return Ok(());
-            }
-        }
-        if self.on_battlefield(object) {
-            self.add_counters(object, CounterKind::PlusOne, 1);
-        }
-        // The card is revealed, on top of the library: a yes puts it into the graveyard.
-        let prompt = Prompt::new(Purpose::Explore)
-            .count(1)
-            .places(prompt::Place::Graveyard, prompt::Place::Top);
-        if let Some(slot) = top
-            && self.choose_yes_no(player, prompt, Bitboard::single(slot))?
-        {
-            self.move_to(
-                self.game.state.object_ref(slot),
-                Zone::Graveyard,
-                Reason::Effect,
-            );
-        }
-        Ok(())
+        explore::explore(&mut self.game, &mut self.resolution, object)
     }
 
-    /// The top `n` cards of a player's library, or all of it if it has fewer.
+    /// [`library::top`].
     pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard<L::Slot> {
         library::top(self.game.state, player, n)
     }
 
-    /// `player` looks at the cards in `cards` and from then on knows them (architecture §13):
-    /// a library and a hand are hidden zones
-    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
-    /// all players can be expected to see the cards' faces."
+    /// [`zones::look_at`].
     pub fn look_at(&mut self, player: Seat, cards: Bitboard<L::Slot>) {
-        self.game.state.look(self.game.sink, player, cards);
+        zones::look_at(&mut self.game, player, cards);
     }
 
-    /// Discards a card from its owner's hand
-    /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
-    /// move it from its owner's hand to that player's graveyard."
-    pub fn discard(&mut self, card: ObjectRef<L>) {
-        if self.game.state.is_current(card)
-            && self.game.state.object(card.slot).zone() == Zone::Hand
-        {
-            self.move_to(card, Zone::Graveyard, Reason::Discard);
-        }
-    }
-
-    /// Puts cards on the bottom of their owner's library in a random order. Their identities
-    /// are dealt anew among the slots they land in, so no player knows which is where
-    /// ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's owner
-    /// doesn't reveal the order in which the cards go into the library."
+    /// [`library::put_on_bottom_in_random_order`].
     pub fn put_on_bottom_in_random_order(&mut self, cards: Bitboard<L::Slot>) {
-        let r = event::move_batch_to(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            cards,
-            Zone::Library,
-            Place::Bottom,
-            Reason::Effect,
-            Entry::default(),
-        );
+        let r = library::put_on_bottom_in_random_order(&mut self.game, cards);
         self.check(r);
-        // Rebound within each owner's library, among the slots that went there. Each takes
-        // from the one random stream, by seat.
-        for owner in self
-            .game
-            .state
-            .players_in_seat_order(self.game.state.players())
-        {
-            let mut moved: L::Queue<L::Slot, 64> = Default::default();
-            for &slot in self.game.state.library(owner) {
-                if cards.contains(slot) && moved.push(slot).is_err() {
-                    self.full = true;
-                }
-            }
-            self.game.state.rebind_at_random(moved.as_slice());
-        }
     }
 
-    /// Puts a card in a library on the bottom of that library, as Jace, the Mind Sculptor's
-    /// "You may put that card on the bottom of that player's library." It stays in the
-    /// library, so it is still the same object.
+    /// [`library::put_into`], on the bottom, for a card in a library: "You may put that
+    /// card on the bottom of that player's library."
     pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
-        if self.game.state.is_current(object)
-            && self.game.state.object(object.slot).zone() == Zone::Library
-        {
-            let r = self.game.state.reorder_library(object.slot, Place::Bottom);
-            self.check(r);
-        }
+        let r = library::put_into(&mut self.game, object, Place::Bottom);
+        self.check(r);
     }
 
-    /// `player` scries `n`
-    /// ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "To 'scry N' means
-    /// to look at the top N cards of your library, then put any number of them on the bottom
-    /// of your library in any order and the rest on top of your library in any order."
-    ///
-    /// The cards for the bottom are chosen one at a time, each going under the ones before,
-    /// until the player is done; then those left are chosen one at a time from the top down.
-    /// Every arrangement is one sequence of answers. [CR 701.22b](https://yawgatog.com/resources/magic-rules/#R70122b):
-    /// "If a player is instructed to scry 0, no scry event occurs."
+    /// [`scry::scry`].
     pub fn scry(&mut self, player: Seat, n: u8) -> Flow {
         scry::scry(&mut self.game, &mut self.resolution, player, n)
     }
 
-    /// `player` manifests dread
-    /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "'Manifest dread'
-    /// means 'Look at the top two cards of your library. Manifest one of them, then put the
-    /// cards you looked at that were not manifested this way into your graveyard.'" With one
-    /// card in the library, that one is manifested; with none, nothing happens.
+    /// [`manifest_dread::manifest_dread`].
     pub fn manifest_dread(&mut self, player: Seat) -> Flow {
-        let top = self.top_of_library(player, 2);
-        if top.is_empty() {
-            return Ok(());
-        }
-        self.look_at(player, top);
-        let prompt = Prompt::new(Purpose::ManifestDread)
-            .count(2)
-            .most(1)
-            .places(prompt::Place::Battlefield, prompt::Place::Graveyard);
-        let chosen = self.choose_object(player, top, prompt)?;
-        let r = face_down::manifest(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            chosen,
-            player,
-        );
-        self.check(r);
-        let mut rest = top;
-        rest.remove(chosen);
-        self.move_all(rest, Zone::Graveyard, Reason::Effect);
-        Ok(())
+        manifest_dread::manifest_dread(&mut self.game, &mut self.resolution, player)
     }
 
-    /// `player` mills `n` cards
-    /// ([CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a)): "For a player to
-    /// mill a number of cards, that player puts that many cards from the top of their library
-    /// into their graveyard." [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b):
-    /// "A player can't mill a number of cards greater than the number of cards in their
-    /// library."
-    pub fn mill(&mut self, player: Seat, n: u8) {
-        let top = self.top_of_library(player, n);
-        self.move_all(top, Zone::Graveyard, Reason::Effect);
-    }
-
-    /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
-    /// control, as Jace, Vryn's Prodigy does. It returns as a new object
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
-    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
-    /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
-    /// enters the battlefield with its back face up." If it already left the battlefield, it
-    /// isn't exiled, so it doesn't return.
+    /// [`transform::exile_and_return_transformed`].
     pub fn exile_and_return_transformed(&mut self, object: ObjectRef<L>) {
-        if !self.on_battlefield(object) {
-            return;
-        }
-        self.move_to(object, Zone::Exile, Reason::Exile);
-        let o = *self.game.state.object(object.slot);
-        if o.zone() != Zone::Exile {
-            return;
-        }
-        let r = event::move_batch(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            Bitboard::single(object.slot),
-            Zone::Battlefield,
-            Reason::Effect,
-            Entry {
-                controller: Some(o.owner()),
-                face: FaceIx::BACK,
-                ..Entry::default()
-            },
-        );
+        let r = transform::exile_and_return_transformed(&mut self.game, object);
         self.check(r);
     }
 
-    /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
-    /// "To destroy a permanent, move it from the battlefield to its owner's graveyard."
+    /// [`destroy::destroy`].
     pub fn destroy(&mut self, object: ObjectRef<L>) {
         let r = destroy::destroy(&mut self.game, object);
         self.check(r);
     }
 
-    /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
-    /// does: one event, so "whenever one or more" abilities see them together.
-    pub fn destroy_all(&mut self, objects: Bitboard<L::Slot>) {
-        let r = destroy::destroy_all(&mut self.game, objects);
-        self.check(r);
-    }
-
-    /// [`EffectCtx::search_library`] for up to `n` cards, as Winds of Abandon's "a basic land
-    /// card" for each creature exiled: those found, still in the library, one
-    /// [`DecisionKind::ChooseUpTo`] at a time. The caller shuffles once they have moved.
+    /// [`search::search_library_up_to`].
     pub fn search_library_up_to(
         &mut self,
         player: Seat,
         filter: Filter,
         n: u8,
     ) -> Result<Bitboard<L::Slot>, Stop> {
-        let library = self.game.state.zone(ZoneKey::Of(player, Zone::Library));
-        self.look_at(player, library);
-        let found = filter.select(self.game.state, self.game.table, library, player);
-        self.choose_up_to(player, found, n, Prompt::new(Purpose::Search).most(n))
+        search::search_library_up_to(&mut self.game, &mut self.resolution, player, filter, n)
     }
 
-    /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:
-    /// "Those cards enter tapped."
-    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard<L::Slot>) {
-        let r = event::move_batch(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            cards,
-            Zone::Battlefield,
-            Reason::Effect,
-            Entry {
-                tapped: true,
-                ..Entry::default()
-            },
-        );
-        self.check(r);
-    }
-
-    /// Sacrifices a permanent ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)):
-    /// "To sacrifice a permanent, its controller moves it from the battlefield directly to its
-    /// owner's graveyard."
-    pub fn sacrifice(&mut self, object: ObjectRef<L>) {
-        if self.on_battlefield(object) {
-            self.move_to(object, Zone::Graveyard, Reason::Sacrifice);
-        }
-    }
-
-    fn on_battlefield(&self, object: ObjectRef<L>) -> bool {
-        self.game.on_battlefield(object)
-    }
-
-    /// Exiles an object until this ability's source leaves the battlefield
-    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot effects
-    /// cause an object to change zones 'until' a specified event occurs. A second one-shot
-    /// effect is created immediately after the specified event. This second one-shot effect
-    /// returns the object to its previous zone."
-    ///
-    /// [CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b): "If a resolving
-    /// triggered ability creates the initial one-shot effect that causes the object to change
-    /// zones, and the specified event has already occurred before that one-shot effect would
-    /// occur but after that ability triggered, the object doesn't move."
-    ///
-    /// # Panics
-    ///
-    /// For an emblem's ability, which has no source.
-    pub fn exile_until_source_leaves(&mut self, object: ObjectRef<L>) {
-        let source = self.source();
-        if !self.on_battlefield(source) || !self.on_battlefield(object) {
-            return;
-        }
-        self.move_to(object, Zone::Exile, Reason::Exile);
-        if self.game.state.object(object.slot).zone() == Zone::Exile {
-            let r = self
-                .game
-                .state
-                .remember(object.slot, Memo::ExiledUntil(source.slot));
-            self.check(r);
-        }
-    }
-
-    /// Exiles a card, linked to this ability's source so that the source's other abilities
-    /// can find it among the cards "exiled with" it
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has an
-    /// activated or triggered ability printed on it that instructs a player to exile one or
-    /// more cards and an ability printed on it that refers either to "the exiled cards" or to
-    /// cards "exiled with [this object]," these abilities are linked." A source that has left
-    /// its zone since is gone, and so is the link: nothing can refer to it any more.
-    ///
-    /// # Panics
-    ///
-    /// For an emblem's ability, which has no source.
-    pub fn exile_linked(&mut self, object: ObjectRef<L>) {
-        if !self.game.state.is_current(object) {
-            return;
-        }
-        let source = self.source();
-        self.move_to(object, Zone::Exile, Reason::Exile);
-        if self.game.state.is_current(source)
-            && self.game.state.object(object.slot).zone() == Zone::Exile
-        {
-            let r = self
-                .game
-                .state
-                .remember(object.slot, Memo::ExiledWith(source.slot));
-            self.check(r);
-        }
-    }
-
-    /// The cards exiled with this ability's source by [`Self::exile_linked`] (CR 607.2a),
-    /// whether or not the source is still there: an ability of an object that has left the
-    /// battlefield still refers to the cards that object exiled.
-    ///
-    /// # Panics
-    ///
-    /// For an emblem's ability, which has no source.
-    pub fn exiled_with_source(&self) -> Bitboard<L::Slot> {
-        self.game.state.exiled_with(self.source().slot)
-    }
-
-    /// `player` searches their library for a card that passes `filter`, and finds one of the
-    /// cards that do, or none ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)):
-    /// "To search for a card in a zone, look at all cards in that zone (even if it's a hidden
-    /// zone) and find a card that matches the given description."
-    /// [CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If a player is
-    /// searching a hidden zone for cards with a stated quality ... that player isn't required
-    /// to find some or all of those cards even if they're present in that zone." Returns the
-    /// card found, still in the library: the body says where it goes, whether it is revealed
-    /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
-    /// The question is a [`DecisionKind::ChooseUpTo`] whose [`Opt::Done`] finds nothing.
+    /// [`search::search_library`].
     pub fn search_library(
         &mut self,
         player: Seat,
         filter: Filter,
     ) -> Result<Option<L::Slot>, Stop> {
-        Ok(self.search_library_up_to(player, filter, 1)?.sole())
+        search::search_library(&mut self.game, &mut self.resolution, player, filter)
+    }
+
+    /// [`zones::put_onto_battlefield_tapped`].
+    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard<L::Slot>) {
+        let r = zones::put_onto_battlefield_tapped(&mut self.game, cards);
+        self.check(r);
+    }
+
+    /// [`sacrifice::sacrifice`].
+    pub fn sacrifice(&mut self, object: ObjectRef<L>) {
+        let r = sacrifice::sacrifice(&mut self.game, object);
+        self.check(r);
+    }
+
+    /// [`one_shot::exile_until_leaves`], until this ability's source leaves.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
+    pub fn exile_until_source_leaves(&mut self, object: ObjectRef<L>) {
+        let r = one_shot::exile_until_leaves(&mut self.game, object, self.resolution.source());
+        self.check(r);
+    }
+
+    /// [`linked::exile_linked`], to this ability's source.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
+    pub fn exile_linked(&mut self, object: ObjectRef<L>) {
+        let r = linked::exile_linked(&mut self.game, object, self.resolution.source());
+        self.check(r);
+    }
+
+    /// [`linked::exiled_with`] this ability's source.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
+    pub fn exiled_with_source(&self) -> Bitboard<L::Slot> {
+        linked::exiled_with(self.game.state, self.source())
     }
 
     /// Creates `count` tokens of a predefined kind under this ability's controller
@@ -929,60 +567,16 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.checked(created)
     }
 
-    /// Creates `count` tokens of a predefined kind under this ability's controller, tapped
-    /// and attacking. As they enter, their controller chooses what they attack
-    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "If a creature is put
-    /// onto the battlefield attacking, its controller chooses which defending player,
-    /// planeswalker a defending player controls, or battle a defending player protects it's
-    /// attacking as it enters the battlefield". Only the attacking player's creatures can be
-    /// ([CR 506.3b](https://yawgatog.com/resources/magic-rules/#R5063b)): "If an effect would
-    /// put a creature onto the battlefield attacking under the control of any player except an
-    /// attacking player, that creature does enter the battlefield, but it's never considered to
-    /// be an attacking creature." [CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062):
-    /// "During the combat phase, the active player is the attacking player".
+    /// [`tokens::create_attacking`]: `count` tokens of a predefined kind under this ability's
+    /// controller, attacking any of the defending players.
     pub fn create_attacking_tokens(
         &mut self,
         def: &'static CardDef,
         count: u8,
     ) -> Result<Bitboard<L::Slot>, Stop> {
-        let you = self.resolution.entry.controller;
-        let attacking = crate::combat::in_combat(self.game.state.turn().step())
-            && self.game.state.turn().active() == you;
-        let tokens = self.create_tokens(
-            def,
-            count,
-            TokenEntry {
-                tapped: true,
-                attacking,
-            },
-        );
-        if attacking {
-            // The choice is the controller's "as it enters", yet asked once the tokens are on
-            // the battlefield, attacking the player, so they see what they choose for. Nothing
-            // sees them in between: it is one step of the resolution, in which no player gets
-            // priority and no ability triggers or state-based action is checked
-            // ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
-            // controller of the spell or ability follows its instructions in the order
-            // written").
-            let opts = self.checked(crate::combat::attack_targets(self.game.state));
-            let Opt::Defender(walker) = self.ask_options(
-                you,
-                DecisionKind::AttackTarget,
-                opts.as_slice(),
-                Prompt::new(Purpose::Attack).part(Part::Aim),
-                tokens,
-            )?
-            else {
-                unreachable!("a defender")
-            };
-            if let Some(walker) = walker {
-                // Each token is told what it attacks, with no event: the order is nothing.
-                for slot in self.game.state.in_candidate_order(tokens) {
-                    self.game.state.choose_attacked(slot, Some(walker));
-                }
-            }
-        }
-        Ok(tokens)
+        let (game, you) = (&mut self.game, self.resolution.controller());
+        let (what, whom) = (tokens::predefined(game.table, def), game.state.players());
+        tokens::create_attacking(game, &mut self.resolution, you, what, count, whom)
     }
 
     /// Gives a player an emblem ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)):
@@ -1030,22 +624,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
     }
 
-    /// This ability's controller untaps up to `n` lands of their choice, whoever controls
-    /// them, as Teferi, Hero of Dominaria's "untap up to two lands". Untapping an untapped
-    /// land does nothing ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)):
-    /// "Only tapped permanents can be untapped", so only tapped lands are offered.
+    /// [`tap::untap_up_to`]: this ability's controller untaps up to `n` lands.
     pub fn untap_up_to_lands(&mut self, n: u8) -> Flow {
-        let you = self.resolution.entry.controller;
-        let tapped = Filter::All(&[Filter::Types(Types::LAND), Filter::Tapped]);
-        let s = &*self.game.state;
-        let lands = tapped.select(s, self.game.table, s.in_zone(Zone::Battlefield), you);
-        let chosen = self.choose_up_to(you, lands, n, Prompt::new(Purpose::Untap).most(n))?;
-        // In battlefield order, never slot order: the untaps' events are seen in this order.
-        let lands = self.game.state.in_game_order(self.game.table, chosen);
-        for &slot in self.checked(lands).as_slice() {
-            self.untap(self.game.state.object_ref(slot));
-        }
-        Ok(())
+        let (you, lands) = (self.controller(), Filter::Types(Types::LAND));
+        tap::untap_up_to(&mut self.game, &mut self.resolution, you, lands, n)
     }
 
     /// Flips a coin and returns whether the player won the flip
@@ -1069,35 +651,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         );
         self.check(r);
         won
-    }
-
-    /// Puts a permanent card onto the battlefield under this ability's controller, with the
-    /// face up that it enters with (a double-faced card returned "transformed" enters with
-    /// its back face up) and any counters it enters with.
-    pub fn put_onto_battlefield(
-        &mut self,
-        object: ObjectRef<L>,
-        face: FaceIx,
-        counters: Option<(CounterKind, u8)>,
-    ) {
-        if !self.game.state.is_current(object) {
-            return;
-        }
-        let r = event::move_batch(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            Bitboard::single(object.slot),
-            Zone::Battlefield,
-            Reason::Effect,
-            Entry {
-                controller: Some(self.resolution.entry.controller),
-                face,
-                counters,
-                ..Entry::default()
-            },
-        );
-        self.check(r);
     }
 }
 

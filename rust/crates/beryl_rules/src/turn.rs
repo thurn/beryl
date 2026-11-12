@@ -2,8 +2,10 @@
 
 use crate::combat;
 use crate::decision::{Outcome, StallReason};
+use crate::drawing;
 use crate::event::{self, Reason, Sink};
 use crate::fixed::Full;
+use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::Layout;
@@ -73,7 +75,7 @@ pub(crate) fn begin_step<L: Layout>(
             // step (see rule 504, "Draw Step") of their first turn."
             if s.turn().number() > 1 {
                 // CR 504.1: "First, the active player draws a card."
-                event::draw(s, t, sink, active, 1)?;
+                drawing::draw(&mut Game::new(s, t, sink), active, 1)?;
             }
         }
         TurnStep::DeclareAttackers => combat::begin_attackers(s),

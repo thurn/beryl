@@ -20,7 +20,7 @@ mod timing;
 pub use costs::cost_being_cast;
 pub use legal::pointless;
 pub(crate) use legal::{priority_options, refusal};
-pub(crate) use stack::{counter, leave_stack, offer_options, unstack};
+pub(crate) use stack::{leave_stack, offer_options, unstack};
 pub(crate) use steps::{begin_activate, begin_cast, decision, perform};
 pub(crate) use targets::{spells, still_legal, target_trigger};
 pub(crate) use timing::{entry_ability, sorcery_timing};

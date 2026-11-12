@@ -22,7 +22,7 @@ use crate::layout::{Bodies, Layout};
 use crate::state::{ObjectRef, PendingTrigger, State};
 use crate::table::GameTable;
 
-pub(crate) use run::Run;
+pub(crate) use run::{Run, no_primitive};
 pub(crate) use scene::Outcome;
 use scene::{Registers, Scene};
 

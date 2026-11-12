@@ -25,6 +25,7 @@ use crate::state::{
     PendingTrigger, StackEntry, TargetPlace, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
+use crate::zones;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
     Scratch, State, Step, apply, next,
@@ -456,7 +457,7 @@ static ICEBERG: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[
+pub(super) static CARDS: CardTable = CardTable::new(&[
     &LAND,
     &GAIN_LAND,
     &TAPLAND,
@@ -480,7 +481,7 @@ static CARDS: CardTable = CardTable::new(&[
 ]);
 
 /// Every card once, then lands: every test finds what it needs in either library.
-const DECK: &Decklist = &[
+pub(super) const DECK: &Decklist = &[
     (1, "Test Gain Land"),
     (1, "Test Tapland"),
     (2, "Test Coast"),
@@ -1256,9 +1257,9 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     let overlord = find(&s, &t, p, "Test Overlord");
     let r = s.object_ref(overlord);
     let land = put(&t, &mut s, &mut x, p, "Test Land");
-    with_ctx(&t, &mut s, &mut x, land, |ctx| {
-        ctx.put_onto_battlefield(r, FaceIx::FRONT, Some((CounterKind::Time, 4)));
-    });
+    let counters = Some((CounterKind::Time, 4));
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    zones::put_onto_battlefield(&mut game, r, p, FaceIx::FRONT, counters).unwrap();
     assert_eq!(s.counters_of(overlord, CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
     let r = s.object_ref(overlord);
@@ -1323,7 +1324,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
         ctx.destroy(r);
         let r = ctx.state().object_ref(bear);
-        ctx.put_onto_battlefield(r, FaceIx::FRONT, None);
+        zones::put_onto_battlefield(&mut ctx.game, r, p, FaceIx::FRONT, None).unwrap();
     });
     assert_eq!(s.object(aura).attached_to(), None);
     assert_eq!(types(&s, bear), Types::CREATURE);
@@ -2030,7 +2031,7 @@ static PRODIGY: CardDef = CardDef {
     tokens: &[],
 };
 
-static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
+pub(super) static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
 
 /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): with its back face up, a
 /// transforming permanent's mana value is still its front face's, but a token copying it

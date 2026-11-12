@@ -58,7 +58,7 @@ impl<L: Layout> EffectCtx<'_, L> {
     ///
     /// For an emblem's ability, which has no source.
     pub fn gain_control(&mut self, object: ObjectRef<L>, duration: Duration) {
-        if !self.on_battlefield(object) {
+        if !self.game.on_battlefield(object) {
             return;
         }
         let player = self.resolution.entry.controller;

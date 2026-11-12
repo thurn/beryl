@@ -23,8 +23,9 @@
 //! [`Resolution`], in modules that mirror the Comprehensive Rules (plan K5;
 //! `docs/project-50k.md`, "Rules library"). This is the design every bead of milestone 5
 //! (epic by-w8gv.9) builds on, written as it will stand when they land; a bead that builds a
-//! part amends its text. Destroy, scry, counters, damage, life and tokens are built. The rest
-//! is still a method of the shim ("The shim").
+//! part amends its text. What moves an object between zones, the keyword actions, drawing,
+//! counters, damage, life and tokens are built. The choices, paying a cost, continuous effects,
+//! emblems, delayed triggers and coins are still methods of the shim ("The shim").
 //!
 //! ## Game
 //!
@@ -81,9 +82,10 @@
 //! - **Full.** A fixed capacity ran out. The state is abandoned for its wider copy (§12.3),
 //!   so nothing undoes, and nothing plays on.
 //!
-//! A function of the game alone returns `Result<T, Full>`. One that may ask returns
-//! `Result<T, Stop>`, or [`card::Flow`] when it has nothing to return, and `?` carries a
-//! `Full` into it. No function notes either on a flag, puts a default in its place or goes
+//! A function of the game alone returns `Result<T, Full>`, or its value plain when nothing it
+//! does can run out of room ([`actions::shuffle`], [`actions::reveal`]). One that may ask
+//! returns `Result<T, Stop>`, or [`card::Flow`] when it has nothing to return, and `?` carries
+//! a `Full` into it. No function notes either on a flag, puts a default in its place or goes
 //! on: a push is followed by `?`, or is a `push_bounded` whose bound is argued (the
 //! `discarded-push` check). The engine turns `Full` into the stall in one place, where the
 //! resolution ends (`resolve.rs`).
@@ -95,9 +97,9 @@
 //!
 //! | Rules | Module | Built, and to come |
 //! | --- | --- | --- |
-//! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::destroy`], [`actions::scry`]; counter, discard, exile, explore, manifest dread, mill, reveal, sacrifice, search, shuffle, tap and untap |
+//! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | flashback, kicker |
-//! | any other rule | a module named for the rule's title | [`tokens`] (CR 111), [`life`] (CR 119), [`damage`] (CR 120), [`counters`] (CR 122), [`library`] (CR 401); emblems (CR 114), costs (CR 118), drawing (CR 121), zones (CR 400), the stack (CR 405), linked abilities (CR 607), continuous effects (CR 611), coins (CR 705), copies (CR 707) |
+//! | any other rule | a module named for the rule's title | [`tokens`] (CR 111), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`linked`] abilities (CR 607), [`one_shot`] effects (CR 610); emblems (CR 114), costs (CR 118), continuous effects (CR 611), coins (CR 705), copies (CR 707) |
 //!
 //! A module holds, in this order:
 //!
@@ -111,7 +113,9 @@
 //!    writes them (`Objects`, `Players`, `Amount`), reads them against the scene, calls the
 //!    function, and returns the outcome the instructions after it read. `Run::carry_out`
 //!    (`interpret/run.rs`) is the table of entries, one line for each, naming its arm; an
-//!    entry whose module is not written still has its arm there.
+//!    entry whose module is not written still has its arm there. Two entries that differ
+//!    only in where they put a card share one arm, which each one's own names
+//!    ([`zones`]'s for [`library`]'s "put into a library").
 //! 4. The entry's English template (plan K13), a constant directly above its arm. Milestone 8
 //!    writes them; none exists yet.
 //!
@@ -144,9 +148,11 @@
 //!
 //! [`effect::EffectCtx`] is how the bodies written before the library reach the game: a
 //! [`Game`], a [`Resolution`], and a method for each thing a body did. A method whose module
-//! is written is a line that calls it. The others still hold their code, and move with the
-//! bead that writes their module: it moves the code into a function, moves the interpreter's
-//! arm into an `instruction`, and leaves the method a delegation.
+//! is written is a line that calls it, giving the function this ability's source or
+//! controller where a body never named them, and it is gone once no body calls it. The
+//! others still hold their code, and move with the bead that writes their module: it moves
+//! the code into a function, moves the interpreter's arm into an `instruction`, and leaves
+//! the method a delegation.
 //!
 //! The shim's methods that return nothing keep a body's old way with `Full`: they note it on
 //! the shim, and the body plays on until it returns. The bodies are never rewritten against
@@ -162,6 +168,7 @@ mod combat;
 pub mod counters;
 pub mod coverage;
 pub mod damage;
+pub mod drawing;
 pub mod effect;
 mod engine;
 pub mod event;
@@ -171,7 +178,9 @@ mod interpret;
 mod layers;
 pub mod library;
 pub mod life;
+pub mod linked;
 mod mana;
+pub mod one_shot;
 mod permission;
 mod reference;
 pub mod resolution;
@@ -179,11 +188,13 @@ mod resolve;
 mod rule_change;
 mod sba;
 mod scratch;
+pub mod stack;
 mod start;
 mod stops;
 pub mod tokens;
 mod trigger;
 mod turn;
+pub mod zones;
 
 // The game state and everything that writes it are the kernel's (`beryl_kernel`, plan K6).
 // The rules name its modules as their own and export none of them whole: a caller reads the

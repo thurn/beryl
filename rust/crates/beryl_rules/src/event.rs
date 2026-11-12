@@ -13,7 +13,7 @@ pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, AbilityKind, CastingKinds, FaceAbility, FaceIx, Replacement, Types};
+use crate::card::{AbilityKind, CastingKinds, FaceIx, Replacement, Types};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -338,84 +338,6 @@ pub(crate) fn life_to_enter<L: Layout>(t: &GameTable, entering: Copiable<L>) -> 
         .find_map(|a| match a.replacement {
             Replacement::EntersTappedUnlessPayLife(n) => Some(n),
             _ => None,
-        })
-}
-
-/// A player draws cards, one at a time
-/// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "If a player is instructed
-/// to draw multiple cards, that player performs that many individual card draws." The event
-/// counts the cards actually drawn, if any.
-///
-/// Each draw from an empty library is offered to Jace, Wielder of Mysteries' replacement
-/// first ([CR 614.11](https://yawgatog.com/resources/magic-rules/#R61411)): "Some effects
-/// replace card draws. These effects are applied even if no cards could be drawn because
-/// there are no cards in the affected player's library." Winning ends the game at once
-/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
-/// that a player wins the game." The draws left are never made.
-pub(crate) fn draw<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    player: Seat,
-    cards: u8,
-) -> Result<(), Full> {
-    let mut drawn = 0;
-    let mut wins = None;
-    for _ in 0..cards {
-        if let Some(&slot) = s.library(player).last() {
-            drawn += 1;
-            sink.note(Event::DrawCard { slot });
-        } else {
-            wins = wins_instead_of_drawing(s, t, player);
-            if wins.is_some() {
-                break;
-            }
-        }
-        s.draw(sink, player)?;
-    }
-    if drawn > 0 {
-        settle(
-            s,
-            t,
-            sink,
-            Event::Draw {
-                player,
-                cards: drawn,
-            },
-        )?;
-    }
-    if let Some(cause) = wins {
-        crate::sba::win_game(s, sink, player, cause);
-    }
-    Ok(())
-}
-
-/// Why `player`'s opponent loses, if `player` controls a permanent whose replacement effect
-/// has them win rather than draw from an empty library: that ability.
-fn wins_instead_of_drawing<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-) -> Option<LossCause<L>> {
-    s.battlefield()
-        .iter()
-        .filter(|&&slot| s.controller(slot) == player)
-        .find_map(|&slot| {
-            let (index, a) = trigger::face(s, t, slot)
-                .abilities
-                .iter()
-                .enumerate()
-                .find(|(_, a)| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)?;
-            crate::coverage::hit(a);
-            let (card, face) = s.copiable(slot).record(t);
-            Some(LossCause::Effect {
-                source: Some(s.object_ref(slot)),
-                card,
-                face,
-                ability: Some(FaceAbility::Own(AbilityIx::new(
-                    u8::try_from(index).expect("a face has fewer than 256 abilities"),
-                ))),
-            })
         })
 }
 

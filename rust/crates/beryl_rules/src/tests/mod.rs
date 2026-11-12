@@ -8,6 +8,7 @@ mod effects;
 mod events;
 mod game;
 mod invariants;
+mod library;
 mod mulligan;
 mod payment;
 mod replay;
