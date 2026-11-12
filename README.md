@@ -18,7 +18,8 @@ On an Apple silicon Mac:
 | Xcode Command Line Tools | `xcode-select --install`                                                                 |
 | Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it                          |
 | Node.js 24               | `brew install node`                                                                      |
-| uv, just (1.59+)         | `brew install uv just`                                                                   |
+| uv                       | `brew install uv`                                                                        |
+| just 1.59+               | `cargo install just --locked`                                                            |
 | Enact, Beads 1.3+, Dolt  | [Enact](https://github.com/thurn/enact)'s setup, then `enact setup` here                 |
 | Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles           |
 | Rosetta                  | `softwareupdate --install-rosetta --agree-to-license`; Forge's build runs an x86-64 tool |
@@ -36,7 +37,8 @@ On Windows 11 (x64), which runs the app, the tests and the agents, but not
 | Visual Studio Build Tools | The "Desktop development with C++" workload; WebView2 ships with Windows |
 | Git for Windows           | `winget install Git.Git`; `just` runs recipes in its `sh`                |
 | Rust                      | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it          |
-| Node.js 24, uv, just      | `winget install OpenJS.NodeJS astral-sh.uv Casey.Just`                   |
+| Node.js 24, uv            | `winget install OpenJS.NodeJS astral-sh.uv`                              |
+| just 1.59+                | `cargo install just --locked`                                            |
 | JDK 21, Maven             | `just oracle-setup`, with winget and Apache's Maven download             |
 
 Set `PYTHONUTF8=1`, so Python reads and writes text as UTF-8. Keep the checkout
