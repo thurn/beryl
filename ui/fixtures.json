@@ -684,6 +684,65 @@
       "board": "shape-order-theirs",
       "until": "first priority decision for seat 1",
       "after": 1
+    },
+    {
+      "name": "shape-pay",
+      "board": "shape-pay",
+      "until": "first priority decision for seat 0",
+      "clicks": [
+        "Thieving Skydiver",
+        "press option 2",
+        "Plains",
+        "Island",
+        "Swift Reconfiguration",
+        "Jace, Vryn's Prodigy",
+        "Jace, Vryn's Prodigy",
+        "press option 2",
+        "Trinket Mage",
+        "Trinket Mage",
+        "Snapcaster Mage",
+        "Elite Spellbinder",
+        "press confirm",
+        "Aang's Iceberg",
+        "Trinket Mage",
+        "Thieving Skydiver",
+        "press auto"
+      ]
+    },
+    {
+      "name": "shape-pay-theirs",
+      "board": "shape-pay-theirs",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
+      "name": "shape-declare",
+      "board": "shape-declare",
+      "until": "first blocker decision for seat 0",
+      "clicks": [
+        "Snapcaster Mage",
+        "Trinket Mage",
+        "Jace, Vryn's Prodigy",
+        "Beza, the Bounding Spring",
+        "Jace, Vryn's Prodigy",
+        "press confirm",
+        "press decline",
+        "press decline",
+        "press decline",
+        "press auto",
+        "press decline",
+        "Elite Spellbinder",
+        "The Wandering Emperor",
+        "Jace, Vryn's Prodigy",
+        "player opponent",
+        "press confirm"
+      ]
+    },
+    {
+      "name": "shape-declare-theirs",
+      "board": "shape-declare-theirs",
+      "until": "first priority decision for seat 1",
+      "after": 1
     }
   ]
 }

@@ -3,15 +3,16 @@
 //! the table with the same play scripted.
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
-    ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT,
-    MANA_DRAIN, OUST, PLAINS, REPRIEVE, STOCK_UP, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
-    TRINKET_MAGE, TUNDRA,
+    AANGS_ICEBERG, ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER,
+    DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
+    JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SNAPCASTER_MAGE,
+    STOCK_UP, SWIFT_RECONFIGURATION, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
+    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TRINKET_MAGE, TUNDRA,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
-use super::shorthand::{ISLAND_, LANDS, choose, play_land};
+use super::shorthand::{ISLAND_, LANDS, PLAINS_, choose, play_land};
 
 /// The permanents of [`pick`], by player.
 const PICKERS: &[Permanent] = &[
@@ -148,8 +149,81 @@ const fn order(name: &'static str) -> Scenario {
         .library(P1, LANDS)
 }
 
+/// The permanents of [`pay`]: three creatures of power 2, 2 and 3 to crew with, an Aang's
+/// Iceberg to waterbend, and lands and a Mana Crypt that pay a cost in more ways than one.
+const PAYERS: &[Permanent] = &[
+    Permanent::new(JACE_VRYNS_PRODIGY),
+    Permanent::new(SNAPCASTER_MAGE),
+    Permanent::new(TRINKET_MAGE),
+    Permanent::new(ELITE_SPELLBINDER),
+    Permanent::new(AANGS_ICEBERG),
+    Permanent::new(MANA_CRYPT),
+    PLAINS_,
+    PLAINS_,
+    ISLAND_,
+    ISLAND_,
+];
+
+/// Paying with permanents: the human's main phase with a Thieving Skydiver, whose mana the
+/// lands and the Mana Crypt pay in several ways; a Swift Reconfiguration to make Jace, Vryn's
+/// Prodigy a Vehicle that three creatures may crew; and Aang's Iceberg, whose waterbend
+/// cost what is left untapped pays, permanents in place of mana among it.
+const fn pay(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[THIEVING_SKYDIVER, SWIFT_RECONFIGURATION])
+        .battlefield(P0, PAYERS)
+        .battlefield(P1, WATCHERS)
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
+/// The permanents of [`declare`], by player: the human's three creatures, and the opponent's
+/// two with a planeswalker to attack beside its controller.
+const DEFENDERS: &[Permanent] = &[
+    Permanent::new(SNAPCASTER_MAGE),
+    Permanent::new(ELITE_SPELLBINDER),
+    Permanent::new(JACE_VRYNS_PRODIGY),
+    PLAINS_,
+    ISLAND_,
+];
+const ATTACKERS: &[Permanent] = &[
+    Permanent::new(BEZA_THE_BOUNDING_SPRING),
+    Permanent::new(TRINKET_MAGE),
+    Permanent::new(THE_WANDERING_EMPEROR),
+    PLAINS_,
+    ISLAND_,
+];
+
+/// Declaring blockers and then attackers: the opponent's turn, in which its two creatures
+/// attack and the human's three may block either, and the human's turn after it, with a
+/// planeswalker across the table to aim an attacker at. `turn` is the turn it opens in, the
+/// opponent's when it is even.
+const fn declare(name: &'static str, turn: u16) -> Scenario {
+    Scenario::new(name)
+        .at(
+            turn,
+            if turn % 2 == 0 { P1 } else { P0 },
+            TurnStep::PrecombatMain,
+        )
+        .hand(P0, &[COUNTERSPELL])
+        .battlefield(P0, DEFENDERS)
+        .battlefield(P1, ATTACKERS)
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
+/// The opponent's attack that opens [`declare`]: the last creature that may attack ends
+/// the declaration.
+const ATTACK: &[Action] = &[
+    choose(P1, DecisionKind::Attacker, BEZA_THE_BOUNDING_SPRING),
+    choose(P1, DecisionKind::Attacker, TRINKET_MAGE),
+];
+
 pub(super) const SHAPES: &[Scenario] = &[
     // The fixtures' clicks play these.
+    pay("shape-pay"),
+    declare("shape-declare", 4).actions(ATTACK),
     split("shape-split").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
     zone("shape-zone"),
     order("shape-order"),
@@ -173,6 +247,27 @@ pub(super) const SHAPES: &[Scenario] = &[
         Action::answer(P0, DecisionKind::YesNo, Pick::No),
         choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
         choose(P0, DecisionKind::ChooseObject, OUST),
+    ]),
+    // A Vehicle made and crewed, and a waterbend cost paid with a creature and two lands;
+    // and an attack at a planeswalker and at its controller, whose blockers that player's
+    // seat declares.
+    pay("shape-pay-theirs").actions(&[
+        Action::cast(P0, SWIFT_RECONFIGURATION),
+        choose(P0, DecisionKind::Target, JACE_VRYNS_PRODIGY),
+        Action::activate_granted(P0, JACE_VRYNS_PRODIGY, 0),
+        choose(P0, DecisionKind::ChooseObject, SNAPCASTER_MAGE),
+        choose(P0, DecisionKind::ChooseObject, ELITE_SPELLBINDER),
+        Action::activate(P0, AANGS_ICEBERG, 1),
+        choose(P0, DecisionKind::ManaPayment, TRINKET_MAGE),
+        Action::answer(P0, DecisionKind::ManaPayment, Pick::Done),
+        Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+    ]),
+    declare("shape-declare-theirs", 3).actions(&[
+        choose(P0, DecisionKind::Attacker, ELITE_SPELLBINDER),
+        choose(P0, DecisionKind::AttackTarget, THE_WANDERING_EMPEROR),
+        choose(P0, DecisionKind::Attacker, SNAPCASTER_MAGE),
+        Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+        Action::answer(P0, DecisionKind::Attacker, Pick::Done),
     ]),
     // The fixture's clicks play it.
     pick("shape-pick"),
