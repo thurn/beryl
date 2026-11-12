@@ -2,8 +2,6 @@
 //! "Stores"): the empty store, what ends its entries, whether it fits a layout and how it
 //! converts to one, its invariants, and what a checkpoint would lose of it.
 
-use beryl_card::Rules;
-
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
 use crate::ids::{CardId, SlotId};
@@ -11,6 +9,7 @@ use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::ObjectRef;
 use crate::relayout::{Relayout, card, queue, slot};
+use crate::rule_changes::Rules;
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
@@ -198,7 +197,7 @@ impl<L: Layout> Store<L> for Effects<L> {
                 Some(format!(
                     "player {} {} {lasting}",
                     player.get(),
-                    rule.words()
+                    t.rule(rule).words()
                 ))
             })
         };

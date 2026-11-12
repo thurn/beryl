@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Rules, Types};
+use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -17,7 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
-use crate::state::{ObjectFlags, State, Subject, Zone, ZoneKey};
+use crate::state::{ObjectFlags, State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -90,11 +90,8 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
     )?;
     // The players in any order: each is checked alone.
     for player in s.players_in_seat_order(s.players()) {
-        let to = Subject::Player(player);
         check(
-            Rules::OF_PLAYERS
-                .iter()
-                .all(|rule| fresh.rule_applies(t, rule, to) == s.rule_applies(t, rule, to)),
+            fresh.rules_for(player) == s.rules_for(player),
             "the rules static abilities change differ from a fresh recompute",
             Some(At::Player(player)),
         )?;

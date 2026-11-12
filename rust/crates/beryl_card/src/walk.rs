@@ -2,7 +2,7 @@
 //! must see them all.
 
 use crate::ability::{Ability, Behavior};
-use crate::continuous::LayerSpec;
+use crate::continuous::{Governed, LayerSpec, Modification};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
@@ -32,7 +32,7 @@ impl CardDef {
 impl Ability {
     /// Calls `visit` with every filter of the ability: what it may target, what pays its
     /// cost, what triggers it, what it needs to be activated, its conditions, its continuous
-    /// effect and its effect data. A Rust body holds none anything can read.
+    /// effect, the rule change it names and its effect data. A Rust body holds none anything can read.
     pub fn filters(&self, visit: Visit) {
         for spec in self.targets {
             spec.filter.filters(visit);
@@ -51,6 +51,13 @@ impl Ability {
         }
         if let Some(layer) = self.layer {
             layer.filters(visit);
+        }
+        if let Some(rule) = self.rule {
+            rule.players.filters(visit);
+            match &rule.what {
+                Governed::CastSpells(filter) => filter.filters(visit),
+                Governed::ActivateLoyaltyAbilities(objects) => objects.filters(visit),
+            }
         }
         if let Some(filter) = &self.only_if_you_control {
             filter.filters(visit);
@@ -80,6 +87,15 @@ impl LayerSpec {
         self.affected.filters(visit);
         if let Some(condition) = &self.condition {
             condition.filters(visit);
+        }
+        self.modification.filters(visit);
+    }
+}
+
+impl Modification {
+    fn filters(&self, visit: Visit) {
+        if let Modification::SetPower(amount) = self {
+            amount.filters(visit);
         }
     }
 }
@@ -160,6 +176,7 @@ impl Condition {
                 objects.filters(visit);
                 filter.filters(visit);
             }
+            Condition::EnteredThisTurn(objects) => objects.filters(visit),
             Condition::Not(condition) => condition.filters(visit),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 for condition in *conditions {
@@ -204,8 +221,15 @@ impl Effect {
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
-            | Effect::PutIntoLibrary { objects, .. }
-            | Effect::Modify { objects, .. } => objects.filters(visit),
+            | Effect::PutIntoLibrary { objects, .. } => objects.filters(visit),
+            Effect::Modify {
+                objects,
+                modification,
+                ..
+            } => {
+                objects.filters(visit);
+                modification.filters(visit);
+            }
             Effect::Draw {
                 player,
                 count: amount,
@@ -244,7 +268,9 @@ impl Effect {
                 objects.filters(visit);
                 count.filters(visit);
             }
-            Effect::AddMana { player, .. } => player.filters(visit),
+            Effect::AddMana { player, .. } | Effect::WinGame(player) | Effect::LoseGame(player) => {
+                player.filters(visit);
+            }
         }
     }
 }

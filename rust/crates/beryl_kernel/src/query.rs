@@ -10,12 +10,13 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{CardDef, Face, FaceIx, Rule, Rules, Zone};
+use beryl_card::{CardDef, Face, FaceIx, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
 use crate::object::Object;
+use crate::rule_changes::Rules;
 use crate::state::State;
 use crate::table::{FaceFacts, GameTable};
 
@@ -126,25 +127,27 @@ impl<L: Layout> Copiable<L> {
         t.facts(self.card, self.face)
     }
 
-    /// Whether the face that is up has a static ability with `rule`.
+    /// The rule changes the static abilities of the face that is up make, by their numbers
+    /// in the game. For a card no face of which makes one, a load and a test.
     #[inline]
-    pub fn has_rule(self, t: &GameTable, rule: Rule) -> bool {
-        t.may_have_rules(self.card).contains(rule) && self.facts(t).rules().contains(rule)
+    pub fn rules(self, t: &GameTable) -> Rules {
+        if t.may_have_rules(self.card).is_empty() {
+            return Rules::NONE;
+        }
+        t.face_rules(self.card, self.face)
     }
 
-    /// The rules the static abilities of the face that is up change for players
-    /// ([`Rule::whose`]). For a card no face of which changes one, a load and an AND. The
-    /// layers ask it only of a battlefield with such a card on it
+    /// The rule changes the static abilities of the face that is up make for players
+    /// ([`GameTable::player_rules`]). For a card no face of which makes one, a load and an
+    /// AND. The layers ask it only of a battlefield with such a card on it
     /// ([`crate::event::kind::RULE_CHANGE`]).
     #[inline]
     pub fn player_rules(self, t: &GameTable) -> Rules {
-        if t.may_have_rules(self.card)
-            .common(Rules::OF_PLAYERS)
-            .is_empty()
-        {
+        let of_players = t.player_rules();
+        if t.may_have_rules(self.card).common(of_players).is_empty() {
             return Rules::NONE;
         }
-        self.facts(t).rules().common(Rules::OF_PLAYERS)
+        t.face_rules(self.card, self.face).common(of_players)
     }
 
     /// The event kinds the triggered abilities of any face of the definition listen to: more

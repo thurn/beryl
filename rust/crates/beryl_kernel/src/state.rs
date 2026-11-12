@@ -22,7 +22,7 @@ pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Tracked, Tracker, Trackers};
 pub use crate::turn::Turn;
 
-use beryl_card::{FaceIx, Rules};
+use beryl_card::FaceIx;
 
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
@@ -32,6 +32,7 @@ use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
+pub use crate::rule_changes::{RuleId, RuleKind, Rules};
 
 /// Object slots: deck cards, tokens and spell copies.
 pub const SLOTS: usize = Slot::COUNT;
@@ -129,7 +130,7 @@ pub struct State<L: Layout = Small> {
     pub(crate) profile: Profile,
     pub(crate) flags: Flags,
     /// The rules the permanents' static abilities change for each player
-    /// ([`beryl_card::Rule::whose`]), found with the layer results and current while they
+    /// ([`GameTable::player_rules`]), found with the layer results and current while they
     /// are: half of what [`State::rule_applies`] reads, the Effects store's own index
     /// being the other.
     pub(crate) static_rules: L::PerPlayer<Rules>,

@@ -1,5 +1,6 @@
 //! State-based actions (architecture §8.4).
 
+use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
@@ -187,19 +188,21 @@ pub(crate) fn end_game<L: Layout>(
     end(s, sink, &causes);
 }
 
-/// Ends the game as an effect has `winner` win it
-/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
-/// that a player wins the game." Each of their opponents loses it for `cause`, which leaves
-/// the winner alone in the game.
-pub(crate) fn win_game<L: Layout>(
+/// Ends the game as an effect has each of `losers` lose it
+/// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e)): "An effect may state
+/// that a player loses the game." With none of them, nothing ends.
+pub(crate) fn lose_game<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
-    winner: Seat,
+    losers: PlayerSet,
     cause: LossCause<L>,
 ) {
+    if losers.is_empty() {
+        return;
+    }
     let mut causes: Causes<L> = Table::filled(None);
-    // Every opponent gets the one cause: the result is the same in any order.
-    for loser in s.players_in_seat_order(s.opponents_of(winner)) {
+    // Every one of them gets the one cause: the result is the same in any order.
+    for loser in s.players_in_seat_order(losers) {
         causes[loser.index()] = Some(cause);
     }
     end(s, sink, &causes);

@@ -5,7 +5,7 @@ use std::fmt;
 use std::panic::RefUnwindSafe;
 
 use crate::characteristics::Types;
-use crate::continuous::{Duration, LayerSpec, Modification, Replacement, Rule};
+use crate::continuous::{Duration, LayerSpec, Modification, Replacement, RuleChange};
 use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
@@ -160,8 +160,9 @@ pub struct Ability {
     /// condition are: a [`Trigger`] names a filter and players, and an ability has 23 bytes
     /// to spare before it is 256.
     pub trigger: Option<&'static Trigger>,
-    /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
-    /// and again as it resolves
+    /// A static or replacement ability: its "as long as" or "while", read as often as the
+    /// ability is. Triggered abilities: an intervening "if" clause, checked when the ability
+    /// triggers and again as it resolves
     /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
@@ -171,8 +172,12 @@ pub struct Ability {
     /// Static abilities: the continuous effect they generate on the battlefield. Held by
     /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
     pub layer: Option<&'static LayerSpec>,
-    /// Static abilities: the rule they change.
-    pub rule: Rule,
+    /// The rule the ability changes
+    /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): a static ability
+    /// all the time, as long as its [`condition`](Ability::condition) holds, and any other
+    /// by its effect, for as long as that says. A game numbers the rule changes its cards
+    /// name here, so one a body starts is named here too.
+    pub rule: Option<&'static RuleChange>,
     /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
     /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
     /// to activate an ability that's prohibited from being activated." Held by reference, as
@@ -223,7 +228,7 @@ impl Ability {
         condition: None,
         replacement: Replacement::None,
         layer: None,
-        rule: Rule::None,
+        rule: None,
         only_if_you_control: None,
         needs: Needs::Nothing,
     };

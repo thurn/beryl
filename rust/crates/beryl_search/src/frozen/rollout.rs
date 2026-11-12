@@ -27,7 +27,7 @@
 
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ObjectAbility, Players, Purpose, Replacement, TargetKind, TargetSpec, Types,
+    ObjectAbility, Players, Purpose, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -456,7 +456,7 @@ impl Policy<'_> {
                         .face(self.obs.object(slot).face())
                         .abilities
                         .iter()
-                        .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+                        .any(beryl_engine::wins_instead_of_drawing)
                 })
         })
     }

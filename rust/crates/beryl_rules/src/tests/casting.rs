@@ -1,14 +1,13 @@
 //! Casting, activation, timing permissions, the stack and resolution, through `next` and
 //! `apply` on positions set up with the cards of [`super::cast`].
 
-use super::cast::{Game, cast, index_of};
+use super::cast::{Game, SORCERIES_AS_FLASH, cast, index_of};
 use super::events::with_ctx;
-use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, Rule};
+use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility};
 use crate::event::{self, Reason};
 use crate::ids::Slot;
 use crate::state::{
-    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, Pending, Subject, Tracker, TurnStep,
-    Zone, ZoneKey,
+    CounterKind, Duration, ManaPool, ObjectFlags, Pending, Tracker, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::{Candidates, Choice, DecisionKind, Opt, Profile};
@@ -563,10 +562,7 @@ fn a_limit_to_sorcery_speed_beats_a_permission_to_cast_as_though_with_flash() {
     let me = g.me;
     g.current();
     with_ctx(&g.t, &mut g.s, &mut g.x, island, |ctx| {
-        ctx.add_effect(
-            Continuous::Rule(Subject::Player(me), Rule::SorceriesAsFlash),
-            Duration::UntilYourNextTurn(me),
-        );
+        ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(me));
     });
     g.at(g.me, TurnStep::Upkeep);
     assert!(g.offers_cast(ponder), "as though it had flash");

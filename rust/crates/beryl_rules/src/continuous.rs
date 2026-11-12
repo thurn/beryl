@@ -2,13 +2,14 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
-use beryl_card::{Modification, Objects};
+use beryl_card::{Modification, Objects, RuleChange};
 
 use crate::bitboard::Bitboard;
 use crate::event::Event;
+use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
-use crate::interpret::{Outcome, Run};
+use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layers;
 use crate::layout::Layout;
 use crate::resolution::Resolution;
@@ -52,6 +53,33 @@ pub fn start_on_set<L: Layout>(
     layers::refresh(game.state, game.table, game.sink)
 }
 
+/// What is resolving changes a rule of the game for the players `rule` names, read for its
+/// controller as it resolves
+/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
+/// effects affect game rules rather than objects." Each of them is affected by an effect
+/// of their own, begun in turn order (CR 101.4).
+///
+/// # Panics
+///
+/// For a rule change the ability resolving does not name ([`beryl_card::Ability::rule`]),
+/// which the game has no number for.
+pub fn change_rule<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &Resolution<'_, L>,
+    rule: &'static RuleChange,
+    duration: Duration,
+) -> Result<(), Full> {
+    let id = (game.table.rule_id(rule)).expect("a rule change its ability names");
+    let you = resolution.entry.controller;
+    let s = &*game.state;
+    let named = (s.players()).filter(|player| filter::is_for(&rule.players, player, you));
+    for player in s.players_in_turn_order(named) {
+        let change = Continuous::Rule(Subject::Player(player), id);
+        start(game, resolution, change, duration)?;
+    }
+    Ok(())
+}
+
 /// The controller of what is resolving gains control of a permanent
 /// ([CR 613.1b](https://yawgatog.com/resources/magic-rules/#R6131b)): a layer-2 effect.
 /// It has not been under its new controller's control since their most recent turn began
@@ -91,7 +119,10 @@ pub(crate) fn instruction<L: Layout>(
         beryl_card::Duration::UntilYourNextTurn => Duration::UntilYourNextTurn(you),
         beryl_card::Duration::Indefinite => Duration::Indefinite,
     };
-    let change = LayerChange::resolve(modification, you);
+    // The card table refuses an effect that sets a power to an amount.
+    let Some(change) = LayerChange::resolve(modification, you) else {
+        no_primitive(&modification)
+    };
     // One effect, with one timestamp, on the set as it is now
     // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an
     // earlier timestamp is applied before an effect with a later timestamp.").

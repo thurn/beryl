@@ -13,6 +13,7 @@ mod mulligan;
 mod payment;
 mod replay;
 mod rules;
+mod static_abilities;
 mod trackers;
 mod triggers;
 mod widths;

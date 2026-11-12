@@ -9,7 +9,7 @@ use crate::effect::Objects;
 /// is determined only once, when the effect is applied." It is never less than zero
 /// ([CR 107.1b](https://yawgatog.com/resources/magic-rules/#R1071b)): "If a calculation that
 /// would determine the result of an effect yields a negative number, zero is used instead".
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Amount {
     /// A number printed on the card: "two cards", "3 life".
     Fixed(u8),

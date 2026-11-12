@@ -170,32 +170,37 @@ impl ReplayFile {
         });
         let [a, b] = decks;
         let decks = [a?, b?];
-        let table =
-            GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(|error| {
-                match error {
-                    TableError::UnknownCard(name) => SessionError::UnknownCard {
-                        name: name.to_owned(),
-                    },
-                    TableError::Cost { card, unpayable } => SessionError::Deck {
-                        reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
-                    },
-                    TableError::Trigger { card, unmatched } => SessionError::Deck {
-                        reason: format!(
-                            "{card} has a trigger the engine cannot match: {unmatched:?}"
-                        ),
-                    },
-                    TableError::Static { card, unapplied } => SessionError::Deck {
-                        reason: format!(
-                            "{card} has a static ability the engine cannot apply: {unapplied:?}"
-                        ),
-                    },
-                    TableError::Players { card } => SessionError::Deck {
-                        reason: format!(
-                            "{card} has a filter naming players the engine cannot read"
-                        ),
-                    },
-                }
-            })?;
+        let table = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(
+            |error| match error {
+                TableError::UnknownCard(name) => SessionError::UnknownCard {
+                    name: name.to_owned(),
+                },
+                TableError::Cost { card, unpayable } => SessionError::Deck {
+                    reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
+                },
+                TableError::Trigger { card, unmatched } => SessionError::Deck {
+                    reason: format!("{card} has a trigger the engine cannot match: {unmatched:?}"),
+                },
+                TableError::Static { card, unapplied } => SessionError::Deck {
+                    reason: format!(
+                        "{card} has a static ability the engine cannot apply: {unapplied:?}"
+                    ),
+                },
+                TableError::Players { card } => SessionError::Deck {
+                    reason: format!("{card} has a filter naming players the engine cannot read"),
+                },
+                TableError::Replacement { card, unreplaced } => SessionError::Deck {
+                    reason: format!(
+                        "{card} has a replacement effect the engine cannot apply: {unreplaced:?}"
+                    ),
+                },
+                TableError::Rule { card, unchecked } => SessionError::Deck {
+                    reason: format!(
+                        "{card} names a rule change the engine cannot check: {unchecked:?}"
+                    ),
+                },
+            },
+        )?;
         let profile = with_stops(
             beryl_engine::Profile::SMART,
             self.stops,

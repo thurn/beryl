@@ -8,11 +8,6 @@
     "ui/src/screens/samples.ts": 1
   },
   "mechanics": [
-    "Rule::OpponentsCastAsSorceries",
-    "Rule::InstantLoyaltyTheTurnItEntered",
-    "Rule::SorceriesAsFlash",
-    "Replacement::WinInsteadOfDrawingFromEmptyLibrary",
-    "Modification::PowerIsCreaturesYouControl",
     "Needs::ExiledWithSource"
   ]
 }

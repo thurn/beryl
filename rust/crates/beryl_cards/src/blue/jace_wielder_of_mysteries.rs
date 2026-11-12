@@ -4,8 +4,8 @@
 //! +1: Target player mills two cards. Draw a card.
 //! −8: Draw seven cards. Then if your library has no cards in it, you win the game."
 
-use beryl_card::Effect;
-use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, mill, sequence};
+use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, mill, sequence, win_game};
+use beryl_card::{Amount, Comparison, Condition, Effect, Objects, Players, Zone};
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Replacement,
     Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
@@ -15,6 +15,19 @@ use beryl_engine::filter::Filter;
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
+
+/// "While your library has no cards in it".
+static LIBRARY_IS_EMPTY: Condition = Condition::Compare(
+    Amount::Count(&Objects::All {
+        zone: Zone::Library,
+        filter: Filter::Whose(&Players::You),
+    }),
+    Comparison::Equal,
+    Amount::Fixed(0),
+);
+
+/// "You win the game".
+static YOU_WIN: Effect = win_game(YOU);
 
 pub static CARD: CardDef = CardDef {
     name: names::JACE_WIELDER_OF_MYSTERIES,
@@ -28,8 +41,12 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
             // "Effects that use the word 'instead' are replacement effects." The draw
-            // machinery applies it to each draw from an empty library (CR 614.11).
-            Ability::replacing(Replacement::WinInsteadOfDrawingFromEmptyLibrary),
+            // machinery offers it each draw, an empty library or not (CR 614.11).
+            Ability {
+                condition: Some(&LIBRARY_IS_EMPTY),
+                body: Behavior::Data(&YOU_WIN),
+                ..Ability::replacing(Replacement::WouldDraw)
+            },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),

@@ -2,12 +2,13 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Rule, Timing, Types,
+    Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Timing, Types,
 };
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::{ObjectFlags, State, Subject, TurnStep, Zone, ZoneKey};
+use crate::rule_change;
+use crate::state::{ObjectFlags, State, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
@@ -154,8 +155,7 @@ fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
 fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
-        || (face.types.intersects(Types::SORCERY)
-            && s.rule_applies(t, Rule::SorceriesAsFlash, Subject::Player(player)))
+        || rule_change::cast_as_instant(s, t, player, face)
 }
 
 /// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as

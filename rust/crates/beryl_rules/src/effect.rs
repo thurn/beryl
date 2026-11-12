@@ -15,7 +15,7 @@ use crate::actions::{
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, Flow, ManaColor, ManaCost,
-    Prompt, Stop, Types,
+    Prompt, RuleChange, Stop, Types,
 };
 use crate::event::{Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
@@ -289,6 +289,12 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// [`continuous::start`].
     pub fn add_effect(&mut self, effect: Continuous<L>, duration: Duration) {
         let r = continuous::start(&mut self.game, &self.resolution, effect, duration);
+        self.check(r);
+    }
+
+    /// [`continuous::change_rule`].
+    pub fn change_rule(&mut self, rule: &'static RuleChange, duration: Duration) {
+        let r = continuous::change_rule(&mut self.game, &self.resolution, rule, duration);
         self.check(r);
     }
 

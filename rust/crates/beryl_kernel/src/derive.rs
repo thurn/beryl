@@ -9,10 +9,11 @@
 
 use std::ops::Deref;
 
-use beryl_card::{FaceIx, Rules};
+use beryl_card::FaceIx;
 
 use crate::layout::{Layout, PerSeat, Queue, Table};
 use crate::object::Derived;
+use crate::rule_changes::Rules;
 use crate::state::State;
 
 /// The stale cache, lent by [`State::rederive`] to be filled. It reads as the [`State`] it

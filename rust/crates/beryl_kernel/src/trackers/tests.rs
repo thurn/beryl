@@ -1,13 +1,14 @@
 //! The Trackers store's tests: which games keep a tracker, what ends one, what it tells
 //! apart and what it keeps across layouts.
 
-use beryl_card::{Ability, AbilityKind, CardDef, Cost, Face, Rule, Types};
+use beryl_card::{Ability, AbilityKind, CardDef, Condition, Cost, Face, Objects, Types};
 
 use super::*;
 use crate::event::Sink;
 use crate::layout::Large;
 use crate::object::Derived;
 use crate::profile::Profile;
+use crate::rule_changes::fixtures::LOYALTY;
 use crate::table::CardTable;
 use crate::zone::Place;
 use crate::{LargeSlot, Seat, Slot};
@@ -33,7 +34,8 @@ static WALKER: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Static,
-                rule: Rule::InstantLoyaltyTheTurnItEntered,
+                rule: Some(&LOYALTY),
+                condition: Some(&Condition::EnteredThisTurn(Objects::This)),
                 ..Ability::NONE
             },
             Ability {

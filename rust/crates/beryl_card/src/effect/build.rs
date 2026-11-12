@@ -266,3 +266,13 @@ pub const fn modify(objects: Objects, modification: Modification, duration: Dura
         duration,
     }
 }
+
+/// [`Effect::WinGame`]: "[player] wins the game".
+pub const fn win_game(player: Players) -> Effect {
+    Effect::WinGame(player)
+}
+
+/// [`Effect::LoseGame`]: "[player] loses the game".
+pub const fn lose_game(player: Players) -> Effect {
+    Effect::LoseGame(player)
+}

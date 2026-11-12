@@ -208,7 +208,7 @@ pub mod zones;
 // items of their own, in `layout`, `profile` and `event`.
 pub(crate) use beryl_kernel::{
     PlayerSet, bitboard, chance, decision, filter, fixed, ids, invariants, observation, query,
-    state, static_ability, table, zone,
+    replacement, state, static_ability, table, zone,
 };
 
 /// The kernel's storage layouts, and the rules' per-layout function tables beside them.
@@ -228,6 +228,7 @@ pub use announced::target_takes;
 pub use bodies::{CustomBody, custom_body};
 pub use cast::{cost_being_cast, pointless};
 pub use combat::preferred_damage;
+pub use drawing::wins_instead_of_drawing;
 pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step, observe,
     paused_events, refusal, view,

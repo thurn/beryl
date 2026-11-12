@@ -11,15 +11,25 @@
 use beryl_card::effect::build::{
     TARGET, YOU, add_counters, create_tokens, exile, gain_life, modify, sequence,
 };
-use beryl_card::{Duration, Effect};
+use beryl_card::{Condition, Duration, Effect, Governed, Objects, Players, RuleChange, When};
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Keywords, ManaCost, Modification,
-    Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
 
 use crate::names;
+
+/// "You may activate her loyalty abilities any time you could cast an instant."
+static LOYALTY_AS_INSTANT: RuleChange = RuleChange {
+    players: Players::You,
+    what: Governed::ActivateLoyaltyAbilities(Objects::This),
+    when: When::AsInstant,
+};
+
+/// "As long as The Wandering Emperor entered this turn".
+static ENTERED_THIS_TURN: Condition = Condition::EnteredThisTurn(Objects::This);
 
 pub static CARD: CardDef = CardDef {
     name: names::THE_WANDERING_EMPEROR,
@@ -34,7 +44,8 @@ pub static CARD: CardDef = CardDef {
             // The exception to CR 606.3's timing, which the casting machine reads.
             Ability {
                 kind: AbilityKind::Static,
-                rule: Rule::InstantLoyaltyTheTurnItEntered,
+                rule: Some(&LOYALTY_AS_INSTANT),
+                condition: Some(&ENTERED_THIS_TURN),
                 ..Ability::NONE
             },
             Ability {
@@ -136,7 +147,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         // Flashed in on the opponent's turn during combat, she activates at instant speed
-        // (Rule::InstantLoyaltyTheTurnItEntered); the turn after, she waits for a main phase.
+        // (her static ability's rule change); the turn after, she waits for a main phase.
         Scenario::new("flashed in during combat, −2 exiles the tapped attacker")
             .at(2, P1, TurnStep::BeginningOfCombat)
             .hand(P0, &[EMPEROR])

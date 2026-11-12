@@ -19,13 +19,14 @@
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
 //! ability or one of these effects makes it.
 
-use beryl_card::{GrantIx, Keywords, Layer, Modification, Rule, Rules, Subtype, Types};
+use beryl_card::{AbilityIx, FaceIx, GrantIx, Keywords, Layer, Modification, Subtype, Types};
 
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
+use crate::rule_changes::{RuleId, Rules};
 use crate::state::State;
 use crate::store::{Duration, Ended};
 use crate::table::GameTable;
@@ -64,8 +65,9 @@ pub enum Continuous<L: Layout = Small> {
     Move(ObjectRef<L>, MoveReplacement),
     /// Changes a rule of the game for a player or for one object
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
-    /// effects affect game rules rather than objects."
-    Rule(Subject<L>, Rule),
+    /// effects affect game rules rather than objects." The rule change is one the game's
+    /// cards name, by its number ([`crate::GameTable::rule`]).
+    Rule(Subject<L>, RuleId),
     /// Lets a player cast the card from the zone it is in.
     Cast(ObjectRef<L>, Permission),
     /// Changes what the spell costs.
@@ -201,19 +203,24 @@ pub enum LayerChange {
     /// Layer 6: "has [ability]", the ability at this index of the effect source's front
     /// face's grants.
     Grant(GrantIx),
-    /// Layer 7a: "power is equal to the number of creatures you control", read of its
-    /// controller as the layer applies.
-    PowerIsCreaturesYouControl,
+    /// Layer 7a: "power is equal to [amount]", the amount a static ability of the effect
+    /// source defines it as (`beryl_card`'s `Modification::SetPower`): the ability at this
+    /// index of this face of the source. The change names the expression and holds no
+    /// number, since the layers read it as they apply
+    /// ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)).
+    DefinedPower { face: FaceIx, ability: AbilityIx },
     /// Layer 7c: "gets +X/+Y".
     ModifyPt(i8, i8),
 }
 
 impl LayerChange {
     /// What `modification` is for an ability whose controller is `you`: "gain control"
-    /// names that player.
+    /// names that player. None for one whose amount the layers read as they apply, which
+    /// only the place of the static ability that says it names
+    /// ([`LayerChange::DefinedPower`]).
     #[inline]
-    pub fn resolve(modification: Modification, you: Seat) -> LayerChange {
-        match modification {
+    pub fn resolve(modification: Modification, you: Seat) -> Option<LayerChange> {
+        Some(match modification {
             Modification::Control => LayerChange::Control(you),
             Modification::AddTypes(types) => LayerChange::AddTypes(types),
             Modification::RemoveTypes(types) => LayerChange::RemoveTypes(types),
@@ -221,9 +228,9 @@ impl LayerChange {
             Modification::AddSubtype(subtype) => LayerChange::AddSubtype(subtype),
             Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
             Modification::Grant(grant) => LayerChange::Grant(grant),
-            Modification::PowerIsCreaturesYouControl => LayerChange::PowerIsCreaturesYouControl,
+            Modification::SetPower(_) => return None,
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
-        }
+        })
     }
 
     /// The layer or sublayer it applies in
@@ -238,7 +245,7 @@ impl LayerChange {
             | LayerChange::SetTypes(_)
             | LayerChange::AddSubtype(_) => Layer::Type,
             LayerChange::AddKeywords(_) | LayerChange::Grant(_) => Layer::Ability,
-            LayerChange::PowerIsCreaturesYouControl => Layer::PtDefining,
+            LayerChange::DefinedPower { .. } => Layer::PtDefining,
             LayerChange::ModifyPt(..) => Layer::PtModifying,
         }
     }
@@ -320,9 +327,10 @@ pub enum Payload {
     Move(MoveReplacement),
     /// Changes a rule of the game for what it affects
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
-    /// effects affect game rules rather than objects." The rule is the vocabulary's own:
-    /// it names no player, and the affected side is who it applies to.
-    Rule(Rule),
+    /// effects affect game rules rather than objects." The rule change is the vocabulary's
+    /// own data, which a game numbers ([`crate::GameTable::rule`]): the number is what is
+    /// kept, and the affected side is who it applies to.
+    Rule(RuleId),
     /// Lets a player cast the affected card from the zone it is in.
     Cast(Permission),
     /// Changes what the affected spell costs.
@@ -463,12 +471,15 @@ impl<L: Layout> Effects<L> {
         done
     }
 
-    /// Whether an entry changes `rule` for exactly `affected`.
+    /// The rule changes the entries make for exactly `affected`.
     #[inline]
-    fn changes_rule(&self, rule: Rule, affected: Affects<L>) -> bool {
+    fn rules_on(&self, affected: Affects<L>) -> Rules {
         self.of(Kinds::RULE)
             .iter()
-            .any(|e| e.payload == Payload::Rule(rule) && e.affected == affected)
+            .fold(Rules::NONE, |rules, e| match e.payload {
+                Payload::Rule(rule) if e.affected == affected => rules.with(rule),
+                _ => rules,
+            })
     }
 }
 
@@ -476,7 +487,7 @@ impl<L: Layout> ContinuousEffect<L> {
     /// The player it changes a rule for and the rule, if that is what it does: what the
     /// store's index of the players' rules holds of it.
     #[inline]
-    fn player_rule(&self) -> Option<(Seat, Rule)> {
+    fn player_rule(&self) -> Option<(Seat, RuleId)> {
         match (self.affected, self.payload) {
             (Affects::Player(player), Payload::Rule(rule)) => Some((player, rule)),
             _ => None,
@@ -679,39 +690,52 @@ impl<L: Layout> State<L> {
             })
     }
 
-    /// Whether the change `rule` makes to the game's rules applies to `to` now, a player
-    /// or a permanent, whoever makes it: a static ability of a permanent
-    /// ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041): "Static abilities do
-    /// something all the time rather than being activated or triggered.") or the
-    /// continuous effect of a resolved spell or ability
+    /// The rule changes in force for `player` now, whoever makes them: a static ability of
+    /// a permanent ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041): "Static
+    /// abilities do something all the time rather than being activated or triggered.") or
+    /// the continuous effect of a resolved spell or ability
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous
-    /// effects affect game rules rather than objects."). The one question the rules ask
-    /// about a rule change.
+    /// effects affect game rules rather than objects."). One OR of two sets: those the
+    /// permanents' static abilities make for them, which the layers found with control
+    /// settled, and those of the effects on them, which this store keeps as they start and
+    /// end. A check ANDs it with the rule changes of its kind
+    /// ([`crate::GameTable::rules_of`]).
     ///
-    /// For a player it is one AND of two sets: the rules the permanents' static abilities
-    /// change for them, which the layers found with control settled, and the rules the
-    /// effects on them change, which this store keeps as they start and end. A permanent
-    /// is asked for a rule about itself ([`Rule::whose`]): its copiable values answer for
-    /// its own static abilities, which a face-down permanent has none of
-    /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)), and the effects on
-    /// it for the rest, one AND while no effect changes a rule.
+    /// # Panics
+    ///
+    /// In debug builds, while the layer results are stale.
+    #[inline]
+    pub fn rules_for(&self, player: Seat) -> Rules {
+        debug_assert!(!self.flags.derived_dirty, "rules read while dirty");
+        let i = player.index();
+        self.static_rules[i].union(self.effects.rules[i])
+    }
+
+    /// The rule changes resolved effects make for the object `object` alone, one AND while
+    /// no effect changes a rule. Its own static abilities' are its copiable values'
+    /// ([`crate::Copiable::rules`]), which a face-down permanent has none of
+    /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
+    #[inline]
+    pub fn effect_rules_on(&self, object: ObjectRef<L>) -> Rules {
+        self.effects.rules_on(Affects::object(object))
+    }
+
+    /// Whether the rule change the game numbered `rule` applies to `to` now, a player or a
+    /// permanent, whoever makes it: for tools and tests. The rules ask for the sets, by
+    /// kind ([`State::rules_for`], [`State::effect_rules_on`]).
     ///
     /// # Panics
     ///
     /// In debug builds, for a player while the layer results are stale.
     #[inline]
-    pub fn rule_applies(&self, t: &GameTable, rule: Rule, to: Subject<L>) -> bool {
+    pub fn rule_applies(&self, t: &GameTable, rule: RuleId, to: Subject<L>) -> bool {
         match to {
-            Subject::Player(player) => {
-                debug_assert!(!self.flags.derived_dirty, "rules read while dirty");
-                let i = player.index();
-                self.static_rules[i]
-                    .union(self.effects.rules[i])
-                    .contains(rule)
-            }
+            Subject::Player(player) => self.rules_for(player).contains(rule),
             Subject::Object(object) => {
-                (rule.whose().is_none() && self.copiable(object.slot).has_rule(t, rule))
-                    || self.effects.changes_rule(rule, to.stored())
+                let own = self.copiable(object.slot).rules(t);
+                own.without(t.player_rules())
+                    .union(self.effect_rules_on(object))
+                    .contains(rule)
             }
         }
     }

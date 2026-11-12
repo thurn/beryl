@@ -28,6 +28,9 @@ pub enum Condition {
     /// "If it's a [filter]": there is such an object and every one passes the filter, read
     /// for the ability's controller.
     Is(Objects, Filter),
+    /// "If it entered this turn", "as long as this entered this turn": there is such an
+    /// object, and every one is a permanent that entered the battlefield this turn.
+    EnteredThisTurn(Objects),
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -52,6 +55,7 @@ impl Condition {
             Condition::Is(objects, filter) => {
                 objects.needs_a_resolution() || filter.needs_a_resolution()
             }
+            Condition::EnteredThisTurn(objects) => objects.needs_a_resolution(),
             Condition::Not(condition) => condition.needs_a_resolution(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -74,7 +78,7 @@ impl Condition {
         match self {
             Condition::Did | Condition::Paid(_) | Condition::Custom(_) => false,
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
-            Condition::Is(objects, _) => objects.names_paid(),
+            Condition::Is(objects, _) | Condition::EnteredThisTurn(objects) => objects.names_paid(),
             Condition::Not(condition) => condition.names_paid(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -87,6 +91,20 @@ impl Condition {
                 false
             }
         }
+    }
+}
+
+impl Condition {
+    /// Whether `test` holds of this condition or of one it is made of.
+    pub fn any(&self, test: &impl Fn(&Condition) -> bool) -> bool {
+        test(self)
+            || match *self {
+                Condition::Not(condition) => condition.any(test),
+                Condition::All(conditions) | Condition::Any(conditions) => {
+                    conditions.iter().any(|condition| condition.any(test))
+                }
+                _ => false,
+            }
     }
 }
 

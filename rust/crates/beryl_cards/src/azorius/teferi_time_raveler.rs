@@ -6,13 +6,14 @@
 //! card."
 
 use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
+use beryl_card::{Governed, Players, RuleChange, When};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Rule, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes,
+    Supertypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{Continuous, Duration, Subject};
+use beryl_engine::state::Duration;
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
@@ -21,6 +22,20 @@ use crate::names;
 /// "A player may activate a loyalty ability of a permanent they control any time they have
 /// priority and the stack is empty during a main phase of their turn, but only if no player
 /// has previously activated a loyalty ability of that permanent that turn."
+/// "Each opponent can cast spells only any time they could cast a sorcery."
+static ONLY_AS_SORCERIES: RuleChange = RuleChange {
+    players: Players::EachOpponent,
+    what: Governed::CastSpells(Filter::Any),
+    when: When::OnlyAsSorcery,
+};
+
+/// "You may cast sorcery spells as though they had flash."
+static SORCERIES_AS_FLASH: RuleChange = RuleChange {
+    players: Players::You,
+    what: Governed::CastSpells(Filter::Types(Types::SORCERY)),
+    when: When::AsInstant,
+};
+
 pub static CARD: CardDef = CardDef {
     name: names::TEFERI_TIME_RAVELER,
     faces: &[Face {
@@ -36,13 +51,15 @@ pub static CARD: CardDef = CardDef {
             // spell with flash waits for sorcery timing.
             Ability {
                 kind: AbilityKind::Static,
-                rule: Rule::OpponentsCastAsSorceries,
+                rule: Some(&ONLY_AS_SORCERIES),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
                 body: bodies!(sorceries_as_flash),
+                // The rule change its effect starts, which the game numbers.
+                rule: Some(&SORCERIES_AS_FLASH),
                 ..Ability::NONE
             },
             // "−3: Return up to one target artifact, creature, or enchantment to its owner's
@@ -76,10 +93,7 @@ pub static CARD: CardDef = CardDef {
 /// affect game rules rather than objects."), which ends as their next turn begins.
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    ctx.add_effect(
-        Continuous::Rule(Subject::Player(you), Rule::SorceriesAsFlash),
-        Duration::UntilYourNextTurn(you),
-    );
+    ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(you));
     Ok(())
 }
 

@@ -35,7 +35,9 @@ mod walk;
 
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
-pub use continuous::{Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules};
+pub use continuous::{
+    Duration, Governed, Layer, LayerSpec, Modification, Replacement, RuleChange, When,
+};
 pub use cost::{
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,
 };

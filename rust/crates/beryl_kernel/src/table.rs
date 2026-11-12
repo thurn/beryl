@@ -2,15 +2,18 @@
 //! decision D20).
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, CardDef, CostAction, CostPart, FACE_DOWN, FACE_DOWN_COPY,
-    Face, FaceIx, Needs, Rule, Rules,
+    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Condition, CostAction, CostPart, Effect,
+    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, RuleChange,
 };
 
+#[cfg(doc)]
 use crate::event::kind;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
 use crate::payable::{self, Unpayable};
+use crate::replacement::{self, Unreplaced};
+use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
 use crate::static_ability::{self, Unapplied};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
@@ -73,6 +76,20 @@ pub enum TableError {
         card: &'static str,
         unapplied: Unapplied,
     },
+    /// A card of the game, or a token or emblem one makes, has a replacement effect the
+    /// engine has no code to apply ([`replacement`]): the event would happen as if it were
+    /// not there, so no game is played with it.
+    Replacement {
+        card: &'static str,
+        unreplaced: Unreplaced,
+    },
+    /// A card of the game, or a token or emblem one makes, names a rule change the rules
+    /// have no check for ([`rule_changes`]): it would change nothing, so no game is played
+    /// with it.
+    Rule {
+        card: &'static str,
+        unchecked: Unchecked,
+    },
     /// A filter of a card of the game, or of a token or emblem one makes, names players the
     /// engine does not read in a filter ([`crate::filter::reads`]): "that player controls",
     /// "its owner controls".
@@ -102,8 +119,9 @@ pub struct GameTable {
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
     decks: PerSeat<Vec<usize>>,
-    /// Per game index, the event kinds its triggered abilities listen to, and
-    /// [`kind::RULE_CHANGE`] if a static ability of it changes a rule for players.
+    /// Per game index, the event kinds its triggered abilities listen to, and the bits no
+    /// event has: [`kind::RULE_CHANGE`] if a static ability of it changes a rule for
+    /// players, [`kind::DRAW_REPLACEMENT`] if one replaces its controller's draws.
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
@@ -115,7 +133,11 @@ pub struct GameTable {
     listeners_from: Vec<u32>,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
-    /// Per game index, the [`Rule`]s any of its faces, or face down, has.
+    /// Per game index, the rule changes the static abilities of its first two faces make.
+    /// Apart from the facts, which the scans of every permanent copy and which stay two
+    /// words.
+    face_rules: Vec<[Rules; 2]>,
+    /// Per game index, the rule changes the static abilities of any of its faces make.
     rules: Vec<Rules>,
     /// The game index of [`FACE_DOWN_COPY`], in the width of each layout's
     /// ([`GameTable::face_down_copy`]); index 0, never read, in a width that does not number
@@ -126,6 +148,8 @@ pub struct GameTable {
     needy: bool,
     /// A bit per [`Capability`] a card of the game has.
     capabilities: u8,
+    /// The rule changes the cards of the game name, numbered.
+    rule_changes: RuleChanges,
 }
 
 /// Something a game's cards may make the stores keep (architecture §6.4, the crate's
@@ -156,8 +180,9 @@ impl Capability {
     /// The capabilities a face gives a game that can contain it.
     fn of(face: &Face) -> u8 {
         let mut found = 0;
-        for a in face.abilities {
-            if a.rule == Rule::InstantLoyaltyTheTurnItEntered {
+        // An ability a permanent is granted reads what one of its own does.
+        for a in face.abilities.iter().chain(face.grants) {
+            if asks_what_entered_this_turn(a) {
                 found |= Capability::EnteredThisTurn.bit();
             }
             if a.cost.is_loyalty() {
@@ -171,6 +196,34 @@ impl Capability {
     const fn bit(self) -> u8 {
         1 << (self as u8)
     }
+}
+
+/// The bits of a card's listener mask that no event has ([`kind::DRAW_REPLACEMENT`],
+/// [`kind::RULE_CHANGE`]), with the rule changes its abilities name numbered in
+/// `rule_changes`; or the first of its abilities the engine has no code for.
+fn unlistened(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<u16, TableError> {
+    let replaces = replacement::check(def).map_err(|unreplaced| TableError::Replacement {
+        card: def.name,
+        unreplaced,
+    })?;
+    let changes =
+        rule_changes::number(def, rule_changes).map_err(|unchecked| TableError::Rule {
+            card: def.name,
+            unchecked,
+        })?;
+    Ok(replaces | changes)
+}
+
+/// Whether an ability asks whether a permanent entered this turn
+/// ([`Condition::EnteredThisTurn`]): in its own condition, or in one its effect reads.
+fn asks_what_entered_this_turn(ability: &Ability) -> bool {
+    let asks = |condition: &Condition| {
+        condition.any(&|condition| matches!(condition, Condition::EnteredThisTurn(_)))
+    };
+    ability.condition.is_some_and(asks)
+        || matches!(ability.body, Behavior::Data(effect) if effect.any(&|effect| {
+            matches!(effect, Effect::If { condition, .. } if asks(condition))
+        }))
 }
 
 impl GameTable {
@@ -221,6 +274,7 @@ impl GameTable {
         let mut listeners = Vec::new();
         let mut listeners_from = Vec::with_capacity(defs.len() + 1);
         let mut listens = Vec::with_capacity(defs.len());
+        let mut rule_changes = RuleChanges::default();
         for def in &defs {
             let of = listener::of(def).map_err(|unmatched| TableError::Trigger {
                 card: def.name,
@@ -233,7 +287,8 @@ impl GameTable {
             if !crate::filter::reads_players_of(def) {
                 return Err(TableError::Players { card: def.name });
             }
-            listens.push(of.iter().fold(rule_change(def), |mask, l| mask | l.kind));
+            let unlistened = unlistened(def, &mut rule_changes)?;
+            listens.push(of.iter().fold(unlistened, |mask, l| mask | l.kind));
             listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
             listeners.extend(of);
         }
@@ -252,15 +307,7 @@ impl GameTable {
                 [of(0), of(1)]
             })
             .collect();
-        let down = FaceFacts::of(&FACE_DOWN).rules;
-        let rules = defs
-            .iter()
-            .map(|d| {
-                d.faces
-                    .iter()
-                    .fold(down, |r, f| r.union(FaceFacts::of(f).rules))
-            })
-            .collect();
+        let (face_rules, rules) = rule_changes.of_cards(&defs);
         let capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -274,10 +321,12 @@ impl GameTable {
             listeners,
             listeners_from,
             faces,
+            face_rules,
             rules,
             face_down_copy,
             needy,
             capabilities,
+            rule_changes,
         })
     }
 
@@ -345,12 +394,65 @@ impl GameTable {
         }
     }
 
-    /// The rules the static abilities of any face of the card at `card` change: more than
-    /// the face that is up may, so a set to skip a card by and nothing else. The crate's
-    /// own: others ask [`crate::Copiable::has_rule`] and [`crate::Copiable::player_rules`].
+    /// The rule changes the static abilities of any face of the card at `card` make: more
+    /// than the face that is up may, so a set to skip a card by and nothing else. The
+    /// crate's own: others ask [`crate::Copiable::rules`] and
+    /// [`crate::Copiable::player_rules`].
     #[inline]
     pub(crate) fn may_have_rules(&self, card: impl CardId) -> Rules {
         self.rules[card.index()]
+    }
+
+    /// The rule changes the static abilities of `face` of the card at `card` make: found
+    /// once per game for its first two faces, and read from the face itself for any other,
+    /// or face down.
+    #[inline]
+    pub(crate) fn face_rules(&self, card: impl CardId, face: FaceIx) -> Rules {
+        match self.face_rules[card.index()].get(usize::from(face.get())) {
+            Some(&rules) => rules,
+            None => self.rule_changes.of_face(self.def(card).face(face)),
+        }
+    }
+
+    /// The rule change the game numbered `id`.
+    #[inline]
+    pub fn rule(&self, id: RuleId) -> &'static RuleChange {
+        self.rule_changes.get(id)
+    }
+
+    /// The condition of the static ability that makes the rule change `id` for its own
+    /// permanent, if it has one: its "as long as".
+    #[inline]
+    pub fn rule_condition(&self, id: RuleId) -> Option<&'static Condition> {
+        self.rule_changes.condition(id)
+    }
+
+    /// The number of `rule` in the game, if a card of it names that rule change
+    /// ([`beryl_card::Ability::rule`]).
+    #[inline]
+    pub fn rule_id(&self, rule: &'static RuleChange) -> Option<RuleId> {
+        self.rule_changes.id(rule)
+    }
+
+    /// The rule changes of `kind` the game's cards can make: what a check of that kind
+    /// holds against the rule changes in force, in one AND.
+    #[inline]
+    pub fn rules_of(&self, kind: RuleKind) -> Rules {
+        self.rule_changes.of_kind(kind)
+    }
+
+    /// The rule changes that govern casting every spell, whatever it is: a check of one of
+    /// them in force reads no filter.
+    #[inline]
+    pub fn rules_of_every_spell(&self) -> Rules {
+        self.rule_changes.of_every_spell()
+    }
+
+    /// The rule changes that apply to players, which the layers find
+    /// ([`RuleKind::of_players`]).
+    #[inline]
+    pub fn player_rules(&self) -> Rules {
+        self.rule_changes.of_players()
     }
 
     /// The event kinds any card of this game listens to.
@@ -427,8 +529,6 @@ pub struct FaceFacts {
     pub mana: ManaFace,
     /// A bit per [`AbilityIx`] of its activated abilities.
     activated: u64,
-    /// The [`Rule`]s its static abilities change.
-    rules: Rules,
 }
 
 impl FaceFacts {
@@ -436,7 +536,6 @@ impl FaceFacts {
     const NONE: FaceFacts = FaceFacts {
         mana: ManaFace::Read,
         activated: 0,
-        rules: Rules::NONE,
     };
 
     /// Whether it has an activated ability
@@ -469,36 +568,14 @@ impl FaceFacts {
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
             activated: 0,
-            rules: Rules::NONE,
         };
         for (i, a) in face.abilities.iter().enumerate() {
-            match a.kind {
-                AbilityKind::Activated => facts.activated |= 1 << i,
-                AbilityKind::Static if a.rule != Rule::None => {
-                    facts.rules = facts.rules.with(a.rule);
-                }
-                _ => {}
+            if a.kind == AbilityKind::Activated {
+                facts.activated |= 1 << i;
             }
         }
         facts
     }
-
-    /// The rules its static abilities change.
-    #[inline]
-    pub fn rules(self) -> Rules {
-        self.rules
-    }
-}
-
-/// [`kind::RULE_CHANGE`] if a static ability of any face of a card changes a rule for
-/// players, the bit of its listener mask no event has.
-fn rule_change(def: &CardDef) -> u16 {
-    let changes = def
-        .faces
-        .iter()
-        .flat_map(|face| face.abilities)
-        .any(|ability| ability.kind == AbilityKind::Static && ability.rule.whose().is_some());
-    if changes { kind::RULE_CHANGE } else { 0 }
 }
 
 /// What a face makes as a source, found once per game ([`GameTable::facts`]) for the

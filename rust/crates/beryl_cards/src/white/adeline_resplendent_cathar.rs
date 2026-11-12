@@ -3,7 +3,7 @@
 //! attack, for each opponent, create a 1/1 white Human creature token that's tapped and
 //! attacking that player or a planeswalker they control."
 
-use beryl_card::Players;
+use beryl_card::{Amount, Filter, Players, Zone};
 use beryl_engine::card::{
     Ability, CardDef, Colors, Face, Flow, Keywords, LayerSpec, ManaCost, Modification, Objects,
     Subtype, Subtypes, Supertypes, Trigger, Types,
@@ -12,6 +12,12 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
+
+/// "The number of creatures you control".
+static CREATURES_YOU_CONTROL: Amount = Amount::Count(&Objects::All {
+    zone: Zone::Battlefield,
+    filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+});
 
 /// The Human token ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)): "If the
 /// spell or ability doesn't specify the name of the token, its name is the same as its
@@ -62,7 +68,7 @@ pub static CARD: CardDef = CardDef {
             Ability::static_ability(&LayerSpec {
                 affected: Objects::This,
                 condition: None,
-                modification: Modification::PowerIsCreaturesYouControl,
+                modification: Modification::SetPower(&CREATURES_YOU_CONTROL),
             }),
             Ability {
                 may_pause: true,

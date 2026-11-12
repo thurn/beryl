@@ -10,17 +10,19 @@
 mod run;
 mod scene;
 
-use beryl_card::{Effect, Players};
+use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
 
-use crate::card::{Ability, Behavior, Flow, ManaColor};
+use crate::card::{Ability, AbilityIx, Behavior, Flow, ManaColor};
 use crate::effect::EffectCtx;
 use crate::event::Sink;
+use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Bodies, Layout};
 use crate::mana;
-use crate::state::{PendingTrigger, State};
+use crate::state::{PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
 use crate::table::GameTable;
 
 pub(crate) use run::{Run, no_primitive};
@@ -108,11 +110,93 @@ pub(crate) fn intervening_if<L: Layout>(
     trigger: &PendingTrigger<L>,
     ability: &Ability,
 ) -> bool {
+    condition_holds(s, t, trigger, ability)
+}
+
+/// Whether the condition of a static or replacement ability of the permanent in `slot`
+/// holds, or it has none: its "as long as" or "while", read for the permanent as "this"
+/// and its controller as "you". `index` is the ability's place on the face that is up.
+#[inline]
+pub(crate) fn static_condition_holds<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    index: AbilityIx,
+    ability: &Ability,
+) -> bool {
+    let Some(condition) = ability.condition else {
+        return true;
+    };
+    if let Some(holds) = without_a_scene(s, slot, condition) {
+        return holds;
+    }
+    let (card, face) = s.copiable(slot).record(t);
+    let subject = PendingTrigger {
+        source: Some(s.object_ref(slot)),
+        card,
+        face,
+        ability: index,
+        controller: s.controller(slot),
+        info: TriggerInfo::default(),
+    };
+    condition_holds(s, t, &subject, ability)
+}
+
+/// Whether `condition` holds for the permanent in `slot` as "this" and its controller as
+/// "you", where that can be read of the permanent and its controller's own zones: what a
+/// scene would answer ([`Scene::holds`]), with none made. None for any other condition. A
+/// static ability's condition is read at every check of what it does, and most are these.
+#[inline]
+pub(crate) fn without_a_scene<L: Layout>(
+    s: &State<L>,
+    slot: L::Slot,
+    condition: &Condition,
+) -> Option<bool> {
+    match *condition {
+        Condition::EnteredThisTurn(Objects::This) => {
+            Some(s.tracked(Tracker::EnteredThisTurn, slot))
+        }
+        Condition::Compare(left, comparison, right) => {
+            let you = s.controller(slot);
+            let (left, right) = (own_amount(s, you, left)?, own_amount(s, you, right)?);
+            Some(comparison.holds(left, right))
+        }
+        _ => None,
+    }
+}
+
+/// The value of `amount` for the player `you`, where it is a printed number or the number
+/// of cards in a zone of their own; none for any other.
+#[inline]
+fn own_amount<L: Layout>(s: &State<L>, you: Seat, amount: Amount) -> Option<u8> {
+    match amount {
+        Amount::Fixed(n) => Some(n),
+        Amount::Count(&Objects::All {
+            zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
+            filter: Filter::Whose(&Players::You),
+        }) => {
+            let cards = s.zone(ZoneKey::Of(you, zone)).count();
+            Some(u8::try_from(cards).unwrap_or(u8::MAX))
+        }
+        _ => None,
+    }
+}
+
+/// Whether an ability's condition holds, or it has none, read for `subject`: the ability
+/// as the trigger it would be, with its source and its controller as "you". A static
+/// ability's "as long as" or "while" is read this way too, as often as it is asked.
+#[inline]
+pub(crate) fn condition_holds<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    subject: &PendingTrigger<L>,
+    ability: &Ability,
+) -> bool {
     ability.condition.is_none_or(|condition| {
         let scene = Scene {
             s,
             t,
-            subject: trigger,
+            subject,
             costs: None,
             x: 0,
             targets: &[],

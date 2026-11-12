@@ -3,15 +3,17 @@
 
 use beryl_kernel::derive::Rederive;
 
-use crate::card::{AbilityKind, Colors, Modification, Objects, Rules, Subtypes, Types};
+use beryl_card::Amount;
+
+use crate::card::{AbilityIx, AbilityKind, Colors, Modification, Objects, Subtypes};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Sink, kind};
-use crate::filter;
+use crate::filter::{self, Filter};
 use crate::fixed::Full;
-use crate::ids::CardId;
+use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, PerSeat, Queue, index};
 use crate::state::{
-    CounterKind, Derived, GrantRef, LayerChange, LockedIn, Permanents, State, Zone,
+    CounterKind, Derived, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
 };
 use crate::static_ability;
 use crate::table::GameTable;
@@ -159,9 +161,9 @@ pub(crate) fn counters_matter<L: Layout>(
 ///
 /// Within a layer, effects apply in timestamp order
 /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)): "An effect with an earlier
-/// timestamp is applied before an effect with a later timestamp." The only
-/// characteristic-defining ability, Adeline's, sits alone in layer 7a, so "apply effects from
-/// characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
+/// timestamp is applied before an effect with a later timestamp." A characteristic-defining
+/// ability defines power alone and sits in layer 7a with no other effect, so "apply effects
+/// from characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
 /// cards' effects in one layer depend on each other
 /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
 ///
@@ -221,13 +223,19 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
                 // No static ability of the cards changes control. One that did would name
                 // its source's controller as layer 2 has it, not as the permanent entered.
                 debug_assert_ne!(spec.modification, Modification::Control);
-                let change = LayerChange::resolve(spec.modification, s.base_controller(slot));
+                let (source, face) = what.record(t);
+                // An amount read as its layer applies is named by the ability that says it.
+                let change = LayerChange::resolve(spec.modification, s.base_controller(slot))
+                    .unwrap_or_else(|| LayerChange::DefinedPower {
+                        face,
+                        ability: AbilityIx::new(n as u8),
+                    });
                 let pushed = list.get_or_insert_with(Default::default).push(Apply {
                     layer: change.layer() as u8,
                     timestamp: o.timestamp(),
                     order: n as u8,
                     target: Target::Position(index::<L>(target)),
-                    source: what.record(t).0,
+                    source,
                     change,
                 });
                 listed = listed.and(pushed);
@@ -240,12 +248,12 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
         list.as_mut_slice().sort_unstable_by_key(Apply::key);
         for a in list.iter() {
             match a.target {
-                Target::Position(i) => apply(s.results(), i.into(), a.source, a.change),
+                Target::Position(i) => apply(t, s.results(), i.into(), a.source, a.change),
                 Target::Set(set) => {
                     let members = s.locked_in(set);
                     for i in 0..len {
                         if members.contains(s.battlefield()[i]) {
-                            apply(s.results(), i, a.source, a.change);
+                            apply(t, s.results(), i, a.source, a.change);
                         }
                     }
                 }
@@ -333,12 +341,17 @@ fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Ru
     let mut rules = [Rules::NONE; _];
     for i in 0..s.battlefield().len() {
         let what = s.copiable(s.battlefield()[i]);
-        if what.player_rules(t).is_empty() {
+        let made = what.player_rules(t);
+        if made.is_empty() {
             continue;
         }
         let controller = s.results()[i].controller;
         for ability in what.face(t).abilities {
-            let (AbilityKind::Static, Some(whose)) = (ability.kind, ability.rule.whose()) else {
+            let (AbilityKind::Static, Some(rule)) = (ability.kind, ability.rule) else {
+                continue;
+            };
+            // The card table has numbered every rule change its cards name.
+            let Some(id) = t.rule_id(rule).filter(|&id| made.contains(id)) else {
                 continue;
             };
             // The rule is in force for those players from here: the ability did what it
@@ -346,8 +359,8 @@ fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Ru
             crate::coverage::hit(ability);
             // Each player's set is a union: the order they are met in is nothing.
             for player in s.players_in_seat_order(s.players()) {
-                if filter::is_for(&whose, player, controller) {
-                    rules[player.index()] = rules[player.index()].with(ability.rule);
+                if filter::is_for(&rule.players, player, controller) {
+                    rules[player.index()] = rules[player.index()].with(id);
                 }
             }
         }
@@ -361,7 +374,13 @@ fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Ru
 /// nothing, and inlined into [`recompute`] it costs the rollout benchmark 0.07% of its
 /// instructions.
 #[inline(never)]
-fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, change: LayerChange) {
+fn apply<L: Layout>(
+    t: &GameTable,
+    derived: &mut [Derived<L>],
+    i: usize,
+    source: L::Card,
+    change: LayerChange,
+) {
     match change {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
         LayerChange::Control(player) => derived[i].controller = player,
@@ -401,17 +420,51 @@ fn apply<L: Layout>(derived: &mut [Derived<L>], i: usize, source: L::Card, chang
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
         // power and/or toughness are applied." Layers 2 to 6 are done for every permanent by
         // now, so the count sees each one's final types and controller.
-        LayerChange::PowerIsCreaturesYouControl => {
-            let you = derived[i].controller;
-            let creatures = derived
-                .iter()
-                .filter(|d| d.controller == you && d.types.contains(Types::CREATURE))
-                .count();
-            derived[i].power = i8::try_from(creatures).unwrap_or(i8::MAX);
+        LayerChange::DefinedPower { face, ability } => {
+            let said_by = &t.def(source).face(face).abilities[ability.index()];
+            let Some(Ok(Some(amount))) = said_by.layer.map(static_ability::defined_power) else {
+                unreachable!("the card table has only the defined powers the layers read");
+            };
+            let power = defined(amount, derived, derived[i].controller);
+            derived[i].power = i8::try_from(power).unwrap_or(i8::MAX);
         }
         LayerChange::ModifyPt(p, t) => {
             derived[i].power = derived[i].power.saturating_add(p);
             derived[i].toughness = derived[i].toughness.saturating_add(t);
+        }
+    }
+}
+
+/// The value of an amount a characteristic-defining ability defines, read as its layer
+/// applies for the permanent's controller `you`: of the permanents as layers 2 to 6 left
+/// them, so a count sees each one's final types and controller. The card table has only
+/// amounts read this way (`beryl_kernel`'s `static_ability::defined_power`).
+fn defined<L: Layout>(amount: &Amount, derived: &[Derived<L>], you: Seat) -> usize {
+    match *amount {
+        Amount::Fixed(n) => usize::from(n),
+        Amount::Times(n, amount) => usize::from(n).saturating_mul(defined(amount, derived, you)),
+        Amount::Count(&Objects::All { filter, .. }) => {
+            derived.iter().filter(|d| passes(filter, d, you)).count()
+        }
+        _ => unreachable!("the card table refuses an amount the layers cannot read"),
+    }
+}
+
+/// Whether a permanent with the characteristics `d` passes `filter`, read for `you`: what
+/// [`Filter`]'s evaluation says of a permanent, of results the state does not yet hold.
+fn passes<L: Layout>(filter: Filter, d: &Derived<L>, you: Seat) -> bool {
+    match filter {
+        Filter::Any => true,
+        Filter::Types(types) => d.types.intersects(types),
+        Filter::Supertypes(supertypes) => d.supertypes.intersects(supertypes),
+        Filter::Subtype(subtype) => d.subtypes.contains(subtype),
+        Filter::Colors(colors) => d.colors.intersects(colors),
+        Filter::Whose(players) => filter::is_for(players, d.controller, you),
+        Filter::Not(filter) => !passes(*filter, d, you),
+        Filter::All(filters) => filters.iter().all(|&filter| passes(filter, d, you)),
+        Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(filter, d, you)),
+        Filter::Tapped | Filter::ManaValueAtMost(_) | Filter::ManaValueAtMostX => {
+            unreachable!("the card table refuses a filter the layers cannot read")
         }
     }
 }

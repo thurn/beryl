@@ -11,6 +11,7 @@ use crate::ids::SlotId;
 use crate::layout::Large;
 use crate::profile::Profile;
 use crate::relayout::Relayout;
+use crate::rule_changes::fixtures::{self, FLASH, LIMIT, LOYALTY};
 use crate::store::Store;
 use crate::{CardIx, LargeCardIx, LargeSlot, Slot};
 
@@ -126,8 +127,8 @@ static NO_CARDS: crate::table::CardTable = crate::table::CardTable::new(&[]);
 
 #[test]
 fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
-    let t = GameTable::new(&NO_CARDS, [&[], &[]]).unwrap();
-    let rule = Rule::SorceriesAsFlash;
+    let t = fixtures::table();
+    let [rule, limit] = [&FLASH, &LIMIT].map(|rule| t.rule_id(rule).unwrap());
     let (you, other) = (Subject::Player(Seat::P1), Subject::Player(Seat::P0));
     let mut small: State<Small> = State::empty(Profile::EXACT);
     small.flags.derived_dirty = false;
@@ -143,7 +144,7 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
     // no input of the layers and about no object.
     assert!(small.rule_applies(&t, rule, you));
     assert!(!small.rule_applies(&t, rule, other));
-    assert!(!small.rule_applies(&t, Rule::OpponentsCastAsSorceries, you));
+    assert!(!small.rule_applies(&t, limit, you));
     assert!(!small.is_derived_stale());
     assert!(small.keyed.is_empty());
     assert_eq!(small.check_stores(&t), Ok(()));
@@ -178,23 +179,24 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
 
 #[test]
 fn two_rule_changes_on_a_player_end_apart() {
-    let t = GameTable::new(&NO_CARDS, [&[], &[]]).unwrap();
+    let t = fixtures::table();
+    let [flash, limit] = [&FLASH, &LIMIT].map(|rule| t.rule_id(rule).unwrap());
     let to = Subject::Player(Seat::P0);
     let mut s: State<Small> = State::empty(Profile::EXACT);
     s.flags.derived_dirty = false;
-    let rule = Continuous::Rule(to, Rule::SorceriesAsFlash);
+    let rule = Continuous::Rule(to, flash);
     s.start_effect(CardIx::FIRST, rule, Duration::EndOfTurn)
         .unwrap();
     s.start_effect(CardIx::FIRST, rule, Duration::Indefinite)
         .unwrap();
-    let limit = Continuous::Rule(to, Rule::OpponentsCastAsSorceries);
-    s.start_effect(CardIx::FIRST, limit, Duration::EndOfTurn)
+    let limit_for = Continuous::Rule(to, limit);
+    s.start_effect(CardIx::FIRST, limit_for, Duration::EndOfTurn)
         .unwrap();
     // The one that ends takes its own rule with it and leaves the rule another still
     // changes.
     s.expire(Duration::EndOfTurn);
-    assert!(s.rule_applies(&t, Rule::SorceriesAsFlash, to));
-    assert!(!s.rule_applies(&t, Rule::OpponentsCastAsSorceries, to));
+    assert!(s.rule_applies(&t, flash, to));
+    assert!(!s.rule_applies(&t, limit, to));
     assert_eq!(s.check_stores(&t), Ok(()));
 }
 
@@ -202,7 +204,7 @@ fn two_rule_changes_on_a_player_end_apart() {
 fn a_rule_change_on_an_object_ends_with_the_object() {
     let mut s: State<Small> = State::empty(Profile::EXACT);
     let (first, second) = (nth(&s, 1), nth(&s, 2));
-    let rule = Rule::InstantLoyaltyTheTurnItEntered;
+    let rule = fixtures::table().rule_id(&LOYALTY).unwrap();
     s.start_effect(
         CardIx::FIRST,
         Continuous::Rule(Subject::Object(first), rule),
@@ -210,10 +212,10 @@ fn a_rule_change_on_an_object_ends_with_the_object() {
     )
     .unwrap();
     // No player is asked, so the layer results need not be current.
-    assert!(s.effects.changes_rule(rule, Affects::object(first)));
-    assert!(!s.effects.changes_rule(rule, Affects::object(second)));
+    assert!(s.effect_rules_on(first).contains(rule));
+    assert!(s.effect_rules_on(second).is_empty());
     s.forget_stored(first.slot);
-    assert!(!s.effects.changes_rule(rule, Affects::object(first)));
+    assert!(s.effect_rules_on(first).is_empty());
     assert!(s.keyed.is_empty());
 }
 

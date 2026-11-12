@@ -4,11 +4,13 @@
 // Bodies have the `Flow` signature whether or not they can pause.
 #![allow(clippy::unnecessary_wraps)]
 
+use beryl_card::{Condition, Governed, Objects, RuleChange, When};
+
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, CostPart, Face, FaceIx, Flow,
-    Keywords, ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Rule, Subtype, Subtypes,
+    Keywords, ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Subtype, Subtypes,
     Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
@@ -17,9 +19,7 @@ use crate::filter::{Evaluate, Filter};
 use crate::game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{
-    Continuous, CounterKind, Duration, Pending, Subject, TargetPlace, TurnStep, Zone, ZoneKey,
-};
+use crate::state::{CounterKind, Duration, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
@@ -179,10 +179,7 @@ fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
-    ctx.add_effect(
-        Continuous::Rule(Subject::Player(you), Rule::SorceriesAsFlash),
-        Duration::UntilYourNextTurn(you),
-    );
+    ctx.change_rule(&SORCERIES_AS_FLASH, Duration::UntilYourNextTurn(you));
     Ok(())
 }
 
@@ -474,6 +471,27 @@ pub(crate) static STUPOR: CardDef = CardDef {
     ],
 };
 
+/// "Each opponent can cast spells only any time they could cast a sorcery."
+static ONLY_AS_SORCERIES: RuleChange = RuleChange {
+    players: Players::EachOpponent,
+    what: Governed::CastSpells(Filter::Any),
+    when: When::OnlyAsSorcery,
+};
+
+/// "You may cast sorcery spells as though they had flash."
+pub(crate) static SORCERIES_AS_FLASH: RuleChange = RuleChange {
+    players: Players::You,
+    what: Governed::CastSpells(Filter::Types(Types::SORCERY)),
+    when: When::AsInstant,
+};
+
+/// "You may activate its loyalty abilities any time you could cast an instant."
+static LOYALTY_AS_INSTANT: RuleChange = RuleChange {
+    players: Players::You,
+    what: Governed::ActivateLoyaltyAbilities(Objects::This),
+    when: When::AsInstant,
+};
+
 pub(crate) static RAVELER: CardDef = CardDef {
     name: "Test Raveler",
     tokens: &[],
@@ -484,13 +502,14 @@ pub(crate) static RAVELER: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Static,
-                rule: Rule::OpponentsCastAsSorceries,
+                rule: Some(&ONLY_AS_SORCERIES),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
                 body: bodies!(sorceries_as_flash),
+                rule: Some(&SORCERIES_AS_FLASH),
                 ..Ability::NONE
             },
             Ability {
@@ -516,7 +535,8 @@ pub(crate) static EMPEROR: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Static,
-                rule: Rule::InstantLoyaltyTheTurnItEntered,
+                rule: Some(&LOYALTY_AS_INSTANT),
+                condition: Some(&Condition::EnteredThisTurn(Objects::This)),
                 ..Ability::NONE
             },
             Ability {

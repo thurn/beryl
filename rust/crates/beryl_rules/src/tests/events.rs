@@ -300,7 +300,7 @@ static ADELINE: CardDef = CardDef {
             Ability::static_ability(&LayerSpec {
                 affected: Objects::This,
                 condition: None,
-                modification: Modification::PowerIsCreaturesYouControl,
+                modification: Modification::SetPower(&super::static_abilities::CREATURES),
             }),
             Ability::triggered(&Trigger::attack(Players::You), bodies!(human_attacking)),
         ],

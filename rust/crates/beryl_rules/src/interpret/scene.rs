@@ -16,7 +16,8 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
 use crate::state::{
-    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Zone, placed,
+    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Tracker, Zone,
+    ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -178,6 +179,12 @@ impl<L: Layout> Scene<'_, L> {
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }
+            // "The cards in your library": a zone each player has one of holds its owner's
+            // cards, which is the whole of what the filter asks.
+            Objects::All {
+                zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
+                filter: Filter::Whose(&Players::You),
+            } => s.zone(ZoneKey::Of(self.you(), zone)),
             Objects::All { zone, filter } => {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),
@@ -325,6 +332,13 @@ impl<L: Layout> Scene<'_, L> {
                 );
                 let objects = self.objects(names);
                 !objects.is_empty() && self.passing(objects, filter) == objects
+            }
+            // A permanent is tracked from the turn it enters to that turn's end, in a game
+            // with a card that asks (`beryl_kernel`'s `Capability::EnteredThisTurn`).
+            Condition::EnteredThisTurn(names) => {
+                let objects = self.objects(names);
+                !objects.is_empty()
+                    && objects.all(|slot| self.s.tracked(Tracker::EnteredThisTurn, slot))
             }
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),

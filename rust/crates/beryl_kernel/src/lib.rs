@@ -152,7 +152,7 @@
 //! | the `effects` queue, `Continuous::Layer` | Effects: an entry on an object, payload [`effects::Payload::Layer`] of a [`effects::LayerChange`] | by-w8gv.7.2, built |
 //! | `Continuous::ExileInsteadOfGraveyard` | Effects: an entry on an object, payload [`effects::Payload::Move`] | by-w8gv.7.2, built |
 //! | `Player::sorceries_as_flash` | Effects: an entry on a player, payload [`effects::Payload::Rule`], lasting until that player's next turn | by-w8gv.7.3, built |
-//! | the `Rule` mask (`rule_bit`, a `u8`) | `beryl_card`'s `Rules`, a set sized from the list of rules; a static ability's rule changes for players are found with the layers ("Static rule changes") | by-w8gv.7.3, built |
+//! | the `Rule` mask (`rule_bit`, a `u8`) | [`rule_changes::Rules`], a set of the rule changes a game numbered; a static ability's rule changes for players are found with the layers ("Static rule changes") | by-w8gv.7.3, built; numbered by-w8gv.9.7 |
 //! | the `permissions` queue, `CastPermission`; its `this_turn` | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them | by-w8gv.7.4, built |
 //! | `CastPermission::extra`, `Casting::extra` | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) | by-w8gv.7.4, built |
 //! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `event::exiled_instead`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
@@ -180,7 +180,7 @@
 //! | Effects | a queue in the order the effects began, and a mask of the kinds live in it | 24 | 64 ([`effects::EFFECTS`]) | 1,552 | a `Vec` of 32-byte entries |
 //! | the keyed slots, shared by every store | one set of slots | | | 32 | 128 |
 //! | Effects' locked-in sets | a table of sets of slots, which an entry names by index; an empty set is a free place, and the table ends at its last set in use | 32 | 4 ([`effects::SETS`]) | 136 | a `Vec` |
-//! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 1 for each eight rules of the list | 2 players, twice | 4 | the same |
+//! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 8, a bit for each rule change the game numbered | 2 players, twice | 32 | the same |
 //! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
@@ -204,7 +204,8 @@
 //! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5,
 //! which landed after it, it is 20,016: the table of locked-in sets, 136. After
 //! by-w8gv.7.8 it is 20,080: the Trackers store's two sets of slots, 64. After
-//! by-w8gv.7.9 it is 20,176: the table of counters, 96.
+//! by-w8gv.7.9 it is 20,176: the table of counters, 96. After by-w8gv.9.7 it is 20,216:
+//! each of the players' four sets of rule changes is a word, where it was a byte.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -272,8 +273,8 @@
 //! rule change, a permission to cast or a cost change (built). A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
-//! rule change is the vocabulary's own `Rule`, which names no player: the affected side is
-//! who it applies to. [`effects::LayerChange`] is the resolved form of `beryl_card`'s
+//! rule change is one the game numbered ([`rule_changes::RuleId`], a byte), which names no
+//! player: the affected side is who it applies to. [`effects::LayerChange`] is the resolved form of `beryl_card`'s
 //! `Modification`, whose `Control` names no seat: [`effects::LayerChange::resolve`] gives
 //! it the ability's controller. A payload is at most 15 bytes and names no slot, so an
 //! entry stays 24 bytes, which the store's file asserts, and converts to another layout
@@ -341,7 +342,7 @@
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
 //! | the turn's reset | Effects: the store's length read twice a turn. Trackers: eight words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same eight words, in place of two flags on every permanent |
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
-//! | "does this rule apply" ([`State::rule_applies`]) | for a player, their two sets of rules joined and one AND, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
+//! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
 //! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::kind::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
@@ -398,17 +399,27 @@
 //!
 //! ### Static rule changes
 //!
-//! One question, [`State::rule_applies`], answers "does this rule change apply to this
-//! player or permanent now", whether a static ability or a resolved effect makes it
+//! Whether a rule change applies to a player or a permanent now is asked the same way
+//! whether a static ability or a resolved effect makes it
 //! ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous
 //! effects affect game rules rather than objects."):
 //!
-//! - `beryl_card`'s `Rule` is a list, and `Rules`, a set of them, has a bit for each in as
-//!   many bytes as the list needs. The table's rules of each card, a face's facts and the
-//!   state's rules for each player are that set, so a rule added to the list widens them
-//!   all and no mask is widened by hand. Each rule says whose rule it changes, read for the
-//!   controller of what makes the change (`Rule::whose`), or that it is about the permanent
-//!   with the ability.
+//! - A rule change is the vocabulary's data (`beryl_card`'s `RuleChange`: who may or may
+//!   not do what, and when), and any number of cards may say any number of them. A game
+//!   numbers those its own cards name as its table is built ([`rule_changes`]): a static
+//!   ability names the one it makes, and an ability whose effect starts one names that
+//!   ([`GameTable::rule`], [`GameTable::rule_id`]). The table's rule changes of each card
+//!   and face, the state's for each player and an effect's payload are those numbers, a
+//!   set of them one word ([`rule_changes::Rules`]). The table refuses a rule change the
+//!   rules have no check for ([`rule_changes::RuleKind::of`], [`rule_changes::Unchecked`]), and
+//!   keeps the set of each kind they do check ([`GameTable::rules_of`]).
+//! - The rules ask by kind: the rule changes in force for a player
+//!   ([`State::rules_for`]) held against those of a kind is one AND, the whole answer
+//!   while none of that kind is in force, and only when one is does the check read what
+//!   it says (the spells its filter accepts). A change of a kind that is asked of the
+//!   permanent with the ability is its face's ([`query::Copiable::rules`]), and its
+//!   condition is kept with its number ([`GameTable::rule_condition`]).
+//!   [`State::rule_applies`] answers for one numbered rule change, for tools and tests.
 //! - A static ability's change for players is kept current with the layers, never found
 //!   by walking the battlefield as the rules ask. A card with such an ability has
 //!   [`event::kind::RULE_CHANGE`] in its listener mask, which the layers' pass already
@@ -427,8 +438,10 @@
 //!   and the two sets never need each other. The contract first had one set for both
 //!   sources (by-w8gv.7.2); with two, an effect that ends dirties nothing and each owner
 //!   checks its own (the store's invariant, the engine's reference recompute).
-//! - A rule about the permanent with the ability asks its copiable values, which a
-//!   face-down permanent has none of, and the Effects store for entries on it.
+//! - A rule change about the permanent with the ability asks its copiable values, which
+//!   a face-down permanent has none of. The Effects store keeps entries on an object too
+//!   ([`State::effect_rules_on`]), which no card starts: the table refuses an ability
+//!   whose effect would.
 //! - "Can't" beats "can" ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012))
 //!   in the rules that read two changes together, not here: each rule is its own bit.
 //! - Which permanent makes a change, to tell a player why, is asked only once it is known
@@ -654,7 +667,9 @@ mod players;
 pub mod profile;
 pub mod query;
 pub mod relayout;
+pub mod replacement;
 pub mod rng;
+pub mod rule_changes;
 mod stack;
 pub mod state;
 pub mod static_ability;

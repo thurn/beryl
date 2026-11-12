@@ -277,7 +277,7 @@ fn enter_replacements<L: Layout>(
         }
         match ability.replacement {
             // Not about entering: the draw machinery reads it.
-            Replacement::None | Replacement::WinInsteadOfDrawingFromEmptyLibrary => continue,
+            Replacement::None | Replacement::WouldDraw => continue,
             Replacement::EntersTapped => entry.tapped = true,
             Replacement::EntersTappedUnlessFewLands(n) => {
                 // Not yet on the battlefield, so every land counted is another land.

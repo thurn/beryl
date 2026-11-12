@@ -1,6 +1,6 @@
 //! A new game's state: each deck dealt into its slots, and the coin flip (CR 103).
 
-use beryl_card::{Rules, TurnStep, Zone};
+use beryl_card::{TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
@@ -11,6 +11,7 @@ use crate::pending::Pending;
 use crate::player::{ManaPool, MulliganStatus, Player};
 use crate::profile::Profile;
 use crate::rng::Rng;
+use crate::rule_changes::Rules;
 use crate::state::{Budgets, CounterTable, Effects, Flags, Memos, State, Trackers, Zones};
 use crate::store::Store;
 use crate::table::GameTable;

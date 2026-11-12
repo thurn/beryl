@@ -4,7 +4,7 @@ use std::cell::Cell;
 
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ObjectAbility, Players, Replacement, TargetKind, TargetSpec, TriggerEvent, Types,
+    ObjectAbility, Players, TargetKind, TargetSpec, TriggerEvent, Types,
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -266,9 +266,7 @@ impl<L: Layout> Policy<'_, L> {
                             .face(self.obs.object(slot).face())
                             .abilities
                             .iter()
-                            .any(|a| {
-                                a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary
-                            })
+                            .any(beryl_engine::wins_instead_of_drawing)
                 })
         })
     }

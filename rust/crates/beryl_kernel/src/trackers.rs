@@ -65,7 +65,7 @@ macro_rules! trackers {
 
 trackers! {
     /// The permanent entered the battlefield this turn. The rules never ask; a static
-    /// ability may (`beryl_card`'s `Rule::InstantLoyaltyTheTurnItEntered`).
+    /// ability may, in its condition (`beryl_card`'s `Condition::EnteredThisTurn`).
     EnteredThisTurn = "entered this turn",
     /// A loyalty ability of the permanent was activated this turn
     /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)): "A player may

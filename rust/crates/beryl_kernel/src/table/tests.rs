@@ -1,11 +1,13 @@
 //! Tests of the card tables.
 
 use beryl_card::{
-    Behavior, Condition, Cost, Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet,
-    Modification, Objects, Players, Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
+    Behavior, Condition, Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet, Modification,
+    Objects, Players, Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
 };
 
 use super::*;
+use crate::event::kind;
+use crate::rule_changes::fixtures::{LIMIT, WALKER};
 
 static ALPHA: CardDef = CardDef {
     name: "Alpha",
@@ -25,32 +27,6 @@ static ALPHA_AGAIN: CardDef = CardDef {
 };
 static TABLE: CardTable = CardTable::new(&[&ALPHA, &BETA, &ALPHA_AGAIN]);
 
-/// A planeswalker whose static abilities read the turn it entered and change a rule
-/// for its controller's opponents.
-static WALKER: CardDef = CardDef {
-    name: "Walker",
-    faces: &[Face {
-        abilities: &[
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Rule::InstantLoyaltyTheTurnItEntered,
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Static,
-                rule: Rule::OpponentsCastAsSorceries,
-                ..Ability::NONE
-            },
-            Ability {
-                kind: AbilityKind::Activated,
-                cost: Cost::loyalty(1),
-                ..Ability::NONE
-            },
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
 static WALKERS: CardTable = CardTable::new(&[&ALPHA, &WALKER]);
 
 #[test]
@@ -71,9 +47,10 @@ fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
     assert_eq!(t.listens(walker), kind::RULE_CHANGE);
     assert_eq!(t.listens_any(), kind::RULE_CHANGE);
     // Its rule about itself is none of the players' rules.
+    let limit = t.rule_id(&LIMIT).unwrap();
     assert_eq!(
-        t.may_have_rules(walker).common(Rules::OF_PLAYERS),
-        Rules::NONE.with(Rule::OpponentsCastAsSorceries)
+        t.may_have_rules(walker).common(t.player_rules()),
+        Rules::NONE.with(limit)
     );
 }
 

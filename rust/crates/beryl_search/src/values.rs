@@ -5,7 +5,7 @@
 //! decision reads it with one load.
 
 use beryl_cards::names;
-use beryl_engine::card::{CardDef, Face, Keywords, Replacement, Types};
+use beryl_engine::card::{CardDef, Face, Keywords, Types};
 use beryl_engine::query::DefinitionKey;
 use beryl_engine::{CardId, CardIx, GameTable, LargeCardIx};
 
@@ -189,7 +189,7 @@ impl CardValues {
                 wins_instead: def.faces.iter().any(|f| {
                     f.abilities
                         .iter()
-                        .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+                        .any(beryl_engine::wins_instead_of_drawing)
                 }),
             }
         };

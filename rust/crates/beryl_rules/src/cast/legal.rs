@@ -5,8 +5,7 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Needs, ObjectAbility, Rule, Timing,
-    Types,
+    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Needs, ObjectAbility, Timing, Types,
 };
 use crate::casting;
 use crate::decision::{Opt, Refusal};
@@ -16,13 +15,13 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::mana::Funds;
 use crate::rule_change;
-use crate::state::{ObjectFlags, State, Subject, Tracker, Zone, ZoneKey};
+use crate::state::{ObjectFlags, RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::GameTable;
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::parts;
 use super::targets::targetable;
-use super::timing::{activated, instant_speed, sorcery_speed_only, sorcery_timing};
+use super::timing::{activated, instant_speed, sorcery_timing};
 
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
@@ -66,6 +65,7 @@ impl<L: Layout> Situation<L> {
 
 /// Whether a face may be cast now, as far as its card types and the timing rules say: what
 /// [`refused`] checks first, which depends only on the face, so on the card.
+#[inline]
 fn in_time<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -80,12 +80,15 @@ fn in_time<L: Layout>(
         return false;
     }
     match from {
+        // Sorcery timing first: it is three compares, lets any spell be cast, and is how
+        // most spells are, so the rule changes are read only outside it.
         From::Priority => {
-            (instant_speed(s, t, face, now.player) && !sorcery_speed_only(s, t, now.player))
-                || sorcery_timing(s, now.player)
+            sorcery_timing(s, now.player)
+                || (instant_speed(s, t, face, now.player)
+                    && !rule_change::cast_only_as_sorcery(s, t, now.player, face))
         }
         // During a resolution the stack is never empty, so a sorcery-speed limit forbids it.
-        From::Resolution { .. } => !sorcery_speed_only(s, t, now.player),
+        From::Resolution { .. } => !rule_change::cast_only_as_sorcery(s, t, now.player, face),
     }
 }
 
@@ -189,14 +192,12 @@ pub(crate) fn refusal<L: Layout>(
     }
     // Only sorcery speed, where a face could be cast at instant speed but for the limit.
     if most == Some(Refusal::Timing { by: None }) {
-        let instant = def.face_ixs().any(|f| {
-            let face = def.face(f);
-            !face.transformed && instant_speed(s, t, face, player)
-        });
-        if instant {
-            let limit = Rule::OpponentsCastAsSorceries;
+        let instant = (def.face_ixs().map(|f| def.face(f)))
+            .find(|face| !face.transformed && instant_speed(s, t, face, player));
+        if let Some(face) = instant {
+            let limit = RuleKind::CastOnlyAsSorcery;
             most = Some(Refusal::Timing {
-                by: rule_change::maker(s, t, limit, Subject::Player(player)),
+                by: rule_change::maker(s, t, limit, player, face),
             });
         }
     }
@@ -332,15 +333,12 @@ fn activatable<L: Layout>(
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
         // time they have priority and the stack is empty during a main phase of their turn,
         // but only if no player has previously activated a loyalty ability of that permanent
-        // that turn." The timing first, so that most decisions read one tracker.
-        let unused = || !s.tracked(Tracker::LoyaltyActivated, slot);
-        let instant = Rule::InstantLoyaltyTheTurnItEntered;
+        // that turn." The timing first, so that most decisions read no tracker. A rule
+        // change may put "any time they could cast an instant" where the rule has the main
+        // phase.
         payable
-            && (sorcery_timing(s, player)
-                || (s.tracked(Tracker::EnteredThisTurn, slot)
-                    && unused()
-                    && rule_change::applies(s, t, instant, Subject::Object(s.object_ref(slot)))))
-            && unused()
+            && (sorcery_timing(s, player) || rule_change::loyalty_as_instant(s, t, slot))
+            && !s.tracked(Tracker::LoyaltyActivated, slot)
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".

@@ -214,6 +214,14 @@ pub enum Effect {
         modification: Modification,
         duration: Duration,
     },
+    /// "[Player] wins the game"
+    /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
+    /// state that a player wins the game."
+    WinGame(Players),
+    /// "[Player] loses the game"
+    /// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e)): "An effect may
+    /// state that a player loses the game."
+    LoseGame(Players),
 }
 
 impl Effect {
@@ -268,7 +276,27 @@ impl Effect {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
-            | Effect::Modify { .. } => false,
+            | Effect::Modify { .. }
+            | Effect::WinGame(_)
+            | Effect::LoseGame(_) => false,
+        }
+    }
+
+    /// Whether `test` holds of this instruction or of one inside it, whichever of them a
+    /// resolution comes to.
+    pub fn any(&self, test: &impl Fn(&Effect) -> bool) -> bool {
+        if test(self) {
+            return true;
+        }
+        match *self {
+            Effect::Sequence(effects) => effects.iter().any(|effect| effect.any(test)),
+            Effect::If {
+                then, otherwise, ..
+            } => then.any(test) || otherwise.is_some_and(|otherwise| otherwise.any(test)),
+            Effect::May { effect, .. }
+            | Effect::Unless { effect, .. }
+            | Effect::ForEachPlayer { effect, .. } => effect.any(test),
+            _ => false,
         }
     }
 
@@ -321,7 +349,9 @@ impl Effect {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
-            | Effect::Modify { .. } => false,
+            | Effect::Modify { .. }
+            | Effect::WinGame(_)
+            | Effect::LoseGame(_) => false,
         }
     }
 }
@@ -389,7 +419,9 @@ impl Effect {
             | Effect::RemoveCounters { objects, count, .. } => {
                 objects.names_paid() || count.names_paid()
             }
-            Effect::AddMana { player, .. } => player.names_paid(),
+            Effect::AddMana { player, .. } | Effect::WinGame(player) | Effect::LoseGame(player) => {
+                player.names_paid()
+            }
         }
     }
 }
