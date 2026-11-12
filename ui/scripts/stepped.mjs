@@ -156,7 +156,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
             const subject = subjectOf(act, e.table.view);
             // Its case as the stage times it (src/stage/timing.ts caseOf), from the table it
             // finds: a life total's rise or fall is not told by the step alone.
-            const found = window.berylCase(act, e.table.view) ?? null;
+            const beside = e.beat.map((step) => step.act);
+            const found = window.berylCase(act, e.table.view, beside) ?? null;
             const turn = e.span.turn - origin;
             steps.push({ act, subject, case: found, turn, from: at, to: at });
         } else if (open.has(e.step)) {

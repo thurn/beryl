@@ -191,7 +191,12 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
         });
         if (edge.edge !== "start") return;
         const { act } = edge.step;
-        const { duration } = stage.timings(act, edge.table.view);
+        const { duration } = stage.timings(
+            act,
+            edge.table.view,
+            undefined,
+            edge.beat.map((step) => step.act),
+        );
         if (duration > 0) {
             wanted.add(edge.at + duration / 2).add(edge.at + duration);
         }
