@@ -22,15 +22,15 @@
 // driver's `spec.ordered`, and any test with a recording.
 
 /** The shortest change that counts as animated, in ms, and the least move that counts. */
-const MIN_MS = 150;
-const MIN_PX = 4;
+export const MIN_MS = 150;
+export const MIN_PX = 4;
 /** How much of a change must be visible to the player. */
-const SEEN = 0.5;
+export const SEEN = 0.5;
 /** How long before a view's logged time its window starts. */
 const LEAD = 60;
 /** More events than this in one view are too many to follow at once. Taps and steps count
  * for nothing: they come with what they pay for. */
-const CROWDED = 3;
+export const CROWDED = 3;
 /** Events that need no animation of their own. */
 const QUIET_EVENTS = new Set([
     "stepBegins",
@@ -48,14 +48,21 @@ const DRAW_GRACE = 1500;
 
 /** Starts recording every frame in the page. Run with `page.evaluate(record, ui?)`: `ui`
  * selects the elements other than cards whose motion is judged, by default what a click opens
- * or moves (a chooser's frames, a prompt's title and buttons, the dock's buttons). */
+ * or moves (a chooser's frames, a prompt's title and buttons, the dock's buttons). With
+ * `{ stepped: true, ui? }` it records no frame of its own: whoever steps the stage's clock
+ * takes each with `window.__motion.frame(at)`, stamped with the stage time given, and calls
+ * `window.__motion.unhit()` once done measuring (stage-audit.mjs). */
 export function record(ui) {
+    const stepped = typeof ui === "object" && ui !== null && ui.stepped;
     const UI_SELECTOR =
-        ui ??
+        (stepped ? ui.ui : ui) ??
         ".dock button, .prompt-title, .ability-choice, .choice-card, .chooser-close, .chooser-corner";
+    // The stage's nodes say their name (`data-stage`, src/stage/dom.ts): an ability's has no
+    // slot.
     const CARD_SELECTOR =
         "[data-slot], [data-viewer-slot], [data-risen], [data-prompt-slot], " +
-        "[data-shown-slot], [data-ghost-slot], [data-ceasing-slot], [data-card]";
+        "[data-shown-slot], [data-ghost-slot], [data-ceasing-slot], [data-card], " +
+        "[data-stage]";
     const slotOf = ({ dataset: d }) =>
         d.slot ??
         d.viewerSlot ??
@@ -72,14 +79,24 @@ export function record(ui) {
         if (!ids.has(e)) ids.set(e, ++nextId);
         return ids.get(e);
     };
-    const opacity = (e) => {
-        let o = 1;
-        for (let x = e; x && x !== document.body; x = x.parentElement) {
-            o *= Number(getComputedStyle(x).opacity);
-            if (o === 0) break;
+    // An element's opacity through its ancestors', each worked out once a frame: the cards
+    // of a layer share theirs.
+    let opacities = new Map();
+    const through = (x) => {
+        if (!x || x === document.body) return 1;
+        let o = opacities.get(x);
+        if (o === undefined) {
+            const own = Number(getComputedStyle(x).opacity);
+            o = own === 0 ? 0 : own * through(x.parentElement);
+            opacities.set(x, o);
         }
-        return Math.round(o * 100) / 100;
+        return o;
     };
+    const opacity = (e) => Math.round(through(e) * 100) / 100;
+    // The stage runs no animation of the browser's (src/stage/stage.ts): stepped, none is
+    // asked after.
+    const animated = (e) =>
+        !stepped && e.getAnimations({ subtree: true }).length > 0;
     // Hit testing follows paint order only where everything takes the pointer: a card in
     // flight, or the layer it flies in, may not. Only while a frame is measured, so a live
     // click between frames lands as it would for a player.
@@ -101,14 +118,47 @@ export function record(ui) {
             (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim(),
         );
     };
+    // What lies at a point, topmost first, and whether an element hides what is under it:
+    // each asked of the page once a frame, since cards in a pile are tested at the same
+    // points against the same cards over them.
+    let lying = new Map();
+    let hiding = new Map();
+    const under = (cx, cy) => {
+        const key = `${cx},${cy}`;
+        let found = lying.get(key);
+        if (!found)
+            lying.set(key, (found = document.elementsFromPoint(cx, cy)));
+        return found;
+    };
+    const hides = (x) => {
+        let found = hiding.get(x);
+        if (found === undefined) {
+            hiding.set(x, (found = paints(x) && opacity(x) > 0.3));
+        }
+        return found;
+    };
     // Whether `e` is what a player sees at (cx, cy): the topmost painted element there is
     // in it.
     const onTop = (e, cx, cy) => {
-        for (const x of document.elementsFromPoint(cx, cy)) {
+        for (const x of under(cx, cy)) {
             if (x === e || e.contains(x)) return true;
-            if (paints(x) && opacity(x) > 0.3) return false;
+            if (hides(x)) return false;
         }
         return false;
+    };
+    // What a player sees at (cx, cy) in place of `e`: the stage's node that lies over it
+    // there, by its name, or how the element that does is classed.
+    const coverOf = (e, cx, cy) => {
+        for (const x of under(cx, cy)) {
+            if (x === e || e.contains(x)) return undefined;
+            if (hides(x)) {
+                return (
+                    x.closest("[data-stage]")?.dataset.stage ??
+                    `.${String(x.className.baseVal ?? x.className).split(" ")[0]}`
+                );
+            }
+        }
+        return undefined;
     };
     const badges = (e) => [
         ...e.querySelectorAll(
@@ -118,9 +168,12 @@ export function record(ui) {
     const frames = [];
     const recording = { frames, stop: false };
     window.__motion = recording;
-    const frame = () => {
+    const frame = (at) => {
         if (recording.stop) return;
-        document.head.append(hits);
+        if (!hits.isConnected) document.head.append(hits);
+        opacities = new Map();
+        lying = new Map();
+        hiding = new Map();
         const instances = [];
         const inside = (x, y) =>
             x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
@@ -155,6 +208,11 @@ export function record(ui) {
                 ])
                 .filter(([x, y]) => inside(x, y));
             const badge = badges(e);
+            const top =
+                o > 0.3 &&
+                r.width > 1 &&
+                r.height > 1 &&
+                points.some(([x, y]) => onTop(face, x, y));
             const flip = o > 0.3 && face.querySelector(".card-flip");
             const surface = flip && flip.firstElementChild;
             const transform = flip && getComputedStyle(flip).transform;
@@ -165,6 +223,7 @@ export function record(ui) {
             instances.push({
                 id: id(e),
                 stage: id(e.closest(".stage") ?? document.body),
+                node: e.dataset.stage,
                 slot,
                 tokenLife: e.dataset.tokenLife,
                 ceasing: e.hasAttribute("data-ceasing-slot"),
@@ -179,16 +238,17 @@ export function record(ui) {
                 h: Math.round(r.height),
                 o,
                 on: points.length > 0,
-                top:
+                top,
+                // Under the stage, what lies over a card that is not on top (stage-audit.mjs).
+                ...(stepped &&
+                    !top &&
                     o > 0.3 &&
-                    r.width > 1 &&
-                    r.height > 1 &&
-                    points.some(([x, y]) => onTop(face, x, y)),
-                anim: o > 0.3 && e.getAnimations({ subtree: true }).length > 0,
+                    points.length > 0 && {
+                        cover: coverOf(face, ...points[0]),
+                    }),
+                anim: o > 0.3 && animated(e),
                 badge: badge.map((b) => b.textContent.trim()).join(" "),
-                badgeAnim: badge.some(
-                    (b) => b.getAnimations({ subtree: true }).length > 0,
-                ),
+                badgeAnim: badge.some(animated),
                 ...(flip && {
                     turn,
                     back:
@@ -306,18 +366,25 @@ export function record(ui) {
                 ends: ends.join("|"),
             };
         }
-        hits.remove();
+        // Stepped, the rule stays in from tick to tick, each change of it restyling the whole
+        // page: whoever steps takes it out before anything is clicked (`unhit`).
+        if (!stepped) hits.remove();
         frames.push({
             arrows,
-            t: performance.now(),
+            t: stepped ? at : performance.now(),
             instances,
             lives,
             stack,
             uis,
             motes,
         });
-        requestAnimationFrame(frame);
+        if (!stepped) requestAnimationFrame(frame);
     };
+    if (stepped) {
+        recording.frame = frame;
+        recording.unhit = () => hits.remove();
+        return undefined;
+    }
     requestAnimationFrame(frame);
     // A few frames of where things were before the caller sets anything going: a view can
     // arrive within a frame of a play. Counted, not timed: a busy machine may draw no frame
@@ -890,14 +957,18 @@ function cardPoses(instances) {
 }
 
 /** Report visible duplicates even if the overlap lasts only a single frame.
- * Group by stage and slot, never by name when both instances have slots. */
-function duplicates(frames) {
+ * Group by stage and slot, never by name when both instances have slots. An instance that
+ * `allows(frame, instance)` may show again in that frame: under the stage, what the design
+ * language says is shown twice (stage-audit.mjs). */
+export function duplicates(frames, allows = () => false) {
     const reported = new Set();
     const out = [];
-    for (const { t, instances } of frames) {
+    for (const frame of frames) {
+        const { t, instances } = frame;
         const bySlot = new Map();
         const byName = new Map();
         for (const card of instances.filter((c) => c.top)) {
+            if (allows(frame, card)) continue;
             if (card.slot != null) {
                 const key = `${card.stage}:${card.slot}`;
                 const list = bySlot.get(key) ?? [];

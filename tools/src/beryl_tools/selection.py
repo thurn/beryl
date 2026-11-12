@@ -84,6 +84,8 @@ VERB_CASES = (
     "ui/scripts/verb-spans.mjs",
     "ui/scripts/verb-rest.mjs",
     "ui/scripts/written-marks.mjs",
+    "ui/scripts/verb-audit.mjs",
+    "ui/scripts/stage-audit.mjs",
 )
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"

@@ -5,7 +5,9 @@
 // moves for both players, where a still shows only how it ends. Usage:
 //   node scripts/film.mjs <base-url> <out-dir> [card-slug...] [--moment NAME] [--viewport WxH]
 // Writes <out-dir>/<card>/<moment>.png, and every frame under <out-dir>/<card>/<moment>/,
-// and prints each sheet's path.
+// and prints each sheet's path. Under the stage (`by specs --stage`) the two seats' stages are
+// held and stepped INTERVAL ms of stage time a frame: a frame's time is the stage's, whatever
+// the machine's speed.
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { launch, workers } from "./capture.mjs";
@@ -18,6 +20,7 @@ import {
     option,
     play,
     QUIET,
+    rest,
     viewport,
     warm,
 } from "./moments.mjs";
@@ -47,6 +50,10 @@ if (!base || !out) {
  * queued) for QUIET ms and LAST_VIEW more, or LONGEST. Each frame: its ms since the play and
  * both seats' JPEGs. */
 async function film(pages, lives) {
+    const staged = await Promise.all(
+        pages.map((p) => p.evaluate(() => window.berylStage !== undefined)),
+    );
+    if (staged.every(Boolean)) return stepped(pages, lives);
     const frames = [];
     const quietSince = pages.map(() => undefined);
     const start = Date.now();
@@ -82,6 +89,37 @@ async function film(pages, lives) {
             setTimeout(r, Math.max(0, INTERVAL - (Date.now() - start - t))),
         );
     }
+    return frames;
+}
+
+/** `film` on the stage: holds both seats' clocks, plays, and once neither page is owed a view
+ * (moments.mjs `rest`) shoots both and steps each stage still playing INTERVAL ms on, until
+ * both are at rest. Each frame: the stage ms since the play, and both seats' JPEGs. */
+async function stepped(pages, lives) {
+    const each = (run, ...given) =>
+        Promise.all(pages.map((p) => p.evaluate(run, ...given)));
+    await each(() => window.berylStage.clock.hold());
+    await play(...lives);
+    await Promise.all(
+        pages.map((p) =>
+            p.waitForFunction(`!(${rest})().owed`, undefined, {
+                timeout: LONGEST,
+            }),
+        ),
+    );
+    const frames = [];
+    for (let t = 0; t < LONGEST; t += INTERVAL) {
+        const shots = await Promise.all(
+            pages.map((p) => p.screenshot({ type: "jpeg", quality: 70 })),
+        );
+        frames.push({ t, shots });
+        if ((await each(`(${rest})()`)).every((at) => at.settled)) break;
+        await each((ms) => {
+            const { clock, shown } = window.berylStage;
+            if (shown.busy) clock.advance(ms);
+        }, INTERVAL);
+    }
+    await each(() => window.berylStage.clock.release());
     return frames;
 }
 

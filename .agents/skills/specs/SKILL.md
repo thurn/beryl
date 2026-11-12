@@ -75,6 +75,16 @@ show the mechanics it shares.
    permanents dissolve where they are (UI Conventions, "Settled as Arena"), so
    a `still` or `instant` there can be right.
 
+   With `--stage` every seat opens on the stage (`?stage`), and the audit judges
+   by what each view's script said should happen
+   (`ui/scripts/stage-audit.mjs`): one finding a step, measured at every tick of
+   the stage's own clock, which it holds and steps. There a token that appears
+   and an ability that is gone in no time are `ok`, a step the stage never
+   played is `still`, an arrow's `jump` is read from the stage's model, and the
+   one card shown twice is a `mode` prompt's (UI Conventions, "Choosing how to
+   cast"). `--film`, `--shots` and `--drive` take `--stage` too: a film's frames
+   are then 120 ms of stage time apart, whatever the machine's speed.
+
 4. **Watch it.** `just specs --film <card> [--moment M]` writes one sheet per
    moment, `$BERYL_CACHE/spec-film/<checkout>/<card>/<moment>.png`: the bursts
    of motion as frames, each your seat over theirs, labelled with ms since play.

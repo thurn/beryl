@@ -78,7 +78,9 @@ restore the old behavior.
   Cancel: an adventure, an alternative cost, a land's abilities (by-lzl,
   by-9fb). Brazen Borrower, Bonecrusher Giant and Force of Will open it from
   hand, Wasteland on the battlefield (SN9QFe2kM4Y 42:44.2, 3sEoP_s4DQE 50:44.3,
-  3sEoP_s4DQE 46:50.2, MnhyzykajXw 35:43).
+  3sEoP_s4DQE 46:50.2, MnhyzykajXw 35:43). The cards a `mode` prompt is about
+  are the one thing on screen twice: the duplicate audit allows them while it is
+  open.
 - **A finished ability.** It is removed at once, with no fade (by-c8b).
 - **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
   attackers." Every prompt's title and buttons are one table in the session

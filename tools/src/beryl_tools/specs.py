@@ -17,7 +17,10 @@ runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 
 Cards are named by slug or by name ("Teferi, Time Raveler"); a card with no spec gets the
 specced cards nearest it in rules text. Each card's film and shots replace only that card's.
-`--release` builds `beryl_cli` optimized and serves the UI's production build.
+`--release` builds `beryl_cli` optimized and serves the UI's production build. `--stage` opens
+every seat the capture flags and the driver open on the stage (`?stage`, plan K25), where the
+film and the audit step the stage's own clock and judge by each view's script
+(ui/scripts/stage-audit.mjs), until the cut-over makes the stage the only board.
 """
 
 from __future__ import annotations
@@ -365,11 +368,16 @@ def specs(args: argparse.Namespace) -> int:
                 **browser_env(),
                 "BERYL_SPECS_PORT": str(spec_port),
                 "BERYL_CLI": str(binary),
+                # The capture scripts open each seat on the stage (ui/scripts/moments.mjs).
+                **({"BERYL_STAGE": "1"} if args.stage else {}),
             }
             port = None if capturing else args.port or None
             with served_ui(env, port, preview=args.release) as url:
                 if args.drive:
                     return drive(args, url, env, servers, spec_port, binary)
+                # A capture script gives up on a spec server that has not opened its port
+                # within a few seconds, as a busy machine's has not.
+                warm_specs(spec_port, [])
                 return capture(args, url, env)
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
         with served_ui(env, args.port or None, preview=args.release) as url:
@@ -449,6 +457,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--minor", action="store_true", help="--motion: print minor findings too"
+    )
+    p.add_argument(
+        "--stage",
+        action="store_true",
+        help="--shots, --film, --motion, --drive: each seat on the stage (?stage)",
     )
     p.add_argument(
         "--release",

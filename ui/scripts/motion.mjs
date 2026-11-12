@@ -3,12 +3,12 @@
 // clearly for both players. Usage:
 //   node scripts/motion.mjs <base-url> <out.json> [card-slug...] [--moment NAME] [--minor]
 //     [--viewport WxH]
-// The measuring and the verdicts are audit.mjs's. Prints each finding by moment and seat,
+// The measuring and the verdicts are audit.mjs's, and under the stage (`by specs --stage`)
+// stage-audit.mjs's, which judges by each view's script on the stage's own clock. Prints each finding by moment and seat,
 // writes them all to <out.json>, and exits 1 if any is not ok. Minor findings (taps and
 // untaps, and what moved with no event to show) are written but printed and counted only
 // with --minor. A seat that fails to open or play is tried again once, in a fresh page.
 import { writeFile } from "node:fs/promises";
-import { audit, collect, record } from "./audit.mjs";
 import { launch, workers } from "./capture.mjs";
 import {
     chosen,
@@ -17,11 +17,11 @@ import {
     option,
     play,
     retried,
-    settled,
     viewport,
     warm,
     SEATS,
 } from "./moments.mjs";
+import { watching } from "./stage-audit.mjs";
 
 const args = process.argv.slice(2);
 const minor = option(args, "--minor", true);
@@ -70,15 +70,9 @@ for (const spec of specs) {
                             m.name,
                             seat,
                         );
-                        const since = await page.evaluate(() =>
-                            performance.now(),
-                        );
-                        await page.evaluate(record);
+                        const watched = await watching(page);
                         await play(live);
-                        await settled(page);
-                        result.findings = audit(
-                            await page.evaluate(collect, since),
-                        );
+                        result.findings = await watched();
                     } catch (e) {
                         errors.push(String(e).split("\n")[0]);
                     } finally {

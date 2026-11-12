@@ -255,6 +255,7 @@
       "kind": "settled",
       "name": "Choosing how to cast",
       "rule": "A card or permanent with more than one way to cast or use it opens a modal, \"Choose One\", showing the card once per option, with Cancel: an adventure, an alternative cost, a land's abilities.",
+      "twice": "mode",
       "reports": [
         "by-lzl",
         "by-9fb"

@@ -27,15 +27,10 @@ import { access, mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { compareSheet, launch } from "./capture.mjs";
-import {
-    audit as auditFrames,
-    collect,
-    ordered,
-    record,
-    timeline,
-} from "./audit.mjs";
+import { ordered, timeline } from "./audit.mjs";
 import { summary } from "./fixture-views.mjs";
 import { openSeat, play, settled } from "./moments.mjs";
+import { watching } from "./stage-audit.mjs";
 
 const [port, url, out, width = "1600", height = "900"] = process.argv.slice(2);
 if (!port || !url || !out) {
@@ -573,15 +568,14 @@ const probe = {
     /** The motion audit (audit.mjs) of whatever `action` sets going (an async function: a
      * click, or `spec.play`): records every frame while it runs and the page settles, then
      * judges each event the page showed meanwhile, as `by specs --motion` does. Returns the
-     * findings that are not ok (all of them with `all`). */
+     * findings that are not ok (all of them with `all`). On the stage (`by specs --stage`)
+     * the audit is stage-audit.mjs's: it holds the stage's clock from here until `action`
+     * returns and then steps it, so `action` sets things going and waits for nothing the
+     * stage plays. */
     async audit(action, { all = false, live = true } = {}) {
-        const since = await page.evaluate(() => performance.now());
-        await page.evaluate(record);
+        const watched = await watching(page);
         await action();
-        await settled(page);
-        const findings = auditFrames(await page.evaluate(collect, since), {
-            live,
-        });
+        const findings = await watched({ live });
         return all ? findings : findings.filter((f) => f.verdict !== "ok");
     },
 
@@ -742,18 +736,15 @@ const spec = {
     async audit(action, { all = false } = {}) {
         const live = action !== undefined;
         const open = Object.entries(seats);
-        const since = await Promise.all(
-            open.map(([, s]) => s.page.evaluate(() => performance.now())),
+        const watched = await Promise.all(
+            open.map(([, s]) => watching(s.page)),
         );
-        await Promise.all(open.map(([, s]) => s.page.evaluate(record)));
         await (action ?? (() => spec.play()))();
-        await Promise.all(open.map(([, s]) => settled(s.page)));
+        // Every seat is watched to its end at once, as they play at once.
+        const found = await Promise.all(watched.map((end) => end({ live })));
         const out = {};
-        for (const [i, [name, s]] of open.entries()) {
-            const findings = auditFrames(
-                await s.page.evaluate(collect, since[i]),
-                { live },
-            );
+        for (const [i, [name]] of open.entries()) {
+            const findings = found[i];
             timelines[name] = timeline(findings);
             out[name] = all
                 ? findings

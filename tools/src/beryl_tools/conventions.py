@@ -5,6 +5,9 @@ generated from it. `by conventions` writes the page; the repo lane fails when it
 Each entry has a kind: a numbered Beryl `exception`, a rule `settled` as Arena, one with
 `no-equivalent` in Arena, one `not-seen` in the recordings, or one still `open`. It states the
 rule, the report beads behind it, and what Arena does with the recording moments that show it.
+One that shows a prompt's cards a second time names that prompt's shape as `twice`: the
+duplicate audit lets the cards such a prompt is about show again while it is open
+(`ui/scripts/stage-audit.mjs`), and nothing else.
 
 The closed lists follow: the `verbs` a script's steps apply, each with what it shows, what Arena
 does and the values the stage plays it with, and the `marks` a card can carry, each with what it
@@ -58,6 +61,8 @@ LISTS: dict[str, tuple[str, ...]] = {
     "marks": ("means", "look"),
 }
 NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
+# A prompt shape's name, as the session's views say it (`beryl_session`'s `ShapeName`).
+SHAPE: re.Pattern[str] = re.compile(r"^[a-z]+([A-Z][a-z]+)*$")
 # What the stage plays a verb with, Beryl's own; null where the verb (or a case, its verb) has
 # none.
 VALUES = ("duration", "delay", "stagger", "curve")
@@ -313,6 +318,8 @@ def problems(data: dict[str, Any]) -> list[str]:
         for report in entry.get("reports", []):
             if not REPORT.match(report):
                 found.append(f"{where}: {report!r} is not a bead id")
+        if "twice" in entry and not SHAPE.match(str(entry["twice"])):
+            found.append(f"{where}: twice {entry['twice']!r} is not a prompt shape")
         found += evidence_problems(where, entry)
     if numbers != list(range(1, len(numbers) + 1)):
         found.append(
@@ -331,7 +338,13 @@ def cite(text: str, refs: list[str]) -> str:
 
 def item(entry: dict[str, Any]) -> str:
     """One entry as the text of its list item."""
-    return f"**{entry['name']}.** {cite(entry['rule'], entry.get('reports', []))}{arena(entry)}"
+    said = f"**{entry['name']}.** {cite(entry['rule'], entry.get('reports', []))}{arena(entry)}"
+    if "twice" in entry:
+        said += (
+            f" The cards a `{entry['twice']}` prompt is about are the one thing on screen"
+            " twice: the duplicate audit allows them while it is open."
+        )
+    return said
 
 
 def arena(entry: dict[str, Any]) -> str:

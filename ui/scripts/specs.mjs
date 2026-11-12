@@ -11,7 +11,16 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { launch, openPage, settle, workers } from "./capture.mjs";
-import { chosen, option, play, retried, viewport, warm } from "./moments.mjs";
+import {
+    chosen,
+    option,
+    play,
+    rest,
+    retried,
+    viewport,
+    warm,
+    STAGED,
+} from "./moments.mjs";
 
 /** How long the page must hear nothing before it counts as settled, and the most to wait. */
 const QUIET = 2500;
@@ -42,6 +51,23 @@ try {
 } catch (e) {
     console.error(`specs: ${e.message}`);
     process.exit(2);
+}
+
+/** Waits until the old board's `page` has heard nothing for QUIET ms and queues no view, then
+ * LAST_VIEW more for its animation; or LONGEST. */
+async function quiet(page) {
+    await page.waitForFunction(
+        ([quiet, longest, started]) => {
+            const log = window.berylLive?.log ?? [];
+            const last = log.at(-1)?.at ?? 0;
+            const now = performance.now();
+            const still = now - last > quiet && !window.berylBehind;
+            return still || now - started > longest;
+        },
+        [QUIET, LONGEST, await page.evaluate(() => performance.now())],
+        { timeout: LONGEST + 5000, polling: 250 },
+    );
+    await page.waitForTimeout(LAST_VIEW);
 }
 
 /** The clip `--crop` asks for on `page`, or undefined for the whole page. Throws if its
@@ -91,30 +117,24 @@ for (const spec of specs) {
                     ).href;
                     try {
                         await page.goto(
-                            `${base}?live=${encodeURIComponent(live)}&spec#/game`,
+                            `${base}?live=${encodeURIComponent(live)}&spec${STAGED ? "&stage" : ""}#/game`,
                             { waitUntil: "load" },
                         );
                         await page.waitForSelector("[data-life]", {
                             timeout: LONGEST,
                         });
                         await play(live);
-                        await page.waitForFunction(
-                            ([quiet, longest, started]) => {
-                                const log = window.berylLive?.log ?? [];
-                                const last = log.at(-1)?.at ?? 0;
-                                const now = performance.now();
-                                const still =
-                                    now - last > quiet && !window.berylBehind;
-                                return still || now - started > longest;
-                            },
-                            [
-                                QUIET,
-                                LONGEST,
-                                await page.evaluate(() => performance.now()),
-                            ],
-                            { timeout: LONGEST + 5000, polling: 250 },
-                        );
-                        await page.waitForTimeout(LAST_VIEW);
+                        // On the stage the page is settled when the stage is at rest; the
+                        // old board's is waited out.
+                        if (STAGED) {
+                            await page.waitForFunction(
+                                `(${rest})().settled`,
+                                undefined,
+                                { timeout: LONGEST },
+                            );
+                        } else {
+                            await quiet(page);
+                        }
                         await settle(page);
                         if (
                             select &&

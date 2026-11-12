@@ -2,7 +2,9 @@
 // driver share (`by specs --film | --motion | --drive`, tools/). A moment's seat page,
 // `/scenarios/<card>/<moment>/<yours|theirs>?hold`, is a fresh game that waits for its play, so
 // a script starts watching before anything moves. Motion is not reduced: how things move is
-// what these look at.
+// what these look at. With `BERYL_STAGE` set (`by specs --stage`) a seat opens on the stage
+// (`?stage`, plan K25), and a page with a stage is settled when the stage says so, on no
+// timer; the waits below are the old board's, until the cut-over.
 
 /** How long the page must hear no view and queue none before it counts as settled, how long
  * the last view's animation may take after that, and the most to wait for either. */
@@ -91,6 +93,9 @@ export async function chosen(base, slugs, moment) {
     return specs;
 }
 
+/** Whether seats open on the stage (`by specs --stage`). */
+export const STAGED = Boolean(process.env.BERYL_STAGE);
+
 /** Opens a moment's seat in `page`, held, and waits until its first view shows, retried (a
  * fresh game each try). Returns the page's live game URL on the spec server, which `play`
  * posts to. */
@@ -98,7 +103,7 @@ export async function openSeat(page, base, slug, moment, seat, instance) {
     return retried(async (n) => {
         await page.goto(
             new URL(
-                `${moment.startsWith("playground-") ? "playground" : "scenarios"}/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
+                `${moment.startsWith("playground-") ? "playground" : "scenarios"}/${slug}/${moment}/${seat}?hold${STAGED ? "&stage" : ""}${instance ? `&instance=${instance}` : ""}`,
                 base,
             ).href,
         );
@@ -147,9 +152,60 @@ export function option(args, name, flag = false) {
     return flag ? Boolean(args.splice(at, 1)) : args.splice(at, 2)[1];
 }
 
-/** Waits until `page` has heard no view for `QUIET` ms and queues none, then `LAST_VIEW` more
- * for its animation; or `LONGEST`. */
+/** In a page with a stage: how far the page is from rest. `owed` a view: the last one heard
+ * plays on (it is followed unasked, ipc.ts `playsOn`), or the page has since sent an answer
+ * the session took, or has yet to reply to, and no view has come of it; a click that only
+ * changed its prompt's state brings none. `shown`: the stage shows the last view heard, its
+ * script played out. `busy`: the stage is playing. `settled`: none owed, the last shown and
+ * nothing playing. A replayed recording has no log: there the stage's word is all. */
+export function rest() {
+    const stage = window.berylStage;
+    const { busy } = stage.shown;
+    const log = window.berylLive?.log;
+    if (!log) return { owed: false, shown: true, busy, settled: !busy };
+    const updateOf = (entry) =>
+        entry.kind === "event" && entry.event === "game-update"
+            ? entry.payload
+            : entry.kind === "result" &&
+                entry.command === "current_game" &&
+                entry.ok
+              ? entry.value
+              : undefined;
+    const heard = log.findLastIndex((entry) => updateOf(entry) !== undefined);
+    if (heard < 0) return { owed: true, shown: false, busy, settled: false };
+    const { view } = updateOf(log[heard]);
+    const answers = ["choose", "click", "pass_on", "undo", "cancel"];
+    const owed =
+        view.status.kind === "thinking" ||
+        view.status.kind === "playing" ||
+        log.slice(heard + 1).some((sent, n) => {
+            if (sent.kind !== "invoke" || !answers.includes(sent.command)) {
+                return false;
+            }
+            const reply = log
+                .slice(heard + n + 2)
+                .find((r) => r.kind === "result" && r.command === sent.command);
+            return (
+                !reply ||
+                (reply.ok &&
+                    (sent.command !== "click" ||
+                        reply.value?.kind === "answered"))
+            );
+        });
+    const shown = stage.shown.view === view;
+    return { owed, shown, busy, settled: !owed && shown && !busy };
+}
+
+/** Waits until `page` is settled. With a stage, that is when it is at rest (`rest`), asked
+ * each frame: no fixed wait. Without, until it has heard no view for `QUIET` ms and queues
+ * none, then `LAST_VIEW` more for its animation; or `LONGEST`. */
 export async function settled(page) {
+    if (await page.evaluate(() => window.berylStage !== undefined)) {
+        await page.waitForFunction(`(${rest})().settled`, undefined, {
+            timeout: LONGEST,
+        });
+        return;
+    }
     const started = await page.evaluate(() => performance.now());
     await page.waitForFunction(
         ([quiet, longest, started]) => {

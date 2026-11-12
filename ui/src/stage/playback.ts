@@ -10,6 +10,7 @@ import type { usePlayback } from "../game/playback";
 import { useGameUpdates, useShownToFrame } from "../game/updates";
 import { animationFrames } from "./clock.ts";
 import { desktop } from "./desktop.ts";
+import { skipped, skipping } from "./fault.ts";
 import { Feed } from "./feed.ts";
 import { Prompts } from "./prompt.ts";
 import { ScriptStage } from "./stage.ts";
@@ -44,7 +45,10 @@ export function pageStage() {
     soundSteps(stage);
     const prompts = new Prompts(stage, click);
     prompts.heard = () => play("select");
-    page = { stage, feed: new Feed(prompts), prompts };
+    // A check of the audits plants a fault here (fault.ts): none otherwise.
+    const verb = skipped();
+    const fed = verb === null ? prompts : skipping(prompts, verb);
+    page = { stage, feed: new Feed(fed), prompts };
     if (navigator.webdriver) {
       (window as Hooked).berylStage = stage;
       (window as Hooked).berylPrompts = prompts;

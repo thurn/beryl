@@ -12,7 +12,9 @@
 // asked for at the stage time its step begins or ends, and none otherwise. What each verb's
 // check then asks of its runs is its cases: verb-cases.mjs for cards changing zone,
 // verb-cases-place.mjs for changes on a card where it lies and to a player, and
-// verb-cases-rest.mjs for what moves no card (streaks, announcements, waits). Exits non-zero if
+// verb-cases-rest.mjs for what moves no card (streaks, announcements, waits). The checks of
+// `appear` and `vanish` also hold the stage's audit to the first moment (verb-audit.mjs): it
+// passes the moment and reports a step a faulted stage skips. Exits non-zero if
 // a check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -31,6 +33,7 @@ import { CASES as PLACE } from "./verb-cases-place.mjs";
 import { CASES as PILES } from "./verb-cases-piles.mjs";
 import { CASES as SPANS } from "./verb-cases-spans.mjs";
 import { CASES as REST } from "./verb-cases-rest.mjs";
+import { AUDITED, auditsHold } from "./verb-audit.mjs";
 import { install as installRest } from "./verb-rest.mjs";
 import { install as installSpans } from "./verb-spans.mjs";
 import { install as installMarks } from "./written-marks.mjs";
@@ -737,6 +740,22 @@ for (const verb of verbs) {
                         } catch (e) {
                             e.message = `at ${at}: ${e.message}`;
                             throw e;
+                        }
+                        // The audits are held to the moment too, with the verbs that come
+                        // to be and go (verb-audit.mjs), at the layout's first window.
+                        if (i === 0 && verb in AUDITED) {
+                            await hangGuard(
+                                auditsHold({
+                                    context,
+                                    base,
+                                    query,
+                                    fixture: fixture.whole,
+                                    verb,
+                                    watch,
+                                }),
+                                CHECK_SECONDS,
+                                `${check}: the audit`,
+                            );
                         }
                     }
                     console.log(`ok: ${check}`);
