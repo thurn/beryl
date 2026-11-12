@@ -12,7 +12,14 @@ import type { Act } from "./table.ts";
 import type { Effect, Layer, On } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
-import { CLOSED, draws, drawsToRead, meets, STRIKE } from "./tracks.ts";
+import {
+  CLOSED,
+  draws,
+  drawsToRead,
+  meets,
+  moverOf,
+  STRIKE,
+} from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
  * verb in which nothing travels, which changes evenly. */
@@ -221,6 +228,18 @@ export function timingOf(
     (found === undefined ? undefined : cases.get(act.verb)?.get(found)) ??
     verbs.get(act.verb) ??
     SNAP;
+  // A permanent that taps and then leaves in one beat (a Treasure, tapped and sacrificed for
+  // mana: its payment is one event of the rules) has done turning as it begins to go, and
+  // leaves from where it lay turned (UI Conventions, "streak": "Mana leaves as its source
+  // begins to turn").
+  if (act.verb === "vanish" || act.verb === "fly") {
+    const mover = moverOf(act);
+    const at = beside?.indexOf(act) ?? -1;
+    const turned = beside
+      ?.slice(0, Math.max(at, 0))
+      .some((other) => other.verb === "tap" && moverOf(other) === mover);
+    if (mover !== undefined && turned) return { ...own, after: [mover] };
+  }
   // An arrow or a line is no turn of its beat: it goes with the step that calls for it and
   // holds up none after it. Arena cuts its own (data/arena-motion.json, point: "It is cut,
   // not faded, when it ends"); Beryl's arrow or line of combat drains into what it pointed at
