@@ -129,7 +129,9 @@ export function Ways({
           <span
             className="stage-way-face"
             // The card shown again: what the audits know a way's frame by.
-            data-card={shows(candidate) ? (object.name ?? undefined) : undefined}
+            data-card={
+              shows(candidate) ? (object.name ?? undefined) : undefined
+            }
             style={{ width, height: width / CARD_ASPECT }}
             aria-hidden
           >
