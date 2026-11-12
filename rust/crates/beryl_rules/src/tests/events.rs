@@ -11,10 +11,12 @@ use crate::card::{
     Prompt, Purpose, Replacement, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec,
     Trigger, Types,
 };
+use crate::damage;
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Evaluate, Filter, Whose};
 use crate::fixed::Fixed;
+use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::query::Copiable;
@@ -561,7 +563,7 @@ pub(super) fn with_ctx(
     };
     let mut ctx = EffectCtx::new(s, t, &mut x.events, &trigger, &Ability::NONE);
     body(&mut ctx);
-    ctx.finish().unwrap();
+    ctx.finish(Ok(())).unwrap();
 }
 
 /// Advances to the next decision.
@@ -755,7 +757,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
     let found = |s: &mut State, x: &mut Scratch| {
         let ctx = EffectCtx::new(s, &t, &mut x.events, &ability, &Ability::NONE);
         let found = ctx.exiled_with_source();
-        ctx.finish().unwrap();
+        ctx.finish(Ok(())).unwrap();
         found
     };
     with_ctx(&t, &mut s, &mut x, bear, |ctx| ctx.exile_linked(land_ref));
@@ -866,27 +868,11 @@ fn combat_damage_to_a_player_triggers_and_noncombat_damage_does_not() {
     let raider = put(&t, &mut s, &mut x, p, "Test Raider");
     let source = s.object_ref(raider);
     let q = p.opponent();
-    event::deal_damage(
-        &mut s,
-        &t,
-        &mut x.events,
-        source,
-        Recipient::Player(q),
-        2,
-        false,
-    )
-    .unwrap();
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    damage::deal(&mut game, source, Recipient::Player(q), 2, false).unwrap();
     assert!(s.triggers().is_empty());
-    event::deal_damage(
-        &mut s,
-        &t,
-        &mut x.events,
-        source,
-        Recipient::Player(q),
-        2,
-        true,
-    )
-    .unwrap();
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    damage::deal(&mut game, source, Recipient::Player(q), 2, true).unwrap();
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].info.player, q);
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand)).count();

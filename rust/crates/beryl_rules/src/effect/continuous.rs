@@ -16,14 +16,17 @@ impl<L: Layout> EffectCtx<'_, L> {
         let affected = on.into();
         if affected
             .as_object()
-            .is_some_and(|r| !self.state.is_current(r))
+            .is_some_and(|r| !self.game.state.is_current(r))
         {
             return;
         }
-        let source = self.entry.card;
-        let pushed = self.state.start_effect(source, affected, payload, duration);
+        let source = self.resolution.entry.card;
+        let pushed = self
+            .game
+            .state
+            .start_effect(source, affected, payload, duration);
         self.check(pushed);
-        let refreshed = layers::refresh(self.state, self.table, self.sink);
+        let refreshed = layers::refresh(self.game.state, self.game.table, self.game.sink);
         self.check(refreshed);
     }
 
@@ -39,10 +42,10 @@ impl<L: Layout> EffectCtx<'_, L> {
         change: LayerChange,
         duration: Duration,
     ) {
-        let source = self.entry.card;
-        let pushed = (self.state).start_effect_on_set(source, permanents, change, duration);
+        let source = self.resolution.entry.card;
+        let pushed = (self.game.state).start_effect_on_set(source, permanents, change, duration);
         self.check(pushed);
-        let refreshed = layers::refresh(self.state, self.table, self.sink);
+        let refreshed = layers::refresh(self.game.state, self.game.table, self.game.sink);
         self.check(refreshed);
     }
 
@@ -58,17 +61,17 @@ impl<L: Layout> EffectCtx<'_, L> {
         if !self.on_battlefield(object) {
             return;
         }
-        let player = self.entry.controller;
+        let player = self.resolution.entry.controller;
         self.add_effect(
             object,
             Payload::Layer(LayerChange::Control(player)),
             duration,
         );
-        self.state.set_summoning_sick(object.slot, true);
+        self.game.state.set_summoning_sick(object.slot, true);
         let r = event::settle(
-            self.state,
-            self.table,
-            self.sink,
+            self.game.state,
+            self.game.table,
+            self.game.sink,
             event::Event::GainControl { object, player },
         );
         self.check(r);

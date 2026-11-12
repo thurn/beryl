@@ -25,27 +25,27 @@ use crate::trigger::entered_with;
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and
 /// whether it did anything.
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct Outcome<L: Layout> {
-    pub(super) objects: Bitboard<L::Slot>,
-    pub(super) number: u8,
-    pub(super) did: bool,
+pub(crate) struct Outcome<L: Layout> {
+    pub(crate) objects: Bitboard<L::Slot>,
+    pub(crate) number: u8,
+    pub(crate) did: bool,
 }
 
 impl<L: Layout> Outcome<L> {
     /// The outcome of an instruction that did nothing.
-    pub(super) const NOTHING: Outcome<L> = Outcome {
+    pub(crate) const NOTHING: Outcome<L> = Outcome {
         objects: Bitboard::EMPTY,
         number: 0,
         did: false,
     };
 
     /// The outcome of an instruction that acted on `objects`.
-    pub(super) fn acted_on(objects: Bitboard<L::Slot>) -> Outcome<L> {
+    pub(crate) fn acted_on(objects: Bitboard<L::Slot>) -> Outcome<L> {
         Outcome::of(objects, objects.count())
     }
 
     /// The outcome of an instruction that did `number` of something to `objects`.
-    pub(super) fn of(objects: Bitboard<L::Slot>, number: u32) -> Outcome<L> {
+    pub(crate) fn of(objects: Bitboard<L::Slot>, number: u32) -> Outcome<L> {
         Outcome {
             objects,
             number: u8::try_from(number).unwrap_or(u8::MAX),
@@ -55,7 +55,7 @@ impl<L: Layout> Outcome<L> {
 
     /// This outcome and `other`'s together, as those of each player an instruction was done
     /// for.
-    pub(super) fn with(self, other: Outcome<L>) -> Outcome<L> {
+    pub(crate) fn with(self, other: Outcome<L>) -> Outcome<L> {
         Outcome {
             objects: self.objects | other.objects,
             number: self.number.saturating_add(other.number),
@@ -69,47 +69,47 @@ impl<L: Layout> Outcome<L> {
 /// that zone, or if the effect has moved it from a public zone to a hidden zone, the effect
 /// uses the object's last known information."
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct Known {
-    pub(super) controller: Seat,
-    pub(super) power: i8,
-    pub(super) toughness: i8,
-    pub(super) mana_value: u8,
-    pub(super) counters: CountersHeld,
+pub(crate) struct Known {
+    pub(crate) controller: Seat,
+    pub(crate) power: i8,
+    pub(crate) toughness: i8,
+    pub(crate) mana_value: u8,
+    pub(crate) counters: CountersHeld,
 }
 
 /// What a resolution keeps between its instructions.
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct Registers<L: Layout> {
+pub(crate) struct Registers<L: Layout> {
     /// The targets that were legal as the resolution began, by their places in the entry's
     /// list
     /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
     /// ability specifies targets, it checks whether the targets are still legal" as it
     /// begins to resolve, and "Illegal targets, if any, won't be affected by parts of a
     /// resolving spell's effect for which they're illegal."
-    pub(super) legal: TargetPlaces,
+    pub(crate) legal: TargetPlaces,
     /// The targets an instruction set out to move, and what was known of each, by its
     /// place, as it did. One that is no longer where it was has moved; one the instruction
     /// could not move is read where it is.
-    pub(super) noted: TargetPlaces,
-    pub(super) known: [Known; TARGETS],
-    pub(super) outcome: Outcome<L>,
+    pub(crate) noted: TargetPlaces,
+    pub(crate) known: [Known; TARGETS],
+    pub(crate) outcome: Outcome<L>,
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
-    pub(super) that_player: Option<Seat>,
+    pub(crate) that_player: Option<Seat>,
 }
 
 /// What an expression is read against.
-pub(super) struct Scene<'s, L: Layout> {
-    pub(super) s: &'s State<L>,
-    pub(super) t: &'s GameTable,
+pub(crate) struct Scene<'s, L: Layout> {
+    pub(crate) s: &'s State<L>,
+    pub(crate) t: &'s GameTable,
     /// The ability, as the trigger it would be: its source, card, controller and what it
     /// triggered on. A spell's is its card.
-    pub(super) subject: &'s PendingTrigger<L>,
+    pub(crate) subject: &'s PendingTrigger<L>,
     /// A spell's casting options paid; `None` for an ability.
-    pub(super) costs: Option<Castings>,
+    pub(crate) costs: Option<Castings>,
     /// The announced value of X.
-    pub(super) x: u8,
-    pub(super) targets: &'s [Target<L>],
-    pub(super) registers: &'s Registers<L>,
+    pub(crate) x: u8,
+    pub(crate) targets: &'s [Target<L>],
+    pub(crate) registers: &'s Registers<L>,
 }
 
 impl<L: Layout> Scene<'_, L> {
@@ -147,7 +147,7 @@ impl<L: Layout> Scene<'_, L> {
     /// The objects `objects` names that are where they were: one that has changed zones is
     /// a new object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which
     /// only [`Objects::Those`] follows.
-    pub(super) fn objects(&self, objects: Objects) -> Bitboard<L::Slot> {
+    pub(crate) fn objects(&self, objects: Objects) -> Bitboard<L::Slot> {
         let s = self.s;
         match objects {
             Objects::This => self
@@ -174,7 +174,7 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The players `players` names.
-    pub(super) fn players(&self, players: Players) -> PlayerSet {
+    pub(crate) fn players(&self, players: Players) -> PlayerSet {
         match players {
             // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
             // controller".
@@ -231,7 +231,7 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// What is known of the object in `slot` as it is now, for an effect about to move it.
-    pub(super) fn known(&self, slot: L::Slot) -> Known {
+    pub(crate) fn known(&self, slot: L::Slot) -> Known {
         Known {
             controller: self.s.controller(slot),
             power: self.s.power(self.t, slot),
@@ -288,12 +288,12 @@ impl<L: Layout> Scene<'_, L> {
     /// ([CR 107.1b](https://yawgatog.com/resources/magic-rules/#R1071b)): "If a calculation
     /// that would determine the result of an effect yields a negative number, zero is used
     /// instead".
-    pub(super) fn amount(&self, amount: Amount) -> u8 {
+    pub(crate) fn amount(&self, amount: Amount) -> u8 {
         u8::try_from(self.value(amount).max(0)).unwrap_or(u8::MAX)
     }
 
     /// Whether `condition` holds.
-    pub(super) fn holds(&self, condition: &Condition) -> bool {
+    pub(crate) fn holds(&self, condition: &Condition) -> bool {
         match *condition {
             Condition::Did => self.registers.outcome.did,
             Condition::Paid(kind) => self.paid(kind),

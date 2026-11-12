@@ -249,8 +249,8 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
             ..PendingTrigger::default()
         };
         let mut ctx = EffectCtx::new(&mut s, &t, &mut sink, &trigger, ability);
-        ctx.mana = color;
-        crate::interpret::resolve(&mut ctx, crate::state::TargetPlaces::NONE).unwrap();
+        ctx.resolution.mana = color;
+        crate::interpret::resolve(&mut ctx).unwrap();
     }
     assert_eq!(s.player(Seat::P0).mana().amounts(), [1, 1, 0, 0, 0, 0]);
 }

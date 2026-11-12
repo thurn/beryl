@@ -8,14 +8,18 @@
 //! most draws) arrive with the cards that create them.
 
 pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Work, kind};
+
+pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, CastingKinds, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
-use crate::ids::{Seat, SlotId};
+use crate::game::Game;
+use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
+use crate::life;
 use crate::query::Copiable;
 use crate::state::{
     CounterKind, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Tracker, Zone,
@@ -319,7 +323,7 @@ fn pay_life_to_enter<L: Layout>(
     let player = entry.controller.unwrap_or(o.owner());
     for ability in face.abilities {
         if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement {
-            lose_life(s, t, sink, player, n)?;
+            life::lose(&mut Game::new(s, t, sink), player, n)?;
         }
     }
     Ok(())
@@ -335,32 +339,6 @@ pub(crate) fn life_to_enter<L: Layout>(t: &GameTable, entering: Copiable<L>) -> 
             Replacement::EntersTappedUnlessPayLife(n) => Some(n),
             _ => None,
         })
-}
-
-/// A player loses life ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "If an
-/// effect causes a player to gain life or lose life, that player's life total is adjusted
-/// accordingly."
-pub(crate) fn lose_life<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    player: Seat,
-    amount: u8,
-) -> Result<(), Full> {
-    let e = s.lose_life(player, amount);
-    settle(s, t, sink, e)
-}
-
-/// A player gains life (CR 119.3).
-pub(crate) fn gain_life<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    player: Seat,
-    amount: u8,
-) -> Result<(), Full> {
-    let e = s.gain_life(player, amount);
-    settle(s, t, sink, e)
 }
 
 /// A player draws cards, one at a time
@@ -441,80 +419,6 @@ fn wins_instead_of_drawing<L: Layout>(
         })
 }
 
-/// Deals damage ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)).
-///
-/// [CR 120.3a](https://yawgatog.com/resources/magic-rules/#R1203a): "Damage dealt to a player
-/// by a source without infect causes that player to lose that much life."
-///
-/// [CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c): "Damage dealt to a
-/// planeswalker causes that many loyalty counters to be removed from that planeswalker."
-///
-/// [CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e): "Damage dealt to a
-/// creature by a source with neither wither nor infect causes that much damage to be marked on
-/// that creature."
-pub(crate) fn deal_damage<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    source: ObjectRef<L>,
-    to: Recipient<L>,
-    amount: u8,
-    combat: bool,
-) -> Result<(), Full> {
-    if amount == 0 {
-        return Ok(());
-    }
-    let e = match to {
-        Recipient::Player(p) => s.damage_player(source, p, amount, combat),
-        Recipient::Permanent(r) => {
-            if !s.is_current(r) || s.object(r.slot).zone() != Zone::Battlefield {
-                return Ok(());
-            }
-            s.mark_damage(source, r, amount, combat)
-        }
-    };
-    settle(s, t, sink, e)
-}
-
-/// Puts counters on a permanent
-/// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)).
-pub(crate) fn add_counters<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    object: ObjectRef<L>,
-    kind: CounterKind,
-    amount: u8,
-) -> Result<(), Full> {
-    if !s.is_current(object) || amount == 0 {
-        return Ok(());
-    }
-    let layered = layers::counters_matter(s, t, object.slot, kind);
-    let e = s.add_counters(object, kind, amount, layered)?;
-    settle(s, t, sink, e)
-}
-
-/// Removes up to `amount` counters of a kind from a permanent.
-pub(crate) fn remove_counters<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    object: ObjectRef<L>,
-    kind: CounterKind,
-    amount: u8,
-) -> Result<(), Full> {
-    if !s.is_current(object) {
-        return Ok(());
-    }
-    let amount = amount.min(s.counters_of(object.slot, kind));
-    if amount == 0 {
-        return Ok(());
-    }
-    let layered = layers::counters_matter(s, t, object.slot, kind);
-    let e = s.remove_counters(object, kind, amount, layered);
-    settle(s, t, sink, e)
-}
-
 /// Taps or untaps a permanent.
 ///
 /// [CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a): "To tap a permanent,
@@ -535,63 +439,4 @@ pub(crate) fn set_tapped<L: Layout>(
     }
     let e = s.set_tapped(object, tapped);
     settle(s, t, sink, e)
-}
-
-/// How a token is created.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TokenEntry {
-    pub tapped: bool,
-    /// Created attacking (CR 508.4): never declared, so no attack triggers.
-    pub attacking: bool,
-}
-
-/// Creates `count` tokens with the copiable values `what` under `controller`'s control: a
-/// predefined token's, or those of what the tokens copy.
-///
-/// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "Some effects put tokens
-/// onto the battlefield." [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The
-/// player who creates a token is its owner."
-/// [CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072): "the copy acquires the
-/// copiable values of the original object's characteristics".
-///
-/// The tokens take free slots from the shared pool (architecture §4.2) and enter as one
-/// event; then one `TokensCreated` event follows for "whenever you create one or more".
-pub(crate) fn create_tokens<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    controller: Seat,
-    what: Copiable<L>,
-    count: u8,
-    how: TokenEntry,
-) -> Result<Bitboard<L::Slot>, Full> {
-    let mut tokens = Bitboard::EMPTY;
-    let mut free = L::Slot::pool().filter(|&slot| s.object(slot).zone() == Zone::Nowhere);
-    for _ in 0..count {
-        let slot = free.next().ok_or(Full)?;
-        tokens.insert(slot);
-    }
-    // A copy of a double-faced permanent enters with the same face up (CR 707.8a).
-    let mut face = FaceIx::FRONT;
-    // Each token is made in its own slot, with no event; they enter together below, in the
-    // batch's order.
-    for slot in s.in_candidate_order(tokens) {
-        face = s.make_token(t, slot, controller, what);
-    }
-    move_batch(
-        s,
-        t,
-        sink,
-        tokens,
-        Zone::Battlefield,
-        Reason::Created,
-        Entry {
-            tapped: how.tapped,
-            attacking: how.attacking,
-            face,
-            ..Entry::default()
-        },
-    )?;
-    settle(s, t, sink, Event::TokensCreated { controller, tokens })?;
-    Ok(tokens)
 }

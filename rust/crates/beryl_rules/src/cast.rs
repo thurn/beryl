@@ -24,17 +24,17 @@ use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
+use crate::game::Game;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table, index};
 use crate::mana::{self, Funds};
-use crate::permission;
 use crate::profile::Payment;
-use crate::rule_change;
 use crate::state::{
     Affects, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry, State,
     Target, Tracker, TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
+use crate::{counters, permission, rule_change};
 
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
 /// ability, as the casting options paid for it make it (an overloaded spell's). A permanent
@@ -1209,11 +1209,11 @@ fn begin_payment<L: Layout>(
         if let Some(n) = a.cost.loyalty {
             // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put on or
             // remove from that permanent a certain number of loyalty counters".
-            let amount = n.unsigned_abs();
+            let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
             if n > 0 {
-                event::add_counters(s, t, sink, source, CounterKind::Loyalty, amount)?;
+                counters::add(game, source, CounterKind::Loyalty, amount)?;
             } else if n < 0 {
-                event::remove_counters(s, t, sink, source, CounterKind::Loyalty, amount)?;
+                counters::remove(game, source, CounterKind::Loyalty, amount)?;
             }
         }
         if a.cost.sacrifice_self {
@@ -1223,7 +1223,7 @@ fn begin_payment<L: Layout>(
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Discard)?;
         }
         if let Some(kind) = a.cost.remove {
-            event::remove_counters(s, t, sink, source, kind, 1)?;
+            counters::remove(&mut Game::new(s, t, sink), source, kind, 1)?;
         }
         if a.cost.waterbend > 0 {
             c.left = a.cost.waterbend.min(total_cost(s, t, &entry, &c).generic);

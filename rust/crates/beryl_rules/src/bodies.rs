@@ -2,9 +2,13 @@
 //! intervening "if" clause, which a card's static data holds as one concrete function per
 //! layout. `crate::layout` re-exports them beside the kernel's layouts.
 
-use crate::card::Flow;
+use core::marker::PhantomData;
+
+use crate::card::{Behavior, Custom, Flow};
 use crate::effect::EffectCtx;
+use crate::game::Game;
 use crate::layout::{Large, Layout, PerLayout, Small};
+use crate::resolution::Resolution;
 use crate::state::{PendingTrigger, State};
 use crate::table::GameTable;
 
@@ -33,9 +37,41 @@ pub struct Conditions {
     pub large: Condition<Large>,
 }
 
+/// An ability's Rust body, for what effect data cannot say yet (the crate's contract, "Custom
+/// bodies"). A card file implements it on a unit type of its own, and its ability's `body` is
+/// [`custom_body`] of that type: one definition, which each layout runs its own instance of.
+pub trait CustomBody: 'static {
+    /// Resolves the ability: `resolution` is of it, in `game`.
+    fn resolve<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>) -> Flow;
+}
+
+/// The [`Behavior`] of the body `B`: its instance for each layout, which the vocabulary
+/// carries without reading ([`Custom`]).
+pub const fn custom_body<B: CustomBody>() -> Behavior {
+    Behavior::Custom(Custom::new(&Instances::<B>::BODIES))
+}
+
+/// A static's worth of `B`'s instances: a `const fn` cannot name a `static` of its own for
+/// each `B`, and an associated constant is one.
+struct Instances<B>(PhantomData<B>);
+
+impl<B: CustomBody> Instances<B> {
+    const BODIES: Bodies = Bodies {
+        small: run::<B, Small>,
+        large: run::<B, Large>,
+    };
+}
+
+/// `B` as the body the shim's callers run, until a [`Body`] takes the game and the resolution
+/// itself.
+fn run<B: CustomBody, L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+    B::resolve(&mut ctx.game, &mut ctx.resolution)
+}
+
 /// The [`Behavior`](beryl_card::Behavior) of a Rust function generic over the layout: its
 /// [`Bodies`], which the vocabulary carries without reading
-/// ([`Custom`](beryl_card::Custom)).
+/// ([`Custom`](beryl_card::Custom)). The bodies written before the rules library use it;
+/// a new one is a [`CustomBody`].
 #[macro_export]
 macro_rules! bodies {
     ($body:expr) => {

@@ -1,10 +1,11 @@
 //! The interpreter: what an ability's [`Behavior`] does to a game (plan K1).
 //!
 //! A [`Behavior::Custom`] is a Rust body, called as it always was. A [`Behavior::Data`] is
-//! effect data: [`run`] carries out its instructions through the same [`EffectCtx`] methods
-//! a body calls, so an ability written as data makes the events its body made, and [`scene`]
-//! reads its expressions. The data is the same for every layout; only the interpreter is
-//! compiled for each, so an ability written as data needs no `bodies!`.
+//! effect data: [`run`] carries out its instructions with the library's functions, and where
+//! one is not written yet through the [`EffectCtx`] method a body calls, so an ability written
+//! as data makes the events its body made, and [`scene`] reads its expressions. The data is
+//! the same for every layout; only the interpreter is compiled for each, so an ability
+//! written as data needs no `bodies!`.
 
 mod run;
 mod scene;
@@ -18,25 +19,25 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Bodies, Layout};
-use crate::state::{ObjectRef, PendingTrigger, State, TargetPlaces};
+use crate::state::{ObjectRef, PendingTrigger, State};
 use crate::table::GameTable;
 
-use run::Run;
+pub(crate) use run::Run;
+pub(crate) use scene::Outcome;
 use scene::{Registers, Scene};
 
 /// Resolves the ability `ctx` was made for
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of the
-/// spell or ability follows its instructions in the order written." `legal` is its targets
-/// that were legal as its resolution began ([`crate::resolve::legal_targets`]).
+/// spell or ability follows its instructions in the order written."
 #[inline]
-pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: TargetPlaces) -> Flow {
-    let ability: &'static Ability = ctx.ability;
+pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+    let ability: &'static Ability = ctx.resolution.ability;
     match ability.body {
         Behavior::Custom(custom) => {
             let bodies = custom.get::<Bodies>().expect("a body made by bodies!");
             bodies.of::<L>()(ctx)
         }
-        Behavior::Data(effect) => data(ctx, effect, legal),
+        Behavior::Data(effect) => data(ctx, effect),
     }
 }
 
@@ -44,16 +45,12 @@ pub(crate) fn resolve<L: Layout>(ctx: &mut EffectCtx<'_, L>, legal: TargetPlaces
 /// a permanent spell, which has no ability to run, or a mana ability, which
 /// [`mana_ability`] does without coming here.
 #[inline(never)]
-fn data<L: Layout>(
-    ctx: &mut EffectCtx<'_, L>,
-    effect: &'static Effect,
-    legal: TargetPlaces,
-) -> Flow {
+fn data<L: Layout>(ctx: &mut EffectCtx<'_, L>, effect: &'static Effect) -> Flow {
     debug_assert!(
-        !ctx.ability.may_pause || effect.asks(),
+        !ctx.resolution.ability.may_pause || effect.asks(),
         "an ability declares may_pause, but its effect never asks"
     );
-    Run::new(ctx, legal).carry_out(effect)
+    Run::new(ctx).carry_out(effect)
 }
 
 /// Carries out a mana ability whose costs are paid, making mana of the kind `color` its
@@ -92,10 +89,10 @@ pub(crate) fn mana_ability<L: Layout>(
         return layers::refresh(s, t, sink);
     }
     let mut ctx = EffectCtx::new(s, t, sink, &activation(), ability);
-    ctx.mana = color;
+    ctx.resolution.mana = color;
     // A mana ability never asks a question, and has no targets (CR 605.1a).
-    let _ = resolve(&mut ctx, TargetPlaces::NONE);
-    ctx.finish()
+    let flow = resolve(&mut ctx);
+    ctx.finish(flow).map(|_| ())
 }
 
 /// Adds mana to a player's mana pool

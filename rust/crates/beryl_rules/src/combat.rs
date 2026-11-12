@@ -7,10 +7,12 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
+use crate::damage;
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Recipient, Sink};
 use crate::fixed::Full;
+use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::state::{BATTLEFIELD, ObjectFlags, ObjectRef, Pending, State, TurnStep};
@@ -603,7 +605,7 @@ fn deal<L: Layout>(
     }
     for a in assigned.iter() {
         if let Some(to) = a.to {
-            event::deal_damage(s, t, sink, a.source, to, a.amount, true)?;
+            damage::deal(&mut Game::new(s, t, sink), a.source, to, a.amount, true)?;
         }
     }
     Ok(())

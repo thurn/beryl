@@ -39,11 +39,12 @@ impl<L: Layout> EffectCtx<'_, L> {
 
     /// Starts a permission to cast the card `object`, if it is still that object.
     fn permit(&mut self, object: ObjectRef<L>, terms: Permission, duration: Duration) {
-        if !self.state.is_current(object) {
+        if !self.game.state.is_current(object) {
             return;
         }
-        let source = self.entry.card;
+        let source = self.resolution.entry.card;
         let r = self
+            .game
             .state
             .start_effect(source, object.into(), Payload::Cast(terms), duration);
         self.checked(r);

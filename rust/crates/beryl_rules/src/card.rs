@@ -4,6 +4,8 @@
 //! Every definition type is `'static` table data shared by all threads. `State` never holds
 //! one; it stores game-table indices (§6.4) and ability indices instead.
 
+use crate::fixed::Full;
+
 pub use beryl_card::{
     Ability, AbilityIx, AbilityKind, Affected, Behavior, CardDef, CastingIx, CastingKind,
     CastingKinds, CastingOption, Castings, Colors, Condition, Cost, Custom, Delayed, FACE_DOWN,
@@ -13,11 +15,25 @@ pub use beryl_card::{
     TargetKind, TargetSpec, Timing, Trigger, Types, counter_kinds, mana,
 };
 
-/// The result of a body. `Err(Pause)` means the body asked a question its answer source could
-/// not answer yet (§7.3). The engine keeps the question with the choice record rather than in
-/// the `Err`, so `Flow` stays one byte wide.
-pub type Flow = Result<(), Pause>;
+/// The result of a body, and of any step of a resolution that can stop it early. The engine
+/// keeps a question with the choice record rather than in the `Err`, so `Flow` stays one byte
+/// wide.
+pub type Flow = Result<(), Stop>;
 
-/// A body stopped to wait for an answer.
+/// Why a resolution stopped before its end (the crate's contract, "How a resolution stops").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Pause;
+pub enum Stop {
+    /// It asked a question its answer source could not answer yet (§7.3): it is run again
+    /// from the top once the answer is on the record.
+    Pause,
+    /// A fixed capacity ran out (§12.3): the game stalls, and goes on in the layout whose
+    /// lists grow.
+    Full,
+}
+
+impl From<Full> for Stop {
+    #[inline]
+    fn from(Full: Full) -> Stop {
+        Stop::Full
+    }
+}

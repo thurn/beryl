@@ -1,5 +1,7 @@
-//! Carrying out effect data's instructions, each through the [`EffectCtx`] method a Rust
-//! body would call for it, so an ability written as data makes the events its body made.
+//! Carrying out effect data's instructions. [`Run::carry_out`] is the table of them: an
+//! entry whose library function is written has its arm in that function's module, named
+//! `instruction` (the crate's contract, "Modules"), and the others are still done here through
+//! the [`EffectCtx`] method a Rust body would call, until their modules are written.
 //!
 //! An instruction acts on every object it names at once where the engine has a primitive
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
@@ -9,38 +11,40 @@ use beryl_card::{
     CopyException, Duration, Effect, LibraryPosition, Objects, Players, Prompt, Purpose,
 };
 
+use crate::actions::{destroy, scry};
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, CardDef, FaceAbility, Flow, ManaCost, ManaSet, Modification};
+use crate::card::{AbilityIx, FaceAbility, Flow, ManaCost, ManaSet, Modification, Stop};
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Reason, TokenEntry};
+use crate::fixed::Full;
+use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
+use crate::resolution::Resolution;
 use crate::state::{
-    self, CounterKind, LayerChange, ObjectRef, PendingTrigger, StackEntry, TargetPlaces, Zone,
-    ZoneKey, placed,
+    self, LayerChange, ObjectRef, PendingTrigger, StackEntry, State, Zone, ZoneKey, placed,
 };
 use crate::zone::Place;
+use crate::{counters, life, tokens};
 
 /// The yes or no of an [`Effect::May`], about nothing but the effect.
 const MAY: Prompt = Prompt::new(Purpose::May);
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
-pub(super) struct Run<'c, 'a, L: Layout> {
+pub(crate) struct Run<'c, 'a, L: Layout> {
     ctx: &'c mut EffectCtx<'a, L>,
     subject: PendingTrigger<L>,
     registers: Registers<L>,
 }
 
 impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
-    /// Begins resolving the ability `ctx` was made for. Which of its targets are `legal` was
-    /// settled as its resolution began, once for the whole effect
-    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
-    /// ability specifies targets, it checks whether the targets are still legal."
-    pub(super) fn new(ctx: &'c mut EffectCtx<'a, L>, legal: TargetPlaces) -> Self {
-        let entry = &ctx.entry;
+    /// Begins resolving the ability `ctx` was made for.
+    pub(crate) fn new(ctx: &'c mut EffectCtx<'a, L>) -> Self {
+        let legal = ctx.resolution.legal;
+        let entry = &ctx.resolution.entry;
         let subject = PendingTrigger {
             source: entry.object,
             card: entry.card,
@@ -62,11 +66,27 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         }
     }
 
-    fn scene(&self) -> Scene<'_, L> {
-        let entry = &self.ctx.entry;
+    /// The game the ability resolves in, to change.
+    pub(crate) fn game(&mut self) -> &mut Game<'a, L> {
+        &mut self.ctx.game
+    }
+
+    /// The game and the resolution, for a library function that asks.
+    pub(crate) fn resolving(&mut self) -> (&mut Game<'a, L>, &mut Resolution<'a, L>) {
+        (&mut self.ctx.game, &mut self.ctx.resolution)
+    }
+
+    /// The state as it is now, to read.
+    pub(crate) fn state(&self) -> &State<L> {
+        self.ctx.game.state
+    }
+
+    /// What the ability's expressions are read against, as the game is now.
+    pub(crate) fn scene(&self) -> Scene<'_, L> {
+        let entry = &self.ctx.resolution.entry;
         Scene {
-            s: self.ctx.state,
-            t: self.ctx.table,
+            s: self.ctx.game.state,
+            t: self.ctx.game.table,
             subject: &self.subject,
             costs: entry.is_spell().then_some(entry.costs),
             x: entry.x,
@@ -78,7 +98,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// Carries out one instruction, or each of several in order
     /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
     /// the spell or ability follows its instructions in the order written."
-    pub(super) fn carry_out(&mut self, effect: &'static Effect) -> Flow {
+    pub(crate) fn carry_out(&mut self, effect: &'static Effect) -> Flow {
         self.registers.outcome = match *effect {
             Effect::Sequence(effects) => {
                 for effect in effects {
@@ -122,9 +142,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 return self.for_each_player(players, effect);
             }
             Effect::Counter(objects) => self.counter(objects),
-            // CR 701.8a: "To destroy a permanent, move it from the battlefield to its owner's
-            // graveyard."
-            Effect::Destroy(objects) => self.remove(objects, EffectCtx::destroy_all),
+            Effect::Destroy(objects) => destroy::instruction(self, objects)?,
             Effect::Exile(objects) => self.exile(objects),
             Effect::ExileUntilThisLeaves(objects) => {
                 let permanents = self.permanents(objects);
@@ -153,34 +171,30 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 self.discard(player, self.scene().amount(count))?
             }
             Effect::Mill { player, count } => self.mill(player, self.scene().amount(count)),
-            Effect::Scry { player, count } => self.scry(player, self.scene().amount(count))?,
-            Effect::GainLife { player, amount } => {
-                self.change_life(player, self.scene().amount(amount), EffectCtx::gain_life)
-            }
-            Effect::LoseLife { player, amount } => {
-                self.change_life(player, self.scene().amount(amount), EffectCtx::lose_life)
-            }
+            Effect::Scry { player, count } => scry::instruction(self, player, count)?,
+            Effect::GainLife { player, amount } => life::gain_instruction(self, player, amount)?,
+            Effect::LoseLife { player, amount } => life::lose_instruction(self, player, amount)?,
             Effect::CreateTokens {
                 player,
                 token,
                 count,
-            } => self.create_tokens(player, token, self.scene().amount(count)),
+            } => tokens::create_instruction(self, player, token, count)?,
             Effect::CreateCopies {
                 player,
                 of,
                 count,
                 except,
-            } => self.create_copies(player, of, self.scene().amount(count), except),
+            } => self.create_copies(player, of, self.scene().amount(count), except)?,
             Effect::AddCounters {
                 objects,
                 kind,
                 count,
-            } => self.change_counters(objects, kind, self.scene().amount(count), true),
+            } => counters::add_instruction(self, objects, kind, count)?,
             Effect::RemoveCounters {
                 objects,
                 kind,
                 count,
-            } => self.change_counters(objects, kind, self.scene().amount(count), false),
+            } => counters::remove_instruction(self, objects, kind, count)?,
             Effect::AddMana { player, mana } => self.add_mana(player, mana),
             Effect::Modify {
                 objects,
@@ -219,9 +233,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// The players `players` names, in the order they act (CR 101.4).
-    fn in_turn_order(&self, players: Players) -> impl Iterator<Item = Seat> + use<L> {
+    pub(crate) fn in_turn_order(&self, players: Players) -> impl Iterator<Item = Seat> + use<L> {
         let who = self.scene().players(players);
-        self.ctx.state.players_in_turn_order(who)
+        self.ctx.game.state.players_in_turn_order(who)
     }
 
     /// The one player who makes a choice the effect offers `players`.
@@ -230,7 +244,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// "Unless [player] pays [cost]" (CR 118.12a): whether they paid.
-    fn unless_pays(&mut self, player: Players, cost: ManaCost) -> Result<bool, crate::card::Pause> {
+    fn unless_pays(&mut self, player: Players, cost: ManaCost) -> Result<bool, Stop> {
         match self.one(player) {
             Some(player) => self.ctx.unless_pays(player, cost),
             None => Ok(false),
@@ -240,27 +254,27 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The permanents among the objects `objects` names
     /// ([CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
     /// card or token on the battlefield."
-    fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
-        let s = &*self.ctx.state;
+    pub(crate) fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
+        let s = &*self.ctx.game.state;
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() == Zone::Battlefield)
     }
 
     /// The objects `objects` names that are not in `zone` already.
     fn elsewhere_than(&self, objects: Objects, zone: Zone) -> Bitboard<L::Slot> {
-        let s = &*self.ctx.state;
+        let s = &*self.ctx.game.state;
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() != zone)
     }
 
     /// Notes what is known of the targets among `leaving` before the effect moves them, for
     /// the instructions after (CR 608.2h): "the effect uses the object's last known
     /// information."
-    fn remember(&mut self, leaving: Bitboard<L::Slot>) {
-        for (place, target) in placed(self.ctx.entry.targets.as_slice()) {
+    pub(crate) fn remember(&mut self, leaving: Bitboard<L::Slot>) {
+        for (place, target) in placed(self.ctx.resolution.entry.targets.as_slice()) {
             let Some(object) = target.as_object() else {
                 continue;
             };
             if self.registers.legal.contains(place)
-                && self.ctx.state.is_current(object)
+                && self.ctx.game.state.is_current(object)
                 && leaving.contains(object.slot)
             {
                 self.registers.known[place.index()] = self.scene().known(object.slot);
@@ -274,8 +288,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// ([CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
     /// causes an object to move to a public zone, other parts of that effect can find that
     /// object."
-    fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
-        let s = &*self.ctx.state;
+    pub(crate) fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
+        let s = &*self.ctx.game.state;
         Outcome::acted_on(permanents.filter(|slot| s.object(slot).zone() != Zone::Battlefield))
     }
 
@@ -294,6 +308,19 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         self.left_the_battlefield(permanents)
     }
 
+    /// The first of `permanents`, in the order they entered the battlefield, that is still
+    /// one, taken out of the set: how an instruction acts on each of several in an order the
+    /// game can see, whatever the ones before did.
+    pub(crate) fn next_permanent(
+        &self,
+        permanents: &mut Bitboard<L::Slot>,
+    ) -> Option<ObjectRef<L>> {
+        let s = self.state();
+        let &slot = (s.battlefield().iter()).find(|&&slot| permanents.contains(slot))?;
+        permanents.remove(slot);
+        Some(s.object_ref(slot))
+    }
+
     /// Does `act` to each of `permanents` that is still one, in the order they entered the
     /// battlefield.
     fn each_permanent(
@@ -301,24 +328,14 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         mut permanents: Bitboard<L::Slot>,
         mut act: impl FnMut(&mut EffectCtx<'a, L>, ObjectRef<L>),
     ) {
-        loop {
-            let s = &*self.ctx.state;
-            let next = s
-                .battlefield()
-                .iter()
-                .find(|&&slot| permanents.contains(slot));
-            let Some(&slot) = next else {
-                break;
-            };
-            permanents.remove(slot);
-            let object = s.object_ref(slot);
+        while let Some(object) = self.next_permanent(&mut permanents) {
             act(self.ctx, object);
         }
     }
 
     /// The topmost spell on the stack among `spells`.
     fn top_spell(&self, spells: Bitboard<L::Slot>) -> Option<ObjectRef<L>> {
-        let stack = self.ctx.state.stack().iter().rev();
+        let stack = self.ctx.game.state.stack().iter().rev();
         stack
             .filter_map(StackEntry::spell)
             .find(|spell| spells.contains(spell.slot))
@@ -344,13 +361,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// ([`crate::event::exiled_instead`]). Returns the objects still to move.
     fn unstack(&mut self, objects: Bitboard<L::Slot>, to: Zone) -> Bitboard<L::Slot> {
         let mut flashback = Bitboard::EMPTY;
-        let spells = objects & crate::cast::spells(self.ctx.state);
+        let spells = objects & crate::cast::spells(self.ctx.game.state);
         // Each spell's entry comes off on its own, with no event, and the spells left on the
         // stack keep their order, so the order these come off in is nothing.
-        for slot in self.ctx.state.in_candidate_order(spells) {
-            let spell = self.ctx.state.object_ref(slot);
-            let taken = self.ctx.state.take_off_stack(spell).is_some();
-            if taken && crate::event::exiled_instead(self.ctx.state, spell, to) {
+        for slot in self.ctx.game.state.in_candidate_order(spells) {
+            let spell = self.ctx.game.state.object_ref(slot);
+            let taken = self.ctx.game.state.take_off_stack(spell).is_some();
+            if taken && crate::event::exiled_instead(self.ctx.game.state, spell, to) {
                 flashback.insert(slot);
             }
         }
@@ -385,9 +402,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let ctx = &mut *self.ctx;
         let entry = Entry::default();
         let moved = event::move_batch_to(
-            ctx.state,
-            ctx.table,
-            ctx.sink,
+            ctx.game.state,
+            ctx.game.table,
+            ctx.game.sink,
             rest,
             to,
             place,
@@ -400,7 +417,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// The outcome of an instruction that moved `objects` to `zone`: those that are there.
     fn now_in(&self, objects: Bitboard<L::Slot>, zone: Zone) -> Outcome<L> {
-        let s = &*self.ctx.state;
+        let s = &*self.ctx.game.state;
         Outcome::acted_on(objects.filter(|slot| s.object(slot).zone() == zone))
     }
 
@@ -408,16 +425,16 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     fn draw(&mut self, players: Players, count: u8) -> Outcome<L> {
         let mut drawn = Bitboard::EMPTY;
         for player in self.in_turn_order(players) {
-            let hand = self.ctx.state.zone(ZoneKey::Of(player, Zone::Hand));
+            let hand = self.ctx.game.state.zone(ZoneKey::Of(player, Zone::Hand));
             self.ctx.draw(player, count);
-            drawn |= self.ctx.state.zone(ZoneKey::Of(player, Zone::Hand)) & !hand;
+            drawn |= self.ctx.game.state.zone(ZoneKey::Of(player, Zone::Hand)) & !hand;
         }
         Outcome::acted_on(drawn)
     }
 
     /// "[Player] discards [count] cards", each of their choice (CR 701.9b), or their whole
     /// hand if it has fewer (CR 609.3).
-    fn discard(&mut self, players: Players, count: u8) -> Result<Outcome<L>, crate::card::Pause> {
+    fn discard(&mut self, players: Players, count: u8) -> Result<Outcome<L>, Stop> {
         let mut discarded = Bitboard::EMPTY;
         for player in self.in_turn_order(players) {
             discarded |= self.ctx.discard_cards(player, count)?;
@@ -431,61 +448,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         for player in self.in_turn_order(players) {
             let top = self.ctx.top_of_library(player, count);
             self.ctx.mill(player, count);
-            milled |= top & !self.ctx.state.zone(ZoneKey::Of(player, Zone::Library));
+            milled |= top & !self.ctx.game.state.zone(ZoneKey::Of(player, Zone::Library));
         }
         Outcome::acted_on(milled)
-    }
-
-    /// "[Player] scries [count]" (CR 701.22a). CR 701.22b: "If a player is instructed to
-    /// scry 0, no scry event occurs."
-    fn scry(&mut self, players: Players, count: u8) -> Result<Outcome<L>, crate::card::Pause> {
-        let mut looked = 0;
-        for player in self.in_turn_order(players) {
-            looked += self.ctx.top_of_library(player, count).count();
-            self.ctx.scry(player, count)?;
-        }
-        Ok(Outcome::of(Bitboard::EMPTY, looked))
-    }
-
-    /// "[Player] gains [amount] life" or loses it, with `change`
-    /// ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "that player's life
-    /// total is adjusted accordingly." None of it is no event. The outcome is the life gained
-    /// or lost.
-    fn change_life(
-        &mut self,
-        players: Players,
-        amount: u8,
-        change: impl Fn(&mut EffectCtx<'a, L>, Seat, u8),
-    ) -> Outcome<L> {
-        if amount == 0 {
-            return Outcome::NOTHING;
-        }
-        let mut total = 0;
-        for player in self.in_turn_order(players) {
-            let before = self.ctx.state.player(player).life();
-            change(self.ctx, player, amount);
-            total += u32::from(self.ctx.state.player(player).life().abs_diff(before));
-        }
-        Outcome::of(Bitboard::EMPTY, total)
-    }
-
-    /// "[Player] creates [count] [token] tokens" (CR 701.7a). The outcome is the tokens.
-    fn create_tokens(
-        &mut self,
-        players: Players,
-        token: &'static CardDef,
-        count: u8,
-    ) -> Outcome<L> {
-        if count == 0 {
-            return Outcome::NOTHING;
-        }
-        let mut tokens = Bitboard::EMPTY;
-        for player in self.in_turn_order(players) {
-            tokens |= self
-                .ctx
-                .create_tokens_for(player, token, count, TokenEntry::default());
-        }
-        Outcome::acted_on(tokens)
     }
 
     /// "[Player] creates [count] tokens that are copies of [object]"
@@ -499,7 +464,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         of: Objects,
         count: u8,
         except: CopyException,
-    ) -> Outcome<L> {
+    ) -> Result<Outcome<L>, Full> {
         // CR 707.9b: "The final set of values for that characteristic becomes part of the
         // copiable values of the copy."
         let excepted = |what: Copiable<L>| match except {
@@ -508,58 +473,37 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             CopyException::PowerToughness(..) => no_primitive(&except),
         };
         if count == 0 {
-            return Outcome::NOTHING;
+            return Ok(Outcome::NOTHING);
         }
         let who = self.scene().players(players);
-        let mut tokens = Bitboard::EMPTY;
-        let mut copy = |ctx: &mut EffectCtx<'a, L>, what: Copiable<L>| {
-            for player in ctx.state.players_in_turn_order(who) {
+        let mut created = Bitboard::EMPTY;
+        let mut copy = |game: &mut Game<'a, L>, what: Copiable<L>| -> Result<(), Full> {
+            for player in game.state.players_in_turn_order(who) {
                 let how = TokenEntry::default();
-                tokens |= ctx.create_tokens_of_for(player, excepted(what), count, how);
+                created |= tokens::create(game, player, excepted(what), count, how)?;
             }
+            Ok(())
         };
-        let originals = self.permanents(of);
+        let mut originals = self.permanents(of);
         if originals.is_empty() && matches!(of, Objects::This) {
-            copy(self.ctx, Copiable::of_card(self.ctx.entry.card));
+            let card = self.ctx.resolution.entry.card;
+            copy(self.game(), Copiable::of_card(card))?;
         }
-        self.each_permanent(originals, |ctx, object| {
-            copy(ctx, ctx.state.copiable(object.slot));
-        });
-        Outcome::acted_on(tokens)
-    }
-
-    /// "Put [count] [kind] counters on [objects]" (CR 122.1), or with `add` false, remove
-    /// them, as many as each has (CR 609.3). The outcome is the counters put or removed.
-    fn change_counters(
-        &mut self,
-        objects: Objects,
-        kind: CounterKind,
-        count: u8,
-        add: bool,
-    ) -> Outcome<L> {
-        let permanents = self.permanents(objects);
-        let counters = |run: &Self| -> u32 {
-            let s = &*run.ctx.state;
-            permanents.sum(|slot| u32::from(s.counters_of(slot, kind)))
-        };
-        let before = counters(self);
-        self.each_permanent(permanents, |ctx, object| {
-            if add {
-                ctx.add_counters(object, kind, count);
-            } else {
-                ctx.remove_counters(object, kind, count);
-            }
-        });
-        Outcome::of(permanents, counters(self).abs_diff(before))
+        while let Some(object) = self.next_permanent(&mut originals) {
+            let what = self.state().copiable(object.slot);
+            copy(self.game(), what)?;
+        }
+        Ok(Outcome::acted_on(created))
     }
 
     /// "[Player] adds [mana]" (CR 106.3): "A spell or ability that produces mana instructs a
     /// player to add that mana", of the kind its activator chose among those it produces.
     fn add_mana(&mut self, players: Players, mana: ManaSet) -> Outcome<L> {
-        debug_assert!(mana.includes(self.ctx.mana));
+        debug_assert!(mana.includes(self.ctx.resolution.mana));
         let mut added = 0;
         for player in self.in_turn_order(players) {
-            self.ctx.add_mana(player, self.ctx.mana, mana.amount);
+            self.ctx
+                .add_mana(player, self.ctx.resolution.mana, mana.amount);
             added += u32::from(mana.amount);
         }
         Outcome::of(Bitboard::EMPTY, added)

@@ -4,6 +4,7 @@
 // Bodies have the `Flow` signature whether or not they can pause.
 #![allow(clippy::unnecessary_wraps)]
 
+use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, Face, FaceIx, Flow, Keywords,
@@ -13,7 +14,9 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter, Whose};
+use crate::game;
 use crate::ids::{Seat, Slot};
+use crate::resolution::Resolution;
 use crate::state::{
     Affects, CounterKind, Duration, Payload, Pending, TargetPlace, TurnStep, Zone, ZoneKey,
 };
@@ -22,7 +25,7 @@ use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
 };
-use crate::{Layout, bodies};
+use crate::{CustomBody, Layout, bodies, custom_body};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};
@@ -39,6 +42,21 @@ fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         ctx.destroy(target);
     }
     Ok(())
+}
+
+/// "Destroy target creature" written against the library, registered with no macro.
+struct DestroyTarget;
+
+impl CustomBody for DestroyTarget {
+    fn resolve<L: Layout>(
+        game: &mut game::Game<'_, L>,
+        resolution: &mut Resolution<'_, L>,
+    ) -> Flow {
+        if let Some(target) = resolution.target_object(game, TargetPlace::FIRST) {
+            destroy(game, target)?;
+        }
+        Ok(())
+    }
 }
 
 fn bounce_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
@@ -121,7 +139,7 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let s = ctx.state();
     let nonland: Bitboard<L::Slot> = s
         .zone(ZoneKey::Of(opponent, Zone::Hand))
-        .filter(|slot| !LANDS.matches(s, ctx.table, slot, opponent));
+        .filter(|slot| !LANDS.matches(s, ctx.table(), slot, opponent));
     let may = Prompt::new(Purpose::May);
     if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), may, Bitboard::EMPTY)? {
         return Ok(());
@@ -308,7 +326,7 @@ pub(crate) static REMOVAL: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Permanent, CREATURE)],
-            body: bodies!(destroy_target),
+            body: custom_body::<DestroyTarget>(),
             ..Ability::NONE
         }],
         ..Face::EMPTY

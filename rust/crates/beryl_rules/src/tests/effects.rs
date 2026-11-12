@@ -17,7 +17,10 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason};
 use crate::filter::{Filter, Whose};
+use crate::fixed::Full;
+use crate::game::Game;
 use crate::ids::{Seat, Slot};
+use crate::resolution::Resolution;
 use crate::state::{
     CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey,
 };
@@ -58,6 +61,21 @@ fn resolve(
     targets: &[Target],
     answers: &[u8],
 ) -> Option<Decision> {
+    let (question, ended) = run(t, s, x, source, ability, targets, answers);
+    assert_eq!(ended, Ok(question.is_some()));
+    question
+}
+
+/// [`resolve`], with how the resolution ended: whether it paused, or that it ran out of room.
+fn run(
+    t: &GameTable,
+    s: &mut State,
+    x: &mut Scratch,
+    source: ObjectRef,
+    ability: &'static Ability,
+    targets: &[Target],
+    answers: &[u8],
+) -> (Option<Decision>, Result<bool, Full>) {
     let mut entry = StackEntry {
         object: Some(source),
         controller: s.object(source.slot).owner(),
@@ -69,12 +87,11 @@ fn resolve(
         entry.targets.push(target).unwrap();
     }
     let legal = crate::resolve::legal_targets(s, t, &entry, ability);
-    let mut ctx = EffectCtx::resolving(s, t, &mut x.events, None, answers, entry, ability);
-    let flow = crate::interpret::resolve(&mut ctx, legal);
-    let question = ctx.question.take();
-    ctx.finish().unwrap();
-    assert_eq!(flow.is_err(), question.is_some());
-    question
+    let resolution = Resolution::new(entry, ability, legal, None, answers);
+    let mut ctx = EffectCtx::resolving(Game::new(s, t, &mut x.events), resolution);
+    let flow = crate::interpret::resolve(&mut ctx);
+    let question = ctx.resolution.question.take();
+    (question, ctx.finish(flow))
 }
 
 /// A game with a land of `p`'s on the battlefield to be the source of abilities.
@@ -401,6 +418,24 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
     assert_eq!(s.counters_of(source.slot, CounterKind::Story), 0);
     assert_eq!((life(&s, p), life(&s, p.opponent())), (21, 16));
     assert!(!COUNT_UP.asks());
+}
+
+#[test]
+fn an_instruction_out_of_room_stops_the_resolution_at_once() {
+    // `Small` has 135 slots for tokens, so 200 do not fit. The library's function says so,
+    // the instruction passes it on, and nothing after it is done: the game stalls.
+    static SWARM: Ability = does(&sequence(&[
+        Effect::CreateTokens {
+            player: YOU,
+            token: &INSECT,
+            count: Amount::Fixed(200),
+        },
+        gain_life(YOU, 1),
+    ]));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let (question, ended) = run(&t, &mut s, &mut x, source, &SWARM, &[], &[]);
+    assert_eq!((question, ended), (None, Err(Full)));
+    assert_eq!(life(&s, p), 20);
 }
 
 #[test]

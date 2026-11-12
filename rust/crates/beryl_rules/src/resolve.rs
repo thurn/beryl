@@ -19,8 +19,10 @@ use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
+use crate::game::Game;
 use crate::interpret;
 use crate::layout::{Layout, Queue};
+use crate::resolution::Resolution;
 use crate::scratch::Scratch;
 use crate::state::{
     CounterKind, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone, placed,
@@ -237,16 +239,17 @@ fn run<L: Layout>(
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
-            let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry.clone(), ability);
+            let resolution = Resolution::new(entry.clone(), ability, legal, answers, record);
+            let mut ctx = EffectCtx::resolving(Game::new(s, t, sink), resolution);
             crate::coverage::hit(ability);
-            let flow = interpret::resolve(&mut ctx, legal);
-            let question = ctx.question.take();
-            offer = ctx.offer;
-            ctx.finish()?;
+            let flow = interpret::resolve(&mut ctx);
+            let question = ctx.resolution.question.take();
+            offer = ctx.resolution.offer;
+            let paused = ctx.finish(flow)?;
             if s.outcome().is_some() {
                 return Ok(None);
             }
-            if flow.is_err() {
+            if paused {
                 return Ok(question);
             }
         }
