@@ -1,5 +1,6 @@
 //! `beryl_scenario dump [PATH] [--generated N]`: writes every card's scenarios as JSON, to PATH
-//! or to standard output, for the oracle exporters (architecture §17.2), followed by N
+//! or to standard output, for the oracle exporters (architecture §17.2), with the scenarios
+//! generated for each card built from library effects ([`beryl_cards::derive`]), followed by N
 //! generated scenarios ([`beryl_cards::generate`]), none by default. It lives here rather than
 //! in `beryl_scenario` because it needs the cards, and the cards depend on that crate.
 
@@ -30,6 +31,9 @@ fn main() -> ExitCode {
     for (card, of_entry) in beryl_cards::library::by_card() {
         cards.push((card, of_entry));
     }
+    // The generated scenarios of the cards built from library effects (plan K3), each as its
+    // card's.
+    cards.extend_from_slice(beryl_cards::derive::all());
     cards.push((generate::CARD, scenarios.as_slice()));
     let json = beryl_scenario::to_json(&beryl_cards::CARDS, &cards);
     match args.as_slice() {

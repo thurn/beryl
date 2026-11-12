@@ -69,9 +69,9 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
         oracles,
         "EXPORTER_GAPS",
         {
-            ("xmage", "Generated 1"): "a gap",
-            ("xmage", "Generated 2"): "another gap",
-            ("forge", "Generated 1"): "Forge's gap",
+            ("xmage", "Generated", "Generated 1"): "a gap",
+            ("xmage", "Generated", "Generated 2"): "another gap",
+            ("forge", "Generated", "Generated 1"): "Forge's gap",
         },
     )
     result: dict[str, object] = {
@@ -90,11 +90,23 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
         ],
     }
     # Generated 2 passes, so its entry is stale; Forge's entry is not XMage's.
-    assert oracles.apply_gaps("xmage", result) == ["Generated 2"]
+    assert oracles.apply_gaps("xmage", result) == ["Generated / Generated 2"]
     assert result["fail"] == 0 and result["unsupported"] == 1 and result["pass"] == 1
     gap = result["scenarios"][0]  # pyre-ignore[16]
     assert gap["status"] == "unsupported" and gap["reason"] == "exporter gap: a gap"
     assert "failure" not in gap
+
+
+def test_generated_scenarios_are_marked() -> None:
+    result: dict[str, object] = {
+        "scenarios": [
+            {"card": "Oust", "name": "generated 1: cast from hand", "status": "pass"},
+            {"card": "Oust", "name": "Oust exiles", "status": "pass"},
+        ]
+    }
+    oracles.mark_generated(result)
+    marked = [s.get("generated", False) for s in result["scenarios"]]  # pyre-ignore[16]
+    assert marked == [True, False]
 
 
 SCENARIOS: list[dict[str, object]] = [

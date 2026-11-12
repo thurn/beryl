@@ -6,12 +6,15 @@
 //! applies, its rule changes what a player may do, or its replacement modifies an event. A
 //! casting option is exercised when a spell is cast with it.
 //!
+//! Each instruction of effect data carried out is recorded too, for the bar a library entry
+//! meets (plan K3): "Library effects carry hand-written scenarios".
+//!
 //! The record is the `coverage` feature's, which only tests enable; without it [`hit`] is
 //! empty and costs nothing. A thread records only between [`start`] and [`take`], so other
 //! tests built with the feature, such as the allocation counter's, record nothing.
 
-/// Notes that the ability or casting option at `what`, a `'static` part of a card
-/// definition, did what it says. Identity is the address: card definitions are statics.
+/// Notes that the ability, casting option or instruction at `what`, a `'static` part of a
+/// card definition, did what it says. Identity is the address: card definitions are statics.
 #[inline]
 pub(crate) fn hit<T>(what: &'static T) {
     #[cfg(feature = "coverage")]

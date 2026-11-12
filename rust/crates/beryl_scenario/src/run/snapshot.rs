@@ -88,8 +88,14 @@ impl Runner {
             .into_iter()
             .partition(|&slot| s.object(slot).face() == FaceIx::DOWN);
         let up_names: Vec<&'static str> = up.iter().map(|&slot| self.name(slot)).collect();
-        // A nameless permanent, as a face-down copy, has nothing an oracle could name it by.
-        for card in distinct(&up_names).into_iter().filter(|c| !c.is_empty()) {
+        let down_names: Vec<&'static str> = down.iter().map(|&slot| self.name(slot)).collect();
+        // A nameless permanent, as a face-down copy, has nothing an oracle could name it by;
+        // nor has a name a face-down permanent of the same player's card also has, which one
+        // oracle counts with the face-up ones and the other does not
+        // ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082): a face-down
+        // permanent has no name).
+        let named_alone = |c: &&str| !c.is_empty() && !down_names.contains(c);
+        for card in distinct(&up_names).into_iter().filter(named_alone) {
             let named: Vec<Slot> = up
                 .iter()
                 .copied()
@@ -148,7 +154,6 @@ impl Runner {
                 }
             }
         }
-        let down_names: Vec<&'static str> = down.iter().map(|&slot| self.name(slot)).collect();
         for card in distinct(&down_names) {
             out.push(Assertion::FaceDown {
                 player,

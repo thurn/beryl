@@ -113,8 +113,13 @@ enum Intent {
 /// The candidates of `d` the scenario vocabulary takes, as actions, but those naming a card
 /// another candidate also names: the runner takes the first of them, and an oracle, which
 /// finds a card by name too, may take another, as a Strip Mine may target itself or the
-/// other Strip Mine.
-fn unambiguous(live: &Live, d: &beryl_engine::Decision) -> Vec<Action> {
+/// other Strip Mine. Where `paid_before`, mana may have been paid earlier in the script, so
+/// an activation that taps a mana source is left out too ([`taps_a_mana_source`]).
+pub(crate) fn unambiguous(
+    live: &Live,
+    d: &beryl_engine::Decision,
+    paid_before: bool,
+) -> Vec<Action> {
     let picks = live.picks(d);
     let card_of = |a: &Action| match *a {
         Action::Answer {
@@ -135,7 +140,10 @@ fn unambiguous(live: &Live, d: &beryl_engine::Decision) -> Vec<Action> {
                 player,
                 card,
                 ability,
-            } => alone(live, player, card) && !taps_a_mana_source(live, player, card, ability),
+            } => {
+                alone(live, player, card)
+                    && !(paid_before && taps_a_mana_source(live, player, card, ability))
+            }
             _ => true,
         })
         .collect()
@@ -281,7 +289,7 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
         if now.number() != TURN {
             break;
         }
-        let picks = unambiguous(&live, &d);
+        let picks = unambiguous(&live, &d, true);
         if d.kind != DecisionKind::Priority {
             if picks.is_empty() {
                 return None;

@@ -1,0 +1,26 @@
+[
+  {
+    "oracle": "xmage",
+    "card": "Aang's Iceberg",
+    "scenario": "generated 9: activate ability 1 on the battlefield",
+    "gap": "a scry's cards for the bottom chosen one at a time, which XMage asks as targets"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Aang's Iceberg",
+    "scenario": "generated 10: activate ability 1 on the battlefield",
+    "gap": "a scry's cards for the bottom chosen one at a time, which XMage asks as targets"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Subtlety",
+    "scenario": "generated 1: cast from hand",
+    "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: Subtlety's enters trigger with no spell to choose"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Teferi, Hero of Dominaria",
+    "scenario": "generated 2: activate ability 0 on the battlefield",
+    "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: untapping up to two lands when none is tapped"
+  }
+]

@@ -447,23 +447,53 @@ DIVERGENCES: Path = paths.REPO / "data" / "oracle-divergences.json"
 GENERATED = 100
 
 # Generated scenarios an oracle fails for a gap in its exporter rather than a difference in the
-# rules, by oracle and scenario, with the gap: reported as unsupported. An entry whose scenario
-# passes, or no longer fails, is stale and fails the run, so the list stays current; a change
-# to the generator renames what it covers.
-EXPORTER_GAPS: dict[tuple[str, str], str] = {}
+# rules, by oracle, card and scenario, with the gap: reported as unsupported. An entry whose
+# scenario passes when played is stale and fails the run, so the list stays current; a change
+# to a generator renames what it covers. Both generators' scenarios may be listed: the random
+# ones under the card "Generated", and those generated from a card's definition
+# (`beryl_cards::derive`) under their card.
+GAPS: Path = paths.REPO / "data" / "oracle-exporter-gaps.json"
+
+
+def load_gaps(path: Path) -> dict[tuple[str, str, str], str]:
+    """The exporter gaps listed in `path`, by oracle, card and scenario."""
+    entries = cast(list[dict[str, str]], json.loads(path.read_text()))
+    return {(e["oracle"], e["card"], e["scenario"]): e["gap"] for e in entries}
+
+
+EXPORTER_GAPS: dict[tuple[str, str, str], str] = load_gaps(GAPS)
+
+
+# What the name of each scenario generated from a card's definition starts with
+# (`beryl_cards::derive::PREFIX`, plan K3): the report marks them `generated`.
+DERIVED_PREFIX = "generated "
+
+
+def mark_generated(result: dict[str, object]) -> None:
+    """Marks each scenario of `result` generated from its card's definition as `generated`."""
+    for s in cast(list[dict[str, object]], result["scenarios"]):
+        if cast(str, s["name"]).startswith(DERIVED_PREFIX):
+            s["generated"] = True
 
 
 def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
     """Reports the scenarios of `result` that `EXPORTER_GAPS` lists for `oracle` as unsupported,
-    recounting, and returns the stale entries: those whose scenario did not fail."""
+    recounting, and returns the stale entries: those whose scenario was played and did not
+    fail."""
     scenarios = cast(list[dict[str, object]], result["scenarios"])
-    gaps = {name: why for (o, name), why in EXPORTER_GAPS.items() if o == oracle}
-    stale = set(gaps)
+    gaps = {
+        f"{card} / {name}": why
+        for (o, card, name), why in EXPORTER_GAPS.items()
+        if o == oracle
+    }
+    # Stale only among the scenarios played: a run for some cards plays no other card's.
+    stale = {f"{s['card']} / {s['name']}" for s in scenarios} & set(gaps)
     for s in scenarios:
-        why = gaps.get(cast(str, s["name"]))
+        key = f"{s['card']} / {s['name']}"
+        why = gaps.get(key)
         if why is None or s["status"] != "fail":
             continue
-        stale.discard(cast(str, s["name"]))
+        stale.discard(key)
         s["status"] = "unsupported"
         s["reason"] = f"exporter gap: {why}"
         s.pop("failures", None)
@@ -682,6 +712,8 @@ def oracle(args: argparse.Namespace) -> int:
                     sim_log.write_text("")
                     results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
                 stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
+                for r in results.values():
+                    mark_generated(r)
                 log_results(results, seconds)
         except system.LockHeld:
             # Another run holds the oracles, as slow CI's oracle lane does for a minute or more.

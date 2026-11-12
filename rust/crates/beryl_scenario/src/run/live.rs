@@ -9,6 +9,7 @@ use crate::{Action, Assertion, Failure, Scenario};
 /// A scenario played one action at a time, for a generator that chooses each action from the
 /// position it begins at (§17.2). Assertions go last: an action's position depends on the
 /// next action that is not one.
+#[derive(Clone)]
 pub struct Live {
     runner: Runner,
     actions: Vec<Action>,

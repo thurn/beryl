@@ -1,6 +1,7 @@
-//! Bounded exhaustive search from every card scenario's end position (architecture §17.4):
-//! every sequence of decisions to a fixed depth keeps the engine's invariants and references
-//! and plays without a panic. `just exhaust [card] --depth N` searches deeper.
+//! Bounded exhaustive search from every card scenario's end position, the generated ones'
+//! too (architecture §17.4): every sequence of decisions to a fixed depth keeps the engine's
+//! invariants and references and plays without a panic. `just exhaust [card] --depth N`
+//! searches deeper.
 //!
 //! `BERYL_EXHAUST_DEPTH` and `BERYL_EXHAUST_NODES` set the bounds, and `BERYL_EXHAUST_CARD`
 //! limits the search to one card's scenarios.
@@ -41,11 +42,13 @@ fn bounds() -> Bounds {
     }
 }
 
-/// The scenarios to search: every card's, or the one card's `BERYL_EXHAUST_CARD` names.
+/// The scenarios to search: every card's, hand-written and generated
+/// ([`beryl_cards::derive`]), or the one card's `BERYL_EXHAUST_CARD` names.
 fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
     let card = var("BERYL_EXHAUST_CARD");
     let chosen: Vec<_> = SCENARIOS
         .iter()
+        .chain(beryl_cards::derive::all())
         .filter(|&&(name, _)| card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name)))
         .flat_map(|&(name, scenarios)| scenarios.iter().map(move |s| (name, s)))
         .collect();
@@ -56,8 +59,30 @@ fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
 /// Searches `scenarios` under `check`, printing what it covered, and returns the failures.
 fn search(scenarios: &[(&str, &'static Scenario)], bounds: Bounds, check: Check) -> Vec<String> {
     let (mut nodes, mut capped, mut failures) = (0, Vec::new(), Vec::new());
-    for &(card, scenario) in scenarios {
-        match exhaust(&CARDS, scenario, bounds, check) {
+    // The scenarios shared among threads, the results kept in their order.
+    let threads = std::thread::available_parallelism().map_or(4, usize::from);
+    let chunk = scenarios.len().div_ceil(threads).max(1);
+    let results: Vec<_> = std::thread::scope(|scope| {
+        let handles: Vec<_> = scenarios
+            .chunks(chunk)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    chunk
+                        .iter()
+                        .map(|&(card, scenario)| {
+                            (card, scenario, exhaust(&CARDS, scenario, bounds, check))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("a search panicked"))
+            .collect()
+    });
+    for (card, scenario, result) in results {
+        match result {
             Ok(searched) => {
                 nodes += searched.nodes;
                 if searched.capped {

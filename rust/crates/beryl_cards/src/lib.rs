@@ -7,6 +7,8 @@ pub mod blue;
 pub mod colorless;
 pub mod decks;
 #[cfg(feature = "scenarios")]
+pub mod derive;
+#[cfg(feature = "scenarios")]
 pub mod generate;
 #[cfg(feature = "scenarios")]
 pub mod library;

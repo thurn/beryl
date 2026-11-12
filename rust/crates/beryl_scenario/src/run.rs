@@ -138,6 +138,22 @@ struct Runner {
     permanents: Vec<(ObjectRef, &'static str)>,
 }
 
+/// A copy at the same position, with fresh working memory: a [`Scratch`] is never copied
+/// with the state it works on.
+impl Clone for Runner {
+    fn clone(&self) -> Runner {
+        Runner {
+            t: self.t.clone(),
+            s: self.s,
+            x: Scratch::recording(),
+            upcoming: self.upcoming,
+            position: self.position,
+            forced: self.forced.clone(),
+            permanents: self.permanents.clone(),
+        }
+    }
+}
+
 impl Runner {
     fn new(
         cards: &'static CardTable,
@@ -240,7 +256,10 @@ impl Runner {
                     return Err("nothing on the stack to resolve".to_string());
                 };
                 loop {
-                    let d = self.decision()?;
+                    // A resolution that ends the game is done.
+                    let Step::Decide(d) = self.position()? else {
+                        return Ok(());
+                    };
                     let stack = self.s.stack();
                     if stack.len() < depth || stack[depth - 1] != top {
                         return Ok(());

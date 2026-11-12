@@ -15,8 +15,10 @@ use beryl_engine::{
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};
 
+mod derive;
 mod knowledge;
 mod props;
+mod vocabulary;
 
 /// This crate's directory, read at run time: a test binary from the shared target directory
 /// may have been built in a worktree that no longer exists.
@@ -256,9 +258,6 @@ fn a_game_of_the_three_lands_runs_to_decking() {
 /// position, so a scenario that breaks one fails here too.
 #[test]
 fn every_card_has_scenarios_and_they_pass() {
-    use beryl_scenario::Slots;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
-
     let mut cards: Vec<_> = SCENARIOS.iter().map(|&(name, _)| name).collect();
     cards.sort_unstable();
     let mut table: Vec<_> = CARDS.cards().iter().map(|c| c.name).collect();
@@ -271,37 +270,48 @@ fn every_card_has_scenarios_and_they_pass() {
             failures.push(format!("{card} has no scenario"));
         }
         for scenario in scenarios {
-            let mut dealt = None;
-            for slots in Slots::ALL {
-                // An invariant violation panics; report it with the rest.
-                let run = catch_unwind(AssertUnwindSafe(|| {
-                    beryl_scenario::trace_with(&CARDS, scenario, slots)
-                }));
-                let positions = match run {
-                    Ok(Ok(positions)) => format!("{positions:?}"),
-                    Ok(Err(e)) => {
-                        failures.push(format!("{card} ({slots:?} slots): {e}"));
-                        break;
-                    }
-                    Err(_) => {
-                        let name = scenario.name;
-                        failures.push(format!("{card} ({slots:?} slots): {name} panicked"));
-                        break;
-                    }
-                };
-                match &dealt {
-                    None => dealt = Some(positions),
-                    Some(d) if *d != positions => failures.push(format!(
-                        "{card} ({slots:?} slots): {} plays out otherwise than with the \
-                         dealt slots",
-                        scenario.name
-                    )),
-                    Some(_) => {}
-                }
-            }
+            failures.extend(plays_alike_in_every_slot_order(card, scenario));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Why `scenario` of `card` fails in the strict runner under some slot order, or plays out
+/// otherwise under one than under the dealt slots, if it does
+/// (`every_card_has_scenarios_and_they_pass`).
+pub(crate) fn plays_alike_in_every_slot_order(
+    card: &str,
+    scenario: &beryl_scenario::Scenario,
+) -> Option<String> {
+    use beryl_scenario::Slots;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let mut dealt = None;
+    for slots in Slots::ALL {
+        // An invariant violation panics; report it with the rest.
+        let run = catch_unwind(AssertUnwindSafe(|| {
+            beryl_scenario::trace_with(&CARDS, scenario, slots)
+        }));
+        let positions = match run {
+            Ok(Ok(positions)) => format!("{positions:?}"),
+            Ok(Err(e)) => return Some(format!("{card} ({slots:?} slots): {e}")),
+            Err(_) => {
+                let name = scenario.name;
+                return Some(format!("{card} ({slots:?} slots): {name} panicked"));
+            }
+        };
+        match &dealt {
+            None => dealt = Some(positions),
+            Some(d) if *d != positions => {
+                return Some(format!(
+                    "{card} ({slots:?} slots): {} plays out otherwise than with the dealt slots",
+                    scenario.name
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    None
 }
 
 /// The lands one effect untaps untap together

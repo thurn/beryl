@@ -80,7 +80,13 @@ fn scenarios_name_only_their_card_its_tokens_basic_lands_and_props() {
     let known = every_name();
     let shared = shared();
     let mut failures = Vec::new();
-    for (name, scenarios) in SCENARIOS.iter().copied().chain(crate::library::by_card()) {
+    let generated = crate::derive::all().iter().copied();
+    for (name, scenarios) in SCENARIOS
+        .iter()
+        .copied()
+        .chain(crate::library::by_card())
+        .chain(generated)
+    {
         let mut own = shared.clone();
         names_of(card(name), &mut own);
         for scenario in scenarios {

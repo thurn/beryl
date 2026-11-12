@@ -48,14 +48,16 @@ the release pinned in `data/rules-version.json`.
   drawn; the UI bundles no card data. `card-pool-exclusions.json`, the cards the
   store leaves out though legal in Vintage; `card-printings.csv`, the printings
   it pins; `oracle-divergences.json`, the scenarios where an oracle is wrong,
-  each with its CR citation; `card-names-allowlist.json`, the generic files that
-  still name cards and the one-card mechanics still in the engine;
-  `save-breaks.json`, the corpus saves no migration carries past a change;
-  `arena-motion.json`, Arena's motion per verb as measured in the recordings,
-  the reference the verbs' own values started from; `ui-conventions.json`, the
-  design language that `just conventions` renders into `docs/ui-conventions.md`
-  (edit the data, never the page). The app downloads images on demand into its
-  cache (`beryl_app`'s `art.rs`); none are committed.
+  each with its CR citation; `oracle-exporter-gaps.json`, the generated
+  scenarios an oracle's exporter cannot script, reported as unsupported;
+  `card-names-allowlist.json`, the generic files that still name cards and the
+  one-card mechanics still in the engine; `save-breaks.json`, the corpus saves
+  no migration carries past a change; `arena-motion.json`, Arena's motion per
+  verb as measured in the recordings, the reference the verbs' own values
+  started from; `ui-conventions.json`, the design language that
+  `just conventions` renders into `docs/ui-conventions.md` (edit the data, never
+  the page). The app downloads images on demand into its cache (`beryl_app`'s
+  `art.rs`); none are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
