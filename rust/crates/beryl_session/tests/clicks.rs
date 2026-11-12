@@ -11,8 +11,8 @@ mod play;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, REPRIEVE,
-    SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, TEFERI_HERO_OF_DOMINARIA,
+    COUNTERSPELL, ELITE_SPELLBINDER, GET_LOST, ISLAND, MANA_CRYPT, MANA_TITHE, OUST, PLAINS,
+    REPRIEVE, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, TEFERI_HERO_OF_DOMINARIA,
     TEFERI_TIME_RAVELER, THUNDERTRAP_TRAINER, TIME_SPIRAL, TUNDRA,
 };
 use beryl_engine::card::Purpose;
@@ -183,6 +183,66 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
             .is_empty()
     );
     assert_eq!(spellbinders(&own), 1);
+}
+
+/// P0 holds Get Lost, with three creatures of their own and the Plains for it and for a Map.
+const MAPS: Scenario = Scenario::new("own target")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[GET_LOST])
+    .battlefield(
+        P0,
+        &[
+            Permanent::new(PLAINS),
+            Permanent::new(PLAINS),
+            Permanent::new(PLAINS),
+            Permanent::new(THUNDERTRAP_TRAINER),
+            Permanent::new(ELITE_SPELLBINDER),
+            Permanent::new(SNAPCASTER_MAGE),
+        ],
+    )
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// A target of the viewer's own that the effect helps is not asked about, unlike one it would
+/// take (UI Conventions, exception 7). Get Lost on their own creature is asked about, and
+/// leaves them two Maps; a Map's "Target creature you control explores" warns of nothing,
+/// and a click on a creature answers at once, as picking that target does.
+#[test]
+fn a_target_of_ones_own_that_is_helped_is_picked_unasked() {
+    let to_the_map = || {
+        let mut play = Play::scenario(&MAPS);
+        let get_lost = play.named(GET_LOST, ZoneName::Hand, Side::You)[0];
+        let snapcaster = play.named(SNAPCASTER_MAGE, ZoneName::Battlefield, Side::You)[0];
+        assert_eq!(play.on(get_lost), None, "Get Lost is cast");
+        let asked = play
+            .on(snapcaster)
+            .expect("its own creature is asked about");
+        assert!(
+            asked.starts_with("pick target: Do you want to target Snapcaster Mage?"),
+            "{asked}"
+        );
+        assert_eq!(play.press(ButtonId::Confirm), None);
+        play.choose(|c| matches!(c, Candidate::Activate { .. }));
+        play
+    };
+    let mut play = to_the_map();
+    let trainer = play.named(THUNDERTRAP_TRAINER, ZoneName::Battlefield, Side::You)[0];
+    let spellbinder = play.named(ELITE_SPELLBINDER, ZoneName::Battlefield, Side::You)[0];
+    assert!(play.decision().prompt.is(Purpose::Target));
+    assert_eq!(
+        play.prompt(),
+        format!(
+            "pick target: Choose a target.\n\
+             picked 0 of 1\n\
+             eligible {}\n",
+            cards(&[trainer, spellbinder]),
+        )
+    );
+    let mut picked = to_the_map();
+    picked.choose(|c| *c == Candidate::Object { slot: trainer });
+    assert_eq!(play.on(trainer), None, "the click answers");
+    assert_eq!(play.game.state(), picked.game.state());
+    assert_eq!(play.game.replay().log, picked.game.replay().log);
 }
 
 /// P0 casts a Mana Crypt, P1 answers it with Mana Tithe, and P0 holds a Counterspell.

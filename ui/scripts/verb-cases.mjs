@@ -710,7 +710,45 @@ export const CASES = {
     // Your own look lifts nothing: its cards are shown by its prompt, and none leaves your
     // library before or after you answer (the scry flight, one of the five repeated themes:
     // by-8qq, by-2wn7, by-kyig, by-1mrh, by-pv6p, by-yfb2, by-nva).
-    lift({ scry, seat }) {
+    //
+    // A look that takes no card from where it lies moves nothing at all, as it begins or as
+    // it ends: the opponent's handling of their own hand, which they mulligan here, and their
+    // search of a library, which counts no cards. The old board's checks of these watched a
+    // page ("opponent hand stays parked during a private choice", "an opponent searching
+    // keeps their library parked": by-w8gv.21.65).
+    lift({ scry, opening, reveal, seat }) {
+        const parked = { "look at their hand": 0, search: 0 };
+        for (const run of [opening, reveal]) {
+            for (const step of run.steps.filter((s) => s.verb === "lift")) {
+                const { handling, span } = step.act;
+                const kind =
+                    handling.zone === "hand"
+                        ? handling.side === "opponent" && "look at their hand"
+                        : handling.count == null && "search";
+                if (!kind) continue;
+                // As it begins, which is as the step before it in its script ends, everything
+                // lies as that step left it.
+                const lay = step.at.from?.poses;
+                if (!lay) continue;
+                parked[kind] += 1;
+                for (const sample of Object.values(step.at)) {
+                    for (const [name, pose] of Object.entries(sample.poses)) {
+                        if (!lay[name]) continue;
+                        assert.deepEqual(
+                            where(pose),
+                            where(lay[name]),
+                            `${name} moved at ${sample.at} ms, as their ${kind} ${span}s`,
+                        );
+                    }
+                }
+            }
+        }
+        assert.ok(
+            parked["look at their hand"] >= 2,
+            "the opponent handles their hand",
+        );
+        // Your own search lifts nothing either: its prompt shows its cards.
+        assert.equal(parked.search, seat === "yours" ? 0 : 2, "a search");
         const lifts = scry.steps.filter((s) => s.verb === "lift");
         if (seat === "yours") {
             assert.deepEqual(lifts, [], "your own look lifts nothing");

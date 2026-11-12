@@ -58,7 +58,16 @@ test("a name finds its card, its face or its token", () => {
     assert.equal(cache.token("Springs"), undefined);
     assert.equal(cache.find("Nothing"), undefined);
     assert.equal(cache.cardBack(), "back");
-    assert.equal(cache.namelessToken(), "copy");
+    // Which image a face asks for (src/game/faces.ts useFace): a token with no name, a copy
+    // of a face-down permanent, the store's art for one, the Double Masters Copy token's
+    // (beryl_session's card_records tests hold which that is); anything else, its name's.
+    // The old board's check of it opened a page (by-w8gv.21.65).
+    const token = { token: true, name: "" };
+    assert.equal(cache.namelessArt(token), "copy");
+    assert.equal(cache.namelessArt({ token: true, name: "Spirit" }), undefined);
+    assert.equal(cache.namelessArt({ token: false, name: "" }), undefined);
+    assert.equal(cache.namelessArt({ token: false, name: null }), undefined);
+    assert.equal(new CardRecordCache().namelessArt(token), undefined);
 });
 
 test("every string a view carries is asked about, wherever it is", () => {

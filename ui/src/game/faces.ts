@@ -8,6 +8,7 @@ import type {
   StatTone,
 } from "../components/Card";
 import type { AbilityIcon, AbilityMark } from "../components/Mana";
+import { isNamelessToken } from "../cardRecords";
 import {
   tokenFace,
   useCardArt,
@@ -159,10 +160,9 @@ export const SCAN = "large";
 
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
-  const namelessCopy = o.token && o.name === "";
   const art = useCardArt(o.name ?? "", undefined, SCAN);
-  const copyArt = useNamelessTokenArt(namelessCopy);
-  if (namelessCopy) return { ...namelessFace(o), art: copyArt };
+  const copyArt = useNamelessTokenArt(o);
+  if (isNamelessToken(o)) return { ...namelessFace(o), art: copyArt };
   if (art) return frameFace(o, art);
   return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");
 }

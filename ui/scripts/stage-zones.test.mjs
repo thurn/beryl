@@ -10,6 +10,7 @@ import { ScriptStage, SNAP } from "../src/stage/stage.ts";
 import { CLOSES, halfTurned, TURN, TURNING } from "../src/stage/tracks.ts";
 import { HELD, HELD_TURN } from "../src/stage/drawn.ts";
 import { tippedOf } from "../src/stage/pose.ts";
+import { timingOf } from "../src/stage/timing.ts";
 import { object, reach, row, stage, view } from "./stage-table.mjs";
 
 const vanish = (slot, why, to) => ({
@@ -657,4 +658,52 @@ test("a lift keeps the cards it began with lifted until it ends", () => {
     assert.deepEqual(ordered.handled, [7, 6]);
     const lowered = apply(lifted, lift("end"));
     assert.deepEqual(lowered, table);
+});
+
+// UI Conventions, "A batch exile": "Cards exiled together leave one at a time, about 0.3 s
+// apart." The old board's check of it watched six cards leave a graveyard in a page
+// ("simultaneous exile departures span three hundred milliseconds", by-w8gv.21.65); here the
+// stage plays a beat of each kind with the design language's own timings, and tells when
+// each step begins.
+test("cards exiled together leave one at a time, about 0.3 s apart", () => {
+    const exiled = (slot) => object(slot, "exile");
+    const batches = {
+        // Permanents exiled where they lie.
+        permanents: [1, 2, 3].map((slot) =>
+            vanish(slot, "exile", exiled(slot)),
+        ),
+        // Cards exiled from a graveyard, as a cost's are, fly to the exile pile.
+        cards: [1, 2, 3].map((slot) => ({
+            act: {
+                verb: "fly",
+                from: "graveyard",
+                why: "exile",
+                object: exiled(slot),
+            },
+        })),
+    };
+    for (const [what, beat] of Object.entries(batches)) {
+        const { stage: made } = stage(timingOf);
+        const before = view(what === "permanents" ? [1, 2, 3] : []);
+        if (what === "cards") {
+            before.objects = [1, 2, 3].map((slot) => object(slot, "graveyard"));
+            before.players.you.graveyard = [1, 2, 3];
+        }
+        made.play(before);
+        const began = [];
+        made.follow((edge) => edge.edge === "start" && began.push(edge.at));
+        const after = view([]);
+        after.objects = [1, 2, 3].map(exiled);
+        made.play(after, { beats: [beat] });
+        reach(made.clock, 5000, 16);
+        assert.equal(began.length, 3, what);
+        for (const [i, at] of began.entries()) {
+            if (i === 0) continue;
+            const apart = at - began[i - 1];
+            assert.ok(
+                apart >= 250 && apart <= 350,
+                `${what}: one left ${apart} ms after the one before`,
+            );
+        }
+    }
 });

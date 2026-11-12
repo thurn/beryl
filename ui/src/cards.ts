@@ -3,7 +3,12 @@
 // cards' records cached already (ipc.ts), so these lookups answer at once.
 import { useEffect, useState } from "react";
 import { cardRecords, type Ask } from "./cardRecords";
-import type { CardEntry, CardFace, CardImages } from "./generated/protocol";
+import type {
+  CardEntry,
+  CardFace,
+  CardImages,
+  ObjectView,
+} from "./generated/protocol";
 import { artAvailable, cardImageUrl } from "./ipc";
 
 export type { CardEntry, CardFace };
@@ -83,9 +88,9 @@ export function useCardBack(): string | undefined {
   return useLoaded(cardRecords.cardBack());
 }
 
-/** The art of a token with no name, if `wanted`, once it has loaded, as `useCardBack`. */
-export function useNamelessTokenArt(wanted: boolean): string | undefined {
-  return useLoaded(wanted ? cardRecords.namelessToken() : undefined);
+/** The art of `o` if it is a token with no name, once it has loaded, as `useCardBack`. */
+export function useNamelessTokenArt(o: ObjectView): string | undefined {
+  return useLoaded(cardRecords.namelessArt(o));
 }
 
 function useLoaded(scryfallUrl: string | undefined): string | undefined {

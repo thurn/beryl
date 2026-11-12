@@ -75,7 +75,7 @@
     "fly": ["zones", "place", "piles"],
     "appear": ["opening", "piles"],
     "vanish": ["zones", "scry", "piles"],
-    "lift": ["scry"],
+    "lift": ["scry", "opening", "reveal"],
     "tap": ["combat", "place"],
     "strike": ["combat"],
     "count": ["combat", "place"],

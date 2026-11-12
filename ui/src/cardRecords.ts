@@ -3,7 +3,7 @@
 // data. It asks for the names a game update shows before anything draws the update, so the
 // lookups in cards.ts stay synchronous. Plain TypeScript with no page under it, which Node runs
 // as it is (scripts/card-records.test.mjs).
-import type { CardEntry, CardRecords } from "./generated/protocol";
+import type { CardEntry, CardRecords, ObjectView } from "./generated/protocol";
 
 /** Answers `names` with the records the store has for them: at once where they are in hand (a
  * fixture's), else when the server answers. */
@@ -23,6 +23,12 @@ export function strings(value: unknown, found = new Set<string>()) {
   }
   return found;
 }
+
+type Named = Pick<ObjectView, "token" | "name">;
+
+/** Whether `o` is a token with no name: a copy of a face-down permanent, a 2/2 with no name
+ * of its own. */
+export const isNamelessToken = (o: Named) => o.token && o.name === "";
 
 export class CardRecordCache {
   /** By the name asked for: the card it names and which of its faces, or the token where no
@@ -56,9 +62,10 @@ export class CardRecordCache {
     return this.back;
   }
 
-  /** The art a token with no name is drawn with, once any answer has arrived. */
-  namelessToken() {
-    return this.nameless;
+  /** The art `o` is drawn with if it is a token with no name, once any answer has arrived:
+   * no card's record draws one. Undefined for anything else, which its name finds. */
+  namelessArt(o: Named) {
+    return isNamelessToken(o) ? this.nameless : undefined;
   }
 
   /** Keeps the store's answer for `names`. */
