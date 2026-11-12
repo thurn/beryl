@@ -179,10 +179,12 @@ export const turned =
 /** How near where it lay, in its own widths, a place is that a card turns straight onto. */
 export const NEAR = 0.5;
 
-/** How far through a step of these verbs what only makes room begins to move: once a card
- * that taps has turned. What makes room for a card that leaves moves after its step
- * (`roomIn`). */
+/** How far along its way what only makes room in a step of these verbs begins to move, and
+ * is until then as it was, at the depth it had: once a card that taps has turned. What makes
+ * room for a card that leaves has its way after that card's step (`roomIn`), and waits there
+ * for it to begin: a spell over one that leaves the stack stays over it while it goes. */
 const WAITS: Partial<Record<Act["verb"], number>> = {
+  vanish: 0,
   tap: TURNED,
 };
 

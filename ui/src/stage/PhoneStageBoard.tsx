@@ -44,6 +44,7 @@ import {
   MiddleEnd,
   Notices,
   PileButtons,
+  landed,
   phonePiles,
   PileSheet,
   type PhonePile,
@@ -80,7 +81,7 @@ export function PhoneStageBoard({
   const { stage, feed } = pageStage();
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
-  const { table, counts } = useSyncExternalStore(
+  const { table, counts, resting } = useSyncExternalStore(
     stage.subscribe,
     () => stage.shown,
   );
@@ -155,7 +156,7 @@ export function PhoneStageBoard({
               className={`phone-strip phone-strip-${side}`}
               style={side === "you" ? bands.yourStrip : bands.opponentStrip}
             >
-              <Piles side={side} view={table} tops={false} />
+              <Piles side={side} view={landed(table, resting)} tops={false} />
               <div className="phone-pool">
                 <ManaPool pool={table.players[side].mana} />
               </div>

@@ -111,9 +111,14 @@ test("what makes room for a tapped card waits for its turn, then steps past", ()
     assert.equal(whole(theirs((1 + TURNED) / 2, rest).y), -45);
     const closing = makingRoom("tap", lying(430, 0), even, 1);
     assert.equal(whole(closing((1 + TURNED) / 2, rest).y), 10);
-    // Other verbs wait for nothing within the step: a row closes up after a card that
-    // leaves once its step is over, and for any other through the step.
-    assert.equal(makingRoom("vanish", lying(600, 0), even, 1), undefined);
+    // A row closes up after a card that leaves once its step is over, straight, and until
+    // then is as it was, at the depth it had: what lay over the card that leaves still
+    // does. For any other verb it moves through the step, and waits for nothing.
+    const under = { ...rest, depth: 0 };
+    const after = makingRoom("vanish", lying(600, 0), even, 1);
+    assert.deepEqual(at(after(0, under)), at(lying(600, 0)));
+    assert.deepEqual(at(after(0.5, under)), at({ ...lying(500, 0), depth: 0 }));
+    assert.deepEqual(at(after(1, under)), at(under));
     assert.equal(makingRoom("fly", lying(600, 0), even, 1), undefined);
     assert.deepEqual(roomIn("vanish", 100, 600), [600, 600 + 500 * CLOSES]);
     assert.deepEqual(roomIn("fly", 100, 600), [100, 600]);

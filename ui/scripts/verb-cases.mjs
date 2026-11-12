@@ -462,8 +462,9 @@ export const CASES = {
     // exile is lost in light, and what goes back to a hand leaves in a halo; nothing of any
     // stays on a card at its new place. The graveyard it goes to shows the top it had until
     // it lands, and then it (the motion review of vanish, by-w8gv.21.48: a phone's pile showed
-    // none, and so did the desktop's when two cards left for it together). Every way of
-    // leaving is seen: a
+    // none, and so did the desktop's when two cards left for it together), and an empty one
+    // shows nothing until then (a phone's showed its edge, a dark slab). Every way of leaving
+    // is seen: a
     // spell countered and spells resolved, a creature and a token destroyed, a permanent
     // exiled and one sacrificed, and the opponent's spell returned to their hand.
     vanish({ whole, script, zones, scry, seat }) {
@@ -539,6 +540,14 @@ export const CASES = {
                         assert.ok(
                             shows(sample.looks[top]),
                             `${what}: its graveyard's top, ${top}, does not show`,
+                        );
+                    }
+                    // A phone's strip draws a pile's edge, and only behind a top.
+                    if (object?.zone === "graveyard" && sample.edges) {
+                        assert.equal(
+                            sample.edges[object.owner],
+                            top !== undefined,
+                            `${what}: its graveyard's edge with no card on it`,
                         );
                     }
                 }

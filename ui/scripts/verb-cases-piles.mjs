@@ -140,8 +140,8 @@ export const CASES = {
     // A card exiled under its host rests tucked under it once it has gone from where it lay
     // (UI Conventions, exception 6). Nothing makes room for a card that leaves until it has
     // gone: half way through the step of a card that leaves alone, and as that step ends, all
-    // else is where it lay but for what lies where it lands (Arena's row closes up after,
-    // 3sEoP_s4DQE 24:49.6).
+    // else is where it lay, as deep as it lay, but for what lies where it lands (Arena's row
+    // closes up after, 3sEoP_s4DQE 24:49.6).
     vanish({ piles, zones }) {
         for (const run of [zones, piles]) {
             const left = run.steps.filter(
@@ -181,6 +181,15 @@ export const CASES = {
                             where(sample.poses[name]),
                             where(pose),
                             `${name} made room by the ${when} of the vanish at ${gone.from} ms`,
+                        );
+                        // Nor does it change depth while the card goes: a spell over one
+                        // that leaves the stack stays over it. As the step ends, what
+                        // flies next is already aloft.
+                        if (when !== "middle") continue;
+                        assert.equal(
+                            sample.poses[name].depth,
+                            pose.depth,
+                            `${name} changed depth half way through the vanish at ${gone.from} ms`,
                         );
                     }
                 }

@@ -335,6 +335,21 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
             ],
         );
     };
+    /** Whether the page draws the edge of each player's graveyard that lies behind its top
+     * card on a phone (src/mobile/chrome.tsx Piles), once React has drawn what the stage
+     * told it; null where the table draws its piles itself. */
+    const pileEdges = async () => {
+        await new Promise((resolve) => setTimeout(resolve));
+        if (!document.querySelector(".phone-piles")) return null;
+        return Object.fromEntries(
+            SIDES.map((side) => [
+                side,
+                !!document.querySelector(
+                    `.phone-strip-${side} .phone-pile:last-child .phone-pile-edge`,
+                ),
+            ]),
+        );
+    };
     const steps = [];
     /** Walks the clock through every step the stage has to play, until `over`. */
     const follow = async (answer, over) => {
@@ -371,6 +386,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
                 if (at.middle.counting.length) {
                     at.middle.changes = await changes();
                 }
+                if (verb === "vanish") at.middle.edges = await pileEdges();
             }
             await reach(to);
             at.to = sample();

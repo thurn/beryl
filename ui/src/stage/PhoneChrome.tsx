@@ -28,6 +28,7 @@ import {
   type BandName,
   type Viewport,
 } from "../mobile/layout";
+import type { Name, Resting } from "./layout.ts";
 import { announced, coinBanner, scryWords } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
 
@@ -51,6 +52,24 @@ export function phonePiles(table: PlayerView): PhonePile[] {
   return [...zonePiles(table, NO_ORDER), ...knownLibraries(table)].filter(
     (pile): pile is PhonePile => pile.zone !== "exile" && pile.cards.length > 0,
   );
+}
+
+/** `table` with only the cards that have landed in each library and graveyard, for the strips'
+ * piles (mobile/chrome.tsx Piles): one still going from sight where it was (a `vanish` under
+ * way) rests dressed as it was there, and its pile shows no edge for it until it lands. */
+export function landed(
+  table: PlayerView,
+  resting: ReadonlyMap<Name, Resting>,
+): PlayerView {
+  const on = (zone: "library" | "graveyard", slots: number[]) =>
+    slots.filter((slot) => (resting.get(slot)?.dress.zone ?? zone) === zone);
+  const { you, opponent } = table.players;
+  const piles = (player: typeof you) => ({
+    ...player,
+    library: on("library", player.library),
+    graveyard: on("graveyard", player.graveyard),
+  });
+  return { ...table, players: { you: piles(you), opponent: piles(opponent) } };
 }
 
 /** A button over each pile that opens, on the card the stage draws there. */
