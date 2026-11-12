@@ -1031,8 +1031,13 @@ Forge inputs are Python in `tools/`, per AGENTS.md.
 
 ### 17.1 Scenarios
 
-Each card file declares `SCENARIOS: &[Scenario]`, built with a typed builder and
-serializable with serde:
+Each card file declares `SCENARIOS: &[Scenario]` in an inline `scenarios` module
+behind `beryl_cards`' `scenarios` feature, which tests and tools turn on and the
+app never does. They are built with a typed builder and serializable with serde.
+A scenario names its own card, that card's tokens, basic lands and the
+designated props (`beryl_cards::props`); one about two particular cards says so
+with `Scenario::interaction`, so one card's change cannot break another card's
+tests.
 
 - **Setup:** cards by `names::` constant in any zone for either player, life,
   counters, tapped, attachments, the top cards of a library in order, the turn
