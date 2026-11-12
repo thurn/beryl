@@ -18,10 +18,8 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::state::{CounterKind, TargetPlace};
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -169,183 +167,199 @@ fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// graveyard."
 static MILL_FIVE: Effect = mill(TARGET_PLAYER, 5);
 
-const JACE: &str = names::JACE_VRYNS_PRODIGY;
 /// The back face's name, which the transformed permanent has (CR 712.6d).
 const TELEPATH: &str = "Jace, Telepath Unbound";
-const ISLAND: &str = names::ISLAND;
-const PLAINS: &str = names::PLAINS;
-const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
 
-const fn loyalty(count: u8) -> Action {
-    Action::assert(Assertion::Counters {
-        player: P0,
-        card: TELEPATH,
-        kind: CounterKind::Loyalty,
-        count,
-    })
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+
+    use beryl_engine::state::CounterKind;
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use super::TELEPATH;
+    use crate::names;
+
+    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+
+    const ISLAND: &str = names::ISLAND;
+
+    const PLAINS: &str = names::PLAINS;
+
+    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+
+    const fn loyalty(count: u8) -> Action {
+        Action::assert(Assertion::Counters {
+            player: P0,
+            card: TELEPATH,
+            kind: CounterKind::Loyalty,
+            count,
+        })
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("looting to five cards in the graveyard transforms him")
+            .battlefield(P0, &[Permanent::new(JACE)])
+            .hand(P0, &[PLAINS])
+            .graveyard(P0, &[ISLAND, ISLAND, ISLAND])
+            .library(P0, &[ISLAND, ISLAND, ISLAND])
+            .library(P1, &[PLAINS, PLAINS])
+            .actions(&[
+                // Four in the graveyard after the first loot: no transformation.
+                Action::activate(P0, JACE, 0),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: JACE,
+                    creature: true,
+                }),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                // Nothing else to do: the loot resolves as soon as its controller passes, and
+                // with only Islands in hand, the discard needs no choice.
+                Action::activate(P0, JACE, 0),
+                // Exiled and returned with his back face up: a planeswalker with loyalty 5.
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: TELEPATH,
+                    creature: false,
+                }),
+                loyalty(5),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: None,
+                    count: 5,
+                }),
+                // A new object, so its loyalty abilities may be activated this turn. No creature
+                // to target: none is chosen.
+                Action::activate(P0, TELEPATH, 0),
+                loyalty(6),
+            ]),
+        Scenario::new("+1 shrinks a creature until his controller's next turn")
+            .battlefield(P0, &[Permanent::new(JACE).transformed()])
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[ISLAND, ISLAND])
+            .library(P1, &[PLAINS, PLAINS])
+            .actions(&[
+                Action::activate(P0, TELEPATH, 0),
+                Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                Action::Resolve,
+                loyalty(6),
+                Action::assert(Assertion::Pt {
+                    player: P1,
+                    card: JACE,
+                    token: false,
+                    power: -2,
+                    toughness: 2,
+                }),
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P1),
+                Action::answer(P1, DecisionKind::Attacker, Pick::Done),
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::End,
+                },
+                Action::assert(Assertion::Pt {
+                    player: P1,
+                    card: JACE,
+                    token: false,
+                    power: -2,
+                    toughness: 2,
+                }),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::Upkeep,
+                },
+                Action::assert(Assertion::Pt {
+                    player: P1,
+                    card: JACE,
+                    token: false,
+                    power: 0,
+                    toughness: 2,
+                }),
+            ]),
+        Scenario::new("−3 recasts a sorcery from the graveyard, which is then exiled")
+            .battlefield(
+                P0,
+                &[Permanent::new(JACE).transformed(), Permanent::new(PLAINS)],
+            )
+            .graveyard(P0, &[names::OUST])
+            // A land to play keeps the game in this main phase for the assertions.
+            .hand(P0, &[ISLAND])
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[ISLAND])
+            .library(P1, &[PLAINS, ISLAND])
+            .actions(&[
+                Action::activate(P0, TELEPATH, 1),
+                Action::Resolve,
+                loyalty(2),
+                Action::cast(P0, names::OUST),
+                Action::Resolve,
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: Some(names::OUST),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: None,
+                    count: 0,
+                }),
+                Action::assert(Assertion::Library {
+                    player: P1,
+                    top: &[PLAINS, JACE, ISLAND],
+                }),
+            ]),
+        Scenario::new("−9's emblem mills an opponent five whenever its owner casts a spell")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(JACE)
+                        .transformed()
+                        .counters(CounterKind::Loyalty, 9),
+                    Permanent::new(PLAINS),
+                    Permanent::new(PLAINS),
+                ],
+            )
+            .hand(P0, &[STAFF, PLAINS])
+            .library(P0, &[ISLAND])
+            .library(P1, &[PLAINS, PLAINS, PLAINS, PLAINS, PLAINS, ISLAND])
+            .actions(&[
+                Action::activate(P0, TELEPATH, 2),
+                // Loyalty 0: he is put into his owner's graveyard; the emblem stays.
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: Some(JACE),
+                    count: 1,
+                }),
+                // The trigger goes on the stack above the Staff and resolves first.
+                Action::cast(P0, STAFF),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Graveyard,
+                    card: Some(PLAINS),
+                    count: 5,
+                }),
+                Action::assert(Assertion::Library {
+                    player: P1,
+                    top: &[ISLAND],
+                }),
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: STAFF,
+                    count: 1,
+                }),
+            ]),
+    ];
 }
-
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("looting to five cards in the graveyard transforms him")
-        .battlefield(P0, &[Permanent::new(JACE)])
-        .hand(P0, &[PLAINS])
-        .graveyard(P0, &[ISLAND, ISLAND, ISLAND])
-        .library(P0, &[ISLAND, ISLAND, ISLAND])
-        .library(P1, &[PLAINS, PLAINS])
-        .actions(&[
-            // Four in the graveyard after the first loot: no transformation.
-            Action::activate(P0, JACE, 0),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: JACE,
-                creature: true,
-            }),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            // Nothing else to do: the loot resolves as soon as its controller passes, and
-            // with only Islands in hand, the discard needs no choice.
-            Action::activate(P0, JACE, 0),
-            // Exiled and returned with his back face up: a planeswalker with loyalty 5.
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: TELEPATH,
-                creature: false,
-            }),
-            loyalty(5),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: None,
-                count: 5,
-            }),
-            // A new object, so its loyalty abilities may be activated this turn. No creature
-            // to target: none is chosen.
-            Action::activate(P0, TELEPATH, 0),
-            loyalty(6),
-        ]),
-    Scenario::new("+1 shrinks a creature until his controller's next turn")
-        .battlefield(P0, &[Permanent::new(JACE).transformed()])
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[ISLAND, ISLAND])
-        .library(P1, &[PLAINS, PLAINS])
-        .actions(&[
-            Action::activate(P0, TELEPATH, 0),
-            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            Action::Resolve,
-            loyalty(6),
-            Action::assert(Assertion::Pt {
-                player: P1,
-                card: JACE,
-                token: false,
-                power: -2,
-                toughness: 2,
-            }),
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::BeginningOfCombat,
-            },
-            Action::pass(P1),
-            Action::answer(P1, DecisionKind::Attacker, Pick::Done),
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::End,
-            },
-            Action::assert(Assertion::Pt {
-                player: P1,
-                card: JACE,
-                token: false,
-                power: -2,
-                toughness: 2,
-            }),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::Upkeep,
-            },
-            Action::assert(Assertion::Pt {
-                player: P1,
-                card: JACE,
-                token: false,
-                power: 0,
-                toughness: 2,
-            }),
-        ]),
-    Scenario::new("−3 recasts a sorcery from the graveyard, which is then exiled")
-        .battlefield(
-            P0,
-            &[Permanent::new(JACE).transformed(), Permanent::new(PLAINS)],
-        )
-        .graveyard(P0, &[names::OUST])
-        // A land to play keeps the game in this main phase for the assertions.
-        .hand(P0, &[ISLAND])
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[ISLAND])
-        .library(P1, &[PLAINS, ISLAND])
-        .actions(&[
-            Action::activate(P0, TELEPATH, 1),
-            Action::Resolve,
-            loyalty(2),
-            Action::cast(P0, names::OUST),
-            Action::Resolve,
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Exile,
-                card: Some(names::OUST),
-                count: 1,
-            }),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: None,
-                count: 0,
-            }),
-            Action::assert(Assertion::Library {
-                player: P1,
-                top: &[PLAINS, JACE, ISLAND],
-            }),
-        ]),
-    Scenario::new("−9's emblem mills an opponent five whenever its owner casts a spell")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(JACE)
-                    .transformed()
-                    .counters(CounterKind::Loyalty, 9),
-                Permanent::new(PLAINS),
-                Permanent::new(PLAINS),
-            ],
-        )
-        .hand(P0, &[STAFF, PLAINS])
-        .library(P0, &[ISLAND])
-        .library(P1, &[PLAINS, PLAINS, PLAINS, PLAINS, PLAINS, ISLAND])
-        .actions(&[
-            Action::activate(P0, TELEPATH, 2),
-            // Loyalty 0: he is put into his owner's graveyard; the emblem stays.
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: Some(JACE),
-                count: 1,
-            }),
-            // The trigger goes on the stack above the Staff and resolves first.
-            Action::cast(P0, STAFF),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Graveyard,
-                card: Some(PLAINS),
-                count: 5,
-            }),
-            Action::assert(Assertion::Library {
-                player: P1,
-                top: &[ISLAND],
-            }),
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: STAFF,
-                count: 1,
-            }),
-        ]),
-];

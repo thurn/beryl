@@ -6,12 +6,10 @@
 //! (It's not a creature unless it's crewed.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, Affected, CardDef, Castings, Colors, Face, FaceIx, Keywords, LayerSpec,
-    ManaCost, Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Affected, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost,
+    Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, TurnStep};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -62,179 +60,194 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const SWIFT: &str = names::SWIFT_RECONFIGURATION;
-const JACE: &str = names::JACE_VRYNS_PRODIGY;
-const PLAINS: &str = names::PLAINS;
-const OVERLORD: &str = names::OVERLORD_OF_THE_MISTMOORS;
-const SKYDIVER: &str = names::THIEVING_SKYDIVER;
-/// A Plains for the Aura, and four Islands for a Thieving Skydiver kicked for up to 2.
-const SKYDIVER_LANDS: &[Permanent] = &[
-    Permanent::new(PLAINS),
-    Permanent::new(names::ISLAND),
-    Permanent::new(names::ISLAND),
-    Permanent::new(names::ISLAND),
-    Permanent::new(names::ISLAND),
-];
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use beryl_engine::card::{Castings, FaceIx};
 
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("a creature becomes a noncreature Vehicle that can't crew alone")
-        .at(2, P1, TurnStep::PrecombatMain)
-        .hand(P0, &[SWIFT])
-        .battlefield(P0, &[Permanent::new(PLAINS)])
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[PLAINS])
-        .library(P1, &[PLAINS, PLAINS])
-        .actions(&[
-            Action::pass(P1),
-            // Flash: cast on the opponent's turn.
-            Action::cast(P0, SWIFT),
-            Action::Resolve,
-            Action::assert(Assertion::Creature {
-                player: P1,
-                card: JACE,
-                creature: false,
-            }),
-            // Not a creature, so its {T} ability isn't summoning-sick-limited, but crew 5 needs
-            // power 5 from other creatures, which P1 doesn't have: only its loot ability is offered.
-            Action::assert(Assertion::Decision {
-                player: P1,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-            // Its loot resolves unasked, with Plains alone to discard.
-            Action::activate(P1, JACE, 0),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: beryl_engine::Zone::Graveyard,
-                card: Some(PLAINS),
-                count: 1,
-            }),
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: SWIFT,
-                count: 1,
-            }),
-        ]),
-    Scenario::new("crewing the Vehicle makes it a creature until end of turn")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(PLAINS),
-                Permanent::new(JACE),
-                Permanent::new(OVERLORD),
-            ],
-        )
-        .hand(P0, &[SWIFT])
-        .library(P0, &[PLAINS, PLAINS])
-        .library(P1, &[PLAINS, PLAINS])
-        .actions(&[
-            Action::cast(P0, SWIFT),
-            Action::choose(P0, DecisionKind::Target, JACE),
-            Action::Resolve,
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: JACE,
-                creature: false,
-            }),
-            // Crew 5, granted by the Aura: the Overlord taps, the only creature that can.
-            Action::activate_granted(P0, JACE, 0),
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: OVERLORD,
-                count: 1,
-            }),
-            Action::Resolve,
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: JACE,
-                creature: true,
-            }),
-            Action::assert(Assertion::Pt {
-                player: P0,
-                card: JACE,
-                token: false,
-                power: 0,
-                toughness: 2,
-            }),
-            // A creature now, it may attack; it doesn't.
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::BeginningOfCombat,
-            },
-            Action::pass(P0),
-            Action::answer(P0, DecisionKind::Attacker, Pick::Done),
-            // Until end of turn ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)).
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::Upkeep,
-            },
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: JACE,
-                creature: false,
-            }),
-        ]),
-    // The enchanted creature is an artifact whose mana value is still its card's
-    // ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)), so a kicked Thieving
-    // Skydiver reaches it only with X of at least 2.
-    Scenario::new("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
-        .hand(P0, &[SWIFT, SKYDIVER])
-        .battlefield(P0, SKYDIVER_LANDS)
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[PLAINS])
-        .library(P1, &[PLAINS])
-        .actions(&[
-            Action::cast(P0, SWIFT),
-            Action::Resolve,
-            Action::Cast {
-                player: P0,
-                card: SKYDIVER,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
-            Action::Resolve,
-            // No artifact of mana value 1 or less: the trigger is removed (CR 603.3d).
-            Action::assert(Assertion::Stack { count: 0 }),
-            Action::assert(Assertion::Controls {
-                player: P1,
-                card: JACE,
-                count: 1,
-            }),
-        ]),
-    Scenario::new("Thieving Skydiver kicked for 2 takes the reconfigured creature")
-        .hand(P0, &[SWIFT, SKYDIVER])
-        .battlefield(P0, SKYDIVER_LANDS)
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[PLAINS])
-        .library(P1, &[PLAINS])
-        .actions(&[
-            Action::cast(P0, SWIFT),
-            Action::Resolve,
-            Action::Cast {
-                player: P0,
-                card: SKYDIVER,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::answer(P0, DecisionKind::X, Pick::Number { n: 2 }),
-            Action::Resolve,
-            Action::Resolve,
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: JACE,
-                count: 1,
-            }),
-            // The Aura stays its controller's, still attached: Jace is no creature.
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: SWIFT,
-                count: 1,
-            }),
-            Action::assert(Assertion::Creature {
-                player: P0,
-                card: JACE,
-                creature: false,
-            }),
-        ]),
-];
+    use beryl_engine::{DecisionKind, TurnStep};
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const SWIFT: &str = names::SWIFT_RECONFIGURATION;
+
+    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+
+    const PLAINS: &str = names::PLAINS;
+
+    const OVERLORD: &str = names::OVERLORD_OF_THE_MISTMOORS;
+
+    const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+
+    /// A Plains for the Aura, and four Islands for a Thieving Skydiver kicked for up to 2.
+    const SKYDIVER_LANDS: &[Permanent] = &[
+        Permanent::new(PLAINS),
+        Permanent::new(names::ISLAND),
+        Permanent::new(names::ISLAND),
+        Permanent::new(names::ISLAND),
+        Permanent::new(names::ISLAND),
+    ];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("a creature becomes a noncreature Vehicle that can't crew alone")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .hand(P0, &[SWIFT])
+            .battlefield(P0, &[Permanent::new(PLAINS)])
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[PLAINS])
+            .library(P1, &[PLAINS, PLAINS])
+            .actions(&[
+                Action::pass(P1),
+                // Flash: cast on the opponent's turn.
+                Action::cast(P0, SWIFT),
+                Action::Resolve,
+                Action::assert(Assertion::Creature {
+                    player: P1,
+                    card: JACE,
+                    creature: false,
+                }),
+                // Not a creature, so its {T} ability isn't summoning-sick-limited, but crew 5 needs
+                // power 5 from other creatures, which P1 doesn't have: only its loot ability is offered.
+                Action::assert(Assertion::Decision {
+                    player: P1,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+                // Its loot resolves unasked, with Plains alone to discard.
+                Action::activate(P1, JACE, 0),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: beryl_engine::Zone::Graveyard,
+                    card: Some(PLAINS),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: SWIFT,
+                    count: 1,
+                }),
+            ]),
+        Scenario::new("crewing the Vehicle makes it a creature until end of turn")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(PLAINS),
+                    Permanent::new(JACE),
+                    Permanent::new(OVERLORD),
+                ],
+            )
+            .hand(P0, &[SWIFT])
+            .library(P0, &[PLAINS, PLAINS])
+            .library(P1, &[PLAINS, PLAINS])
+            .actions(&[
+                Action::cast(P0, SWIFT),
+                Action::choose(P0, DecisionKind::Target, JACE),
+                Action::Resolve,
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: JACE,
+                    creature: false,
+                }),
+                // Crew 5, granted by the Aura: the Overlord taps, the only creature that can.
+                Action::activate_granted(P0, JACE, 0),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: OVERLORD,
+                    count: 1,
+                }),
+                Action::Resolve,
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: JACE,
+                    creature: true,
+                }),
+                Action::assert(Assertion::Pt {
+                    player: P0,
+                    card: JACE,
+                    token: false,
+                    power: 0,
+                    toughness: 2,
+                }),
+                // A creature now, it may attack; it doesn't.
+                Action::AdvanceTo {
+                    turn: 1,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P0),
+                Action::answer(P0, DecisionKind::Attacker, Pick::Done),
+                // Until end of turn ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)).
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::Upkeep,
+                },
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: JACE,
+                    creature: false,
+                }),
+            ]),
+        // The enchanted creature is an artifact whose mana value is still its card's
+        // ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)), so a kicked Thieving
+        // Skydiver reaches it only with X of at least 2.
+        Scenario::new("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
+            .hand(P0, &[SWIFT, SKYDIVER])
+            .battlefield(P0, SKYDIVER_LANDS)
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[PLAINS])
+            .library(P1, &[PLAINS])
+            .actions(&[
+                Action::cast(P0, SWIFT),
+                Action::Resolve,
+                Action::Cast {
+                    player: P0,
+                    card: SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+                Action::Resolve,
+                // No artifact of mana value 1 or less: the trigger is removed (CR 603.3d).
+                Action::assert(Assertion::Stack { count: 0 }),
+                Action::assert(Assertion::Controls {
+                    player: P1,
+                    card: JACE,
+                    count: 1,
+                }),
+            ]),
+        Scenario::new("Thieving Skydiver kicked for 2 takes the reconfigured creature")
+            .hand(P0, &[SWIFT, SKYDIVER])
+            .battlefield(P0, SKYDIVER_LANDS)
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[PLAINS])
+            .library(P1, &[PLAINS])
+            .actions(&[
+                Action::cast(P0, SWIFT),
+                Action::Resolve,
+                Action::Cast {
+                    player: P0,
+                    card: SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::answer(P0, DecisionKind::X, Pick::Number { n: 2 }),
+                Action::Resolve,
+                Action::Resolve,
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: JACE,
+                    count: 1,
+                }),
+                // The Aura stays its controller's, still attached: Jace is no creature.
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: SWIFT,
+                    count: 1,
+                }),
+                Action::assert(Assertion::Creature {
+                    player: P0,
+                    card: JACE,
+                    creature: false,
+                }),
+            ]),
+    ];
+}

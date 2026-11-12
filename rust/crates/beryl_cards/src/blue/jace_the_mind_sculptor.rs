@@ -17,10 +17,9 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{CounterKind, TargetPlace};
-use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
+use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_engine::{Zone, ZoneKey};
 
 use crate::names;
 
@@ -145,130 +144,145 @@ fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
-const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
-const ISLAND: &str = names::ISLAND;
-const PLAINS: &str = names::PLAINS;
-const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
-const PRODIGY: &str = names::JACE_VRYNS_PRODIGY;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const fn loyalty(count: u8) -> Action {
-    Action::assert(Assertion::Counters {
-        player: P0,
-        card: JACE,
-        kind: CounterKind::Loyalty,
-        count,
-    })
+    use beryl_engine::state::CounterKind;
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
+
+    const ISLAND: &str = names::ISLAND;
+
+    const PLAINS: &str = names::PLAINS;
+
+    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+
+    const PRODIGY: &str = names::JACE_VRYNS_PRODIGY;
+
+    const fn loyalty(count: u8) -> Action {
+        Action::assert(Assertion::Counters {
+            player: P0,
+            card: JACE,
+            kind: CounterKind::Loyalty,
+            count,
+        })
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("+2 puts the top of an opponent's library on the bottom")
+            .battlefield(P0, &[Permanent::new(JACE)])
+            .library(P0, &[ISLAND, PLAINS])
+            .library(P1, &[STAFF, PLAINS, ISLAND])
+            .actions(&[
+                Action::activate(P0, JACE, 0),
+                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                // Assertions read the next open decision: by then, the opponent has drawn the
+                // Plains that the Staff left on top.
+                Action::assert(Assertion::Library {
+                    player: P1,
+                    top: &[ISLAND, STAFF],
+                }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Hand,
+                    card: Some(PLAINS),
+                    count: 1,
+                }),
+                loyalty(5),
+                // The next turn, Jace looks at his own top card and keeps it there.
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P0, JACE, 0),
+                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+                Action::answer(P0, DecisionKind::YesNo, Pick::No),
+                Action::assert(Assertion::Library {
+                    player: P0,
+                    top: &[PLAINS],
+                }),
+                loyalty(7),
+            ]),
+        Scenario::new("0 draws three and puts two back in the order chosen")
+            .battlefield(P0, &[Permanent::new(JACE)])
+            .hand(P0, &[STAFF])
+            .library(P0, &[ISLAND, PLAINS, PRODIGY, ISLAND])
+            .library(P1, &[PLAINS])
+            .actions(&[
+                Action::activate(P0, JACE, 1),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, STAFF),
+                Action::choose(P0, DecisionKind::ChooseObject, ISLAND),
+                Action::assert(Assertion::Library {
+                    player: P0,
+                    top: &[ISLAND, STAFF, ISLAND],
+                }),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Hand,
+                    card: None,
+                    count: 2,
+                }),
+                loyalty(3),
+            ]),
+        Scenario::new("−1 returns a creature; −12 exiles a library and shuffles in the hand")
+            .battlefield(
+                P0,
+                &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
+            )
+            .battlefield(P1, &[Permanent::new(PRODIGY)])
+            .hand(P1, &[PLAINS])
+            .library(P0, &[ISLAND, ISLAND])
+            .library(P1, &[ISLAND, ISLAND, ISLAND])
+            .actions(&[
+                Action::activate(P0, JACE, 2),
+                Action::Resolve,
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Hand,
+                    card: Some(PRODIGY),
+                    count: 1,
+                }),
+                loyalty(12),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P0, JACE, 3),
+                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+                // Turn 2's draw left two Islands, now exiled; the hand of three is the library.
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Exile,
+                    card: Some(ISLAND),
+                    count: 2,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Library,
+                    card: None,
+                    count: 3,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Hand,
+                    card: None,
+                    count: 0,
+                }),
+                // Loyalty 0: put into its owner's graveyard (CR 704.5i).
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: Some(JACE),
+                    count: 1,
+                }),
+            ]),
+    ];
 }
-
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("+2 puts the top of an opponent's library on the bottom")
-        .battlefield(P0, &[Permanent::new(JACE)])
-        .library(P0, &[ISLAND, PLAINS])
-        .library(P1, &[STAFF, PLAINS, ISLAND])
-        .actions(&[
-            Action::activate(P0, JACE, 0),
-            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            // Assertions read the next open decision: by then, the opponent has drawn the
-            // Plains that the Staff left on top.
-            Action::assert(Assertion::Library {
-                player: P1,
-                top: &[ISLAND, STAFF],
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Hand,
-                card: Some(PLAINS),
-                count: 1,
-            }),
-            loyalty(5),
-            // The next turn, Jace looks at his own top card and keeps it there.
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P0, JACE, 0),
-            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
-            Action::answer(P0, DecisionKind::YesNo, Pick::No),
-            Action::assert(Assertion::Library {
-                player: P0,
-                top: &[PLAINS],
-            }),
-            loyalty(7),
-        ]),
-    Scenario::new("0 draws three and puts two back in the order chosen")
-        .battlefield(P0, &[Permanent::new(JACE)])
-        .hand(P0, &[STAFF])
-        .library(P0, &[ISLAND, PLAINS, PRODIGY, ISLAND])
-        .library(P1, &[PLAINS])
-        .actions(&[
-            Action::activate(P0, JACE, 1),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, STAFF),
-            Action::choose(P0, DecisionKind::ChooseObject, ISLAND),
-            Action::assert(Assertion::Library {
-                player: P0,
-                top: &[ISLAND, STAFF, ISLAND],
-            }),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Hand,
-                card: None,
-                count: 2,
-            }),
-            loyalty(3),
-        ]),
-    Scenario::new("−1 returns a creature; −12 exiles a library and shuffles in the hand")
-        .battlefield(
-            P0,
-            &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
-        )
-        .battlefield(P1, &[Permanent::new(PRODIGY)])
-        .hand(P1, &[PLAINS])
-        .library(P0, &[ISLAND, ISLAND])
-        .library(P1, &[ISLAND, ISLAND, ISLAND])
-        .actions(&[
-            Action::activate(P0, JACE, 2),
-            Action::Resolve,
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Hand,
-                card: Some(PRODIGY),
-                count: 1,
-            }),
-            loyalty(12),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P0, JACE, 3),
-            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
-            // Turn 2's draw left two Islands, now exiled; the hand of three is the library.
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Exile,
-                card: Some(ISLAND),
-                count: 2,
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Library,
-                card: None,
-                count: 3,
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Hand,
-                card: None,
-                count: 0,
-            }),
-            // Loyalty 0: put into its owner's graveyard (CR 704.5i).
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: Some(JACE),
-                count: 1,
-            }),
-        ]),
-];

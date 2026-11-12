@@ -4,16 +4,15 @@
 //! to cast."
 
 use beryl_engine::card::{
-    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Place, Prompt,
-    Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Place, Prompt, Purpose, Subtype,
+    Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
 use beryl_engine::state::TargetPlace;
-use beryl_engine::{DecisionKind, TurnStep, Zone, ZoneKey};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_engine::{Zone, ZoneKey};
 
 use crate::names;
 
@@ -67,131 +66,143 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use beryl_engine::card::{Castings, FaceIx};
 
-const THREE_PLAINS: &[Permanent] = &[
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-];
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
 
-pub const SCENARIOS: &[Scenario] = &[
-    // The exiled Skydiver costs its owner {3}{U} on their turn: all four Islands.
-    Scenario::new("Spellbinder's card costs its owner {2} more")
-        .hand(P0, &[SPELLBINDER])
-        .battlefield(P0, THREE_PLAINS)
-        .hand(P1, &[SKYDIVER, names::ISLAND])
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::Cast {
-                player: P0,
-                card: SPELLBINDER,
-                face: FaceIx::FRONT,
-                costs: Castings::NONE,
-            },
-            Action::Resolve,
-            // The enters trigger, which targets the one opponent, resolves up to its question.
-            Action::Assert {
-                assertion: Assertion::Stack { count: 1 },
-            },
-            Action::Resolve,
-            Action::Answer {
-                player: P0,
-                kind: DecisionKind::YesNo,
-                pick: Pick::Yes,
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P1,
-                    zone: Zone::Exile,
-                    card: Some(SKYDIVER),
-                    count: 1,
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+
+    const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+
+    const THREE_PLAINS: &[Permanent] = &[
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+    ];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // The exiled Skydiver costs its owner {3}{U} on their turn: all four Islands.
+        Scenario::new("Spellbinder's card costs its owner {2} more")
+            .hand(P0, &[SPELLBINDER])
+            .battlefield(P0, THREE_PLAINS)
+            .hand(P1, &[SKYDIVER, names::ISLAND])
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: SPELLBINDER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::NONE,
                 },
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P1,
-                    zone: Zone::Hand,
-                    card: Some(SKYDIVER),
-                    count: 0,
+                Action::Resolve,
+                // The enters trigger, which targets the one opponent, resolves up to its question.
+                Action::Assert {
+                    assertion: Assertion::Stack { count: 1 },
                 },
-            },
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::PrecombatMain,
-            },
-            // Pass, an Island to play, the one P0 saw or the one just drawn, and the Skydiver
-            // unkicked: kicked, it would need five.
-            Action::Assert {
-                assertion: Assertion::Decision {
-                    player: P1,
-                    kind: DecisionKind::Priority,
-                    candidates: 4,
+                Action::Resolve,
+                Action::Answer {
+                    player: P0,
+                    kind: DecisionKind::YesNo,
+                    pick: Pick::Yes,
                 },
-            },
-            Action::Cast {
-                player: P1,
-                card: SKYDIVER,
-                face: FaceIx::FRONT,
-                costs: Castings::NONE,
-            },
-            Action::Assert {
-                assertion: Assertion::Tapped {
-                    player: P1,
-                    card: names::ISLAND,
-                    count: 4,
+                Action::Assert {
+                    assertion: Assertion::Count {
+                        player: P1,
+                        zone: Zone::Exile,
+                        card: Some(SKYDIVER),
+                        count: 1,
+                    },
                 },
-            },
-            Action::Resolve,
-            Action::Assert {
-                assertion: Assertion::Controls {
+                Action::Assert {
+                    assertion: Assertion::Count {
+                        player: P1,
+                        zone: Zone::Hand,
+                        card: Some(SKYDIVER),
+                        count: 0,
+                    },
+                },
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::PrecombatMain,
+                },
+                // Pass, an Island to play, the one P0 saw or the one just drawn, and the Skydiver
+                // unkicked: kicked, it would need five.
+                Action::Assert {
+                    assertion: Assertion::Decision {
+                        player: P1,
+                        kind: DecisionKind::Priority,
+                        candidates: 4,
+                    },
+                },
+                Action::Cast {
                     player: P1,
                     card: SKYDIVER,
-                    count: 1,
+                    face: FaceIx::FRONT,
+                    costs: Castings::NONE,
                 },
-            },
-        ]),
-    // Only lands: nothing to exile, nothing to ask.
-    Scenario::new("Spellbinder sees a hand of lands")
-        .hand(P0, &[SPELLBINDER])
-        .battlefield(P0, THREE_PLAINS)
-        .hand(P1, &[names::ISLAND, names::PLAINS])
-        .actions(&[
-            Action::Cast {
-                player: P0,
-                card: SPELLBINDER,
-                face: FaceIx::FRONT,
-                costs: Castings::NONE,
-            },
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::PostcombatMain,
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P1,
-                    zone: Zone::Exile,
-                    card: None,
-                    count: 0,
+                Action::Assert {
+                    assertion: Assertion::Tapped {
+                        player: P1,
+                        card: names::ISLAND,
+                        count: 4,
+                    },
                 },
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P1,
-                    zone: Zone::Hand,
-                    card: None,
-                    count: 2,
+                Action::Resolve,
+                Action::Assert {
+                    assertion: Assertion::Controls {
+                        player: P1,
+                        card: SKYDIVER,
+                        count: 1,
+                    },
                 },
-            },
-        ]),
-];
+            ]),
+        // Only lands: nothing to exile, nothing to ask.
+        Scenario::new("Spellbinder sees a hand of lands")
+            .hand(P0, &[SPELLBINDER])
+            .battlefield(P0, THREE_PLAINS)
+            .hand(P1, &[names::ISLAND, names::PLAINS])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: SPELLBINDER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::NONE,
+                },
+                Action::AdvanceTo {
+                    turn: 1,
+                    step: TurnStep::PostcombatMain,
+                },
+                Action::Assert {
+                    assertion: Assertion::Count {
+                        player: P1,
+                        zone: Zone::Exile,
+                        card: None,
+                        count: 0,
+                    },
+                },
+                Action::Assert {
+                    assertion: Assertion::Count {
+                        player: P1,
+                        zone: Zone::Hand,
+                        card: None,
+                        count: 2,
+                    },
+                },
+            ]),
+    ];
+}

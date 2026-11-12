@@ -7,9 +7,8 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::{Bitboard, DecisionKind, Zone};
+use beryl_engine::{Bitboard, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
 
@@ -31,6 +30,7 @@ pub static CARD: CardDef = CardDef {
 };
 
 const LOOK: u8 = 5;
+
 const TAKE: u8 = 2;
 
 /// The two for the hand are chosen one at a time and go there together; with two or fewer
@@ -69,101 +69,111 @@ fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
-const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const fn in_hand(card: &'static str) -> Action {
-    Action::assert(Assertion::Count {
-        player: P0,
-        zone: Zone::Hand,
-        card: Some(card),
-        count: 1,
-    })
+    use beryl_engine::{DecisionKind, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+
+    use crate::names;
+
+    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+
+    const fn in_hand(card: &'static str) -> Action {
+        Action::assert(Assertion::Count {
+            player: P0,
+            zone: Zone::Hand,
+            card: Some(card),
+            count: 1,
+        })
+    }
+
+    const fn take(card: &'static str) -> Action {
+        Action::choose(P0, DecisionKind::ChooseObject, card)
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Mana Crypt and Counterspell to the hand; Reprieve, then Plains, then Island to the
+        // bottom, each under the one before. The sixth card, Tundra, is now on top.
+        Scenario::new("Stock Up takes two of five and orders the rest on the bottom")
+            .battlefield(P0, ISLANDS)
+            .hand(P0, &[names::STOCK_UP])
+            .library(
+                P0,
+                &[
+                    names::ISLAND,
+                    names::PLAINS,
+                    names::MANA_CRYPT,
+                    names::COUNTERSPELL,
+                    names::REPRIEVE,
+                    names::TUNDRA,
+                ],
+            )
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, names::STOCK_UP),
+                Action::Resolve,
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseObject,
+                    candidates: 5,
+                }),
+                take(names::MANA_CRYPT),
+                take(names::COUNTERSPELL),
+                take(names::REPRIEVE),
+                take(names::PLAINS),
+                in_hand(names::MANA_CRYPT),
+                in_hand(names::COUNTERSPELL),
+                Action::assert(Assertion::Library {
+                    player: P0,
+                    top: &[names::TUNDRA, names::REPRIEVE, names::PLAINS, names::ISLAND],
+                }),
+            ]),
+        // Four cards: two to the hand, and the order of the other two on the bottom.
+        Scenario::new("Stock Up with four cards in the library")
+            .battlefield(P0, ISLANDS)
+            .hand(P0, &[names::STOCK_UP])
+            .library(
+                P0,
+                &[
+                    names::PLAINS,
+                    names::MANA_CRYPT,
+                    names::ISLAND,
+                    names::COUNTERSPELL,
+                ],
+            )
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, names::STOCK_UP),
+                Action::Resolve,
+                take(names::MANA_CRYPT),
+                take(names::COUNTERSPELL),
+                take(names::ISLAND),
+                in_hand(names::MANA_CRYPT),
+                in_hand(names::COUNTERSPELL),
+                Action::assert(Assertion::Library {
+                    player: P0,
+                    top: &[names::ISLAND, names::PLAINS],
+                }),
+            ]),
+        // Two cards: both go to the hand, with nothing to choose.
+        Scenario::new("Stock Up with two cards in the library")
+            .battlefield(P0, ISLANDS)
+            .hand(P0, &[names::STOCK_UP])
+            .library(P0, &[names::MANA_CRYPT, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, names::STOCK_UP),
+                Action::Resolve,
+                in_hand(names::MANA_CRYPT),
+                in_hand(names::PLAINS),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Library,
+                    card: None,
+                    count: 0,
+                }),
+            ]),
+    ];
 }
-
-const fn take(card: &'static str) -> Action {
-    Action::choose(P0, DecisionKind::ChooseObject, card)
-}
-
-pub const SCENARIOS: &[Scenario] = &[
-    // Mana Crypt and Counterspell to the hand; Reprieve, then Plains, then Island to the
-    // bottom, each under the one before. The sixth card, Tundra, is now on top.
-    Scenario::new("Stock Up takes two of five and orders the rest on the bottom")
-        .battlefield(P0, ISLANDS)
-        .hand(P0, &[names::STOCK_UP])
-        .library(
-            P0,
-            &[
-                names::ISLAND,
-                names::PLAINS,
-                names::MANA_CRYPT,
-                names::COUNTERSPELL,
-                names::REPRIEVE,
-                names::TUNDRA,
-            ],
-        )
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P0, names::STOCK_UP),
-            Action::Resolve,
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::ChooseObject,
-                candidates: 5,
-            }),
-            take(names::MANA_CRYPT),
-            take(names::COUNTERSPELL),
-            take(names::REPRIEVE),
-            take(names::PLAINS),
-            in_hand(names::MANA_CRYPT),
-            in_hand(names::COUNTERSPELL),
-            Action::assert(Assertion::Library {
-                player: P0,
-                top: &[names::TUNDRA, names::REPRIEVE, names::PLAINS, names::ISLAND],
-            }),
-        ]),
-    // Four cards: two to the hand, and the order of the other two on the bottom.
-    Scenario::new("Stock Up with four cards in the library")
-        .battlefield(P0, ISLANDS)
-        .hand(P0, &[names::STOCK_UP])
-        .library(
-            P0,
-            &[
-                names::PLAINS,
-                names::MANA_CRYPT,
-                names::ISLAND,
-                names::COUNTERSPELL,
-            ],
-        )
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P0, names::STOCK_UP),
-            Action::Resolve,
-            take(names::MANA_CRYPT),
-            take(names::COUNTERSPELL),
-            take(names::ISLAND),
-            in_hand(names::MANA_CRYPT),
-            in_hand(names::COUNTERSPELL),
-            Action::assert(Assertion::Library {
-                player: P0,
-                top: &[names::ISLAND, names::PLAINS],
-            }),
-        ]),
-    // Two cards: both go to the hand, with nothing to choose.
-    Scenario::new("Stock Up with two cards in the library")
-        .battlefield(P0, ISLANDS)
-        .hand(P0, &[names::STOCK_UP])
-        .library(P0, &[names::MANA_CRYPT, names::PLAINS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P0, names::STOCK_UP),
-            Action::Resolve,
-            in_hand(names::MANA_CRYPT),
-            in_hand(names::PLAINS),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Library,
-                card: None,
-                count: 0,
-            }),
-        ]),
-];

@@ -4,9 +4,6 @@ use beryl_engine::card::{
     Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types,
 };
 
-use beryl_engine::Zone;
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
-
 use crate::names;
 
 /// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land
@@ -24,27 +21,36 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-/// Two Swamps pay Damn's {B}{B}, which two Plains could not.
-pub const SCENARIOS: &[Scenario] = &[Scenario::new("two Swamps pay {B}{B}")
-    .battlefield(
-        P0,
-        &[Permanent::new(names::SWAMP), Permanent::new(names::SWAMP)],
-    )
-    .hand(P0, &[names::DAMN])
-    .battlefield(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
-    .library(P1, &[names::ISLAND])
-    .actions(&[
-        Action::cast(P0, names::DAMN),
-        Action::Resolve,
-        Action::assert(Assertion::Tapped {
-            player: P0,
-            card: names::SWAMP,
-            count: 2,
-        }),
-        Action::assert(Assertion::Count {
-            player: P1,
-            zone: Zone::Graveyard,
-            card: Some(names::ELITE_SPELLBINDER),
-            count: 1,
-        }),
-    ])];
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+
+    use beryl_engine::Zone;
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+
+    use crate::names;
+
+    /// Two Swamps pay Damn's {B}{B}, which two Plains could not.
+    pub const SCENARIOS: &[Scenario] = &[Scenario::new("two Swamps pay {B}{B}")
+        .battlefield(
+            P0,
+            &[Permanent::new(names::SWAMP), Permanent::new(names::SWAMP)],
+        )
+        .hand(P0, &[names::DAMN])
+        .battlefield(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::DAMN),
+            Action::Resolve,
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::SWAMP,
+                count: 2,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::ELITE_SPELLBINDER),
+                count: 1,
+            }),
+        ])];
+}

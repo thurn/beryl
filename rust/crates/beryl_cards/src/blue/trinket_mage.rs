@@ -9,9 +9,8 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
-use beryl_engine::{Bitboard, DecisionKind, Zone};
+use beryl_engine::{Bitboard, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -56,143 +55,153 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const MAGE: &str = names::TRINKET_MAGE;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+    use beryl_engine::{DecisionKind, Zone};
 
-const fn count(zone: Zone, card: Option<&'static str>, count: u8) -> Action {
-    Action::assert(Assertion::Count {
-        player: P0,
-        zone,
-        card,
-        count,
-    })
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const MAGE: &str = names::TRINKET_MAGE;
+
+    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+
+    const fn count(zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+        Action::assert(Assertion::Count {
+            player: P0,
+            zone,
+            card,
+            count,
+        })
+    }
+
+    /// Mana Crypt (mana value 0) and Portable Hole (1) qualify; Staff of the Storyteller is an
+    /// artifact of mana value 2, and Oust and the lands are not artifacts.
+    const LIBRARY: &[&str] = &[
+        names::ISLAND,
+        names::STAFF_OF_THE_STORYTELLER,
+        names::PORTABLE_HOLE,
+        names::OUST,
+        names::MANA_CRYPT,
+        names::PLAINS,
+    ];
+
+    /// Casts the Mage and resolves it, then its trigger, up to the "you may".
+    const ENTER: [Action; 3] = [Action::cast(P0, MAGE), Action::Resolve, Action::Resolve];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("Trinket Mage finds Mana Crypt")
+            .hand(P0, &[MAGE])
+            .battlefield(P0, ISLANDS)
+            .library(P0, LIBRARY)
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                // Finding nothing, the Crypt or the Hole.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseUpTo,
+                    candidates: 3,
+                }),
+                Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
+                count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+                count(Zone::Library, None, 5),
+                count(Zone::Battlefield, Some(MAGE), 1),
+            ]),
+        Scenario::new("Trinket Mage finds Portable Hole")
+            .hand(P0, &[MAGE])
+            .battlefield(P0, ISLANDS)
+            .library(P0, LIBRARY)
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::choose(P0, DecisionKind::ChooseUpTo, names::PORTABLE_HOLE),
+                count(Zone::Hand, Some(names::PORTABLE_HOLE), 1),
+                count(Zone::Library, Some(names::MANA_CRYPT), 1),
+            ]),
+        Scenario::new("Trinket Mage finds nothing although Mana Crypt is there")
+            .hand(P0, &[MAGE])
+            .battlefield(P0, ISLANDS)
+            .library(P0, LIBRARY)
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+                count(Zone::Hand, None, 0),
+                count(Zone::Library, Some(names::MANA_CRYPT), 1),
+                count(Zone::Library, None, 6),
+            ]),
+        // With no artifact of mana value 1 or less there is nothing to choose: the search finds
+        // nothing without a question.
+        Scenario::new("Trinket Mage searches a library without a trinket")
+            .hand(P0, &[MAGE])
+            .battlefield(P0, ISLANDS)
+            .library(
+                P0,
+                &[names::STAFF_OF_THE_STORYTELLER, names::OUST, names::PLAINS],
+            )
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                count(Zone::Hand, None, 0),
+                count(Zone::Library, None, 3),
+                Action::assert(Assertion::Stack { count: 0 }),
+            ]),
+        Scenario::new("Trinket Mage declines to search")
+            .hand(P0, &[MAGE])
+            .battlefield(P0, ISLANDS)
+            .library(P0, LIBRARY)
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::No),
+                count(Zone::Hand, None, 0),
+                // Unsearched and unshuffled.
+                Action::assert(Assertion::Library {
+                    player: P0,
+                    top: LIBRARY,
+                }),
+            ]),
+        // UI regression by-kac: a known library top must not add a separate Search? prompt.
+        Scenario::new("Trinket Mage searches with a known library top")
+            .hand(P0, &[MAGE])
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .library(P0, LIBRARY)
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::activate(P0, names::JACE_THE_MIND_SCULPTOR, 0),
+                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+                Action::answer(P0, DecisionKind::YesNo, Pick::No),
+                ENTER[0],
+                ENTER[1],
+                ENTER[2],
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
+                count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+            ]),
+    ];
 }
-
-/// Mana Crypt (mana value 0) and Portable Hole (1) qualify; Staff of the Storyteller is an
-/// artifact of mana value 2, and Oust and the lands are not artifacts.
-const LIBRARY: &[&str] = &[
-    names::ISLAND,
-    names::STAFF_OF_THE_STORYTELLER,
-    names::PORTABLE_HOLE,
-    names::OUST,
-    names::MANA_CRYPT,
-    names::PLAINS,
-];
-
-/// Casts the Mage and resolves it, then its trigger, up to the "you may".
-const ENTER: [Action; 3] = [Action::cast(P0, MAGE), Action::Resolve, Action::Resolve];
-
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("Trinket Mage finds Mana Crypt")
-        .hand(P0, &[MAGE])
-        .battlefield(P0, ISLANDS)
-        .library(P0, LIBRARY)
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            // Finding nothing, the Crypt or the Hole.
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::ChooseUpTo,
-                candidates: 3,
-            }),
-            Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
-            count(Zone::Hand, Some(names::MANA_CRYPT), 1),
-            count(Zone::Library, None, 5),
-            count(Zone::Battlefield, Some(MAGE), 1),
-        ]),
-    Scenario::new("Trinket Mage finds Portable Hole")
-        .hand(P0, &[MAGE])
-        .battlefield(P0, ISLANDS)
-        .library(P0, LIBRARY)
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::choose(P0, DecisionKind::ChooseUpTo, names::PORTABLE_HOLE),
-            count(Zone::Hand, Some(names::PORTABLE_HOLE), 1),
-            count(Zone::Library, Some(names::MANA_CRYPT), 1),
-        ]),
-    Scenario::new("Trinket Mage finds nothing although Mana Crypt is there")
-        .hand(P0, &[MAGE])
-        .battlefield(P0, ISLANDS)
-        .library(P0, LIBRARY)
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
-            count(Zone::Hand, None, 0),
-            count(Zone::Library, Some(names::MANA_CRYPT), 1),
-            count(Zone::Library, None, 6),
-        ]),
-    // With no artifact of mana value 1 or less there is nothing to choose: the search finds
-    // nothing without a question.
-    Scenario::new("Trinket Mage searches a library without a trinket")
-        .hand(P0, &[MAGE])
-        .battlefield(P0, ISLANDS)
-        .library(
-            P0,
-            &[names::STAFF_OF_THE_STORYTELLER, names::OUST, names::PLAINS],
-        )
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            count(Zone::Hand, None, 0),
-            count(Zone::Library, None, 3),
-            Action::assert(Assertion::Stack { count: 0 }),
-        ]),
-    Scenario::new("Trinket Mage declines to search")
-        .hand(P0, &[MAGE])
-        .battlefield(P0, ISLANDS)
-        .library(P0, LIBRARY)
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::No),
-            count(Zone::Hand, None, 0),
-            // Unsearched and unshuffled.
-            Action::assert(Assertion::Library {
-                player: P0,
-                top: LIBRARY,
-            }),
-        ]),
-    // UI regression by-kac: a known library top must not add a separate Search? prompt.
-    Scenario::new("Trinket Mage searches with a known library top")
-        .hand(P0, &[MAGE])
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .library(P0, LIBRARY)
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            Action::activate(P0, names::JACE_THE_MIND_SCULPTOR, 0),
-            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
-            Action::answer(P0, DecisionKind::YesNo, Pick::No),
-            ENTER[0],
-            ENTER[1],
-            ENTER[2],
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
-            count(Zone::Hand, Some(names::MANA_CRYPT), 1),
-        ]),
-];

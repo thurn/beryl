@@ -105,9 +105,13 @@ def rulings(oracle_id: str) -> list[Json] | str:
     return sorted(found, key=lambda r: str(r.get("published_at", "")))
 
 
+# Where a card file's scenarios begin: the module behind the `scenarios` feature.
+SCENARIOS_START = r'#\[cfg\(feature = "scenarios"\)\]|pub const SCENARIOS'
+
+
 def definition(path: Path) -> str:
     """A card file's definition: its code before its scenarios, comments left out."""
-    text = path.read_text().split("pub const SCENARIOS", 1)[0]
+    text = re.split(SCENARIOS_START, path.read_text(), maxsplit=1)[0]
     return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
 
 

@@ -3,16 +3,15 @@
 //! puts it on their choice of the top or bottom of their library. Evoke—Exile a blue card
 //! from your hand."
 
+use beryl_engine::Bitboard;
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost,
-    Place, Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Place, Prompt,
+    Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::TargetPlace;
-use beryl_engine::{Bitboard, DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -67,174 +66,186 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-const TEFERI: &str = names::TEFERI_TIME_RAVELER;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use beryl_engine::card::{Castings, FaceIx};
 
-const fn library(player: Seat, top: &'static [&'static str]) -> Action {
-    Action::assert(Assertion::Library { player, top })
+    use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+
+    const TEFERI: &str = names::TEFERI_TIME_RAVELER;
+
+    const fn library(player: Seat, top: &'static [&'static str]) -> Action {
+        Action::assert(Assertion::Library { player, top })
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Cast for {2}{U}{U} in response to P1's Elite Spellbinder, which P1 puts on top. The
+        // Plains in P1's hand keeps P1's main phase a decision once the stack is empty.
+        Scenario::new("Subtlety hard cast: the creature spell's owner puts it on top")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(P0, &[names::SUBTLETY])
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .hand(P1, &[SPELLBINDER, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P1, SPELLBINDER),
+                // Passing and the cast for mana: with no other blue card in hand, no evoke.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+                Action::cast(P0, names::SUBTLETY),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                Action::Resolve,
+                Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
+                library(P1, &[SPELLBINDER, names::ISLAND]),
+                Action::assert(Assertion::Stack { count: 0 }),
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: names::SUBTLETY,
+                    count: 1,
+                }),
+            ]),
+        // Evoked with no mana, exiling Mana Drain, against P1's Teferi. P0 orders the triggers so
+        // the sacrifice resolves first; the tuck resolves anyway, and P1 puts Teferi on the
+        // bottom.
+        Scenario::new("Subtlety evoked: sacrificed, its trigger still tucks a planeswalker spell")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .hand(P0, &[names::SUBTLETY, names::MANA_DRAIN])
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(P1, &[TEFERI, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P1, TEFERI),
+                Action::Cast {
+                    player: P0,
+                    card: names::SUBTLETY,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: Some(names::MANA_DRAIN),
+                    count: 1,
+                }),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::TriggerOrder, names::SUBTLETY),
+                Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                // The sacrifice: the tuck and Teferi are left.
+                Action::Resolve,
+                Action::assert(Assertion::Stack { count: 2 }),
+                Action::Resolve,
+                Action::answer(P1, DecisionKind::YesNo, Pick::No),
+                library(P1, &[names::ISLAND, TEFERI]),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: Some(names::SUBTLETY),
+                    count: 1,
+                }),
+            ]),
+        // With mana for its cost and two other blue cards in hand, both casts are offered; evoked,
+        // P0 picks which blue card to exile.
+        Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                    Permanent::new(names::ISLAND),
+                ],
+            )
+            .hand(
+                P0,
+                &[
+                    names::SUBTLETY,
+                    names::TIME_SPIRAL,
+                    names::FRACTURED_IDENTITY,
+                ],
+            )
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .hand(P1, &[SPELLBINDER, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P1, SPELLBINDER),
+                // Passing, the cast for mana and the evoke.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 3,
+                }),
+                Action::Cast {
+                    player: P0,
+                    card: names::SUBTLETY,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseObject,
+                    candidates: 2,
+                }),
+                Action::choose(P0, DecisionKind::ChooseObject, names::TIME_SPIRAL),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: Some(names::TIME_SPIRAL),
+                    count: 1,
+                }),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::TriggerOrder, names::SUBTLETY),
+                Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                Action::Resolve,
+                Action::Resolve,
+                Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
+                library(P1, &[SPELLBINDER, names::ISLAND]),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: Some(names::SUBTLETY),
+                    count: 1,
+                }),
+            ]),
+    ];
 }
-
-pub const SCENARIOS: &[Scenario] = &[
-    // Cast for {2}{U}{U} in response to P1's Elite Spellbinder, which P1 puts on top. The
-    // Plains in P1's hand keeps P1's main phase a decision once the stack is empty.
-    Scenario::new("Subtlety hard cast: the creature spell's owner puts it on top")
-        .at(2, P1, TurnStep::PrecombatMain)
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .hand(P0, &[names::SUBTLETY])
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-            ],
-        )
-        .hand(P1, &[SPELLBINDER, names::PLAINS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P1, SPELLBINDER),
-            // Passing and the cast for mana: with no other blue card in hand, no evoke.
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-            Action::cast(P0, names::SUBTLETY),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            Action::Resolve,
-            Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
-            library(P1, &[SPELLBINDER, names::ISLAND]),
-            Action::assert(Assertion::Stack { count: 0 }),
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: names::SUBTLETY,
-                count: 1,
-            }),
-        ]),
-    // Evoked with no mana, exiling Mana Drain, against P1's Teferi. P0 orders the triggers so
-    // the sacrifice resolves first; the tuck resolves anyway, and P1 puts Teferi on the
-    // bottom.
-    Scenario::new("Subtlety evoked: sacrificed, its trigger still tucks a planeswalker spell")
-        .at(2, P1, TurnStep::PrecombatMain)
-        .hand(P0, &[names::SUBTLETY, names::MANA_DRAIN])
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .hand(P1, &[TEFERI, names::PLAINS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P1, TEFERI),
-            Action::Cast {
-                player: P0,
-                card: names::SUBTLETY,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Exile,
-                card: Some(names::MANA_DRAIN),
-                count: 1,
-            }),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::TriggerOrder, names::SUBTLETY),
-            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            // The sacrifice: the tuck and Teferi are left.
-            Action::Resolve,
-            Action::assert(Assertion::Stack { count: 2 }),
-            Action::Resolve,
-            Action::answer(P1, DecisionKind::YesNo, Pick::No),
-            library(P1, &[names::ISLAND, TEFERI]),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: Some(names::SUBTLETY),
-                count: 1,
-            }),
-        ]),
-    // With mana for its cost and two other blue cards in hand, both casts are offered; evoked,
-    // P0 picks which blue card to exile.
-    Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
-        .at(2, P1, TurnStep::PrecombatMain)
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .hand(
-            P0,
-            &[
-                names::SUBTLETY,
-                names::TIME_SPIRAL,
-                names::FRACTURED_IDENTITY,
-            ],
-        )
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-            ],
-        )
-        .hand(P1, &[SPELLBINDER, names::PLAINS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P1, SPELLBINDER),
-            // Passing, the cast for mana and the evoke.
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 3,
-            }),
-            Action::Cast {
-                player: P0,
-                card: names::SUBTLETY,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::ChooseObject,
-                candidates: 2,
-            }),
-            Action::choose(P0, DecisionKind::ChooseObject, names::TIME_SPIRAL),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Exile,
-                card: Some(names::TIME_SPIRAL),
-                count: 1,
-            }),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::TriggerOrder, names::SUBTLETY),
-            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            Action::Resolve,
-            Action::Resolve,
-            Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
-            library(P1, &[SPELLBINDER, names::ISLAND]),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: Some(names::SUBTLETY),
-                count: 1,
-            }),
-        ]),
-];

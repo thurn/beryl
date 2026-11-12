@@ -556,7 +556,7 @@ fn a_cleanup_discard_triggers_currency_converter() {
 /// whatever card it deals there.
 #[test]
 fn a_face_down_card_is_hidden_until_it_leaves() {
-    let scenario = blue::abhorrent_oculus::SCENARIOS
+    let scenario = blue::abhorrent_oculus::scenarios::SCENARIOS
         .iter()
         .find(|s| s.name == "A face-down permanent leaving the battlefield is revealed")
         .expect("the scenario");
@@ -592,7 +592,7 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
 /// turned face up (CR 701.40b).
 #[test]
 fn a_copy_of_a_face_down_permanent_hides_its_card() {
-    let scenario = blue::abhorrent_oculus::SCENARIOS
+    let scenario = blue::abhorrent_oculus::scenarios::SCENARIOS
         .iter()
         .find(|s| s.name == "Fractured Identity copies a face-down permanent as a 2/2")
         .expect("the scenario");
@@ -695,7 +695,7 @@ fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
 /// graveyard" does nothing until a card is exiled with it (CR 607.2a), and then does.
 #[test]
 fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
-    use crate::colorless::currency_converter::SCENARIOS as CONVERTER;
+    use crate::colorless::currency_converter::scenarios::SCENARIOS as CONVERTER;
     use beryl_engine::card::ObjectAbility;
     let scenario = CONVERTER
         .iter()

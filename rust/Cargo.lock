@@ -170,6 +170,7 @@ name = "beryl_cards"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
  "serde_json",

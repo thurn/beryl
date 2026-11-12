@@ -11,12 +11,11 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
-use beryl_engine::{Bitboard, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Bitboard, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
-use crate::tokens::{TREASURE, TREASURE_TOKEN};
+use crate::tokens::TREASURE;
 
 /// The Rogue token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
@@ -122,231 +121,254 @@ pub static CARD: CardDef = CardDef {
     tokens: &[&TREASURE, &ROGUE],
 };
 
-const CONVERTER: &str = names::CURRENCY_CONVERTER;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const fn count(player: beryl_engine::Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Count {
-        player,
-        zone,
-        card: Some(card),
-        count,
-    })
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use super::ROGUE_TOKEN;
+    use crate::names;
+    use crate::tokens::TREASURE_TOKEN;
+
+    const CONVERTER: &str = names::CURRENCY_CONVERTER;
+
+    const fn count(
+        player: beryl_engine::Seat,
+        zone: Zone,
+        card: &'static str,
+        count: u8,
+    ) -> Action {
+        Action::assert(Assertion::Count {
+            player,
+            zone,
+            card: Some(card),
+            count,
+        })
+    }
+
+    const fn controls(card: &'static str, count: u8) -> Action {
+        Action::assert(Assertion::Controls {
+            player: P0,
+            card,
+            count,
+        })
+    }
+
+    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+
+    const ISLAND: Permanent = Permanent::new(names::ISLAND);
+
+    const PERMANENT: Permanent = Permanent::new(CONVERTER);
+
+    /// The Converter and the {2} for its loot.
+    const LOOTING: &[Permanent] = &[PERMANENT, ISLAND, ISLAND];
+
+    /// The Converter, the {2} for its loot and the {1} to cast it again.
+    const LOOTING_AND_RECASTING: &[Permanent] = &[PERMANENT, ISLAND, ISLAND, ISLAND];
+
+    /// The Converter and the {2}{U} for Thirst for Discovery.
+    const CASTING_THIRST: &[Permanent] = &[PERMANENT, ISLAND, ISLAND, ISLAND];
+
+    /// The Converter, the {2} for its loot, and Jace, Vryn's Prodigy to loot too.
+    const LOOTING_WITH_JACE: &[Permanent] = &[
+        PERMANENT,
+        ISLAND,
+        ISLAND,
+        Permanent::new(names::JACE_VRYNS_PRODIGY),
+    ];
+
+    /// The Converter, the {2} for its loot, and a tapped Jace, Vryn's Prodigy, which can neither
+    /// loot nor attack on the first turn.
+    const LOOTING_BESIDE_JACE: &[Permanent] = &[
+        PERMANENT,
+        ISLAND,
+        ISLAND,
+        Permanent::new(names::JACE_VRYNS_PRODIGY).tapped(),
+    ];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // The loot discards Oust, which the trigger exiles. Next turn the Converter puts it into
+        // the graveyard: a nonland card, so a Rogue.
+        Scenario::new("Currency Converter exiles its own loot's discard for a Rogue")
+            .battlefield(P0, LOOTING)
+            .hand(P0, &[names::OUST])
+            .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
+            .library(P1, &[names::ISLAND, names::ISLAND])
+            .actions(&[
+                Action::activate(P0, CONVERTER, 1),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                count(P0, Zone::Exile, names::OUST, 1),
+                count(P0, Zone::Graveyard, names::OUST, 0),
+                count(P0, Zone::Hand, names::PLAINS, 1),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P0, CONVERTER, 2),
+                Action::Resolve,
+                count(P0, Zone::Graveyard, names::OUST, 1),
+                controls(ROGUE_TOKEN, 1),
+                Action::assert(Assertion::Pt {
+                    player: P0,
+                    card: ROGUE_TOKEN,
+                    token: true,
+                    power: 2,
+                    toughness: 2,
+                }),
+                controls(TREASURE_TOKEN, 0),
+            ]),
+        // Jace's loot discards an Island; the Converter may exile it but doesn't, so its {T} finds
+        // nothing to return and makes nothing.
+        Scenario::new("Currency Converter declines to exile another loot's discard")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(CONVERTER),
+                    Permanent::new(names::JACE_VRYNS_PRODIGY),
+                ],
+            )
+            .hand(P0, &[names::ISLAND])
+            .library(P0, &[names::PLAINS, names::PLAINS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::No),
+                count(P0, Zone::Graveyard, names::ISLAND, 1),
+                Action::activate(P0, CONVERTER, 2),
+                Action::Resolve,
+                count(P0, Zone::Graveyard, names::ISLAND, 1),
+                controls(TREASURE_TOKEN, 0),
+                controls(ROGUE_TOKEN, 0),
+            ]),
+        // Thirst for Discovery discards Tundra and Counterspell, one at a time: one trigger for
+        // each card, both exiled.
+        Scenario::new("Currency Converter exiles Thirst for Discovery's discards")
+            .battlefield(P0, CASTING_THIRST)
+            .hand(P0, &[names::THIRST_FOR_DISCOVERY])
+            .library(
+                P0,
+                &[
+                    names::TUNDRA,
+                    names::MANA_CRYPT,
+                    names::COUNTERSPELL,
+                    names::ISLAND,
+                ],
+            )
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::cast(P0, names::THIRST_FOR_DISCOVERY),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::TUNDRA),
+                Action::choose(P0, DecisionKind::ChooseObject, names::COUNTERSPELL),
+                // The two triggers carry different cards, so their order is a choice.
+                Action::choose(P0, DecisionKind::TriggerOrder, CONVERTER),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                count(P0, Zone::Exile, names::TUNDRA, 1),
+                count(P0, Zone::Exile, names::COUNTERSPELL, 1),
+                count(P0, Zone::Hand, names::MANA_CRYPT, 1),
+            ]),
+        // Jace's loot discards an Island and the Converter's own loot Oust: the Converter exiles
+        // both. Next turn it returns the land of the two, for a Treasure.
+        Scenario::new("Currency Converter chooses among its exiled cards")
+            .battlefield(P0, LOOTING_WITH_JACE)
+            .hand(P0, &[names::ISLAND, names::OUST])
+            .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
+            .library(P1, &[names::ISLAND, names::ISLAND])
+            .actions(&[
+                Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::activate(P0, CONVERTER, 1),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                count(P0, Zone::Exile, names::ISLAND, 1),
+                count(P0, Zone::Exile, names::OUST, 1),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P0, CONVERTER, 2),
+                Action::Resolve,
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseObject,
+                    candidates: 2,
+                }),
+                Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
+                count(P0, Zone::Graveyard, names::ISLAND, 1),
+                count(P0, Zone::Exile, names::OUST, 1),
+                controls(TREASURE_TOKEN, 1),
+                controls(ROGUE_TOKEN, 0),
+            ]),
+        // P1 returns the Converter to P0's hand in response to its {T}. The ability still refers
+        // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
+        // Rogue. Jace makes the target a choice, which the oracles are then told.
+        Scenario::new("Currency Converter's ability returns a card after the Converter left")
+            .battlefield(P0, LOOTING_BESIDE_JACE)
+            .hand(P0, &[names::OUST])
+            .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
+            .battlefield(P1, ISLANDS)
+            .hand(P1, &[names::SINK_INTO_STUPOR])
+            .library(P1, &[names::ISLAND, names::ISLAND])
+            .actions(&[
+                Action::activate(P0, CONVERTER, 1),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P0, CONVERTER, 2),
+                Action::pass(P0),
+                Action::cast(P1, names::SINK_INTO_STUPOR),
+                Action::choose(P1, DecisionKind::Target, CONVERTER),
+                Action::Resolve,
+                count(P0, Zone::Hand, CONVERTER, 1),
+                Action::Resolve,
+                count(P0, Zone::Graveyard, names::OUST, 1),
+                controls(ROGUE_TOKEN, 1),
+            ]),
+        // P1 returns the Converter to P0's hand after it exiled Oust. Recast, it is a new object
+        // (CR 400.7), and Oust was exiled with the old one: its {T} finds nothing.
+        Scenario::new("Currency Converter's exiled cards stay with the Converter that exiled them")
+            .battlefield(P0, LOOTING_AND_RECASTING)
+            .hand(P0, &[names::OUST])
+            .library(P0, &[names::PLAINS, names::PLAINS])
+            .battlefield(P1, ISLANDS)
+            .hand(P1, &[names::SINK_INTO_STUPOR])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::activate(P0, CONVERTER, 1),
+                Action::Resolve,
+                Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
+                Action::Resolve,
+                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                Action::pass(P0),
+                Action::cast(P1, names::SINK_INTO_STUPOR),
+                count(P0, Zone::Hand, CONVERTER, 1),
+                Action::cast(P0, CONVERTER),
+                Action::Resolve,
+                Action::activate(P0, CONVERTER, 2),
+                Action::Resolve,
+                count(P0, Zone::Exile, names::OUST, 1),
+                controls(ROGUE_TOKEN, 0),
+            ]),
+    ];
 }
-
-const fn controls(card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Controls {
-        player: P0,
-        card,
-        count,
-    })
-}
-
-const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
-const ISLAND: Permanent = Permanent::new(names::ISLAND);
-const PERMANENT: Permanent = Permanent::new(CONVERTER);
-/// The Converter and the {2} for its loot.
-const LOOTING: &[Permanent] = &[PERMANENT, ISLAND, ISLAND];
-/// The Converter, the {2} for its loot and the {1} to cast it again.
-const LOOTING_AND_RECASTING: &[Permanent] = &[PERMANENT, ISLAND, ISLAND, ISLAND];
-/// The Converter and the {2}{U} for Thirst for Discovery.
-const CASTING_THIRST: &[Permanent] = &[PERMANENT, ISLAND, ISLAND, ISLAND];
-/// The Converter, the {2} for its loot, and Jace, Vryn's Prodigy to loot too.
-const LOOTING_WITH_JACE: &[Permanent] = &[
-    PERMANENT,
-    ISLAND,
-    ISLAND,
-    Permanent::new(names::JACE_VRYNS_PRODIGY),
-];
-
-/// The Converter, the {2} for its loot, and a tapped Jace, Vryn's Prodigy, which can neither
-/// loot nor attack on the first turn.
-const LOOTING_BESIDE_JACE: &[Permanent] = &[
-    PERMANENT,
-    ISLAND,
-    ISLAND,
-    Permanent::new(names::JACE_VRYNS_PRODIGY).tapped(),
-];
-
-pub const SCENARIOS: &[Scenario] = &[
-    // The loot discards Oust, which the trigger exiles. Next turn the Converter puts it into
-    // the graveyard: a nonland card, so a Rogue.
-    Scenario::new("Currency Converter exiles its own loot's discard for a Rogue")
-        .battlefield(P0, LOOTING)
-        .hand(P0, &[names::OUST])
-        .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
-        .library(P1, &[names::ISLAND, names::ISLAND])
-        .actions(&[
-            Action::activate(P0, CONVERTER, 1),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            count(P0, Zone::Exile, names::OUST, 1),
-            count(P0, Zone::Graveyard, names::OUST, 0),
-            count(P0, Zone::Hand, names::PLAINS, 1),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P0, CONVERTER, 2),
-            Action::Resolve,
-            count(P0, Zone::Graveyard, names::OUST, 1),
-            controls(ROGUE_TOKEN, 1),
-            Action::assert(Assertion::Pt {
-                player: P0,
-                card: ROGUE_TOKEN,
-                token: true,
-                power: 2,
-                toughness: 2,
-            }),
-            controls(TREASURE_TOKEN, 0),
-        ]),
-    // Jace's loot discards an Island; the Converter may exile it but doesn't, so its {T} finds
-    // nothing to return and makes nothing.
-    Scenario::new("Currency Converter declines to exile another loot's discard")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(CONVERTER),
-                Permanent::new(names::JACE_VRYNS_PRODIGY),
-            ],
-        )
-        .hand(P0, &[names::ISLAND])
-        .library(P0, &[names::PLAINS, names::PLAINS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::No),
-            count(P0, Zone::Graveyard, names::ISLAND, 1),
-            Action::activate(P0, CONVERTER, 2),
-            Action::Resolve,
-            count(P0, Zone::Graveyard, names::ISLAND, 1),
-            controls(TREASURE_TOKEN, 0),
-            controls(ROGUE_TOKEN, 0),
-        ]),
-    // Thirst for Discovery discards Tundra and Counterspell, one at a time: one trigger for
-    // each card, both exiled.
-    Scenario::new("Currency Converter exiles Thirst for Discovery's discards")
-        .battlefield(P0, CASTING_THIRST)
-        .hand(P0, &[names::THIRST_FOR_DISCOVERY])
-        .library(
-            P0,
-            &[
-                names::TUNDRA,
-                names::MANA_CRYPT,
-                names::COUNTERSPELL,
-                names::ISLAND,
-            ],
-        )
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::cast(P0, names::THIRST_FOR_DISCOVERY),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::TUNDRA),
-            Action::choose(P0, DecisionKind::ChooseObject, names::COUNTERSPELL),
-            // The two triggers carry different cards, so their order is a choice.
-            Action::choose(P0, DecisionKind::TriggerOrder, CONVERTER),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            count(P0, Zone::Exile, names::TUNDRA, 1),
-            count(P0, Zone::Exile, names::COUNTERSPELL, 1),
-            count(P0, Zone::Hand, names::MANA_CRYPT, 1),
-        ]),
-    // Jace's loot discards an Island and the Converter's own loot Oust: the Converter exiles
-    // both. Next turn it returns the land of the two, for a Treasure.
-    Scenario::new("Currency Converter chooses among its exiled cards")
-        .battlefield(P0, LOOTING_WITH_JACE)
-        .hand(P0, &[names::ISLAND, names::OUST])
-        .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
-        .library(P1, &[names::ISLAND, names::ISLAND])
-        .actions(&[
-            Action::activate(P0, names::JACE_VRYNS_PRODIGY, 0),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::activate(P0, CONVERTER, 1),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            count(P0, Zone::Exile, names::ISLAND, 1),
-            count(P0, Zone::Exile, names::OUST, 1),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P0, CONVERTER, 2),
-            Action::Resolve,
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::ChooseObject,
-                candidates: 2,
-            }),
-            Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
-            count(P0, Zone::Graveyard, names::ISLAND, 1),
-            count(P0, Zone::Exile, names::OUST, 1),
-            controls(TREASURE_TOKEN, 1),
-            controls(ROGUE_TOKEN, 0),
-        ]),
-    // P1 returns the Converter to P0's hand in response to its {T}. The ability still refers
-    // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
-    // Rogue. Jace makes the target a choice, which the oracles are then told.
-    Scenario::new("Currency Converter's ability returns a card after the Converter left")
-        .battlefield(P0, LOOTING_BESIDE_JACE)
-        .hand(P0, &[names::OUST])
-        .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
-        .battlefield(P1, ISLANDS)
-        .hand(P1, &[names::SINK_INTO_STUPOR])
-        .library(P1, &[names::ISLAND, names::ISLAND])
-        .actions(&[
-            Action::activate(P0, CONVERTER, 1),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P0, CONVERTER, 2),
-            Action::pass(P0),
-            Action::cast(P1, names::SINK_INTO_STUPOR),
-            Action::choose(P1, DecisionKind::Target, CONVERTER),
-            Action::Resolve,
-            count(P0, Zone::Hand, CONVERTER, 1),
-            Action::Resolve,
-            count(P0, Zone::Graveyard, names::OUST, 1),
-            controls(ROGUE_TOKEN, 1),
-        ]),
-    // P1 returns the Converter to P0's hand after it exiled Oust. Recast, it is a new object
-    // (CR 400.7), and Oust was exiled with the old one: its {T} finds nothing.
-    Scenario::new("Currency Converter's exiled cards stay with the Converter that exiled them")
-        .battlefield(P0, LOOTING_AND_RECASTING)
-        .hand(P0, &[names::OUST])
-        .library(P0, &[names::PLAINS, names::PLAINS])
-        .battlefield(P1, ISLANDS)
-        .hand(P1, &[names::SINK_INTO_STUPOR])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::activate(P0, CONVERTER, 1),
-            Action::Resolve,
-            Action::choose(P0, DecisionKind::ChooseObject, names::OUST),
-            Action::Resolve,
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            Action::pass(P0),
-            Action::cast(P1, names::SINK_INTO_STUPOR),
-            count(P0, Zone::Hand, CONVERTER, 1),
-            Action::cast(P0, CONVERTER),
-            Action::Resolve,
-            Action::activate(P0, CONVERTER, 2),
-            Action::Resolve,
-            count(P0, Zone::Exile, names::OUST, 1),
-            controls(ROGUE_TOKEN, 0),
-        ]),
-];

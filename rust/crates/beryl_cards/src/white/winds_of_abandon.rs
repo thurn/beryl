@@ -4,19 +4,18 @@
 //! {4}{W}{W} (You may cast this spell for its overload cost. If you do, change "target" in its
 //! text to "each.")"
 
+use beryl_engine::Zone;
 use beryl_engine::bitboard::Bitboard;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, ManaCost,
-    Supertypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Supertypes,
+    TargetKind, TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Evaluate, Filter, Whose};
 use beryl_engine::layout::{PerPlayer, Table};
 use beryl_engine::state::TargetPlace;
-use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -123,160 +122,175 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const WINDS: &str = names::WINDS_OF_ABANDON;
-const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-const SKYDIVER: &str = names::THIEVING_SKYDIVER;
-const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const fn controls(player: Seat, card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Controls {
-        player,
-        card,
-        count,
-    })
+    use beryl_engine::card::{Castings, FaceIx};
+
+    use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const WINDS: &str = names::WINDS_OF_ABANDON;
+
+    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+
+    const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+
+    const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
+
+    const fn controls(player: Seat, card: &'static str, count: u8) -> Action {
+        Action::assert(Assertion::Controls {
+            player,
+            card,
+            count,
+        })
+    }
+
+    const fn tapped(player: Seat, card: &'static str, count: u8) -> Action {
+        Action::assert(Assertion::Tapped {
+            player,
+            card,
+            count,
+        })
+    }
+
+    const SIX_PLAINS_AND_ADELINE: &[Permanent] = &[
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(ADELINE),
+    ];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Its one target is the creature P0 doesn't control; P1 finds a Plains, which enters
+        // tapped, from a library with a nonbasic land too.
+        Scenario::new("Winds of Abandon exiles a creature; its controller fetches a tapped basic")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(ADELINE),
+                ],
+            )
+            .hand(P0, &[WINDS, names::PLAINS])
+            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .library(P1, &[names::TUNDRA, names::PLAINS, names::ISLAND])
+            .actions(&[
+                Action::cast(P0, WINDS),
+                Action::Resolve,
+                Action::choose(P1, DecisionKind::ChooseUpTo, names::PLAINS),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Exile,
+                    card: Some(SPELLBINDER),
+                    count: 1,
+                }),
+                controls(P0, ADELINE, 1),
+                controls(P1, names::PLAINS, 1),
+                tapped(P1, names::PLAINS, 1),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Library,
+                    card: None,
+                    count: 2,
+                }),
+            ]),
+        // Overloaded, it exiles both of P1's creatures and spares P0's; P1 may find two basics
+        // and finds the Island, then is done.
+        Scenario::new("Winds of Abandon overloaded: a basic per creature exiled")
+            .battlefield(P0, SIX_PLAINS_AND_ADELINE)
+            .hand(P0, &[WINDS, names::PLAINS])
+            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(SKYDIVER)])
+            .library(P1, &[names::ISLAND, names::PLAINS, names::TUNDRA])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: WINDS,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::Resolve,
+                Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),
+                Action::answer(P1, DecisionKind::ChooseUpTo, Pick::Done),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Exile,
+                    card: None,
+                    count: 2,
+                }),
+                controls(P0, ADELINE, 1),
+                controls(P1, names::ISLAND, 1),
+                controls(P1, names::PLAINS, 0),
+                tapped(P1, names::ISLAND, 1),
+            ]),
+        // A library with no basic land: the search finds nothing and asks nothing.
+        Scenario::new("Winds of Abandon: no basic land to find")
+            .battlefield(
+                P0,
+                &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
+            )
+            .hand(P0, &[WINDS, names::PLAINS])
+            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .library(P1, &[names::TUNDRA, names::SEACHROME_COAST])
+            .actions(&[
+                Action::cast(P0, WINDS),
+                Action::Resolve,
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Exile,
+                    card: Some(SPELLBINDER),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Battlefield,
+                    card: None,
+                    count: 0,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Library,
+                    card: None,
+                    count: 2,
+                }),
+            ]),
+        // UI regression by-yfw: the token leaves while Winds stays on the stack for the search.
+        Scenario::new("Winds of Abandon exiles a token before its controller searches")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
+            )
+            .hand(P0, &[names::WINDS_OF_ABANDON, names::PLAINS])
+            .battlefield(
+                P1,
+                &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
+            )
+            .hand(P1, &[names::STAFF_OF_THE_STORYTELLER])
+            .library(P0, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[names::ISLAND, names::PLAINS])
+            .actions(&[
+                // Create the token in play: external engines do not share Beryl token names.
+                Action::cast(P1, names::STAFF_OF_THE_STORYTELLER),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::cast(P0, names::WINDS_OF_ABANDON),
+                Action::Resolve,
+                Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),
+                Action::assert(Assertion::Controls {
+                    player: P1,
+                    card: "Spirit Token",
+                    count: 0,
+                }),
+            ]),
+    ];
 }
-
-const fn tapped(player: Seat, card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Tapped {
-        player,
-        card,
-        count,
-    })
-}
-
-const SIX_PLAINS_AND_ADELINE: &[Permanent] = &[
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(ADELINE),
-];
-
-pub const SCENARIOS: &[Scenario] = &[
-    // Its one target is the creature P0 doesn't control; P1 finds a Plains, which enters
-    // tapped, from a library with a nonbasic land too.
-    Scenario::new("Winds of Abandon exiles a creature; its controller fetches a tapped basic")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(ADELINE),
-            ],
-        )
-        .hand(P0, &[WINDS, names::PLAINS])
-        .battlefield(P1, &[Permanent::new(SPELLBINDER)])
-        .library(P1, &[names::TUNDRA, names::PLAINS, names::ISLAND])
-        .actions(&[
-            Action::cast(P0, WINDS),
-            Action::Resolve,
-            Action::choose(P1, DecisionKind::ChooseUpTo, names::PLAINS),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Exile,
-                card: Some(SPELLBINDER),
-                count: 1,
-            }),
-            controls(P0, ADELINE, 1),
-            controls(P1, names::PLAINS, 1),
-            tapped(P1, names::PLAINS, 1),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Library,
-                card: None,
-                count: 2,
-            }),
-        ]),
-    // Overloaded, it exiles both of P1's creatures and spares P0's; P1 may find two basics
-    // and finds the Island, then is done.
-    Scenario::new("Winds of Abandon overloaded: a basic per creature exiled")
-        .battlefield(P0, SIX_PLAINS_AND_ADELINE)
-        .hand(P0, &[WINDS, names::PLAINS])
-        .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(SKYDIVER)])
-        .library(P1, &[names::ISLAND, names::PLAINS, names::TUNDRA])
-        .actions(&[
-            Action::Cast {
-                player: P0,
-                card: WINDS,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::Resolve,
-            Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),
-            Action::answer(P1, DecisionKind::ChooseUpTo, Pick::Done),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Exile,
-                card: None,
-                count: 2,
-            }),
-            controls(P0, ADELINE, 1),
-            controls(P1, names::ISLAND, 1),
-            controls(P1, names::PLAINS, 0),
-            tapped(P1, names::ISLAND, 1),
-        ]),
-    // A library with no basic land: the search finds nothing and asks nothing.
-    Scenario::new("Winds of Abandon: no basic land to find")
-        .battlefield(
-            P0,
-            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
-        )
-        .hand(P0, &[WINDS, names::PLAINS])
-        .battlefield(P1, &[Permanent::new(SPELLBINDER)])
-        .library(P1, &[names::TUNDRA, names::SEACHROME_COAST])
-        .actions(&[
-            Action::cast(P0, WINDS),
-            Action::Resolve,
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Exile,
-                card: Some(SPELLBINDER),
-                count: 1,
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Battlefield,
-                card: None,
-                count: 0,
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Library,
-                card: None,
-                count: 2,
-            }),
-        ]),
-    // UI regression by-yfw: the token leaves while Winds stays on the stack for the search.
-    Scenario::new("Winds of Abandon exiles a token before its controller searches")
-        .at(2, P1, TurnStep::PrecombatMain)
-        .battlefield(
-            P0,
-            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
-        )
-        .hand(P0, &[names::WINDS_OF_ABANDON, names::PLAINS])
-        .battlefield(
-            P1,
-            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
-        )
-        .hand(P1, &[names::STAFF_OF_THE_STORYTELLER])
-        .library(P0, &[names::ISLAND, names::ISLAND])
-        .library(P1, &[names::ISLAND, names::PLAINS])
-        .actions(&[
-            // Create the token in play: external engines do not share Beryl token names.
-            Action::cast(P1, names::STAFF_OF_THE_STORYTELLER),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::cast(P0, names::WINDS_OF_ABANDON),
-            Action::Resolve,
-            Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),
-            Action::assert(Assertion::Controls {
-                player: P1,
-                card: "Spirit Token",
-                count: 0,
-            }),
-        ]),
-];

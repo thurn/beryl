@@ -2,12 +2,9 @@
 
 use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Castings, Colors, Face, FaceIx, ManaCost, TargetKind,
-    TargetSpec, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Face, ManaCost, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, Seat, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -39,73 +36,84 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Count {
-        player,
-        zone,
-        card: Some(card),
-        count,
-    })
-}
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
+    use beryl_engine::card::{Castings, FaceIx};
 
-pub const SCENARIOS: &[Scenario] = &[
-    // Thieving Skydiver kicked for X = 1 taps three of four Islands. Returned to P0's hand,
-    // it never enters, and the mana spent on it, X included, stays spent.
-    Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
-        .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
-        .hand(P0, &[names::THIEVING_SKYDIVER, names::PLAINS])
-        .library(P0, &[names::ISLAND])
-        .battlefield(P1, P1_LANDS)
-        .hand(P1, &[names::REPRIEVE])
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            Action::Cast {
-                player: P0,
-                card: names::THIEVING_SKYDIVER,
-                face: FaceIx::FRONT,
-                costs: Castings::only(0),
-            },
-            Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
-            // P0 has nothing to do with the stack full; the Plains to play keeps the game in
-            // P0's main phase once it is empty.
-            Action::cast(P1, names::REPRIEVE),
-            count(P0, Zone::Hand, names::THIEVING_SKYDIVER, 1),
-            count(P0, Zone::Battlefield, names::THIEVING_SKYDIVER, 0),
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: names::ISLAND,
-                count: 3,
-            }),
-            count(P1, Zone::Hand, names::PLAINS, 1),
-            count(P1, Zone::Graveyard, names::REPRIEVE, 1),
-        ]),
-    // P1 counters Mana Crypt; P0 returns the Counterspell to P1's hand, and the Crypt
-    // resolves.
-    Scenario::new("Reprieve on a counterspell saves the spell it targets")
-        .battlefield(P0, &[Permanent::new(names::PLAINS); 2])
-        .hand(P0, &[names::MANA_CRYPT, names::REPRIEVE])
-        .library(P0, &[names::ISLAND])
-        .battlefield(P1, &[Permanent::new(names::ISLAND); 2])
-        .hand(P1, &[names::COUNTERSPELL])
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            Action::cast(P0, names::MANA_CRYPT),
-            Action::pass(P0),
-            Action::cast(P1, names::COUNTERSPELL),
-            Action::cast(P0, names::REPRIEVE),
-            Action::answer(
-                P0,
-                DecisionKind::Target,
-                Pick::Card {
-                    card: names::COUNTERSPELL,
+    use beryl_engine::{DecisionKind, Seat, Zone};
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
+        Action::assert(Assertion::Count {
+            player,
+            zone,
+            card: Some(card),
+            count,
+        })
+    }
+
+    const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Thieving Skydiver kicked for X = 1 taps three of four Islands. Returned to P0's hand,
+        // it never enters, and the mana spent on it, X included, stays spent.
+        Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
+            .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
+            .hand(P0, &[names::THIEVING_SKYDIVER, names::PLAINS])
+            .library(P0, &[names::ISLAND])
+            .battlefield(P1, P1_LANDS)
+            .hand(P1, &[names::REPRIEVE])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: names::THIEVING_SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
                 },
-            ),
-            Action::Resolve,
-            count(P1, Zone::Hand, names::COUNTERSPELL, 1),
-            count(P0, Zone::Hand, names::ISLAND, 1),
-            Action::Resolve,
-            count(P0, Zone::Battlefield, names::MANA_CRYPT, 1),
-        ]),
-];
+                Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+                // P0 has nothing to do with the stack full; the Plains to play keeps the game in
+                // P0's main phase once it is empty.
+                Action::cast(P1, names::REPRIEVE),
+                count(P0, Zone::Hand, names::THIEVING_SKYDIVER, 1),
+                count(P0, Zone::Battlefield, names::THIEVING_SKYDIVER, 0),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::ISLAND,
+                    count: 3,
+                }),
+                count(P1, Zone::Hand, names::PLAINS, 1),
+                count(P1, Zone::Graveyard, names::REPRIEVE, 1),
+            ]),
+        // P1 counters Mana Crypt; P0 returns the Counterspell to P1's hand, and the Crypt
+        // resolves.
+        Scenario::new("Reprieve on a counterspell saves the spell it targets")
+            .battlefield(P0, &[Permanent::new(names::PLAINS); 2])
+            .hand(P0, &[names::MANA_CRYPT, names::REPRIEVE])
+            .library(P0, &[names::ISLAND])
+            .battlefield(P1, &[Permanent::new(names::ISLAND); 2])
+            .hand(P1, &[names::COUNTERSPELL])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::cast(P0, names::MANA_CRYPT),
+                Action::pass(P0),
+                Action::cast(P1, names::COUNTERSPELL),
+                Action::cast(P0, names::REPRIEVE),
+                Action::answer(
+                    P0,
+                    DecisionKind::Target,
+                    Pick::Card {
+                        card: names::COUNTERSPELL,
+                    },
+                ),
+                Action::Resolve,
+                count(P1, Zone::Hand, names::COUNTERSPELL, 1),
+                count(P0, Zone::Hand, names::ISLAND, 1),
+                Action::Resolve,
+                count(P0, Zone::Battlefield, names::MANA_CRYPT, 1),
+            ]),
+    ];
+}

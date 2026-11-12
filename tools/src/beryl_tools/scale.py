@@ -134,7 +134,7 @@ def shard_lib(first: int, picks: list[Source]) -> str:
     lines.append("pub static CARDS: &[&beryl_engine::card::CardDef] = &[")
     lines += [f"    &c{i}::CARD," for i in ids]
     lines += ["];", "pub static SCENARIOS: &[&[beryl_scenario::Scenario]] = &["]
-    lines += [f"    c{i}::SCENARIOS," for i in ids]
+    lines += [f"    c{i}::scenarios::SCENARIOS," for i in ids]
     lines.append("];")
     return "\n".join(lines) + "\n"
 
@@ -161,6 +161,12 @@ name = "{name}"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[features]
+# A clone's scenarios sit behind its crate's `scenarios` feature, as the real cards' do; the
+# rehearsal builds them, as the tests and tools do.
+default = ["scenarios"]
+scenarios = []
 
 [dependencies]
 {dependencies}"""

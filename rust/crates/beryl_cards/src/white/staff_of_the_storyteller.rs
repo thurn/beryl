@@ -12,8 +12,6 @@ use beryl_engine::card::{
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
 
@@ -74,106 +72,120 @@ pub static SPIRIT: CardDef = CardDef {
 /// token is its owner. The token enters the battlefield under that player's control."
 static CREATE_SPIRIT: Effect = create_tokens(YOU, &SPIRIT, 1);
 
-const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
-const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
-const PLAINS: &str = names::PLAINS;
-const ISLAND: &str = names::ISLAND;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-const fn story(count: u8) -> Action {
-    Action::assert(Assertion::Counters {
-        player: P0,
-        card: STAFF,
-        kind: CounterKind::Story,
-        count,
-    })
+    use beryl_engine::state::CounterKind;
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+
+    use super::SPIRIT_TOKEN;
+    use crate::names;
+
+    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+
+    const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
+
+    const PLAINS: &str = names::PLAINS;
+
+    const ISLAND: &str = names::ISLAND;
+
+    const fn story(count: u8) -> Action {
+        Action::assert(Assertion::Counters {
+            player: P0,
+            card: STAFF,
+            kind: CounterKind::Story,
+            count,
+        })
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("its own Spirit and a Samurai each add a story counter, spent to draw")
+            .hand(P0, &[STAFF])
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(PLAINS),
+                    Permanent::new(PLAINS),
+                    Permanent::new(PLAINS),
+                    Permanent::new(EMPEROR),
+                ],
+            )
+            .library(P0, &[ISLAND, ISLAND, ISLAND])
+            .library(P1, &[PLAINS])
+            .actions(&[
+                Action::cast(P0, STAFF),
+                Action::Resolve,
+                // The enters trigger: the Spirit, and its story-counter trigger.
+                Action::Resolve,
+                Action::Resolve,
+                story(1),
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: SPIRIT_TOKEN,
+                    count: 1,
+                }),
+                Action::activate(P0, EMPEROR, 2),
+                Action::Resolve,
+                Action::Resolve,
+                story(2),
+                Action::activate(P0, STAFF, 2),
+                story(1),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Hand,
+                    card: Some(ISLAND),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: STAFF,
+                    count: 1,
+                }),
+                // Tapped, it can't draw again this turn: passing, or playing the Island drawn.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+            ]),
+        // CR 603.2c: Overlord's attack makes two Insects in one event, so one story counter.
+        Scenario::new("two tokens created at once add one story counter")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(STAFF),
+                    Permanent::new(names::OVERLORD_OF_THE_MISTMOORS),
+                ],
+            )
+            .library(P0, &[ISLAND])
+            .library(P1, &[PLAINS])
+            .actions(&[
+                Action::AdvanceTo {
+                    turn: 1,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P0),
+                Action::choose(P0, DecisionKind::Attacker, names::OVERLORD_OF_THE_MISTMOORS),
+                Action::assert(Assertion::Controls {
+                    player: P0,
+                    card: super::super::overlord_of_the_mistmoors::INSECT_TOKEN,
+                    count: 2,
+                }),
+                story(1),
+            ]),
+        // UI regression by-xd4: resolving a response must not demand a pass on one's own spell.
+        Scenario::new("Staff resolves after an opposing flash creature")
+            .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+            .hand(P0, &[STAFF, PLAINS])
+            .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+            .hand(P1, &[names::SNAPCASTER_MAGE])
+            .library(P0, &[ISLAND])
+            .library(P1, &[ISLAND])
+            .actions(&[
+                Action::cast(P0, STAFF),
+                Action::cast(P1, names::SNAPCASTER_MAGE),
+                story(1),
+            ]),
+    ];
 }
-
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("its own Spirit and a Samurai each add a story counter, spent to draw")
-        .hand(P0, &[STAFF])
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(PLAINS),
-                Permanent::new(PLAINS),
-                Permanent::new(PLAINS),
-                Permanent::new(EMPEROR),
-            ],
-        )
-        .library(P0, &[ISLAND, ISLAND, ISLAND])
-        .library(P1, &[PLAINS])
-        .actions(&[
-            Action::cast(P0, STAFF),
-            Action::Resolve,
-            // The enters trigger: the Spirit, and its story-counter trigger.
-            Action::Resolve,
-            Action::Resolve,
-            story(1),
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: SPIRIT_TOKEN,
-                count: 1,
-            }),
-            Action::activate(P0, EMPEROR, 2),
-            Action::Resolve,
-            Action::Resolve,
-            story(2),
-            Action::activate(P0, STAFF, 2),
-            story(1),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Hand,
-                card: Some(ISLAND),
-                count: 1,
-            }),
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: STAFF,
-                count: 1,
-            }),
-            // Tapped, it can't draw again this turn: passing, or playing the Island drawn.
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-        ]),
-    // CR 603.2c: Overlord's attack makes two Insects in one event, so one story counter.
-    Scenario::new("two tokens created at once add one story counter")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(STAFF),
-                Permanent::new(names::OVERLORD_OF_THE_MISTMOORS),
-            ],
-        )
-        .library(P0, &[ISLAND])
-        .library(P1, &[PLAINS])
-        .actions(&[
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::BeginningOfCombat,
-            },
-            Action::pass(P0),
-            Action::choose(P0, DecisionKind::Attacker, names::OVERLORD_OF_THE_MISTMOORS),
-            Action::assert(Assertion::Controls {
-                player: P0,
-                card: super::overlord_of_the_mistmoors::INSECT_TOKEN,
-                count: 2,
-            }),
-            story(1),
-        ]),
-    // UI regression by-xd4: resolving a response must not demand a pass on one's own spell.
-    Scenario::new("Staff resolves after an opposing flash creature")
-        .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
-        .hand(P0, &[STAFF, PLAINS])
-        .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
-        .hand(P1, &[names::SNAPCASTER_MAGE])
-        .library(P0, &[ISLAND])
-        .library(P1, &[ISLAND])
-        .actions(&[
-            Action::cast(P0, STAFF),
-            Action::cast(P1, names::SNAPCASTER_MAGE),
-            story(1),
-        ]),
-];

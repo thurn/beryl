@@ -11,7 +11,8 @@ workspace = true
 
 
 [dependencies]
-beryl_cards = { path = "../beryl_cards" }
+# Specs, script checks and boards are built from the cards' scenarios.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_engine = { path = "../beryl_engine" }
 beryl_scenario = { path = "../beryl_scenario" }
 beryl_search = { path = "../beryl_search" }

@@ -233,9 +233,12 @@ def matches(path: str, globs: Iterable[str]) -> bool:
 
 
 ITEM_START: dict[str, re.Pattern[str]] = {
-    "scenarios": re.compile(r"^\s*(pub(\([a-z]+\))? )?(const|static) SCENARIOS\b"),
+    "scenarios": re.compile(
+        r'^\s*(#\[cfg\(feature = "scenarios"\)\]|(pub(\([a-z]+\))? )?(const|static) SCENARIOS\b)'
+    ),
     "tests": re.compile(
-        r"^\s*(#\[cfg\(test\)\]|(pub(\([a-z]+\))? )?(const|static) SCENARIOS\b)"
+        r"^\s*(#\[cfg\(test\)\]|#\[cfg\(feature = \"scenarios\"\)\]"
+        r"|(pub(\([a-z]+\))? )?(const|static) SCENARIOS\b)"
     ),
 }
 

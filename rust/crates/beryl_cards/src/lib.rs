@@ -9,6 +9,7 @@ pub mod black;
 pub mod blue;
 pub mod colorless;
 pub mod decks;
+#[cfg(feature = "scenarios")]
 pub mod generate;
 pub mod multicolor;
 pub mod names;
@@ -16,7 +17,6 @@ pub mod tokens;
 pub mod white;
 
 use beryl_engine::CardTable;
-use beryl_scenario::Scenario;
 
 /// Every card Beryl implements.
 pub static CARDS: CardTable = CardTable::new(&[
@@ -70,111 +70,154 @@ pub static CARDS: CardTable = CardTable::new(&[
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
-pub static SCENARIOS: &[(&str, &[Scenario])] = &[
-    (names::PLAINS, white::plains::SCENARIOS),
-    (names::MANA_TITHE, white::mana_tithe::SCENARIOS),
-    (names::OUST, white::oust::SCENARIOS),
-    (names::GET_LOST, white::get_lost::SCENARIOS),
+#[cfg(feature = "scenarios")]
+pub static SCENARIOS: &[(&str, &[beryl_scenario::Scenario])] = &[
+    (names::PLAINS, white::plains::scenarios::SCENARIOS),
+    (names::MANA_TITHE, white::mana_tithe::scenarios::SCENARIOS),
+    (names::OUST, white::oust::scenarios::SCENARIOS),
+    (names::GET_LOST, white::get_lost::scenarios::SCENARIOS),
     (
         names::ADELINE_RESPLENDENT_CATHAR,
-        white::adeline_resplendent_cathar::SCENARIOS,
+        white::adeline_resplendent_cathar::scenarios::SCENARIOS,
     ),
     (
         names::ELITE_SPELLBINDER,
-        white::elite_spellbinder::SCENARIOS,
+        white::elite_spellbinder::scenarios::SCENARIOS,
     ),
     (
         names::OVERLORD_OF_THE_MISTMOORS,
-        white::overlord_of_the_mistmoors::SCENARIOS,
+        white::overlord_of_the_mistmoors::scenarios::SCENARIOS,
     ),
-    (names::ISLAND, blue::island::SCENARIOS),
-    (names::MANA_DRAIN, blue::mana_drain::SCENARIOS),
-    (names::SINK_INTO_STUPOR, blue::sink_into_stupor::SCENARIOS),
-    (names::TIME_SPIRAL, blue::time_spiral::SCENARIOS),
-    (names::TIMETWISTER, blue::timetwister::SCENARIOS),
+    (names::ISLAND, blue::island::scenarios::SCENARIOS),
+    (names::MANA_DRAIN, blue::mana_drain::scenarios::SCENARIOS),
+    (
+        names::SINK_INTO_STUPOR,
+        blue::sink_into_stupor::scenarios::SCENARIOS,
+    ),
+    (names::TIME_SPIRAL, blue::time_spiral::scenarios::SCENARIOS),
+    (names::TIMETWISTER, blue::timetwister::scenarios::SCENARIOS),
     (
         names::MALCOLM_ALLURING_SCOUNDREL,
-        blue::malcolm_alluring_scoundrel::SCENARIOS,
+        blue::malcolm_alluring_scoundrel::scenarios::SCENARIOS,
     ),
     (
         names::SPHINX_OF_FALSE_CONCLUSIONS,
-        blue::sphinx_of_false_conclusions::SCENARIOS,
+        blue::sphinx_of_false_conclusions::scenarios::SCENARIOS,
     ),
-    (names::THIEVING_SKYDIVER, blue::thieving_skydiver::SCENARIOS),
+    (
+        names::THIEVING_SKYDIVER,
+        blue::thieving_skydiver::scenarios::SCENARIOS,
+    ),
     (
         names::THUNDERTRAP_TRAINER,
-        blue::thundertrap_trainer::SCENARIOS,
+        blue::thundertrap_trainer::scenarios::SCENARIOS,
     ),
-    (names::TUNDRA, azorius::tundra::SCENARIOS),
-    (names::NO_MORE_LIES, azorius::no_more_lies::SCENARIOS),
-    (names::SEACHROME_COAST, azorius::seachrome_coast::SCENARIOS),
+    (names::TUNDRA, azorius::tundra::scenarios::SCENARIOS),
+    (
+        names::NO_MORE_LIES,
+        azorius::no_more_lies::scenarios::SCENARIOS,
+    ),
+    (
+        names::SEACHROME_COAST,
+        azorius::seachrome_coast::scenarios::SCENARIOS,
+    ),
     (
         names::SPARAS_HEADQUARTERS,
-        multicolor::sparas_headquarters::SCENARIOS,
+        multicolor::sparas_headquarters::scenarios::SCENARIOS,
     ),
-    (names::MANA_CRYPT, colorless::mana_crypt::SCENARIOS),
-    (names::STRIP_MINE, colorless::strip_mine::SCENARIOS),
+    (
+        names::MANA_CRYPT,
+        colorless::mana_crypt::scenarios::SCENARIOS,
+    ),
+    (
+        names::STRIP_MINE,
+        colorless::strip_mine::scenarios::SCENARIOS,
+    ),
     (
         names::TEFERI_TIME_RAVELER,
-        azorius::teferi_time_raveler::SCENARIOS,
+        azorius::teferi_time_raveler::scenarios::SCENARIOS,
     ),
     (
         names::THE_WANDERING_EMPEROR,
-        white::the_wandering_emperor::SCENARIOS,
+        white::the_wandering_emperor::scenarios::SCENARIOS,
     ),
     (
         names::JACE_THE_MIND_SCULPTOR,
-        blue::jace_the_mind_sculptor::SCENARIOS,
+        blue::jace_the_mind_sculptor::scenarios::SCENARIOS,
     ),
     (
         names::JACE_VRYNS_PRODIGY,
-        blue::jace_vryns_prodigy::SCENARIOS,
+        blue::jace_vryns_prodigy::scenarios::SCENARIOS,
     ),
     (
         names::STAFF_OF_THE_STORYTELLER,
-        white::staff_of_the_storyteller::SCENARIOS,
+        white::staff_of_the_storyteller::scenarios::SCENARIOS,
     ),
     (
         names::SWIFT_RECONFIGURATION,
-        white::swift_reconfiguration::SCENARIOS,
+        white::swift_reconfiguration::scenarios::SCENARIOS,
     ),
-    (names::AANGS_ICEBERG, white::aangs_iceberg::SCENARIOS),
-    (names::COUNTERSPELL, blue::counterspell::SCENARIOS),
-    (names::REPRIEVE, white::reprieve::SCENARIOS),
-    (names::STOCK_UP, blue::stock_up::SCENARIOS),
+    (
+        names::AANGS_ICEBERG,
+        white::aangs_iceberg::scenarios::SCENARIOS,
+    ),
+    (
+        names::COUNTERSPELL,
+        blue::counterspell::scenarios::SCENARIOS,
+    ),
+    (names::REPRIEVE, white::reprieve::scenarios::SCENARIOS),
+    (names::STOCK_UP, blue::stock_up::scenarios::SCENARIOS),
     (
         names::THIRST_FOR_DISCOVERY,
-        blue::thirst_for_discovery::SCENARIOS,
+        blue::thirst_for_discovery::scenarios::SCENARIOS,
     ),
-    (names::FLOODFARM_VERGE, azorius::floodfarm_verge::SCENARIOS),
-    (names::PORTABLE_HOLE, white::portable_hole::SCENARIOS),
-    (names::TRINKET_MAGE, blue::trinket_mage::SCENARIOS),
+    (
+        names::FLOODFARM_VERGE,
+        azorius::floodfarm_verge::scenarios::SCENARIOS,
+    ),
+    (
+        names::PORTABLE_HOLE,
+        white::portable_hole::scenarios::SCENARIOS,
+    ),
+    (
+        names::TRINKET_MAGE,
+        blue::trinket_mage::scenarios::SCENARIOS,
+    ),
     (
         names::BEZA_THE_BOUNDING_SPRING,
-        white::beza_the_bounding_spring::SCENARIOS,
+        white::beza_the_bounding_spring::scenarios::SCENARIOS,
     ),
     (
         names::CURRENCY_CONVERTER,
-        colorless::currency_converter::SCENARIOS,
+        colorless::currency_converter::scenarios::SCENARIOS,
     ),
-    (names::SWAMP, black::swamp::SCENARIOS),
-    (names::DAMN, white::damn::SCENARIOS),
-    (names::WINDS_OF_ABANDON, white::winds_of_abandon::SCENARIOS),
-    (names::SUBTLETY, blue::subtlety::SCENARIOS),
-    (names::SNAPCASTER_MAGE, blue::snapcaster_mage::SCENARIOS),
+    (names::SWAMP, black::swamp::scenarios::SCENARIOS),
+    (names::DAMN, white::damn::scenarios::SCENARIOS),
+    (
+        names::WINDS_OF_ABANDON,
+        white::winds_of_abandon::scenarios::SCENARIOS,
+    ),
+    (names::SUBTLETY, blue::subtlety::scenarios::SCENARIOS),
+    (
+        names::SNAPCASTER_MAGE,
+        blue::snapcaster_mage::scenarios::SCENARIOS,
+    ),
     (
         names::TEFERI_HERO_OF_DOMINARIA,
-        azorius::teferi_hero_of_dominaria::SCENARIOS,
+        azorius::teferi_hero_of_dominaria::scenarios::SCENARIOS,
     ),
     (
         names::JACE_WIELDER_OF_MYSTERIES,
-        blue::jace_wielder_of_mysteries::SCENARIOS,
+        blue::jace_wielder_of_mysteries::scenarios::SCENARIOS,
     ),
     (
         names::FRACTURED_IDENTITY,
-        azorius::fractured_identity::SCENARIOS,
+        azorius::fractured_identity::scenarios::SCENARIOS,
     ),
-    (names::ABHORRENT_OCULUS, blue::abhorrent_oculus::SCENARIOS),
+    (
+        names::ABHORRENT_OCULUS,
+        blue::abhorrent_oculus::scenarios::SCENARIOS,
+    ),
 ];
 
 #[cfg(test)]

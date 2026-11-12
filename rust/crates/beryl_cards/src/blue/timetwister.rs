@@ -6,8 +6,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::{Layout, bodies};
 
-use beryl_engine::{Seat, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_engine::Zone;
 
 use crate::names;
 
@@ -55,53 +54,62 @@ pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
     }
 }
 
-const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
-    Action::assert(Assertion::Count {
-        player,
-        zone,
-        card,
-        count,
-    })
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+
+    use beryl_engine::{Seat, Zone};
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+
+    use crate::names;
+
+    const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+        Action::assert(Assertion::Count {
+            player,
+            zone,
+            card,
+            count,
+        })
+    }
+
+    const THREE_ISLANDS: &[Permanent] = &[
+        Permanent::new(names::ISLAND),
+        Permanent::new(names::ISLAND),
+        Permanent::new(names::ISLAND),
+    ];
+
+    /// Each player ends with seven cards in hand and the rest of hand, graveyard and library in
+    /// the library; Timetwister alone goes to the graveyard, after the shuffle.
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("Timetwister with empty graveyards")
+            .battlefield(P0, THREE_ISLANDS)
+            .hand(P0, &[names::TIMETWISTER, names::PLAINS])
+            .library(P0, &[names::PLAINS; 7])
+            .hand(P1, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[names::ISLAND; 6])
+            .actions(&[
+                Action::cast(P0, names::TIMETWISTER),
+                count(P0, Zone::Hand, None, 7),
+                count(P0, Zone::Library, None, 1),
+                count(P0, Zone::Graveyard, Some(names::TIMETWISTER), 1),
+                count(P0, Zone::Graveyard, None, 1),
+                count(P1, Zone::Hand, None, 7),
+                count(P1, Zone::Library, None, 1),
+            ]),
+        Scenario::new("Timetwister shuffles graveyards away")
+            .battlefield(P0, THREE_ISLANDS)
+            .hand(P0, &[names::TIMETWISTER])
+            .graveyard(P0, &[names::MANA_TITHE, names::OUST])
+            .library(P0, &[names::PLAINS; 5])
+            .graveyard(P1, &[names::MANA_DRAIN])
+            .library(P1, &[names::ISLAND; 8])
+            .actions(&[
+                Action::cast(P0, names::TIMETWISTER),
+                count(P0, Zone::Hand, None, 7),
+                count(P0, Zone::Library, None, 0),
+                count(P0, Zone::Graveyard, None, 1),
+                count(P1, Zone::Hand, None, 7),
+                count(P1, Zone::Graveyard, None, 0),
+                count(P1, Zone::Library, None, 2),
+            ]),
+    ];
 }
-
-const THREE_ISLANDS: &[Permanent] = &[
-    Permanent::new(names::ISLAND),
-    Permanent::new(names::ISLAND),
-    Permanent::new(names::ISLAND),
-];
-
-/// Each player ends with seven cards in hand and the rest of hand, graveyard and library in
-/// the library; Timetwister alone goes to the graveyard, after the shuffle.
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("Timetwister with empty graveyards")
-        .battlefield(P0, THREE_ISLANDS)
-        .hand(P0, &[names::TIMETWISTER, names::PLAINS])
-        .library(P0, &[names::PLAINS; 7])
-        .hand(P1, &[names::ISLAND, names::ISLAND])
-        .library(P1, &[names::ISLAND; 6])
-        .actions(&[
-            Action::cast(P0, names::TIMETWISTER),
-            count(P0, Zone::Hand, None, 7),
-            count(P0, Zone::Library, None, 1),
-            count(P0, Zone::Graveyard, Some(names::TIMETWISTER), 1),
-            count(P0, Zone::Graveyard, None, 1),
-            count(P1, Zone::Hand, None, 7),
-            count(P1, Zone::Library, None, 1),
-        ]),
-    Scenario::new("Timetwister shuffles graveyards away")
-        .battlefield(P0, THREE_ISLANDS)
-        .hand(P0, &[names::TIMETWISTER])
-        .graveyard(P0, &[names::MANA_TITHE, names::OUST])
-        .library(P0, &[names::PLAINS; 5])
-        .graveyard(P1, &[names::MANA_DRAIN])
-        .library(P1, &[names::ISLAND; 8])
-        .actions(&[
-            Action::cast(P0, names::TIMETWISTER),
-            count(P0, Zone::Hand, None, 7),
-            count(P0, Zone::Library, None, 0),
-            count(P0, Zone::Graveyard, None, 1),
-            count(P1, Zone::Hand, None, 7),
-            count(P1, Zone::Graveyard, None, 0),
-            count(P1, Zone::Library, None, 2),
-        ]),
-];

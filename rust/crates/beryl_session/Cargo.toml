@@ -24,5 +24,7 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
+# The tests play cards' scenarios.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }
 proptest = { version = "1.11.0", default-features = false, features = ["std", "handle-panics"] }

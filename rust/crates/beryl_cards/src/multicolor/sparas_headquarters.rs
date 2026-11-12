@@ -1,12 +1,9 @@
 //! Spara's Headquarters. Land — Forest Plains Island. "({T}: Add {G}, {W}, or {U}.) This land
 //! enters tapped. Cycling {3} ({3}, Discard this card: Draw a card.)"
 
-use beryl_engine::Seat;
-use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Replacement, Subtype, Subtypes, Types,
 };
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
 
@@ -32,74 +29,84 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-    Action::assert(Assertion::Count {
-        player,
-        zone,
-        card: Some(card),
-        count,
-    })
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use beryl_engine::Seat;
+    use beryl_engine::Zone;
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+
+    use crate::names;
+
+    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
+        Action::assert(Assertion::Count {
+            player,
+            zone,
+            card: Some(card),
+            count,
+        })
+    }
+
+    const THREE_PLAINS: &[Permanent] = &[
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+        Permanent::new(names::PLAINS),
+    ];
+
+    /// The cycling ability is the face's fifth.
+    const CYCLING: u8 = 4;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("Spara's Headquarters enters tapped")
+            .hand(P0, &[names::SPARAS_HEADQUARTERS])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::PlayLand {
+                    player: P0,
+                    card: names::SPARAS_HEADQUARTERS,
+                },
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::SPARAS_HEADQUARTERS,
+                    count: 1,
+                }),
+            ]),
+        Scenario::new("Cycling Spara's Headquarters")
+            .battlefield(P0, THREE_PLAINS)
+            .hand(P0, &[names::SPARAS_HEADQUARTERS])
+            .library(P0, &[names::ISLAND])
+            .library(P1, &[names::ISLAND])
+            .actions(&[
+                Action::activate(P0, names::SPARAS_HEADQUARTERS, CYCLING),
+                count(P0, Zone::Hand, names::ISLAND, 1),
+                count(P0, Zone::Graveyard, names::SPARAS_HEADQUARTERS, 1),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::PLAINS,
+                    count: 3,
+                }),
+            ]),
+        // Its {U} is the only blue mana for Timetwister.
+        Scenario::new("Spara's Headquarters' blue mana")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(names::SPARAS_HEADQUARTERS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .hand(P0, &[names::TIMETWISTER])
+            .library(P0, &[names::ISLAND; 7])
+            .library(P1, &[names::ISLAND; 8])
+            .actions(&[
+                Action::cast(P0, names::TIMETWISTER),
+                count(P0, Zone::Graveyard, names::TIMETWISTER, 1),
+                Action::assert(Assertion::Tapped {
+                    player: P0,
+                    card: names::SPARAS_HEADQUARTERS,
+                    count: 1,
+                }),
+            ]),
+    ];
 }
-
-const THREE_PLAINS: &[Permanent] = &[
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-    Permanent::new(names::PLAINS),
-];
-
-/// The cycling ability is the face's fifth.
-const CYCLING: u8 = 4;
-
-pub const SCENARIOS: &[Scenario] = &[
-    Scenario::new("Spara's Headquarters enters tapped")
-        .hand(P0, &[names::SPARAS_HEADQUARTERS])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::PlayLand {
-                player: P0,
-                card: names::SPARAS_HEADQUARTERS,
-            },
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: names::SPARAS_HEADQUARTERS,
-                count: 1,
-            }),
-        ]),
-    Scenario::new("Cycling Spara's Headquarters")
-        .battlefield(P0, THREE_PLAINS)
-        .hand(P0, &[names::SPARAS_HEADQUARTERS])
-        .library(P0, &[names::ISLAND])
-        .library(P1, &[names::ISLAND])
-        .actions(&[
-            Action::activate(P0, names::SPARAS_HEADQUARTERS, CYCLING),
-            count(P0, Zone::Hand, names::ISLAND, 1),
-            count(P0, Zone::Graveyard, names::SPARAS_HEADQUARTERS, 1),
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: names::PLAINS,
-                count: 3,
-            }),
-        ]),
-    // Its {U} is the only blue mana for Timetwister.
-    Scenario::new("Spara's Headquarters' blue mana")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::SPARAS_HEADQUARTERS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-            ],
-        )
-        .hand(P0, &[names::TIMETWISTER])
-        .library(P0, &[names::ISLAND; 7])
-        .library(P1, &[names::ISLAND; 8])
-        .actions(&[
-            Action::cast(P0, names::TIMETWISTER),
-            count(P0, Zone::Graveyard, names::TIMETWISTER, 1),
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: names::SPARAS_HEADQUARTERS,
-                count: 1,
-            }),
-        ]),
-];

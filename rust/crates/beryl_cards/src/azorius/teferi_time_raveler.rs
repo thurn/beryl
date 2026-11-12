@@ -13,9 +13,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{Affects, Duration, Payload};
-use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -86,190 +84,203 @@ fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
-const TEFERI: &str = names::TEFERI_TIME_RAVELER;
-const ICEBERG: &str = names::AANGS_ICEBERG;
-const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
-const JACE: &str = names::JACE_VRYNS_PRODIGY;
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
 
-pub const SCENARIOS: &[Scenario] = &[
-    // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A planeswalker or battle
-    // that’s removed from combat stops being attacked."
-    Scenario::new("combat damage removes Teferi while other attacks remain")
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(names::BEZA_THE_BOUNDING_SPRING),
-                Permanent::new(names::SNAPCASTER_MAGE),
-                Permanent::new(names::SUBTLETY),
-            ],
-        )
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(TEFERI),
-                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
-            ],
-        )
-        .library(P0, &[names::ISLAND])
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::BeginningOfCombat,
-            },
-            Action::pass(P0),
-            Action::choose(P0, DecisionKind::Attacker, names::BEZA_THE_BOUNDING_SPRING),
-            Action::choose(P0, DecisionKind::AttackTarget, TEFERI),
-            Action::choose(P0, DecisionKind::Attacker, names::SNAPCASTER_MAGE),
-            Action::choose(
+    use beryl_engine::{DecisionKind, TurnStep, Zone};
+
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+    use crate::names;
+
+    const TEFERI: &str = names::TEFERI_TIME_RAVELER;
+
+    const ICEBERG: &str = names::AANGS_ICEBERG;
+
+    const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
+
+    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A planeswalker or battle
+        // that’s removed from combat stops being attacked."
+        Scenario::new("combat damage removes Teferi while other attacks remain")
+            .battlefield(
                 P0,
-                DecisionKind::AttackTarget,
-                names::JACE_THE_MIND_SCULPTOR,
-            ),
-            Action::choose(P0, DecisionKind::Attacker, names::SUBTLETY),
-            Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::EndOfCombat,
-            },
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Graveyard,
-                card: Some(TEFERI),
-                count: 1,
-            }),
-            Action::assert(Assertion::Counters {
-                player: P1,
-                card: names::JACE_THE_MIND_SCULPTOR,
-                kind: beryl_engine::state::CounterKind::Loyalty,
-                count: 1,
-            }),
-            Action::assert(Assertion::Life {
-                player: P1,
-                life: 17,
-            }),
-        ]),
-    // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
-    // with an empty stack.
-    Scenario::new("an opponent's flash spell waits for sorcery timing")
-        .battlefield(P0, &[Permanent::new(TEFERI)])
-        .hand(P1, &[ICEBERG])
-        .battlefield(
-            P1,
-            &[
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(names::PLAINS),
-                Permanent::new(JACE),
-            ],
-        )
-        .library(P0, &[names::ISLAND, names::ISLAND])
-        .library(P1, &[names::PLAINS, names::ISLAND])
-        .actions(&[
-            Action::pass(P0),
-            // Passing and Jace's loot: Aang's Iceberg has flash, but Teferi forbids it now.
-            Action::assert(Assertion::Decision {
-                player: P1,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::Upkeep,
-            },
-            Action::assert(Assertion::Decision {
-                player: P1,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-            // Nor in its own main phase while the loot is on the stack: with only passing
-            // left, the loot resolves unasked, straight to its discard.
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::activate(P1, JACE, 0),
-            Action::choose(P1, DecisionKind::ChooseObject, names::ISLAND),
-            // The stack empty in its main phase: sorcery timing.
-            Action::cast(P1, ICEBERG),
-            Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            Action::choose(P1, DecisionKind::Target, TEFERI),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Exile,
-                card: Some(TEFERI),
-                count: 1,
-            }),
-        ]),
-    Scenario::new("−3 returns an opposing artifact and draws a card")
-        .battlefield(P0, &[Permanent::new(TEFERI)])
-        .battlefield(P1, &[Permanent::new(STAFF)])
-        .library(P0, &[names::ISLAND])
-        .library(P1, &[names::PLAINS])
-        .actions(&[
-            Action::activate(P0, TEFERI, 2),
-            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Hand,
-                card: Some(STAFF),
-                count: 1,
-            }),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Hand,
-                card: Some(names::ISLAND),
-                count: 1,
-            }),
-            Action::assert(Assertion::Counters {
-                player: P0,
-                card: TEFERI,
-                kind: beryl_engine::state::CounterKind::Loyalty,
-                count: 1,
-            }),
-            // CR 606.3: one loyalty ability a turn.
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            }),
-        ]),
-    Scenario::new("+1 lets a sorcery be cast on the opponent's turn, until the next")
-        .battlefield(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
-        .hand(P0, &[names::OUST, names::OUST])
-        .battlefield(P1, &[Permanent::new(JACE)])
-        .library(P0, &[names::ISLAND, names::ISLAND])
-        .library(P1, &[names::PLAINS, names::ISLAND])
-        .actions(&[
-            Action::activate(P0, TEFERI, 1),
-            Action::Resolve,
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::Upkeep,
-            },
-            Action::pass(P1),
-            // In the opponent's upkeep, as though it had flash (CR 702.8a).
-            Action::cast(P0, names::OUST),
-            Action::Resolve,
-            // Second from the top.
-            Action::assert(Assertion::Library {
-                player: P1,
-                top: &[names::PLAINS, JACE, names::ISLAND],
-            }),
-            Action::assert(Assertion::Life {
-                player: P1,
-                life: 23,
-            }),
-            // "Until your next turn": in its controller's next upkeep the other Oust waits for
-            // a main phase.
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::Upkeep,
-            },
-            Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 1,
-            }),
-        ]),
-];
+                &[
+                    Permanent::new(names::BEZA_THE_BOUNDING_SPRING),
+                    Permanent::new(names::SNAPCASTER_MAGE),
+                    Permanent::new(names::SUBTLETY),
+                ],
+            )
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(TEFERI),
+                    Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+                ],
+            )
+            .library(P0, &[names::ISLAND])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::AdvanceTo {
+                    turn: 1,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P0),
+                Action::choose(P0, DecisionKind::Attacker, names::BEZA_THE_BOUNDING_SPRING),
+                Action::choose(P0, DecisionKind::AttackTarget, TEFERI),
+                Action::choose(P0, DecisionKind::Attacker, names::SNAPCASTER_MAGE),
+                Action::choose(
+                    P0,
+                    DecisionKind::AttackTarget,
+                    names::JACE_THE_MIND_SCULPTOR,
+                ),
+                Action::choose(P0, DecisionKind::Attacker, names::SUBTLETY),
+                Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+                Action::AdvanceTo {
+                    turn: 1,
+                    step: TurnStep::EndOfCombat,
+                },
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Graveyard,
+                    card: Some(TEFERI),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Counters {
+                    player: P1,
+                    card: names::JACE_THE_MIND_SCULPTOR,
+                    kind: beryl_engine::state::CounterKind::Loyalty,
+                    count: 1,
+                }),
+                Action::assert(Assertion::Life {
+                    player: P1,
+                    life: 17,
+                }),
+            ]),
+        // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
+        // with an empty stack.
+        Scenario::new("an opponent's flash spell waits for sorcery timing")
+            .battlefield(P0, &[Permanent::new(TEFERI)])
+            .hand(P1, &[ICEBERG])
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(names::PLAINS),
+                    Permanent::new(JACE),
+                ],
+            )
+            .library(P0, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[names::PLAINS, names::ISLAND])
+            .actions(&[
+                Action::pass(P0),
+                // Passing and Jace's loot: Aang's Iceberg has flash, but Teferi forbids it now.
+                Action::assert(Assertion::Decision {
+                    player: P1,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::Upkeep,
+                },
+                Action::assert(Assertion::Decision {
+                    player: P1,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+                // Nor in its own main phase while the loot is on the stack: with only passing
+                // left, the loot resolves unasked, straight to its discard.
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::PrecombatMain,
+                },
+                Action::activate(P1, JACE, 0),
+                Action::choose(P1, DecisionKind::ChooseObject, names::ISLAND),
+                // The stack empty in its main phase: sorcery timing.
+                Action::cast(P1, ICEBERG),
+                Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                Action::choose(P1, DecisionKind::Target, TEFERI),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Exile,
+                    card: Some(TEFERI),
+                    count: 1,
+                }),
+            ]),
+        Scenario::new("−3 returns an opposing artifact and draws a card")
+            .battlefield(P0, &[Permanent::new(TEFERI)])
+            .battlefield(P1, &[Permanent::new(STAFF)])
+            .library(P0, &[names::ISLAND])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::activate(P0, TEFERI, 2),
+                Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Hand,
+                    card: Some(STAFF),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Hand,
+                    card: Some(names::ISLAND),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Counters {
+                    player: P0,
+                    card: TEFERI,
+                    kind: beryl_engine::state::CounterKind::Loyalty,
+                    count: 1,
+                }),
+                // CR 606.3: one loyalty ability a turn.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 2,
+                }),
+            ]),
+        Scenario::new("+1 lets a sorcery be cast on the opponent's turn, until the next")
+            .battlefield(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
+            .hand(P0, &[names::OUST, names::OUST])
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[names::PLAINS, names::ISLAND])
+            .actions(&[
+                Action::activate(P0, TEFERI, 1),
+                Action::Resolve,
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::Upkeep,
+                },
+                Action::pass(P1),
+                // In the opponent's upkeep, as though it had flash (CR 702.8a).
+                Action::cast(P0, names::OUST),
+                Action::Resolve,
+                // Second from the top.
+                Action::assert(Assertion::Library {
+                    player: P1,
+                    top: &[names::PLAINS, JACE, names::ISLAND],
+                }),
+                Action::assert(Assertion::Life {
+                    player: P1,
+                    life: 23,
+                }),
+                // "Until your next turn": in its controller's next upkeep the other Oust waits for
+                // a main phase.
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::Upkeep,
+                },
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 1,
+                }),
+            ]),
+    ];
+}
