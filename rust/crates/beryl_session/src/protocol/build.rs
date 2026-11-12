@@ -1,7 +1,7 @@
 //! Building a [`PlayerView`] from one player's [`Observation`].
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Part, Purpose, Shape, Types,
+    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Measure, Part, Purpose, Shape, Types,
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
@@ -472,7 +472,11 @@ pub(super) fn stack_item_cast<L: Layout>(
                 granted: matches!(ability, FaceAbility::Grant(_)),
                 name: t.def(e.card).face_name(e.face).to_owned(),
                 triggered: kind,
-                taps_to_pay: (face.ability(ability).cost.waterbend > 0).then_some(true),
+                taps_to_pay: matches!(
+                    face.ability(ability).cost.measure(),
+                    Some(Measure::ForGeneric(_))
+                )
+                .then_some(true),
                 nth,
                 controller: side(obs, e.controller),
                 targets,

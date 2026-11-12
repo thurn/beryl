@@ -218,11 +218,11 @@ impl<L: Layout> Policy<'_, L> {
             };
         }
         let a = &self.t.def(card).face(o.face()).abilities[usize::from(i)];
-        let v = match a.cost.loyalty {
+        let v = match a.cost.loyalty_change() {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
             Some(l) => 20 + 5 * i32::from(-l),
-            None if a.cost.discard_self => 3,
+            None if a.cost.does(beryl_engine::card::CostAction::Discard) => 3,
             None => 15,
         };
         self.worth_targeting(a, info.friendly(i), v)

@@ -3,6 +3,7 @@
 
 use crate::ability::{Ability, Behavior};
 use crate::continuous::LayerSpec;
+use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
@@ -12,25 +13,32 @@ use crate::trigger::Subject;
 type Visit<'a> = &'a mut dyn FnMut(&Filter);
 
 impl CardDef {
-    /// Calls `visit` with every filter of the card's faces: those of its abilities and of the
-    /// abilities it grants, the filters inside them included. A token it makes is a card of
+    /// Calls `visit` with every filter of the card's faces: those of its abilities, of the
+    /// abilities it grants and of the costs it is cast with, the filters inside them included. A token it makes is a card of
     /// its own ([`CardDef::tokens`]) and is not walked.
     pub fn filters(&self, visit: Visit) {
         for face in self.faces {
             for ability in face.abilities.iter().chain(face.grants) {
                 ability.filters(visit);
             }
+            let options = face.casting.iter().flat_map(|option| option.parts());
+            for part in face.additional_cost.iter().chain(options) {
+                part.filters(visit);
+            }
         }
     }
 }
 
 impl Ability {
-    /// Calls `visit` with every filter of the ability: what it may target, what triggers it,
-    /// what it needs to be activated, its conditions, its continuous effect and its effect
-    /// data. A Rust body holds none anything can read.
+    /// Calls `visit` with every filter of the ability: what it may target, what pays its
+    /// cost, what triggers it, what it needs to be activated, its conditions, its continuous
+    /// effect and its effect data. A Rust body holds none anything can read.
     pub fn filters(&self, visit: Visit) {
         for spec in self.targets {
             spec.filter.filters(visit);
+        }
+        for part in self.cost.parts() {
+            part.filters(visit);
         }
         if let Some(trigger) = self.trigger {
             if let Subject::A(filter) = &trigger.subject {
@@ -53,6 +61,20 @@ impl Ability {
     }
 }
 
+impl CostPart {
+    fn filters(&self, visit: Visit) {
+        match self {
+            CostPart::This(_) | CostPart::Loyalty(_) | CostPart::Life(_) => {}
+            CostPart::Chosen(_, chosen) => chosen.filter.filters(visit),
+            CostPart::OneOf(costs) => {
+                for part in costs.iter().flat_map(Cost::parts) {
+                    part.filters(visit);
+                }
+            }
+        }
+    }
+}
+
 impl LayerSpec {
     fn filters(&self, visit: Visit) {
         self.affected.filters(visit);
@@ -71,6 +93,7 @@ impl Filter {
             | Filter::Types(_)
             | Filter::Supertypes(_)
             | Filter::Subtype(_)
+            | Filter::Colors(_)
             | Filter::Tapped
             | Filter::ManaValueAtMost(_)
             | Filter::ManaValueAtMostX => {}
@@ -88,7 +111,11 @@ impl Filter {
 impl Objects {
     fn filters(&self, visit: Visit) {
         match self {
-            Objects::This | Objects::Target(_) | Objects::AttachedTo | Objects::Those => {}
+            Objects::This
+            | Objects::Target(_)
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::Paid(_) => {}
             Objects::All { filter, .. } => filter.filters(visit),
         }
     }

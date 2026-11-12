@@ -36,7 +36,9 @@ mod walk;
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use continuous::{Duration, Layer, LayerSpec, Modification, Replacement, Rule, Rules};
-pub use cost::{CastingKind, CastingKinds, CastingOption, Castings, Cost};
+pub use cost::{
+    CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,
+};
 pub use counter::CounterKind;
 pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility,

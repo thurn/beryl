@@ -3,12 +3,14 @@
 //! manifest dread."
 
 use beryl_card::Players;
-use beryl_engine::TurnStep;
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Trigger, Types,
+    Ability, CardDef, Colors, CostPart, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Trigger,
+    Types,
 };
 use beryl_engine::effect::EffectCtx;
+use beryl_engine::filter::Filter;
 use beryl_engine::{Layout, bodies};
+use beryl_engine::{TurnStep, Zone};
 
 use crate::names;
 
@@ -48,7 +50,7 @@ pub static CARD: CardDef = CardDef {
                 bodies!(manifest_dread),
             )
         }],
-        exile_from_graveyard: 6,
+        additional_cost: &[CostPart::exile(6, Zone::Graveyard, Filter::Any)],
         ..Face::EMPTY
     }],
     tokens: &[],

@@ -82,6 +82,9 @@ impl Evaluate for Filter {
             Filter::Subtype(subtype) => derived()
                 .map_or(face().subtypes, |d| d.subtypes)
                 .contains(subtype),
+            Filter::Colors(colors) => derived()
+                .map_or_else(|| face().colors, |d| d.colors)
+                .intersects(colors),
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),

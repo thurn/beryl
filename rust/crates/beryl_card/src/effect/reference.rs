@@ -1,5 +1,6 @@
 //! References: which objects and which players an instruction means.
 
+use crate::cost::CostAction;
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
@@ -13,7 +14,7 @@ use crate::index::SpecIx;
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "if it's no longer in
 /// that zone, or if the effect has moved it from a public zone to a hidden zone, the effect
 /// uses the object's last known information."
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Objects {
     /// The object the ability is on, or the spell itself: "this creature", "this spell"
     /// ([CR 201.5](https://yawgatog.com/resources/magic-rules/#R2015)): "Text that refers to
@@ -38,6 +39,26 @@ pub enum Objects {
     /// means permanents unless it says otherwise
     /// ([CR 609.2](https://yawgatog.com/resources/magic-rules/#R6092)), so the zone is said.
     All { zone: Zone, filter: Filter },
+    /// What paying the cost of the spell or ability did this to: "the sacrificed creature",
+    /// "the exiled card", "the revealed card"
+    /// ([CR 608.2k](https://yawgatog.com/resources/magic-rules/#R6082k)): "If an ability's
+    /// effect refers to a specific untargeted object that has been previously referred to by
+    /// that ability's cost or trigger condition, it still affects that object even if the
+    /// object has changed characteristics." What a cost moved is known as it last was
+    /// (CR 608.2h).
+    ///
+    /// The engine does not keep what a cost took, so a card table refuses a definition that
+    /// names it (`beryl_kernel`'s `TableError::Paid`). When a card needs it, the step that
+    /// pays a part with objects has each one remember, as a memo, the spell or the source
+    /// it paid for, and this reads the objects that remember the one resolving.
+    Paid(CostAction),
+}
+
+impl Objects {
+    /// Whether it is what a cost took ([`Objects::Paid`]).
+    pub const fn names_paid(&self) -> bool {
+        matches!(self, Objects::Paid(_))
+    }
 }
 
 /// Which players: none, one or several
@@ -46,7 +67,7 @@ pub enum Objects {
 ///
 /// Several players take an instruction in turn order from the active player
 /// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Players {
     /// "You"
     /// ([CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095)): "The words 'you' and
@@ -87,7 +108,7 @@ impl Objects {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Objects::This | Objects::AttachedTo => false,
-            Objects::Target(_) | Objects::Those => true,
+            Objects::Target(_) | Objects::Those | Objects::Paid(_) => true,
             Objects::All { filter, .. } => filter.needs_a_resolution(),
         }
     }
@@ -104,6 +125,20 @@ impl Players {
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
                 objects.needs_a_resolution()
             }
+        }
+    }
+}
+
+impl Players {
+    /// Whether it reads what a cost took ([`Objects::Paid`]).
+    pub const fn names_paid(&self) -> bool {
+        match self {
+            Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.names_paid(),
+            Players::You
+            | Players::EachOpponent
+            | Players::EachPlayer
+            | Players::Target(_)
+            | Players::ThatPlayer => false,
         }
     }
 }

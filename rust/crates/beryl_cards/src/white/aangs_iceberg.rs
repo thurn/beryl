@@ -7,8 +7,8 @@
 //! cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, Keywords, ManaCost, TargetKind,
-    TargetSpec, Trigger, Types,
+    Ability, AbilityKind, CardDef, Colors, Cost, CostPart, Face, Flow, Keywords, ManaCost,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -36,11 +36,7 @@ pub static CARD: CardDef = CardDef {
             },
             Ability {
                 kind: AbilityKind::Activated,
-                cost: Cost {
-                    mana: ManaCost::generic(3),
-                    waterbend: 3,
-                    ..Cost::NONE
-                },
+                cost: Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)]),
                 may_pause: true,
                 body: bodies!(sacrifice_and_scry),
                 ..Ability::NONE

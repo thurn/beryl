@@ -182,7 +182,12 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
     };
     GameEvent::Ability {
         item: stack_item(t, obs, &entry),
-        loyalty: t.def(card).face(face).ability(ability).cost.loyalty,
+        loyalty: t
+            .def(card)
+            .face(face)
+            .ability(ability)
+            .cost
+            .loyalty_change(),
     }
 }
 

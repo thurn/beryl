@@ -5,8 +5,8 @@
 //! explores. Activate only as a sorcery."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Players, Subtype, Subtypes,
-    TargetKind, TargetSpec, Timing, Types,
+    Ability, AbilityKind, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Players, Subtype,
+    Subtypes, TargetKind, TargetSpec, Timing, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
@@ -56,12 +56,7 @@ pub static MAP: CardDef = CardDef {
         subtypes: Subtypes::of(&[Subtype::Map]),
         abilities: &[Ability {
             kind: AbilityKind::Activated,
-            cost: Cost {
-                mana: ManaCost::generic(1),
-                tap: true,
-                sacrifice_self: true,
-                ..Cost::NONE
-            },
+            cost: Cost::of(ManaCost::generic(1), &[CostPart::TAP, CostPart::SACRIFICE]),
             timing: Timing::Sorcery,
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,

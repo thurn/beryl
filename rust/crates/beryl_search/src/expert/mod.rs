@@ -264,7 +264,7 @@ pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: L::Slot, base: i32) -
                 .face(o.face())
                 .abilities
                 .iter()
-                .filter_map(|a| a.cost.loyalty)
+                .filter_map(|a| a.cost.loyalty_change())
                 .min()
         });
         let near = ultimate.is_some_and(|u| u <= -6 && loyalty >= -i32::from(u) - 3);
@@ -1847,7 +1847,7 @@ impl<L: Layout> Expert<'_, L> {
                 def.face(e.face)
                     .ability(a)
                     .cost
-                    .loyalty
+                    .loyalty_change()
                     .is_some_and(|l| l < 0)
             });
             e.controller == self.me()
@@ -1975,7 +1975,7 @@ impl<L: Layout> Expert<'_, L> {
         let keeps = |i: u8| {
             face.abilities[usize::from(i)]
                 .cost
-                .loyalty
+                .loyalty_change()
                 .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -8 || lethal)
         };
         // Nor one that draws by choice when that could deck us, as Teferi, Hero of
@@ -1989,7 +1989,9 @@ impl<L: Layout> Expert<'_, L> {
                 face.abilities
                     .iter()
                     .enumerate()
-                    .position(|(i, a)| a.cost.loyalty.is_some_and(|l| l > 0) && !draws(i as u8))
+                    .position(|(i, a)| {
+                        a.cost.loyalty_change().is_some_and(|l| l > 0) && !draws(i as u8)
+                    })
                     .map(|i| i as u8)
             })
     }
@@ -2004,7 +2006,7 @@ impl<L: Layout> Expert<'_, L> {
         let by_cost = |cost: i8| {
             face.abilities
                 .iter()
-                .position(|a| a.cost.loyalty == Some(cost))
+                .position(|a| a.cost.loyalty_change() == Some(cost))
                 .map(|i| i as u8)
         };
         let threatened = self.threat_past(None);
@@ -2086,7 +2088,7 @@ impl<L: Layout> Expert<'_, L> {
             _ => face
                 .abilities
                 .iter()
-                .position(|a| a.cost.loyalty.is_some_and(|l| l >= 0))
+                .position(|a| a.cost.loyalty_change().is_some_and(|l| l >= 0))
                 .map(|i| i as u8),
         }
     }
@@ -2495,7 +2497,7 @@ impl<L: Layout> Expert<'_, L> {
                 .face(e.face)
                 .ability(ability)
                 .cost
-                .loyalty
+                .loyalty_change()
                 == Some(-3)
         {
             return Some(best(d, |c| {

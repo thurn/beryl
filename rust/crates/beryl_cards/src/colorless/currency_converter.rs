@@ -6,8 +6,8 @@
 use beryl_card::effect::build::{YOU, discard, draw, sequence};
 use beryl_card::{Effect, Players};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Place,
-    Prompt, Purpose, Subtype, Subtypes, Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Needs,
+    Place, Prompt, Purpose, Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
@@ -100,10 +100,7 @@ pub static CARD: CardDef = CardDef {
             },
             Ability {
                 kind: AbilityKind::Activated,
-                cost: Cost {
-                    mana: ManaCost::generic(2),
-                    ..Cost::TAP
-                },
+                cost: Cost::of(ManaCost::generic(2), &[CostPart::TAP]),
                 body: Behavior::Data(&LOOT),
                 ..Ability::NONE
             },

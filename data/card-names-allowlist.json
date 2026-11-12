@@ -13,9 +13,6 @@
     "Rule::SorceriesAsFlash",
     "Replacement::WinInsteadOfDrawingFromEmptyLibrary",
     "Modification::PowerIsCreaturesYouControl",
-    "Needs::ExiledWithSource",
-    "Face::exile_from_graveyard",
-    "Cost::waterbend",
-    "CastStep::Waterbend"
+    "Needs::ExiledWithSource"
   ]
 }

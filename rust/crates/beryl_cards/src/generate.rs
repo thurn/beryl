@@ -10,7 +10,7 @@
 //! for the oracles to compare. A seed whose script the runner refuses is skipped.
 
 use beryl_engine::card::{
-    AbilityKind, Face, ObjectAbility, Subtype, Supertypes, TriggerEvent, Types,
+    AbilityKind, CostAction, Face, ObjectAbility, Subtype, Supertypes, TriggerEvent, Types,
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{DecisionKind, Step, TurnStep, Zone, ZoneKey};
@@ -178,7 +178,9 @@ fn taps_a_mana_source(
         .filter(|&&slot| s.controller(slot) == player && live.name(slot) == card)
         .any(|&slot| {
             let face = s.copiable(slot).face(live.table());
-            face.abilities.get(i.index()).is_some_and(|a| a.cost.tap)
+            face.abilities
+                .get(i.index())
+                .is_some_and(|a| a.cost.does(CostAction::Tap))
                 && face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
         })
 }

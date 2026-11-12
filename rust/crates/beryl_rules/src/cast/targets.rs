@@ -211,12 +211,13 @@ pub(crate) fn target_trigger<L: Layout>(
         player: entry.controller,
         step: CastStep::TargetCount,
         spec: SpecIx::default(),
+        part: 0,
         graveyard_from: 0,
         left: 0,
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
-        bent: 0,
+        substituted: 0,
         triggered: true,
     };
     advance(s, t, sink, c)

@@ -3,7 +3,9 @@
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types};
+use beryl_engine::card::{
+    AbilityKind, CostAction, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types,
+};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::ObjectFlags;
 use beryl_engine::{
@@ -195,7 +197,7 @@ fn tundra_is_a_plains_island_with_both_mana_abilities() {
         .iter()
         .map(|a| {
             assert_eq!(a.kind, AbilityKind::Mana);
-            assert!(a.cost.tap);
+            assert!(a.cost.does(CostAction::Tap));
             (
                 a.produces.includes(ManaColor::White),
                 a.produces.includes(ManaColor::Blue),

@@ -3,26 +3,23 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingIx, ManaCost, ObjectAbility, Part, Prompt, Purpose, SpecIx, TargetSpec};
+use crate::casting;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
-use crate::game::Game;
 use crate::ids::Seat;
 use crate::keywords::flashback;
-use crate::layout::{Layout, Queue, Table, index};
-use crate::mana::{self, Funds};
+use crate::layout::{Layout, Queue, index};
+use crate::mana;
 use crate::profile::Payment;
-use crate::state::{
-    CastStep, Casting, CounterKind, Pending, StackEntry, State, Target, Tracker, Zone,
-};
+use crate::state::{CastStep, Casting, Pending, StackEntry, State, Target, Tracker, Zone};
 use crate::table::GameTable;
-use crate::{casting, counters};
 
-use super::costs::{ExileCost, exile_choices, spent_by_entry, total_cost, x_range_start};
-use super::legal::{benders, crew_candidates, power_of, waterbend_payable};
-use super::targets::{TargetSet, source_of, target_options};
-use super::timing::{activated, entry_ability, entry_ability_of};
+use super::costs::{spent_by_entry, total_cost, x_range_start};
+use super::parts;
+use super::targets::{TargetSet, target_options};
+use super::timing::{activated, entry_ability};
 
 /// Begins casting a spell: moves it to the stack and starts the machine.
 ///
@@ -70,12 +67,13 @@ pub(crate) fn begin_cast<L: Layout>(
             CastStep::TargetCount
         },
         spec: SpecIx::default(),
+        part: 0,
         graveyard_from: 0,
         left: 0,
         free,
         resolving: resolving.is_some(),
         remaining: ManaCost::NONE,
-        bent: 0,
+        substituted: 0,
         triggered: false,
     };
     advance(s, t, sink, c)
@@ -116,12 +114,13 @@ pub(crate) fn begin_activate<L: Layout>(
             CastStep::TargetCount
         },
         spec: SpecIx::default(),
+        part: 0,
         graveyard_from: 0,
         left: 0,
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
-        bent: 0,
+        substituted: 0,
         triggered: false,
     };
     advance(s, t, sink, c)
@@ -148,12 +147,7 @@ pub(super) fn advance<L: Layout>(
 ) -> Result<(), Full> {
     loop {
         match c.step {
-            CastStep::X
-            | CastStep::Plan
-            | CastStep::Manual
-            | CastStep::Crew
-            | CastStep::Waterbend
-            | CastStep::Exile => break,
+            CastStep::X | CastStep::Plan | CastStep::Manual | CastStep::Objects => break,
             CastStep::TargetCount | CastStep::Target => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
@@ -163,13 +157,7 @@ pub(super) fn advance<L: Layout>(
                         sink.push(ability_event(&entry));
                         return Ok(());
                     }
-                    let crew = entry_ability(t, &entry).map_or(0, |a| a.cost.crew);
-                    if crew == 0 {
-                        return begin_payment(s, t, sink, c);
-                    }
-                    c.step = CastStep::Crew;
-                    c.left = crew;
-                    break;
+                    return begin_payment(s, t, sink, c);
                 };
                 if c.step == CastStep::TargetCount {
                     // CR 601.2c: "If the spell has a variable number of targets, the player
@@ -193,109 +181,27 @@ pub(super) fn advance<L: Layout>(
     Ok(())
 }
 
-/// Pays an ability's non-mana costs, then turns to mana. A spell's exile choices follow
-/// mana payment, so its caster sees the mana spent before selecting the other costs.
+/// Turns to paying the total cost, once everything is announced: an ability's parts that are
+/// not mana and then its mana, or a spell's mana and then its parts ([`parts::pay`] says why
+/// in that order).
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
-/// total cost. First, they pay all costs that don't involve random elements or moving objects
-/// from the library to a public zone, in any order." The solver never taps a source that pays
-/// with itself (`spent_by_entry`), so paying an ability's costs first changes nothing.
+/// total cost."
 fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
-    let entry = top(s);
-    if !entry.is_spell() {
-        let a = entry_ability_of(t, &entry);
-        let source = entry.object.expect("an activated ability's source");
-        if a.cost.tap {
-            event::set_tapped(s, t, sink, source, true)?;
-        }
-        if let Some(n) = a.cost.loyalty {
-            // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put on or
-            // remove from that permanent a certain number of loyalty counters".
-            let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
-            if n > 0 {
-                counters::add(game, source, CounterKind::Loyalty, amount)?;
-            } else if n < 0 {
-                counters::remove(game, source, CounterKind::Loyalty, amount)?;
-            }
-        }
-        if a.cost.sacrifice_self {
-            event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Sacrifice)?;
-        }
-        if a.cost.discard_self {
-            event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Discard)?;
-        }
-        if let Some(kind) = a.cost.remove {
-            counters::remove(&mut Game::new(s, t, sink), source, kind, 1)?;
-        }
-        if a.cost.waterbend > 0 {
-            c.left = a.cost.waterbend.min(total_cost(s, t, &entry, &c).generic);
-            if c.left > 0 && !waterbend_options(s, t, &c)?.is_empty() {
-                c.step = CastStep::Waterbend;
-                s.ask(Pending::Casting(c));
-                return Ok(());
-            }
-        }
+    if top(s).is_spell() {
+        return pay_mana(s, t, sink, c);
     }
-    pay_mana(s, t, sink, c)
-}
-
-/// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
-/// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
-/// one answer (§7.2). The human can also activate a mana ability
-/// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "the player then has a
-/// chance to activate mana abilities". Empty when there is no choice to make.
-fn waterbend_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    c: &Casting,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
-    let mut out: L::Queue<Opt<L>, 64> = Default::default();
-    let entry = top(s);
-    let cost = total_cost(s, t, &entry, c);
-    let mut objects: L::Queue<Opt<L>, 64> = Default::default();
-    if c.left > 0 {
-        let mut fewer = cost;
-        fewer.generic -= 1;
-        let funds = Funds::of(s, t, c.player)?;
-        // Candidates are listed in the candidate order, which a `Choice` counts in.
-        for slot in s.in_candidate_order(collapse(s, benders(s, c.player))) {
-            let rest = Bitboard::single(slot);
-            if waterbend_payable(s, t, &funds, c.player, fewer, c.left - 1, rest) {
-                objects.push(Opt::Object(slot))?;
-            }
-        }
-    }
-    // With only generic symbols, activating a mana source keeps at least as much payment
-    // available as it did untapped. Activate before tapping any permanent as a bender.
-    let manual_mana = s.profile().taps_mana == Some(c.player)
-        && c.bent == 0
-        && cost.symbols.iter().all(|&n| n == 0);
-    if objects.is_empty() && !manual_mana {
-        return Ok(out);
-    }
-    if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
-        out.push(Opt::Done)?;
-    }
-    for &o in objects.iter() {
-        out.push(o)?;
-    }
-    // Append the mana choices so existing candidate indices hold.
-    if manual_mana {
-        mana::waterbend_mana_options(s, t, c.player, &mut out);
-    }
-    if out.as_slice() == [Opt::Done] {
-        return Ok(Default::default());
-    }
-    Ok(out)
+    c.part = 0;
+    parts::pay(s, t, sink, c)
 }
 
 /// Pays the mana of the total cost: by plan, or one source at a time under manual payment.
-fn pay_mana<L: Layout>(
+pub(super) fn pay_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -337,7 +243,8 @@ fn pay_mana<L: Layout>(
     }
 }
 
-/// Mana production and spending have completed before choosing cards for an exile cost.
+/// Mana production and spending have completed before a spell's caster chooses the objects
+/// its other parts take.
 /// [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "Mana abilities must be
 /// activated before costs are paid." CR 601.2h permits spending that mana before exiling
 /// cards; it does not permit activating mana abilities after paying the exile cost. Keeping
@@ -348,16 +255,9 @@ fn after_mana<L: Layout>(
     sink: &mut Sink<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
-    let entry = top(s);
-    if entry.is_spell() {
-        let face = t.def(entry.card).face(entry.face);
-        if let Some(cost) = ExileCost::of(face, entry.costs) {
-            c.step = CastStep::Exile;
-            c.left = cost.count();
-            c.graveyard_from = 0;
-            s.ask(Pending::Casting(c));
-            return Ok(());
-        }
+    if top(s).is_spell() {
+        c.part = 0;
+        return parts::pay(s, t, sink, c);
     }
     finish(s, t, sink, c)
 }
@@ -369,7 +269,7 @@ fn after_mana<L: Layout>(
 /// controller had priority before casting it, they get priority." CR 608.2g: after a spell
 /// cast during a resolution, "no player receives priority"; the resolution it was cast in is
 /// over by now, so the active player receives priority (CR 117.3b).
-fn finish<L: Layout>(
+pub(super) fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -508,40 +408,12 @@ pub(crate) fn decision<L: Layout>(
             let plan = Prompt::new(Purpose::Mana).cost(cost).part(Part::Plan);
             options(DecisionKind::PaymentPlan, list, plan)
         }
-        CastStep::Crew => {
-            let entry = top(s);
-            Decision {
-                player: c.player,
-                kind: DecisionKind::ChooseObject,
-                candidates: Candidates::Objects(collapse(
-                    s,
-                    crew_candidates(s, c.player, source_of(&entry).expect("a Vehicle to crew")),
-                )),
-                // The crew cost's power, and what of it is still to tap.
-                prompt: Prompt::new(Purpose::Crew)
-                    .count(entry_ability(t, &entry).map_or(0, |a| a.cost.crew))
-                    .most(c.left),
-                about: Bitboard::EMPTY,
-            }
-        }
         CastStep::Manual => options(
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
             Prompt::new(Purpose::Mana).cost(c.remaining),
         ),
-        CastStep::Waterbend => options(
-            DecisionKind::ManaPayment,
-            waterbend_options(s, t, c)?,
-            Prompt::new(Purpose::Waterbend).cost(total_cost(s, t, &top(s), c)),
-        ),
-        // The cards lie in the zone the cost exiles from, the hand or the graveyard.
-        CastStep::Exile => Decision {
-            player: c.player,
-            kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(exile_choices(s, t, c)),
-            prompt: Prompt::new(Purpose::ExileCost).most(c.left),
-            about: Bitboard::EMPTY,
-        },
+        CastStep::Objects => parts::decision(s, t, c)?,
     })
 }
 
@@ -596,56 +468,7 @@ pub(crate) fn perform<L: Layout>(
             )?;
             return after_mana(s, t, sink, c);
         }
-        CastStep::Crew => {
-            // CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
-            // activate a Vehicle's crew ability."
-            let slot = object.expect("a creature to crew with");
-            let power = power_of(s, slot);
-            event::set_tapped(s, t, sink, s.object_ref(slot), true)?;
-            c.left = c.left.saturating_sub(power);
-            if c.left == 0 {
-                return begin_payment(s, t, sink, c);
-            }
-        }
-        CastStep::Waterbend => {
-            // CR 701.67a: "you may tap an untapped artifact or creature you control rather
-            // than pay that mana."
-            if let Some(Opt::Mana { slot, color }) = option {
-                mana::activate(s, t, sink, slot, color)?;
-                if waterbend_options(s, t, &c)?.is_empty() {
-                    return pay_mana(s, t, sink, c);
-                }
-                s.ask(Pending::Casting(c));
-                return Ok(());
-            }
-            let Some(Opt::Object(slot)) = option else {
-                return pay_mana(s, t, sink, c);
-            };
-            event::set_tapped(s, t, sink, s.object_ref(slot), true)?;
-            c.bent += 1;
-            c.left -= 1;
-            if waterbend_options(s, t, &c)?.is_empty() {
-                return pay_mana(s, t, sink, c);
-            }
-            s.ask(Pending::Casting(c));
-            return Ok(());
-        }
-        CastStep::Exile => {
-            // CR 601.2h: "The player pays the total cost." The cards go from the hand or the
-            // graveyard to exile as part of it.
-            let slot = object.expect("a card to exile");
-            if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
-                // The cards above it move down one, so the next pick starts here.
-                c.graveyard_from = i as u8;
-            }
-            event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile)?;
-            c.left -= 1;
-            if c.left > 0 {
-                s.ask(Pending::Casting(c));
-                return Ok(());
-            }
-            return finish(s, t, sink, c);
-        }
+        CastStep::Objects => return parts::perform(s, t, sink, c, option, object),
         CastStep::Manual => {
             let option = option.expect("a manual payment");
             c.remaining = mana::manual_pay(s, t, sink, c.player, c.remaining, option)?;

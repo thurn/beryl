@@ -17,7 +17,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
             Ability {
-                only_if_you_control: Some(Filter::AnyOf(&[
+                only_if_you_control: Some(&Filter::AnyOf(&[
                     Filter::Subtype(Subtype::Plains),
                     Filter::Subtype(Subtype::Island),
                 ])),

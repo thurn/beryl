@@ -2,14 +2,15 @@
 //! decision D20).
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, CardDef, Cost, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs,
-    Rule, Rules,
+    Ability, AbilityIx, AbilityKind, CardDef, CostAction, CostPart, FACE_DOWN, FACE_DOWN_COPY,
+    Face, FaceIx, Needs, Rule, Rules,
 };
 
 use crate::event::kind;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
+use crate::payable::{self, Unpayable};
 use crate::static_ability::{self, Unapplied};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
@@ -76,6 +77,13 @@ pub enum TableError {
     /// engine does not read in a filter ([`crate::filter::reads`]): "that player controls",
     /// "its owner controls".
     Players { card: &'static str },
+    /// A card of the game, or a token or emblem one makes, has a cost the engine has no
+    /// code to pay ([`payable`]): it would be played without paying it, so no game is played
+    /// with it.
+    Cost {
+        card: &'static str,
+        unpayable: Unpayable,
+    },
 }
 
 /// The cards one game can contain, under dense game-local indices: what `State` stores for
@@ -152,7 +160,7 @@ impl Capability {
             if a.rule == Rule::InstantLoyaltyTheTurnItEntered {
                 found |= Capability::EnteredThisTurn.bit();
             }
-            if a.cost.loyalty.is_some() {
+            if a.cost.is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
         }
@@ -204,6 +212,12 @@ impl GameTable {
             CardIx::try_from_index(last).unwrap_or_default(),
             LargeCardIx::try_from_index(last).unwrap_or_default(),
         );
+        for def in &defs {
+            payable::check(def).map_err(|unpayable| TableError::Cost {
+                card: def.name,
+                unpayable,
+            })?;
+        }
         let mut listeners = Vec::new();
         let mut listeners_from = Vec::with_capacity(defs.len() + 1);
         let mut listens = Vec::with_capacity(defs.len());
@@ -533,14 +547,16 @@ pub fn has_other_ability(face: &Face) -> bool {
     face.abilities.iter().any(|a| {
         matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
             && !is_simple(a)
-            && !a.cost.discard_self
+            && !a.cost.does(CostAction::Discard)
     })
 }
 
 /// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
 #[inline]
 pub fn is_simple(a: &Ability) -> bool {
-    a.kind == AbilityKind::Mana && a.cost == Cost::TAP
+    a.kind == AbilityKind::Mana
+        && a.cost.mana.is_zero()
+        && matches!(a.cost.parts(), [CostPart::This(CostAction::Tap)])
 }
 
 /// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
@@ -551,11 +567,17 @@ pub fn is_simple(a: &Ability) -> bool {
 #[inline]
 pub fn is_sacrificed(a: &Ability) -> bool {
     a.kind == AbilityKind::Mana
-        && a.cost
-            == Cost {
-                sacrifice_self: true,
-                ..Cost::TAP
-            }
+        && a.cost.mana.is_zero()
+        && matches!(
+            a.cost.parts(),
+            [
+                CostPart::This(CostAction::Tap),
+                CostPart::This(CostAction::Sacrifice)
+            ] | [
+                CostPart::This(CostAction::Sacrifice),
+                CostPart::This(CostAction::Tap)
+            ]
+        )
 }
 
 #[cfg(test)]

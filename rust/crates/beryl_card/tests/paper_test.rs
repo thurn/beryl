@@ -7,14 +7,14 @@
 //! `Subtype` lacks is left out; what is under test is the abilities.
 
 use beryl_card::effect::build::{
-    EACH_OPPONENT, EACH_PLAYER, TARGET, THAT_PLAYER, THIS, YOU, create_tokens, destroy, draw,
-    sequence,
+    EACH_OPPONENT, EACH_PLAYER, TARGET, THAT_PLAYER, THIS, YOU, counter, create_tokens, destroy,
+    draw, sequence,
 };
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost,
-    CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subject,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types,
-    Zone, mana,
+    CostAction, CostPart, CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification,
+    Objects, Subject, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Timing, Trigger,
+    TriggerEvent, TurnStep, Types, Zone, mana,
 };
 
 /// Fire Nation Warship {3}, Artifact — Vehicle 4/4. "Reach / When this Vehicle dies, create a
@@ -46,11 +46,7 @@ static CLUE: CardDef = CardDef {
         types: Types::ARTIFACT,
         abilities: &[Ability {
             kind: AbilityKind::Activated,
-            cost: Cost {
-                mana: mana("{2}"),
-                sacrifice_self: true,
-                ..Cost::NONE
-            },
+            cost: Cost::of(mana("{2}"), &[CostPart::SACRIFICE]),
             body: Behavior::Data(&draw(YOU, 1)),
             ..Ability::NONE
         }],
@@ -144,6 +140,198 @@ static FUGITIVE_WIZARD: CardDef = CardDef {
     }],
     tokens: &[],
 };
+
+/// "The sacrificed creature": what the cost's sacrifice took.
+const SACRIFICED: Objects = Objects::Paid(CostAction::Sacrifice);
+
+/// Slagdrill Scrapper {R}, Artifact Creature — Robot Scout 2/2. "{2}, {T}, Sacrifice another
+/// artifact or land: Draw a card."
+static SLAGDRILL_SCRAPPER: CardDef = CardDef {
+    name: "Slagdrill Scrapper",
+    faces: &[Face {
+        cost: mana("{R}"),
+        types: Types::ARTIFACT.union(Types::CREATURE),
+        colors: Colors::RED,
+        power: Some(2),
+        toughness: Some(2),
+        abilities: &[Ability {
+            kind: AbilityKind::Activated,
+            cost: Cost::of(
+                mana("{2}"),
+                &[
+                    CostPart::TAP,
+                    CostPart::sacrifice_another(Filter::Types(Types::ARTIFACT.union(Types::LAND))),
+                ],
+            ),
+            body: Behavior::Data(&draw(YOU, 1)),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Severed Strands {1}{B}, Sorcery. "As an additional cost to cast this spell, sacrifice a
+/// creature. / You gain life equal to the sacrificed creature's toughness. Destroy target
+/// creature an opponent controls."
+static SEVERED_STRANDS: CardDef = CardDef {
+    name: "Severed Strands",
+    faces: &[Face {
+        cost: mana("{1}{B}"),
+        types: Types::SORCERY,
+        colors: Colors::BLACK,
+        additional_cost: &[CostPart::sacrifice(Filter::Types(Types::CREATURE))],
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            timing: Timing::Sorcery,
+            targets: &[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&EACH_OPPONENT),
+                ]),
+            )
+            .removal()],
+            body: Behavior::Data(&sequence(&[
+                Effect::GainLife {
+                    player: YOU,
+                    amount: Amount::Toughness(SACRIFICED),
+                },
+                destroy(TARGET),
+            ])),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Teferi's Care {2}{W}, Enchantment. "{W}, Sacrifice an enchantment: Destroy target
+/// enchantment. / {3}{U}{U}: Counter target enchantment spell."
+static TEFERIS_CARE: CardDef = CardDef {
+    name: "Teferi's Care",
+    faces: &[Face {
+        cost: mana("{2}{W}"),
+        types: Types::ENCHANTMENT,
+        colors: Colors::WHITE,
+        abilities: &[
+            Ability {
+                kind: AbilityKind::Activated,
+                cost: Cost::of(
+                    mana("{W}"),
+                    &[CostPart::sacrifice(Filter::Types(Types::ENCHANTMENT))],
+                ),
+                targets: &[TargetSpec::one(
+                    TargetKind::Permanent,
+                    Filter::Types(Types::ENCHANTMENT),
+                )
+                .removal()],
+                body: Behavior::Data(&destroy(TARGET)),
+                ..Ability::NONE
+            },
+            Ability {
+                kind: AbilityKind::Activated,
+                cost: Cost::mana(mana("{3}{U}{U}")),
+                targets: &[
+                    TargetSpec::one(TargetKind::Spell, Filter::Types(Types::ENCHANTMENT)).counter(),
+                ],
+                body: Behavior::Data(&counter(TARGET)),
+                ..Ability::NONE
+            },
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// To forage ([CR 701.61a](https://yawgatog.com/resources/magic-rules/#R70161a)): "Exile
+/// three cards from your graveyard or sacrifice a Food." Food is a subtype `Subtype` lacks,
+/// left out as the printed ones are.
+const FORAGE: CostPart = CostPart::OneOf(&[
+    Cost::of_parts(&[CostPart::exile(3, Zone::Graveyard, Filter::Any)]),
+    Cost::of_parts(&[CostPart::sacrifice(Filter::Types(Types::ARTIFACT))]),
+]);
+
+/// The costs of the paper test's misfits. Of its 60 cards, 8 asked for a part of a cost paid
+/// with other objects, or an additional cost that is one. A cost is now mana and parts, so
+/// each is said here under its card and its words; the three cards with nothing else missing
+/// are written whole above.
+///
+/// The engine pays few of these yet (`beryl_kernel`'s `payable`), and a card table refuses the
+/// rest: what is under test is that the vocabulary says them.
+const COSTS: [(&str, &str, Cost); 8] = [
+    (
+        "Flamekin Bladewhirl",
+        "As an additional cost to cast this spell, reveal an Elemental card from your hand or \
+         pay {3}",
+        Cost::of_parts(&[CostPart::OneOf(&[
+            Cost::of_parts(&[CostPart::reveal(Filter::Subtype(Subtype::Elemental))]),
+            Cost::mana(mana("{3}")),
+        ])]),
+    ),
+    (
+        "Slagdrill Scrapper",
+        "{2}, {T}, Sacrifice another artifact or land",
+        SLAGDRILL_SCRAPPER.faces[0].abilities[0].cost,
+    ),
+    (
+        "Camellia, the Seedmiser",
+        "{2}, Forage",
+        Cost::of(mana("{2}"), &[FORAGE]),
+    ),
+    (
+        "Channel",
+        "you may pay 1 life",
+        Cost::of_parts(&[CostPart::Life(1)]),
+    ),
+    (
+        "Gríma Wormtongue",
+        "{T}, Sacrifice another creature",
+        Cost::of_parts(&[
+            CostPart::TAP,
+            CostPart::sacrifice_another(Filter::Types(Types::CREATURE)),
+        ]),
+    ),
+    (
+        "Severed Strands",
+        "As an additional cost to cast this spell, sacrifice a creature",
+        Cost::of_parts(SEVERED_STRANDS.faces[0].additional_cost),
+    ),
+    (
+        "Teferi's Care",
+        "{W}, Sacrifice an enchantment",
+        TEFERIS_CARE.faces[0].abilities[0].cost,
+    ),
+    (
+        "Lluwen, Exchange Student",
+        "Exile a creature card from your graveyard",
+        Cost::of_parts(&[CostPart::exile(
+            1,
+            Zone::Graveyard,
+            Filter::Types(Types::CREATURE),
+        )]),
+    ),
+];
+
+/// Gríma Wormtongue: "If the sacrificed creature was legendary, amass Orcs 2." The condition
+/// names what the cost took.
+const SACRIFICED_WAS_LEGENDARY: Condition =
+    Condition::Is(SACRIFICED, Filter::Supertypes(Supertypes::LEGENDARY));
+
+/// Every misfit's cost has a part that is not mana, and the two effects that name "the
+/// sacrificed creature" read what a cost took.
+#[test]
+fn the_misfits_costs_are_parts_and_an_effect_names_what_one_took() {
+    for (card, words, cost) in COSTS {
+        assert!(!cost.parts().is_empty(), "{card}: {words}");
+    }
+    assert!(SACRIFICED_WAS_LEGENDARY.names_paid());
+    let [strands] = SEVERED_STRANDS.faces[0].abilities else {
+        panic!("one spell ability");
+    };
+    assert!(strands.names_paid());
+    assert!(!TEFERIS_CARE.faces[0].abilities[0].names_paid());
+}
 
 /// The triggers of the paper test's misfits. Of its 60 cards, 17 asked for a `Trigger` entry,
 /// nearly all an event that existed with another subject or player. A trigger is now an
@@ -328,6 +516,9 @@ fn the_cards_that_fit_are_written_wholly_as_data() {
         &DEMONIC_LORE,
         &AZURE_DRAKE,
         &FUGITIVE_WIZARD,
+        &SLAGDRILL_SCRAPPER,
+        &SEVERED_STRANDS,
+        &TEFERIS_CARE,
     ];
     for card in cards {
         for ability in card.faces.iter().flat_map(|face| face.abilities) {

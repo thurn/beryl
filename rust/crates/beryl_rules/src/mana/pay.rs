@@ -1,7 +1,7 @@
 //! Tapping and paying: carrying out a plan or a manual choice.
 
 use crate::bitboard::Bitboard;
-use crate::card::{ManaColor, ManaCost, Types};
+use crate::card::{CostAction, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::fixed::Full;
@@ -228,7 +228,7 @@ pub(crate) fn activate<L: Layout>(
     // [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost."
     event::set_tapped(s, t, sink, source, true)?;
-    if ability.cost.sacrifice_self {
+    if ability.cost.does(CostAction::Sacrifice) {
         event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
     }
     let activation = || PendingTrigger {

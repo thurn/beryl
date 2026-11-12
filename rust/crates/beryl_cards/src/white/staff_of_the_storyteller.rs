@@ -7,8 +7,8 @@
 use beryl_card::effect::build::{THIS, YOU, add_counters, create_tokens, draw};
 use beryl_card::{Effect, Players};
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, Face, Keywords, ManaCost, Subtype,
-    Subtypes, Trigger, Types,
+    Ability, AbilityKind, Behavior, CardDef, Colors, Cost, CostPart, Face, Keywords, ManaCost,
+    Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
@@ -33,12 +33,10 @@ pub static CARD: CardDef = CardDef {
             ),
             Ability {
                 kind: AbilityKind::Activated,
-                cost: Cost {
-                    mana: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
-                    tap: true,
-                    remove: Some(CounterKind::Story),
-                    ..Cost::NONE
-                },
+                cost: Cost::of(
+                    ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
+                    &[CostPart::TAP, CostPart::remove(CounterKind::Story)],
+                ),
                 body: Behavior::Data(&draw(YOU, 1)),
                 ..Ability::NONE
             },

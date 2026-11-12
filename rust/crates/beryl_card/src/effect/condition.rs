@@ -67,6 +67,29 @@ impl Condition {
     }
 }
 
+impl Condition {
+    /// Whether it reads what a cost took ([`Objects::Paid`]). A [`Condition::Custom`] is
+    /// Rust, which names nothing of the vocabulary.
+    pub const fn names_paid(&self) -> bool {
+        match self {
+            Condition::Did | Condition::Paid(_) | Condition::Custom(_) => false,
+            Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
+            Condition::Is(objects, _) => objects.names_paid(),
+            Condition::Not(condition) => condition.names_paid(),
+            Condition::All(conditions) | Condition::Any(conditions) => {
+                let mut i = 0;
+                while i < conditions.len() {
+                    if conditions[i].names_paid() {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+        }
+    }
+}
+
 /// How one [`Amount`] is held against another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Comparison {

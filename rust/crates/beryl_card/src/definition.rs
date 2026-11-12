@@ -3,7 +3,7 @@
 
 use crate::ability::{Ability, AbilityKind};
 use crate::characteristics::{Colors, Keywords, Subtypes, Supertypes, Types};
-use crate::cost::{CastingOption, Castings};
+use crate::cost::{CastingOption, Castings, CostPart};
 use crate::index::{AbilityIx, GrantIx};
 use crate::mana::ManaCost;
 
@@ -106,10 +106,13 @@ pub struct Face {
     /// double-faced card lets its caster choose the face
     /// ([CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b)).
     pub transformed: bool,
-    /// "As an additional cost to cast this spell, exile N cards from your graveyard"
-    /// (Abhorrent Oculus): N, or 0 for no such cost. It is paid with the rest of the total
-    /// cost ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)).
-    pub exile_from_graveyard: u8,
+    /// "As an additional cost to cast this spell, [parts]"
+    /// ([CR 118.8](https://yawgatog.com/resources/magic-rules/#R1188)): "An additional cost is
+    /// a cost listed in a spell's rules text, or applied to a spell or ability from another
+    /// effect, that its controller must pay at the same time they pay the spell's mana cost
+    /// or the ability's activation cost." One its caster may decline is a
+    /// [`CastingOption`] instead.
+    pub additional_cost: &'static [CostPart],
     /// Abilities this face grants to another object rather than has itself, such as the crew
     /// ability of Swift Reconfiguration's "Enchanted permanent is a Vehicle artifact with crew
     /// 5". [`Modification::Grant`] names one by its index here.
@@ -144,13 +147,15 @@ impl Face {
             .or_else(|| self.spell_ability())
     }
 
-    /// The colors of the card that paying `costs` exiles from its caster's hand, such as
-    /// Subtlety's evoke cost, "Exile a blue card from your hand"; none for no such card.
-    pub fn exiles_with(&self, costs: Castings) -> Colors {
-        costs.paid(self).fold(Colors::NONE, |colors, o| match o {
-            CastingOption::Evoke { exile, .. } => colors.union(exile),
-            _ => colors,
-        })
+    /// The parts that are not mana of the cost of casting this face with the options
+    /// `costs`, in the order printed: its additional cost, then those of each option paid
+    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): "The total cost is
+    /// the mana cost or alternative cost (as determined in rule 601.2b), plus all additional
+    /// costs and cost increases, and minus all cost reductions."
+    pub fn cost_parts(&self, costs: Castings) -> impl Iterator<Item = &'static CostPart> + '_ {
+        self.additional_cost
+            .iter()
+            .chain(costs.paid(self).flat_map(CastingOption::parts))
     }
 }
 
@@ -200,7 +205,7 @@ impl Face {
         abilities: &[],
         casting: &[],
         transformed: false,
-        exile_from_graveyard: 0,
+        additional_cost: &[],
         grants: &[],
     };
 

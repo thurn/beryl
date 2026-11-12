@@ -175,7 +175,7 @@ fn fold_loyalty_abilities(
         let Some(ability) = def.front().abilities.get(index.index()) else {
             return true;
         };
-        let Some(loyalty) = ability.cost.loyalty else {
+        let Some(loyalty) = ability.cost.loyalty_change() else {
             return true;
         };
         if loyalty < 0 && loyalty.unsigned_abs() > def.front().loyalty.unwrap_or(0) {

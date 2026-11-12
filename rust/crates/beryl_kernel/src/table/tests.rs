@@ -1,8 +1,8 @@
 //! Tests of the card tables.
 
 use beryl_card::{
-    Behavior, Condition, Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet, Modification,
-    Objects, Players, Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
+    Behavior, Condition, Cost, Effect, Filter, Keywords, LayerSpec, ManaColor, ManaSet,
+    Modification, Objects, Players, Subject, Trigger, TriggerEvent, TurnStep, Types, Zone,
 };
 
 use super::*;

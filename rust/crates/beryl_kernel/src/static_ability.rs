@@ -49,7 +49,7 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
     }
     match spec.affected {
         Objects::This | Objects::AttachedTo => {}
-        Objects::Target(_) | Objects::Those | Objects::All { .. } => {
+        Objects::Target(_) | Objects::Those | Objects::All { .. } | Objects::Paid(_) => {
             return Err(Unapplied::Affected);
         }
     }

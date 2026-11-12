@@ -646,6 +646,7 @@ mod new;
 mod object;
 pub mod observation;
 mod order;
+pub mod payable;
 mod pending;
 mod player;
 mod player_set;

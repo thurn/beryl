@@ -57,3 +57,18 @@ impl Amount {
         }
     }
 }
+
+impl Amount {
+    /// Whether it reads what a cost took ([`Objects::Paid`]).
+    pub const fn names_paid(&self) -> bool {
+        match self {
+            Amount::Fixed(_) | Amount::X | Amount::ThatMany => false,
+            Amount::Count(objects) => objects.names_paid(),
+            Amount::Times(_, amount) => amount.names_paid(),
+            Amount::Power(objects)
+            | Amount::Toughness(objects)
+            | Amount::ManaValue(objects)
+            | Amount::Counters(objects, _) => objects.names_paid(),
+        }
+    }
+}

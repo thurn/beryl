@@ -5,7 +5,7 @@
 //! before it sends the engine's picks; and what a count of targets lets the first target be, so
 //! the UI can take the count with the target.
 
-use beryl_engine::card::{AbilityKind, Purpose};
+use beryl_engine::card::{AbilityKind, CostAction, Purpose};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
@@ -279,7 +279,7 @@ pub(crate) fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTab
         let face = before.copiable(slot).face(t);
         face.abilities
             .iter()
-            .any(|a| a.kind == AbilityKind::Mana && a.cost.sacrifice_self)
+            .any(|a| a.kind == AbilityKind::Mana && a.cost.does(CostAction::Sacrifice))
     };
     before
         .battlefield()

@@ -131,7 +131,11 @@ impl<L: Layout> Scene<'_, L> {
     fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known> + '_ {
         let spec = match objects {
             Objects::Target(spec) => Some(spec),
-            Objects::This | Objects::AttachedTo | Objects::Those | Objects::All { .. } => None,
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::All { .. }
+            | Objects::Paid(_) => None,
         };
         spec.into_iter()
             .flat_map(|spec| self.targets(spec))
@@ -171,6 +175,9 @@ impl<L: Layout> Scene<'_, L> {
                 .and_then(|source| s.object(source.slot).attached_to())
                 .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
+            Objects::Paid(_) => {
+                unreachable!("the card table refuses an effect that names what a cost took")
+            }
             Objects::All { zone, filter } => {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),

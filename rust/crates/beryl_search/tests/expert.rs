@@ -310,7 +310,9 @@ fn jace_bounces_only_when_that_saves_him() {
             slot,
             ability: ObjectAbility::Own(i),
         } if name(t, s, slot) == names::JACE_THE_MIND_SCULPTOR => {
-            s.copiable(slot).face(t).abilities[i.index()].cost.loyalty
+            s.copiable(slot).face(t).abilities[i.index()]
+                .cost
+                .loyalty_change()
         }
         _ => None,
     };
@@ -667,7 +669,7 @@ fn teferi_hero_does_not_draw_from_a_thin_library() {
         matches!(
             chosen(&d, c),
             Opt::Activate { slot, ability: ObjectAbility::Own(i) }
-                if s.copiable(slot).face(&t).abilities[i.index()].cost.loyalty == Some(1)
+                if s.copiable(slot).face(&t).abilities[i.index()].cost.loyalty_change() == Some(1)
         )
     };
     assert!(plus_one(&scenario(DEEP)));

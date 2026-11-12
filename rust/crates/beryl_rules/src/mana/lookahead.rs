@@ -2,7 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Face, Keywords, ManaCost, Replacement, Rule, Timing, Types,
+    Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Rule, Timing, Types,
 };
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -47,7 +47,7 @@ pub(super) fn later_costs<L: Layout>(
                 });
             }
             for a in face.abilities {
-                if a.kind == AbilityKind::Activated && a.cost.discard_self {
+                if a.kind == AbilityKind::Activated && a.cost.does(CostAction::Discard) {
                     add(Later {
                         cost: a.cost.mana.with_x(0),
                         taps: None,
@@ -65,7 +65,7 @@ pub(super) fn later_costs<L: Layout>(
             if a.kind == AbilityKind::Activated && !a.is_loyalty() {
                 add(Later {
                     cost: a.cost.mana.with_x(0),
-                    taps: a.cost.tap.then_some(slot),
+                    taps: a.cost.does(CostAction::Tap).then_some(slot),
                 });
             }
         }
@@ -231,7 +231,10 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
                 ahead.lands.push_if_room((kinds, amount)); // A heuristic's sample.
             }
             for a in face.abilities {
-                if a.kind == AbilityKind::Activated && a.cost.discard_self && activatable(a) {
+                if a.kind == AbilityKind::Activated
+                    && a.cost.does(CostAction::Discard)
+                    && activatable(a)
+                {
                     ahead.add(a.cost.mana, None);
                 }
             }
@@ -260,7 +263,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
         }
         for a in s.copiable(slot).face(t).abilities {
             if a.kind == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
-                ahead.add(a.cost.mana, a.cost.tap.then_some(slot));
+                ahead.add(a.cost.mana, a.cost.does(CostAction::Tap).then_some(slot));
             }
         }
     }

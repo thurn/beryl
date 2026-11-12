@@ -390,7 +390,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Activate { slot, ability } => match ability {
             ObjectAbility::Own(i) => {
                 let a = &s.copiable(slot).face(t).abilities[i.index()];
-                match a.cost.loyalty {
+                match a.cost.loyalty_change() {
                     Some(l) => format!("{} {l:+}", named(slot)),
                     None => format!("activate {} #{i}", named(slot)),
                 }

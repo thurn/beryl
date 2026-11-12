@@ -1,9 +1,10 @@
 //! Building each candidate answer of a decision, with its label.
 
 use beryl_engine::card::{
-    AbilityKind, CastingIx, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx, ManaColor,
-    ManaCost, ObjectAbility, Types,
+    AbilityKind, CastingIx, CastingOption, Castings, Colors, Cost, CostAction, CostPart,
+    FaceAbility, FaceIx, ManaColor, ManaCost, Measure, ObjectAbility, Types,
 };
+use beryl_engine::filter::Filter;
 use beryl_engine::layout::Queue;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -148,9 +149,9 @@ fn mana_candidate<L: Layout>(
             .abilities
             .iter()
             .filter(|a| a.kind == AbilityKind::Mana && a.produces.includes(color))
-            .find(|a| a.cost.tap || a.cost.sacrifice_self)
+            .find(|a| a.cost.does(CostAction::Tap) || a.cost.does(CostAction::Sacrifice))
     });
-    let verb = if ability.is_some_and(|a| a.cost.sacrifice_self) {
+    let verb = if ability.is_some_and(|a| a.cost.does(CostAction::Sacrifice)) {
         "Sacrifice"
     } else {
         "Tap"
@@ -251,18 +252,27 @@ fn casting_options<L: Layout>(
                 format!(" with impending {counters}, {}", mana_text(cost))
             }
             CastingOption::Overload { cost, .. } => format!(" with overload {}", mana_text(cost)),
-            CastingOption::Evoke { cost, exile } => {
-                let mut parts = Vec::new();
+            CastingOption::Evoke { cost, parts } => {
+                let mut words = Vec::new();
                 if cost != ManaCost::NONE {
-                    parts.push(mana_text(cost));
+                    words.push(mana_text(cost));
                 }
-                if exile != Colors::NONE {
-                    parts.push(format!("exile a {} card", color_words(exile)));
-                }
-                format!(" with evoke, {}", parts.join(", "))
+                words.extend(parts.iter().filter_map(exile_text));
+                format!(" with evoke, {}", words.join(", "))
             }
         })
         .collect()
+}
+
+/// A part of a cost that exiles a card, in a label: "exile a blue card".
+fn exile_text(part: &CostPart) -> Option<String> {
+    let CostPart::Chosen(CostAction::Exile, chosen) = part else {
+        return None;
+    };
+    Some(match chosen.filter {
+        Filter::Colors(colors) => format!("exile a {} card", color_words(colors)),
+        _ => "exile a card".to_owned(),
+    })
 }
 
 /// A set of colors as card text names them: "blue", "white or blue".
@@ -308,7 +318,7 @@ fn activated_cost<L: Layout>(
 
 /// An activation cost as Oracle text writes it: "{W}, {T}, Remove a story counter".
 pub(super) fn cost_text(cost: &Cost) -> String {
-    if let Some(loyalty) = cost.loyalty {
+    if let Some(loyalty) = cost.loyalty_change() {
         // A minus sign, as printed, rather than a hyphen.
         return match loyalty {
             0 => "0".to_owned(),
@@ -316,26 +326,26 @@ pub(super) fn cost_text(cost: &Cost) -> String {
             l => format!("\u{2212}{}", l.unsigned_abs()),
         };
     }
-    if cost.crew > 0 {
-        return format!("Crew {}", cost.crew);
+    let measure = cost.measure();
+    if let Some(Measure::TotalPower(crew)) = measure {
+        return format!("Crew {crew}");
     }
     let mut parts = Vec::new();
-    if cost.waterbend > 0 {
+    if matches!(measure, Some(Measure::ForGeneric(_))) {
         parts.push(format!("Waterbend {}", mana_text(cost.mana)));
     } else if cost.mana != ManaCost::NONE {
         parts.push(mana_text(cost.mana));
     }
-    if cost.tap {
-        parts.push("{T}".to_owned());
-    }
-    if cost.sacrifice_self {
-        parts.push("Sacrifice this".to_owned());
-    }
-    if cost.discard_self {
-        parts.push("Discard this card".to_owned());
-    }
-    if let Some(kind) = cost.remove {
-        parts.push(format!("Remove a {} counter", kind.name()));
+    for part in cost.parts() {
+        match *part {
+            CostPart::This(CostAction::Tap) => parts.push("{T}".to_owned()),
+            CostPart::This(CostAction::Sacrifice) => parts.push("Sacrifice this".to_owned()),
+            CostPart::This(CostAction::Discard) => parts.push("Discard this card".to_owned()),
+            CostPart::This(CostAction::RemoveCounter(kind)) => {
+                parts.push(format!("Remove a {} counter", kind.name()));
+            }
+            _ => {}
+        }
     }
     if parts.is_empty() {
         "Activate".to_owned()

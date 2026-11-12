@@ -26,19 +26,13 @@ pub enum CastStep {
     Plan,
     /// Paying mana one source at a time, under the `manual_mana` profile.
     Manual,
-    /// Tapping creatures for a crew cost one at a time; `left` is the power still needed
-    /// (CR 702.122a).
-    Crew,
-    /// Tapping artifacts and creatures for a waterbend cost's generic mana one at a time;
-    /// `left` is the generic mana they may still pay (CR 701.67a).
-    Waterbend,
-    /// Choosing a card a cost exiles (CR 601.2h): from the hand, as evoke's "Exile a blue card
-    /// from your hand", or one of the cards from the graveyard of an additional cost such as
-    /// Abhorrent Oculus's "exile six cards from your graveyard". `left` is the number still to
-    /// exile. Graveyard cards are chosen in graveyard order, bottom first, each above the one
-    /// before, from position `graveyard_from` up, so each set of cards is one sequence of
-    /// answers (§7.2).
-    Exile,
+    /// Paying one part of the cost with objects its player chooses, one at a time
+    /// ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays
+    /// the total cost."): the part at `part`, of which `left` is what is still to pay, by
+    /// the part's measure. Cards of a graveyard are chosen in graveyard order, bottom first,
+    /// each above the one before, from position `graveyard_from` up, so each set of cards is
+    /// one sequence of answers (§7.2).
+    Objects,
 }
 
 /// A spell being cast or an ability being activated.
@@ -48,7 +42,10 @@ pub struct Casting {
     pub step: CastStep,
     /// The target spec being chosen (CR 601.2c).
     pub spec: SpecIx,
-    /// For [`CastStep::Exile`], the graveyard position picks continue from.
+    /// For [`CastStep::Objects`], which part of the cost is being paid, counting its parts
+    /// that are not mana from 0 in the order printed.
+    pub part: u8,
+    /// For [`CastStep::Objects`], the graveyard position picks continue from.
     pub graveyard_from: u8,
     /// Targets still to choose for it, or what another step still has to pay.
     pub left: u8,
@@ -60,9 +57,9 @@ pub struct Casting {
     pub resolving: bool,
     /// What remains to pay under manual payment.
     pub remaining: ManaCost,
-    /// Generic mana paid by tapping artifacts and creatures for a waterbend cost
-    /// (CR 701.67a).
-    pub bent: u8,
+    /// Generic mana of the cost that a part paid with objects rather than with mana
+    /// ([`beryl_card::Measure::ForGeneric`]).
+    pub substituted: u8,
     /// A triggered ability being put on the stack: targets only, no costs and no change of
     /// priority (CR 603.3d).
     pub triggered: bool,

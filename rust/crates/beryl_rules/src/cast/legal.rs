@@ -5,7 +5,7 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, Face, FaceIx, ManaCost, Needs, ObjectAbility, Rule, Timing,
+    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Needs, ObjectAbility, Rule, Timing,
     Types,
 };
 use crate::casting;
@@ -19,7 +19,8 @@ use crate::rule_change;
 use crate::state::{ObjectFlags, State, Subject, Tracker, Zone, ZoneKey};
 use crate::table::GameTable;
 
-use super::costs::{ExileCost, From, option_sets, spell_cost, x_range_start};
+use super::costs::{From, option_sets, spell_cost, x_range_start};
+use super::parts;
 use super::targets::targetable;
 use super::timing::{activated, instant_speed, sorcery_speed_only, sorcery_timing};
 
@@ -128,8 +129,8 @@ fn refused<L: Layout>(
     {
         return Some(Refusal::Mana);
     }
-    // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
-    if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
+    // CR 601.2h: the player pays the total cost, so the objects its parts take must be there.
+    if !parts::spell_payable(s, t, player, slot, face, costs) {
         return Some(Refusal::Cost);
     }
     (!targetable(
@@ -267,40 +268,10 @@ pub(super) fn cast_options<L: Layout>(
 /// mana.
 pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
     let mut b = Bitboard::EMPTY;
-    if a.cost.tap || a.cost.sacrifice_self {
+    if a.cost.does(CostAction::Tap) || a.cost.does(CostAction::Sacrifice) {
         b.insert(slot);
     }
     b
-}
-
-/// The other untapped creatures `player` controls, which may crew the Vehicle in `vehicle`
-/// (CR 702.122a). Summoning sickness doesn't stop them: tapping them is a cost of the
-/// Vehicle's ability, not an ability of theirs with {T} (CR 302.6).
-pub(super) fn crew_candidates<L: Layout>(
-    s: &State<L>,
-    player: Seat,
-    vehicle: L::Slot,
-) -> Bitboard<L::Slot> {
-    s.battlefield()
-        .iter()
-        .copied()
-        .filter(|&slot| {
-            slot != vehicle
-                && s.controller(slot) == player
-                && s.derived(slot).types.contains(Types::CREATURE)
-                && !s.object(slot).flags().has(ObjectFlags::TAPPED)
-        })
-        .collect()
-}
-
-/// A creature's power counted toward a crew cost; less than 0 counts as 0.
-pub(super) fn power_of<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
-}
-
-/// The total power of the creatures that could crew the Vehicle in `vehicle`.
-fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: L::Slot) -> u32 {
-    crew_candidates(s, player, vehicle).sum(|slot| u32::from(power_of(s, slot)))
 }
 
 /// Whether `player` may activate ability `ability` of the object in `slot` now.
@@ -326,7 +297,7 @@ fn activatable<L: Layout>(
     // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
     // can activate its activated ability". CR 702.29a: cycling "functions only while the card
     // with cycling is in a player's hand."
-    let in_place = if a.cost.discard_self {
+    let in_place = if a.cost.does(CostAction::Discard) {
         o.zone() == Zone::Hand && o.owner() == player
     } else {
         o.zone() == Zone::Battlefield && s.controller(slot) == player
@@ -334,7 +305,7 @@ fn activatable<L: Layout>(
     if !in_place {
         return false;
     }
-    if a.cost.tap {
+    if a.cost.does(CostAction::Tap) {
         // CR 118.3: "a permanent that's already tapped can't be tapped to pay a cost". CR
         // 602.5a: "A creature's activated ability with the tap symbol ... in its activation
         // cost can't be activated unless the creature has been under its controller's control
@@ -346,15 +317,15 @@ fn activatable<L: Layout>(
             return false;
         }
     }
-    if a.cost.crew > 0 && crew_power(s, player, slot) < u32::from(a.cost.crew) {
-        return false;
-    }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if matches!(a.cost.remove, Some(kind) if s.counters_of(slot, kind) == 0) {
+    if a.cost.chooses() && !parts::ability_payable(s, t, player, slot, a.cost.parts()) {
         return false;
     }
-    let timely = if let Some(loyalty) = a.cost.loyalty {
+    if matches!(a.cost.removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
+        return false;
+    }
+    let timely = if let Some(loyalty) = a.cost.loyalty_change() {
         // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
         // unless the permanent has at least that many loyalty counters on it."
         let payable = i16::from(o.counters().loyalty) + i16::from(loyalty) >= 0;
@@ -381,56 +352,19 @@ fn activatable<L: Layout>(
     // The mana before the targets, which read the battlefield: both checks are pure.
     let cost = a.cost.mana.with_x(0);
     let spent = spent_by_cost(slot, a);
-    let paid = now.funds(s, t).is_some_and(|funds| {
-        if a.cost.waterbend > 0 {
-            waterbend_payable(s, t, funds, player, cost, a.cost.waterbend, spent)
-        } else {
-            funds.pays(s, t, cost, spent)
+    let substitute = if a.cost.chooses() {
+        parts::substitute(a.cost.parts())
+    } else {
+        None
+    };
+    let paid = now.funds(s, t).is_some_and(|funds| match substitute {
+        Some((_, action, chosen, most)) => {
+            let objects = parts::candidates(s, t, player, slot, action, chosen);
+            parts::payable_with_substitutes(s, t, funds, cost, most, objects, spent)
         }
+        None => funds.pays(s, t, cost, spent),
     });
     paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
-}
-
-/// Whether `player` can pay `cost`, tapping artifacts and creatures for up to `bendable` of
-/// its generic mana (CR 701.67a), with none of `exclude`. Tapping one that makes no mana now
-/// pays as much as it ever can, so those pay first; a mana source pays at least as much
-/// tapped for mana, so it never needs to.
-pub(super) fn waterbend_payable<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    funds: &Funds<L>,
-    player: Seat,
-    mut cost: ManaCost,
-    bendable: u8,
-    mut exclude: Bitboard<L::Slot>,
-) -> bool {
-    let free = benders(s, player) & !exclude & !funds.sources(exclude);
-    // Any of them do: each pays one generic mana, and none is a source the funds count.
-    for slot in s
-        .in_candidate_order(free)
-        .take(usize::from(bendable.min(cost.generic)))
-    {
-        cost.generic -= 1;
-        exclude.insert(slot);
-    }
-    funds.pays(s, t, cost, exclude)
-}
-
-/// The untapped artifacts and creatures `player` controls, which may each pay for one
-/// generic mana of a waterbend cost (CR 701.67a). Summoning sickness doesn't stop them:
-/// tapping them is a cost of the ability, not an ability of theirs with {T} (CR 302.6).
-pub(super) fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
-    s.battlefield()
-        .iter()
-        .copied()
-        .filter(|&slot| {
-            s.controller(slot) == player
-                && s.derived(slot)
-                    .types
-                    .intersects(Types::ARTIFACT.union(Types::CREATURE))
-                && !s.object(slot).flags().has(ObjectFlags::TAPPED)
-        })
-        .collect()
 }
 
 /// Whether activating `ability` of the object in `slot` now would do nothing, as its card

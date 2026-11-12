@@ -176,6 +176,9 @@ impl ReplayFile {
                     TableError::UnknownCard(name) => SessionError::UnknownCard {
                         name: name.to_owned(),
                     },
+                    TableError::Cost { card, unpayable } => SessionError::Deck {
+                        reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
+                    },
                     TableError::Trigger { card, unmatched } => SessionError::Deck {
                         reason: format!(
                             "{card} has a trigger the engine cannot match: {unmatched:?}"

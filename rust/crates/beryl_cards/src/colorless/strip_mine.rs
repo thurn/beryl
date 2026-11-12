@@ -1,8 +1,8 @@
 //! Strip Mine. Land. "{T}: Add {C}. {T}, Sacrifice Strip Mine: Destroy target land."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Cost, Face, Flow, ManaColor, ManaSet, TargetKind, TargetSpec,
-    Types,
+    Ability, AbilityKind, CardDef, Cost, CostPart, Face, Flow, ManaColor, ManaSet, TargetKind,
+    TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -19,11 +19,7 @@ pub static CARD: CardDef = CardDef {
             Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
             Ability {
                 kind: AbilityKind::Activated,
-                cost: Cost {
-                    tap: true,
-                    sacrifice_self: true,
-                    ..Cost::NONE
-                },
+                cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
                 targets: &[
                     TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::LAND)).removal(),
                 ],

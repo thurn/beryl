@@ -6,7 +6,7 @@ use std::panic::RefUnwindSafe;
 
 use crate::characteristics::Types;
 use crate::continuous::{Duration, LayerSpec, Modification, Replacement, Rule};
-use crate::cost::{CastingKind, Cost};
+use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
 use crate::filter::Filter;
@@ -175,8 +175,9 @@ pub struct Ability {
     pub rule: Rule,
     /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
     /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
-    /// to activate an ability that's prohibited from being activated."
-    pub only_if_you_control: Option<Filter>,
+    /// to activate an ability that's prohibited from being activated." Held by reference, as
+    /// the trigger is: the ability's size is a power of two with its cost's parts in it.
+    pub only_if_you_control: Option<&'static Filter>,
     /// Activated abilities: what the effect needs to do anything, so that a human isn't
     /// offered an activation that would do nothing ([`Needs`]).
     pub needs: Needs,
@@ -269,11 +270,7 @@ impl Ability {
     pub const fn cycling(mana: ManaCost) -> Ability {
         Ability {
             kind: AbilityKind::Activated,
-            cost: Cost {
-                mana,
-                discard_self: true,
-                ..Cost::NONE
-            },
+            cost: Cost::of(mana, &[CostPart::DISCARD]),
             body: Behavior::Data(&Effect::Draw {
                 player: Players::You,
                 count: Amount::Fixed(1),
@@ -291,10 +288,7 @@ impl Ability {
     pub const fn crew(n: u8) -> Ability {
         Ability {
             kind: AbilityKind::Activated,
-            cost: Cost {
-                crew: n,
-                ..Cost::NONE
-            },
+            cost: Cost::crew(n),
             body: Behavior::Data(&BECOME_ARTIFACT_CREATURE),
             ..Ability::NONE
         }
@@ -390,10 +384,24 @@ impl Ability {
                 && matches!(self.body, Behavior::Data(effect) if effect.takes(target, how))
     }
 
+    /// Whether its effect or its intervening "if" reads what its cost took
+    /// ([`Objects::Paid`]). A Rust body names nothing of the vocabulary.
+    pub const fn names_paid(&self) -> bool {
+        let condition = match self.condition {
+            Some(condition) => condition.names_paid(),
+            None => false,
+        };
+        condition
+            || match self.body {
+                Behavior::Data(effect) => effect.names_paid(),
+                Behavior::Custom(_) => false,
+            }
+    }
+
     /// Whether this is a loyalty ability
     /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
     pub fn is_loyalty(&self) -> bool {
-        self.cost.loyalty.is_some()
+        self.cost.is_loyalty()
     }
 
     /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type

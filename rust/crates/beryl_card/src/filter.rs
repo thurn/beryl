@@ -1,6 +1,6 @@
 //! `Filter`: the predicates targets and affected sets are written in.
 
-use crate::characteristics::{Subtype, Supertypes, Types};
+use crate::characteristics::{Colors, Subtype, Supertypes, Types};
 use crate::effect::Players;
 
 /// A predicate over objects. Evaluating one is a pass over a candidate set; the hot ones
@@ -8,13 +8,15 @@ use crate::effect::Players;
 ///
 /// A permanent's characteristics and controller are its derived ones, after continuous
 /// effects; elsewhere they are the face's.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Filter {
     Any,
     /// Has at least one of these card types.
     Types(Types),
     Supertypes(Supertypes),
     Subtype(Subtype),
+    /// Is at least one of these colors: "a blue card".
+    Colors(Colors),
     /// Controlled by (on the battlefield or stack) or owned by (elsewhere) one of these
     /// players, read for the controller of the spell or ability the filter is part of: "you
     /// control", "an opponent controls", "your graveyard"
@@ -48,6 +50,7 @@ impl Filter {
             | Filter::Types(_)
             | Filter::Supertypes(_)
             | Filter::Subtype(_)
+            | Filter::Colors(_)
             | Filter::Tapped
             | Filter::ManaValueAtMost(_) => false,
             Filter::ManaValueAtMostX => true,

@@ -5,13 +5,13 @@
 
 use beryl_engine::Bitboard;
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Place, Prompt,
-    Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, CastingOption, Colors, CostPart, Face, Flow, Keywords, ManaCost, Place,
+    Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
+use beryl_engine::{Layout, Zone, bodies};
 
 use crate::names;
 
@@ -59,7 +59,7 @@ pub static CARD: CardDef = CardDef {
         ],
         casting: &[CastingOption::Evoke {
             cost: ManaCost::NONE,
-            exile: Colors::BLUE,
+            parts: &[CostPart::exile(1, Zone::Hand, Filter::Colors(Colors::BLUE))],
         }],
         ..Face::EMPTY
     }],

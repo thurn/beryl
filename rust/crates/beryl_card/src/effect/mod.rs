@@ -326,6 +326,74 @@ impl Effect {
     }
 }
 
+impl Effect {
+    /// Whether it reads what a cost of its spell or ability took ([`Objects::Paid`]), which
+    /// the engine does not keep: a card table refuses the definition.
+    pub const fn names_paid(&self) -> bool {
+        match self {
+            Effect::Sequence(effects) => {
+                let mut i = 0;
+                while i < effects.len() {
+                    if effects[i].names_paid() {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+            Effect::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                condition.names_paid()
+                    || then.names_paid()
+                    || match otherwise {
+                        Some(otherwise) => otherwise.names_paid(),
+                        None => false,
+                    }
+            }
+            Effect::May { player, effect }
+            | Effect::Unless { effect, player, .. }
+            | Effect::ForEachPlayer {
+                players: player,
+                effect,
+            } => player.names_paid() || effect.names_paid(),
+            Effect::Counter(objects)
+            | Effect::Destroy(objects)
+            | Effect::Exile(objects)
+            | Effect::ExileUntilThisLeaves(objects)
+            | Effect::Sacrifice(objects)
+            | Effect::ReturnToHand(objects)
+            | Effect::PutIntoLibrary { objects, .. }
+            | Effect::Modify { objects, .. } => objects.names_paid(),
+            Effect::Draw { player, count }
+            | Effect::Discard { player, count }
+            | Effect::Mill { player, count }
+            | Effect::Scry { player, count }
+            | Effect::GainLife {
+                player,
+                amount: count,
+            }
+            | Effect::LoseLife {
+                player,
+                amount: count,
+            }
+            | Effect::CreateTokens { player, count, .. } => {
+                player.names_paid() || count.names_paid()
+            }
+            Effect::CreateCopies {
+                player, of, count, ..
+            } => player.names_paid() || of.names_paid() || count.names_paid(),
+            Effect::AddCounters { objects, count, .. }
+            | Effect::RemoveCounters { objects, count, .. } => {
+                objects.names_paid() || count.names_paid()
+            }
+            Effect::AddMana { player, .. } => player.names_paid(),
+        }
+    }
+}
+
 /// Whether `objects` is what was chosen for the `target`th instance of the word "target".
 const fn is_target(objects: Objects, target: SpecIx) -> bool {
     matches!(objects, Objects::Target(n) if n.get() == target.get())

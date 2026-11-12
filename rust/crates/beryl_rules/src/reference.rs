@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, Cost, ManaCost, Rules, Types};
+use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Rules, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -205,12 +205,16 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         let mut kinds = 0u8;
         let mut amount = None;
         for a in face(s, t, slot).abilities {
-            let tap_only = Cost {
-                tap: true,
-                sacrifice_self: a.cost.sacrifice_self,
-                ..Cost::NONE
-            };
-            if a.kind != AbilityKind::Mana || a.cost != tap_only || !controls(s, t, player, a) {
+            // {T}, or {T} and sacrificing it, and nothing else.
+            let tap_only = a.cost.mana.is_zero()
+                && a.cost.does(CostAction::Tap)
+                && a.cost.parts().iter().all(|part| {
+                    matches!(
+                        part,
+                        CostPart::This(CostAction::Tap | CostAction::Sacrifice)
+                    )
+                });
+            if a.kind != AbilityKind::Mana || !tap_only || !controls(s, t, player, a) {
                 continue;
             }
             if amount.is_some_and(|n| n != a.produces.amount) {

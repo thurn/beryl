@@ -7,9 +7,9 @@
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, Face, FaceIx, Flow, Keywords,
-    ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Rule, Subtype, Subtypes, Supertypes,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, CostPart, Face, FaceIx, Flow,
+    Keywords, ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Rule, Subtype, Subtypes,
+    Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::Reason;
@@ -255,10 +255,7 @@ pub(crate) static TREASURE: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability {
-            cost: Cost {
-                sacrifice_self: true,
-                ..Cost::TAP
-            },
+            cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
             ..Ability::tap_for_mana(ManaSet {
                 colors: 0b1_1111,
                 amount: 1,
@@ -277,11 +274,7 @@ pub(crate) static STRIP: CardDef = CardDef {
             Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
             Ability {
                 kind: AbilityKind::Activated,
-                cost: Cost {
-                    tap: true,
-                    sacrifice_self: true,
-                    ..Cost::NONE
-                },
+                cost: Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
                 targets: &[TargetSpec::one(TargetKind::Permanent, LANDS)],
                 body: bodies!(destroy_target),
                 ..Ability::NONE

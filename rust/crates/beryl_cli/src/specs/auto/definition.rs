@@ -6,7 +6,7 @@ use beryl_cards::names::{
     COUNTERSPELL, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP, SWAMP,
     THIEVING_SKYDIVER,
 };
-use beryl_engine::card::{AbilityKind, CardDef, Face, Needs, Timing, Types};
+use beryl_engine::card::{AbilityKind, CardDef, CostAction, Face, Measure, Needs, Timing, Types};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
@@ -68,7 +68,8 @@ pub(super) fn activated(face: &Face) -> Vec<(u8, &'static beryl_engine::card::Ab
         .iter()
         .enumerate()
         .filter(|(_, a)| a.kind == AbilityKind::Activated)
-        .filter(|(_, a)| !a.cost.discard_self && a.cost.crew == 0)
+        .filter(|(_, a)| !a.cost.does(CostAction::Discard))
+        .filter(|(_, a)| !matches!(a.cost.measure(), Some(Measure::TotalPower(_))))
         .filter_map(|(i, a)| Some((u8::try_from(i).ok()?, a)))
         .collect()
 }
@@ -85,7 +86,7 @@ pub fn ability_labels(def: &'static CardDef) -> Vec<(u8, String)> {
 /// An ability's label: its cost, as its card prints it ("{2}{T}", "+2", "−1"), or its index
 /// for a cost that is none of those.
 pub(super) fn cost_label(a: &beryl_engine::card::Ability, k: u8) -> String {
-    if let Some(l) = a.cost.loyalty {
+    if let Some(l) = a.cost.loyalty_change() {
         return match l {
             0 => "0".to_owned(),
             l if l > 0 => format!("+{l}"),
@@ -102,10 +103,10 @@ pub(super) fn cost_label(a: &beryl_engine::card::Ability, k: u8) -> String {
             let _ = write!(out, "{{{symbol}}}");
         }
     }
-    if a.cost.tap {
+    if a.cost.does(CostAction::Tap) {
         out += "{T}";
     }
-    if a.cost.sacrifice_self {
+    if a.cost.does(CostAction::Sacrifice) {
         out += if out.is_empty() {
             "Sacrifice"
         } else {
@@ -155,12 +156,12 @@ pub(super) fn permanent(
 ) -> Permanent {
     let p = Permanent::new(def.name);
     let cost = ability
-        .and_then(|a| a.cost.loyalty)
+        .and_then(|a| a.cost.loyalty_change())
         .map_or(0, i8::unsigned_abs);
     if face.loyalty.is_some_and(|l| l < cost) {
         return p.counters(CounterKind::Loyalty, cost);
     }
-    match face.abilities.iter().find_map(|a| a.cost.remove) {
+    match face.abilities.iter().find_map(|a| a.cost.removes()) {
         Some(kind) => p.counters(kind, 2),
         None => p,
     }
@@ -228,7 +229,7 @@ pub(super) fn stops(
     // the others can stop a player outside their own main phase.
     if abilities
         .iter()
-        .any(|(_, a)| a.timing == Timing::Instant && a.cost.loyalty.is_none())
+        .any(|(_, a)| a.timing == Timing::Instant && a.cost.loyalty_change().is_none())
     {
         let main = table("stops-main", 5, P0, TurnStep::PostcombatMain);
         out.push(probe(
@@ -306,7 +307,7 @@ fn activations(
     let bounceable = !def.front().types.intersects(Types::LAND);
     if let Some(&(k, a)) = abilities
         .iter()
-        .find(|(_, a)| a.timing == Timing::Instant && !a.cost.sacrifice_self)
+        .find(|(_, a)| a.timing == Timing::Instant && !a.cost.does(CostAction::Sacrifice))
         .filter(|_| bounceable)
     {
         let board = table("bounced", 5, P0, TurnStep::PrecombatMain)

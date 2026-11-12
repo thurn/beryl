@@ -212,7 +212,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
             let target = match spec.affected {
                 Objects::This => Some(i),
                 Objects::AttachedTo => o.attached_to().and_then(|a| s.battlefield_position(a)),
-                Objects::Target(_) | Objects::Those | Objects::All { .. } => {
+                Objects::Target(_) | Objects::Those | Objects::All { .. } | Objects::Paid(_) => {
                     unreachable!("the card table refuses a static ability on any other set")
                 }
             };

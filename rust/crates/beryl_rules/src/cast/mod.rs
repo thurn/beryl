@@ -12,6 +12,7 @@
 
 mod costs;
 mod legal;
+mod parts;
 mod stack;
 mod steps;
 mod targets;
