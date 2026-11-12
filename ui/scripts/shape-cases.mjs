@@ -129,7 +129,10 @@ async function flown({ tick, cards }) {
         }),
     });
     const seen = [sample()];
-    for (let i = 0; stage.shown.busy && i < 2000; i++) {
+    // The pill passes over the table and may outlast the script (timing.ts, `passes`):
+    // play on until it has gone too.
+    const playing = () => stage.shown.busy || stage.shown.notices.length > 0;
+    for (let i = 0; playing() && i < 2000; i++) {
         stage.clock.advance(tick);
         // The faces are React's, drawn a moment after the model has them.
         await new Promise((resolve) => setTimeout(resolve));

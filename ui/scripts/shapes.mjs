@@ -100,7 +100,9 @@ const LAYOUTS = {
             ).values(),
         ],
         dock: ".phone-dock, .phone-prompt-more",
-        title: ".phone-pill",
+        // The prompt's own pill, not a scry's, which may still be passing over the table
+        // (it outlasts its script: timing.ts, `passes`).
+        title: ".phone-pill:not(.stage-notice-scry)",
         captions: false,
         handClicks: false,
     },
