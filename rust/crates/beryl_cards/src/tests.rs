@@ -1,6 +1,5 @@
 //! The generated names, the card table and the decklists.
 
-use std::fmt::Write;
 use std::path::PathBuf;
 
 use beryl_engine::card::{
@@ -13,7 +12,7 @@ use beryl_engine::{
     Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
 
-use crate::{CARDS, SCENARIOS, blue, decks, names};
+use crate::{CARDS, SCENARIOS, decks, names};
 
 mod derive;
 mod facts;
@@ -27,115 +26,28 @@ fn crate_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
 }
 
-/// The decklists whose cards have name constants, read at test time.
-const DECKS: &str = "docs/sample-decks";
-const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
-
-/// A card name as a Rust constant: "Jace, Vryn's Prodigy" is `JACE_VRYNS_PRODIGY`.
-fn constant(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.chars() {
-        let c = match c {
-            'á' | 'à' | 'â' | 'ä' => 'a',
-            'é' | 'è' | 'ê' | 'ë' => 'e',
-            'í' | 'ì' | 'î' | 'ï' => 'i',
-            'ó' | 'ò' | 'ô' | 'ö' => 'o',
-            'ú' | 'ù' | 'û' | 'ü' => 'u',
-            c => c,
-        };
-        assert!(c.is_ascii(), "no ASCII spelling for {c:?} in {name:?}");
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_uppercase());
-        } else if c != '\'' && !out.ends_with('_') {
-            out.push('_');
-        }
-    }
-    let out = out.trim_matches('_').to_string();
-    assert!(
-        out.starts_with(|c: char| c.is_ascii_alphabetic()),
-        "{name:?} gives no constant"
-    );
-    out
+/// The scenarios in the file of the card called `name`.
+fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
+    let found = SCENARIOS.iter().find(|(card, _)| *card == name);
+    found.unwrap_or_else(|| panic!("{name} has no scenarios")).1
 }
 
-/// The card names of the decklists in `dir`, main deck and sideboard, each once, by file name
-/// and then in each list's order.
-fn deck_names(dir: &std::path::Path) -> Vec<String> {
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|path| path.extension().is_some_and(|e| e == "txt"))
-        .collect();
-    paths.sort();
-    let mut names = Vec::new();
-    for path in paths {
-        for line in std::fs::read_to_string(&path).unwrap().lines() {
-            if let Some((count, name)) = line.split_once(' ')
-                && count.parse::<u8>().is_ok()
-                && !names.iter().any(|n| n == name.trim())
-            {
-                names.push(name.trim().to_string());
-            }
-        }
-    }
-    names
-}
-
-fn generate(decks: &[String]) -> String {
-    let mut out = String::from(
-        "//! Every card name as a constant, so a misspelled card is a compile error.\n\
-         //!\n\
-         //! Generated from the decklists in `docs/sample-decks` and the basic lands by the\n\
-         //! `names_are_current` test. Regenerate with\n\
-         //! `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`.\n\n",
-    );
+/// The generated tables: one card and one list of scenarios per card file, under the card's
+/// own name, and a constant for every card.
+#[test]
+fn the_registry_lists_every_card_file_once() {
     let mut seen = std::collections::BTreeSet::new();
-    let mut emit = |out: &mut String, name: &str| {
-        let c = constant(name);
-        assert!(seen.insert(c.clone()), "two names give {c}");
-        writeln!(out, "pub const {c}: &str = {name:?};").unwrap();
-    };
-    let mut names: Vec<&str> = decks
-        .iter()
-        .map(String::as_str)
-        .filter(|name| !BASIC_LANDS.contains(name))
-        .collect();
-    names.sort_unstable();
-    for name in names {
-        emit(&mut out, name);
+    assert_eq!(CARDS.cards().len(), SCENARIOS.len());
+    for (def, (name, _)) in CARDS.cards().iter().zip(SCENARIOS) {
+        assert_eq!(def.name, *name);
+        assert!(seen.insert(def.name), "{name} is listed twice");
     }
-    out.push_str("\n// The basic lands.\n");
-    for name in BASIC_LANDS {
-        emit(&mut out, name);
-    }
-    out
-}
-
-#[test]
-fn names_are_current() {
-    let crate_dir = crate_dir();
-    let decks = deck_names(&crate_dir.join("../../..").join(DECKS));
-    let expected = generate(&decks);
-    let path = crate_dir.join("src/names.rs");
-    if std::env::var_os("BERYL_UPDATE_NAMES").is_some() {
-        std::fs::write(&path, &expected).unwrap();
-    }
-    let actual = std::fs::read_to_string(&path).unwrap_or_default();
-    assert!(
-        actual == expected,
-        "src/names.rs is stale: run `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`"
-    );
-}
-
-#[test]
-fn constants_spell_names_plainly() {
-    assert_eq!(constant("Jace, Vryn's Prodigy"), "JACE_VRYNS_PRODIGY");
-    assert_eq!(constant("Life // Death"), "LIFE_DEATH");
-    assert_eq!(constant("Troll of Khazad-dûm"), "TROLL_OF_KHAZAD_DUM");
+    assert!(seen.len() >= 47, "a card file is gone: {seen:?}");
     assert_eq!(
         names::JACE_WIELDER_OF_MYSTERIES,
         "Jace, Wielder of Mysteries"
     );
+    assert_eq!(names::FOREST, "Forest");
 }
 
 /// A decklist file's main deck: its `<count> <name>` lines up to the blank line before the
@@ -421,7 +333,7 @@ fn the_dump_is_valid_json_with_every_scenario() {
         serde_json::from_str(&beryl_scenario::to_json(&CARDS, SCENARIOS)).unwrap();
     let total: usize = SCENARIOS.iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
-    assert_eq!(json[0]["card"], names::PLAINS);
+    assert_eq!(json[0]["card"], CARDS.cards()[0].name);
 }
 
 /// A paused body's looks stay known (architecture §13): while Elite Spellbinder asks whether
@@ -581,7 +493,7 @@ fn a_cleanup_discard_triggers_currency_converter() {
 /// whatever card it deals there.
 #[test]
 fn a_face_down_card_is_hidden_until_it_leaves() {
-    let scenario = blue::abhorrent_oculus::scenarios::SCENARIOS
+    let scenario = scenarios_of(names::ABHORRENT_OCULUS)
         .iter()
         .find(|s| s.name == "A face-down permanent leaving the battlefield is revealed")
         .expect("the scenario");
@@ -617,7 +529,7 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
 /// turned face up (CR 701.40b).
 #[test]
 fn a_copy_of_a_face_down_permanent_hides_its_card() {
-    let scenario = blue::abhorrent_oculus::scenarios::SCENARIOS
+    let scenario = scenarios_of(names::ABHORRENT_OCULUS)
         .iter()
         .find(|s| s.name == "Fractured Identity copies a face-down permanent as a 2/2")
         .expect("the scenario");
@@ -720,9 +632,8 @@ fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
 /// graveyard" does nothing until a card is exiled with it (CR 607.2a), and then does.
 #[test]
 fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
-    use crate::colorless::currency_converter::scenarios::SCENARIOS as CONVERTER;
     use beryl_engine::card::ObjectAbility;
-    let scenario = CONVERTER
+    let scenario = scenarios_of(names::CURRENCY_CONVERTER)
         .iter()
         .find(|s| s.name == "Currency Converter chooses among its exiled cards")
         .unwrap();

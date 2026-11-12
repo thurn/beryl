@@ -21,6 +21,8 @@ RULES = (
     "rust/crates/beryl_rules/src",
     "rust/crates/beryl_engine/src",
     "rust/crates/beryl_cards/src",
+    "rust/crates/beryl_card_shared/src",
+    "rust/cards",
 )
 # The facade other crates import the kernel through re-exports the module, and the rules'
 # tests set up tables of two.

@@ -335,7 +335,7 @@ def test_a_rerun_that_misses_a_failed_check_is_no_flake(
 def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    changed = ["rust/crates/beryl_cards/src/blue/counterspell.rs", "tools/x.py"]
+    changed = ["rust/cards/cards_1993_1994/lea/counterspell.rs", "tools/x.py"]
     assert checks.changed_cards(changed) == []
     monkeypatch.setattr(oracles, "built", lambda oracle: True)
     assert checks.changed_cards(changed) == ["Counterspell"]
@@ -366,7 +366,7 @@ def test_a_card_or_vocabulary_change_runs_the_tests_that_read_card_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for path in [
-        "rust/crates/beryl_cards/src/blue/counterspell.rs",
+        "rust/cards/cards_1993_1994/lea/counterspell.rs",
         "rust/crates/beryl_card/src/effect/mod.rs",
         "rust/crates/beryl_cards/Cargo.toml",
     ]:
@@ -385,7 +385,7 @@ def test_a_change_under_tools_runs_the_python_lane_and_the_scale_tests_once(
 ) -> None:
     lanes = lanes_for(
         monkeypatch,
-        ["tools/src/beryl_tools/scale.py", "rust/crates/beryl_cards/src/blue/a.rs"],
+        ["tools/src/beryl_tools/scale.py", "rust/cards/cards_1993_1994/lea/a.rs"],
     )
     assert "scale" not in lanes
     # The python lane's pytest names no files, so it runs every test, test_scale's once.
@@ -399,7 +399,7 @@ def test_the_script_checks_run_for_a_change_to_a_crate_a_script_comes_from(
     for path in [
         "rust/crates/beryl_session/src/script/build.rs",
         "rust/crates/beryl_kernel/src/lib.rs",
-        "rust/crates/beryl_cards/src/blue/counterspell.rs",
+        "rust/cards/cards_1993_1994/lea/counterspell.rs",
         "ui/fixtures.json",
         "data/card-store.tsv",
     ]:

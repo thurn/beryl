@@ -16,9 +16,13 @@ as later sets join it.
 
 A card's file is `rust/cards/<crate>/<set module>/<card module>.rs` (`SetGroups.card_path`): a
 set's module is its code (`m10`), and a card's is its name in lowercase ASCII words joined by
-underscores, accents dropped (`lim_dul_s_vault`, `fire_ice`). A module name that would start
-with a digit or be a Rust keyword takes a prefix spelled out: `set_10e`, `set_mod`,
-`card_2_mace`.
+underscores, accents and apostrophes dropped (`lim_duls_vault`, `fire_ice`). A module name that
+would start with a digit or be a Rust keyword takes a prefix spelled out: `set_10e`, `set_mod`,
+`card_2_mace`. The name is the one the engine knows the card by (`file_name`): a card of two
+faces is its front face (`jace_vryns_prodigy`), and a split card both halves. A card's constant
+in a `names` module is its module in capitals (`constant`). The set crates' build scripts spell
+the same rules in Rust (`beryl_card_build`'s names.rs) and find each file's card in the store
+by them, so a file out of place fails the build.
 """
 
 from __future__ import annotations
@@ -83,12 +87,27 @@ def set_module(code: str) -> str:
 
 def card_module(name: str) -> str:
     """A card's module, from its name: ASCII letters and digits in lowercase words joined by
-    underscores, accents dropped and other characters breaking words."""
-    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    words = "".join(c.lower() if c.isalnum() else " " for c in folded).split()
+    underscores, accents and apostrophes dropped and other characters breaking words."""
+    folded = unicodedata.normalize("NFKD", name)
+    kept = "".join(c for c in folded if c not in "'’" and not unicodedata.combining(c))
+    spaced = "".join(c.lower() if c.isascii() and c.isalnum() else " " for c in kept)
+    words = spaced.split()
     if not words:
         raise ValueError(f"card name {name!r} has no ASCII letters or digits")
     return module("_".join(words), "card")
+
+
+def constant(name: str) -> str:
+    """A card's constant in a `names` module: `JACE_VRYNS_PRODIGY`."""
+    return card_module(name).upper()
+
+
+def file_name(record: Json) -> str:
+    """The name a card record's file is spelled from, the one the engine knows the card by:
+    both halves of a split card ("Fire // Ice"), else its front face's."""
+    if record.get("layout") == "split":
+        return str(record["name"])
+    return str(cast(list[Json], record["faces"])[0]["name"])
 
 
 def first_sets(records: Iterable[Json]) -> dict[str, SetInfo]:
@@ -224,5 +243,5 @@ class SetGroups:
             root
             / self.group_of(record)
             / set_module(str(record["first_set"]))
-            / f"{card_module(str(record['name']))}.rs"
+            / f"{card_module(file_name(record))}.rs"
         )

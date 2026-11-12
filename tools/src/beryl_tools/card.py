@@ -10,13 +10,17 @@
 3. Vocabulary: the entries of beryl_card the rules text most likely needs, read from its source
    as text (vocabulary.py), each with its file, line and doc comment.
 4. The nearest implemented cards by rules text (nearest.py), each with its file under
-   beryl_cards and the vocabulary entries its definition uses.
+   rust/cards and the vocabulary entries its definition uses.
 5. The XMage class, MIT-licensed, as a reference: its path in the oracle checkout and its source.
 
 Never Forge's script, nor anything derived from one (K16): this module does not import forge.py
 and reads nothing under Forge's checkout. A part whose source is missing (offline with no
 rulings cached, no XMage checkout) says so and the brief goes on. A name the store lacks exits
 1, naming the closest names it has.
+
+`card path <name>` prints the card's file, `rust/cards/<crate>/<set>/<card>.rs` by its first
+printing (set_groups.py). A card with no file yet is a record in the store alone: it says so,
+with where the file would go, and exits 1.
 """
 
 from __future__ import annotations
@@ -32,7 +36,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, nearest, paths, scryfall, vocabulary, xmage_classes
+from . import (
+    card_files,
+    card_store,
+    nearest,
+    paths,
+    scryfall,
+    set_groups,
+    vocabulary,
+    xmage_classes,
+)
 
 Json = card_store.Json
 
@@ -40,12 +53,12 @@ Json = card_store.Json
 @dataclass(frozen=True)
 class Sources:
     """Where a brief reads from: the card store, beryl_card's source (the vocabulary) and
-    beryl_cards' (the implemented cards). The rulings and XMage's checkout are in the cache.
+    the card files under rust/cards (the implemented cards). The rulings and XMage's checkout are in the cache.
     """
 
     store: Path = card_store.STORE
     vocabulary: Path = vocabulary.SOURCES
-    cards: Path = nearest.CARD_SOURCES
+    cards: Path = card_files.CARDS
 
 
 def find(name: str, store: card_store.Store) -> Json | str:
@@ -154,7 +167,7 @@ def brief(record: Json, sources: Sources) -> str:
         )
     )
 
-    files = nearest.implemented(sources.cards)
+    files = card_files.implemented(sources.cards, sources.store)
     with card_store.Store(sources.store) as store:
         near = nearest.nearest(text, name, store, files)
     listed: list[str] = []
@@ -202,8 +215,26 @@ def run_brief(args: argparse.Namespace, sources: Sources = Sources()) -> int:
     return 0
 
 
+def run_path(args: argparse.Namespace, sources: Sources = Sources()) -> int:
+    with card_store.Store(sources.store) as store:
+        found = find(args.name, store)
+    if isinstance(found, str):
+        print(f"card: {found}", file=sys.stderr)
+        return 1
+    path = set_groups.SetGroups().card_path(found, sources.cards)
+    if path.is_file():
+        print(where(path))
+        return 0
+    print(
+        f"card: {found['name']} is a record in the card store with no file; its file "
+        f"would be {where(path)}",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = sub.add_parser("card", help="the tools a card is written with: brief")
+    p = sub.add_parser("card", help="the tools a card is written with: brief, path")
     commands = p.add_subparsers(dest="card_command", required=True)
     b = commands.add_parser(
         "brief",
@@ -212,3 +243,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     b.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     b.set_defaults(func=run_brief)
+    w = commands.add_parser("path", help="the card's file, by its first printing")
+    w.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
+    w.set_defaults(func=run_path)

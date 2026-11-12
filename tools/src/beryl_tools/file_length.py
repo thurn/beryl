@@ -17,12 +17,11 @@ from . import paths
 LIMIT = 800
 ALLOWLIST: Path = paths.REPO / "data" / "file-length-allowlist.json"
 
-SCOPE = ("rust/crates", "ui/src", "ui/scripts", "tools/src")
+SCOPE = ("rust/crates", "rust/cards", "ui/src", "ui/scripts", "tools/src")
 SUFFIXES = {".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
 # Paths from the repository root: a directory (its whole subtree) or a file.
 EXEMPT = (
     "ui/src/generated",
-    "rust/crates/beryl_cards/src/names.rs",
     "rust/crates/beryl_search/src/frozen",
     "ui/scripts/drive.mjs",
     "rust/crates/beryl_search/src/expert",

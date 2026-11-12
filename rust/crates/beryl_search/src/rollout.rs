@@ -505,7 +505,8 @@ mod tests {
     fn greedy_holds_a_portable_hole_with_nothing_to_exile() {
         let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
         let policy = RolloutPolicy::new(&t);
-        let hole = beryl_cards::white::portable_hole::CARD.faces[0].abilities[0].targets()[0];
+        let hole = CARDS.get(beryl_cards::names::PORTABLE_HOLE).unwrap().faces[0].abilities[0]
+            .targets()[0];
         let mut x = Scratch::new();
         let (mut cast, mut held) = (0, 0);
         for seed in 0..60 {

@@ -49,6 +49,7 @@ from pathlib import Path
 from . import (
     board_door,
     build_paths,
+    card_files,
     card_names,
     citations,
     conventions,
@@ -476,9 +477,9 @@ def python_lane() -> Lane:
 
 
 # The Python tests that read card and vocabulary files, which `scale_lane` runs alone for a Rust
-# change (tests/test_scale.py reads the cards and beryl_cards/Cargo.toml; tests/test_card_names.py
-# reads every card file; tests/test_card.py reads beryl_card's source as card brief does, and
-# tests/test_specs.py beryl_cards' names.rs). Others read files outside tools/ too (test_forge:
+# change (tests/test_scale.py and tests/test_card_names.py read every card file;
+# tests/test_card.py reads beryl_card's source as card brief does, and tests/test_specs.py the
+# card files' names). Others read files outside tools/ too (test_forge:
 # data/card-store.tsv and oracle-divergences.json; test_runlog: git), but never what a card or
 # vocabulary change touches.
 CARD_READERS = [
@@ -487,7 +488,7 @@ CARD_READERS = [
     "tests/test_card.py",
     "tests/test_specs.py",
 ]
-CARD_FILES = r"^rust/crates/beryl_cards?/"
+CARD_FILES = r"^rust/(cards|crates/beryl_cards?)/"
 # The card store is source to both: beryl_card_store embeds it, so a refresh (`just cards`)
 # rebuilds every crate that reads a record, and the tools' tests read it and hold it to their
 # sample.
@@ -514,7 +515,11 @@ def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
         .step(
             "build-paths", [sys.executable, "-m", "beryl_tools.checks", "build-paths"]
         )
-        .step("fmt", ["cargo", "fmt", "--all", "--check"], paths.RUST)
+        .step(
+            "fmt",
+            [sys.executable, "-m", "beryl_tools.checks", "rustfmt", "--check"],
+            paths.RUST,
+        )
         .step(
             "clippy",
             [
@@ -686,7 +691,7 @@ def changed_cards(changed: list[str] | None) -> list[str]:
 
     if not changed or not all(oracles.built(o) for o in oracles.ORACLES):
         return []
-    return card_names.cards_in(changed)
+    return card_files.cards_in(changed)
 
 
 def slow(args: argparse.Namespace) -> int:
@@ -788,5 +793,6 @@ if __name__ == "__main__":
         "citations": citations.step,
         "conventions": conventions.step,
         "build-paths": build_paths.step,
+        "rustfmt": card_files.rustfmt_step,
     }
     sys.exit(steps[sys.argv[1]](*sys.argv[2:]))

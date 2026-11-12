@@ -89,10 +89,14 @@ const FUZZ_NONBASICS: usize = 23;
 /// the rest. A limited deck holds "as many duplicates of a card as are included with the
 /// product" (CR 100.2b), and the cube holds one of each.
 pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
-    let (basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = CARDS
+    let (mut basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = CARDS
         .cards()
         .iter()
         .partition(|c| c.front().supertypes.contains(Supertypes::BASIC));
+    // By name, so that a seed's deck does not change with the table's order, which is the
+    // card files' and moves as files are added.
+    basics.sort_unstable_by_key(|c| c.name);
+    nonbasics.sort_unstable_by_key(|c| c.name);
     SplitMix64::new(seed).shuffle(&mut nonbasics);
     nonbasics.truncate(FUZZ_NONBASICS);
     let mut deck: Vec<(u8, &'static str)> = nonbasics.iter().map(|c| (1, c.name)).collect();

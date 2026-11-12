@@ -82,6 +82,7 @@ class Store:
     """An open card store. Each lookup seeks: it costs a few reads however large the store."""
 
     def __init__(self, path: Path = STORE) -> None:
+        self.path: Path = path
         self.file: BinaryIO = path.open("rb")
         self.size: int = path.stat().st_size
 

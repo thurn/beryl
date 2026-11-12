@@ -3,7 +3,7 @@
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-use crate::white::adeline_resplendent_cathar::HUMAN_TOKEN;
+use crate::tokens::HUMAN_TOKEN;
 use crate::{names, props};
 
 const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;

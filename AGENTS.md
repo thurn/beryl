@@ -28,8 +28,14 @@ the release pinned in `data/rules-version.json`.
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
   IPC commands, `tauri.conf.json`, capabilities, icons). Keep it thin: game
   rules and AI go in their own library crates under `rust/crates/`, which build
-  and test without Tauri. `docs/engine-architecture.md` §16 maps the crates;
-  `docs/project-50k.md` is the plan for restructuring them to scale.
+  and test without Tauri. A card is one file,
+  `rust/cards/<crate>/<set>/<card>.rs` by its first printing
+  (`just card path <name>` prints it), in a set crate that depends on the
+  vocabulary alone. Nothing lists card files by hand: build scripts
+  (`beryl_card_build`) write each set crate's modules and tables, and
+  `beryl_cards`' registry and `names` over them, so a new card is a new file.
+  `docs/engine-architecture.md` §16 maps the crates; `docs/project-50k.md` is
+  the plan for restructuring them to scale.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it. Its fixture
   transport replays sessions recorded from seeded games or scripted boards

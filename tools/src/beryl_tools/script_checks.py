@@ -75,24 +75,25 @@ def run(
     ).returncode
 
 
-def inputs(crates: Path = paths.RUST / "crates") -> str:
+def inputs(rust: Path = paths.RUST) -> str:
     """A pattern of the paths a change to which can change a script check's outcome: the
     workspace's manifest and lock, the fixtures' definitions, and the checker's crate with
-    every crate it depends on through path dependencies."""
-    found: set[str] = set()
-    todo = [CHECKER]
+    every crate it depends on through path dependencies, the set crates under `cards` among
+    them."""
+    found: set[Path] = set()
+    todo = [rust / "crates" / CHECKER]
     while todo:
         crate = todo.pop()
         if crate in found:
             continue
         found.add(crate)
-        manifest = tomllib.loads((crates / crate / "Cargo.toml").read_text())
+        manifest = tomllib.loads((crate / "Cargo.toml").read_text())
         for table in ("dependencies", "build-dependencies"):
             for spec in manifest.get(table, {}).values():
                 if isinstance(spec, dict) and isinstance(spec.get("path"), str):
-                    todo.append(Path(spec["path"]).name)
-    names = "|".join(re.escape(c) for c in sorted(found))
-    return rf"^rust/(Cargo\.(toml|lock)$|crates/({names})/)|^ui/fixtures\.json$"
+                    todo.append(Path(os.path.normpath(crate / spec["path"])))
+    names = "|".join(re.escape(c.relative_to(rust).as_posix()) for c in sorted(found))
+    return rf"^rust/(Cargo\.(toml|lock)$|({names})/)|^ui/fixtures\.json$"
 
 
 if __name__ == "__main__":

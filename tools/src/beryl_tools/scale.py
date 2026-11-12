@@ -5,7 +5,7 @@ builds it and prints what it cost: a cold `cargo check`, a release build, a rebu
 editing one card, and the largest compiler process's peak memory.
 
 The workload is real cards. Each of the N definitions is a clone of one of the card files under
-`rust/crates/beryl_cards/src/<color>/`, cycled until N is reached, with its own card name made
+`rust/cards`, cycled until N is reached, with its own card name made
 unique, so it carries its abilities, bodies and scenarios, not a stub. The clones are split over
 K library crates (`shard0` ...), and a final binary, `all`, references every card and scenario
 through `std::hint::black_box`, since the linker would strip tables nothing reads and the
@@ -14,7 +14,7 @@ crates are built once in each profile before the clock starts, so only the clone
 
 A clone keeps its `use crate::...` lines working: each shard re-exports the real card modules
 (`crate::tokens`) and has a `names` module of its own, the real names
-plus one constant per clone. Files reaching another card (`super::`, `crate::white::...`) are left out of the pool.
+plus one constant per clone. Files reaching past those (`super::`) are left out of the pool.
 
 It then prints what scripts cost (plan K24): the seconds `beryl_cli script-check` takes to play
 every spec moment of each pooled card from both seats in a debug build, where every script the
@@ -40,16 +40,14 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import checks, nearest, paths, script_checks
+from . import card_files, checks, nearest, paths, script_checks
 
 DEFAULT_CARDS = 50_000
 DEFAULT_CRATES = 20
-BERYL_CARDS: Path = paths.RUST / "crates" / "beryl_cards" / "src"
 CRATES: Path = paths.RUST / "crates"
 # The modules a clone reaches by `crate::`, which a shard re-exports from `beryl_cards`: the
 # shared tokens, and the props its scenarios name.
@@ -64,7 +62,6 @@ CRATE_GROUP: re.Pattern[str] = re.compile(r"\b(?:crate|super)::\{([^}]*)\}")
 NAME_FIELD: re.Pattern[str] = re.compile(
     r"(?:^\s*name: |\bcard\(\s*)names::([A-Z0-9_]+),", re.MULTILINE
 )
-NAME_CONST: re.Pattern[str] = re.compile(r'pub const ([A-Z0-9_]+): &str = "(.*)";')
 MAX_LINE = 100
 # A card's script check in the run log: `script:<card>/<moment>/<seat>`.
 SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
@@ -86,14 +83,12 @@ class Source:
     name: str
 
 
-def sources(src: Path = BERYL_CARDS) -> list[Source]:
+def sources(root: Path = card_files.CARDS) -> list[Source]:
     """The real card files that can be cloned: those with a `CardDef` named by `names::...`
-    that reach nothing in their crate but `names` and `tokens`."""
-    names = dict(NAME_CONST.findall((src / "names.rs").read_text()))
+    that reach nothing in their crate but `names` and the shared modules."""
+    names = card_files.constants(root)
     found = []
-    for path in sorted(src.glob("*/*.rs")):
-        if path.name == "mod.rs":
-            continue
+    for path in card_files.files(root):
         text = path.read_text()
         field = NAME_FIELD.search(text)
         grouped = {
@@ -140,31 +135,24 @@ def shard_lib(first: int, picks: list[Source]) -> str:
         lines.append(f'    pub const {pick.const}_{i}: &str = "{pick.name} {i}";')
     lines.append("}")
     lines += [f"pub mod c{i};" for i in ids]
-    lines.append("pub static CARDS: &[&beryl_engine::card::CardDef] = &[")
+    lines.append("pub static CARDS: &[&beryl_card::CardDef] = &[")
     lines += [f"    &c{i}::CARD," for i in ids]
-    lines += ["];", "pub static SCENARIOS: &[&[beryl_scenario::Scenario]] = &["]
+    lines += ["];", "pub static SCENARIOS: &[&[beryl_scenario_types::Scenario]] = &["]
     lines += [f"    c{i}::scenarios::SCENARIOS," for i in ids]
     lines.append("];")
     return "\n".join(lines) + "\n"
 
 
-def card_crates() -> list[str]:
-    """The checkout's crates a card file may use: those `beryl_cards` depends on by path, so
-    a clone compiles wherever its original does."""
-    manifest = tomllib.loads((CRATES / "beryl_cards" / "Cargo.toml").read_text())
-    dependencies: dict[str, object] = manifest["dependencies"]
-    return sorted(
-        name
-        for name, spec in dependencies.items()
-        if isinstance(spec, dict) and "path" in spec
-    )
+# The checkout's crates a card file may use, which a set crate depends on: the vocabulary and
+# the scenarios' value types.
+CARD_CRATES = ("beryl_card", "beryl_scenario_types")
 
 
 def shard_manifest(name: str) -> str:
-    # `beryl_cards` with its scenarios, which hold the props the clones' scenarios name.
-    dependencies = f'beryl_cards = {{ path = "{CRATES / "beryl_cards"}", features = ["scenarios"] }}\n'
+    # `beryl_cards` for its `names`, and the tokens and props it re-exports.
+    dependencies = f'beryl_cards = {{ path = "{CRATES / "beryl_cards"}" }}\n'
     dependencies += "".join(
-        f'{crate} = {{ path = "{CRATES / crate}" }}\n' for crate in card_crates()
+        f'{crate} = {{ path = "{CRATES / crate}" }}\n' for crate in CARD_CRATES
     )
     return f"""[package]
 name = "{name}"

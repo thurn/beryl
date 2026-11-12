@@ -1,0 +1,14 @@
+[package]
+name = "beryl_card_shared"
+version = "0.1.0"
+description = "What card files share: tokens several cards create and the scenarios' prop cards"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The vocabulary, and nothing else: every set crate depends on this one.
+beryl_card = { path = "../beryl_card" }

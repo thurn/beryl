@@ -34,9 +34,9 @@ def test_rules_code_may_not_discard_a_failed_push(tmp_path: Path) -> None:
     several = "let _ = list\n    .get_or_insert_with(Default::default)\n    .push(a);\n"
     write(tmp_path, "rust/crates/beryl_rules/src/layers.rs", "\n" + several)
     write(tmp_path, "rust/crates/beryl_kernel/src/zone.rs", "_ = cards.push(card);\n")
-    write(tmp_path, "rust/crates/beryl_cards/src/white/a.rs", "v.push(x).ok();\n")
+    write(tmp_path, "rust/cards/cards_1993_1994/lea/a.rs", "v.push(x).ok();\n")
     kernel, rule, card = discarded_push.check(tmp_path)
-    assert card.startswith("rust/crates/beryl_cards/src/white/a.rs:1: ")
+    assert card.startswith("rust/cards/cards_1993_1994/lea/a.rs:1: ")
     assert rule.startswith("rust/crates/beryl_rules/src/layers.rs:2: ")
     assert kernel.startswith("rust/crates/beryl_kernel/src/zone.rs:1: ")
     assert "push_bounded" in rule

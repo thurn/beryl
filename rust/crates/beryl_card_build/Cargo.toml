@@ -1,0 +1,16 @@
+[package]
+name = "beryl_card_build"
+version = "0.1.0"
+description = "What a card crate's build script runs: the module tree, tables and names of its files"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# A build dependency of every set crate and of the registry, standard library only. It replaces
+# the lists kept by hand: `beryl_cards`' `CARDS` and `SCENARIOS`, the color `mod.rs` files and
+# the committed `names.rs` (plan K8: "A build script lists each set directory. No registry is
+# kept by hand").
+[dependencies]

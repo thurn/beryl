@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from beryl_tools import card_names
+from beryl_tools import card_files, card_names, card_store, paths, set_groups
 
 NAMES = ["Ponder", "Jace, the Mind Sculptor", "Jace", "Aang's Iceberg", "Island"]
 INDEX = card_names.NameIndex(
@@ -126,44 +126,48 @@ def test_the_check_over_a_tree(tmp_path: Path) -> None:
     assert len(card_names.check(tmp_path, allowlist, INDEX, shrink=True)) == 1
 
 
-def test_a_card_file_names_its_card_through_its_definition(tmp_path: Path) -> None:
-    src = "rust/crates/beryl_cards/src"
-    write(
-        tmp_path,
-        f"{src}/names.rs",
-        'pub const COUNTERSPELL: &str = "Counterspell";\n'
-        'pub const JACE_THE_MIND_SCULPTOR: &str = "Jace, the Mind Sculptor";\n',
-    )
-    definition = "pub static DEFINITION: Card = Card {{\n    name: names::{},\n}};\n"
-    write(tmp_path, f"{src}/blue/counterspell.rs", definition.format("COUNTERSPELL"))
-    write(
-        tmp_path,
-        f"{src}/blue/jace_the_mind_sculptor.rs",
-        definition.format("JACE_THE_MIND_SCULPTOR")
-        + "const X: &[&str] = &[names::COUNTERSPELL];\n",
-    )
-    write(tmp_path, f"{src}/blue/mod.rs", "pub mod counterspell;\n")
-    write(tmp_path, f"{src}/lib.rs", definition.format("COUNTERSPELL"))
-    changed = [
-        f"{src}/blue/jace_the_mind_sculptor.rs",
-        f"{src}/blue/counterspell.rs",
-        f"{src}/blue/mod.rs",
-        f"{src}/lib.rs",
-        f"{src}/blue/deleted.rs",
+def test_a_card_file_names_its_card_by_its_path(tmp_path: Path) -> None:
+    lea, wwk = "rust/cards/cards_1993_1994/lea", "rust/cards/cards_2009_2011/wwk"
+    for path in (
+        f"{lea}/counterspell.rs",
+        f"{wwk}/jace_the_mind_sculptor.rs",
+        # A file in a set its card was not first printed in, and a crate's own files.
+        f"{wwk}/counterspell.rs",
+        "rust/cards/cards_1993_1994/lib.rs",
         "rust/crates/beryl_rules/src/blue/counterspell.rs",
-        f"{src}/blue/counterspell.rs",
+    ):
+        write(tmp_path, path, "")
+    changed = [
+        f"{wwk}/jace_the_mind_sculptor.rs",
+        f"{lea}/counterspell.rs",
+        f"{wwk}/counterspell.rs",
+        "rust/cards/cards_1993_1994/lib.rs",
+        f"{lea}/deleted.rs",
+        "rust/crates/beryl_rules/src/blue/counterspell.rs",
+        f"{lea}/counterspell.rs",
     ]
-    assert card_names.cards_in(changed, tmp_path) == [
+    assert card_files.cards_in(changed, tmp_path) == [
         "Jace, the Mind Sculptor",
         "Counterspell",
     ]
 
 
-def test_every_card_file_names_its_card() -> None:
-    files = [
-        p.relative_to(card_names.paths.REPO).as_posix()
-        for p in (card_names.NAMES_RS.parent).glob("*/*.rs")
-        if p.name != "mod.rs"
-        and p.parent.name not in ("bin", "tests", "library", "derive")
-    ]
-    assert len(card_names.cards_in(files)) == len(files)
+def test_every_card_file_is_where_its_first_printing_puts_it() -> None:
+    files = card_files.files()
+    assert len(files) >= 47
+    groups = set_groups.SetGroups()
+    with card_store.Store() as store:
+        for path in files:
+            name = card_files.name_of(path, store)
+            assert name is not None, f"{path} is no card of its set in the store"
+            record = store.card(name)
+            assert record is not None and groups.card_path(record) == path
+    rels = [p.relative_to(paths.REPO).as_posix() for p in files]
+    assert len(card_files.cards_in(rels)) == len(files)
+
+
+def test_names_has_a_constant_for_every_deck_card_and_card_file() -> None:
+    constants = card_files.constants()
+    assert constants["JACE_VRYNS_PRODIGY"] == "Jace, Vryn's Prodigy"
+    assert constants["FOREST"] == "Forest"
+    assert set(card_files.implemented()) <= set(constants.values())

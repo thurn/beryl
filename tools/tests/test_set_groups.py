@@ -96,8 +96,18 @@ def test_every_card_has_a_path_of_its_own() -> None:
         "cards",
         groups.group_of(jace),
         "ori",
-        "jace_vryn_s_prodigy_jace_telepath_unbound.rs",
+        "jace_vryns_prodigy.rs",
     )
+    # A card of two faces is filed by its front face, the name the engine knows; a split card
+    # by both halves.
+    split: set_groups.Json = {
+        "name": "Fire // Ice",
+        "first_set": "apc",
+        "layout": "split",
+        "faces": [{"name": "Fire"}, {"name": "Ice"}],
+    }
+    assert groups.card_path(split).name == "fire_ice.rs"
+    assert set_groups.constant("Jace, Vryn's Prodigy") == "JACE_VRYNS_PRODIGY"
     with pytest.raises(LookupError, match="zzz"):
         groups.group_of({"first_set": "zzz", "name": "New Card"})
 
@@ -106,7 +116,7 @@ def test_modules_are_rust_identifiers() -> None:
     assert set_groups.set_module("m10") == "m10"
     assert set_groups.set_module("10e") == "set_10e"
     assert set_groups.set_module("mod") == "set_mod"
-    assert set_groups.card_module("Lim-Dûl's Vault") == "lim_dul_s_vault"
+    assert set_groups.card_module("Lim-Dûl's Vault") == "lim_duls_vault"
     assert set_groups.card_module("Fire // Ice") == "fire_ice"
     assert set_groups.card_module("+2 Mace") == "card_2_mace"
     assert set_groups.card_module("Static") == "card_static"

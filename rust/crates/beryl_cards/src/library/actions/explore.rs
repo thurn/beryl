@@ -4,7 +4,7 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-use crate::white::get_lost::MAP_TOKEN;
+use crate::tokens::MAP_TOKEN;
 use crate::{names, props};
 
 /// A land card revealed goes to its controller's hand, a nonbasic one as a basic

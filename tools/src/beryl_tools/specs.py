@@ -37,7 +37,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import card_store, cards, checks, paths, scryfall, system, warm
+from . import card_files, card_store, cards, checks, paths, scryfall, system, warm
 from . import nearest as nearest_cards
 from .shots import (
     PHONE,
@@ -95,8 +95,8 @@ slug = nearest_cards.slug
 
 
 def implemented() -> set[str]:
-    """The slugs of the implemented cards: each card's file under beryl_cards, by its name."""
-    return set(nearest_cards.card_files())
+    """The slugs of the implemented cards: each card with a file, by its name."""
+    return {slug(name) for name in card_files.implemented()}
 
 
 def oracle(name: str) -> str | None:
@@ -123,7 +123,7 @@ def nearest(name: str, specced: set[str], most: int = 5) -> list[str]:
     text = oracle(name)
     if text is None:
         return []
-    among = [n for n in nearest_cards.implemented() if slug(n) in specced]
+    among = [n for n in card_files.implemented() if slug(n) in specced]
     with card_store.Store() as store:
         return nearest_cards.nearest(text, name, store, among, most)
 

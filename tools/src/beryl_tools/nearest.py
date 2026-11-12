@@ -1,8 +1,7 @@
 """Rules texts compared by the words they share: the implemented cards nearest a card, for
 `specs` and `card brief`, and what a rules text has in common with any other text.
 
-The implemented cards are the files under beryl_cards, each named by its card's slug, with the
-names those slugs come from in beryl_cards' `names.rs`. Both are read as text: nothing is built.
+The implemented cards are the files under `rust/cards` (card_files.py).
 """
 
 from __future__ import annotations
@@ -12,12 +11,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
-from . import card_store, paths
-
-CARD_SOURCES: Path = paths.RUST / "crates" / "beryl_cards" / "src"
-
-# `pub const COUNTERSPELL: &str = "Counterspell";`, one per card in beryl_cards' names.rs.
-NAME: re.Pattern[str] = re.compile(r'^pub const \w+: &str = "((?:[^"\\]|\\.)*)";', re.M)
+from . import card_store
 
 
 def slug(name: str) -> str:
@@ -29,22 +23,6 @@ def slug(name: str) -> str:
         elif c in " -" and out and not out.endswith("-"):
             out += "-"
     return out.rstrip("-")
-
-
-def card_files(sources: Path = CARD_SOURCES) -> dict[str, Path]:
-    """Each implemented card's file under beryl_cards, by its card's slug."""
-    return {
-        f.stem.replace("_", "-"): f
-        for f in sources.glob("*/*.rs")
-        if f.stem not in ("mod", "beryl_scenario")
-    }
-
-
-def implemented(sources: Path = CARD_SOURCES) -> dict[str, Path]:
-    """Each implemented card's file, by the card's name in names.rs."""
-    files = card_files(sources)
-    names = NAME.findall((sources / "names.rs").read_text())
-    return {n: files[slug(n)] for n in names if slug(n) in files}
 
 
 WORD: re.Pattern[str] = re.compile(r"[a-z+\-/{}0-9]+")

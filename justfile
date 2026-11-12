@@ -142,7 +142,7 @@ bench-count *args:
 count-gate:
     {{ by }} count-gate
 
-# The tools a card is written with: brief <name> prints the packet it is written from
+# The tools a card is written with: brief <name> prints the packet it is written from, path <name> its file
 [group('data')]
 card command *args:
     {{ by }} card "$@"
@@ -342,7 +342,7 @@ verdict check verdict:
 [group('checks')]
 fmt:
     uv run --quiet --project tools black --quiet tools
-    cd rust && cargo fmt --all
+    cd rust && uv run --quiet --project ../tools python -m beryl_tools.checks rustfmt
     {{ by }} warm
     cd ui && node_modules/.bin/prettier --write --log-level warn .
     just --fmt --unstable

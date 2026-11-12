@@ -3,7 +3,7 @@
 use beryl_engine::Zone;
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
-use crate::colorless::currency_converter::ROGUE_TOKEN;
+use crate::tokens::ROGUE_TOKEN;
 use crate::{names, props};
 
 const CONVERTER: &str = names::CURRENCY_CONVERTER;

@@ -20,15 +20,15 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
-from . import cards, paths
+from . import card_files, cards, paths
 
 ALLOWLIST: Path = paths.REPO / "data" / "card-names-allowlist.json"
-NAMES_RS: Path = paths.RUST / "crates" / "beryl_cards" / "src" / "names.rs"
 
 # The generic code, as directories under the repository root. `expert` and `frozen` are the
 # expert system and its frozen copy, which this project leaves alone.
 SCOPE = (
     "rust/crates/beryl_card/src",
+    "rust/crates/beryl_card_build/src",
     "rust/crates/beryl_kernel/src",
     "rust/crates/beryl_rules/src",
     "rust/crates/beryl_engine/src",
@@ -272,39 +272,7 @@ def all_card_names() -> set[str]:
 
 def name_constants() -> set[str]:
     """The identifiers of `beryl_cards::names`."""
-    return set(re.findall(r"^pub const ([A-Z0-9_]+):", NAMES_RS.read_text(), re.M))
-
-
-# A card's file, under its color's directory, and the line of its definition naming it.
-CARD_FILE: re.Pattern[str] = re.compile(
-    r"^rust/crates/beryl_cards/src/[a-z]+/(\w+)\.rs$"
-)
-# Either form of a definition: the `card` builder's first argument, or a literal's `name`.
-DEFINITION_NAME: re.Pattern[str] = re.compile(
-    r"(?:^    name: |\bcard\(\s*)names::([A-Z0-9_]+),", re.M
-)
-
-
-def cards_in(files: Iterable[str], root: Path = paths.REPO) -> list[str]:
-    """The cards whose files are among `files` (paths from `root`), by the name of each file's
-    definition, in order and once each. A deleted file, a module file and the binaries name no
-    card."""
-    values = dict(
-        re.findall(
-            r'^pub const ([A-Z0-9_]+): &str = "(.*)";',
-            (root / NAMES_RS.relative_to(paths.REPO)).read_text(),
-            re.M,
-        )
-    )
-    found: list[str] = []
-    for rel in files:
-        path = root / rel
-        if not CARD_FILE.match(rel) or not path.is_file():
-            continue
-        match = DEFINITION_NAME.search(path.read_text())
-        if match and match[1] in values:
-            found.append(values[match[1]])
-    return list(dict.fromkeys(found))
+    return set(card_files.constants())
 
 
 def scan(root: Path, index: NameIndex) -> dict[str, list[tuple[int, str]]]:

@@ -158,6 +158,17 @@ name = "beryl_card"
 version = "0.1.0"
 
 [[package]]
+name = "beryl_card_build"
+version = "0.1.0"
+
+[[package]]
+name = "beryl_card_shared"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+]
+
+[[package]]
 name = "beryl_card_store"
 version = "0.1.0"
 dependencies = [
@@ -170,10 +181,30 @@ name = "beryl_cards"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
  "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
  "beryl_scenario_types",
+ "cards_1993_1994",
+ "cards_1996_1998",
+ "cards_2003_2005",
+ "cards_2005_2007",
+ "cards_2009_2011",
+ "cards_2011_2013",
+ "cards_2014_2016",
+ "cards_2016_2017",
+ "cards_2018_2019",
+ "cards_2019_2020",
+ "cards_2020_2021",
+ "cards_2021_2022",
+ "cards_2022",
+ "cards_2022_2023",
+ "cards_2023_2024",
+ "cards_2024_2025",
+ "cards_2025",
+ "cards_2026",
  "serde_json",
 ]
 
@@ -413,6 +444,186 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "cards_1993_1994"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_1996_1998"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2003_2005"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2005_2007"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2009_2011"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2011_2013"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2014_2016"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2016_2017"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2018_2019"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2019_2020"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2020_2021"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2021_2022"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2022"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2022_2023"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2023_2024"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2024_2025"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2025"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2026"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
 ]
 
 [[package]]

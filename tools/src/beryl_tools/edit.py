@@ -86,7 +86,7 @@ def formatter(tree: Path, rel: str) -> tuple[list[str], Path] | None:
     if rel.startswith("tools/") and rel.endswith(".py"):
         return [sys.executable, "-m", "black", "--quiet", rel], tree
     if rel.startswith("rust/") and rel.endswith(".rs"):
-        return ["cargo", "fmt", "--all"], tree / "rust"
+        return [sys.executable, "-m", "beryl_tools.checks", "rustfmt"], tree / "rust"
     if rel == "justfile":
         return ["just", "--fmt", "--unstable"], tree
     if rel.startswith("ui/"):
