@@ -276,8 +276,7 @@ const STAGED = Boolean(process.env.BERYL_STAGE);
 
 /** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches and its
  * fonts have loaded, alongside other checks (capture.mjs' workers): awaiting it waits only for
- * a free worker. A check with `board: "stage"` is written for the stage alone, and its page draws
- * the stage whatever the run. The page's fixtures come from `fixtures`, not from what Vite serves. The
+ * a free worker. The page's fixtures come from `fixtures`, not from what Vite serves. The
  * page runs on Playwright's fake clock, paused once the page is ready so that a check cannot
  * race the wall clock; `clock: "off"` leaves the browser's own, and says why. */
 async function check(
@@ -293,7 +292,6 @@ async function check(
         init,
         phone = false,
         clock = "paused",
-        board,
     } = {},
 ) {
     if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
@@ -338,7 +336,7 @@ async function check(
                 assert.ok(["paused", "off"].includes(clock), clock);
                 if (clock === "paused") await page.clock.install();
                 if (init) await page.addInitScript(init);
-                const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${board === "stage" ? "&stage" : ""}${hash}`;
+                const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
                 await page.goto(new URL(route, base).href, {
                     waitUntil: "load",
                 });
@@ -8823,225 +8821,6 @@ for (const next of ["player", "object", "attack"]) {
         { ...run, ready: slotOf(source) },
     );
 }
-
-// The stage's own checks (by-w8gv.21.64): what a key or a press does while a script plays, a
-// button over a prompt that holds the table, the pointer over a card a prompt holds up, and a
-// page that takes its game up. Each draws the stage whatever the run. A recording made
-// before the session held a prompt's state has no reply to a click, which is what the stage
-// sends: these answer any.
-const anyClick = {
-    kind: "response",
-    command: "click",
-    value: { kind: "answered" },
-};
-async function clickable(from, name) {
-    const { messages } = JSON.parse(
-        await readFile(join(fixtures, `${from}.json`), "utf8"),
-    );
-    await writeFixture(name, { messages: [...messages, anyClick] });
-    return name;
-}
-/** Whether the stage comes to be behind the session (a script is playing, or views wait
- * to), or with `not` to have caught up, within a few frames of the page's clock: the page
- * draws what it was sent on its own timers, which a paused clock holds, and a script takes
- * far longer than these frames to play. */
-async function behind(page, not = false) {
-    const is = () => page.evaluate(() => window.berylBehind);
-    for (let frames = 0; frames < 6 && (await is()) === not; frames++) {
-        await page.clock.runFor(16);
-    }
-    return is();
-}
-/** The button of `view`'s prompt that the dock puts forward, as a click names it. */
-const forward = (view) => ({
-    kind: "button",
-    button: view.status.decision.prompt.buttons.find((b) => b.primary).id,
-});
-
-await check(
-    "Space while a script plays shows its end at once and sends nothing",
-    async (page) => {
-        await page.clock.runFor(2000);
-        // From here on time passes only when the check says so: no script can play on.
-        await page.clock.pauseAt(Date.now() + 60_000);
-        const answer = turnViews[lookAt].status.decision.prompt.buttons.find(
-            (button) => button.primary,
-        );
-        await page
-            .locator(".stage-prompt")
-            .getByRole("button", { name: answer.label, exact: true })
-            .click();
-        assert.ok(await behind(page), "the turn plays");
-        const shows = () =>
-            page.evaluate(() => {
-                const { view } = window.berylStage.shown;
-                return [view.turn.number, view.turn.step, view.status.kind];
-            });
-        const { turn, status } = turnViews[mainHalt];
-        const halt = [turn.number, turn.step, status.kind];
-        assert.notDeepEqual(await shows(), halt, "the turn is still playing");
-        await page.keyboard.press("Space");
-        assert.equal(await behind(page, true), false, "the turn is over");
-        assert.deepEqual(await shows(), halt, "the turn's last view at once");
-        assert.equal((await clicksSent(page)).length, 1, "Space sent nothing");
-        // The next press answers what that view asks.
-        await page.keyboard.press("Space");
-        assert.deepEqual(
-            (await clicked(page, 2))[1],
-            forward(turnViews[mainHalt]),
-            "the halt is answered",
-        );
-    },
-    {
-        fixture: await clickable("opponent-turn", "opponent-turn-clicks"),
-        at: lookAt + 1,
-        ready: ".stage-prompt button",
-        board: "stage",
-        stage: "what a key does while a script plays: a state between two views, which no screen settles on",
-    },
-);
-
-await check(
-    "a land pressed while a script plays on to it is played",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.clock.pauseAt(Date.now() + 60_000);
-        const land =
-            views[replayed.next].status.decision.candidates[replayed.land]
-                .option.slot;
-        await page.keyboard.press("Space");
-        assert.ok(await behind(page), "a script plays");
-        assert.deepEqual(
-            await clicksSent(page),
-            [forward(views[replayed.at])],
-            "passed",
-        );
-        // Pressed while the script plays, which ends; let go on the view it played on to,
-        // where the land may be played.
-        const box = await page.locator(`[data-stage="${land}"]`).boundingBox();
-        await page.mouse.click(box.x + box.width / 2, box.y + 40);
-        assert.deepEqual(
-            (await clicked(page, 2))[1],
-            { kind: "on", on: { kind: "object", slot: land } },
-            "the land is played",
-        );
-        // It was a click on the view the script played on to, which the press showed.
-        const on = await page.evaluate(
-            () =>
-                window.berylFixture.calls.findLast((c) => c.command === "click")
-                    .args.request.decision.seq,
-        );
-        assert.equal(on, views[replayed.next].status.decision.id.seq);
-    },
-    {
-        fixture: await clickable(FIXTURE, `${FIXTURE}-clicks`),
-        at: replayed.at + 1,
-        ready: ".stage-prompt button",
-        board: "stage",
-        stage: "what a press does while a script plays: a state between two views, which no screen settles on",
-    },
-);
-
-await check(
-    "Undo is pressed over a prompt that holds the table",
-    async (page) => {
-        await page.clock.runFor(1000);
-        assert.ok(
-            await page.locator(".stage-tray-pile").first().isVisible(),
-            "the prompt holds its cards up",
-        );
-        await page.getByRole("button", { name: "Undo", exact: true }).click();
-        const sent = await page.evaluate(
-            () =>
-                window.berylFixture.calls.filter((c) => c.command === "undo")
-                    .length,
-        );
-        assert.equal(sent, 1);
-    },
-    {
-        fixture: "choice-jace",
-        at: jace.views.length,
-        ready: ".stage-tray-pile",
-        board: "stage",
-        stage: "that a button outside a prompt is reached while the prompt is open, and the command it sends",
-    },
-);
-
-await check(
-    "the pointer over a card a prompt holds up inspects it",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const view = scry.views.at(-1);
-        const held = view.status.decision.prompt.state.piles.flatMap(
-            (pile) => pile.cards,
-        );
-        assert.ok(held.length > 0, "the scry holds cards up");
-        for (const slot of held) {
-            const { name } = view.objects.find((o) => o.slot === slot);
-            const box = await page
-                .locator(`[data-stage="${slot}"]`)
-                .boundingBox();
-            // By its right edge, which a card lying over its neighbor leaves showing.
-            await page.mouse.move(
-                box.x + box.width - 12,
-                box.y + box.height / 2,
-            );
-            await page.clock.runFor(300);
-            await page
-                .getByLabel(`${name}, inspected`)
-                .waitFor({ state: "visible" });
-        }
-        await page.mouse.move(1, 1);
-        await page.clock.runFor(300);
-        assert.equal(
-            await page.locator(".inspect").count(),
-            0,
-            "the inspector goes with the pointer",
-        );
-    },
-    {
-        fixture: "choice-scry",
-        at: scry.views.length,
-        ready: ".stage-tray-pile",
-        board: "stage",
-        stage: "what the pointer's inspector shows over each card of a tray: a state only the pointer enters",
-    },
-);
-
-// A reloaded page asks for the game in progress (`current_game`) and takes it up: the
-// fixture holds no view but that answer, the human's last pass of `game-over`.
-await writeFixture("game-over-resumed-clicks", {
-    messages: [
-        ...overFixture.messages.filter((m) => m.kind === "response"),
-        {
-            kind: "response",
-            command: "current_game",
-            value: overEvents[lastPass].payload,
-        },
-        anyClick,
-    ],
-});
-await check(
-    "a reloaded page takes up the game in progress on the stage",
-    async (page) => {
-        assert.equal(await lifeShown(page), 3);
-        assert.equal(await page.locator(".start-panel").count(), 0);
-        await page.clock.runFor(1000);
-        await page.keyboard.press("Space");
-        assert.deepEqual(
-            await clicked(page, 1),
-            [forward(overViews[lastPass])],
-            "the open prompt is answered",
-        );
-    },
-    {
-        fixture: "game-over-resumed-clicks",
-        at: 0,
-        ready: ".stage-prompt button",
-        board: "stage",
-        stage: "a game taken up from the session's answer at launch, with no view sent: what a page does as it boots",
-    },
-);
 
 await queue.drain();
 await browser.close();

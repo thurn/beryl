@@ -258,7 +258,7 @@ export async function check(
 // Fixtures and helpers more than one part of the checks reads.
 
 /** The clicks the page has sent, as recorded by the fixture transport. */
-const clicksSent = (page) =>
+export const clicksSent = (page) =>
     page.evaluate(() =>
         window.berylFixture.calls
             .filter((c) => c.command === "click")

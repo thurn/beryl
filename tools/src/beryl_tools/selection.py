@@ -90,7 +90,7 @@ INTERACTIONS = "ui/scripts/interactions.mjs"
 KEPT_SCRIPT = "ui/scripts/kept.mjs"
 KEPT_PARTS: tuple[str, ...] = tuple(
     f"ui/scripts/kept-{part}.mjs"
-    for part in ("screens", "table", "crowded", "piles", "pointer")
+    for part in ("screens", "table", "crowded", "piles", "pointer", "play")
 )
 CHECK_SOURCES: tuple[str, ...] = (
     INTERACTIONS,
