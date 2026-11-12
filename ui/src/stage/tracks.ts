@@ -79,7 +79,7 @@ export const flatAt = (through: number) =>
 
 /** How a flight leaves the straight line between its ends: by `share` of that line where it
  * is farthest off it, `peak` of the way along (half way, if not said), leaning `lean`
- * degrees the way it travels there and upright again as it lands. It bows `toward` the edge
+ * degrees into the bow there and upright again as it lands. It bows `toward` the edge
  * of the table its card's controller sits at (1 down the stage, -1 up it): the outside of
  * the table, where it crosses the fewest cards. */
 export interface Bow {
@@ -93,10 +93,14 @@ export interface Bow {
  * by-w8gv.21.47: "a card cast from hand is a thrown object, and here it slides along a
  * ruler line"): a spell thrown onto the stack, a permanent set down from it, which swings out
  * and settles into its row, and an ability lifting out of its source, farthest a little past
- * half way. Arena's own spell bows 0.29 of its line, and its ability's copy and its
- * resolving permanent travel a curve (data/arena-motion.json, fly and emerge). */
+ * half way. An opponent's spell bows half as far, and later: their hand lies over the
+ * table's far edge, and a full bow carried the card along that edge, half out of sight,
+ * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
+ * line, and its ability's copy and its resolving permanent travel a curve
+ * (data/arena-motion.json, fly and emerge). */
 export const BOWS = {
   cast: { share: 0.15 },
+  theirs: { share: 0.08, peak: 0.6 },
   lands: { share: 0.1, lean: 2 },
   lifts: { share: 0.12, peak: 0.6 },
 };
@@ -106,7 +110,9 @@ export const BOWS = {
 export function bowOf(act: Act, toward: number): Bow | undefined {
   if (act.verb === "emerge") return { ...BOWS.lifts, toward };
   if (act.verb !== "fly") return undefined;
-  if (act.object.zone === "stack") return { ...BOWS.cast, toward };
+  if (act.object.zone === "stack") {
+    return { ...(toward < 0 ? BOWS.theirs : BOWS.cast), toward };
+  }
   const lands = act.from === "stack" && act.object.zone === "battlefield";
   return lands ? { ...BOWS.lands, toward } : undefined;
 }
@@ -130,8 +136,8 @@ function bowed(
     ...pose,
     x: pose.x - down * off,
     y: pose.y + across * off,
-    // It leans the way it travels across the table.
-    rotation: pose.rotation + Math.sign(across) * (bow.lean ?? 0) * arch,
+    // It leans into the bow, its top toward the side it swings out to.
+    rotation: pose.rotation - side * (bow.lean ?? 0) * arch,
   };
 }
 
