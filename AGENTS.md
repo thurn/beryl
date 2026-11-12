@@ -97,8 +97,8 @@ the release pinned in `data/rules-version.json`.
 - Slow CI runs on each machine: this Mac and Cygnus, a Windows PC. A pass on
   either advances `master`. A failure's Steward goes first to a machine on the
   OS that failed, and to any machine after two hours. `enact ci --wait` lists a
-  failure on the other OS as `other_os_stewards`. `enact ci --schedule install`,
-  run once per machine, has each test `staging` every 30 minutes.
+  failure on the other OS as `other_os_stewards`. No timer runs slow CI: each
+  machine tests `staging` when it works, and fixes its breaks as they appear.
 - The checks are `.enact.toml`'s: `just check` (fast) and `just ci` (slow).
 - Beads live in this repo (`bd`, prefix `by`); publish bead changes with
   `enact sync`. Plans, designs and decisions go in beads, not markdown: a bead's
