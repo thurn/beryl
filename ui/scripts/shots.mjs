@@ -27,9 +27,9 @@ import {
     settle,
     stageFaults,
     still,
-    toldErrors,
     workers,
 } from "./capture.mjs";
+import { toldErrors } from "./told.mjs";
 
 /** The other windows a game screen is checked at. Between the stage's narrowest and widest
  * every position slides linearly with its width, so these two stand for every window: a small

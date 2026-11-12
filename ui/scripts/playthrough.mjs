@@ -20,9 +20,9 @@ import {
     screenFaults,
     settle,
     stageFaults,
-    toldErrors,
     workers,
 } from "./capture.mjs";
+import { toldErrors } from "./told.mjs";
 import { moving, option, retried } from "./moments.mjs";
 import { watching } from "./stage-audit.mjs";
 

@@ -87,3 +87,23 @@ export async function watching({ tick, dock }) {
     stage.settle();
     return { seen, done: stage.shown.view === last };
 }
+
+/** The key that presses a button of the desktop's dock for a player with no control
+ * in focus (src/stage/PromptBar.tsx usePromptKeys): Space for the one put forward, Shift with
+ * it for the one that passes on; none for any other, or for a way to use a card, which stands
+ * over the table. The focus is taken off whatever the last click left it on. */
+export async function keyOf(page, prompt, click) {
+    const pressed = prompt.buttons.find(
+        (button) => JSON.stringify(button.id) === JSON.stringify(click.button),
+    );
+    const key = pressed.primary
+        ? "Space"
+        : pressed.id.kind === "passOn" && "Shift+Space";
+    const stands = await page
+        .locator(".stage-prompt")
+        .getByRole("button", { name: pressed.label, exact: true })
+        .count();
+    if (!key || !stands) return null;
+    await page.evaluate(() => document.activeElement?.blur());
+    return key;
+}

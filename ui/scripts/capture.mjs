@@ -473,18 +473,6 @@ export function cutText(page) {
     });
 }
 
-/** What the game screen tells its player went wrong (src/screens/Game.tsx's toast): a command
- * the session, or a recording, refused. A screen a check opens shows none: a click a recording
- * holds no answer to is refused so, and the shot of what it was to open would show the table
- * as it was. */
-export async function toldErrors(page) {
-    return page.evaluate(() =>
-        [...document.querySelectorAll(".game-error")].map((e) =>
-            e.textContent.trim(),
-        ),
-    );
-}
-
 /** Where the game screen disagrees with the view the fixture last released
  * (`window.berylFixture.view()`, src/ipc.ts), or on a live page the view its stage says it
  * shows (`window.berylStage.shown.view`), once it has settled: each permanent, spell and

@@ -20,9 +20,9 @@ import {
     screenFaults,
     settle,
     stageFaults,
-    toldErrors,
     workers,
 } from "./capture.mjs";
+import { toldErrors } from "./told.mjs";
 import {
     chosen,
     option,

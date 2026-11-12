@@ -58,7 +58,7 @@ import {
     reach,
     scryFlight,
 } from "./shape-cases.mjs";
-import { panelOf, set, watching } from "./shape-cases-panel.mjs";
+import { keyOf, panelOf, set, watching } from "./shape-cases-panel.mjs";
 import {
     combatLines,
     declared,
@@ -453,26 +453,6 @@ async function opened(context, watch, query, fixture, at = 1) {
     await page.evaluate(() => document.fonts.ready.then(() => {}));
     await page.evaluate(() => window.berylStage.settle());
     return { page, done };
-}
-
-/** The key that presses a button of the desktop's dock for a player with no control
- * in focus (src/stage/PromptBar.tsx usePromptKeys): Space for the one put forward, Shift with
- * it for the one that passes on; none for any other, or for a way to use a card, which stands
- * over the table. The focus is taken off whatever the last click left it on. */
-async function keyOf(page, prompt, click) {
-    const pressed = prompt.buttons.find(
-        (button) => JSON.stringify(button.id) === JSON.stringify(click.button),
-    );
-    const key = pressed.primary
-        ? "Space"
-        : pressed.id.kind === "passOn" && "Shift+Space";
-    const stands = await page
-        .locator(".stage-prompt")
-        .getByRole("button", { name: pressed.label, exact: true })
-        .count();
-    if (!key || !stands) return null;
-    await page.evaluate(() => document.activeElement?.blur());
-    return key;
 }
 
 /** Answers the prompts of `fixture` on a page of its own by the recording's clicks, each made
