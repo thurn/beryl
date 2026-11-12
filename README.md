@@ -13,14 +13,20 @@ and open source, under the Apache License 2.0.
 
 On an Apple silicon Mac:
 
-| Tool                     | Install                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| Xcode Command Line Tools | `xcode-select --install`                                                       |
-| Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it                |
-| Node.js 24               | `brew install node`                                                            |
-| uv, just                 | `brew install uv just`                                                         |
-| Enact, Beads, Dolt       | [Enact](https://github.com/thurn/enact)'s setup, for delivering changes        |
-| Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles |
+| Tool                     | Install                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| Xcode Command Line Tools | `xcode-select --install`                                                                 |
+| Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it                          |
+| Node.js 24               | `brew install node`                                                                      |
+| uv, just (1.59+)         | `brew install uv just`                                                                   |
+| Enact, Beads 1.3+, Dolt  | [Enact](https://github.com/thurn/enact)'s setup, then `enact setup` here                 |
+| Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles           |
+| Rosetta                  | `softwareupdate --install-rosetta --agree-to-license`; Forge's build runs an x86-64 tool |
+| iOS and Android SDKs     | `just mobile-setup`                                                                      |
+| Lima                     | `brew install lima`, then `just bench-count` once to create the count gate's VM          |
+
+Run the setup recipes one at a time: each installs with Homebrew, which takes a
+lock.
 
 On Windows 11 (x64), which runs the app, the tests and the agents, but not
 `pyre` or the instruction-count gate (`just bench-count`, `just count-gate`):

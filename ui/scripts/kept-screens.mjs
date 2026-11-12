@@ -155,9 +155,12 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         const turn = page.locator(".turn-action button");
+        // WebKit on macOS tabs only to text fields unless the system's Keyboard navigation
+        // setting is on; Option+Tab reaches every control either way, as in Safari.
+        const tab = process.platform === "darwin" ? "Alt+Tab" : "Tab";
         for (let i = 0; i < 40; i++) {
             if (await turn.evaluate((b) => b === document.activeElement)) break;
-            await page.keyboard.press("Tab");
+            await page.keyboard.press(tab);
         }
         assert.ok(
             await turn.evaluate((b) => b === document.activeElement),

@@ -466,6 +466,9 @@ def count_gate(args: argparse.Namespace) -> int:
         # The bar counts an aarch64 build's instructions; an x86-64 build runs others.
         log("the gate's bar is for Apple silicon; `just bench-count` compares here")
         return 2
+    if not system.WINDOWS and shutil.which("limactl") is None:
+        log("Lima is missing: brew install lima, then `just bench-count` once")
+        return 2
     if vm_status() is None:
         # Creating it takes minutes, past CI's deadline.
         log(f"no {VM} VM: run `just bench-count` once to create it")

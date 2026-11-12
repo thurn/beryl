@@ -1,7 +1,7 @@
 # Beryl's commands; `just` lists them. Most wrap `by` (tools/), and extra arguments pass
 # straight through: `just smoke --seconds 30`.
 
-set positional-arguments := true
+set positional-arguments
 
 # Recipes are POSIX shell; on Windows, Git for Windows' (PowerShell has no `sh` on its PATH).
 

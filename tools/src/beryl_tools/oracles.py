@@ -28,6 +28,7 @@ import argparse
 import itertools
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -291,11 +292,26 @@ def configure_forge() -> None:
     profile.write_text(f"userDir={user}/data/\ncacheDir={user}/cache/\n", newline="\n")
 
 
+def ensure_rosetta() -> None:
+    """Forge's desktop build wraps its jar with launch4j, whose macOS `windres` is an x86-64
+    binary: on Apple silicon it runs only under Rosetta. Fails before the long Maven build.
+    """
+    if sys.platform != "darwin" or platform.machine() != "arm64" or built(FORGE):
+        return
+    probe = subprocess.run(["arch", "-x86_64", "/usr/bin/true"], capture_output=True)
+    if probe.returncode != 0:
+        raise StepFailed(
+            "Forge's build needs Rosetta: "
+            "softwareupdate --install-rosetta --agree-to-license"
+        )
+
+
 def setup(_args: argparse.Namespace) -> int:
     started = time.monotonic()
     summary: dict[str, object] = {"root": str(root())}
     try:
         with locked():
+            ensure_rosetta()
             summary["installed"] = ensure_formulas(log_dir() / "brew.log")
             summary["java_home"] = str(java_home())
             for oracle in ORACLES:

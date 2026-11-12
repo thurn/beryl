@@ -246,3 +246,19 @@ def test_the_remove_hook_removes_a_worktree_it_could_not_save(
     monkeypatch.delenv("ENACT_BRANCH", raising=False)
     assert warm.remove_hook() == 0
     assert not tree.exists()
+
+
+def test_a_clone_another_process_beat_leaves_no_temporary_directory(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "cache" / "target"
+    (source / "tauri").mkdir(parents=True)
+    (source / "tauri" / "beryl").write_text("cached")
+    dest = tmp_path / "checkout" / "rust" / "target"
+    # A parallel lane's build put a non-empty target there first, as cargo does.
+    (dest / "debug").mkdir(parents=True)
+    (dest / "debug" / "beryl").write_text("built here")
+
+    assert warm.clone_into(source, dest) is True
+    assert (dest / "debug" / "beryl").read_text() == "built here"
+    assert sorted(p.name for p in dest.parent.iterdir()) == ["target"]

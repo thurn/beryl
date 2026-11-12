@@ -201,7 +201,13 @@ def clone_into(source: Path, dest: Path, leave_out: str | None = None) -> bool:
     if run.returncode != 0:
         shutil.rmtree(tmp, ignore_errors=True)
         return False
-    tmp.rename(dest)
+    try:
+        tmp.rename(dest)
+    except OSError:
+        # Another process, such as a parallel check lane, put `dest` there first: keep its
+        # clone, and leave no temporary directory behind to block the worktree's removal.
+        shutil.rmtree(tmp, ignore_errors=True)
+        return dest.exists()
     log(f"cloned {source} in {time.monotonic() - started:.1f} s")
     return True
 
