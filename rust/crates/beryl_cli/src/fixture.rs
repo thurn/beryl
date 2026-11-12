@@ -6,6 +6,7 @@
 
 mod clicks;
 mod condition;
+mod prop;
 mod until;
 mod view_predicates;
 
@@ -30,6 +31,7 @@ use crate::boards::{self, Scripted, Shared};
 
 use self::clicks::Written;
 pub(crate) use self::condition::Condition;
+use self::prop::{Prop, Standing};
 use self::until::Until;
 
 /// The definitions file.
@@ -68,6 +70,10 @@ pub(crate) struct Definition {
     /// The stand-in answers what the human is asked between the scripts' end and the stop.
     #[serde(default)]
     clicks: Vec<String>,
+    /// A prompt no card asks yet, stood on the board in place of what its first player is
+    /// first asked ([`Prop::parse`]): the clicks are made on it, or with none, the seat across
+    /// the table is shown that player asked it.
+    prop: Option<String>,
 }
 
 impl Definition {
@@ -114,6 +120,9 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
     Ok(())
 }
 
+/// How many messages a recording opens with before its first view.
+const OPENING: usize = 3;
+
 /// Where a recording stops: its stopping condition, and what else must hold of the view.
 struct Stop {
     until: Until,
@@ -146,6 +155,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     if !clicks.is_empty() && (def.board.is_none() || def.after > 0) {
         return Err("clicks are a board's, with nothing recorded `after` its stop".to_owned());
     }
+    let prop = standing(def)?;
     let human = stop.until.seat();
     let (sent, updates) = channel();
     let told = sent.clone();
@@ -203,7 +213,10 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             matches!(status, Status::Deciding { .. }),
             matches!(status, Status::Over { .. } | Status::Stopped),
         );
-        messages.push(FixtureMessage::game_update(&update));
+        // The seat across the table from a prop is shown it in its first view.
+        let watches = clicks.is_empty() && messages.len() == OPENING;
+        let shown = prop::watched(prop.filter(|_| watches), human, &update)?;
+        messages.push(FixtureMessage::game_update(&shown));
         if !clicks.is_empty() && deciding {
             // The seat is the recording's from its stop, which the scripts must be done by:
             // a decision handed over anywhere else would wait for an answer nobody gives.
@@ -214,8 +227,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
                 ));
             }
             if reached {
-                let mut next = || clicks::next_view(&updates);
-                clicks::play(&clicks, &sessions, &update, &mut next, &mut messages)?;
+                answer(&clicks, prop, &sessions, &update, &updates, &mut messages)?;
                 return Ok(messages);
             }
         }
@@ -248,6 +260,53 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
         }
     }
+}
+
+/// The prop `def` stands on its board, if it has one.
+fn standing(def: &Definition) -> Result<Option<Standing>, String> {
+    let stops = def.stops.unwrap_or(StopsSetting::SMART);
+    match (&def.prop, &def.board) {
+        (Some(prop), Some(board)) => Ok(Some(Standing {
+            prop: Prop::parse(prop)?,
+            board: boards::named(board)?,
+            stops,
+        })),
+        (Some(_), None) => Err("a prop stands on a board".to_owned()),
+        (None, _) => Ok(None),
+    }
+}
+
+/// Makes `clicks` from `stop`, the view a recording stopped at and the last of `messages`, and
+/// adds what they led to: on the session's own prompts, or on `prop`, stood on its board in
+/// place of what `stop` asks, whose answer leads to `stop` itself.
+fn answer(
+    clicks: &[Written],
+    prop: Option<Standing>,
+    sessions: &Sessions,
+    stop: &GameUpdate,
+    updates: &Receiver<Result<GameUpdate, String>>,
+    messages: &mut Vec<FixtureMessage>,
+) -> Result<(), String> {
+    let Some(prop) = prop else {
+        let mut next = || clicks::next_view(updates);
+        let mut click = |request| sessions.click(request).map_err(|e| e.to_string());
+        return clicks::play(clicks, &mut click, stop, &mut next, messages);
+    };
+    // A prop stands where the board's seat is first asked anything.
+    if messages.len() != OPENING + 1 {
+        return Err("a prop stands at its board's first view".to_owned());
+    }
+    let (asks, mut stood) = prop::stand(prop, stop)?;
+    messages.pop();
+    messages.push(FixtureMessage::game_update(&asks));
+    let mut after = Some(prop::after(stop));
+    let mut next = || {
+        after
+            .take()
+            .ok_or("a prop's answer ends its clicks".to_owned())
+    };
+    let mut click = |request| stood.click(request);
+    clicks::play(clicks, &mut click, &asks, &mut next, messages)
 }
 
 /// The first message of a session that owns no guard: its first view, or a panic nothing watched
@@ -521,6 +580,7 @@ mod tests {
             conditions: vec![],
             after: 0,
             clicks: vec![],
+            prop: None,
         };
         let messages = record(&def).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {

@@ -5,14 +5,16 @@
 use beryl_cards::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER,
     DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
-    JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SNAPCASTER_MAGE,
-    STOCK_UP, SWIFT_RECONFIGURATION, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
-    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TRINKET_MAGE, TUNDRA,
+    JACE_WIELDER_OF_MYSTERIES, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, OUST, PLAINS,
+    REPRIEVE, SINK_INTO_STUPOR, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION,
+    THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
+    TRINKET_MAGE, TUNDRA,
 };
+use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
-use super::shorthand::{ISLAND_, LANDS, PLAINS_, choose, play_land};
+use super::shorthand::{ISLAND_, LANDS, PLAINS_, cast_with_option, choose, play_land};
 
 /// The permanents of [`pick`], by player.
 const PICKERS: &[Permanent] = &[
@@ -217,7 +219,118 @@ const ATTACK: &[Action] = &[
     choose(P1, DecisionKind::Attacker, TRINKET_MAGE),
 ];
 
+/// The permanents of [`yes`]: a planeswalker that looks at the top of a library, a creature
+/// that has a card discarded, and an artifact that asks about each card discarded.
+const ASKERS: &[Permanent] = &[
+    Permanent::new(JACE_THE_MIND_SCULPTOR),
+    Permanent::new(JACE_VRYNS_PRODIGY),
+    Permanent::new(CURRENCY_CONVERTER),
+    ISLAND_,
+];
+
+/// Yes or no: the human's main phase with a Sink into Stupor to play as its land, which
+/// asks for life to enter untapped; Jace, the Mind Sculptor, whose first ability looks at the
+/// top card of the opponent's library and asks where it goes; and Jace, Vryn's Prodigy, whose
+/// discard a Currency Converter asks about.
+const fn yes(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[SINK_INTO_STUPOR, COUNTERSPELL])
+        .battlefield(P0, ASKERS)
+        .battlefield(P1, WATCHERS)
+        .library(P0, LANDS)
+        .library(P1, &[OUST, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
+}
+
+/// The opponent's permanents in [`number`], and in [`mode`], where a spell has two to
+/// choose its target among.
+const CRYPT: &[Permanent] = &[Permanent::new(MANA_CRYPT), ISLAND_];
+const ARTIFACTS: &[Permanent] = &[
+    Permanent::new(MANA_CRYPT),
+    Permanent::new(CURRENCY_CONVERTER),
+    ISLAND_,
+];
+
+/// A number: the human's main phase with a Thieving Skydiver, whose kicker is an X that four
+/// lands pay up to two of, and a Mana Crypt across the table to take with it.
+const fn number(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[THIEVING_SKYDIVER])
+        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_, ISLAND_])
+        .battlefield(P1, CRYPT)
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
+/// The permanents of [`mode`]: a Malcolm, Alluring Scoundrel one counter short of offering
+/// the card it has discarded, and lands that cast a Sink into Stupor.
+const OFFERERS: &[Permanent] = &[
+    Permanent::new(MALCOLM_ALLURING_SCOUNDREL).counters(CounterKind::Chorus, 3),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+];
+
+/// A mode: the human's main phase with a Sink into Stupor, a card to cast or to play as a
+/// land, chosen between its two faces; and a Malcolm, Alluring Scoundrel to attack with,
+/// which draws an Elite Spellbinder, has it discarded and offers it to cast.
+const fn mode(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[SINK_INTO_STUPOR])
+        .battlefield(P0, OFFERERS)
+        .battlefield(P1, ARTIFACTS)
+        .library(
+            P0,
+            &[ELITE_SPELLBINDER, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS],
+        )
+        .library(P1, LANDS)
+}
+
+/// The permanents of [`stand`], by player.
+const OURS: &[Permanent] = &[Permanent::new(SNAPCASTER_MAGE)];
+const THEIRS: &[Permanent] = &[
+    Permanent::new(TRINKET_MAGE),
+    Permanent::new(ELITE_SPELLBINDER),
+];
+
+/// A table for a prop to stand on (`fixture/prop.rs`): a creature of the human's and two of
+/// the opponent's, the recipients of a division, and nothing else on the battlefield; and a
+/// land in the human's hand, so that their main phase asks them something for the prop to
+/// stand in place of.
+const fn stand(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[ISLAND])
+        .battlefield(P0, OURS)
+        .battlefield(P1, THEIRS)
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
 pub(super) const SHAPES: &[Scenario] = &[
+    // The fixtures' clicks play these.
+    yes("shape-yes"),
+    number("shape-number"),
+    mode("shape-mode"),
+    // The same plays, in part, for the seat across the table to watch: a look at its top
+    // card; a Thieving Skydiver kicked for one; and a Sink into Stupor played as a land.
+    yes("shape-yes-theirs").actions(&[
+        Action::activate(P0, JACE_THE_MIND_SCULPTOR, 0),
+        Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+        Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+    ]),
+    number("shape-number-theirs").actions(&[
+        cast_with_option(P0, THIEVING_SKYDIVER),
+        Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+    ]),
+    mode("shape-mode-theirs").actions(&[
+        play_land(P0, SINK_INTO_STUPOR),
+        Action::answer(P0, DecisionKind::YesNo, Pick::No),
+    ]),
+    // The table the props stand on, from either seat.
+    stand("shape-stand"),
     // The fixtures' clicks play these.
     pay("shape-pay"),
     declare("shape-declare", 4, P1).actions(ATTACK),

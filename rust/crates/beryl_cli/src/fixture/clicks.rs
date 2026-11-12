@@ -10,7 +10,7 @@ use beryl_session::ipc::{self, FixtureMessage};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, PromptView};
 use beryl_session::protocol::{PlayerView, Side};
 use beryl_session::script::Subject;
-use beryl_session::{DecisionId, GameUpdate, Sessions, Status};
+use beryl_session::{DecisionId, GameUpdate, Status};
 
 /// One click, as a definition writes it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,13 +26,20 @@ pub(super) enum Written {
     Drop { card: String, pile: u8, at: u16 },
     /// The item `item` of an order moved to before what lies at `at`.
     Move { item: u32, at: u16 },
+    /// The number `n`: a number prompt's value, or the share of the card named, a recipient
+    /// of a division.
+    Number { n: u8, card: Option<String> },
+    /// The entry `index` of a catalog.
+    Entry(u16),
 }
 
 impl Written {
     /// Parses "press confirm", "press decline", "press auto", "press passOn" or "press
     /// option <n>" for a button, "player you" or "player opponent" for a player, "drop
     /// <pile> <at> <card>" for a card dropped into a pile, "move <item> <at>" for an item of
-    /// an order moved, and anything else as the name of a card.
+    /// an order moved, "number <n>" for a number prompt's value or "number <n> <card>" for
+    /// that card's share of a division, "entry <index>" for an entry of a catalog, and
+    /// anything else as the name of a card.
     pub(super) fn parse(text: &str) -> Result<Written, String> {
         let words: Vec<&str> = text.split_whitespace().collect();
         match words.as_slice() {
@@ -58,6 +65,13 @@ impl Written {
                 at: super::number(text, at)?,
             }),
             ["move", ..] => Err(format!("{text:?}: a move is of an item, to a place")),
+            ["number", n, card @ ..] => Ok(Written::Number {
+                n: super::number(text, n)?,
+                card: (!card.is_empty()).then(|| card.join(" ")),
+            }),
+            ["number"] => Err(format!("{text:?}: which number")),
+            ["entry", index] => Ok(Written::Entry(super::number(text, index)?)),
+            ["entry", ..] => Err(format!("{text:?}: an entry is named by its place")),
             [] => Err("an empty click".to_owned()),
             _ => Ok(Written::Card(text.to_owned())),
         }
@@ -100,17 +114,22 @@ impl Written {
                 pile: 0,
                 at: *at,
             },
+            Written::Number { n, card: name } => Click::Number {
+                n: *n,
+                on: name.as_ref().map(card).transpose()?,
+            },
+            Written::Entry(index) => Click::Entry { index: *index },
         })
     }
 }
 
 /// Makes `clicks` in order from the human's decision open in `stop`, the view the recording
 /// stopped at, and adds what the session said to `messages`: each click's reply, and after
-/// one that answered, the views up to the human's next decision. `next` gives the session's
-/// next view, or why there is none.
+/// one that answered, the views up to the human's next decision. `send` gives the session's
+/// reply to a click, and `next` its next view, or why there is none.
 pub(super) fn play(
     clicks: &[Written],
-    sessions: &Sessions,
+    send: &mut dyn FnMut(ClickRequest) -> Result<ClickReply, String>,
     stop: &GameUpdate,
     next: &mut dyn FnMut() -> Result<GameUpdate, String>,
     messages: &mut Vec<FixtureMessage>,
@@ -126,9 +145,7 @@ pub(super) fn play(
             revision: prompt.revision,
             click: written.click(&view, prompt)?,
         };
-        let reply = sessions
-            .click(request)
-            .map_err(|e| format!("click {i}, {written:?}: {e}"))?;
+        let reply = send(request).map_err(|e| format!("click {i}, {written:?}: {e}"))?;
         messages.push(FixtureMessage::asked(ipc::CLICK, &request, &reply));
         match reply {
             ClickReply::Open { prompt: after } => *prompt = *after,
@@ -191,6 +208,20 @@ mod tests {
             Written::parse("player opponent"),
             Ok(Written::Player(Side::Opponent))
         );
+        assert_eq!(
+            Written::parse("number 2"),
+            Ok(Written::Number { n: 2, card: None })
+        );
+        assert_eq!(
+            Written::parse("number 3 Trinket Mage"),
+            Ok(Written::Number {
+                n: 3,
+                card: Some("Trinket Mage".to_owned())
+            })
+        );
+        assert_eq!(Written::parse("entry 4"), Ok(Written::Entry(4)));
+        assert!(Written::parse("entry").is_err());
+        assert!(Written::parse("number").is_err());
         assert_eq!(
             Written::parse("Jace, the Mind Sculptor"),
             Ok(Written::Card("Jace, the Mind Sculptor".to_owned()))
