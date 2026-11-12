@@ -91,6 +91,17 @@ fn a_combat_line_is_begun_once_and_never_swings() {
             (9, "-point attack #0 > #256"),
         ])
     );
+    // The last attacker declared, sent at a planeswalker, begins its line as it taps, not
+    // after combat (by-w8gv.21.57).
+    let name = "combat damage removes Teferi while the other planeswalker is attacked";
+    let [first, second] = steps(names::TEFERI_TIME_RAVELER, name, "point attack");
+    let both = lines(&[
+        (6, "+point attack #0 > #256"),
+        (8, "+point attack #2 > #259"),
+        (8, "-point attack #0 > #256"),
+    ]);
+    assert_eq!(first, both);
+    assert_eq!(second, both);
     // An attacker's line stays through its attack trigger and through the choice of what
     // the token the trigger makes is attacking (by-y3sp).
     let name = "Adeline's Human attacks a planeswalker";

@@ -118,6 +118,7 @@
 //! table's value, and whose doing it is, by its cause or its record's controller.
 
 mod act;
+mod attack;
 mod build;
 mod check;
 mod follow;

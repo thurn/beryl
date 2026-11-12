@@ -155,6 +155,57 @@ pub mod scenarios {
                     life: 18,
                 }),
             ]),
+        // CR 506.4 again, with the 2/1 the last attacker declared and sent at the other
+        // planeswalker: its attack goes on after Teferi leaves, and its line begins as it is
+        // declared (by-w8gv.21.57).
+        Scenario::new("combat damage removes Teferi while the other planeswalker is attacked")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(props::CREATURE),
+                    Permanent::new(props::SMALL_CREATURE),
+                ],
+            )
+            .battlefield(
+                P1,
+                &[Permanent::new(TEFERI), Permanent::new(props::PLANESWALKER)],
+            )
+            .library(P0, &[names::ISLAND])
+            .library(P1, &[names::PLAINS, names::ISLAND])
+            .actions(&[
+                Action::activate(P1, TEFERI, 2),
+                Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 0 }),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P0),
+                Action::choose(P0, DecisionKind::Attacker, props::CREATURE),
+                Action::choose(P0, DecisionKind::AttackTarget, TEFERI),
+                Action::choose(P0, DecisionKind::Attacker, props::SMALL_CREATURE),
+                Action::choose(P0, DecisionKind::AttackTarget, props::PLANESWALKER),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::EndOfCombat,
+                },
+                Action::assert(Assertion::Count {
+                    player: P1,
+                    zone: Zone::Graveyard,
+                    card: Some(TEFERI),
+                    count: 1,
+                }),
+                Action::assert(Assertion::Counters {
+                    player: P1,
+                    card: props::PLANESWALKER,
+                    kind: CounterKind::Loyalty,
+                    count: 1,
+                }),
+                Action::assert(Assertion::Life {
+                    player: P1,
+                    life: 20,
+                }),
+            ]),
         // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
         // with an empty stack.
         Scenario::new("an opponent's flash spell waits for sorcery timing")

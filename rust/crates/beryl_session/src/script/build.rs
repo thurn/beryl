@@ -12,8 +12,8 @@ use super::table::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check, replay};
 use super::{mana, spans};
 use crate::protocol::{
-    CardType, Combat, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem,
-    Step as TurnStep, TargetRef, Why, ZoneName,
+    CardType, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem, Step as TurnStep,
+    TargetRef, Why, ZoneName,
 };
 
 /// What one seat's screen last showed: the session keeps one per seat it sends views to, and
@@ -515,20 +515,6 @@ impl<'a> Builder<'a> {
         }
     }
 
-    /// The attackers are declared: each that did not tap to attack takes its part in combat
-    /// with no motion.
-    fn attack(&mut self, attackers: &[u16], cause: Option<Subject>) {
-        for &slot in attackers {
-            if let Some(mut object) = self.permanent(slot)
-                && object.combat.is_none()
-            {
-                object.combat = Some(self.attacking(slot));
-                let fact = Fact::Object { object };
-                self.emit(Act::Set { fact }, cause);
-            }
-        }
-    }
-
     fn gain_control(&mut self, slot: u16, player: Side, cause: Option<Subject>) {
         if let Some(mut object) = self.permanent(slot) {
             object.controller = player;
@@ -566,54 +552,12 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn permanent(&self, slot: u16) -> Option<ObjectView> {
+    pub(super) fn permanent(&self, slot: u16) -> Option<ObjectView> {
         self.table
             .objects
             .get(&slot)
             .filter(|o| o.zone == ZoneName::Battlefield)
             .cloned()
-    }
-
-    /// The part in combat an attacker in `slot` takes as it is declared: the view's, not yet
-    /// blocked.
-    fn attacking(&self, slot: u16) -> Combat {
-        match self
-            .after
-            .objects
-            .get(&slot)
-            .and_then(|o| o.combat.as_ref())
-        {
-            Some(&Combat::Attacking {
-                planeswalker,
-                target_departed,
-                ..
-            }) => Combat::Attacking {
-                planeswalker,
-                target_departed,
-                blocked: false,
-            },
-            _ => Combat::Attacking {
-                planeswalker: None,
-                target_departed: None,
-                blocked: false,
-            },
-        }
-    }
-
-    fn tap(&mut self, slot: u16, tapped: bool, cause: Option<Subject>) {
-        let Some(mut object) = self.permanent(slot) else {
-            return;
-        };
-        if object.tapped == tapped {
-            return;
-        }
-        object.tapped = tapped;
-        // An attacker taps as it is declared: its record says both.
-        let attacks = |e: &GameEvent| matches!(e, GameEvent::Attack { attackers, .. } if attackers.contains(&slot));
-        if tapped && object.combat.is_none() && self.events.iter().any(attacks) {
-            object.combat = Some(self.attacking(slot));
-        }
-        self.emit(Act::Tap { object }, cause);
     }
 
     /// The counts held back for the ability they paid for, now that it is on the stack, in a
