@@ -527,6 +527,18 @@
       "where": ["resolving Jace, Vryn's Prodigy", "prompt discard pick"]
     },
     {
+      "name": "order-long",
+      "board": "order-long",
+      "stops": { "fullControl": true },
+      "until": "first triggerOrder decision for seat 0"
+    },
+    {
+      "name": "choice-loot-full",
+      "board": "choice-loot-full",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["resolving Jace, Vryn's Prodigy", "prompt discard pick"]
+    },
+    {
       "name": "choice-untap",
       "board": "choice-untap",
       "until": "first chooseUpTo decision for seat 0",
@@ -608,6 +620,13 @@
         "press decline",
         "Elite Spellbinder"
       ]
+    },
+    {
+      "name": "shape-pile",
+      "board": "tokens",
+      "until": "first priority decision for seat 0",
+      "where": ["token twins", "changed token", "stolen permanent"],
+      "clicks": ["Map Token"]
     },
     {
       "name": "shape-pick-theirs",

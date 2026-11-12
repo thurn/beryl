@@ -450,6 +450,30 @@
       "height": 900
     },
     {
+      "name": "stage-stack-x",
+      "route": "/?stage&fixture=stack-x#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-discard-full",
+      "route": "/?stage&fixture=choice-loot-full#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-order-long",
+      "route": "/?stage&fixture=order-long#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-order-long",
+      "route": "/?phone&stage&fixture=order-long#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
       "name": "stage-arrow-ability",
       "route": "/?stage&fixture=arrow-ability#/game",
       "width": 1600,

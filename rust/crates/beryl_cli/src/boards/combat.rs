@@ -33,6 +33,28 @@ pub(super) const COMBAT: &[Scenario] = &[
             // The one creature that may attack ends the declaration.
             choose(P1, DecisionKind::Attacker, BEZA_THE_BOUNDING_SPRING),
         ]),
+    // Adeline, Resplendent Cathar and Overlord of the Mistmoors attack together, and each
+    // has a trigger for it, which their controller orders: the longest names among the cards
+    // whose triggers wait together.
+    Scenario::new("order-long")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ADELINE_RESPLENDENT_CATHAR),
+                Permanent::new(OVERLORD_OF_THE_MISTMOORS),
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            choose(P0, DecisionKind::Attacker, ADELINE_RESPLENDENT_CATHAR),
+            // The last creature that may attack ends the declaration.
+            choose(P0, DecisionKind::Attacker, OVERLORD_OF_THE_MISTMOORS),
+        ]),
     // The opponent's Jace, Wielder of Mysteries mills their own last two cards with his +1,
     // and its draw from the empty library wins them the game instead.
     Scenario::new("game-over-jace")

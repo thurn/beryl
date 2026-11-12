@@ -139,6 +139,27 @@ pub(super) const CHOICES: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
+    // The same with a full hand: eight cards to discard from, as wide as a hand is held,
+    // beside the ability that asks on the stack.
+    Scenario::new("choice-loot-full")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
+        .hand(
+            P0,
+            &[
+                COUNTERSPELL,
+                OUST,
+                DAMN,
+                REPRIEVE,
+                MANA_DRAIN,
+                ISLAND,
+                PLAINS,
+            ],
+        )
+        .library(P0, &[STOCK_UP, ISLAND, PLAINS, ISLAND, PLAINS])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
     // Time Spiral, paid with Mana Crypt and the human's lands, untaps up to six lands, more
     // than the human has tapped, beside the opponent's tapped and untapped ones.
     Scenario::new("choice-untap")
