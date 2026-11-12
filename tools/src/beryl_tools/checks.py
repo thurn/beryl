@@ -6,7 +6,9 @@ started, and fails its lane.
 
 Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work oversubscribes
 the machine (other sessions' checks, a game, `just longthink`), the clock runs slower, so a run
-is held to what it would take on a machine to itself, and a hung step still dies.
+is held to what it would take on a machine to itself, and a hung step still dies. Slow CI also
+stops its steps on the wall clock before Enact's `slow_timeout` would kill it (bisect.time_left),
+so a run the load stretched past that still prints its lanes and names the step it cut off.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging,
 `oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
@@ -208,13 +210,36 @@ class Steps:
     """A run's steps, each started in its own session, so that once the run's deadline passes,
     or the run is interrupted, a step can be killed with everything it started."""
 
-    def __init__(self, deadline: float, clock: Clock | None = None) -> None:
+    def __init__(
+        self,
+        deadline: float,
+        clock: Clock | None = None,
+        wall_limit: float | None = None,
+    ) -> None:
         self.deadline = deadline
         self.clock: Clock = clock or Clock()
+        # Wall seconds (`Clock.wall`) before someone else's wall clock kills the run, such as
+        # Enact's `slow_timeout`: a loaded machine stretches the deadline past it (by-tkgu),
+        # and a run killed from outside prints nothing, so a step still running then is
+        # killed here instead and named as timed out.
+        self.wall_limit = wall_limit
         self.stopped = threading.Event()
         self.lock = threading.Lock()
         # Popen's type depends on its arguments, which pyre reads differently per platform.
         self.running: set[subprocess.Popen[Any]] = set()
+
+    def left(self) -> float:
+        """Seconds before the deadline or the wall limit, whichever comes first."""
+        left = self.deadline - self.clock.now()
+        if self.wall_limit is not None:
+            left = min(left, self.wall_limit - self.clock.wall())
+        return left
+
+    def limit(self) -> str:
+        """What a step that timed out ran into, for its line in the log."""
+        if self.wall_limit is not None and self.wall_limit - self.clock.wall() <= 0:
+            return f"the wall limit of {self.wall_limit:.0f} s before Enact's kill"
+        return f"deadline {self.deadline:.0f} s"
 
     def run(
         self, cmd: list[str], cwd: Path, env: dict[str, str]
@@ -224,7 +249,7 @@ class Steps:
         """
         with tempfile.TemporaryFile("w+", errors="replace") as out:
             with self.lock:
-                if self.stopped.is_set() or self.clock.now() >= self.deadline:
+                if self.stopped.is_set() or self.left() <= 0:
                     return None, ""
                 proc = subprocess.Popen(
                     cmd,
@@ -238,7 +263,7 @@ class Steps:
                 self.running.add(proc)
             code: int | None = None
             try:
-                while (left := self.deadline - self.clock.now()) > 0:
+                while (left := self.left()) > 0:
                     try:
                         code = proc.wait(timeout=min(0.5, left))
                         break
@@ -288,7 +313,7 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
             log.append(output.rstrip())
         ended = f"{script} {lane.name} {step.name}: "
         if code is None:
-            ended += f"TIMED OUT after {took(wall, seconds)} (deadline {steps.deadline:.0f} s)"
+            ended += f"TIMED OUT after {took(wall, seconds)} ({steps.limit()})"
         elif code != 0:
             ended += f"FAILED (exit {code}) after {took(wall, seconds)}"
         else:
@@ -367,8 +392,18 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
     return run_all(lanes, script, budget, strict).code
 
 
-def run_all(lanes: list[Lane], script: str, budget: int, strict: bool) -> Report:
-    steps = Steps(float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)))
+def run_all(
+    lanes: list[Lane],
+    script: str,
+    budget: int,
+    strict: bool,
+    wall_limit: float | None = None,
+) -> Report:
+    """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
+    many wall seconds in is killed (`Steps.wall_limit`)."""
+    steps = Steps(
+        float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)), wall_limit=wall_limit
+    )
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
@@ -723,7 +758,9 @@ def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
     """
     from . import bisect  # It imports this module.
 
-    report = run_all(lanes, "ci", budget, strict=True)
+    report = run_all(
+        lanes, "ci", budget, strict=True, wall_limit=bisect.time_left(started)
+    )
     failed = [o for o in report.outcomes if not o.ok]
     if report.over and not failed and (report.loaded or report.cold):
         why = "under load" if report.loaded else "on a cold cache"
@@ -731,7 +768,9 @@ def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
             print(f"excused: over budget {why}, with no time left to rerun")
             return 0
         print(f"ci: over budget {why}: rerunning the whole run once")
-        report = run_all(lanes, "ci", budget, strict=True)
+        report = run_all(
+            lanes, "ci", budget, strict=True, wall_limit=bisect.time_left(started)
+        )
         failed = [o for o in report.outcomes if not o.ok]
         if report.over and not failed and report.loaded:
             print("excused: over budget under load")

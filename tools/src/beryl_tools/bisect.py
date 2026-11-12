@@ -192,7 +192,7 @@ class Prober:
     def __call__(
         self, commit: str, group: list[Suspect], prove: bool
     ) -> list[bool] | None:
-        if self.steps.deadline - self.steps.clock.now() < LEAST_PROBE:
+        if self.steps.left() < LEAST_PROBE:
             return None
         if not self.tree.at(commit):
             print(f"bisect: could not check out {commit[:10]} in {self.tree.path}")

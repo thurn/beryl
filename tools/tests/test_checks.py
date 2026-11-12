@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import build_paths, checks, hygiene, oracles, reruns
+from beryl_tools import bisect, build_paths, checks, hygiene, oracles, reruns
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -117,6 +117,25 @@ def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
     monkeypatch.setattr(checks.system, "loadavg", lambda: (4.0, 4.0, 4.0))
     assert checks.run_lanes([lane], "ci", 1, strict=True) == 1
     assert "ci busy sleep: TIMED OUT after" in capsys.readouterr().out
+
+
+def test_slow_ci_stops_its_steps_before_enacts_wall_clock_kills_it(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # by-tkgu: the load stretched the deadline past Enact's kill, which left no log.
+    monkeypatch.setattr(os, "cpu_count", lambda: 18)
+    monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
+    monkeypatch.setattr(bisect, "time_left", lambda *args: 1.0)
+    monkeypatch.setattr(bisect, "after", lambda *args: None)
+    lane = checks.Lane("busy").step(
+        "sleep", [sys.executable, "-c", "import time; time.sleep(600)"]
+    )
+    started = time.monotonic()
+    assert checks.slow_run([lane], 300, started) == 1
+    assert time.monotonic() - started < 60
+    out = capsys.readouterr().out
+    assert "ci busy sleep: TIMED OUT after" in out
+    assert "before Enact's kill" in out
 
 
 # A step that fails the first time it runs and passes after, recording each run's arguments.

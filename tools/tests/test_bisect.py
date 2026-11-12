@@ -250,7 +250,9 @@ def test_over_budget_under_load_with_no_time_to_rerun_is_excused(
 ) -> None:
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
     monkeypatch.setattr(checks.system, "loadavg", lambda: (40.0, 40.0, 40.0))
-    monkeypatch.setattr(bisect, "time_left", lambda *args: 0.0)
+    # Time for the run, which asks first, and none left after it for a rerun.
+    left = iter([600.0])
+    monkeypatch.setattr(bisect, "time_left", lambda *args: next(left, 0.0))
     assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 0
     out = capsys.readouterr().out
     assert "rerunning" not in out
