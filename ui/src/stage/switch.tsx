@@ -1,7 +1,8 @@
 // Which board draws the game's table and what paces its views: the stage's (plan K25) with
-// `?stage` in the URL, read as mobile/phone.ts reads `?phone`, and the old ones without, until
-// the stage takes their place. The desktop's and the phone's boards are two layouts of the
-// one stage.
+// `?stage` in the URL, read as mobile/phone.ts reads `?phone`, or in every page of a UI built
+// with `VITE_BERYL_STAGE` set (`by bundle`: the release app plays on the stage), and the old
+// ones without, until the stage takes their place. The desktop's and the phone's boards are
+// two layouts of the one stage.
 import type { ComponentProps } from "react";
 import { Board as CardBoard } from "../game/Board";
 import { usePlayback as useBeats } from "../game/playback";
@@ -12,7 +13,9 @@ import type { Asked } from "./prompt.ts";
 import { usePrompt } from "./PromptBar.tsx";
 import { StageBoard } from "./StageBoard.tsx";
 
-const staged = new URLSearchParams(window.location.search).has("stage");
+const staged =
+  new URLSearchParams(window.location.search).has("stage") ||
+  Boolean(import.meta.env.VITE_BERYL_STAGE);
 
 /** The game's table. The stage's has the old board's chrome and none of its prompts yet. */
 export function Board(props: ComponentProps<typeof CardBoard>) {
