@@ -115,6 +115,10 @@ the release pinned in `data/rules-version.json`.
   files, helpers and tests it needs. Give beads that touch the same code one
   `lane:<name>` label: one session works them in turn. Label mechanical beads
   (wiring, renames, boilerplate tests) `tier:light` to run them on Sonnet.
+- **No Fable without an explicit ask.** Never label a bead `tier:fable`, and
+  never start a session or subagent on a Fable model, unless the user has
+  explicitly asked for it. Design work defaults to `tier:opus` and mechanical
+  work to `tier:sonnet` (or `tier:light`).
 - No plan, bead or skill has a step that waits for the user's approval (plan
   K31). Where his judgement might be wanted, proceed on a default and record the
   choice in the bead you are working. Never file a bead asking him to look at
