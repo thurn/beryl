@@ -61,7 +61,7 @@ use beryl_engine::{
 
 use crate::eval::evaluate;
 use crate::mcts::{shows_the_same, smart};
-use crate::rollout::{RolloutPolicy, Softmax, soft_rollout, soft_rollout_to};
+use crate::rollout::{RolloutPolicy, Rules, Softmax, soft_rollout, soft_rollout_to};
 use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, Search, Sight, Widen};
 
@@ -122,6 +122,12 @@ pub struct Options {
     /// Jace, Wielder led an attack by 0.015 and lost on visits
     /// (`docs/incidents/2026-11-07-snapcaster-and-jace-wielder.md`).
     pub means: bool,
+    /// Hold instant-speed plays until a useful window.
+    pub hold: bool,
+    /// Avoid spending resources on effects with no worthwhile targets.
+    pub waste: bool,
+    /// Use the additional attack and block heuristics.
+    pub combat: bool,
 }
 
 /// A searcher's settings.
@@ -243,8 +249,8 @@ impl FromStr for Family {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate or tuned; options anchor, guard, mid and means \
-                 joined by + in that order, guard only with anchor)"
+                 rollout, cutN or eval; estimate or tuned; options anchor, guard, mid, means, \
+                 hold, waste and combat joined by + in that order, guard only with anchor)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -262,6 +268,9 @@ impl FromStr for Family {
                         "guard" => &mut o.guard,
                         "mid" => &mut o.mid,
                         "means" => &mut o.means,
+                        "hold" => &mut o.hold,
+                        "waste" => &mut o.waste,
+                        "combat" => &mut o.combat,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -316,18 +325,29 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+guard+mid+means`; empty for none.
+    /// `anchor+guard+mid+means+hold+waste+combat`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
             (self.guard, "guard"),
             (self.mid, "mid"),
             (self.means, "means"),
+            (self.hold, "hold"),
+            (self.waste, "waste"),
+            (self.combat, "combat"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
         .collect::<Vec<_>>()
         .join("+")
+    }
+
+    fn rules(self) -> Rules {
+        Rules {
+            hold: self.hold,
+            waste: self.waste,
+            combat: self.combat,
+        }
     }
 }
 
@@ -364,9 +384,10 @@ impl<L: Layout> LongSearch<L> {
     /// The agent as it stands before its own decision `decision`, for a game resumed midway
     /// (as [`crate::Mcts::resumed`]).
     pub fn resumed(t: &GameTable, settings: Settings, seed: u64, decision: AgentDecision) -> Self {
+        let family = settings.family;
         Self {
             table: t.clone(),
-            policy: RolloutPolicy::with(t, settings.family.knowledge),
+            policy: RolloutPolicy::with_rules(t, family.knowledge, family.options.rules()),
             settings,
             seed,
             decision,
@@ -1690,6 +1711,9 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+mid+means",
             "pimc72/hidden/rollout/tuned/anchor+guard",
             "pimc72/hidden/rollout/tuned/anchor+guard+mid+means",
+            "pimc72/hidden/rollout/tuned/anchor+hold",
+            "pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat",
+            "pimc72/hidden/rollout/tuned/anchor+guard+mid+means+hold+waste+combat",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1710,6 +1734,7 @@ mod tests {
             "pimc18/hidden/rollout/tuned/guard",
             "pimc18/hidden/rollout/tuned/guard+mid",
             "pimc18/hidden/rollout/tuned/guard+anchor",
+            "pimc18/hidden/rollout/tuned/hold+anchor",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
@@ -1808,6 +1833,28 @@ mod tests {
             answered += walk(&t, &tree, tree.root, &tree.state, &d, 0);
         }
         assert!(answered > 0, "no question below the root was met");
+    }
+
+    /// Reserving the `hold` option leaves search choices alone until its rule is implemented.
+    #[test]
+    fn hold_flag_alone_does_not_change_search_choices() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let settings = |hold| Settings {
+            family: family(Options {
+                anchor: true,
+                hold,
+                ..Options::default()
+            }),
+            work: 10_000,
+            threads: 1,
+        };
+        let mut x = Scratch::new();
+        for (s, d) in &positions(&t, 1)[..10] {
+            let obs = observe(s, &t, &mut x, d.player);
+            let mut anchor = LongSearch::new(&t, settings(false), 7);
+            let mut hold = LongSearch::new(&t, settings(true), 7);
+            assert_eq!(anchor.choose(obs, d), hold.choose(obs, d));
+        }
     }
 
     /// Walks `tree` a few levels below `node`, reached in `s` at decision `d`: every node at a

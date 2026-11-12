@@ -56,11 +56,20 @@ const LIBRARY_LOW: usize = 10;
 /// The most a land on the battlefield is worth.
 const LAND_MAX: i32 = 15;
 
-/// The rollout policy for one game: its per-card values. Stateless between decisions, so one
-/// policy serves both seats, every determinization and every thread.
+/// Optional rules for the rollout policy, each off by default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Rules {
+    pub hold: bool,
+    pub waste: bool,
+    pub combat: bool,
+}
+
+/// The rollout policy for one game: its per-card values and rules. Stateless between
+/// decisions, so one policy serves both seats, every determinization and every thread.
 #[derive(Clone, Debug)]
 pub struct RolloutPolicy {
     values: CardValues,
+    rules: Rules,
 }
 
 /// One candidate of a decision, objects and options alike.
@@ -93,8 +102,14 @@ impl RolloutPolicy {
 
     /// The policy with the card values of tier `knowledge`.
     pub fn with(t: &GameTable, knowledge: Knowledge) -> RolloutPolicy {
+        Self::with_rules(t, knowledge, Rules::default())
+    }
+
+    /// The policy with the card values of tier `knowledge` and the given optional rules.
+    pub fn with_rules(t: &GameTable, knowledge: Knowledge, rules: Rules) -> RolloutPolicy {
         RolloutPolicy {
             values: CardValues::with(t, knowledge),
+            rules,
         }
     }
 
@@ -118,6 +133,7 @@ impl RolloutPolicy {
             obs,
             me,
             expert,
+            rules: self.rules,
             may_draw: Cell::new(None),
         }
     }

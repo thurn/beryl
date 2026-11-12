@@ -26,8 +26,8 @@ pub use long::{
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
-    COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Softmax, rollout, rollout_to, soft_rollout,
-    soft_rollout_to,
+    COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Rules, Softmax, rollout, rollout_to,
+    soft_rollout, soft_rollout_to,
 };
 pub use values::{CardInfo, CardValues, Knowledge};
 
@@ -379,6 +379,9 @@ const ANCHORED: Options = Options {
     guard: false,
     mid: false,
     means: false,
+    hold: false,
+    waste: false,
+    combat: false,
 };
 
 /// `pimc18/omniscient/rollout/tuned@30M`, Deep Seer as docs/incidents/2026-11-06-deep-seer-misplays.md

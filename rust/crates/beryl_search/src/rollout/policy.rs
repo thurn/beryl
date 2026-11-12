@@ -11,7 +11,7 @@ use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, Zone, ZoneKey};
 
-use super::{COUNTER_MIN, Candidate, LAND_MAX, LIBRARY_LOW, REMOVAL_MIN};
+use super::{COUNTER_MIN, Candidate, LAND_MAX, LIBRARY_LOW, REMOVAL_MIN, Rules};
 use crate::values::{CardInfo, CardValues};
 
 /// One decision's view, for the rules above.
@@ -22,6 +22,8 @@ pub(crate) struct Policy<'a, L: Layout> {
     pub(crate) me: Seat,
     /// Whether permanents are valued as the expert values them ([`crate::expert`]).
     pub(crate) expert: bool,
+    #[expect(dead_code, reason = "the ladder's policy rungs will read these flags")]
+    pub(super) rules: Rules,
     /// [`Policy::may_draw`], once asked: every option of a decision may ask it.
     pub(super) may_draw: Cell<Option<bool>>,
 }
