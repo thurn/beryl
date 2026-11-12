@@ -258,7 +258,7 @@ def test_an_implemented_cards_brief_has_all_five_parts(
         "effect/mod.rs:9)" in vocabulary_part and '"Counter [spell]"' in vocabulary_part
     )
     nearest_part = part(text, "Nearest implemented cards")
-    leak = str(sources.cards / "blue" / "mana_leak.rs")
+    leak = (sources.cards / "blue" / "mana_leak.rs").as_posix()
     # Its uses come from its definition: the comment and the scenarios name no entry.
     assert f"- Mana Leak: {leak}\n  uses build::counter, build::TARGET" in nearest_part
     assert "Counterspell:" not in nearest_part

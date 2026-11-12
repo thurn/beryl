@@ -47,14 +47,17 @@ class Removed:
 
 
 def size(path: Path) -> int:
-    """The bytes `path` holds on disk."""
+    """The bytes `path` holds on disk: its blocks, or on Windows, which counts none, its
+    files' sizes."""
     total = 0
     for root, folders, files in os.walk(path):
         for name in folders + files:
             try:
-                total += os.lstat(os.path.join(root, name)).st_blocks * 512
+                stat = os.lstat(os.path.join(root, name))
             except OSError:
                 continue  # Removed while we looked.
+            blocks = getattr(stat, "st_blocks", None)
+            total += stat.st_size if blocks is None else blocks * 512
     return total
 
 

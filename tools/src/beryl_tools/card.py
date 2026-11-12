@@ -175,18 +175,17 @@ def brief(record: Json, sources: Sources) -> str:
     elif (source := xmage_classes.card_source(name, checkout)) is None:
         body = "XMage has no class for it."
     else:
-        body = f"{source}\n\n```java\n{source.read_text().strip()}\n```"
+        body = f"{where(source)}\n\n```java\n{source.read_text().strip()}\n```"
     parts.append(section("XMage class", body))
     return "\n".join(parts)
 
 
 def where(path: Path) -> str:
-    """A path in the repository relative to its root; another as it is."""
+    """A path in the repository relative to its root; another whole. Both with forward
+    slashes, as on every machine."""
     return (
-        str(path.relative_to(paths.REPO))
-        if path.is_relative_to(paths.REPO)
-        else str(path)
-    )
+        path.relative_to(paths.REPO) if path.is_relative_to(paths.REPO) else path
+    ).as_posix()
 
 
 def run_brief(args: argparse.Namespace, sources: Sources = Sources()) -> int:

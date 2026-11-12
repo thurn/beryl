@@ -164,10 +164,8 @@ def test_the_motion_capture_runs_at_low_priority_and_logs_each_verb(
         env: dict[str, str] | None = None,
     ) -> int:
         # With the moments of cards changing zone, which the fast check leaves to it.
-        assert (
-            command[-3:] == ["beryl_tools.cli", "motion", "--more"]
-            and command[0] != sys.executable
-        )
+        unwrapped = [sys.executable, "-m", "beryl_tools.cli", "motion", "--more"]
+        assert command[-3:] == unwrapped[-3:] and command != unwrapped
         results = Path((env or {})[runlog.RESULTS_ENV])
         with open(results, "a") as f:
             f.write(
