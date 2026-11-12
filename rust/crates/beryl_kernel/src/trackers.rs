@@ -23,45 +23,56 @@ use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::{Capability, GameTable};
 
-/// A kind of tracker keyed by permanent: the closed list. Each is a fact about a permanent
-/// that ends with the turn, or as the permanent leaves the battlefield
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves
-/// from one zone to another becomes a new object with no memory of, or relation to, its
-/// previous existence.").
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Tracker {
+/// The kinds of tracker keyed by permanent: one list, from which [`Tracker`], the order of
+/// the store's sets and each kind's capability and words are written, so a new kind is an
+/// entry here and its reader. Each entry names the [`Capability`] a game's cards must have
+/// for the kind to be kept, and what it says of a permanent in a save's description. A
+/// `const fn` cannot enumerate an enum's variants.
+macro_rules! trackers {
+    ($($(#[$doc:meta])* $variant:ident = $words:literal),* $(,)?) => {
+        /// A kind of tracker keyed by permanent: the closed list. Each is a fact about a
+        /// permanent that ends with the turn, or as the permanent leaves the battlefield
+        /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that
+        /// moves from one zone to another becomes a new object with no memory of, or
+        /// relation to, its previous existence.").
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub enum Tracker {
+            $($(#[$doc])* $variant),*
+        }
+
+        impl Tracker {
+            /// Every kind, in the order of the store's sets.
+            pub const ALL: [Tracker; [$(Tracker::$variant),*].len()] = [$(Tracker::$variant),*];
+
+            /// What a game's cards must be able to do for it to be kept, the capability of
+            /// its own name: with no card that reads it, nothing writes it.
+            #[inline]
+            pub const fn capability(self) -> Capability {
+                match self {
+                    $(Tracker::$variant => Capability::$variant),*
+                }
+            }
+
+            /// What it says of a permanent, as a save's description words it.
+            fn words(self) -> &'static str {
+                match self {
+                    $(Tracker::$variant => $words),*
+                }
+            }
+        }
+    };
+}
+
+trackers! {
     /// The permanent entered the battlefield this turn. The rules never ask; a static
     /// ability may (`beryl_card`'s `Rule::InstantLoyaltyTheTurnItEntered`).
-    EnteredThisTurn,
+    EnteredThisTurn = "entered this turn",
     /// A loyalty ability of the permanent was activated this turn
     /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)): "A player may
     /// activate a loyalty ability of a permanent they control any time they have priority
     /// and the stack is empty during a main phase of their turn, but only if no player has
     /// previously activated a loyalty ability of that permanent that turn."
-    LoyaltyActivated,
-}
-
-impl Tracker {
-    /// Every kind, in the order of the store's sets.
-    pub const ALL: [Tracker; 2] = [Tracker::EnteredThisTurn, Tracker::LoyaltyActivated];
-
-    /// What a game's cards must be able to do for it to be kept: with no card that reads
-    /// it, nothing writes it.
-    #[inline]
-    pub const fn capability(self) -> Capability {
-        match self {
-            Tracker::EnteredThisTurn => Capability::EnteredThisTurn,
-            Tracker::LoyaltyActivated => Capability::LoyaltyActivated,
-        }
-    }
-
-    /// What it says of a permanent, as a save's description words it.
-    fn words(self) -> &'static str {
-        match self {
-            Tracker::EnteredThisTurn => "entered this turn",
-            Tracker::LoyaltyActivated => "had a loyalty ability activated this turn",
-        }
-    }
+    LoyaltyActivated = "had a loyalty ability activated this turn",
 }
 
 /// The Trackers store: for each kind, the permanents it is noted of.
@@ -176,6 +187,9 @@ impl<L: Layout> Relayout for Trackers<L> {
 /// ([`State::signature`]): the kinds noted of it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Tracked(u8);
+
+/// A bit for each kind of the list.
+const _: () = assert!(Tracker::ALL.len() <= u8::BITS as usize);
 
 impl Tracked {
     /// Whether `tracker` is noted of the permanent.

@@ -33,7 +33,8 @@ use crate::table::GameTable;
 /// [`crate::Large`], whose store grows.
 pub const MEMOS: usize = 32;
 
-/// One thing an object remembers.
+/// One thing an object remembers. A new kind is a variant here, its arm in each of the
+/// methods below and its reader: the store's own code names no kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Memo<L: Layout = Small> {
     /// The permanent's spell was cast with these kinds of cost paid, a kicker cost among
@@ -95,6 +96,30 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn layer_input(self) -> bool {
         matches!(self, Memo::Paid(_))
+    }
+
+    /// Whether it says something, and of an exiler that is where such a memo needs it:
+    /// what the store's invariant holds each memo to, given the zone of the object in a
+    /// slot.
+    fn holds(self, zone: impl Fn(L::Slot) -> Zone) -> bool {
+        match self {
+            Memo::X(x) => x > 0,
+            Memo::Paid(paid) => !paid.is_empty(),
+            // What exiled it left a card or a token in its slot.
+            Memo::ExiledWith(by) => zone(by) != Zone::Nowhere,
+            // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
+            Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
+        }
+    }
+
+    /// The memo in layout `M`: a slot it names at the same number.
+    fn relayout<M: Layout>(self) -> Memo<M> {
+        match self {
+            Memo::Paid(paid) => Memo::Paid(paid),
+            Memo::X(x) => Memo::X(x),
+            Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
+            Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
+        }
     }
 
     /// Whether `other` is of the same variant: an object has one memo of each.
@@ -241,15 +266,7 @@ impl<L: Layout> Store<L> for Memos<L> {
                 at,
             )?;
             check(
-                match e.memo {
-                    Memo::X(x) => x > 0,
-                    Memo::Paid(paid) => !paid.is_empty(),
-                    // What exiled it left a card or a token in its slot.
-                    Memo::ExiledWith(by) => zone(by) != Zone::Nowhere,
-                    // An object exiled "until" its exiler leaves returns as it leaves
-                    // (CR 610.3).
-                    Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
-                },
+                e.memo.holds(zone),
                 "a memo of nothing, or of what exiled it and has gone",
                 at,
             )?;
@@ -285,12 +302,7 @@ impl<L: Layout> Relayout for Memos<L> {
         Memos {
             entries: queue(self.entries.as_slice(), |e| Remembered {
                 slot: slot(e.slot),
-                memo: match e.memo {
-                    Memo::Paid(paid) => Memo::Paid(paid),
-                    Memo::X(x) => Memo::X(x),
-                    Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
-                    Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
-                },
+                memo: e.memo.relayout(),
             }),
             kinds: self.kinds,
         }
