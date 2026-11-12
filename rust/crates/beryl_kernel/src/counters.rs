@@ -243,13 +243,17 @@ impl<L: Layout> CountersOf<'_, L> {
     /// moving it.
     #[inline]
     pub fn held(&self) -> CountersHeld {
-        let mut held = CountersHeld::default();
-        held.0[CounterKind::PlusOne as usize] = self.fields.plus_one;
-        held.0[CounterKind::MinusOne as usize] = self.fields.minus_one;
-        held.0[CounterKind::Loyalty as usize] = self.fields.loyalty;
-        for row in self.rows.iter() {
-            held.0[row.kind as usize] = row.count;
+        let mut held = CountersHeld {
+            fields: self.fields,
+            rows: [None; HELD],
+        };
+        for (to, row) in held.rows.iter_mut().zip(self.rows.iter()) {
+            *to = Some((row.kind, row.count));
         }
+        debug_assert!(
+            self.rows.iter().count() <= HELD,
+            "an object has more kinds of counter than its last known information holds"
+        );
         held
     }
 }
@@ -296,23 +300,33 @@ impl<L: Layout> PartialEq for CounterRows<'_, L> {
 
 impl<L: Layout> Eq for CounterRows<'_, L> {}
 
+/// The kinds of counter kept in the table that last-known information holds of one object:
+/// far more than any object of the pool's cards has at once. A count per kind of the
+/// vocabulary's list would be a quarter kilobyte in every resolution's registers.
+const HELD: usize = 6;
+
 /// How many counters of each kind an object had: its last known information
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h): "the effect uses the
-/// object's last known information"), a count for each kind of the vocabulary's list.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CountersHeld([u8; CounterKind::ALL.len()]);
+/// object's last known information"), the kinds it keeps in fields and its rows of the table.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CountersHeld {
+    fields: Counters,
+    rows: [Option<(CounterKind, u8)>; HELD],
+}
 
 impl CountersHeld {
     /// How many counters of a kind the object had.
     #[inline]
     pub fn get(&self, kind: CounterKind) -> u8 {
-        self.0[kind as usize]
-    }
-}
-
-impl Default for CountersHeld {
-    fn default() -> Self {
-        CountersHeld([0; CounterKind::ALL.len()])
+        match self.fields.field(kind) {
+            Some(n) => n,
+            None => self
+                .rows
+                .iter()
+                .flatten()
+                .find(|&&(k, _)| k == kind)
+                .map_or(0, |&(_, n)| n),
+        }
     }
 }
 

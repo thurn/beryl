@@ -91,8 +91,7 @@ fn store_text() -> String {
 
 /// The subtypes these tests' engine has.
 fn subtypes() -> Subtypes {
-    Subtypes::parse("pub enum Subtype {\n    Plains,\n    Island,\n    Human,\n    Knight,\n}")
-        .unwrap()
+    Subtypes::named(&["Plains", "Island", "Human", "Knight"])
 }
 
 /// `set_crate_source` of the crate at `dir` over the test store.
@@ -310,11 +309,11 @@ fn typed_or_unknown_characteristics_fail_the_build() {
     );
     std::fs::remove_file(scratch.0.join("lea/island.rs")).unwrap();
     scratch.write("lea/plains.rs", "printed::PLAINS");
-    let without_plains = Subtypes::parse("pub enum Subtype {\n    Island,\n}").unwrap();
+    let without_plains = Subtypes::named(&["Island"]);
     let error =
         set_crate_source(&scratch.0, "..", &mut Printed::new(&store, &without_plains)).unwrap_err();
     assert!(
-        error.contains("Plains: beryl_card's Subtype has no Plains"),
+        error.contains("Plains: no subtype Plains in data/catalogs.json"),
         "{error}"
     );
 }

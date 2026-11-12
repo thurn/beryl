@@ -275,6 +275,10 @@ const MARK_ICONS = {
 
 export type MarkIcon = keyof typeof MARK_ICONS;
 
+/** Whether a mark, such as a kind of counter, has an icon to draw. */
+export const isMarkIcon = (mark: string): mark is MarkIcon =>
+  mark in MARK_ICONS;
+
 /** A mark's badge: its icon, with a count when it has one, named `label` for assistive
  * technology when it stands alone. */
 export function MarkBadge({

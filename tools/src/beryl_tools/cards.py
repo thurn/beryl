@@ -512,11 +512,12 @@ def aliases(card: Json, record: Json) -> list[str]:
 
 @dataclass
 class Built:
-    """The store's lines, its card records, each card's printing by every name it answers to,
-    and counts."""
+    """The store's lines, its card records and token records, each card's printing by every
+    name it answers to, and counts."""
 
     lines: list[bytes] = field(default_factory=list)
     records: list[Json] = field(default_factory=list)
+    tokens: list[Json] = field(default_factory=list)
     by_name: dict[str, Json] = field(default_factory=dict)
     counts: Counter[str] = field(default_factory=Counter)
 
@@ -556,6 +557,7 @@ def build_store(pool: Pool) -> Built:
     for linked, record in tokens.items():
         name = str(record["name"])
         built.lines.append(card_store.line("token", name, record))
+        built.tokens.append(record)
         for alias in aliases(pool.by_id[linked], record):
             token_alias: Json = {"alias": name, "scryfall_id": linked}
             built.lines.append(card_store.line("token", alias, token_alias))
@@ -616,8 +618,13 @@ def cards(args: argparse.Namespace) -> int:
         for r in built.records
         for f in cast(list[Json], r["faces"])
     ]
+    type_lines = [
+        str(f.get("type_line", ""))
+        for r in built.records + built.tokens
+        for f in cast(list[Json], r["faces"])
+    ]
     found = catalogs.fetch(args.refresh)
-    catalogs.write(store.parent / catalogs.CATALOGS.name, found, texts)
+    catalogs.write(store.parent / catalogs.CATALOGS.name, found, texts, type_lines)
     print(
         f"cards: wrote {store} and, beside it, {len(groups)} set groups",
         file=sys.stderr,

@@ -1,7 +1,8 @@
 //! Walking a definition: every [`Filter`] it holds, wherever it holds one, for a check that
-//! must see them all.
+//! must see them all, and every [`Subtype`](crate::Subtype) it names.
 
 use crate::ability::{Ability, Behavior};
+use crate::characteristics::Subtypes;
 use crate::continuous::{Governed, LayerSpec, Modification};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
@@ -26,6 +27,51 @@ impl CardDef {
                 part.filters(visit);
             }
         }
+    }
+}
+
+impl CardDef {
+    /// Calls `visit` with every set of subtypes an object of the card can have or a rule of
+    /// it can ask about: each face's printed subtypes, each subtype a filter names
+    /// ([`Filter::Subtype`]) and each a continuous effect gives
+    /// ([`Modification::AddSubtype`]), in its static abilities or its effect data. The game
+    /// numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
+    /// another subtype is read by nothing, so it names none a game does not.
+    pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
+        let given = |modification: &Modification| match *modification {
+            Modification::AddSubtype(subtype) => Some(Subtypes::of(&[subtype])),
+            _ => None,
+        };
+        for face in self.faces {
+            visit(face.subtypes);
+            for ability in face.abilities.iter().chain(face.grants) {
+                if let Some(spec) = ability.layer()
+                    && let Some(given) = given(&spec.modification)
+                {
+                    visit(given);
+                }
+                if let Behavior::Data(effect) = ability.body() {
+                    let found = std::cell::RefCell::new(Subtypes::NONE);
+                    effect.any(&|instruction| {
+                        if let Effect::Modify { modification, .. } = instruction
+                            && let Some(given) = given(modification)
+                        {
+                            let mut found = found.borrow_mut();
+                            *found = found.union(given);
+                        }
+                        false
+                    });
+                    visit(found.into_inner());
+                }
+            }
+        }
+        let mut named = Subtypes::NONE;
+        self.filters(&mut |filter| {
+            if let Filter::Subtype(subtype) = *filter {
+                named = named.with(subtype);
+            }
+        });
+        visit(named);
     }
 }
 

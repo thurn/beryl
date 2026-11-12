@@ -17,3 +17,6 @@ workspace = true
 # The card store's reader, so a build script reads a record as the app does, in place of a
 # second JSON parser.
 beryl_card_store = { path = "../beryl_card_store" }
+# Reads `data/catalogs.json`, in place of a hand-written JSON parser; the store's reader
+# already builds it.
+serde_json = "1.0.154"

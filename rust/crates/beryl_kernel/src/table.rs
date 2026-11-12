@@ -15,6 +15,7 @@ use crate::payable::{self, Unpayable};
 use crate::replacement::{self, Unreplaced};
 use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
 use crate::static_ability::{self, Unapplied};
+use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
 #[derive(Debug)]
@@ -108,6 +109,9 @@ pub enum TableError {
         card: &'static str,
         unpayable: Unpayable,
     },
+    /// The cards of the game, with the tokens and emblems they make, print, ask about or
+    /// give more subtypes than a state numbers ([`crate::subtypes::GAME_SUBTYPES`]).
+    Subtypes { count: usize },
 }
 
 /// The cards one game can contain, under dense game-local indices: what `State` stores for
@@ -157,6 +161,10 @@ pub struct GameTable {
     capabilities: u8,
     /// The rule changes the cards of the game name, numbered.
     rule_changes: RuleChanges,
+    /// The subtypes the cards of the game name, numbered.
+    subtypes: SubtypeNumbers,
+    /// Per game index, the printed subtypes of its first two faces by those numbers.
+    face_subtypes: Vec<[GameSubtypes; 2]>,
 }
 
 /// Something a game's cards may make the stores keep (architecture §6.4, the crate's
@@ -334,6 +342,9 @@ impl GameTable {
             })
             .collect();
         let (face_rules, rules) = rule_changes.of_cards(&defs);
+        let subtypes =
+            SubtypeNumbers::new(&defs).map_err(|count| TableError::Subtypes { count })?;
+        let face_subtypes = subtypes.of_cards(&defs);
         let capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -353,7 +364,30 @@ impl GameTable {
             needy,
             capabilities,
             rule_changes,
+            subtypes,
+            face_subtypes,
         })
+    }
+
+    /// The numbers of the subtypes the cards of the game name, which a permanent's
+    /// [`GameSubtypes`] is read by.
+    #[inline]
+    pub fn subtypes(&self) -> &SubtypeNumbers {
+        &self.subtypes
+    }
+
+    /// The printed subtypes of the face `face` of the card at `card` by the game's numbers:
+    /// found once per game for its first two faces, and from the face itself for any other.
+    /// A face-down permanent has none
+    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it "becomes a 2/2
+    /// face-down creature with no text, no name, no subtypes, and no mana cost."
+    #[inline]
+    pub fn face_subtypes(&self, card: impl CardId, face: FaceIx) -> GameSubtypes {
+        match self.face_subtypes[card.index()].get(usize::from(face.get())) {
+            Some(&subtypes) => subtypes,
+            None if face == FaceIx::DOWN => GameSubtypes::NONE,
+            None => self.subtypes.of(self.def(card).face(face).subtypes),
+        }
     }
 
     /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies,

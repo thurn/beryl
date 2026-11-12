@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::catalogs::Catalogs;
 use crate::files::{card_files, set_crates};
 use crate::names::constant;
 use crate::printed::{Subtypes, faces};
@@ -347,12 +348,12 @@ pub fn registry_source(
 }
 
 /// A path of the environment Cargo gives a build script.
-fn env_path(variable: &str) -> PathBuf {
+pub(crate) fn env_path(variable: &str) -> PathBuf {
     PathBuf::from(std::env::var_os(variable).unwrap_or_else(|| panic!("{variable} is not set")))
 }
 
 /// Writes `source` to `OUT_DIR/<file>`, or fails the build with the error.
-fn write_out(file: &str, source: Result<String, String>) {
+pub(crate) fn write_out(file: &str, source: Result<String, String>) {
     let source = source.unwrap_or_else(|error| panic!("{error}"));
     std::fs::write(env_path("OUT_DIR").join(file), source).expect("OUT_DIR is writable");
 }
@@ -386,13 +387,10 @@ fn repository(manifest_dir: &Path) -> (PathBuf, Result<Store, String>) {
     (root, store)
 }
 
-/// The subtypes the engine has, from `beryl_card`'s source under `root`, telling Cargo to run
-/// the script again when they change.
+/// The subtypes the engine has, from the catalogs under `root`, telling Cargo to run the
+/// script again when they change.
 fn subtypes(root: &Path) -> Result<Subtypes, String> {
-    println!("cargo:rerun-if-changed=../../../rust/crates/beryl_card/src/characteristics.rs");
-    let path = root.join("rust/crates/beryl_card/src/characteristics.rs");
-    let source = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    Subtypes::parse(&source)
+    Ok(Subtypes::of_catalogs(&Catalogs::read(root)?))
 }
 
 /// A set crate's whole build script: writes `OUT_DIR/cards.rs`, which the crate's `lib.rs`

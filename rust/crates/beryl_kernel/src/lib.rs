@@ -675,6 +675,7 @@ mod stack;
 pub mod state;
 pub mod static_ability;
 pub mod store;
+pub mod subtypes;
 pub mod table;
 pub mod trackers;
 mod turn;

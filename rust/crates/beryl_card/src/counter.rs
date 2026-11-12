@@ -1,37 +1,17 @@
 //! The kinds of counter: one list, from which the vocabulary's type and every table of
 //! their names is written.
 
-/// The kinds of counter the pool's cards use, each with its name in the rules
-/// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)): "Counters with the same
-/// name or description are interchangeable." The name is the kind's identity wherever a
-/// counter is written down: in a card's text, a save, a transcript.
-///
-/// A new kind is an entry here and nothing else: [`CounterKind`], its names and every
-/// table another crate keeps by kind are written from the list. It hands its entries to the
-/// macro named, so a table elsewhere is one more macro over the same entries. A `const fn`
-/// cannot enumerate an enum's variants.
-#[macro_export]
-macro_rules! counter_kinds {
-    ($with:ident) => {
-        $with! {
-            /// [CR 122.1a](https://yawgatog.com/resources/magic-rules/#R1221a): "A +X/+Y
-            /// counter on a creature or on a creature card in a zone other than the
-            /// battlefield, where X and Y are numbers, adds X to that object's power and Y to
-            /// that object's toughness."
-            PlusOne = "+1/+1",
-            /// [CR 122.1a](https://yawgatog.com/resources/magic-rules/#R1221a): "Similarly,
-            /// -X/-Y counters subtract from power and toughness."
-            MinusOne = "-1/-1",
-            /// [CR 122.1e](https://yawgatog.com/resources/magic-rules/#R1221e): "The number
-            /// of loyalty counters on a planeswalker on the battlefield indicates how much
-            /// loyalty it has."
-            Loyalty = "loyalty",
-            Time = "time",
-            Story = "story",
-            Chorus = "chorus",
-        }
-    };
-}
+// The list, `counter_kinds!`, one entry for each kind the pool's Oracle text names
+// (`data/catalogs.json`), written by the build script. The kinds the rules themselves read
+// keep the names the hand-written list gave them: `PlusOne = "+1/+1"` and `MinusOne = "-1/-1"`
+// ([CR 122.1a](https://yawgatog.com/resources/magic-rules/#R1221a): "A +X/+Y counter on a
+// creature or on a creature card in a zone other than the battlefield, where X and Y are
+// numbers, adds X to that object's power and Y to that object's toughness."), and `Loyalty`
+// ([CR 122.1e](https://yawgatog.com/resources/magic-rules/#R1221e): "The number of loyalty
+// counters on a planeswalker on the battlefield indicates how much loyalty it has."). A new
+// kind is a new entry of the catalogs' list and nothing else: [`CounterKind`], its names and
+// every table another crate keeps by kind are written from it.
+include!(concat!(env!("OUT_DIR"), "/counter_kinds.rs"));
 
 /// Writes [`CounterKind`] from the list.
 macro_rules! vocabulary {

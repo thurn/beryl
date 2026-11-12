@@ -19,6 +19,7 @@ import {
   CardBack,
   MarkBadge,
   toneClass,
+  isMarkIcon,
   type MarkIcon,
 } from "../components/Card";
 import { Tip } from "../components/Controls";
@@ -504,7 +505,9 @@ function InspectMarks({
       ? [tone(pt.power, printed.power), tone(pt.toughness, printed.toughness)]
       : [];
   const marks: { icon: MarkIcon; count?: number }[] = [
-    ...counters.map((c) => ({ icon: c.kind, count: c.count })),
+    ...counters.flatMap((c) =>
+      isMarkIcon(c.kind) ? [{ icon: c.kind, count: c.count }] : [],
+    ),
     ...(damage > 0 ? [{ icon: "damage" as const, count: damage }] : []),
     ...(summoningSick ? [{ icon: "sick" as const }] : []),
   ];

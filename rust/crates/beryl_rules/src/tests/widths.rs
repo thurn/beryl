@@ -96,7 +96,7 @@ fn more_static_abilities_than_the_list_holds_stall_into_large_and_apply_there() 
     for slot in [bear, land] {
         let derived = large.derived(slot.to().unwrap());
         assert_eq!(derived.types, Types::ARTIFACT);
-        assert!(derived.subtypes.contains(Subtype::Vehicle));
+        assert!(derived.subtypes.contains(t.subtypes(), Subtype::Vehicle));
     }
 }
 

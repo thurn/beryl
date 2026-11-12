@@ -35,24 +35,35 @@ macro_rules! bitset {
 
 bitset! {
     /// Card types ([CR 300.1](https://yawgatog.com/resources/magic-rules/#R3001)), those the
-    /// cube's cards use.
-    Types(u8) {
+    /// pool's cards have: a test holds them to the catalogs and every pool card's type line
+    /// (`beryl_card_build`'s `printed::TYPES`). The low byte holds every type a permanent can
+    /// have, so a permanent's types fit a byte
+    /// ([CR 110.4](https://yawgatog.com/resources/magic-rules/#R1104)): "There are six
+    /// permanent types: artifact, battle, creature, enchantment, land, and planeswalker.
+    /// Instant and sorcery cards can't enter the battlefield and thus can't be permanents.
+    /// Some kindred cards can enter the battlefield and some can't".
+    Types(u16) {
         ARTIFACT = 0,
-        CREATURE = 1,
-        ENCHANTMENT = 2,
-        INSTANT = 3,
-        LAND = 4,
-        PLANESWALKER = 5,
-        SORCERY = 6,
+        BATTLE = 1,
+        CREATURE = 2,
+        ENCHANTMENT = 3,
+        KINDRED = 4,
+        LAND = 5,
+        PLANESWALKER = 6,
+        INSTANT = 8,
+        SORCERY = 9,
+        CONSPIRACY = 10,
     }
 }
 
 bitset! {
     /// Supertypes ([CR 205.4a](https://yawgatog.com/resources/magic-rules/#R2054a)), those the
-    /// cube's cards use.
+    /// pool's cards have, held to them as [`Types`] is.
     Supertypes(u8) {
         BASIC = 0,
         LEGENDARY = 1,
+        SNOW = 2,
+        WORLD = 3,
     }
 }
 
@@ -89,160 +100,133 @@ bitset! {
     }
 }
 
-/// A subtype ([CR 205.3](https://yawgatog.com/resources/magic-rules/#R2053)). The cards that
-/// need more add them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum Subtype {
-    // The basic land types (CR 305.6).
-    Plains,
-    Island,
-    Swamp,
-    Mountain,
-    Forest,
-    /// An artifact type ([CR 301.7](https://yawgatog.com/resources/magic-rules/#R3017)).
-    Vehicle,
-    /// An enchantment type ([CR 303.4](https://yawgatog.com/resources/magic-rules/#R3034)):
-    /// "Some enchantments have the subtype "Aura." An Aura enters the battlefield attached to
-    /// an object or player."
-    Aura,
-    /// An artifact type (CR 301.7), of the Map tokens Get Lost creates.
-    Map,
-    /// An artifact type (CR 301.7), of Treasure tokens
-    /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)).
-    Treasure,
-    // Creature types ([CR 205.3m](https://yawgatog.com/resources/magic-rules/#R2053m)).
-    Avatar,
-    Cleric,
-    Elemental,
-    Elk,
-    Eye,
-    Fish,
-    Horror,
-    Human,
-    Illusion,
-    Incarnation,
-    Insect,
-    Knight,
-    Merfolk,
-    Otter,
-    Pirate,
-    Rogue,
-    Samurai,
-    Siren,
-    Sphinx,
-    Spirit,
-    Wizard,
-    // Planeswalker types ([CR 205.3j](https://yawgatog.com/resources/magic-rules/#R2053j)).
-    Jace,
-    Teferi,
-}
-
-impl Subtype {
-    pub const ALL: [Subtype; 32] = [
-        Subtype::Plains,
-        Subtype::Island,
-        Subtype::Swamp,
-        Subtype::Mountain,
-        Subtype::Forest,
-        Subtype::Vehicle,
-        Subtype::Aura,
-        Subtype::Map,
-        Subtype::Treasure,
-        Subtype::Avatar,
-        Subtype::Cleric,
-        Subtype::Elemental,
-        Subtype::Elk,
-        Subtype::Eye,
-        Subtype::Fish,
-        Subtype::Horror,
-        Subtype::Human,
-        Subtype::Illusion,
-        Subtype::Incarnation,
-        Subtype::Insect,
-        Subtype::Knight,
-        Subtype::Merfolk,
-        Subtype::Otter,
-        Subtype::Pirate,
-        Subtype::Rogue,
-        Subtype::Samurai,
-        Subtype::Siren,
-        Subtype::Sphinx,
-        Subtype::Spirit,
-        Subtype::Wizard,
-        Subtype::Jace,
-        Subtype::Teferi,
-    ];
-
-    /// The card type this subtype belongs to (CR 205.3).
-    pub const fn card_type(self) -> Types {
-        match self {
-            Subtype::Plains
-            | Subtype::Island
-            | Subtype::Swamp
-            | Subtype::Mountain
-            | Subtype::Forest => Types::LAND,
-            Subtype::Vehicle | Subtype::Map | Subtype::Treasure => Types::ARTIFACT,
-            Subtype::Aura => Types::ENCHANTMENT,
-            Subtype::Avatar
-            | Subtype::Cleric
-            | Subtype::Elemental
-            | Subtype::Eye
-            | Subtype::Elk
-            | Subtype::Fish
-            | Subtype::Horror
-            | Subtype::Human
-            | Subtype::Illusion
-            | Subtype::Incarnation
-            | Subtype::Insect
-            | Subtype::Knight
-            | Subtype::Merfolk
-            | Subtype::Otter
-            | Subtype::Pirate
-            | Subtype::Rogue
-            | Subtype::Samurai
-            | Subtype::Siren
-            | Subtype::Sphinx
-            | Subtype::Spirit
-            | Subtype::Wizard => Types::CREATURE,
-            Subtype::Jace | Subtype::Teferi => Types::PLANESWALKER,
-        }
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/subtypes.rs"));
 
 /// A set of [`Subtype`]s, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Subtypes(pub [u64; 2]);
+pub struct Subtypes(pub [u64; SUBTYPE_WORDS]);
 
 impl Subtypes {
-    pub const NONE: Subtypes = Subtypes([0; 2]);
+    pub const NONE: Subtypes = Subtypes([0; SUBTYPE_WORDS]);
 
     pub const fn of(subtypes: &[Subtype]) -> Subtypes {
-        let mut bits = [0; 2];
+        let mut bits = [0; SUBTYPE_WORDS];
         let mut i = 0;
         while i < subtypes.len() {
-            let s = subtypes[i] as u8;
-            bits[(s >> 6) as usize] |= 1 << (s & 63);
+            let s = subtypes[i] as usize;
+            bits[s >> 6] |= 1 << (s & 63);
             i += 1;
         }
         Subtypes(bits)
     }
 
+    /// Every subtype of a card type. `Subtypes::every(Types::CREATURE)` is what a changeling
+    /// is ([CR 702.73a](https://yawgatog.com/resources/magic-rules/#R70273a)): "Changeling is
+    /// a characteristic-defining ability. “Changeling” means “This object is every creature
+    /// type.”"
+    pub const fn every(card_type: Types) -> Subtypes {
+        let mut bits = [0; SUBTYPE_WORDS];
+        let mut i = 0;
+        while i < Subtype::ALL.len() {
+            if Subtype::ALL[i].card_type().0 & card_type.0 != 0 {
+                bits[i >> 6] |= 1 << (i & 63);
+            }
+            i += 1;
+        }
+        Subtypes(bits)
+    }
+
+    /// The subtypes in either set.
+    #[must_use]
+    pub const fn union(self, other: Subtypes) -> Subtypes {
+        let mut bits = self.0;
+        let mut i = 0;
+        while i < SUBTYPE_WORDS {
+            bits[i] |= other.0[i];
+            i += 1;
+        }
+        Subtypes(bits)
+    }
+
+    /// Whether every subtype of `other` is in the set.
+    pub fn contains_all(self, other: Subtypes) -> bool {
+        self.0.iter().zip(other.0).all(|(a, b)| a & b == b)
+    }
+
+    /// The subtypes in the set but not in `other`.
+    #[must_use]
+    pub fn minus(self, other: Subtypes) -> Subtypes {
+        let mut bits = self.0;
+        for (a, b) in bits.iter_mut().zip(other.0) {
+            *a &= !b;
+        }
+        Subtypes(bits)
+    }
+
     pub fn contains(self, subtype: Subtype) -> bool {
-        let s = subtype as u8;
-        self.0[usize::from(s >> 6)] & (1 << (s & 63)) != 0
+        let s = subtype as usize;
+        self.0[s >> 6] & (1 << (s & 63)) != 0
     }
 
     #[must_use]
     pub fn with(self, subtype: Subtype) -> Subtypes {
         let mut bits = self.0;
-        let s = subtype as u8;
-        bits[usize::from(s >> 6)] |= 1 << (s & 63);
+        let s = subtype as usize;
+        bits[s >> 6] |= 1 << (s & 63);
         Subtypes(bits)
     }
 
-    /// The subtypes in the set.
+    /// The subtypes in the set, in [`Subtype`]'s order.
     pub fn iter(self) -> impl Iterator<Item = Subtype> {
-        Subtype::ALL.into_iter().filter(move |&s| self.contains(s))
+        self.0.into_iter().enumerate().flat_map(|(word, mut bits)| {
+            std::iter::from_fn(move || {
+                if bits == 0 {
+                    return None;
+                }
+                let bit = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                Some(Subtype::ALL[word * 64 + bit])
+            })
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Subtype, Subtypes, Types};
+
+    /// A set lists what was put in it, in order, across words.
+    #[test]
+    fn a_set_lists_its_members() {
+        let last = Subtype::ALL[Subtype::ALL.len() - 1];
+        let set = Subtypes::of(&[last, Subtype::Island, Subtype::Plains]);
+        assert_eq!(
+            set.iter().collect::<Vec<_>>(),
+            vec![Subtype::Island, Subtype::Plains, last]
+        );
+        assert!(set.contains(last) && !set.contains(Subtype::Aura));
+    }
+
+    /// CR 205.3m: creatures and kindreds share the creature types, and a changeling has
+    /// every one of them and nothing else (CR 702.73a).
+    #[test]
+    fn every_creature_type() {
+        let every = Subtypes::every(Types::CREATURE);
+        assert!(every.contains(Subtype::TimeLord) && every.contains(Subtype::Human));
+        assert!(!every.contains(Subtype::Island) && !every.contains(Subtype::Jace));
+        assert!(Subtype::Human.card_type().contains(Types::KINDRED));
+        assert_eq!(
+            every.iter().count(),
+            Subtype::ALL
+                .iter()
+                .filter(|s| s.card_type().intersects(Types::CREATURE))
+                .count()
+        );
+        assert_eq!(Subtype::TimeLord.name(), "Time Lord");
+        assert_eq!(Subtype::Treasure.card_type(), Types::ARTIFACT);
+        assert_eq!(
+            Subtype::Lesson.card_type(),
+            Types::INSTANT.union(Types::SORCERY)
+        );
     }
 }

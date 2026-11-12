@@ -16,7 +16,8 @@ use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
-    Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
+    Lki, ObjectFlags, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, State, TriggerInfo,
+    TurnStep, Zone,
 };
 use crate::table::GameTable;
 
@@ -274,7 +275,7 @@ pub(crate) fn match_leaving<L: Layout>(
         return Ok(());
     }
     let lki = lki(s, t, slot);
-    if !lki.types.contains(Types::CREATURE) {
+    if !lki.types.types().contains(Types::CREATURE) {
         return Ok(());
     }
     let source = s.object_ref(slot);
@@ -309,7 +310,7 @@ pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki<
         card: s.copiable(slot).record(t).0,
         power: d.power,
         toughness: d.toughness,
-        types: d.types,
+        types: PermanentTypes::of(d.types),
         controller: d.controller,
         token: o.flags().has(ObjectFlags::TOKEN),
     }

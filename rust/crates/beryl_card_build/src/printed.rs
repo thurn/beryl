@@ -7,19 +7,29 @@ use std::fmt::Write as _;
 
 use beryl_card_store::{Face, Record};
 
+use crate::catalogs::Catalogs;
+
 /// The supertypes the engine knows
 /// ([CR 205.4a](https://yawgatog.com/resources/magic-rules/#R2054a)): "An object can have one
 /// or more supertypes."
-const SUPERTYPES: [(&str, &str); 2] = [("Basic", "BASIC"), ("Legendary", "LEGENDARY")];
+pub const SUPERTYPES: [(&str, &str); 4] = [
+    ("Basic", "BASIC"),
+    ("Legendary", "LEGENDARY"),
+    ("Snow", "SNOW"),
+    ("World", "WORLD"),
+];
 
 /// The card types the engine knows
 /// ([CR 205.2a](https://yawgatog.com/resources/magic-rules/#R2052a)): "The card types are artifact, battle, conspiracy, creature, dungeon, enchantment, instant,
 /// kindred, land, phenomenon, plane, planeswalker, scheme, sorcery, and vanguard."
-const TYPES: [(&str, &str); 7] = [
+pub const TYPES: [(&str, &str); 10] = [
     ("Artifact", "ARTIFACT"),
+    ("Battle", "BATTLE"),
+    ("Conspiracy", "CONSPIRACY"),
     ("Creature", "CREATURE"),
     ("Enchantment", "ENCHANTMENT"),
     ("Instant", "INSTANT"),
+    ("Kindred", "KINDRED"),
     ("Land", "LAND"),
     ("Planeswalker", "PLANESWALKER"),
     ("Sorcery", "SORCERY"),
@@ -35,39 +45,109 @@ const COLORS: [(&str, &str); 5] = [
     ("G", "GREEN"),
 ];
 
-/// The variants of `beryl_card`'s `Subtype`, read from its source: the subtypes a face may
-/// have until the catalogs generate that enum.
-pub struct Subtypes(Vec<String>);
+/// The subtypes a face may have, each a name as a type line prints it with its variant of
+/// `beryl_card`'s `Subtype`, which the catalogs generate ([`crate::catalogs`]).
+pub struct Subtypes(Vec<(String, String)>);
 
 impl Subtypes {
-    /// The variants of `pub enum Subtype` in `source`, `beryl_card`'s `characteristics.rs`.
+    /// Every subtype of the catalogs.
+    #[must_use]
+    pub fn of_catalogs(catalogs: &Catalogs) -> Self {
+        Self(
+            catalogs
+                .subtypes
+                .iter()
+                .map(|s| (s.name.clone(), s.variant.clone()))
+                .collect(),
+        )
+    }
+
+    /// The subtypes `names` name, for a test.
+    #[must_use]
+    pub fn named(names: &[&str]) -> Self {
+        Self(
+            names
+                .iter()
+                .map(|n| ((*n).to_string(), crate::catalogs::variant(n)))
+                .collect(),
+        )
+    }
+
+    /// The variant of the subtype a type line prints as `name`.
+    fn variant(&self, name: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// The variants of the subtypes after a type line's dash. A creature type may be two
+    /// words ([CR 205.3b](https://yawgatog.com/resources/magic-rules/#R2053b)): "Subtypes of
+    /// creature cards are one or two words and are listed after a long dash." So two words
+    /// that name one are read as it before either alone.
     ///
     /// # Errors
     ///
-    /// When the source has no such enum.
-    pub fn parse(source: &str) -> Result<Self, String> {
-        let body = source
-            .split_once("pub enum Subtype {")
-            .and_then(|(_, rest)| rest.split_once("\n}"))
-            .ok_or("beryl_card's characteristics.rs has no `pub enum Subtype`")?
-            .0;
-        let variants = body
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.starts_with("//") && !line.starts_with('#'))
-            .filter_map(|line| line.strip_suffix(','))
-            .map(str::to_string)
-            .collect();
-        Ok(Self(variants))
+    /// The first word, or pair, that names no subtype.
+    fn variants<'a>(&'a self, words: &'a str) -> Result<Vec<&'a str>, &'a str> {
+        let words: Vec<&str> = words.split(' ').filter(|w| !w.is_empty()).collect();
+        let mut found = Vec::new();
+        let mut i = 0;
+        while i < words.len() {
+            let pair = words.get(i + 1).map(|next| format!("{} {next}", words[i]));
+            if let Some(v) = pair.as_deref().and_then(|p| self.variant(p)) {
+                found.push(v);
+                i += 2;
+            } else {
+                found.push(self.variant(words[i]).ok_or(words[i])?);
+                i += 1;
+            }
+        }
+        Ok(found)
     }
+}
 
-    /// The variant spelling `subtype`, a word or words of a type line.
-    fn variant(&self, subtype: &str) -> Option<&str> {
-        let spelled: String = subtype
-            .chars()
-            .filter(char::is_ascii_alphanumeric)
-            .collect();
-        self.0.iter().find(|v| **v == spelled).map(String::as_str)
+/// A type line read as the engine's supertypes, card types and `Subtype` variants.
+#[derive(Debug, PartialEq, Eq)]
+pub struct TypeLine<'a> {
+    pub supertypes: Vec<&'a str>,
+    pub types: Vec<&'a str>,
+    pub subtypes: Vec<&'a str>,
+}
+
+impl<'a> TypeLine<'a> {
+    /// Reads `line`. A type line is supertypes and card types, then a dash and subtypes
+    /// ([CR 205.1](https://yawgatog.com/resources/magic-rules/#R2051)): "It contains the
+    /// card's card type(s). It also contains the card's subtype(s) and supertype(s), if
+    /// applicable."
+    ///
+    /// # Errors
+    ///
+    /// The first word that is no supertype, card type or subtype the engine has.
+    pub fn parse(line: &'a str, subtypes: &'a Subtypes) -> Result<Self, String> {
+        let (types, subtype_words) = line.split_once(" — ").unwrap_or((line, ""));
+        let mut read = TypeLine {
+            supertypes: Vec::new(),
+            types: Vec::new(),
+            subtypes: Vec::new(),
+        };
+        // "Token" and "Emblem" say what the object is, not a type it has (CR 111.1, CR 114.1).
+        for word in types
+            .split(' ')
+            .filter(|w| !w.is_empty() && *w != "Token" && *w != "Emblem")
+        {
+            if SUPERTYPES.iter().any(|(s, _)| *s == word) {
+                read.supertypes.push(word);
+            } else if TYPES.iter().any(|(t, _)| *t == word) {
+                read.types.push(word);
+            } else {
+                return Err(format!("the engine has no supertype or card type {word}"));
+            }
+        }
+        read.subtypes = subtypes
+            .variants(subtype_words)
+            .map_err(|word| format!("no subtype {word} in data/catalogs.json: run `just cards`"))?;
+        Ok(read)
     }
 }
 
@@ -118,44 +198,21 @@ pub fn face_source(
     if let Some(cost) = face.mana_cost.as_deref().filter(|c| !c.is_empty()) {
         write!(out, "\n    .cost(beryl_card::mana({cost:?}))").unwrap();
     }
-    // A type line is supertypes and card types, then a dash and subtypes
-    // ([CR 205.1](https://yawgatog.com/resources/magic-rules/#R2051)): "It contains the
-    // card's card type(s). It also contains the card's subtype(s) and supertype(s), if
-    // applicable."
-    let (types, subtype_words) = face
-        .type_line
-        .split_once(" — ")
-        .unwrap_or((&face.type_line, ""));
-    let mut supers = Vec::new();
-    let mut cards = Vec::new();
-    // "Token" and "Emblem" say what the object is, not a type it has (CR 111.1, CR 114.1).
-    for word in types
-        .split(' ')
-        .filter(|w| !w.is_empty() && *w != "Token" && *w != "Emblem")
-    {
-        if SUPERTYPES.iter().any(|(s, _)| *s == word) {
-            supers.push(word);
-        } else if TYPES.iter().any(|(t, _)| *t == word) {
-            cards.push(word);
-        } else {
-            return Err(format!(
-                "{name}: the engine has no supertype or card type {word}"
-            ));
-        }
-    }
+    let TypeLine {
+        supertypes: supers,
+        types: cards,
+        subtypes: variants,
+    } = TypeLine::parse(&face.type_line, subtypes).map_err(|e| format!("{name}: {e}"))?;
     if let Some(s) = flags("Supertypes", &SUPERTYPES, &supers) {
         write!(out, "\n    .supertypes({s})").unwrap();
     }
     if let Some(t) = flags("Types", &TYPES, &cards) {
         write!(out, "\n    .types({t})").unwrap();
     }
-    let mut variants = Vec::new();
-    for word in subtype_words.split(' ').filter(|w| !w.is_empty()) {
-        let variant = subtypes.variant(word).ok_or(format!(
-            "{name}: beryl_card's Subtype has no {word}: add it there"
-        ))?;
-        variants.push(format!("beryl_card::Subtype::{variant}"));
-    }
+    let variants: Vec<String> = variants
+        .into_iter()
+        .map(|variant| format!("beryl_card::Subtype::{variant}"))
+        .collect();
     if !variants.is_empty() {
         let of = variants.join(", ");
         write!(out, "\n    .subtypes(beryl_card::Subtypes::of(&[{of}]))").unwrap();

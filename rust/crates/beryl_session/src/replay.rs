@@ -202,6 +202,9 @@ impl ReplayFile {
                         "{card} names a rule change the engine cannot check: {unchecked:?}"
                     ),
                 },
+                TableError::Subtypes { count } => SessionError::Deck {
+                    reason: format!("the decks name {count} subtypes, more than a game can number"),
+                },
             },
         )?;
         let profile = with_stops(

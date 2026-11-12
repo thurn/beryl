@@ -101,10 +101,9 @@ fn an_object_holds_each_kind_with_its_own_count() {
         (3, 3, 1, 0)
     );
     // Listed in the order of the vocabulary's list, not the order they were put on.
-    assert_eq!(
-        s.counters(bear.slot).iter().collect::<Vec<_>>(),
-        [(CounterKind::PlusOne, 1), (first, 3), (second, 3)]
-    );
+    let mut listed = vec![(second, 3), (CounterKind::PlusOne, 1), (first, 3)];
+    listed.sort_by_key(|&(kind, _)| kind as usize);
+    assert_eq!(s.counters(bear.slot).iter().collect::<Vec<_>>(), listed);
     assert_eq!(s.check_stores(&t), Ok(()));
     // A checkpoint of the board records a permanent's counters with it.
     assert_eq!(s.stores_lingering(&t), None);

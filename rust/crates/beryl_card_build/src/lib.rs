@@ -18,6 +18,7 @@
 //! `printed::token::<CONSTANT>`, and a card file starts each face from one. A file that types a
 //! cost, type, subtype, color, power, toughness, loyalty or face name fails the build.
 
+pub mod catalogs;
 pub mod files;
 mod generate;
 pub mod names;

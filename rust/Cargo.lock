@@ -156,12 +156,16 @@ dependencies = [
 [[package]]
 name = "beryl_card"
 version = "0.1.0"
+dependencies = [
+ "beryl_card_build",
+]
 
 [[package]]
 name = "beryl_card_build"
 version = "0.1.0"
 dependencies = [
  "beryl_card_store",
+ "serde_json",
 ]
 
 [[package]]

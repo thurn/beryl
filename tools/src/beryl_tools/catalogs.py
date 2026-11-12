@@ -8,7 +8,9 @@ Scryfall serves each catalog at https://api.scryfall.com/catalog/<name>
 no catalog of counter kinds, so `counter_kinds` reads them from the pool's Oracle text: the word
 before "counter" or "counters" after a quantity ("a", "three", "another", "that many"), or the
 two words of a keyword ability ("a first strike counter"), and "+1/+1"-style kinds; never a word
-that is itself a quantity or `NOT_KINDS`. Every list is sorted, so a refresh diffs small.
+that is itself a quantity or `NOT_KINDS`. A subtype on a pool type line that no catalog lists yet
+(a new token's artifact type) joins the catalog of its card type (`with_pool_subtypes`), so the
+generated `Subtype` has every one. Every list is sorted, so a refresh diffs small.
 """
 
 from __future__ import annotations
@@ -53,6 +55,20 @@ NOT_KINDS: frozenset[str] = frozenset(QUANTITIES) | {"of", "had", "more", "diffe
 COUNTER: re.Pattern[str] = re.compile(
     rf"\b(?:(?:{'|'.join(QUANTITIES)}|\d+) )+([+-]\d+/[+-]\d+|[a-z]+(?: [a-z]+)?) counters?\b"
 )
+# The subtype catalog of each card type (CR 205.3g to 205.3q); creatures and kindreds share one,
+# and instants and sorceries another.
+TYPE_CATALOGS: dict[str, str] = {
+    "Artifact": "artifact-types",
+    "Battle": "battle-types",
+    "Creature": "creature-types",
+    "Kindred": "creature-types",
+    "Enchantment": "enchantment-types",
+    "Land": "land-types",
+    "Planeswalker": "planeswalker-types",
+    "Instant": "spell-types",
+    "Sorcery": "spell-types",
+}
+POOL_RULE = "A subtype on a pool type line that no catalog lists joins the catalog of its card type."
 COUNTER_RULE = (
     "counter_kinds: from the pool's Oracle text, the word before 'counter' or 'counters' after "
     "a quantity ('a', 'three', 'that many'), two words for a keyword ability ('first strike'), "
@@ -90,10 +106,38 @@ def counter_kinds(texts: Iterable[str], keywords: Iterable[str]) -> list[str]:
     return sorted(kinds)
 
 
-def write(path: Path, catalogs: dict[str, list[str]], texts: Iterable[str]) -> None:
+def with_pool_subtypes(
+    catalogs: dict[str, list[str]], type_lines: Iterable[str]
+) -> dict[str, list[str]]:
+    """The catalogs with each subtype on `type_lines` that none lists added to the catalog of
+    the line's card type, sorted. A line whose unknown subtype could belong to two catalogs
+    is an error: no rule says which."""
+    out = {name: list(entries) for name, entries in catalogs.items()}
+    known = {s for name in SUBTYPES for s in catalogs[name]}
+    for line in type_lines:
+        _, unknown = subtypes(line, known)
+        if not unknown:
+            continue
+        types = line.partition(" — ")[0].split()
+        homes = {TYPE_CATALOGS[t] for t in types if t in TYPE_CATALOGS}
+        if len(homes) != 1:
+            raise ValueError(f"{line}: no one catalog for {', '.join(unknown)}")
+        (home,) = homes
+        for subtype in unknown:
+            out[home].append(subtype)
+            known.add(subtype)
+    return {name: sorted(entries) for name, entries in out.items()}
+
+
+def write(
+    path: Path,
+    catalogs: dict[str, list[str]],
+    texts: Iterable[str],
+    type_lines: Iterable[str],
+) -> None:
     data = {
-        "rule": f"Scryfall's catalogs ({CATALOG}<name>), sorted. {COUNTER_RULE}",
-        "catalogs": catalogs,
+        "rule": f"Scryfall's catalogs ({CATALOG}<name>), sorted. {POOL_RULE} {COUNTER_RULE}",
+        "catalogs": with_pool_subtypes(catalogs, type_lines),
         "counter_kinds": counter_kinds(texts, catalogs["keyword-abilities"]),
     }
     text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"

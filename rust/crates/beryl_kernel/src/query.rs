@@ -18,6 +18,7 @@ use crate::layout::{Layout, Small};
 use crate::object::Object;
 use crate::rule_changes::Rules;
 use crate::state::State;
+use crate::subtypes::GameSubtypes;
 use crate::table::{FaceFacts, GameTable};
 
 /// An object's copiable values: what a copy of it would have, and what it has itself before
@@ -119,6 +120,12 @@ impl<L: Layout> Copiable<L> {
     #[inline]
     pub fn face(self, t: &GameTable) -> &'static Face {
         t.def(self.card).face(self.face)
+    }
+
+    /// The printed subtypes of the face that is up, by the game's numbers.
+    #[inline]
+    pub fn subtypes(self, t: &GameTable) -> GameSubtypes {
+        t.face_subtypes(self.card, self.face)
     }
 
     /// What the scans over every permanent read of that face, found once per game.

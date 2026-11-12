@@ -1,5 +1,5 @@
 {
-  "rule": "Scryfall's catalogs (https://api.scryfall.com/catalog/<name>), sorted. counter_kinds: from the pool's Oracle text, the word before 'counter' or 'counters' after a quantity ('a', 'three', 'that many'), two words for a keyword ability ('first strike'), or a '+1/+1'-style kind (tools/src/beryl_tools/catalogs.py).",
+  "rule": "Scryfall's catalogs (https://api.scryfall.com/catalog/<name>), sorted. A subtype on a pool type line that no catalog lists joins the catalog of its card type. counter_kinds: from the pool's Oracle text, the word before 'counter' or 'counters' after a quantity ('a', 'three', 'that many'), two words for a keyword ability ('first strike'), or a '+1/+1'-style kind (tools/src/beryl_tools/catalogs.py).",
   "catalogs": {
     "supertypes": [
       "Basic",
@@ -43,16 +43,20 @@
       "Food",
       "Fortification",
       "Gold",
+      "Heartwood",
       "Incubator",
       "Infinity",
       "Junk",
+      "Lander",
       "Map",
+      "Mutagen",
       "Powerstone",
       "Spacecraft",
       "Stone",
       "Terminus",
       "Treasure",
-      "Vehicle"
+      "Vehicle",
+      "Vibranium"
     ],
     "battle-types": [
       "Siege"

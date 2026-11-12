@@ -1317,7 +1317,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
-    assert!(d.subtypes.contains(Subtype::Vehicle));
+    assert!(d.subtypes.contains(t.subtypes(), Subtype::Vehicle));
     let grant = d.granted[0].unwrap();
     assert_eq!(grant.card, s.copiable(aura).record(&t).0);
     let granted = &t.def(grant.card).front().grants[grant.grant.index()];
@@ -1327,7 +1327,10 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     s.board().attach(aura, land);
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let subtypes = s.derived(land).subtypes;
-    assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
+    assert_eq!(
+        subtypes.iter(t.subtypes()).collect::<Vec<_>>(),
+        vec![Subtype::Vehicle]
+    );
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
     s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();

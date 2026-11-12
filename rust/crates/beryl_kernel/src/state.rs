@@ -15,8 +15,8 @@ pub use crate::object::{Derived, GrantRef, Object, ObjectFlags, ObjectRef};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
-    Lki, PendingTrigger, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces, TriggerInfo,
-    placed,
+    Lki, PendingTrigger, PermanentTypes, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces,
+    TriggerInfo, placed,
 };
 pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Tracked, Tracker, Trackers};

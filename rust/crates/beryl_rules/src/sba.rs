@@ -36,7 +36,7 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
-    let (graveyard, tokens, legendary) = doomed(s);
+    let (graveyard, tokens, legendary) = doomed(s, t);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && !legends {
         s.reset_state_based_checks();
@@ -106,7 +106,10 @@ type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 ///
 /// With them, in the same pass, the legendary permanents each player controls, for the legend
 /// rule.
-fn doomed<L: Layout>(s: &State<L>) -> Doomed<L> {
+fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
+    // A game none of whose cards is an Aura or makes one never asks (the count gate).
+    let aura = t.subtypes().has(Subtype::Aura);
+    let auras = aura.possible();
     let mut graveyard = Bitboard::EMPTY;
     let mut legendary: Legendary<L> = Table::filled(Bitboard::EMPTY);
     for (slot, d) in s.permanents() {
@@ -118,7 +121,7 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L> {
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
                 || (o.damage() > 0 && i16::from(o.damage()) >= i16::from(d.toughness)));
-        let unattached = o.attached_to().is_none() && d.subtypes.contains(Subtype::Aura);
+        let unattached = auras && o.attached_to().is_none() && aura.of(d.subtypes);
         if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
         {
             graveyard.insert(slot);

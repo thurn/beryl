@@ -81,9 +81,10 @@ impl Evaluate for Filter {
             Filter::Supertypes(supertypes) => derived()
                 .map_or_else(|| face().supertypes, |d| d.supertypes)
                 .intersects(supertypes),
-            Filter::Subtype(subtype) => derived()
-                .map_or_else(|| face().subtypes, |d| d.subtypes)
-                .contains(subtype),
+            Filter::Subtype(subtype) => match derived() {
+                Some(d) => d.subtypes.contains(t.subtypes(), subtype),
+                None => face().subtypes.contains(subtype),
+            },
             Filter::Colors(colors) => derived()
                 .map_or_else(|| face().colors, |d| d.colors)
                 .intersects(colors),

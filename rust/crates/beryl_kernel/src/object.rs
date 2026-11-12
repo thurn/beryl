@@ -5,7 +5,7 @@
 //! chance chokepoints and the board door. No `&mut Object` leaves the
 //! crate. Other crates read an object through the getters below.
 
-use beryl_card::{Colors, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone};
+use beryl_card::{Colors, FaceIx, GrantIx, Keywords, Supertypes, Types, Zone};
 
 use crate::counters::Counters;
 use crate::ids::{CardId, CardIx, Seat, Slot};
@@ -332,7 +332,8 @@ pub struct Derived<L: Layout = Small> {
     /// The colors it has protection from.
     pub protection: Colors,
     pub keywords: Keywords,
-    pub subtypes: Subtypes,
+    /// By the game's numbers: read them through [`crate::GameTable::subtypes`].
+    pub subtypes: crate::subtypes::GameSubtypes,
     /// The abilities other objects grant this permanent (§9), in the order granted.
     pub granted: [Option<GrantRef<L>>; 4],
 }

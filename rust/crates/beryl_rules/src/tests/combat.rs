@@ -833,7 +833,11 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     assert!(g.s.stack().is_empty());
     assert!(is_creature(&g, wagon));
     assert!(g.s.derived(wagon).types.contains(Types::ARTIFACT));
-    assert!(g.s.derived(wagon).subtypes.contains(Subtype::Vehicle));
+    assert!(
+        g.s.derived(wagon)
+            .subtypes
+            .contains(g.t.subtypes(), Subtype::Vehicle)
+    );
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(wagon));
     g.finish_combat();

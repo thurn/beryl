@@ -5,7 +5,7 @@ use beryl_kernel::derive::Rederive;
 
 use beryl_card::Amount;
 
-use crate::card::{AbilityIx, AbilityKind, Colors, Modification, Objects, Subtypes};
+use crate::card::{AbilityIx, AbilityKind, Colors, Modification, Objects};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Sink, kind};
 use crate::filter::{self, Filter};
@@ -199,7 +199,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
             controller: s.base_controller(slot),
             protection: Colors::NONE,
             keywords: f.keywords,
-            subtypes: f.subtypes,
+            subtypes: what.subtypes(t),
             granted: [None; 4],
         };
         for (n, ability) in f.abilities.iter().enumerate() {
@@ -404,16 +404,10 @@ fn apply<L: Layout>(
         // removed".
         LayerChange::SetTypes(types) => {
             derived[i].types = types;
-            let mut kept = Subtypes::NONE;
-            for subtype in derived[i].subtypes.iter() {
-                if types.intersects(subtype.card_type()) {
-                    kept = kept.with(subtype);
-                }
-            }
-            derived[i].subtypes = kept;
+            derived[i].subtypes = derived[i].subtypes.of_types(t.subtypes(), types);
         }
         LayerChange::AddSubtype(subtype) => {
-            derived[i].subtypes = derived[i].subtypes.with(subtype);
+            derived[i].subtypes = derived[i].subtypes.with(t.subtypes(), subtype);
         }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
@@ -434,7 +428,7 @@ fn apply<L: Layout>(
             let Some(Ok(Some(amount))) = said_by.layer().map(static_ability::defined_power) else {
                 unreachable!("the card table has only the defined powers the layers read");
             };
-            let power = defined(amount, derived, derived[i].controller);
+            let power = defined(t, amount, derived, derived[i].controller);
             derived[i].power = i8::try_from(power).unwrap_or(i8::MAX);
         }
         LayerChange::ModifyPt(p, t) => {
@@ -448,12 +442,12 @@ fn apply<L: Layout>(
 /// applies for the permanent's controller `you`: of the permanents as layers 2 to 6 left
 /// them, so a count sees each one's final types and controller. The card table has only
 /// amounts read this way (`beryl_kernel`'s `static_ability::defined_power`).
-fn defined<L: Layout>(amount: &Amount, derived: &[Derived<L>], you: Seat) -> usize {
+fn defined<L: Layout>(t: &GameTable, amount: &Amount, derived: &[Derived<L>], you: Seat) -> usize {
     match *amount {
         Amount::Fixed(n) => usize::from(n),
-        Amount::Times(n, amount) => usize::from(n).saturating_mul(defined(amount, derived, you)),
+        Amount::Times(n, amount) => usize::from(n).saturating_mul(defined(t, amount, derived, you)),
         Amount::Count(&Objects::All { filter, .. }) => {
-            derived.iter().filter(|d| passes(filter, d, you)).count()
+            derived.iter().filter(|d| passes(t, filter, d, you)).count()
         }
         _ => unreachable!("the card table refuses an amount the layers cannot read"),
     }
@@ -461,17 +455,17 @@ fn defined<L: Layout>(amount: &Amount, derived: &[Derived<L>], you: Seat) -> usi
 
 /// Whether a permanent with the characteristics `d` passes `filter`, read for `you`: what
 /// [`Filter`]'s evaluation says of a permanent, of results the state does not yet hold.
-fn passes<L: Layout>(filter: Filter, d: &Derived<L>, you: Seat) -> bool {
+fn passes<L: Layout>(t: &GameTable, filter: Filter, d: &Derived<L>, you: Seat) -> bool {
     match filter {
         Filter::Any => true,
         Filter::Types(types) => d.types.intersects(types),
         Filter::Supertypes(supertypes) => d.supertypes.intersects(supertypes),
-        Filter::Subtype(subtype) => d.subtypes.contains(subtype),
+        Filter::Subtype(subtype) => d.subtypes.contains(t.subtypes(), subtype),
         Filter::Colors(colors) => d.colors.intersects(colors),
         Filter::Whose(players) => filter::is_for(players, d.controller, you),
-        Filter::Not(filter) => !passes(*filter, d, you),
-        Filter::All(filters) => filters.iter().all(|&filter| passes(filter, d, you)),
-        Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(filter, d, you)),
+        Filter::Not(filter) => !passes(t, *filter, d, you),
+        Filter::All(filters) => filters.iter().all(|&filter| passes(t, filter, d, you)),
+        Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(t, filter, d, you)),
         Filter::Tapped | Filter::ManaValueAtMost(_) | Filter::ManaValueAtMostX => {
             unreachable!("the card table refuses a filter the layers cannot read")
         }

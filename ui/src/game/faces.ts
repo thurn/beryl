@@ -93,8 +93,17 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   };
 }
 
+/** The kinds a permanent wears as a badge; loyalty is its plaque's. */
+const BADGED: ReadonlySet<string> = new Set<CounterMark>([
+  "plusOne",
+  "minusOne",
+  "time",
+  "story",
+  "chorus",
+]);
+
 const isBadged = (c: CounterView): c is { kind: CounterMark; count: number } =>
-  c.kind !== "loyalty";
+  BADGED.has(c.kind);
 
 /** What the battlefield draws on object `o` beyond its frame. */
 export const marksOf = (o: ObjectView): CardMarks => ({

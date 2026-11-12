@@ -102,14 +102,26 @@ export function listed(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
-const COUNTERS: Record<Counter, string> = {
+/** The power and toughness kinds the rules read, named apart from the rest. */
+const COUNTERS: Partial<Record<Counter, string>> = {
   plusOne: "+1/+1",
   minusOne: "−1/−1",
-  loyalty: "loyalty",
-  time: "time",
-  story: "story",
-  chorus: "chorus",
 };
+
+const NUMBERS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven"];
+
+/** A kind's name in the rules: "time", "first strike", "+1/+2" (`plusOnePlusTwo`). */
+function counterName(kind: Counter): string {
+  const named = COUNTERS[kind];
+  if (named) return named;
+  const pt = /^(plus|minus)([A-Z][a-z]+)(Plus|Minus)([A-Z][a-z]+)$/.exec(kind);
+  if (pt) {
+    const part = (sign: string, n: string) =>
+      `${sign.toLowerCase() === "plus" ? "+" : "−"}${NUMBERS.indexOf(n)}`;
+    return `${part(pt[1]!, pt[2]!)}/${part(pt[3]!, pt[4]!)}`;
+  }
+  return kind.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
+}
 
 /** How a player lost, after "lost the game". */
 const LOSSES: Record<LossReason, (life: number) => string> = {
@@ -120,7 +132,7 @@ const LOSSES: Record<LossReason, (life: number) => string> = {
 };
 
 const counters = (n: number, kind: Counter) =>
-  `${n === 1 ? "a" : n} ${COUNTERS[kind]} counter${n === 1 ? "" : "s"}`;
+  `${n === 1 ? "a" : n} ${counterName(kind)} counter${n === 1 ? "" : "s"}`;
 
 /** A loyalty ability's cost as its card prints it: "+1", "0", "−3". */
 const loyaltyCost = (n: number) =>

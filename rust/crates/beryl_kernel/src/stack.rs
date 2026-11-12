@@ -216,9 +216,31 @@ pub struct Lki<L: Layout = Small> {
     pub card: L::Card,
     pub power: i8,
     pub toughness: i8,
-    pub types: Types,
+    pub types: PermanentTypes,
     pub controller: Seat,
     pub token: bool,
+}
+
+/// The card types of a permanent, in a byte: `beryl_card::Types` keeps every type a
+/// permanent can have in its low byte
+/// ([CR 110.4](https://yawgatog.com/resources/magic-rules/#R1104)): "Instant and sorcery
+/// cards can't enter the battlefield and thus can't be permanents." So last-known
+/// information, kept in every pending trigger and stack entry, stays as small as it was.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PermanentTypes(u8);
+
+impl PermanentTypes {
+    /// A permanent's types: those of `types` a permanent can have.
+    #[inline]
+    pub fn of(types: Types) -> PermanentTypes {
+        PermanentTypes(types.0.to_le_bytes()[0])
+    }
+
+    /// The card types.
+    #[inline]
+    pub fn types(self) -> Types {
+        Types(u16::from(self.0))
+    }
 }
 
 /// What a triggered ability triggered on: the object and player the event involved, an
