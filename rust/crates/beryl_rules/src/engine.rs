@@ -522,7 +522,8 @@ pub fn refusal<L: Layout>(
 /// place above the top as it is put there.
 ///
 /// Every other answer is the game's and opens no scope: passing priority resolves the top of
-/// the stack or ends the step, declaring attackers and blockers and dealing combat damage are turn-based actions
+/// the stack or ends the step, declaring attackers and blockers and dealing combat damage are
+/// turn-based actions
 /// ([CR 703.1](https://yawgatog.com/resources/magic-rules/#R7031): "Turn-based actions are
 /// game actions that happen automatically when certain steps or phases begin, or when each
 /// step and phase ends."), as is the cleanup step's discard, the legend rule is a
