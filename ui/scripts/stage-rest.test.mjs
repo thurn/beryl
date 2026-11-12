@@ -113,15 +113,16 @@ test("streaks that leave one place for one target together fan out", () => {
     const { stage: made } = stage({ streak: { duration: 200 } });
     made.play(view([1, 2, 3]));
     const from = { kind: "player", player: "you" };
+    const spent = mana(from, card(1));
     made.play(view([1, 2, 3]), {
-        beats: [
-            [mana(from, card(1)), mana(from, card(1)), mana(card(2), card(1))],
-        ],
+        beats: [[spent, spent, spent, mana(card(2), card(1))]],
     });
     made.clock.advance(60);
-    const [first, second, other] = made.streaks().map((s) => s.shape);
+    const [first, second, third, other] = made.streaks().map((s) => s.shape);
     assert.deepEqual(second.tail, first.tail);
-    assert.ok(second.head.y < first.head.y, "the second rises higher");
+    // To either side of the way by turns, and then higher.
+    assert.ok(second.head.y > first.head.y, "the second on the other side");
+    assert.ok(third.head.y < first.head.y, "the third higher than the first");
     assert.notDeepEqual(other.tail, first.tail);
     // And each closes on the one target.
     made.clock.advance(139);
@@ -132,6 +133,24 @@ test("streaks that leave one place for one target together fan out", () => {
             JSON.stringify(head),
         );
     }
+});
+
+test("a streak rises out of its row toward the middle of the table", () => {
+    const { stage: made } = stage({ streak: { duration: 200 } });
+    const theirs = (slot) =>
+        object(slot, "battlefield", { controller: "opponent" });
+    const table = view([1, 2], [], {
+        objects: [theirs(1), object(2)],
+    });
+    made.play(table);
+    // Their permanent's mana bows down the stage, and yours up it.
+    made.play(table, {
+        beats: [[mana(card(1), card(2)), mana(card(2), card(1))]],
+    });
+    made.clock.advance(100);
+    const [down, up] = made.streaks().map((s) => s.shape.head);
+    assert.ok(down.y > 70, `theirs is at y ${down.y}`);
+    assert.ok(up.y < 70, `yours is at y ${up.y}`);
 });
 
 test("mana a player spends leaves their pool", () => {

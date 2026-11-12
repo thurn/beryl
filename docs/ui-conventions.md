@@ -407,19 +407,21 @@ held to by `just motion`.
   its blow lands (on what it strikes).
 - **streak.** A streak of light leaves one thing and lands on another, which
   flashes: mana from its source into the spell or ability it pays for, and
-  damage from a spell or ability to what it hits. It rises out of its source on
-  a low arc, a bright head with a tail behind it, quickening all the way, and
-  its tail is drawn in as it lands. Several into one spell leave together. A
-  source with no place left on the table sends none: what its mana pays for only
-  flashes. Each tapped land sends one streak of its color to the spell on the
-  stack in about 0.3 s. A burn spell or ability glows, and a streak of fire
-  crosses to its target in about 0.25 s, with a burst where it lands; the spell
-  leaves after (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85, pE4XSNi-nZc 22:00.6,
-  IEXcjBn3BXk 20:40.88, IEXcjBn3BXk 38:36.7, I3Te0m1bBFw 31:37.8). Beryl: 250
-  ms, 100 ms after its cause, ease-in. Effects: glow as it begins (mana) (on
-  what it leaves), flash as it ends (mana) (on what it strikes), glow as it
-  begins (damage) (on what it leaves), impact as it ends (damage) (on what it
-  strikes).
+  damage from a spell or ability to what it hits. It rises out of its source's
+  row toward the middle of the table on a low arc, a bright head with a tail
+  behind it, gathering as it leaves and quickening all the way, and its tail is
+  drawn in as it lands. Mana leaves as its source begins to turn, several into
+  one spell together, and has left the row before the row closes up; the mana of
+  a pile of lands fans out to either side. A source with no place left on the
+  table sends none: what its mana pays for only flashes. Each tapped land sends
+  one streak of its color to the spell on the stack in about 0.3 s. A burn spell
+  or ability glows, and a streak of fire crosses to its target in about 0.25 s,
+  with a burst where it lands; the spell leaves after (TbrYIs2juCw 33:32.45,
+  3sEoP_s4DQE 45:30.85, pE4XSNi-nZc 22:00.6, IEXcjBn3BXk 20:40.88, IEXcjBn3BXk
+  38:36.7, I3Te0m1bBFw 31:37.8). Beryl: 250 ms, 100 ms after its cause, ease-in.
+  Effects: glow as it begins (mana) (on what it leaves), flash as it ends (mana)
+  (on what it strikes), glow as it begins (damage) (on what it leaves), impact
+  as it ends (damage) (on what it strikes).
 - **count.** A number changes and shows that it did: a life total, a kind of
   counter, a power and toughness, a mana pool. A life total jumps to its new
   value in a burst of about 0.4 s; a loss's red number drifts down from the

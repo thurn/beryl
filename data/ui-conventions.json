@@ -1444,7 +1444,7 @@
     },
     {
       "name": "streak",
-      "shows": "A streak of light leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits. It rises out of its source on a low arc, a bright head with a tail behind it, quickening all the way, and its tail is drawn in as it lands. Several into one spell leave together. A source with no place left on the table sends none: what its mana pays for only flashes.",
+      "shows": "A streak of light leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits. It rises out of its source's row toward the middle of the table on a low arc, a bright head with a tail behind it, gathering as it leaves and quickening all the way, and its tail is drawn in as it lands. Mana leaves as its source begins to turn, several into one spell together, and has left the row before the row closes up; the mana of a pile of lands fans out to either side. A source with no place left on the table sends none: what its mana pays for only flashes.",
       "arena": {
         "does": "Each tapped land sends one streak of its color to the spell on the stack in about 0.3 s. A burn spell or ability glows, and a streak of fire crosses to its target in about 0.25 s, with a burst where it lands; the spell leaves after.",
         "evidence": [
@@ -1483,7 +1483,7 @@
       "cases": {
         "mana": {
           "duration": 275,
-          "delay": 100,
+          "delay": 0,
           "stagger": null,
           "curve": "ease-in"
         },

@@ -7,8 +7,9 @@
 // A streak is a comet: a bright head on a low arc from where its source lay as the step began
 // to where its target is now, with a tail that stretches out of the source, follows, and is
 // drawn in as the head lands. Beryl's cards are whole and lie in rows, so several lands'
-// streaks into one spell rise from the row side by side and close on it together (Arena's
-// curl out of each land and run straight: `TbrYIs2juCw 33:32.45`). Like a pose, a streak's
+// streaks into one spell rise out of the row side by side, toward the middle of the table,
+// and close on the spell together (Arena's curl out of each land and run straight:
+// `TbrYIs2juCw 33:32.45`); those of one pile fan out to either side of their way. Like a pose, a streak's
 // shape at a stage time is a function of that time and of where the model has its ends, so
 // it is the same however the time is reached, and the surface only writes it.
 import type { Act } from "../generated/protocol";
@@ -51,9 +52,10 @@ export interface StreakSurface {
 }
 
 /** How a streak is drawn. Its arc rises `bow` of the way between its ends, and never more
- * than `rise` of its target's height, so that a streak across the whole table stays low;
- * each streak that leaves one place for one target with another rises `fan` as high again
- * as the one before, so that the mana of a pile of lands is seen as so many. Its tail is
+ * than `rise` of the height of the taller of them, so that a streak across the whole table
+ * stays low; of the streaks that leave one place for one target together, each pair after
+ * the first two rises `fan` as high again, so that the mana of a pile of lands is seen as
+ * so many. Its tail is
  * `tail` of its way long. Its head is `head` of its target's half-width across, so that it
  * is as large against a phone's cards as against the desktop's, and no less than `least`
  * nor more than `most` stage pixels, `more` as wide again for each unit past the first that
@@ -85,8 +87,8 @@ const round = (n: number) => Math.round(n * 100) / 100;
 
 /** The comet between the reaches `from` and `to`, its head `through` of the way there and
  * carrying `amount` units: from the middle of one to the middle of the other on an arc that
- * rises up the stage, to the left of a way straight up or down it. It is the `nth` after
- * the first of those that leave that place for that target together. */
+ * rises out of its source's row toward the middle of the table. It is the `nth` after the
+ * first of those that leave that place for that target together. */
 export function cometOf(
   from: Reach,
   to: Reach,
@@ -97,11 +99,15 @@ export function cometOf(
   const [a, b] = [from.middle, to.middle];
   const [dx, dy] = [b.x - a.x, b.y - a.y];
   const far = Math.hypot(dx, dy) || 1;
-  const rise =
-    Math.min(COMET.bow * far, COMET.rise * 2 * to.half.y) *
-    (1 + COMET.fan * nth);
-  // The side of the way that lies up the stage; for a way straight up or down, its left.
-  const side = dx === 0 ? 1 : Math.sign(dx);
+  // Those of a sheaf rise on either side of the way by turns, each pair higher than the last.
+  const sheaf = (nth % 2 ? -1 : 1) * (1 + COMET.fan * Math.floor(nth / 2));
+  const high = Math.max(from.half.y, to.half.y);
+  const rise = Math.min(COMET.bow * far, COMET.rise * 2 * high) * sheaf;
+  // The side of the way its source faces, out of its own row and toward the middle of the
+  // table: yours rise up the stage and the opponent's down it, and what faces neither way
+  // (a pool) rises up it. For a way straight up or down the stage, a side of it.
+  const faces = from.toward || -1;
+  const side = (dx === 0 ? 1 : Math.sign(dx)) * -faces;
   const c = {
     x: (a.x + b.x) / 2 + ((side * dy) / far) * rise,
     y: (a.y + b.y) / 2 - ((side * dx) / far) * rise,
@@ -168,11 +174,16 @@ export class Streaks {
     if (to <= from) return;
     this.#made += 1;
     const key = `${lookOf(act)} ${this.#made}`;
+    // One place: within a card's half-width, as the lands of a pile lie.
     const beside = (other: Running) =>
       other.from === from &&
       namedBy(other.act.to) === namedBy(act.to) &&
-      other.origin?.middle.x === origin?.middle.x &&
-      other.origin?.middle.y === origin?.middle.y;
+      other.origin !== undefined &&
+      origin !== undefined &&
+      Math.hypot(
+        other.origin.middle.x - origin.middle.x,
+        other.origin.middle.y - origin.middle.y,
+      ) <= origin.half.x;
     const nth = this.#running.filter(beside).length;
     this.#running.push({ key, act, nth, origin, from, to, ease });
   }

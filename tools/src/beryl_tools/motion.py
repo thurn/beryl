@@ -112,6 +112,7 @@ SPANS: tuple[str, ...] = ("point", "mark")
 # announcement): the next like step in the script is another beat's, a whole step later, and
 # no stagger is held between the two.
 ALONE: tuple[str, ...] = ("set", "dwell", "announce")
+UNSTAGGERED: tuple[str, ...] = SPANS + ALONE
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
 INPUTS = (
@@ -286,7 +287,7 @@ def timing_verdicts(
         ]
         if (
             after is not None
-            and step["verb"] not in (*SPANS, *ALONE)
+            and step["verb"] not in UNSTAGGERED
             and after["n"] == step["n"] + 1
             and after["verb"] == step["verb"]
             and case_in(after, seat) == case

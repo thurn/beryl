@@ -308,6 +308,7 @@ export function Notices({
     coin || !combat ? undefined : `${combat.title}|${combat.detail}`,
   );
   const banner = coin ? coinBanner(coin, table) : combat;
+  const middle = bands.middle.top + bands.middle.height / 2;
   const edge = (side: Side) =>
     side === "you"
       ? bands.yourStrip.top - 30
@@ -317,7 +318,9 @@ export function Notices({
       {banner && (
         <div
           className="phone-announce phone-announce-step"
-          style={{ top: edge("opponent") }}
+          // A coin is tossed mid-table, just above where the turn is announced; a combat
+          // step's banner lies under the opponent's strip.
+          style={{ top: coin ? middle - 80 : edge("opponent") }}
         >
           <StepBanner
             key={`${banner.title}|${banner.detail}`}
@@ -338,10 +341,7 @@ export function Notices({
         </div>
       )}
       {turn && (
-        <div
-          className="phone-announce"
-          style={{ top: bands.middle.top + bands.middle.height / 2 }}
-        >
+        <div className="phone-announce" style={{ top: middle }}>
           <TurnAnnouncement
             key={table.turn.number}
             side={turn.notice.active}
