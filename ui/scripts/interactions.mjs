@@ -189,13 +189,8 @@ async function replied(name, source, replies) {
     );
     await writeFixture(name, fixture);
 }
-const SAME = (decision) => ({ kind: "open", prompt: decision.prompt });
-const ANSWERED = { kind: "answered" };
 /** A click on the card in `slot`, as the page sends it. */
 const ON = (slot) => ({ kind: "on", on: { kind: "object", slot } });
-/** A press of the button `kind`, as the page sends it. */
-const PRESS = (kind) => ({ kind: "button", button: { kind } });
-
 /** Where an element's box is, rounded to whole stage pixels. */
 const where = (handle) =>
     handle.evaluate((e) => {
@@ -274,17 +269,15 @@ async function pause(page) {
     }
 }
 
-/** Whether the run is forced onto the stage (`by ui-test --stage`, plan K25): every page draws
- * the stage's board, and only the checks that say they are the stage's too run. */
+/** Whether every page draws the stage's board (plan K25): `by ui-test --stage` runs none of these
+ * checks, which go with the old board at the cut-over, unless `BERYL_STAGE_EVERY` is set; those
+ * that stay are kept.mjs'. */
 const STAGED = Boolean(process.env.BERYL_STAGE);
 
 /** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches and its
  * fonts have loaded, alongside other checks (capture.mjs' workers): awaiting it waits only for
- * a free worker. A check with `stage` holds a property of a screen that outlives the old board
- * (the start screen, the settings, the log, a key, a result), which runs on the stage too and
- * stays at the cut-over, where every check without it goes with the old board; `stage` says
- * why no generic audit can express the property (plan K20). A check with `board: "stage"`
- * is written for the stage alone, and its page draws the stage whatever the run. The page's fixtures come from `fixtures`, not from what Vite serves. The
+ * a free worker. A check with `board: "stage"` is written for the stage alone, and its page draws
+ * the stage whatever the run. The page's fixtures come from `fixtures`, not from what Vite serves. The
  * page runs on Playwright's fake clock, paused once the page is ready so that a check cannot
  * race the wall clock; `clock: "off"` leaves the browser's own, and says why. */
 async function check(
@@ -300,12 +293,10 @@ async function check(
         init,
         phone = false,
         clock = "paused",
-        stage,
         board,
     } = {},
 ) {
     if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
-    if (STAGED && !stage && !process.env.BERYL_STAGE_EVERY) return;
     ran += 1;
     await queue(async () => {
         // A page whose boot lost one of its modules to the network (Windows now and then
@@ -430,135 +421,6 @@ async function assertSounded(page) {
     sounded.heard += heard;
 }
 
-await check(
-    "playground reports and navigation survive refresh",
-    async (page) => {
-        await page.addInitScript(() => {
-            window.EventSource = class {
-                constructor() {
-                    setTimeout(() => this.onopen?.(), 0);
-                }
-                addEventListener() {}
-                close() {}
-            };
-        });
-        const moment = "playground-payment";
-        let reports = 2;
-        await page.route("**/spec-api/**", async (route) => {
-            const path = new URL(route.request().url()).pathname;
-            let body;
-            if (path.endsWith("/specs"))
-                body = [
-                    {
-                        card: "Aang’s Iceberg",
-                        slug: "aangs-iceberg",
-                        reviewed: null,
-                        reports,
-                        momentReports: {
-                            [`aangs-iceberg/${moment}/yours`]: reports,
-                        },
-                    },
-                ];
-            else if (path.includes("/playground/"))
-                body = {
-                    examples: [
-                        {
-                            title: "Payment",
-                            variants: [
-                                {
-                                    name: moment,
-                                    title: "Payment",
-                                    label: "Default",
-                                    plays: true,
-                                },
-                            ],
-                        },
-                    ],
-                    missing: [],
-                };
-            else if (path.includes("/stream/"))
-                return route.fulfill({
-                    contentType: "text/event-stream",
-                    body: "",
-                });
-            else if (path.endsWith("/held"))
-                body = { ok: path.includes("/theirs/") };
-            else if (path.endsWith("/invoke/card_records"))
-                body = { ok: recordedCards };
-            else if (path.endsWith("/report")) {
-                reports++;
-                body = { ok: { id: "test", path: "test" } };
-            } else body = { ok: null };
-            await route.fulfill({ json: body });
-        });
-        await page.route("**/?live=*", (route) =>
-            route.fulfill({
-                contentType: "text/html",
-                body: `<script>parent.postMessage({kind:"beryl-shown"},location.origin)</script>`,
-            }),
-        );
-        await page.goto(new URL("/playground/aangs-iceberg", base).href);
-        const board = page.locator(".specs-moment").first();
-        const bug = board.getByRole("button", {
-            name: "Report a bug",
-            exact: true,
-        });
-        await bug.waitFor();
-        assert.equal(await bug.getAttribute("data-filed"), "2");
-        assert.equal(await page.getByText("More cases →").count(), 0);
-        await bug.click();
-        await board.getByRole("textbox").fill("Keep my report draft");
-        await board
-            .getByRole("checkbox", { name: "Bug in the playground viewer" })
-            .check();
-        await page.reload();
-        await bug.click();
-        assert.equal(
-            await board.getByRole("textbox").inputValue(),
-            "Keep my report draft",
-        );
-        assert.ok(await board.getByRole("checkbox").isChecked());
-        await board.getByRole("button", { name: "File", exact: true }).click();
-        await page.waitForFunction(() => !document.querySelector("textarea"));
-        await page.reload();
-        await bug.waitFor();
-        assert.equal(await bug.getAttribute("data-filed"), "3");
-        await bug.click();
-        assert.equal(await board.getByRole("textbox").inputValue(), "");
-        await board
-            .getByRole("button", { name: "Cancel", exact: true })
-            .click();
-        assert.equal(
-            await board
-                .getByRole("button", { name: "Play", exact: true })
-                .count(),
-            0,
-        );
-        const theirs = page.locator(".specs-moment").nth(1);
-        await theirs.scrollIntoViewIfNeeded();
-        await theirs
-            .getByRole("button", { name: "Play", exact: true })
-            .waitFor();
-        const header = await page.locator(".testing-header").boundingBox();
-        assert.ok(
-            header.y >= 0 && header.y < 2,
-            "navigation stays at the top after scrolling",
-        );
-        await page
-            .getByRole("link", { name: "Playground", exact: true })
-            .click();
-        await page
-            .getByRole("heading", { name: "Playground", exact: true })
-            .waitFor();
-    },
-    // Off: it reloads and navigates the testing pages, waiting on their requests and their
-    // stubbed EventSource's timer as a browser would; it measures no motion.
-    {
-        stage: "a draft and a count kept across a reload, and a page's scroll: no screen a shot settles on shows them",
-        clock: "off",
-    },
-);
-
 /** The `cancel` commands the page has sent. */
 const cancels = (page) =>
     page.evaluate(
@@ -641,66 +503,9 @@ await check("Space passes priority", async (page) => {
     assert.deepEqual(await chosen(page), [pass], "passed");
 });
 
-await check(
-    "the turn button is reached by Tab, with a visible ring",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const turn = page.locator(".turn-action button");
-        for (let i = 0; i < 40; i++) {
-            if (await turn.evaluate((b) => b === document.activeElement)) break;
-            await page.keyboard.press("Tab");
-        }
-        assert.ok(
-            await turn.evaluate((b) => b === document.activeElement),
-            "Tab reaches the turn button",
-        );
-        const ring = await turn.evaluate(
-            (b) => getComputedStyle(b).outlineStyle,
-        );
-        assert.notEqual(ring, "none", "the focused turn button shows a ring");
-    },
-    {
-        stage: "which control a key reaches, and its ring while it has the focus",
-    },
-);
-
-await check(
-    "Escape closes the settings",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Settings" }).click();
-        const panel = page.locator(".settings");
-        await panel.waitFor();
-        await page.keyboard.press("Escape");
-        assert.equal(await panel.count(), 0, "closed");
-    },
-    { stage: "a key's effect on an open panel" },
-);
-
-await check(
-    "dragging across the table selects no text",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const selected = () =>
-            page.evaluate(() => window.getSelection()?.toString() ?? "");
-        // From the far corner, over the log and the table, to the near corner.
-        await page.mouse.move(60, 90);
-        await page.mouse.down();
-        await page.mouse.move(1580, 880, { steps: 25 });
-        await page.mouse.up();
-        assert.equal(await selected(), "", "nothing selected by a drag");
-        // A hand card picked up, carried over the log and put back.
-        const box = await page.locator(card).boundingBox();
-        await page.mouse.move(box.x + box.width / 2, box.y + 40);
-        await page.mouse.down();
-        await page.mouse.move(60, 300, { steps: 15 });
-        await page.mouse.move(box.x + box.width / 2, 880, { steps: 15 });
-        await page.mouse.up();
-        assert.equal(await selected(), "", "nothing selected by a card's drag");
-    },
-    { stage: "what a drag leaves selected: a gesture's side effect" },
-);
-
+// Why no audit: which card of a fan each point of its strip reaches: a hit test along every card.
+// It stays here, on the old board, until the stage's raised card leaves its neighbors' strips to
+// them (by-w8gv.21.70), which moves it to kept-table.mjs.
 await check(
     "a click on the visible strip of each hand card acts on that card",
     async (page) => {
@@ -752,10 +557,13 @@ await check(
                 const raised = mid(neighbor);
                 await page.mouse.move(raised.x, raised.y, { steps: 4 });
                 await page.clock.runFor(500);
+                await committed(page);
                 const x =
                     n < i ? strip.xs[0] + 4 : strip.xs[strip.xs.length - 1] - 4;
                 await page.mouse.move(x, strip.y, { steps: 4 });
                 await page.clock.runFor(500);
+                // The hover moves on: the neighbor lowers once React commits it.
+                await committed(page);
                 await page.mouse.down();
                 await page.mouse.up();
                 const hits = await page.evaluate(() => window.hits);
@@ -766,25 +574,6 @@ await check(
                 );
             }
         }
-    },
-    {
-        stage: "which card of a fan each point of its strip reaches: a hit test along every card",
-    },
-);
-
-await check(
-    "hovering a card shows it whole, with its artist",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.hover(card);
-        const { artist } = (await cardRecords(FIXTURE)).cards[name];
-        await page
-            .locator(".inspect")
-            .getByText(`Illustrated by ${artist}`)
-            .waitFor();
-    },
-    {
-        stage: "which card the pointer's inspector shows, and its artist's line",
     },
 );
 
@@ -824,6 +613,10 @@ for (const [title, target] of [
     ["a hand card", card],
     ["a battlefield card", fieldCard],
 ]) {
+    // It stays here, on the old board, until the stage raises a hand card as far as this asks
+    // (by-w8gv.21.70), which moves it to kept-pointer.mjs.
+    // Why no audit: what a hover moves, and that the card it raises keeps the pointer: a sweep of
+    // every card's box as the pointer rests.
     await check(
         `hovering ${title} moves no other card and starts no layout animation`,
         async (page) => {
@@ -835,6 +628,8 @@ for (const [title, target] of [
             await page.mouse.move(at.x, at.y);
             for (let t = 0; t < 20; t++) {
                 await page.clock.runFor(50);
+                // What the hover set off, committed by React (`committed`), as it stands now.
+                await committed(page);
                 const now = await drawn(page);
                 for (const [other, { box, animating }] of Object.entries(now)) {
                     assert.ok(!animating, `slot ${other} animates its layout`);
@@ -878,9 +673,6 @@ for (const [title, target] of [
             );
             assert.ok(await page.$(".inspect"), "the card is inspected");
         },
-        {
-            stage: "what a hover moves, and that the card it raises keeps the pointer: a sweep of every card's box as the pointer rests",
-        },
     );
 }
 
@@ -905,76 +697,6 @@ const quiet = quietViews.findIndex(
         creatures(v, "opponent").length >= 3,
 );
 assert.ok(quiet >= 0, "the blockers fixture has a quiet, crowded table");
-for (const viewport of [
-    { width: 1280, height: 800 },
-    { width: 1600, height: 900 },
-]) {
-    await check(
-        `each battlefield row is centered as near as the stack allows at ${viewport.width} wide`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            const stage = await page.locator(".stage").boundingBox();
-            const middle = stage.x + stage.width / 2;
-            // A row too long to center left of the stack's column (layout.ts ROOM, which the
-            // stack's coming and going never changes) reaches that column's edge instead,
-            // short of it by no more than the lean of its last card.
-            const scale = stage.width / 1600;
-            const roomEnd = stage.x + 1160 * scale;
-            const boxes = async (objects) =>
-                Promise.all(
-                    objects.map((o) =>
-                        page.locator(`[data-slot="${o.slot}"]`).boundingBox(),
-                    ),
-                );
-            for (const side of ["you", "opponent"]) {
-                const whose = side === "you" ? "your" : "the opponent's";
-                const row = await boxes(creatures(quietViews[quiet], side));
-                assert.ok(row.length > 0, `${whose} row is empty`);
-                const left = Math.min(...row.map((b) => b.x));
-                const right = Math.max(...row.map((b) => b.x + b.width));
-                const centered = Math.abs((left + right) / 2 - middle) <= 3;
-                const flush =
-                    (left + right) / 2 < middle &&
-                    Math.abs(right - roomEnd) <= 12 * scale;
-                assert.ok(
-                    centered || flush,
-                    `${whose} row spans ${left} to ${right}, centered on ${middle} ` +
-                        `or reaching ${roomEnd}`,
-                );
-            }
-            await assertClearOfLands(page);
-        },
-        {
-            fixture: "combat-blockers",
-            at: quiet + 1,
-            ready: `[data-slot="${creatures(quietViews[quiet], "you")[0].slot}"]`,
-            viewport,
-            stage: "where a row stands between the table's middle and the stack: a measure of the layout, which the screen audits hold only to its view and to overlap",
-        },
-    );
-}
-
-// A fixture's history reaches the log once, however often the screen starts listening (React's
-// StrictMode mounts it twice), so no turn's heading comes twice.
-await check(
-    "the log tells a fixture's history once",
-    async (page) => {
-        const turns = await page.locator(".game-log-turn").allTextContents();
-        assert.ok(turns.length > 0, "the log heads its turns");
-        assert.deepEqual(
-            turns,
-            [...new Set(turns)],
-            `each turn is headed once: ${await page.locator(".game-log").textContent()}`,
-        );
-    },
-    {
-        stage: "a history told twice is a heading twice in a list, no fault of any screen",
-        fixture: "opponent-turn",
-        at: 22,
-        ready: ".game-log-toggle",
-    },
-);
-
 // The log names what an ability did and to what: an activation its source, its loyalty cost
 // (the counters paid go unsaid) and its targets, and a trigger with targets its source and them,
 // so a mill or a bounce that follows has its cause.
@@ -1058,50 +780,6 @@ if (wanted(abilityLog)) {
         (performance.now() - started) / 1000,
     );
 }
-
-// The log rests at its newest entry, even one laid out while hidden (by an ancestor), which has
-// no size to scroll in until it shows: it would show its first turn.
-await check(
-    "the log shows its newest entry once it shows",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const list = page.locator(".game-log-list");
-        assert.ok(await list.isHidden(), "the log is hidden");
-        await page.evaluate(() => document.getElementById("hide-log").remove());
-        // Folded by default: opened, it shows.
-        await page.getByRole("button", { name: "Show log" }).click();
-        // A resize is observed as the page renders, on the real clock.
-        const scroll = () =>
-            list.evaluate((el) => [
-                el.scrollTop,
-                el.clientHeight,
-                el.scrollHeight,
-            ]);
-        let [top, height, full] = await scroll();
-        for (let i = 0; i < 30 && top + height < full - 2; i++) {
-            await page.clock.runFor(100);
-            await page.waitForTimeout(100);
-            [top, height, full] = await scroll();
-        }
-        assert.ok(full > height, "the log overflows its box");
-        assert.ok(
-            top + height >= full - 2,
-            `scrolled to ${top} of ${full - height}`,
-        );
-    },
-    {
-        ready: "[data-life]",
-        init: () => {
-            const style = document.createElement("style");
-            style.id = "hide-log";
-            style.textContent = ".game-log { display: none !important }";
-            document.addEventListener("DOMContentLoaded", () =>
-                document.head.append(style),
-            );
-        },
-        stage: "where a list is scrolled to once an ancestor that hid it shows",
-    },
-);
 
 /** Asserts that `button` takes a click anywhere along its middle, at 10, 30, 50, 70 and 90%
  * of its width, with both of the opponent's piles on the table: nothing lies over it. */
@@ -1783,82 +1461,6 @@ const defender = blockersView.objects.find(
     (o) => o.combat?.kind === "blocking",
 )?.controller;
 assert.ok(defender, "the blockers fixture has a blocker");
-// The defending side's nonland permanents.
-const standing = blockersView.objects.filter(
-    (o) =>
-        o.zone === "battlefield" &&
-        o.controller === defender &&
-        !o.types.includes("land"),
-);
-
-await check(
-    "a blocker stands across from its attacker, covering no other card",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const box = async (slot) =>
-            page.locator(`[data-slot="${slot}"]`).boundingBox();
-        for (const o of standing) {
-            if (o.combat?.kind !== "blocking") continue;
-            const mine = await box(o.slot);
-            const theirs = center(await box(o.combat.attacker));
-            const blockers = standing.filter(
-                (b) => b.combat?.attacker === o.combat.attacker,
-            ).length;
-            assert.ok(
-                Math.abs(center(mine).x - theirs.x) < 120 * blockers,
-                `${o.name} stands across from what it blocks`,
-            );
-            for (const other of standing) {
-                if (other.slot === o.slot) continue;
-                const them = await box(other.slot);
-                const overlap =
-                    Math.min(mine.x + mine.width, them.x + them.width) -
-                    Math.max(mine.x, them.x);
-                assert.ok(
-                    overlap < them.width / 2,
-                    `${o.name} covers ${other.name} by ${Math.round(overlap)} px`,
-                );
-            }
-        }
-    },
-    {
-        fixture: "combat-blockers",
-        at: blockersViews.length,
-        ready: `[data-slot="${standing[0].slot}"]`,
-        stage: "a blocker's place by its attacker's: a measure between two cards",
-    },
-);
-
-// A crowded row (five permanents a side, attackers raised over their neighbors) spreads into
-// the table's clear right rather than laying its cards over one another's numbers.
-await check(
-    "every creature on a crowded table shows its power and toughness",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const hidden = await page.evaluate(() =>
-            [...document.querySelectorAll('[data-zone="battlefield"]')]
-                .filter((el) => !el.querySelector(".card-under"))
-                .flatMap((el) => {
-                    const pt = el.querySelector(".card-pt");
-                    if (!pt) return [];
-                    const r = pt.getBoundingClientRect();
-                    const top = document
-                        .elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
-                        ?.closest("[data-slot]");
-                    return top === el ? [] : [el.dataset.card];
-                }),
-        );
-        assert.deepEqual(hidden, [], "power and toughness covered");
-        await assertClearOfLands(page);
-    },
-    {
-        fixture: "combat-blockers",
-        at: blockersViews.length,
-        ready: `[data-slot="${standing[0].slot}"]`,
-        stage: "what lies on top at each plaque: a hit test between cards, which may overlap one another",
-    },
-);
-
 // A face-down permanent a side, the human's tapped: each in a permanent's frame (the field's
 // short one, not a card back's full height), showing its 2/2, over no land.
 const faceDown = blockersView.objects.filter(
@@ -1874,55 +1476,6 @@ assert.ok(
     faceDown.some((o) => o.tapped),
     "the blockers fixture has a tapped face-down permanent",
 );
-// The face-up permanents: each row's cards share a size, and a tapped one lies on its side.
-const faceUp = blockersView.objects.filter(
-    (o) =>
-        o.zone === "battlefield" &&
-        o.facing === "up" &&
-        !o.types.includes("land"),
-);
-await check(
-    "a face-down permanent stands in a permanent's frame, a 2/2",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const el = (o) => page.locator(`.card-el[data-slot="${o.slot}"]`);
-        // Untransformed sizes, which a tapped card's turn leaves alone.
-        const size = (o) =>
-            el(o).evaluate((e) => [e.offsetWidth, e.offsetHeight]);
-        for (const o of faceDown) {
-            const row = faceUp.filter((u) => u.controller === o.controller);
-            const like = row.find((u) => u.tapped === o.tapped) ?? row[0];
-            assert.ok(like, `a face-up permanent shares ${o.slot}'s row`);
-            const [width, height] = await size(like);
-            assert.match(
-                await el(o).getAttribute("class"),
-                /card-el-field/,
-                `${o.slot} is drawn as a permanent`,
-            );
-            const [w, h] = await size(o);
-            // Turned a quarter from `like`, its footprint is `like`'s turned.
-            const [ww, hh] =
-                like.tapped === o.tapped ? [width, height] : [height, width];
-            assert.ok(
-                Math.abs(w - ww) <= 1 && Math.abs(h - hh) <= 1,
-                `${o.slot} is ${w} by ${h}, ${like.name} ${width} by ${height}`,
-            );
-            assert.equal(
-                await el(o).locator(".card-pt").textContent(),
-                "2/2",
-                `${o.slot} shows its power and toughness`,
-            );
-        }
-        await assertClearOfLands(page);
-    },
-    {
-        fixture: "combat-blockers",
-        at: blockersViews.length,
-        ready: `[data-slot="${faceDown[0].slot}"]`,
-        stage: "a face-down card's frame beside a face-up one's of its row: a comparison of sizes",
-    },
-);
-
 // A table with tapped and untapped lands and creatures, and a card Portable Hole exiled.
 const beneathViews = await load("exiled-beneath");
 const beneathView = beneathViews.at(-1);
@@ -1989,94 +1542,6 @@ await check(
     beneathRun,
 );
 
-await check(
-    "a card exiled by a permanent peeks out from beneath it, previewed on hover",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const under = page.locator(`[data-slot="${exiled.slot}"]`);
-        const host = page.locator(`[data-slot="${exiled.exiledBy}"]`);
-        const [mine, theirs] = [
-            await under.boundingBox(),
-            await host.boundingBox(),
-        ];
-        assert.ok(
-            mine.x < theirs.x && mine.y > theirs.y,
-            `${exiled.name} peeks out down and to the left of what exiled it`,
-        );
-        const z = (l) => l.evaluate((e) => Number(getComputedStyle(e).zIndex));
-        assert.ok((await z(under)) < (await z(host)), "it lies beneath");
-        // Its peeking strip, left of what exiled it.
-        const at = { x: (mine.x + theirs.x) / 2, y: mine.y + mine.height / 2 };
-        assert.equal(
-            await page.evaluate(
-                ({ x, y }) =>
-                    document.elementFromPoint(x, y)?.closest("[data-slot]")
-                        ?.dataset.slot,
-                at,
-            ),
-            String(exiled.slot),
-            "its strip shows",
-        );
-        await page.mouse.move(at.x, at.y);
-        await page.waitForSelector(
-            `.inspect[aria-label="${exiled.name}, inspected"]`,
-        );
-    },
-    {
-        ...beneathRun,
-        stage: "where a tucked card peeks out, that its strip takes the pointer, and what hovering it shows",
-    },
-);
-
-// The first slot is a valid exile host, just like any other battlefield slot.
-{
-    const fixture = JSON.parse(
-        await readFile(join(fixtures, "exiled-beneath.json"), "utf8"),
-    );
-    const last = fixture.messages.findLast((m) => m.kind === "event");
-    const host = exiled.exiledBy;
-    const swap = (slot) => (slot === host ? 0 : slot === 0 ? host : slot);
-    last.payload.view = {
-        ...beneathView,
-        battlefield: beneathView.battlefield.map(swap),
-        objects: beneathView.objects.map((o) => ({
-            ...o,
-            slot: swap(o.slot),
-            exiledBy: swap(o.exiledBy),
-        })),
-    };
-    // On the stage the click is the open prompt's first, which has no use for it.
-    const asked = last.payload.view.status.decision;
-    if (asked) {
-        fixture.messages.unshift({
-            kind: "response",
-            command: "click",
-            value: SAME(asked),
-        });
-    }
-    await writeFixture("exiled-beneath-first", fixture);
-}
-
-await check(
-    "a card exiled by the first slot stays under its host",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const host = await page.locator('[data-slot="0"]').boundingBox();
-        const under = await page.locator(beneathRun.ready).boundingBox();
-        assert.ok(under.x < host.x && under.x + under.width > host.x);
-        const at = { x: (under.x + host.x) / 2, y: under.y + under.height / 2 };
-        await page.mouse.click(at.x, at.y);
-        await page
-            .locator(`.zone-viewer [data-viewer-slot="${exiled.slot}"]`)
-            .waitFor();
-    },
-    {
-        ...beneathRun,
-        fixture: "exiled-beneath-first",
-        stage: "what a click on a card tucked under its host opens: a viewer no screen at rest shows",
-    },
-);
-
 // The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
 // fixture attaches across the table): an Aura one player controls on a permanent the other does.
 const attachedView = (await load("attached-across")).at(-1);
@@ -2088,69 +1553,6 @@ const aura = attachedView.objects.find(
         attachedBySlot.get(o.attachedTo)?.controller !== o.controller,
 );
 assert.ok(aura, "the attached-across fixture attaches across the table");
-const auraHost = attachedBySlot.get(aura.attachedTo);
-
-await check(
-    "an attachment is drawn behind its host, linked on hover",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const mine = page.locator(`[data-slot="${aura.slot}"]`);
-        const host = page.locator(`[data-slot="${auraHost.slot}"]`);
-        const [a, h] = [await mine.boundingBox(), await host.boundingBox()];
-        // Their boxes overlap or touch, in the host's row rather than its controller's.
-        assert.ok(
-            a.x <= h.x + h.width &&
-                h.x <= a.x + a.width &&
-                a.y <= h.y + h.height &&
-                h.y <= a.y + a.height,
-            `${aura.name} touches ${auraHost.name}`,
-        );
-        assert.ok(
-            Math.abs(center(a).y - center(h).y) < h.height / 2,
-            `${aura.name} lies in ${auraHost.name}'s row`,
-        );
-        const z = (l) => l.evaluate((e) => Number(getComputedStyle(e).zIndex));
-        assert.ok((await z(mine)) < (await z(host)), "it lies behind");
-        // Its name bar, above the host's top edge.
-        const strip = { x: a.x + a.width * 0.4, y: (a.y + h.y) / 2 };
-        assert.equal(
-            await page.evaluate(
-                ({ x, y }) =>
-                    document.elementFromPoint(x, y)?.closest("[data-slot]")
-                        ?.dataset.slot,
-                strip,
-            ),
-            String(aura.slot),
-            "its name bar shows above its host",
-        );
-        // Hovering either rings the other.
-        await page.mouse.move(strip.x, strip.y);
-        await host.locator(".card-linked").waitFor();
-        await page.mouse.move(center(h).x, h.y + h.height * 0.75);
-        await mine.locator(".card-linked").waitFor();
-        // The host's inspector shows its types now and what is attached to it.
-        const inspect = page.locator(
-            `.inspect[aria-label="${auraHost.name}, inspected"]`,
-        );
-        await inspect.locator(`[data-attached="${aura.slot}"]`).waitFor();
-        const types = (await inspect.locator(".inspect-types").innerText())
-            .toLowerCase()
-            .split(/\s+/);
-        for (const t of auraHost.types) {
-            assert.ok(
-                types.includes(t),
-                `the inspector shows ${t} in ${types}`,
-            );
-        }
-    },
-    {
-        fixture: "attached-across",
-        at: (await load("attached-across")).length,
-        ready: `[data-slot="${aura.slot}"]`,
-        stage: "a ring only the pointer brings up, and which card lies over which where two overlap",
-    },
-);
-
 // A permanent with more than one ability (a planeswalker's loyalty abilities) opens the ability
 // chooser, each a button, beside those it cannot use now (Teferi's −8), disabled.
 const uses = new Map();
@@ -2535,55 +1937,6 @@ const timingView = timingViews[0];
 const timingCard = (name) =>
     `[data-slot="${timingView.objects.find((o) => o.name === name).slot}"]`;
 
-await replied("teferi-timing-refused", "teferi-timing", [
-    SAME(timingView.status.decision),
-]);
-await check(
-    "Teferi's timing refusal appears briefly beside its source",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const source = page.locator(timingCard("Teferi, Time Raveler"));
-        const notice = page.locator(".timing-refusal");
-        await page.click(timingCard("Thundertrap Trainer"));
-        assert.equal(await notice.count(), 0, "ordinary timing has no source");
-        await page.click(timingCard("Thirst for Discovery"));
-        await notice.waitFor();
-        await page.clock.runFor(500);
-        assert.equal(await notice.textContent(), "Sorcery speed only");
-        const at = await notice.boundingBox();
-        const teferi = await source.boundingBox();
-        assert.ok(
-            Math.abs(center(at).x - center(teferi).x) < 3,
-            "the notice is centered on the opposing source",
-        );
-        const gap = at.y - (teferi.y + teferi.height);
-        assert.ok(
-            gap >= -1 && gap < 12,
-            `the notice is just below the source: ${gap}`,
-        );
-        assert.ok(
-            Number(await notice.evaluate((e) => getComputedStyle(e).opacity)) >
-                0.9,
-        );
-        await page.mouse.move(800, 380);
-        assert.equal(await notice.count(), 1, "feedback outlasts hover");
-        await page.clock.runFor(2000);
-        await notice.waitFor({ state: "detached" });
-        assert.deepEqual(
-            await chosen(page),
-            [],
-            "the rejected click sends no action",
-        );
-    },
-    {
-        fixture: "teferi-timing-refused",
-        at: 1,
-        ready: timingCard("Thirst for Discovery"),
-        reducedMotion: "reduce",
-        stage: "a word a refused click brings up for a moment, and where it stands by the permanent that forbids",
-    },
-);
-
 const mainWithTeferi = timingViews.findIndex((view) =>
     view.status.decision?.candidates.some(
         (c) => c.label === "Cast Thirst for Discovery",
@@ -2967,258 +2320,6 @@ const pileRun = {
     at: pilesAt + 1,
     ready: pile("you", "graveyard"),
 };
-await derive("choice-scry", "known-library", pilesAt, (v) => ({
-    ...v,
-    objects: v.objects.map((o) =>
-        o.zone === "library"
-            ? {
-                  ...o,
-                  name:
-                      o.slot === v.players[o.owner].library.at(-2)
-                          ? "Jace, Vryn's Prodigy"
-                          : null,
-              }
-            : o,
-    ),
-}));
-await check(
-    "known library browser never reveals unknown cards",
-    async (page) => {
-        await page.clock.runFor(2000);
-        for (const side of ["you", "opponent"]) {
-            await page
-                .locator(`button[data-pile="library"][data-side="${side}"]`)
-                .click();
-            await page.clock.runFor(1000);
-            const dialog = page.getByRole("dialog");
-            assert.match(await dialog.innerText(), /Known cards/);
-            assert.equal(await dialog.locator(".zone-viewer-card").count(), 1);
-            assert.match(await dialog.innerText(), /Jace/);
-            await dialog
-                .getByRole("button", { name: "Close", exact: true })
-                .click();
-            await page.clock.runFor(1000);
-        }
-    },
-    {
-        stage: "which cards a viewer lists, of those its player knows",
-        ...pileRun,
-        fixture: "known-library",
-        at: 1,
-    },
-);
-
-const overlaps = (a, b) =>
-    a.x < b.x + b.width &&
-    b.x < a.x + a.width &&
-    a.y < b.y + b.height &&
-    b.y < a.y + a.height;
-
-for (const viewport of [
-    { width: 1600, height: 900 },
-    { width: 1280, height: 800 },
-]) {
-    await check(
-        `your graveyard and exile lie clear of the hand at ${viewport.width}`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            const hand = await page.locator(".card-el-hand").all();
-            assert.ok(hand.length >= 6, "the hand fans out as far as it goes");
-            for (const zone of ["graveyard", "exile"]) {
-                const box = await page.locator(pile("you", zone)).boundingBox();
-                for (const card of hand) {
-                    const name = await card.getAttribute("data-card");
-                    assert.ok(
-                        !overlaps(box, await card.boundingBox()),
-                        `${name} covers your ${zone}`,
-                    );
-                }
-            }
-        },
-        {
-            stage: "a pile against the hand's fan: cards against cards, which the audit of controls leaves alone",
-            ...pileRun,
-            viewport,
-        },
-    );
-}
-
-// Six other permanents a side, the opponent's back row reaching under their piles' corner, and
-// thick piles on both sides (by-lomm): no layer of any library, graveyard or exile pile lies
-// over a permanent, at the reported window and at narrower and wider ones. Cards lean by
-// skewing sideways only, so their boxes' heights are their own.
-const pilesCrowded = await load("piles-crowded");
-for (const viewport of [
-    { width: 1728, height: 963 },
-    { width: 1600, height: 900 },
-    { width: 1280, height: 800 },
-    { width: 2134, height: 900 },
-]) {
-    await check(
-        `the piles lie clear of every permanent at ${viewport.width}×${viewport.height}`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            const { piles, field } = await page.evaluate(() => {
-                const boxes = (selector) =>
-                    [...document.querySelectorAll(selector)]
-                        .filter((e) => {
-                            const s = getComputedStyle(e);
-                            return (
-                                s.visibility !== "hidden" &&
-                                Number(s.opacity) > 0
-                            );
-                        })
-                        .map((e) => {
-                            const r = e.getBoundingClientRect();
-                            return {
-                                name: `${e.dataset.card ?? "a back"} (${e.dataset.zone})`,
-                                x: r.x,
-                                y: r.y,
-                                right: r.right,
-                                bottom: r.bottom,
-                            };
-                        });
-                return {
-                    piles: boxes(
-                        ".card-layer > .card-el:is([data-zone=library], [data-zone=graveyard], [data-zone=exile])",
-                    ),
-                    field: boxes(
-                        ".card-layer > .card-el[data-zone=battlefield]",
-                    ),
-                };
-            });
-            for (const zone of ["library", "graveyard", "exile"]) {
-                assert.ok(
-                    piles.filter((p) => p.name.endsWith(`(${zone})`)).length >=
-                        6,
-                    `both ${zone} piles are thick`,
-                );
-            }
-            assert.ok(field.length >= 20, "both sides' permanents are drawn");
-            for (const p of piles) {
-                for (const b of field) {
-                    const across =
-                        Math.min(p.right, b.right) - Math.max(p.x, b.x);
-                    const down =
-                        Math.min(p.bottom, b.bottom) - Math.max(p.y, b.y);
-                    assert.ok(
-                        across <= 0.5 || down <= 0.5,
-                        `${p.name} covers ${b.name} by ${across.toFixed(1)} × ${down.toFixed(1)} px`,
-                    );
-                }
-            }
-        },
-        {
-            fixture: "piles-crowded",
-            at: pilesCrowded.length,
-            ready: "[data-pile=exile][data-side=opponent]",
-            viewport,
-            stage: "every layer of a pile against every permanent, at four windows: cards against cards",
-        },
-    );
-}
-
-/** The names of the cards a pile in the piles' view holds. */
-function pileNames(side, zone) {
-    const slots =
-        zone === "graveyard"
-            ? pilesView.players[side].graveyard
-            : exiledFrom(pilesView, side).map((o) => o.slot);
-    return slots.map(
-        (slot) => pilesView.objects.find((o) => o.slot === slot).name,
-    );
-}
-
-await check(
-    "a pile opens a viewer listing each of its cards, which closes",
-    async (page) => {
-        await page.clock.runFor(2000);
-        // A pile is not pointed at card by card: hovering it shows no card whole.
-        await page.hover(pile("you", "graveyard"));
-        await page.clock.runFor(500);
-        assert.equal(await page.$(".inspect"), null, "a pile card is hovered");
-        const close = [
-            (p) => p.keyboard.press("Escape"),
-            (p) => p.getByRole("button", { name: "Close" }).click(),
-            (p) => p.mouse.click(20, 450),
-        ];
-        const piles = [
-            ["you", "graveyard"],
-            ["opponent", "graveyard"],
-            ["opponent", "exile"],
-        ];
-        for (const [i, [side, zone]] of piles.entries()) {
-            const names = pileNames(side, zone);
-            assert.ok(names.length > 0, `the ${side}'s ${zone} has cards`);
-            await page.click(pile(side, zone));
-            const viewer = `.zone-viewer${pile(side, zone)}`;
-            await page.waitForSelector(viewer);
-            const listed = await page.$$eval(
-                `${viewer} [data-viewer-slot]`,
-                (cards) => cards.map((c) => c.dataset.card),
-            );
-            assert.deepEqual(
-                [...listed].sort(),
-                [...names].sort(),
-                `the ${side}'s ${zone} lists each of its cards`,
-            );
-            const slots = await page.$$eval(
-                `${viewer} [data-viewer-slot]`,
-                (cards) => cards.map((c) => c.dataset.viewerSlot),
-            );
-            for (const slot of slots) {
-                const original = page.locator(
-                    `.card-layer > [data-slot="${slot}"]`,
-                );
-                assert.equal(await original.count(), 1);
-                assert.equal(
-                    await original.isVisible(),
-                    false,
-                    "the browser owns the card",
-                );
-            }
-            // Once the flight has arrived, each card shows whole on hover.
-            await page.clock.runFor(500);
-            await page.hover(`${viewer} [data-card="${listed[0]}"]`);
-            await page
-                .getByLabel(`${listed[0]}, inspected`)
-                .waitFor({ state: "visible" });
-            await close[i](page);
-            await untilGone(page, viewer, 2000);
-            for (const slot of slots) {
-                assert.equal(
-                    await page
-                        .locator(`.card-layer > [data-slot="${slot}"]`)
-                        .isVisible(),
-                    true,
-                    "the table takes the original back",
-                );
-            }
-        }
-        assert.deepEqual(await chosen(page), [], "browsing answers nothing");
-    },
-    {
-        ...pileRun,
-        stage: "a viewer's list against its pile, and each way to close it",
-    },
-);
-
-await check(
-    "an empty known library opens without revealing cards",
-    async (page) => {
-        await page.locator(`button${pile("you", "library")}`).click();
-        const dialog = page.getByRole("dialog", { name: /Known cards/ });
-        assert.match(await dialog.innerText(), /Nothing here/);
-        assert.equal(await dialog.locator("[data-viewer-slot]").count(), 0);
-        await dialog.getByRole("button", { name: "Close" }).click();
-    },
-    {
-        stage: "what a viewer says of a pile with nothing known in it",
-        ...pileRun,
-        reducedMotion: "reduce",
-    },
-);
-
 // The production recorder must catch deliberate duplicates in viewer and
 // prompt markup, even when the borrowed face has no name.
 await check(
@@ -3438,86 +2539,6 @@ for (const { viewport, reducedMotion } of motionConfigs) {
     );
 }
 
-// A full row and a scrolling row both borrow from the same live pile. Use distinct slots
-// even where the fixture repeats the same printing.
-for (const count of [1, 10, 11]) {
-    const fixture = `graveyard-${count}`;
-    await derive("choice-scry", fixture, pilesAt, (view) => {
-        const you = view.players.you;
-        const top = view.objects.find((o) => o.slot === you.graveyard.at(-1));
-        const first = Math.max(...view.objects.map((o) => o.slot)) + 1;
-        const cards = Array.from({ length: count }, (_, i) => ({
-            ...top,
-            slot: first + i,
-        }));
-        return {
-            ...view,
-            objects: [
-                ...view.objects.filter((o) => !you.graveyard.includes(o.slot)),
-                ...cards,
-            ],
-            players: {
-                ...view.players,
-                you: { ...you, graveyard: cards.map((o) => o.slot) },
-            },
-        };
-    });
-    await check(
-        `a ${count}-card graveyard opens with the table cards borrowed`,
-        async (page) => {
-            const button = page.locator(`button${pile("you", "graveyard")}`);
-            await page.clock.runFor(1000);
-            const layers = await page
-                .locator('.card-layer > [data-zone="graveyard"].card-el-you')
-                .evaluateAll((cards) =>
-                    cards.map((card) => ({
-                        slot: Number(card.dataset.slot),
-                        top: card.getBoundingClientRect().top,
-                        z: Number(getComputedStyle(card).zIndex),
-                    })),
-                );
-            assert.equal(layers.length, count);
-            const ordered = layers.sort((a, b) => b.slot - a.slot);
-            assert.ok(
-                ordered.every(
-                    (layer, i) =>
-                        i === 0 ||
-                        (layer.top < ordered[i - 1].top &&
-                            layer.z < ordered[i - 1].z),
-                ),
-                "deeper cards fan behind the top card in distinct layers",
-            );
-            await button.click();
-            const dialog = page.getByRole("dialog", { name: "Your graveyard" });
-            const listed = dialog.locator("[data-viewer-slot]");
-            assert.equal(await listed.count(), count);
-            const slot = await listed.last().getAttribute("data-viewer-slot");
-            const original = page.locator(
-                `.card-layer > [data-slot="${slot}"]`,
-            );
-            assert.equal(await original.isVisible(), false);
-            if (count === 11) {
-                await page.clock.runFor(500);
-                await listed.last().scrollIntoViewIfNeeded();
-                const within = await listed.last().evaluate((card) => {
-                    const list = card.parentElement.getBoundingClientRect();
-                    const box = card.getBoundingClientRect();
-                    return box.bottom <= list.bottom;
-                });
-                assert.ok(within, "the last card scrolls into view");
-            }
-            await dialog.getByRole("button", { name: "Close" }).click();
-            assert.equal(await original.isVisible(), true);
-        },
-        {
-            stage: "a deep pile's fan, and its viewer scrolled to its last card",
-            ...pileRun,
-            fixture,
-            viewport: { width: 1180, height: 820 },
-        },
-    );
-}
-
 const jace = await lastDecision("choice-jace");
 const [first, second] = [...jace.bySlot.keys()];
 const fatesealFixture = "choice-jace-fateseal";
@@ -3619,9 +2640,6 @@ await check(
 // Mana Tithe asks the human to pay {1} on the board, the table in view: the land the payment
 // would tap glows on hover; the prompt answers from its buttons.
 const pay = await lastDecision("choice-pay");
-const decline = pay.decision.candidates.findIndex(
-    (c) => c.option.kind === "no",
-);
 const payTaps = pay.decision.candidates.find((c) => c.option.kind === "yes")
     .payments[0].taps;
 assert.equal(payTaps.length, 1, "one land pays {1}");
@@ -3633,41 +2651,6 @@ const suggested = (page) =>
             .map((mark) => Number(mark.parentElement.dataset.slot))
             .sort(),
     );
-await replied("choice-pay-click", "choice-pay", [ANSWERED]);
-await check(
-    "a pay-or-counter prompt lights the land that would pay",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const shown = STAGED ? suggested : lit;
-        assert.equal(await page.$(".choice"), null, "no overlay opens");
-        assert.equal(await page.$(".table-dimmed"), null, "the table shows");
-        assert.deepEqual(await shown(page), []);
-        await page.getByRole("button", { name: /^Pay/ }).hover();
-        await committed(page);
-        assert.deepEqual(await shown(page), payTaps, "the paying land glows");
-        await page.mouse.move(2, 2);
-        await committed(page);
-        assert.deepEqual(await shown(page), [], "and no longer once it leaves");
-        await page.getByRole("button", { name: "Decline" }).click();
-        if (STAGED) {
-            const { id } = pay.decision.prompt.buttons.find(
-                (button) => button.label === "Decline",
-            );
-            assert.deepEqual(await clicked(page, 1), [
-                { kind: "button", button: id },
-            ]);
-        } else {
-            assert.deepEqual(await settled(page, 1), [decline]);
-        }
-    },
-    {
-        fixture: "choice-pay-click",
-        at: pay.views.length,
-        ready: STAGED ? ".stage-prompt" : ".prompt",
-        stage: "what the pointer over a button lights on the table, and puts out as it leaves",
-    },
-);
-
 await check(
     "View Battlefield puts the overlay aside until asked back",
     async (page) => {
@@ -3729,38 +2712,6 @@ const ravelerActs = lowView.status.decision.candidates.flatMap((c, i) =>
     c.option.kind === "activate" && c.option.slot === raveler ? [i] : [],
 );
 assert.equal(ravelerActs.length, 1, "Teferi offers its +1 alone");
-for (const phone of [false, true]) {
-    await check(
-        `the loyalty badge centers the number in the shield on ${phone ? "phone" : "desktop"}`,
-        async (page) => {
-            const badge = page.locator(
-                `[data-slot="${raveler}"] .card-loyalty`,
-            );
-            const numberCenter = await badge.evaluate((e) => {
-                const shield = e
-                    .querySelector(".card-loyalty-glyph")
-                    .getBoundingClientRect();
-                const number = e.querySelector("b").getBoundingClientRect();
-                return (
-                    (number.top + number.height / 2 - shield.top) /
-                    shield.height
-                );
-            });
-            assert.ok(
-                numberCenter >= 0.54 && numberCenter <= 0.64,
-                `the number sits in the body below the shield's top notch: ${numberCenter}`,
-            );
-        },
-        {
-            fixture: "walker-low",
-            at: lowViews.length,
-            ready: ".card-loyalty",
-            phone,
-            viewport: phone ? { width: 390, height: 844 } : undefined,
-            stage: "where a number sits in its glyph: a proportion inside one mark",
-        },
-    );
-}
 await check(
     "a planeswalker's click opens its chooser, unaffordable abilities disabled",
     async (page) => {
@@ -3805,44 +2756,6 @@ assert.deepEqual(
     { kind: "target" },
     "the view refuses Counterspell for want of a target",
 );
-await replied("menu-refused", "menu-choices", [SAME(menus.decision)]);
-await check(
-    "clicking a refused card shows why in the inspector",
-    async (page) => {
-        await page.clock.runFor(3000);
-        const counterspell = `[data-slot="${refusedCard.slot}"]`;
-        const inspect = page.locator(".inspect");
-        await page.hover(counterspell);
-        await page.getByLabel("Counterspell, inspected").waitFor();
-        assert.equal(
-            await inspect.locator(".inspect-refusal").count(),
-            0,
-            "hovering alone says nothing",
-        );
-        await page.click(counterspell);
-        assert.equal(
-            await inspect.locator(".inspect-refusal").innerText(),
-            "No target",
-        );
-        assert.equal((await cues(page)).at(-1), "no", "a refusal sounds no");
-        await page.hover(".turn-action");
-        await page.clock.runFor(500);
-        await page.hover(counterspell);
-        await page.getByLabel("Counterspell, inspected").waitFor();
-        assert.equal(
-            await inspect.locator(".inspect-refusal").count(),
-            0,
-            "the reason goes once the pointer leaves",
-        );
-    },
-    {
-        fixture: "menu-refused",
-        at: menus.views.length,
-        ready: ".turn-action",
-        stage: "what the inspector says after a refused click, and its sound: a state a click enters and the pointer leaves",
-    },
-);
-
 // A target prompt with two cards of one name (by-isv.8): `namesake-target` stops on a
 // target for Teferi, Hero of Dominaria with a Snapcaster Mage on each side. The prompt lists
 // neither; each glows on the table, on its side, and clicking one there picks it.
@@ -7039,9 +5952,8 @@ if (wanted(staffChain)) {
     );
 }
 
-// `marks` and `marks-damage` end on boards where a permanent bearing one mark and no other
-// stands beside a twin of the same name bearing none: +1/+1 counters, summoning sickness and
-// story or time counters in one, damage in the other.
+// `marks-damage` ends on a board where a permanent bearing damage and no other mark stands
+// beside a twin of the same name bearing none (kept-table.mjs reads `marks`, its +1/+1 counters).
 {
     const counted = (kinds) => (o) =>
         o.counters.some((c) => kinds.includes(c.kind));
@@ -7052,7 +5964,7 @@ if (wanted(staffChain)) {
         (o) => creature(o) && o.summoningSick,
         counted(["story", "time"]),
     ];
-    const [plusOne, damaged] = MARKS;
+    const [, damaged] = MARKS;
     /** A permanent bearing `mark` alone in fixture `views`' last view, and a bare twin. */
     const pair = (views, mark) => {
         const field = views
@@ -7075,7 +5987,6 @@ if (wanted(staffChain)) {
         assert.fail("the fixture has a marked permanent beside a bare twin");
     };
     const el = (page, o) => page.locator(`.card-el[data-slot="${o.slot}"]`);
-    const marks = await load("marks");
     const hurt = await load("marks-damage");
     await check(
         "marks: damage lowers the toughness drawn, in red",
@@ -7110,30 +6021,6 @@ if (wanted(staffChain)) {
         },
         { fixture: "marks-damage", at: hurt.length, ready: ".card-pt" },
     );
-    await check(
-        "marks: a countered creature's inspector shows its current P/T",
-        async (page) => {
-            await page.clock.runFor(2000);
-            const [o] = pair(marks, plusOne);
-            await page.hover(`.card-el[data-slot="${o.slot}"]`);
-            const pt = page.locator(".inspect .inspect-pt");
-            await pt.waitFor();
-            const text = await pt.textContent();
-            assert.ok(
-                text.endsWith(`${o.pt.power}/${o.pt.toughness}`),
-                `${o.name}'s inspector reads ${text}`,
-            );
-            await page
-                .locator(".inspect .inspect-marks .mark-plusOne")
-                .waitFor();
-        },
-        {
-            stage: "what the inspector says of the card under the pointer",
-            fixture: "marks",
-            at: marks.length,
-            ready: ".card-counters",
-        },
-    );
 }
 
 // A card the opponent's Elite Spellbinder exiled from the human's hand, which they may cast from
@@ -7149,42 +6036,11 @@ const exileCast = exileView.status.decision.candidates.findIndex(
 );
 assert.ok(exileCast >= 0, "exile-cast offers a cast from exile");
 const exiledSlot = exileView.status.decision.candidates[exileCast].option.slot;
-const yourExile = '[data-pile="exile"][data-side="you"]';
 const exileRun = {
     fixture: "exile-cast",
     at: exileViews.length,
     ready: `${slotOf(exiledSlot)}.card-el-hand`,
 };
-
-await replied("exile-cast-click", "exile-cast", [ANSWERED]);
-await check(
-    "a card castable from exile waits in the hand fan and is cast from there",
-    async (page) => {
-        await page.clock.runFor(2000);
-        assert.ok(
-            await page.$(`${slotOf(exiledSlot)} .card-elsewhere`),
-            "it is outlined apart from the hand's own cards",
-        );
-        assert.equal(await page.$(yourExile), null, "its exile pile is gone");
-        await page.click(slotOf(exiledSlot));
-        // With nothing to choose, the pick casts it at once: the session's to say on the
-        // stage, which sends it the click.
-        if (STAGED) {
-            assert.deepEqual(await clicked(page, 1), [ON(exiledSlot)]);
-        } else {
-            assert.deepEqual(
-                await chosen(page),
-                [exileCast],
-                `chose "${exileView.status.decision.candidates[exileCast].label}"`,
-            );
-        }
-    },
-    {
-        ...exileRun,
-        fixture: "exile-cast-click",
-        stage: "the outline of a card the hand holds from another zone, whose pile is gone: a look and an absence no audit reads",
-    },
-);
 
 const theirHand = exileView.objects.filter(
     (o) => o.zone === "hand" && o.owner === "opponent",
@@ -7194,30 +6050,6 @@ assert.ok(knownCard, "exile-cast: the human knows a card in their hand");
 assert.ok(
     theirHand.some((o) => o.name === null),
     "exile-cast: the opponent holds a card the human does not know",
-);
-
-await check(
-    "a card you know in the opponent's hand lies face up",
-    async (page) => {
-        await page.clock.runFor(2000);
-        for (const o of theirHand) {
-            const back = await page.$(`${slotOf(o.slot)} .card-back`);
-            assert.equal(
-                !back,
-                o.name !== null,
-                `slot ${o.slot} (${o.name ?? "unknown"}) is ` +
-                    (back ? "a back" : "face up"),
-            );
-        }
-        // It peeks in from the top edge; hovering what shows of it shows it whole.
-        const box = await page.locator(slotOf(knownCard.slot)).boundingBox();
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height - 12);
-        await page.getByLabel(`${knownCard.name}, inspected`).waitFor();
-    },
-    {
-        ...exileRun,
-        stage: "which of the opponent's cards the viewer knows: the screen audits read the viewer's own hand alone",
-    },
 );
 
 // Tokens, piles of identical permanents and stolen permanents: the `tokens` fixture holds two
@@ -7258,38 +6090,6 @@ const tokenRun = {
 };
 
 await check(
-    "tokens wear their frame and stolen permanents their edge",
-    async (page) => {
-        await page.clock.runFor(2000);
-        for (const o of tokenField) {
-            if (o.types.includes("land")) continue;
-            const marks = await page
-                .locator(`${slotOf(o.slot)} .card`)
-                .evaluate((e) => [
-                    e.classList.contains("card-token"),
-                    !!e.querySelector(".card-stolen-edge"),
-                ]);
-            assert.deepEqual(
-                marks,
-                [o.token, o.owner !== o.controller],
-                `${o.name} in slot ${o.slot}: [token, stolen]`,
-            );
-        }
-        // The inspector names the owner.
-        const thief = stolen[0];
-        await page.hover(slotOf(thief.slot));
-        await page
-            .getByLabel(`${thief.name}, inspected`)
-            .getByText(`Owner: ${thief.owner === "you" ? "You" : "Opponent"}`)
-            .waitFor();
-    },
-    {
-        ...tokenRun,
-        stage: "a frame and an edge against who made and who owns each permanent, which the screen audits do not read",
-    },
-);
-
-await check(
     "clicking a pile's top card acts on the one the engine offers",
     async (page) => {
         await page.clock.runFor(2000);
@@ -7327,434 +6127,8 @@ await check(
     tokenRun,
 );
 
-await check(
-    "a pile splits on any difference, and on a target",
-    async (page) => {
-        // The board's layout of variants of the fixture's view, by the page's own module.
-        const counts = await page.evaluate(
-            async ({ view, map }) => {
-                const { layout } = await import("/src/game/layout.ts");
-                const { zonePiles } = await import("/src/game/zoneViews.ts");
-                const order = new Map();
-                const borrowed = new Set();
-                // Each card of the pile of `map`'s copies that wears a count, with the count.
-                const counted = (v) =>
-                    [
-                        ...layout(
-                            v,
-                            "held",
-                            false,
-                            {},
-                            order,
-                            borrowed,
-                            zonePiles(v, order),
-                            [],
-                        ).values(),
-                    ]
-                        .filter((p) => p.count !== undefined)
-                        .filter((p) =>
-                            v.objects.some(
-                                (o) => o.slot === p.slot && o.name === map.name,
-                            ),
-                        )
-                        .map((p) => p.count);
-                const vary = (change) => {
-                    const v = structuredClone(view);
-                    const copy = { ...structuredClone(map), slot: 250 };
-                    v.objects.push(copy);
-                    v.battlefield.push(copy.slot);
-                    change(
-                        v,
-                        v.objects.find((o) => o.slot === copy.slot),
-                    );
-                    return counted(v);
-                };
-                const aura = view.objects.find(
-                    (o) => o.zone === "battlefield" && o.attachedTo !== null,
-                ).slot;
-                return {
-                    fixture: counted(view),
-                    third: vary(() => {}),
-                    types: vary((_, o) => o.types.push("creature")),
-                    owner: vary((_, o) => (o.owner = "opponent")),
-                    tapped: vary((_, o) => (o.tapped = true)),
-                    enchanted: vary((v, o) => {
-                        v.objects.find((a) => a.slot === aura).attachedTo =
-                            o.slot;
-                    }),
-                    targeted: vary((v, o) =>
-                        v.stack.push({
-                            kind: "ability",
-                            source: null,
-                            ability: 0,
-                            granted: false,
-                            name: "Test",
-                            triggered: true,
-                            nth: 0,
-                            controller: "opponent",
-                            targets: [{ kind: "object", slot: o.slot }],
-                            x: 0,
-                        }),
-                    ),
-                };
-            },
-            { view: tokenView, map: offeredToken },
-        );
-        assert.deepEqual(counts, {
-            fixture: [2],
-            third: [3],
-            types: [2],
-            owner: [2],
-            tapped: [2],
-            enchanted: [2],
-            targeted: [2],
-        });
-    },
-    {
-        ...tokenRun,
-        stage: "how the layout groups copies, over views written for each difference",
-    },
-);
-
-// Every object an open decision offers something for has an element a player can see and point
-// at: the card on the table or in a choice's tray, a twin the engine offers it through, or the
-// button of the pile it lies in. Every exiled card can be seen the same way, if not pointed at
-// under a screen over the table. Checked at the last decision of every fixture, with motion
-// reduced so that nothing is caught halfway through fading in.
-for (const fixture of recorded) {
-    const fixtureViews = await load(fixture);
-    const last = fixtureViews.findLastIndex(
-        (v) => v.status.kind === "deciding",
-    );
-    if (last < 0) continue;
-    const view = fixtureViews[last];
-    const byId = new Map(view.objects.map((o) => [o.slot, o]));
-    const describe = (slot, why) =>
-        `slot ${slot} (${byId.get(slot)?.name ?? "unknown"}, ${why})`;
-    const wanted = [];
-    for (const c of view.status.decision.candidates) {
-        const slot = offeredSlot(c.option);
-        if (slot === undefined) continue;
-        const o = byId.get(slot);
-        const twinSlots = o
-            ? view.objects.filter((t) => twins(o, t)).map((t) => t.slot)
-            : [];
-        wanted.push({
-            what: describe(slot, `${c.option.kind} "${c.label}"`),
-            slots: [slot, ...twinSlots],
-            point: true,
-        });
-    }
-    for (const o of view.objects) {
-        if (o.zone === "exile") {
-            wanted.push({
-                what: describe(o.slot, "exiled"),
-                slots: [o.slot],
-                point: false,
-            });
-        }
-    }
-    const owners = Object.fromEntries(
-        view.objects.map((o) => [o.slot, o.owner]),
-    );
-    await check(
-        `${fixture}: what the decision offers and what is exiled can be seen`,
-        async (page) => {
-            await page.clock.runFor(5000);
-            const look = () =>
-                page.evaluate(
-                    ({ wanted, owners }) => {
-                        const seen = (el, point) => {
-                            for (let e = el; e; e = e.parentElement) {
-                                const style = getComputedStyle(e);
-                                if (Number(style.opacity) < 0.5) return false;
-                                if (style.visibility === "hidden") return false;
-                            }
-                            const r = el.getBoundingClientRect();
-                            if (r.width < 1 || r.height < 1) return false;
-                            // Some part of it lies on the screen, and, to be pointed at, is the
-                            // topmost thing there.
-                            for (let i = 1; i < 10; i++) {
-                                for (let j = 1; j < 10; j++) {
-                                    const x = r.left + (r.width * i) / 10;
-                                    const y = r.top + (r.height * j) / 10;
-                                    if (x < 0 || y < 0) continue;
-                                    if (x >= innerWidth || y >= innerHeight)
-                                        continue;
-                                    if (!point) return true;
-                                    const hit = document.elementFromPoint(x, y);
-                                    if (hit && el.contains(hit)) return true;
-                                }
-                            }
-                            return false;
-                        };
-                        const shown = (slot, point) =>
-                            [
-                                ...document.querySelectorAll(
-                                    `[data-slot="${slot}"]`,
-                                ),
-                            ].some((el) => {
-                                if (!el.classList.contains("card-el-pile")) {
-                                    return seen(el, point);
-                                }
-                                const pile = document.querySelector(
-                                    `[data-pile="${el.dataset.zone}"]` +
-                                        `[data-side="${owners[slot]}"]`,
-                                );
-                                return !!pile && seen(pile, point);
-                            });
-                        return wanted
-                            .filter(
-                                (w) => !w.slots.some((s) => shown(s, w.point)),
-                            )
-                            .map((w) => w.what);
-                    },
-                    { wanted, owners },
-                );
-            // Fades run on the compositor's clock, not the page's fake one, and a loaded
-            // machine slows them: look until all show, the deadline only a hang guard.
-            let unseen = await look();
-            for (
-                const end = Date.now() + 20_000;
-                unseen.length && Date.now() < end;
-            ) {
-                await page.waitForTimeout(100);
-                unseen = await look();
-            }
-            assert.deepEqual(unseen, [], "every one can be seen");
-        },
-        // The board draws its first view, the whole fixture's, once the fixture has loaded.
-        {
-            fixture,
-            at: last + 1,
-            ready: ".table",
-            reducedMotion: "reduce",
-            stage: "that every object a decision offers takes the pointer where it lies: a hit test of each, in every recording",
-        },
-    );
-}
-
-await check(
-    "the full-control toggle sends the session its new stops",
-    async (page) => {
-        const recorded = JSON.parse(
-            await readFile(join(fixtures, `${FIXTURE}.json`), "utf8"),
-        );
-        const session = recorded.messages.find(
-            (m) => m.kind === "response" && m.command === "start_game",
-        ).value;
-        await page.clock.runFor(2000);
-        await page.click('[aria-label="Settings"]');
-        const toggle = page.locator(".settings-toggle input");
-        assert.equal(await toggle.isChecked(), false, "smart stops at first");
-        await toggle.click();
-        const sent = await page.evaluate(() =>
-            window.berylFixture.calls
-                .filter((c) => c.command === "set_stops")
-                .map((c) => c.args.request),
-        );
-        const smart = {
-            yours: [
-                "precombatMain",
-                "declareAttackers",
-                "declareBlockers",
-                "postcombatMain",
-            ],
-            theirs: ["declareAttackers", "declareBlockers", "end"],
-        };
-        assert.deepEqual(sent, [
-            { session, stops: { fullControl: true, ...smart } },
-        ]);
-    },
-    { stage: "what a setting sends: a command, which no screen shows" },
-);
-
-await check(
-    "a step icon sets and clears a stop in that player's turns",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const row = ".step-stops-opponent";
-        const end = `${row} [data-step=end]`;
-        const upkeep = `${row} [data-step=upkeep]`;
-        assert.ok(await page.locator(`${end}.step-stop`).count());
-        assert.ok(await page.locator(`${upkeep}.step-no-stop`).count());
-        // Untap and cleanup, where no one gets priority, are never stops.
-        assert.equal(await page.locator(`${row} .step-fixed`).count(), 2);
-        assert.equal(
-            await page.locator(`${row} .step-fixed .step-toggle`).count(),
-            0,
-        );
-        await page.click(`${end} .step-toggle`);
-        await page.click(`${upkeep} .step-toggle`);
-        assert.ok(await page.locator(`${end}.step-no-stop`).count());
-        assert.ok(await page.locator(`${upkeep}.step-stop`).count());
-        const sent = await page.evaluate(() =>
-            window.berylFixture.calls
-                .filter((c) => c.command === "set_stops")
-                .map((c) => c.args.request.stops.theirs),
-        );
-        assert.deepEqual(sent.at(-1), [
-            "declareAttackers",
-            "declareBlockers",
-            "upkeep",
-        ]);
-    },
-    { stage: "what a click on a stop sends, and the stops that take none" },
-);
-
-await check(
-    "the beginning of combat tooltip names the step for both seats",
-    async (page) => {
-        for (const [side, expected] of [
-            ["you", "Your beginning of combat"],
-            ["opponent", "Opponent's beginning of combat"],
-        ]) {
-            const stop = page.locator(
-                `.step-stops-${side} [data-step="beginCombat"]`,
-            );
-            await stop.locator("button").hover();
-            assert.equal(await stop.locator(".tip").innerText(), expected);
-        }
-    },
-    { stage: "the words of a tip, by seat" },
-);
-
-await check(
-    "a phase icon has a round keyboard focus ring that clears on pointer use",
-    async (page) => {
-        const icon = page.locator('.step-stops-you [data-step="main1"] button');
-        await page.keyboard.press("Tab");
-        await icon.focus();
-        const ring = () =>
-            icon.evaluate((e) => {
-                const style = getComputedStyle(e);
-                return [style.outlineStyle, style.borderRadius];
-            });
-        assert.deepEqual(await ring(), ["solid", "50%"]);
-        await page
-            .getByRole("button", { name: "Report bug", exact: true })
-            .click();
-        assert.equal((await ring())[0], "none");
-    },
-    { stage: "a ring that depends on how the focus came" },
-);
-
 // `mana-floating` stops at the human's priority in their main phase with Mana Crypt's {C}
 // unspent, then plays on past their pass, which ends the step and empties the pool.
-const floatingViews = await load("mana-floating");
-const floatingAt =
-    floatingViews.findIndex(
-        (v) =>
-            v.status.kind === "deciding" &&
-            Object.values(v.players.you.mana).some((n) => n > 0),
-    ) + 1;
-
-/** The words standing on the table, outside cards, stack items, open prompts and panels and
- * the game log (the record a player reads back, which grows with the game): what a player
- * must read past to see the board. Text hidden or transparent, such as a closed tip, does not
- * count. */
-const tableWords = (page) =>
-    page.evaluate(() => {
-        const SKIP = [
-            ".card-el",
-            ".card-slot",
-            ".card-back",
-            ".stack-item",
-            ".prompt",
-            ".action-menu",
-            ".choice",
-            ".zone-viewer",
-            ".inspect",
-            ".settings",
-            ".game-log",
-        ].join(", ");
-        const shown = (el) => {
-            if (getComputedStyle(el).visibility !== "visible") return false;
-            for (let a = el; a; a = a.parentElement) {
-                if (parseFloat(getComputedStyle(a).opacity) === 0) return false;
-            }
-            return el.getClientRects().length > 0;
-        };
-        const words = [];
-        const table = document.querySelector(".table");
-        const walk = document.createTreeWalker(table, NodeFilter.SHOW_TEXT);
-        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-            const el = n.parentElement;
-            if (!el || el.closest(SKIP) || !shown(el)) continue;
-            words.push(...(n.textContent.match(/[\p{L}\p{N}]+/gu) ?? []));
-        }
-        return words;
-    });
-
-// The table's standing words in states that show its piles, mana and the stack: the badges,
-// the life totals and the turn button. Moving the piles' names and counts into their tips took
-// these from 15, 13, 11 and 8; no change adds standing words to the table.
-const WORD_BUDGETS = [
-    { fixture: "choice-scry", at: pilesAt + 1, budget: 7 },
-    { fixture: FIXTURE, at: 119, budget: 7 },
-    { fixture: "stack-x", budget: 7 },
-    { fixture: "mana-floating", at: floatingAt, budget: 8 },
-];
-for (const { fixture, at, budget } of WORD_BUDGETS) {
-    await check(
-        `${fixture}: the table stands no more words than before`,
-        async (page) => {
-            await page.clock.runFor(3000);
-            const words = await tableWords(page);
-            assert.ok(
-                words.length <= budget,
-                `${words.length} words, over ${budget}: ${words.join(" ")}`,
-            );
-        },
-        {
-            fixture,
-            at: at ?? (await load(fixture)).length,
-            ready: ".table",
-            reducedMotion: "reduce",
-            stage: "a count of the words standing on the table, held to a budget",
-        },
-    );
-}
-
-await replied("mana-floating-pass", "mana-floating", [ANSWERED]);
-await check(
-    "unspent mana shows by the life orb and pulses on a pass, unasked",
-    async (page) => {
-        await page.clock.runFor(3000);
-        await page.clock.pauseAt(Date.now() + 60_000);
-        const decision = floatingViews[floatingAt - 1].status.decision;
-        assert.equal(decision.passTo.kind, "step", "the pass ends the step");
-        const pool = page.locator(".mana-pool");
-        assert.equal(
-            await pool.getAttribute("aria-label"),
-            "Unspent mana: {C}",
-        );
-        await page.getByRole("button", { name: /^Next/ }).click();
-        assert.equal(await page.locator(".mana-pool-pulse").count(), 1);
-        assert.equal(
-            await page.getByRole("dialog").count(),
-            0,
-            "passing asks nothing",
-        );
-        if (STAGED) {
-            assert.deepEqual(await clicked(page, 1), [PRESS("decline")]);
-        } else {
-            assert.deepEqual(await chosen(page), [
-                decision.candidates.findIndex((c) => c.option.kind === "pass"),
-            ]);
-        }
-        // The step ends and the pool empties; it goes once the pulse is over.
-        await page.clock.runFor(5000);
-        assert.equal(await pool.count(), 0, "the emptied pool goes");
-    },
-    {
-        fixture: "mana-floating-pass",
-        at: floatingAt,
-        ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
-        stage: "a pulse a press begins and a moment ends, and that the press asks nothing",
-    },
-);
-
 await check(
     "each stack item names whose it is and shows any X announced",
     async (page) => {
@@ -7923,87 +6297,6 @@ await check(
     crowdedRun(crowdedAt),
 );
 
-await check(
-    "sweeping a crowded table moves no card but inspects each, clear of the stack and lives",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const still = await drawn(page);
-        const forbidden = await page.evaluate(() =>
-            [
-                ...document.querySelectorAll(
-                    ".card-el-stack, .stack-ability, [data-life]",
-                ),
-            ].map((e) => {
-                const r = e.getBoundingClientRect();
-                return {
-                    what: e.dataset.card ?? e.dataset.life ?? "an ability",
-                    x: r.x,
-                    y: r.y,
-                    width: r.width,
-                    height: r.height,
-                };
-            }),
-        );
-        assert.ok(
-            forbidden.filter((f) => f.what === "you" || f.what === "opponent")
-                .length === 2 && forbidden.length >= 3,
-            "the stack and both lives are drawn",
-        );
-        const { you, opponent } = await rows(page);
-        const hand = await page.$$eval(".card-el-hand", (cards) =>
-            cards.map((e) => {
-                const r = e.getBoundingClientRect();
-                return {
-                    slot: e.dataset.slot,
-                    name: e.dataset.card,
-                    box: { x: r.x, y: r.y, width: r.width, height: r.height },
-                };
-            }),
-        );
-        for (const { slot, name, box } of [...opponent, ...you, ...hand]) {
-            // Where the card shows: its frame's middle, or a hand card's top.
-            const at = {
-                x: box.x + box.width / 2,
-                y:
-                    box.y +
-                    (hand.some((h) => h.slot === slot) ? 30 : box.height / 2),
-            };
-            await page.mouse.move(at.x, at.y);
-            await page.clock.runFor(400);
-            const now = await drawn(page);
-            for (const [other, { box: b }] of Object.entries(now)) {
-                if (other === slot || !still[other]) continue;
-                const moved = Math.max(
-                    ...b.map((v, i) => Math.abs(v - still[other].box[i])),
-                );
-                assert.ok(
-                    moved <= 1,
-                    `hovering ${name} moved slot ${other} by ${moved}`,
-                );
-            }
-            const inspect = page.locator(
-                `.inspect[aria-label="${name}, inspected"]`,
-            );
-            assert.equal(
-                await inspect.count(),
-                1,
-                `the pointer at ${name}'s middle inspects it`,
-            );
-            const shown = await inspect.boundingBox();
-            for (const f of forbidden) {
-                assert.ok(
-                    !overlap(shown, f),
-                    `${name}'s inspector covers ${f.what}`,
-                );
-            }
-        }
-    },
-    {
-        ...crowdedRun(crowdedAt),
-        stage: "what each hover moves and where its inspector stands: a sweep of the pointer",
-    },
-);
-
 /** A prompt of `shape` for `purpose` in place of `prompt`, the record's other fields empty
  * but for `fields`: what a view edited by hand says its decision asks. */
 function asking(prompt, shape, purpose, fields = {}) {
@@ -8137,92 +6430,6 @@ await check(
     { ...crowdedRun(crowdedAt), fixture: "crowded-flip" },
 );
 
-/** Each permanent's power and toughness (or loyalty) plaque on the table, by its card, and its
- * numerals' size on screen in window pixels: their font's size by the scales its card and the
- * stage are drawn at. A scan's printed text is too small to read there; the plaques are not. */
-const plaqueSizes = (page) =>
-    page.$$eval(
-        '.card-el[data-zone="battlefield"]:not(.card-el-land) .card-pt span',
-        (names) => {
-            const scale = (e) => {
-                const m = new DOMMatrix(getComputedStyle(e).transform);
-                return Math.hypot(m.a, m.b);
-            };
-            const stage = scale(document.querySelector(".stage"));
-            return names.map((e) => {
-                const card = e.closest(".card-el");
-                return {
-                    name: card.dataset.card,
-                    px:
-                        parseFloat(getComputedStyle(e).fontSize) *
-                        scale(card) *
-                        stage,
-                };
-            });
-        },
-    );
-
-// A crowded table's rows still fill the table between them, and their plaques stay readable.
-await check(
-    "a crowded table's plaques read at 14 px, its rows filling the room between them",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const sizes = await plaqueSizes(page);
-        assert.ok(sizes.length >= 8, "both rows' plaques are drawn");
-        const small = sizes
-            .filter((n) => n.px < 14)
-            .map((n) => `${n.name} at ${n.px.toFixed(1)} px`);
-        assert.deepEqual(small, [], "plaques under 14 px");
-        const { you, opponent } = await rows(page);
-        const far = Math.max(...opponent.map((c) => c.box.y + c.box.height));
-        const near = Math.min(...you.map((c) => c.box.y));
-        // Only the lane where combat and the stack's arrows run lies between them.
-        assert.ok(near - far <= 48, `${near - far} px between the rows`);
-        assert.deepEqual(await cutText(page), [], "no name is cut");
-    },
-    {
-        ...crowdedRun(crowdedAt),
-        stage: "the least size a plaque is read at on the desktop, and the room between two rows",
-    },
-);
-
-/** What lies over the opponent's hand, a permanent or a land, of what `by` matches: at each one's
- * middle and at its corners inset 8 px, as the ui-live harness's `probe.covered` looks. A copy
- * beneath another in a pile is covered by its own pile, which `by` does not match. */
-const coveredBy = (page, by) =>
-    page.evaluate((by) => {
-        const out = [];
-        for (const e of document.querySelectorAll(
-            ".card-el-held, .card-el-field, .card-el-land",
-        )) {
-            const r = e.getBoundingClientRect();
-            const points = [
-                [r.left + r.width / 2, r.top + r.height / 2],
-                [r.left + 8, r.top + 8],
-                [r.right - 8, r.top + 8],
-                [r.left + 8, r.bottom - 8],
-                [r.right - 8, r.bottom - 8],
-            ].filter(
-                ([x, y]) =>
-                    x >= 0 && y >= 0 && x < innerWidth && y < innerHeight,
-            );
-            for (const [x, y] of points) {
-                const over = document.elementFromPoint(x, y)?.closest(by);
-                if (over && !e.contains(over)) {
-                    const what = e.dataset.card ?? "a back";
-                    out.push(
-                        `${what} under ${over.className} at ${Math.round(x)}, ${Math.round(y)}`,
-                    );
-                }
-            }
-        }
-        return out;
-    }, by);
-
-/** What may never lie over a card on the table: a life orb, a tip, the game log or the reach of
- * a raised hand card. */
-const COVERS = "[data-life], .tip, .game-log, .hand-hit";
-
 // Each side of the crowded table has six lands. Add one Island to either side in turn,
 // then remove it. Only the side that crosses seven should change its piling.
 const landThreshold = JSON.parse(
@@ -8311,314 +6518,6 @@ await check(
     { ...crowdedRun(0), fixture: "land-threshold" },
 );
 
-// Eight cards in your hand while you may pass on to the next stop: the fan, each card at rest
-// and raised in turn, stays clear of the round button left of the turn button (by-biv).
-await derive("crowded", "crowded-eight", crowdedAt, (v) => {
-    const hand = v.objects.filter(
-        (o) => o.owner === "you" && o.zone === "hand",
-    );
-    const more = Array.from({ length: 8 - hand.length }, (_, i) => ({
-        ...hand[i % hand.length],
-        slot: 9200 + i,
-    }));
-    const decision = v.status.decision;
-    return {
-        ...v,
-        objects: [...v.objects, ...more],
-        status: {
-            ...v.status,
-            decision: {
-                ...decision,
-                passOn: decision.passOn ?? { kind: "nextTurn" },
-            },
-        },
-    };
-});
-await check(
-    "a full hand keeps clear of the pass-on button",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const button = await page.locator(".pass-on-button").boundingBox();
-        assert.ok(button, "the pass-on button shows");
-        // The right edge of everything drawn for a hand card, a raised one's copy included.
-        const right = () =>
-            page.$$eval(
-                ".card-el-hand, .card-el-hand *, .card-ghost *",
-                (all) =>
-                    Math.max(
-                        ...all.map((e) => e.getBoundingClientRect().right),
-                    ),
-            );
-        const cards = await page.locator(".card-el-hand").all();
-        assert.equal(cards.length, 8, "eight cards in hand");
-        assert.ok(
-            (await right()) < button.x,
-            `the hand reaches ${await right()}, the button begins at ${button.x}`,
-        );
-        for (const card of cards) {
-            const box = await card.boundingBox();
-            await page.mouse.move(box.x + box.width / 2, box.y + 30);
-            await page.clock.runFor(600);
-            const name = await card.getAttribute("data-card");
-            const reach = await right();
-            assert.ok(
-                reach < button.x,
-                `${name} raised reaches ${reach}, the button begins at ${button.x}`,
-            );
-        }
-    },
-    {
-        stage: "the hand's cards, at rest and raised, against a button: cards the audit of controls does not weigh",
-        ...crowdedRun(crowdedAt),
-        fixture: "crowded-eight",
-    },
-);
-
-// The opponent holding nine cards: their fan's outer backs, which its turn lifts, still show.
-await derive(FIXTURE, "held-nine", views.length - 2, (v) => {
-    const held = v.objects.filter(
-        (o) => o.owner === "opponent" && o.zone === "hand",
-    );
-    const more = Array.from({ length: 9 - held.length }, (_, i) => ({
-        ...held[0],
-        slot: 9100 + i,
-    }));
-    return { ...v, objects: [...v.objects, ...more] };
-});
-for (const [title, run] of [
-    ["a crowded table", crowdedRun(crowdedAt)],
-    [
-        "a full opposing hand",
-        {
-            at: views.length - 1,
-            ready: ".card-el-held",
-            reducedMotion: "reduce",
-        },
-    ],
-    [
-        "nine cards in the opposing hand",
-        {
-            fixture: "held-nine",
-            at: views.length - 1,
-            ready: ".card-el-held",
-            reducedMotion: "reduce",
-        },
-    ],
-]) {
-    await check(
-        `on ${title}, no orb, tip, log or raised hand card covers a card on the table`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            assert.deepEqual(await coveredBy(page, COVERS), [], "at rest");
-            // Each of the opponent's backs reaches well into the window, to be counted.
-            const feet = await page.$$eval(".card-el-held", (backs) =>
-                backs.map((e) => Math.round(e.getBoundingClientRect().bottom)),
-            );
-            assert.ok(
-                feet.every((y) => y >= 24),
-                `the backs end at ${feet.join(", ")}`,
-            );
-            // Each hand card raised in turn, the pointer at its top.
-            for (const card of await page.locator(".card-el-hand").all()) {
-                const box = await card.boundingBox();
-                await page.mouse.move(box.x + box.width / 2, box.y + 30);
-                await page.clock.runFor(600);
-                const name = await card.getAttribute("data-card");
-                assert.deepEqual(
-                    await coveredBy(page, COVERS),
-                    [],
-                    `${name} raised`,
-                );
-            }
-            // Each of your piles' tips, over its pile, clear of your badge if it shows.
-            const badges = page.locator(".player-badge");
-            const badge = (await badges.count())
-                ? await badges.last().boundingBox()
-                : undefined;
-            for (const pile of await page
-                .locator(".has-tip:has([aria-label^=Library]), [data-side=you]")
-                .all()) {
-                const box = await pile.boundingBox();
-                if (!box || box.y < 450) continue;
-                await page.mouse.move(box.x + box.width / 2, box.y + 20);
-                await page.clock.runFor(300);
-                const tip = page.locator(".tip").filter({ visible: true });
-                assert.equal(await tip.count(), 1, "the pile's tip shows");
-                assert.ok(
-                    !badge || !overlap(await tip.boundingBox(), badge),
-                    `${await tip.innerText()} covers your badge`,
-                );
-                assert.deepEqual(await coveredBy(page, COVERS), [], "a tip");
-            }
-            const toggle = page.getByRole("button", { name: "Show log" });
-            if (await toggle.isVisible()) {
-                await toggle.click();
-                await page.clock.runFor(2000);
-                assert.deepEqual(
-                    await coveredBy(page, COVERS),
-                    [],
-                    "the log open",
-                );
-            }
-        },
-        {
-            ...run,
-            stage: "what a tip, the log and a raised card cover: states only the pointer enters",
-        },
-    );
-}
-
-// At 16:10, the table reaches the window's edges rather than stand in bands, and each hand
-// runs off its edge of the window as at 16:9, showing no less of each card.
-await check(
-    "a 16:10 window shows the table to its edges, both hands reaching them",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const { width, height } = page.viewportSize();
-        const bare = await page.evaluate(
-            ([w, h]) => {
-                const frame = document.querySelector(".stage-frame");
-                const points = [0.1, 0.3, 0.5, 0.7, 0.9].flatMap((f) => [
-                    [w * f, 16],
-                    [w * f, h - 16],
-                    [16, h * f],
-                    [w - 16, h * f],
-                ]);
-                return points
-                    .filter(
-                        ([x, y]) => document.elementFromPoint(x, y) === frame,
-                    )
-                    .map((p) => p.map(Math.round).join(", "));
-            },
-            [width, height],
-        );
-        assert.deepEqual(
-            bare,
-            [],
-            "points 16 px from an edge showing no table",
-        );
-        // Each card of both hands runs off the window's edge, as at 16:9, showing at least as
-        // much of itself as a 16:9 window would: as much as lies on the stage.
-        const hands = await page.$$eval(
-            ".card-el-hand, .card-el-held",
-            (cards) => {
-                const stage = document
-                    .querySelector(".stage")
-                    .getBoundingClientRect();
-                const part = (r, top, bottom) =>
-                    (Math.min(r.bottom, bottom) - Math.max(r.top, top)) /
-                    r.height;
-                return cards.map((e) => {
-                    const r = e.getBoundingClientRect();
-                    const held = e.classList.contains("card-el-held");
-                    return {
-                        slot: e.dataset.slot,
-                        held,
-                        shown: part(r, 0, innerHeight),
-                        wide: part(r, stage.top, stage.bottom),
-                        reaches: held ? r.top < 0 : r.bottom > innerHeight,
-                        inside: r.left >= 0 && r.right <= innerWidth,
-                    };
-                });
-            },
-        );
-        assert.ok(
-            hands.some((c) => c.held) && hands.some((c) => !c.held),
-            "both hands hold cards",
-        );
-        for (const c of hands) {
-            assert.ok(
-                c.reaches,
-                `slot ${c.slot} ends short of the window's edge`,
-            );
-            assert.ok(c.inside, `slot ${c.slot} is cut at the window's side`);
-            assert.ok(
-                c.shown >= c.wide - 0.01,
-                `slot ${c.slot} shows ${c.shown.toFixed(2)} of itself, ` +
-                    `${c.wide.toFixed(2)} at 16:9`,
-            );
-        }
-    },
-    {
-        at: views.length - 1,
-        ready: ".card-el-held",
-        reducedMotion: "reduce",
-        viewport: { width: 1280, height: 800 },
-        stage: "bare points at a window's edges, and how much of each hand shows there against 16:9",
-    },
-);
-
-// A pile too long for its viewer fades out where more of it lies, until scrolled there.
-const crowdedYou = crowdedViews[crowdedAt].objects.find(
-    (o) =>
-        o.zone === "battlefield" &&
-        o.controller === "you" &&
-        !o.types.includes("land") &&
-        o.name,
-);
-await derive("crowded", "crowded-graveyard", crowdedAt, (v) => {
-    const dead = Array.from({ length: 14 }, (_, i) => ({
-        ...crowdedYou,
-        slot: 9000 + i,
-        zone: "graveyard",
-        tapped: false,
-        combat: null,
-        counters: [],
-        damage: 0,
-    }));
-    return {
-        ...v,
-        objects: [...v.objects, ...dead],
-        players: {
-            ...v.players,
-            you: {
-                ...v.players.you,
-                graveyard: [
-                    ...v.players.you.graveyard,
-                    ...dead.map((o) => o.slot),
-                ],
-            },
-        },
-    };
-});
-await check(
-    "a long pile's viewer fades where more of it lies beyond the scroll",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.click("[data-pile=graveyard][data-side=you]");
-        await page.clock.runFor(1000);
-        const list = page.locator(".zone-viewer-cards");
-        const state = () =>
-            list.evaluate((e) => ({
-                over: e.scrollHeight > e.clientHeight,
-                more: e.dataset.more,
-                mask:
-                    getComputedStyle(e).maskImage ||
-                    getComputedStyle(e).webkitMaskImage,
-            }));
-        const top = await state();
-        assert.ok(top.over, "fourteen cards overflow the viewer");
-        assert.equal(top.more, "below");
-        assert.notEqual(top.mask, "none", "the list's foot fades");
-        await list.evaluate((e) => {
-            e.scrollTop = e.scrollHeight;
-        });
-        // The browser sends the scroll event with its next frame, in its own time.
-        let more;
-        for (let tries = 0; tries < 30 && more !== "above"; tries++) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            await page.clock.runFor(100);
-            ({ more } = await state());
-        }
-        assert.equal(more, "above", "scrolled to its end");
-    },
-    {
-        ...crowdedRun(crowdedAt),
-        fixture: "crowded-graveyard",
-        stage: "a fade that follows a scroll",
-    },
-);
-
 // Cards over the table are small to fit; each shows whole on hover, wherever it is.
 for (const [title, run, selector] of [
     ["the opening hand", { at: 2, ready: ".opening-card" }, ".opening-card"],
@@ -8668,169 +6567,6 @@ async function inspectorOf(page, name) {
     const inspect = page.locator(`.inspect[aria-label="${name}, inspected"]`);
     await inspect.waitFor({ state: "visible" });
     return inspect.boundingBox();
-}
-
-/** A point of the element `selector` picks (the `nth`) where it is on top, so the pointer
- * reaches it: its middle if nothing covers that, else the first such point on a 10 px grid.
- * Whole pixels, where WebKit delivers the pointer: a fraction of a pixel inside a leaning
- * card's edge may lie outside it there. */
-const visiblePoint = (page, selector, nth) =>
-    page.evaluate(
-        ([selector, nth]) => {
-            const e = document.querySelectorAll(selector)[nth];
-            const r = e.getBoundingClientRect();
-            const on = (x, y) => e.contains(document.elementFromPoint(x, y));
-            const mid = {
-                x: Math.round(r.x + r.width / 2),
-                y: Math.round(r.y + r.height / 2),
-            };
-            if (on(mid.x, mid.y)) return mid;
-            for (let y = Math.ceil(r.top) + 5; y < r.bottom; y += 10) {
-                for (let x = Math.ceil(r.left) + 5; x < r.right; x += 10) {
-                    if (on(x, y)) return { x, y };
-                }
-            }
-            return null;
-        },
-        [selector, nth],
-    );
-
-// A prompt's cards show whole on hover, beside its title, options and cards, never over
-// them, on an opaque inspector (by-isv.17): a look at the top four.
-for (const [fixture, at] of [
-    ["choice-look", (await load("choice-look")).length],
-]) {
-    await check(
-        `hovering a card in ${fixture}'s prompt keeps its inspector off the prompt`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            // On the stage the cards looked at are the library's own, held up over the
-            // table (its depths 850 to 899, desktop.ts), and the prompt is the dock's.
-            if (STAGED) {
-                await page.evaluate(() => {
-                    for (const node of document.querySelectorAll(
-                        "[data-stage]",
-                    )) {
-                        const depth = Number(node.style.zIndex);
-                        if (depth >= 850 && depth < 900)
-                            node.classList.add("held-up");
-                    }
-                });
-            }
-            const prompt = await page.$$eval(
-                STAGED
-                    ? ".stage-prompt :is(.prompt-title, button), .held-up"
-                    : ".overlay-main :is(.overlay-title, button, .shown-card)",
-                (els) =>
-                    els.map((e) => {
-                        const r = e.getBoundingClientRect();
-                        return {
-                            what:
-                                e.closest("[data-card]")?.dataset.card ??
-                                e.textContent.trim().slice(0, 30),
-                            x: r.x,
-                            y: r.y,
-                            width: r.width,
-                            height: r.height,
-                        };
-                    }),
-            );
-            assert.ok(
-                prompt.some((p) => p.what) && prompt.length >= 3,
-                "the prompt is drawn",
-            );
-            const cards = STAGED ? ".held-up" : ".overlay .shown-card";
-            const count = await page.locator(cards).count();
-            assert.ok(count >= 1, "the prompt shows a card");
-            for (let i = 0; i < count; i++) {
-                const point = await visiblePoint(page, cards, i);
-                if (!point) continue;
-                await page.mouse.move(point.x, point.y);
-                await page.clock.runFor(300);
-                const inspect = page.locator(".inspect");
-                await inspect.waitFor({ state: "visible" });
-                const name = await inspect.getAttribute("aria-label");
-                const shown = await inspect.boundingBox();
-                for (const p of prompt) {
-                    assert.ok(
-                        !overlap(shown, p),
-                        `${name}'s inspector covers ${p.what}`,
-                    );
-                }
-                const fill = await inspect.evaluate(
-                    (e) => getComputedStyle(e).backgroundColor,
-                );
-                assert.match(
-                    fill,
-                    /^rgb\(/,
-                    `the inspector is opaque, not ${fill}`,
-                );
-            }
-        },
-        {
-            fixture,
-            at,
-            ready: STAGED ? ".stage-prompt" : ".overlay .shown-card",
-            stage: "where the inspector stands against a prompt's cards and buttons: a place only the pointer on each card gives it",
-        },
-    );
-}
-
-// In a target step, a card shows whole clear of every target it might cover (by-isv.17):
-// Fractured Identity's in greedy-turn-9, whose targets fill the table's middle, and Swift
-// Reconfiguration's in attached-across and in crew, whose targets lie on both sides.
-for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
-    const views = await load(fixture);
-    const at = views.findIndex((v) => v.status.decision?.kind === "target");
-    await check(
-        `hovering a card in ${fixture}'s target step covers no target`,
-        async (page) => {
-            await page.clock.runFor(2000);
-            const targets = await page.$$eval(
-                STAGED
-                    ? '[data-zone="battlefield"]:has(> .stage-mark)'
-                    : '[data-zone="battlefield"]:has(.card-target)',
-                (els) =>
-                    els.map((e) => {
-                        const r = e.getBoundingClientRect();
-                        return {
-                            what: e.dataset.card,
-                            x: r.x,
-                            y: r.y,
-                            width: r.width,
-                            height: r.height,
-                        };
-                    }),
-            );
-            assert.ok(targets.length > 0, "the targets glow");
-            const cards = '.card-el-hand, .card-el[data-zone="battlefield"]';
-            const count = await page.locator(cards).count();
-            for (let i = 0; i < count; i++) {
-                const name = await page
-                    .locator(cards)
-                    .nth(i)
-                    .getAttribute("data-card");
-                const point = name && (await visiblePoint(page, cards, i));
-                if (!point) continue;
-                await page.mouse.move(point.x, point.y);
-                await page.clock.runFor(400);
-                const shown = await inspectorOf(page, name);
-                for (const t of targets) {
-                    assert.ok(
-                        !overlap(shown, t),
-                        `${name}'s inspector covers the target ${t.what}`,
-                    );
-                }
-            }
-        },
-        {
-            fixture,
-            at: at + 1,
-            ready: '[data-zone="battlefield"]',
-            reducedMotion: "reduce",
-            stage: "where the inspector stands against every target, for the pointer on each card in turn",
-        },
-    );
 }
 
 // Up to one target is one targeting step (`target-up-to-one`: Teferi, Time Raveler's −3, "up to
@@ -9723,31 +7459,6 @@ await check(
         fixture: "choice-search",
         at: searching.views.length,
         ready: tray(crypt),
-    },
-);
-
-await check(
-    "ability frames have square tops and shield bottoms",
-    async (page) => {
-        await page.clock.runFor(1000);
-        const corners = await page
-            .locator(".stack-item")
-            .first()
-            .evaluate((e) => {
-                const s = getComputedStyle(e);
-                return [s.borderTopLeftRadius, s.borderBottomLeftRadius];
-            });
-        assert.equal(parseFloat(corners[0]), 0);
-        assert.ok(
-            parseFloat(corners[1]) >= 20,
-            `rounded shield bottom ${corners[1]}`,
-        );
-    },
-    {
-        fixture: "arrow-ability",
-        at: (await load("arrow-ability")).length,
-        ready: ".stack-item",
-        stage: "the shape of a frame's corners: skin no audit measures",
     },
 );
 
@@ -10672,68 +8383,6 @@ await check(
     },
 );
 
-// The start screen: Enter starts the game, and the opponent picked is offered again after a
-// reload.
-const startCalls = (page) =>
-    page.evaluate(() =>
-        window.berylFixture.calls.filter((c) => c.command === "start_game"),
-    );
-await check(
-    "Enter on the start screen starts a game",
-    async (page) => {
-        await page.keyboard.press("Enter");
-        await page.waitForURL(/#\/game$/);
-        assert.equal((await startCalls(page)).length, 1);
-    },
-    {
-        stage: "a key on the start screen, and the command it sends",
-        at: 0,
-        hash: "#/",
-        ready: ".start-agent input:checked",
-    },
-);
-await check(
-    "Enter with a game in progress returns to it",
-    async (page) => {
-        await page.getByRole("button", { name: "Return to Game" }).waitFor();
-        await page.keyboard.press("Enter");
-        await page.waitForURL(/#\/game$/);
-        assert.equal((await startCalls(page)).length, 0, "no new game");
-    },
-    {
-        stage: "a key on the start screen with a game under way, and that it sends none",
-        at: 50,
-        hash: "#/",
-        ready: ".start-agent input:checked",
-    },
-);
-await check(
-    "the start screen remembers the last opponent across a reload",
-    async (page) => {
-        const checked = () =>
-            page.locator(".start-agent input:checked").getAttribute("value");
-        const other = await page
-            .locator(".start-agent input:not(:checked)")
-            .first()
-            .getAttribute("value");
-        await page.locator(`.start-agent input[value="${other}"]`).check();
-        await page.getByRole("button", { name: "Start", exact: true }).click();
-        await page.waitForURL(/#\/game$/);
-        const [call] = await startCalls(page);
-        assert.equal(call.args.request.agent, other);
-        await page.evaluate(() => (window.location.hash = "#/"));
-        await page.reload();
-        await page.waitForSelector(".start-agent input:checked");
-        assert.equal(await checked(), other, "the last opponent is picked");
-    },
-    {
-        stage: "a choice kept across a reload",
-        at: 0,
-        hash: "#/",
-        ready: ".start-agent input:checked",
-    },
-);
-
 // The end of a game (`game-over`, under full control): Beza, the Bounding Spring attacks a
 // human at 3 life with nothing to block, and its damage ends the game once they pass. The page
 // starts at that last pass.
@@ -10743,7 +8392,6 @@ const overFixture = JSON.parse(
 const overViews = await load("game-over");
 const overEvents = overFixture.messages.filter((m) => m.kind === "event");
 const lastPass = overViews.findLastIndex((v) => v.status.kind === "deciding");
-const overAt = { fixture: "game-over", at: lastPass + 1, ready: "[data-life]" };
 const lifeShown = async (page) =>
     Number(
         (
@@ -10752,253 +8400,6 @@ const lifeShown = async (page) =>
                 .textContent()
         ).replace("\u2212", "-"),
     );
-/** How long the stage holds the table still as a game ends, before the result covers it
- * (UI Conventions, Verbs, dwell, "game's end"), in ms. */
-const endDwell = JSON.parse(
-    await readFile(
-        new URL("../../data/ui-conventions.json", import.meta.url),
-        "utf8",
-    ),
-).verbs.find((verb) => verb.name === "dwell").cases["game's end"].duration;
-await replied("game-over-pass", "game-over", [ANSWERED]);
-await check(
-    "the life-loss result waits for the killing blow and can be put aside",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.keyboard.press(" ");
-        const result = page.getByRole("dialog", { name: "Defeat" });
-        // When the damage shows, and when the view of the end does (its log line).
-        let [lost, ended] = [undefined, undefined];
-        let t = 0;
-        await committed(page);
-        for (; t < 100 && !(await result.count()); t++) {
-            lost ??= (await lifeShown(page)) < 0 ? t : undefined;
-            const log = await page.locator(".game-log-entry").allTextContents();
-            ended ??= log.some((e) => e.includes("lost the game"))
-                ? t
-                : undefined;
-            await page.clock.runFor(100);
-            await committed(page);
-        }
-        assert.ok(await result.count(), "the result shows");
-        assert.ok(lost !== undefined && lost < t, "the damage shows first");
-        if (STAGED) {
-            // The view of the end reaches the screen once its script has played out, the
-            // table held still at its end: the result waits out that hold after the blow.
-            assert.ok(
-                (t - lost) * 100 >= endDwell,
-                `the table holds after the blow: ${lost}, then ${t}`,
-            );
-        } else {
-            // The end's events (the loss) hold it as long as an action (playback.ts' HOLD).
-            assert.ok(
-                ended !== undefined && (t - ended) * 100 >= 800,
-                `the end plays first: ${ended}, then ${t}`,
-            );
-        }
-        assert.equal(
-            await result.locator(".game-over-reason, .game-over-card").count(),
-            0,
-            "the life-loss result only shows the outcome and controls",
-        );
-        const entries = await page.locator(".game-log-entry").allTextContents();
-        assert.ok(
-            entries.some((e) => /You lost the game at -1 life/.test(e)),
-            "the log says how",
-        );
-        await result
-            .getByRole("button", { name: "View Battlefield", exact: true })
-            .click();
-        assert.equal(await result.count(), 0, "the battlefield shows");
-        const back = page.getByRole("button", { name: "Back to Defeat" });
-        await assertReachable(page, back);
-        await back.click();
-        // One capitalisation for New Game, here as on the start screen.
-        await result
-            .getByRole("button", { name: "New Game", exact: true })
-            .waitFor();
-    },
-    {
-        ...overAt,
-        fixture: "game-over-pass",
-        stage: "when a result comes up against the blow that ended the game: an order in time, and a result put aside and asked back",
-    },
-);
-
-for (const [reason, title, description, by] of [
-    ["life", "Victory", null, { name: "Trinket Mage", ability: null }],
-    [
-        "effect",
-        "Victory",
-        "Card effect",
-        { name: "Trinket Mage", ability: null },
-    ],
-    ["library", "Victory", "Library", null],
-    ["concede", "Defeat", "Conceded", null],
-]) {
-    const fixture = `result-${reason}`;
-    await derive("game-over", fixture, overViews.length - 1, (view) => ({
-        ...view,
-        status: {
-            kind: "over",
-            outcome: {
-                kind: "win",
-                winner: title === "Victory" ? "you" : "opponent",
-                reason,
-                by,
-            },
-        },
-    }));
-    await check(
-        `the ${reason} result shows ${title} and the applicable details`,
-        async (page) => {
-            const result = page.getByRole("dialog", { name: title });
-            await result.waitFor();
-            assert.deepEqual(
-                await result.locator(".game-over-reason").allTextContents(),
-                description ? [description] : [],
-            );
-            assert.deepEqual(
-                await result
-                    .locator(".game-over-card")
-                    .evaluateAll((cards) =>
-                        cards.map((card) => card.dataset.card),
-                    ),
-                reason === "effect" ? [by.name] : [],
-            );
-            await result
-                .getByRole("button", { name: "New Game", exact: true })
-                .waitFor();
-            await result
-                .getByRole("button", { name: "View Battlefield" })
-                .click();
-            assert.equal(await result.count(), 0);
-            await page
-                .getByRole("button", { name: `Back to ${title}` })
-                .click();
-            await result.waitFor();
-        },
-        {
-            stage: "the result's words and card for each way a game ends, over views written for each",
-            ...overAt,
-            fixture,
-            at: overViews.length,
-        },
-    );
-}
-
-await check(
-    "the settings concede the game once confirmed in place",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const concessions = () =>
-            page.evaluate(() =>
-                window.berylFixture.calls.filter(
-                    (c) => c.command === "concede",
-                ),
-            );
-        const settings = page.getByRole("button", { name: "Settings" });
-        const concede = page.getByRole("button", {
-            name: "Concede",
-            exact: true,
-        });
-        const confirm = page.getByRole("button", {
-            name: "Confirm Concede",
-            exact: true,
-        });
-        await settings.click();
-        await concede.click();
-        assert.deepEqual(await concessions(), [], "asks first");
-        assert.equal(await page.locator(".settings").count(), 1, "still open");
-        // Closing the settings puts the question back.
-        await settings.click();
-        await settings.click();
-        assert.equal(await confirm.count(), 0, "asked again");
-        await concede.click();
-        await confirm.click();
-        assert.deepEqual(
-            (await concessions()).map((c) => c.args.request.session),
-            [overEvents[0].payload.session],
-        );
-        assert.equal(await page.locator(".settings").count(), 0, "closed");
-    },
-    {
-        ...overAt,
-        stage: "a question asked in place, and the command its answer sends",
-    },
-);
-
-await check(
-    "a new game with one in progress asks first, then concedes it",
-    async (page) => {
-        await page.evaluate(() => (window.location.hash = "#/"));
-        assert.equal(
-            await page.locator(".start-title").textContent(),
-            "New Game",
-        );
-        await page
-            .getByRole("button", { name: "New Game", exact: true })
-            .click();
-        const commands = () =>
-            page.evaluate(() =>
-                window.berylFixture.calls
-                    .map((c) => c.command)
-                    .filter((c) => c === "concede" || c === "start_game"),
-            );
-        assert.deepEqual(await commands(), [], "nothing yet");
-        await page
-            .getByRole("button", { name: "Concede & Start", exact: true })
-            .click();
-        for (let i = 0; i < 20 && (await commands()).length < 2; i++) {
-            await page.clock.runFor(100);
-        }
-        assert.deepEqual(await commands(), ["concede", "start_game"]);
-    },
-    { ...overAt, stage: "two commands in their order, behind a question" },
-);
-
-// A launched app with no game in progress resumes the newest unfinished one saved
-// (`resume_game`): here the views of `game-over` up to its last pass.
-await writeFixture("game-over-launched", {
-    messages: [
-        { kind: "response", command: "current_game", value: null },
-        {
-            kind: "response",
-            command: "resume_game",
-            value: overEvents[0].payload.session,
-        },
-        ...overFixture.messages,
-    ],
-});
-await check(
-    "a game resumed at launch gives way to a new game at one click",
-    async (page) => {
-        await page
-            .getByRole("button", { name: "Return to Game", exact: true })
-            .waitFor();
-        const commands = () =>
-            page.evaluate(() =>
-                window.berylFixture.calls
-                    .map((c) => c.command)
-                    .filter((c) => c === "concede" || c === "start_game"),
-            );
-        await page
-            .getByRole("button", { name: "New Game", exact: true })
-            .click();
-        for (let i = 0; i < 20 && (await commands()).length < 2; i++) {
-            await page.clock.runFor(100);
-        }
-        assert.deepEqual(await commands(), ["concede", "start_game"]);
-    },
-    {
-        fixture: "game-over-launched",
-        at: lastPass + 1,
-        hash: "#/",
-        ready: ".start-agent input:checked",
-        stage: "the commands one click sends when the game was resumed at launch",
-    },
-);
-
 // A reloaded page asks for the game in progress (`current_game`) and takes it up: here the
 // fixture records no views, only that answer, the human's last pass in `game-over`.
 await writeFixture("game-over-resumed", {
@@ -11122,60 +8523,6 @@ await check("libraries match the other piles", async (page) => {
         );
     }
 });
-
-await check(
-    "cancelled frames stay cancelled across bug report freeze",
-    async (page) => {
-        await page.evaluate(async () => {
-            const { freeze } = await import("/src/freeze.ts");
-            window.cancelledFrameCalls = 0;
-            window.cancelledFrameId = requestAnimationFrame(
-                () => window.cancelledFrameCalls++,
-            );
-            freeze();
-        });
-        await page.clock.runFor(50);
-        await page.evaluate(async () => {
-            cancelAnimationFrame(window.cancelledFrameId);
-            (await import("/src/freeze.ts")).thaw();
-        });
-        await page.clock.runFor(100);
-        assert.equal(await page.evaluate(() => window.cancelledFrameCalls), 0);
-    },
-    {
-        fixture: "arrow-player",
-        at: (await load("arrow-player")).length,
-        ready: STAGED ? "[data-life]" : ".board-arrows",
-        stage: "a frame cancelled while a bug report holds the page: the page's own clock, which no screen shows",
-    },
-);
-
-await check(
-    "a second bug report keeps thawed frames frozen",
-    async (page) => {
-        await page.evaluate(async () => {
-            const { freeze, thaw } = await import("/src/freeze.ts");
-            window.refrozenCalls = 0;
-            freeze();
-            requestAnimationFrame(() => window.refrozenCalls++);
-            thaw();
-            freeze();
-        });
-        await page.clock.runFor(100);
-        assert.equal(await page.evaluate(() => window.refrozenCalls), 0);
-        await page.evaluate(async () =>
-            (await import("/src/freeze.ts")).thaw(),
-        );
-        await page.clock.runFor(100);
-        assert.equal(await page.evaluate(() => window.refrozenCalls), 1);
-    },
-    {
-        fixture: "arrow-player",
-        at: (await load("arrow-player")).length,
-        ready: STAGED ? "[data-life]" : ".board-arrows",
-        stage: "a frame asked for between two holds of a bug report: the page's own clock, which no screen shows",
-    },
-);
 
 for (const controller of ["you", "opponent"]) {
     const view = structuredClone((await load("arrow-player")).at(-1));
@@ -11712,9 +9059,11 @@ if (
         `sound: ${JSON.stringify(sounded)} checked; expected some of each`,
     );
 }
-if (ran === 0 && !chosenTitles) {
-    failed = true;
-    console.error(`no check's title contains ${filters.join(" or ")}`);
+if (ran === 0 && !chosenTitles && !failed && !errors.length) {
+    // `by ui-test` hands a filter to every script it may be for, and fails only if it reaches
+    // no check in any (selection.py NONE_REACHED).
+    console.error(`no check's title here contains ${filters.join(" or ")}`);
+    process.exit(3);
 }
 if (errors.length) {
     failed = true;

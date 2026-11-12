@@ -163,16 +163,17 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 2. UI: `cd ui && npm run typecheck`. `npm test` runs what needs no browser
    (`ui/scripts/*.test.mjs`: the stage's clock and sequencing).
    `just ui-shots [names]` screenshots UI states headless and prints their
-   paths; `just ui-test` plays the game screen through a fixture, then the
-   stage's verbs on the stage's own clock (`ui/scripts/verbs.mjs`;
-   `just ui-test verb:` runs those alone), and then its prompt shapes, each
-   answered by the clicks its fixture recorded with the session's replies
-   (`ui/scripts/shapes.mjs`; `just ui-test shape:`). `just ui-play [fixtures]`
-   plays every recorded fixture to its end on the stage, on both layouts, under
-   the stage's audit. `--stage` (or `BERYL_STAGE=1`) forces a whole `ui-shots`,
-   `ui-test`, `ui-live` or `specs` run onto the stage, until the cut-over makes
-   it the only board; `just specs --phone` and `just ui-live --phone` open the
-   phone's layout. Every card has a spec (`/specs/<card>`), generated from its
+   paths; `just ui-test` plays the game screen through a fixture (the old
+   board's checks, then `ui/scripts/kept.mjs`'s, which stay), then the stage's
+   verbs on the stage's own clock (`ui/scripts/verbs.mjs`; `just ui-test verb:`
+   runs those alone), and then its prompt shapes, each answered by the clicks
+   its fixture recorded with the session's replies (`ui/scripts/shapes.mjs`;
+   `just ui-test shape:`). `just ui-play [fixtures]` plays every recorded
+   fixture to its end on the stage, on both layouts, under the stage's audit.
+   `--stage` (or `BERYL_STAGE=1`) forces a whole `ui-shots`, `ui-test`,
+   `ui-live` or `specs` run onto the stage, until the cut-over makes it the only
+   board; `just specs --phone` and `just ui-live --phone` open the phone's
+   layout. Every card has a spec (`/specs/<card>`), generated from its
    definition and scenarios, showing each of its UI moments as a live game from
    both seats. To reproduce, debug or verify a card's behavior in the UI, use
    the `specs` skill: `just specs --describe`, `--film`, `--motion` and
@@ -250,8 +251,8 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - A UI fix adds the broken state as a fixture or spec moment for the generic
   audits (overlap, off-screen, reachability, duplicate objects, page errors,
   motion), extending an audit for a new class of bug. Write a scripted check in
-  `ui/scripts/interactions.mjs` only when no audit can express the property, and
-  say why in a comment (`docs/project-50k.md`, K20).
+  a part of `ui/scripts/kept.mjs` only when no audit can express the property,
+  and say why in a comment (`docs/project-50k.md`, K20).
 - Budgets and deadlines count load-adjusted seconds: while the load average is
   over the core count, the clock runs slower in proportion, up to 8x. A check
   passes on a busy machine if it would on a quiet one. A lane the deadline kills

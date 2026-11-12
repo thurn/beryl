@@ -76,7 +76,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import conventions, paths, runlog, selection, shots, video_measure, video_shape
+from . import conventions, paths, runlog, shots, suites, video_measure, video_shape
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -589,7 +589,7 @@ def capture(out: Path, tick: float | None = None, more: bool = False) -> int:
     moments of `more` if `more`; its exit code. An earlier capture's frames are
     removed first, so that none is measured again."""
     recorded = out / "fixtures"
-    if shots.record_fixtures(recorded, selection.verb_fixtures()):
+    if shots.record_fixtures(recorded, suites.verb_fixtures()):
         return 1
     shutil.rmtree(out / "frames", ignore_errors=True)
     env = shots.browser_env()
@@ -637,7 +637,7 @@ def command(args: argparse.Namespace) -> int:
         print("motion: the capture failed", file=sys.stderr)
         return code
     measured = measure_capture(data, reference, out / "frames")
-    verbs = selection.verb_suite().get("verbs")
+    verbs = suites.verb_suite().get("verbs")
     verbs = [str(v) for v in verbs] if isinstance(verbs, list) else []
     took = (time.monotonic() - began) / max(1, len(verbs) * len(LAYOUTS))
     failed = False

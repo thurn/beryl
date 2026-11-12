@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, paths, runlog, selection, verdicts
+from beryl_tools import checks, paths, runlog, selection, suites, verdicts
 from beryl_tools.selection import Coverage, Hunk, Record
 
 NOW = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
@@ -339,10 +339,10 @@ VERB_CHECKS = [
 
 def test_the_verb_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
     assert selection.verb_checks() == []
-    assert selection.verb_fixtures() == []
+    assert suites.verb_fixtures() == []
     (repo / "ui" / "verbs.json").write_text(json.dumps(VERBS))
     assert selection.verb_checks() == VERB_CHECKS
-    assert selection.verb_fixtures() == [
+    assert suites.verb_fixtures() == [
         "combat-declare",
         "verbs-cast-stops",
         "verbs-cast-theirs",
@@ -374,16 +374,42 @@ def test_a_change_to_the_verb_suite_chooses_its_checks(repo: Path) -> None:
     assert choice.reasons == {}
 
 
-def test_each_name_goes_to_the_script_whose_check_it_is() -> None:
+KEPT = """\
+await check("Escape closes the settings", async (page) => {
+    await page.keyboard.press("Escape");
+});
+
+for (const size of [1180, 1600]) {
+    await check(`the piles lie clear at ${size} wide`, async (page) => {
+        await page.drag();
+    });
+}
+"""
+
+
+def test_each_name_goes_to_the_script_whose_check_it_is(repo: Path) -> None:
+    (repo / "ui" / "scripts" / "kept-screens.mjs").write_text(KEPT)
     every = {
         selection.INTERACTIONS: [],
+        selection.KEPT_SCRIPT: [],
         selection.VERB_SCRIPT: [],
         selection.SHAPE_SCRIPT: [],
     }
     assert selection.scripts([]) == every
-    names = ["joins", "verb:fly/yours/desktop", "shape:pick/yours/phone", "drag"]
-    assert selection.scripts(names) == {
-        selection.INTERACTIONS: ["joins", "drag"],
+    # A title goes to the script whose check gives it, a computed one too.
+    titles = [
+        "dragging a creature forward joins the attack",
+        "verb:fly/yours/desktop",
+        "shape:pick/yours/phone",
+        "Escape closes the settings",
+        "the piles lie clear at 1180 wide",
+    ]
+    assert selection.scripts(titles) == {
+        selection.INTERACTIONS: ["dragging a creature forward joins the attack"],
+        selection.KEPT_SCRIPT: [
+            "Escape closes the settings",
+            "the piles lie clear at 1180 wide",
+        ],
         selection.VERB_SCRIPT: ["verb:fly/yours/desktop"],
         selection.SHAPE_SCRIPT: ["shape:pick/yours/phone"],
     }
@@ -391,7 +417,40 @@ def test_each_name_goes_to_the_script_whose_check_it_is() -> None:
         selection.VERB_SCRIPT: ["verb:emerge"]
     }
     assert selection.scripts(["shape:"]) == {selection.SHAPE_SCRIPT: ["shape:"]}
-    assert selection.scripts(["drag"]) == {selection.INTERACTIONS: ["drag"]}
+    # A filter goes to both, each running what it reaches (NONE_REACHED where nothing).
+    assert selection.scripts(["drag"]) == {
+        selection.INTERACTIONS: ["drag"],
+        selection.KEPT_SCRIPT: ["drag"],
+    }
+
+
+def test_a_kept_checks_body_and_harness_choose_as_interactions_does(
+    repo: Path,
+) -> None:
+    script = "ui/scripts/kept-screens.mjs"
+    (repo / script).write_text(KEPT)
+    kept = [
+        "ui-test:Escape closes the settings",
+        "ui-test:the piles lie clear at 1180 wide",
+        "ui-test:the piles lie clear at 1600 wide",
+    ]
+    universe = UNIVERSE + kept
+    changed = {script: [hunk(script, 2, 2, ["a"], ["b"])]}
+    choice = selection.choose("ui-test", [script], changed, universe, None, "base")
+    assert choice.reasons == {kept[0]: "body"}
+    harness = "ui/scripts/kept-harness.mjs"
+    (repo / harness).write_text("export const x = 1;\n")
+    changed = {harness: [hunk(harness, 1, 1, ["a"], ["b"])]}
+    choice = selection.choose("ui-test", [harness], changed, universe, None, "base")
+    assert set(choice.reasons) == set(universe)
+    # Its titles are the lane's checks, computed ones as the log names them.
+    log: list[dict[str, object]] = [
+        {"lane": "ui-test", "check": kept[2]},
+        {"lane": "ui-test", "check": "ui-test:gone"},
+    ]
+    every = selection.every_check("ui-test", log, None)
+    assert {kept[0], kept[2]} <= set(every)
+    assert kept[1] not in every and "ui-test:gone" not in every
 
 
 SHAPES = {
@@ -408,10 +467,10 @@ SHAPE_CHECKS = [
 
 def test_the_shape_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
     assert selection.shape_checks() == []
-    assert selection.shape_fixtures() == []
+    assert suites.shape_fixtures() == []
     (repo / "ui" / "shapes.json").write_text(json.dumps(SHAPES))
     assert selection.shape_checks() == SHAPE_CHECKS
-    assert selection.shape_fixtures() == ["shape-pick", "shape-pick-theirs"]
+    assert suites.shape_fixtures() == ["shape-pick", "shape-pick-theirs"]
     # They are the lane's checks, after every other.
     assert selection.lane_checks("ui-test", [], None)[-4:] == SHAPE_CHECKS
 

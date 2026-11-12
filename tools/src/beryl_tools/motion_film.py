@@ -38,8 +38,8 @@ from . import (
     conventions,
     motion,
     paths,
-    selection,
     shots,
+    suites,
     video,
     video_measure,
     video_shape,
@@ -344,7 +344,7 @@ def brief(
 def fixtures_of(verb: str) -> list[str]:
     """The fixtures the verb's moments play: the suite's first moment whole, and the moments
     it watches besides, one a seat (ui/verbs.json)."""
-    suite: dict[str, Any] = json.loads((paths.REPO / selection.VERBS).read_text())
+    suite: dict[str, Any] = json.loads((paths.REPO / suites.VERBS).read_text())
     found = [seat["whole"] for seat in suite["moment"].values()]
     for moment in suite.get("watches", {}).get(verb, []):
         found += list(suite["more"][moment].values())
@@ -360,7 +360,7 @@ def command(args: argparse.Namespace) -> int:
     reference = motion.motion()
     verb, case = str(args.film[0]), " ".join(args.film[1:]) or None
     declared = {v["name"]: v for v in data.get("verbs", [])}.get(verb)
-    suite = selection.verb_suite().get("verbs")
+    suite = suites.verb_suite().get("verbs")
     if declared is None or not isinstance(suite, list) or verb not in suite:
         print(f"motion: the verb suite has no verb {verb!r}", file=sys.stderr)
         return 2

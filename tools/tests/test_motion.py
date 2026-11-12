@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from beryl_tools import conventions, motion, selection
+from beryl_tools import conventions, motion, suites
 from beryl_tools.video_measure import Clip
 
 # The values report: Beryl's own values beside Arena's, with no verdict.
@@ -211,7 +211,7 @@ def test_a_steps_travel_and_curve_are_held_to_its_curve_and_its_sizes_only_shown
 
 
 def test_a_verb_the_capture_does_not_play_is_one_of_the_suites() -> None:
-    suite = selection.verb_suite()["verbs"]
+    suite = suites.verb_suite()["verbs"]
     assert isinstance(suite, list)
     assert set(motion.MORE_ONLY) <= {str(v) for v in suite}
 

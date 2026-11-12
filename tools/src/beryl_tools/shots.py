@@ -5,8 +5,9 @@ paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromiu
 Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
-as a player would (ui/scripts/interactions.mjs), and then the stage's verbs on the stage's own
-clock (ui/scripts/verbs.mjs, the checks named `verb:...`). It records its fixtures into the cache
+as a player would (ui/scripts/interactions.mjs, the old board's checks; ui/scripts/kept.mjs, those
+that stay at the cut-over), and then the stage's verbs on the stage's own clock
+(ui/scripts/verbs.mjs, the checks named `verb:...`). It records its fixtures into the cache
 instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and
 `ui-test` lanes).
 
@@ -39,7 +40,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import checks, paths, selection, system, warm
+from . import checks, paths, selection, suites, system, warm
 
 # Load-adjusted seconds (checks.Clock): a crowded machine stretches Vite's start well past a
 # minute of wall time, and a wall-clock wait failed runs that would pass on a quiet one.
@@ -257,7 +258,7 @@ def ui_shots(args: argparse.Namespace) -> int:
     return code
 
 
-# The fixtures ui/scripts/interactions.mjs plays.
+# The fixtures ui/scripts/interactions.mjs and kept.mjs play.
 INTERACTION_FIXTURES = [
     "greedy-turn-9",
     "opening-bottom",
@@ -341,8 +342,9 @@ def ui_test(args: argparse.Namespace) -> int:
 
 
 def ui_test_fixtures() -> list[str]:
-    """The fixtures `ui-test` records: interactions.mjs' and the verb and shape suites'."""
-    fixtures = selection.verb_fixtures() + selection.shape_fixtures()
+    """The fixtures `ui-test` records: interactions.mjs' and kept.mjs', and the verb and shape
+    suites'."""
+    fixtures = suites.verb_fixtures() + suites.shape_fixtures()
     return list(dict.fromkeys(INTERACTION_FIXTURES + fixtures))
 
 
@@ -352,10 +354,13 @@ def interactions(
     only: list[str],
     chooser: selection.Chooser | None,
 ) -> int:
-    """Plays the checks of interactions.mjs, then verbs.mjs, then shapes.mjs: those `only`
-    names, or with `chooser`, those it chose, which the scripts match exactly so that a rerun's
-    filters narrow them. A script none of the names is for does not run (selection.scripts).
-    Fails if any script does."""
+    """Plays the checks of interactions.mjs, kept.mjs, verbs.mjs and shapes.mjs in turn: those
+    `only` names, or with `chooser`, those it chose, which the scripts match exactly so that a
+    rerun's filters narrow them. A script none of the names is for does not run
+    (selection.scripts), one they reach no check of is no failure unless none reach one, nor
+    interactions.mjs on a run forced onto the stage, whose checks go
+    with the old board (`BERYL_STAGE_EVERY` set plays them there too). Fails if any script
+    does."""
     with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
         names = only
         if chooser:
@@ -367,8 +372,13 @@ def interactions(
                 chosen.write_text("".join(f"{t}\n" for t in names))
                 env = {**env, selection.CHOSEN_ENV: str(chosen)}
         code = 0
+        every_staged = bool(os.environ.get("BERYL_STAGE_EVERY"))
+        # Whether a script reached a check: a filter goes to every script it may be for.
+        reached = False
         with served_ui(env) as url:
             for script, own in selection.scripts(names).items():
+                if script == selection.INTERACTIONS and staged() and not every_staged:
+                    continue
                 ran = subprocess.run(
                     ["node", str(paths.REPO / script), url, str(recorded)]
                     + (own if only else []),
@@ -377,7 +387,13 @@ def interactions(
                     stdin=subprocess.DEVNULL,
                     check=False,
                 )
+                if ran.returncode == selection.NONE_REACHED:
+                    continue
+                reached = True
                 code = code or ran.returncode
+        if only and not reached:
+            print(f"ui-test: no check's title contains {' or '.join(only)}")
+            return 1
         return code
 
 

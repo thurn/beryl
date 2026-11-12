@@ -7,8 +7,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
 
 - `coverage:<file>:<line>`: a changed line of ui/src (JavaScript or CSS) is one it ran, by the
   nightly coverage file (coverage.py), mapped across the commits between it and the branch;
-- `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs, or a
-  top-level block of them, or its entry in ui/shots.json; for a verb check
+- `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs or a part
+  of kept.mjs, or a top-level block of them, or its entry in ui/shots.json; for a verb check
   (`verb:<verb>/<seat>/<layout>`, ui/scripts/verbs.mjs), that script or its list, ui/verbs.json;
   for a shape check (`shape:<shape>/<seat>/<layout>`, ui/scripts/shapes.mjs), that script or its
   list, ui/shapes.json;
@@ -16,8 +16,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
   coverage sees: as if each line of interactions.mjs that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
   step recorded it against the recording the coverage run made;
-- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, interactions.mjs outside
-  any check): every check is chosen;
+- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, interactions.mjs or a
+  kept file outside any check): every check is chosen;
 - `record`: a change no check covers (new code, a file absent from coverage, coverage too old or
   without recordings): the rest of the time box goes to the worst failure records.
 
@@ -38,6 +38,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import checks, paths, runlog, system, verdicts
+from .suites import (
+    SHAPE_CASES,
+    SHAPE_PREFIX,
+    SHAPE_SCRIPT,
+    SHAPES,
+    VERB_CASES,
+    VERB_PREFIX,
+    VERB_SCRIPT,
+    VERBS,
+    shape_checks,
+    verb_checks,
+)
 
 # Coverage older than this is not trusted to choose: checks fall back to their records.
 STALE_DAYS = 3
@@ -72,31 +84,20 @@ HARNESS: dict[str, tuple[str, ...]] = {
     "shots": (*COMMON_HARNESS, "ui/scripts/shots.mjs"),
 }
 INTERACTIONS = "ui/scripts/interactions.mjs"
-# The verb suite, which `ui-test` runs beside interactions.mjs: its script, its cases, the list
-# of its checks, and the prefix of their ids in the run log (the lane's others are `ui-test:<title>`).
-VERB_SCRIPT = "ui/scripts/verbs.mjs"
-VERB_CASES = (
-    "ui/scripts/verb-cases.mjs",
-    "ui/scripts/verb-cases-place.mjs",
-    "ui/scripts/verb-cases-piles.mjs",
-    "ui/scripts/verb-cases-spans.mjs",
-    "ui/scripts/verb-cases-rest.mjs",
-    "ui/scripts/verb-spans.mjs",
-    "ui/scripts/verb-rest.mjs",
-    "ui/scripts/written-marks.mjs",
-    "ui/scripts/verb-audit.mjs",
-    "ui/scripts/stage-audit.mjs",
+# The kept checks, whose ids are `ui-test:<title>` as interactions.mjs' are: the script `ui-test`
+# runs, its harness and its parts. Each file is read as interactions.mjs is: a line in no check
+# is the harness.
+KEPT_SCRIPT = "ui/scripts/kept.mjs"
+KEPT_PARTS: tuple[str, ...] = tuple(
+    f"ui/scripts/kept-{part}.mjs"
+    for part in ("screens", "table", "crowded", "piles", "pointer")
 )
-VERBS = "ui/verbs.json"
-VERB_PREFIX = "verb:"
-# The shape suite, which `ui-test` runs after it: its script, its cases, the list of its checks,
-# and the prefix of their ids in the run log.
-SHAPE_SCRIPT = "ui/scripts/shapes.mjs"
-SHAPE_CASES: tuple[str, ...] = tuple(
-    f"ui/scripts/shape-cases{part}.mjs" for part in ("", "-table", "-panel")
+CHECK_SOURCES: tuple[str, ...] = (
+    INTERACTIONS,
+    KEPT_SCRIPT,
+    "ui/scripts/kept-harness.mjs",
+    *KEPT_PARTS,
 )
-SHAPES = "ui/shapes.json"
-SHAPE_PREFIX = "shape:"
 SHOTS = "ui/shots.json"
 FIXTURES = "ui/fixtures.json"
 COMMENT = ("//", "/*", "*")
@@ -412,91 +413,48 @@ def interaction_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
     return [f"ui-test:{r.literal}" for r in found if r.literal is not None], patterns
 
 
-def verb_suite() -> dict[str, object]:
-    """ui/verbs.json: the verb suite's verbs, layouts and the fixtures of its moment by seat.
-    Empty where a checkout has none."""
-    try:
-        found = json.loads((paths.REPO / VERBS).read_text())
-    except (OSError, ValueError):
-        return {}
-    return found if isinstance(found, dict) else {}
-
-
-def verb_checks() -> list[str]:
-    """The verb suite's checks, by their run-log ids."""
-    suite = verb_suite()
-    verbs, layouts, moment = (suite.get(k) for k in ("verbs", "layouts", "moment"))
-    if not (
-        isinstance(verbs, list)
-        and isinstance(layouts, list)
-        and isinstance(moment, dict)
-    ):
-        return []
-    return [
-        f"{VERB_PREFIX}{verb}/{seat}/{layout}"
-        for verb in verbs
-        for seat in moment
-        for layout in layouts
-    ]
-
-
-def verb_fixtures() -> list[str]:
-    """The fixtures the verb suite plays: its first moment's, whole and cut, and those of the
-    moments its verbs watch besides (`more`), one a seat."""
-    suite = verb_suite()
-    moment, more = suite.get("moment"), suite.get("more")
-    seats = list(moment.values()) if isinstance(moment, dict) else []
-    seats += list(more.values()) if isinstance(more, dict) else []
-    return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
-
-
-def shape_suite() -> dict[str, object]:
-    """ui/shapes.json: the shape suite's shapes, each with its fixture by seat, and its layouts.
-    Empty where a checkout has none."""
-    try:
-        found = json.loads((paths.REPO / SHAPES).read_text())
-    except (OSError, ValueError):
-        return {}
-    return found if isinstance(found, dict) else {}
-
-
-def shape_checks() -> list[str]:
-    """The shape suite's checks, by their run-log ids."""
-    suite = shape_suite()
-    shapes, layouts = suite.get("shapes"), suite.get("layouts")
-    if not (isinstance(shapes, dict) and isinstance(layouts, list)):
-        return []
-    return [
-        f"{SHAPE_PREFIX}{shape}/{seat}/{layout}"
-        for shape, seats in shapes.items()
-        if isinstance(seats, dict)
-        for seat in seats
-        for layout in layouts
-    ]
-
-
-def shape_fixtures() -> list[str]:
-    """The fixtures the shape suite plays: each shape's, one a seat."""
-    shapes = shape_suite().get("shapes")
-    seats = list(shapes.values()) if isinstance(shapes, dict) else []
-    return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
+# The exit of a check script whose filters reached none of its checks: `by ui-test` fails only
+# when every script it ran said so (shots.py).
+NONE_REACHED = 3
 
 
 def scripts(names: list[str]) -> dict[str, list[str]]:
     """Which of `ui-test`'s scripts run, each with the checks of `names` that are its own: a
-    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs and any other to
-    interactions.mjs, and a script with none does not run. With no names all run every check.
-    """
+    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs, a title a kept check
+    gives to kept.mjs and one a check of interactions.mjs gives to it; any other, a filter
+    (`just ui-test drag`), goes to both, each running the checks it reaches. A script with none
+    does not run. With no names all run every check."""
+    every = [INTERACTIONS, KEPT_SCRIPT, VERB_SCRIPT, SHAPE_SCRIPT]
     if not names:
-        return {INTERACTIONS: [], VERB_SCRIPT: [], SHAPE_SCRIPT: []}
+        return {script: [] for script in every}
     suites = {VERB_PREFIX: VERB_SCRIPT, SHAPE_PREFIX: SHAPE_SCRIPT}
-    found: dict[str, list[str]] = {INTERACTIONS: [], VERB_SCRIPT: [], SHAPE_SCRIPT: []}
+    found: dict[str, list[str]] = {script: [] for script in every}
+    kept = patterns_of(KEPT_PARTS)
+    old = patterns_of((INTERACTIONS,))
     for name in names:
-        script = next(
-            (s for p, s in suites.items() if name.startswith(p)), INTERACTIONS
-        )
-        found[script].append(name)
+        suite = next((s for p, s in suites.items() if name.startswith(p)), None)
+        if suite:
+            found[suite].append(name)
+            continue
+        mine = any(p.fullmatch(name) for p in kept)
+        theirs = any(p.fullmatch(name) for p in old)
+        if mine or not theirs:
+            found[KEPT_SCRIPT].append(name)
+        if theirs or not mine:
+            found[INTERACTIONS].append(name)
     return {script: own for script, own in found.items() if own}
+
+
+def patterns_of(scripts: Iterable[str]) -> list[re.Pattern[str]]:
+    """The titles the `check(...)` calls of `scripts` give, as patterns; none for a title this
+    cannot follow."""
+    return [
+        r.title
+        for s in scripts
+        if (paths.REPO / s).exists()
+        for r in regions((paths.REPO / s).read_text())
+        if r.title is not None
+    ]
 
 
 def shot_entries(text: str) -> dict[str, object]:
@@ -617,11 +575,14 @@ def choose(
     choice = Choice(universe, fallback)
     if any(matches(p, HARNESS[lane]) for p in changed):
         choice.add(universe, "harness")
-    if lane == "ui-test" and INTERACTIONS in changed:
-        source = (paths.REPO / INTERACTIONS).read_text()
-        bodies, harness = body_reasons(
-            source, hunks_now.get(INTERACTIONS, []), universe
-        )
+    for script in CHECK_SOURCES if lane == "ui-test" else ():
+        if script not in changed or not (paths.REPO / script).exists():
+            continue
+        if script not in hunks_now:  # A file git does not track yet: all of it is new.
+            choice.add(universe, "harness")
+            continue
+        source = (paths.REPO / script).read_text()
+        bodies, harness = body_reasons(source, hunks_now[script], universe)
         choice.add(sorted(bodies), "body")
         if harness:
             choice.add(universe, "harness")
@@ -649,10 +610,12 @@ def choose(
         choice.fill = True
     elif sources and found is not None:
         coverage_reasons(choice, sources, found, base)
-    if lane == "ui-test" and sources:
-        source = (paths.REPO / INTERACTIONS).read_text()
-        for path, hs in sources.items():
-            bodies, harness = import_reasons(source, path, hs, universe)
+    for script, path in (
+        ((c, p) for c in CHECK_SOURCES for p in sources) if lane == "ui-test" else ()
+    ):
+        if (paths.REPO / script).exists():
+            source = (paths.REPO / script).read_text()
+            bodies, harness = import_reasons(source, path, sources[path], universe)
             choice.add(sorted(bodies), f"import:{path}")
             if harness:
                 choice.add(universe, "harness")
@@ -718,8 +681,15 @@ def every_check(
     prefix = f"{lane}:"
     if lane == "shots":
         return [f"{prefix}{n}" for n in shot_entries((paths.REPO / SHOTS).read_text())]
-    source = (paths.REPO / INTERACTIONS).read_text()
-    literal, patterns = interaction_titles(source)
+    sources = [
+        (paths.REPO / s).read_text() for s in CHECK_SOURCES if (paths.REPO / s).exists()
+    ]
+    literal: list[str] = []
+    patterns: list[re.Pattern[str]] = []
+    for source in sources:
+        found_literal, found_patterns = interaction_titles(source)
+        literal += found_literal
+        patterns += found_patterns
     named = {str(r.get("check")) for r in log if r.get("lane") == lane}
     named |= set(found.checks) if found else set()
     current = {
@@ -729,7 +699,7 @@ def every_check(
         and (
             any(p.fullmatch(c.removeprefix(prefix)) for p in patterns)
             # A check that records itself rather than through check().
-            or json.dumps(c.removeprefix(prefix)) in source
+            or any(json.dumps(c.removeprefix(prefix)) in s for s in sources)
         )
     }
     return sorted(current | set(literal)) + verb_checks() + shape_checks()
