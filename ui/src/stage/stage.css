@@ -61,6 +61,19 @@
   opacity: calc(1 - var(--glow));
   transform: scale(calc(1 + 0.1 * var(--glow)));
 }
+/* On the stack a card lies under the spell that acts on it, and a halo around it would ring
+   that spell, which then seems the one alight (the motion review of vanish, by-w8gv.21.48):
+   there the light is a rim inside the card's own frame, over its face, so that it shows only
+   where the card does. */
+.stage-node[data-zone="stack"] > .stage-effect-glow {
+  z-index: 100;
+  box-shadow:
+    inset 0 0 calc(var(--frame) * 0.03) calc(var(--frame) * 0.03)
+      rgb(var(--light)),
+    inset 0 0 calc(var(--frame) * 0.22) calc(var(--frame) * 0.1)
+      rgb(255 214 140 / 75%);
+  transform: none;
+}
 /* A wash of light over the card and a halo around it, bright as it lands. */
 .stage-effect-settle {
   background: rgb(var(--light));

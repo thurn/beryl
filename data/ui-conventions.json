@@ -1866,7 +1866,7 @@
   "effects": [
     {
       "name": "glow",
-      "shows": "A halo of warm light around a card, bright at once, that spreads and fades: the card is new here, or is leaving whole.",
+      "shows": "A halo of warm light around a card, bright at once, that spreads and fades: the card is new here, or is leaving whole. On the stack, where the spell that acts on a card lies over it, the light is a rim inside the card's own frame.",
       "layer": "under",
       "values": {
         "duration": 300,

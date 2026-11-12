@@ -484,8 +484,9 @@ steps begin. A mark says what a player may do; an effect says what just
 happened, and is gone.
 
 - **glow.** A halo of warm light around a card, bright at once, that spreads and
-  fades: the card is new here, or is leaving whole. Drawn under its card. Beryl:
-  300 ms, ease-out.
+  fades: the card is new here, or is leaving whole. On the stack, where the
+  spell that acts on a card lies over it, the light is a rim inside the card's
+  own frame. Drawn under its card. Beryl: 300 ms, ease-out.
 - **settle.** A wash of light over a card and a halo around it, bright as it
   lands and gone as it settles. Drawn over its card. Beryl: 350 ms, ease-out.
 - **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
