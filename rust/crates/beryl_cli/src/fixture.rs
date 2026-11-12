@@ -140,8 +140,8 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             let told = sent.clone();
             move |panic| drop(told.send(Err(panic)))
         });
-        // The recording stops listening once it has what it came for.
         let _ = done.send(boards::lock(&scripts).done());
+        // The recording stops listening once it has what it came for.
         let _ = sent.send(Ok(update));
     });
     let before = crate::panics::mark();

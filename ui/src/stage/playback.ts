@@ -56,6 +56,7 @@ export function pageStage() {
 
 /** The game in progress as the player watches it on the stage, and how to start one. */
 export function useStagePlayback(): ReturnType<typeof usePlayback> {
+  const { stage, feed } = pageStage();
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(true);
   const resumed = useGameUpdates({
@@ -70,7 +71,6 @@ export function useStagePlayback(): ReturnType<typeof usePlayback> {
       if (!awaiting || feed.fed().shown) setResuming(false);
     },
   });
-  const { stage, feed } = pageStage();
   const { shown, behind, latest, log } = useSyncExternalStore(
     feed.subscribe,
     feed.fed,
