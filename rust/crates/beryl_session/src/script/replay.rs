@@ -60,7 +60,7 @@ pub(super) fn check(before: Table, script: &Script, after: &Table) -> Option<Str
 }
 
 /// The first part of `replayed` that differs from `view`'s, by its path in the table.
-fn difference(replayed: &Table, view: &Table) -> String {
+pub(super) fn difference(replayed: &Table, view: &Table) -> String {
     let value = |table| serde_json::to_value(table).expect("a table is plain data");
     first_difference(&value(replayed), &value(view), "table").map_or_else(
         || "the tables are the same".to_owned(),

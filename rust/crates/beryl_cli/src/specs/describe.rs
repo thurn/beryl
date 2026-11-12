@@ -2,6 +2,7 @@
 //! with the views shown on the way, for `specs-describe`.
 
 use beryl_session::Status;
+use beryl_session::script::Follow;
 
 use super::{Moment, Phase, View, auto, chosen, start_guarded};
 use crate::boards;
@@ -17,7 +18,8 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
 #[derive(Clone, Debug)]
 pub enum Unreached {
     /// The session's thread panicked: a debug build's script checks (plan K24) or anything
-    /// else that broke. The message says where ([`crate::panics`]).
+    /// else that broke. The message says where ([`crate::panics`]). Or the scripts did not
+    /// play from the first view shown, started over ([`restart`]).
     Panicked(String),
     /// The game went another way: the moment's actions did not fit, or it ended first.
     Failed(String),
@@ -53,6 +55,7 @@ pub(super) fn trace(
     .map_err(Unreached::Failed)?;
     let mut shown = false;
     let mut views = Vec::new();
+    let mut follow = Follow::default();
     loop {
         let (update, phase) = received
             .recv_timeout(std::time::Duration::from_secs(30))
@@ -61,7 +64,15 @@ pub(super) fn trace(
         if let Some(failure) = boards::lock(&progress).failure.take() {
             return Err(Unreached::Failed(failure));
         }
-        shown |= phase != Phase::Setup;
+        let mut update = update;
+        if !shown && phase != Phase::Setup {
+            restart(&mut follow, &mut update.view).map_err(Unreached::Panicked)?;
+            shown = true;
+        } else {
+            follow.play(&update.view).map_err(|e| {
+                Unreached::Panicked(format!("a script does not play as the page shows it: {e}"))
+            })?;
+        }
         if shown {
             views.push(update.view.clone());
         }
@@ -85,6 +96,18 @@ pub(super) fn trace(
             _ => {}
         }
     }
+}
+
+/// Gives `view`, the first a page shows of a moment, the script that starts its stage over
+/// where the views before it left the seat's screen (`beryl_session::script::Follow`), in place
+/// of the one it came with, and follows it.
+pub(super) fn restart(
+    follow: &mut Follow,
+    view: &mut beryl_session::PlayerView,
+) -> Result<(), String> {
+    follow.play(view)?;
+    view.script = Some(follow.restart(view)?);
+    follow.play(view)
 }
 
 /// A view's events in a line, each its kind and fields, objects by name: "turn 5 your

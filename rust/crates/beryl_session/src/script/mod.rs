@@ -76,7 +76,8 @@
 //! stage drops its table and every span and takes the view's table as it stands, with no
 //! motion. The script's steps are then only the spans to show, begun at once. A stage with no
 //! table yet does the same with whatever view it first gets (a page reloaded into a game in
-//! progress), whose script was written for a screen that had the view before.
+//! progress), whose script was written for a screen that had the view before. A page that shows
+//! first a view other than its seat's first has [`Follow`] write that view a reset of its own.
 //!
 //! # Building
 //!
@@ -119,6 +120,7 @@
 mod act;
 mod build;
 mod check;
+mod follow;
 mod infer;
 mod mana;
 mod moves;
@@ -137,6 +139,7 @@ pub use act::{Act, Fact, Notice, Stream, Tally};
 pub(crate) use build::PLANTED;
 pub use build::Screen;
 pub use check::{Open, carried};
+pub use follow::Follow;
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;

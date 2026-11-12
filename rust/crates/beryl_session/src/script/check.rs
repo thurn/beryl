@@ -14,6 +14,10 @@
 //! - Every beginning has an end, in this script or carried: a step ends only what was begun
 //!   and is still open, and what a script leaves open is handed to the seat's next one
 //!   ([`carried`] returns it), which a reset drops.
+//! - Nothing leaves the stack that the table does not hold there: a spell's card leaves the
+//!   stack only with its spell on the table's stack, and an ability vanishes only from it. A
+//!   stage that starts over from a view holds what the view's table does (`Table::of`), so a
+//!   resolving spell or ability its view leaves out would have nothing to take away.
 //!
 //! A thing *moves* in a step that takes it from its place: a `fly`, an `appear`, a `vanish`,
 //! and the `emerge` that puts an ability on the stack. Turning, tapping, striking and
@@ -23,7 +27,7 @@ use std::fmt::{self, Display, Formatter};
 
 use super::replay::number;
 use super::{Act, Arrow, Mark, Script, Span, Subject, Table};
-use crate::protocol::{CardHandling, ZoneName};
+use crate::protocol::{CardHandling, StackItem, ZoneName};
 
 /// An arrow, a mark or a lift that has begun and not ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +124,35 @@ pub(super) fn lands(table: &Table, act: &Act) -> bool {
         }
         _ => false,
     }
+}
+
+/// Whether `act` takes `subject` off the stack of `table`.
+fn unstacks(table: &Table, act: &Act, subject: Subject) -> bool {
+    let stacked = |slot| {
+        table
+            .objects
+            .get(&slot)
+            .is_some_and(|o| o.zone == ZoneName::Stack)
+    };
+    match (act, subject) {
+        (Act::Vanish { .. }, Subject::Ability { .. }) => true,
+        (Act::Fly { object, .. } | Act::Appear { object, .. }, Subject::Object { slot }) => {
+            object.zone != ZoneName::Stack && stacked(slot)
+        }
+        (Act::Vanish { object, .. }, Subject::Object { slot }) => {
+            object.as_ref().is_none_or(|o| o.zone != ZoneName::Stack) && stacked(slot)
+        }
+        _ => false,
+    }
+}
+
+/// Whether `table`'s stack holds `subject`: a spell by its card, or an ability.
+fn stacks(table: &Table, subject: Subject) -> bool {
+    table.stack.iter().any(|e| match (&e.item, subject) {
+        (StackItem::Spell { slot, .. }, Subject::Object { slot: s }) => *slot == s,
+        (StackItem::Ability { .. }, Subject::Ability { id }) => e.id == Some(id),
+        _ => false,
+    })
 }
 
 fn present(table: &Table, subject: Subject) -> bool {
@@ -239,6 +272,11 @@ fn moving(
     if twice {
         return Err(format!(
             "{subject} is on the table already: one visual per thing"
+        ));
+    }
+    if unstacks(table, act, subject) && !stacks(table, subject) {
+        return Err(format!(
+            "{subject} leaves the stack, which does not hold it"
         ));
     }
     Ok(())

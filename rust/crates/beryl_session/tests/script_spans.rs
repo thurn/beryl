@@ -8,7 +8,9 @@ mod common;
 use beryl_cards::{CARDS, SCENARIOS, names};
 use beryl_search::Budget;
 use beryl_session::protocol::{Candidate, Kind, ObjectView, StackItem, TargetRef, Why, ZoneName};
-use beryl_session::script::{Act, Arrow, Open, Script, Span, Step, Subject, Table, carried};
+use beryl_session::script::{
+    Act, Arrow, Follow, Open, Script, Span, Step, Subject, Table, carried,
+};
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 use common::{script, scripts, text, views};
 
@@ -496,6 +498,68 @@ fn two_visuals_of_one_thing_break_a_rule() {
         "`appear #256 (Portable Hole) nowhere>stack created`: \
          #256 is on the table already: one visual per thing"
     );
+}
+
+/// Nothing leaves the stack that the table does not hold there: a stage that started over
+/// from a view leaving out a resolving spell or ability would have nothing to take away.
+#[test]
+fn taking_off_the_stack_what_it_does_not_hold_breaks_a_rule() {
+    let (mut table, whole) = counterspell();
+    // The spell countered, its card on the stack, but no entry for it on the table's stack.
+    table
+        .stack
+        .retain(|e| !matches!(e.item, StackItem::Spell { slot: 256, .. }));
+    assert_eq!(
+        broken(&table, &[], &whole),
+        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
+         #256 leaves the stack, which does not hold it"
+    );
+    // An ability that was never on the stack, finishing.
+    let finish = Script {
+        reset: None,
+        beats: vec![vec![step(Act::Vanish {
+            subject: Subject::Ability { id: 9 },
+            from: ZoneName::Stack,
+            why: Why::Resolve,
+            object: None,
+            at: None,
+        })]],
+    };
+    assert_eq!(
+        broken(&table, &[], &finish),
+        "`vanish a9 stack>gone resolve`: a9 leaves the stack, which does not hold it"
+    );
+}
+
+/// A view shown first that is not its seat's first starts over with a reset that names what
+/// its stage holds as the scripts before it named it: the ability on the stack by the number
+/// its `emerge` gave it, and its line to its source begun at once. The seat's scripts after it
+/// then play over that reset.
+#[test]
+fn a_view_shown_first_starts_over_where_its_scripts_left_the_stack() {
+    let name = "Thieving Skydiver kicked steals Mana Crypt over a Map";
+    let views = views(names::THIEVING_SKYDIVER, name, |_, _, _| {});
+    for seat in 0..2 {
+        let mut follow = Follow::default();
+        for seats in &views[..8] {
+            follow
+                .play(&seats[seat])
+                .expect("the session's scripts play");
+        }
+        let mut first = views[7][seat].clone();
+        let restart = follow.restart(&first).expect("a restart");
+        assert_eq!(
+            restart.to_string(),
+            "reset a1\n+point source a1 > #0\n",
+            "seat {seat}"
+        );
+        first.script = Some(restart);
+        let mut shown = Follow::default();
+        shown.play(&first).expect("the restart plays");
+        for later in &views[8..] {
+            shown.play(&later[seat]).expect("the scripts after it play");
+        }
+    }
 }
 
 /// Every beginning has an end, in its script or carried to a later one.

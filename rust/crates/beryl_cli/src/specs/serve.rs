@@ -43,6 +43,7 @@ use beryl_scenario::Action;
 use beryl_session::bugs::SpecMoment;
 use beryl_session::ipc;
 use beryl_session::protocol::{Candidate, GameEvent, PlayerView, Side};
+use beryl_session::script::Follow;
 use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
@@ -82,6 +83,9 @@ struct Feed {
     mode: FeedMode,
     opponent_move: Option<(DecisionId, CandidateIndex)>,
     streams: Vec<Sender<String>>,
+    /// The seat's screen as the views so far leave it, which the view shown at once starts
+    /// over from.
+    follow: Follow,
     /// Its key, and the page stream it goes to as well, if its key names a page.
     key: String,
     page: Option<(Pages, String)>,
@@ -463,10 +467,14 @@ fn instance(
                 if f.start.is_some() {
                     broadcast(&mut f, &update);
                 } else if !ready {
+                    follow(&mut f, &update);
                     continue;
                 }
+                // What a page opened from here on shows at once.
+                let mut shown = update;
+                shown_first(&mut f, &mut shown);
                 f.views.clear();
-                f.views.push(update);
+                f.views.push(shown);
                 f.start = Some(0);
                 changed.notify_all();
             }
@@ -502,18 +510,41 @@ fn instance(
 fn record_view(shared: &SharedFeed, update: &GameUpdate, phase: Phase) {
     let (feed, ready) = &**shared;
     let mut f = lock(feed);
-    f.views.push(update.clone());
     if f.start.is_none()
         && phase != Phase::Setup
         && !(f.mode == FeedMode::Playground && matches!(update.view.status, Status::Playing))
     {
-        f.start = Some(f.views.len() - 1);
         let mut initial = update.clone();
+        shown_first(&mut f, &mut initial);
+        f.views.push(initial.clone());
+        f.start = Some(f.views.len() - 1);
         initial.view.events.clear();
         remember(&mut f, &initial);
         ready.notify_all();
-    } else if f.released {
-        broadcast(&mut f, update);
+    } else {
+        if f.start.is_none() {
+            follow(&mut f, update);
+        }
+        f.views.push(update.clone());
+        if f.released {
+            broadcast(&mut f, update);
+        }
+    }
+}
+
+/// Follows the seat's screen through `update`, a view the page never shows at once.
+fn follow(feed: &mut Feed, update: &GameUpdate) {
+    if let Err(error) = feed.follow.play(&update.view) {
+        eprintln!("beryl_cli: {}: {error}", feed.key);
+    }
+}
+
+/// Gives `update`, which the page shows at once, the script that starts the page's stage over
+/// where the views before it left the seat's screen, in place of the one it came with (a
+/// reset numbering the abilities on its stack as the scripts after it name them).
+fn shown_first(feed: &mut Feed, update: &mut GameUpdate) {
+    if let Err(error) = super::describe::restart(&mut feed.follow, &mut update.view) {
+        eprintln!("beryl_cli: {}: {error}", feed.key);
     }
 }
 
@@ -682,6 +713,28 @@ fn pump(mut stream: TcpStream, received: &std::sync::mpsc::Receiver<String>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A view shown at once starts the page's stage over, from each seat; one that opens with
+    /// an ability on the stack numbers it as the scripts after the setup do, so the stage has
+    /// a node for what the next script resolves.
+    #[test]
+    fn the_view_shown_at_once_starts_over_with_the_stack_numbered() {
+        let instances = Arc::new(Mutex::new(Vec::new()));
+        let pages = Arc::new(Mutex::new(HashMap::new()));
+        let card = "the-wandering-emperor";
+        let moment = "1-grows-a-creature-and-gives-it-first-strike-pass";
+        for (view, abilities) in [("yours", json!([1])), ("theirs", json!([]))] {
+            let key = format!("{card}/{moment}/{view}/reset-test");
+            let feed = instance(&instances, &pages, &key, card, moment, view).unwrap();
+            let shown = current(&feed);
+            assert_eq!(
+                shown["ok"]["view"]["script"]["reset"],
+                json!({ "abilities": abilities }),
+                "{view}: {}",
+                shown["ok"]["view"]["script"]
+            );
+        }
+    }
 
     #[test]
     fn playground_priority_needs_no_play_button() {
