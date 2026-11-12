@@ -193,7 +193,11 @@ recordings do not show them.
   Arena documents the preview and acceptance gestures in its
   [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes).
   A selected permanent turns and carries a tap mark, and an outline means one
-  thing at a time (by-1y4, by-uld, by-4hjm, by-z973).
+  thing at a time: at rest every permanent that can pay wears the outline of
+  what may be picked, and while Auto Pay shows its proposal those it would tap
+  alone show, in their ring. The prompt says after what it asks how much is
+  still to pay (by-1y4, by-uld, by-4hjm, by-z973, by-szrn, by-uq8, by-x45,
+  by-hmfq, by-tyf).
 - **A creature that enters attacking.** It gets an explicit choice of what it
   attacks, and its line stays drawn throughout (by-l26, by-y3sp).
 - **A token that leaves.** It dissolves in place like any permanent. No token
