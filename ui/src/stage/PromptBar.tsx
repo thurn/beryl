@@ -60,6 +60,12 @@ export function usePaying({ prompt }: Asked) {
   return { pay, suggest } as const;
 }
 
+/** How many letters a prompt asks in as a heading: what asks in more, a sentence of rules
+ * text, is set smaller in the desktop's dock, so that the dock stays under the stack
+ * (stage.css), and wraps in the phone's pill, beside the prompt's other buttons
+ * (mobile/phone.css). */
+const LONG = 40;
+
 /** How long a touch is held on Auto Pay before it shows what it would tap, in ms. */
 const HELD = 450;
 
@@ -260,7 +266,11 @@ export function PromptDock({
   const takesBack = decision?.cancellable && cancel;
   return (
     <Dock
-      className="stage-prompt"
+      className={
+        prompt.title.length > LONG
+          ? "stage-prompt stage-prompt-long"
+          : "stage-prompt"
+      }
       title={prompt.title ? <Asks prompt={prompt} /> : undefined}
     >
       {(others.length > 0 || takesBack) && (
@@ -352,14 +362,24 @@ export function PhonePromptOver({
   if (!prompt) return null;
   const { others } = standing(prompt.buttons);
   const takesBack = decision?.cancellable && cancel;
+  const more = others.length > 0 || Boolean(takesBack);
+  const long = prompt.title.length > LONG;
   return (
     <>
       {prompt.title && (
-        <div className="phone-pill" role="status" style={{ top: top - 30 }}>
+        <div
+          className={long ? "phone-pill phone-pill-long" : "phone-pill"}
+          role="status"
+          data-beside={(long && more) || undefined}
+          // A pill of several lines stands on the strip as one line does.
+          style={
+            long ? { bottom: `calc(100% - ${top - 6}px)` } : { top: top - 30 }
+          }
+        >
           <Asks prompt={prompt} />
         </div>
       )}
-      {(others.length > 0 || takesBack) && (
+      {more && (
         <div
           className="phone-prompt-more"
           style={{ bottom: `calc(100% - ${top - 6}px)` }}

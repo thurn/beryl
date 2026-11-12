@@ -463,6 +463,14 @@
   border: calc(var(--frame) * 0.016) solid rgb(240 122 28);
   border-radius: calc(var(--frame) * 0.08);
 }
+/* What the desktop's dock asks in a sentence of rules text (PromptBar.tsx `LONG`) is set as
+   text and not as a heading, and wider than the buttons, toward the table, so that it and
+   the buttons stay under the stack. */
+.dock.stage-prompt-long .prompt-title {
+  margin-left: -110px;
+  font-size: 18px;
+  line-height: 1.2;
+}
 /* While a cost is paid with permanents (UI Conventions, "Paying with permanents") the table
    wears one outline at a time. What Auto Pay would tap is outlined as anything else that may
    be picked, until the pointer is over Auto Pay or a touch is held on it: then those alone

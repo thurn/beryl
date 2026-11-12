@@ -4,9 +4,10 @@
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out
 // for what stands around it, and hears the pointer. The prompt picked on the table is the
 // session's, drawn and answered through prompt.ts and PromptBar.tsx, as are a cost paid with
-// permanents, a declaration of attackers or blockers, the cards a prompt holds up to be sorted
-// or picked and the triggers it has put in order (Tray.tsx); the other shapes come with their
-// own beads, and are answered over the table until then.
+// permanents, a declaration of attackers or blockers (Aim.tsx draws its line to the pointer),
+// the cards a prompt holds up to be sorted or picked and the triggers it has put in order
+// (Tray.tsx); the other shapes come with their own beads, and are answered over the table
+// until then.
 import {
   useCallback,
   useEffect,
@@ -18,6 +19,7 @@ import {
 import type { Board } from "../game/Board";
 import { Corner, UndoButton } from "../game/Corner";
 import { useStageWidth } from "../game/Stage";
+import { Aim } from "./Aim.tsx";
 import { Controls, Hud } from "./Chrome.tsx";
 import { desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
@@ -137,6 +139,7 @@ export function StageBoard({
             layer={layer.current}
           />
         )}
+        {surface && <Aim asked={asked} layer={layer.current} />}
         <OrderRow
           key={`order-${width}`}
           asked={asked}

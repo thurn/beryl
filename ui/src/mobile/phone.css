@@ -375,6 +375,24 @@ body.phone {
   white-space: nowrap;
   pointer-events: none;
 }
+/* What a prompt asks in a sentence of rules text (stage/PromptBar.tsx `LONG`) wraps, as wide
+   as the screen has room for and beside the prompt's other buttons where it has them. */
+.phone-pill-long {
+  left: 8px;
+  right: 8px;
+  translate: none;
+  width: fit-content;
+  margin-inline: auto;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
+}
+.phone-pill-long[data-beside] {
+  right: 116px;
+}
 /* Every control in the menu is as large as a finger. */
 .phone-menu-sheet .button {
   min-height: 40px;
