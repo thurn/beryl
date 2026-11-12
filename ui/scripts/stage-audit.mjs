@@ -379,7 +379,8 @@ function judgeStep(act, start, end, frames, taken) {
         object.exiledWith == null;
     if (
         frames.at(-1).phone &&
-        (exiled(act.object) || (act.from === "exile" && act.verb === "fly"))
+        (exiled(act.object) ||
+            (act.from === "exile" && ["fly", "vanish"].includes(act.verb)))
     ) {
         return played;
     }
