@@ -455,9 +455,16 @@ export function cutText(page) {
                         document.querySelector(".stage-tray") !== null &&
                         Number(over.style.zIndex) >= 850 &&
                         Number(over.style.zIndex) < 900;
+                    // A card of the hand raised under the pointer (stage/dom.ts `raise`)
+                    // covers what it likes until the pointer leaves it, as Arena's does:
+                    // it is hover inspection, not where the layout put it.
+                    const raised =
+                        over &&
+                        over.closest(".stage-node[data-raised]") !== null;
                     if (
                         over &&
                         !heldUp &&
+                        !raised &&
                         !over.contains(el) &&
                         !paintedOver(el, x, y)
                     ) {
