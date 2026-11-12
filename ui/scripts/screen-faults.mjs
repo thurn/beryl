@@ -127,11 +127,7 @@ export async function screenFaults(page) {
         // On top is what asks the viewer something as it resolves, which a view leaves out
         // of its list (src/stage/table.ts `tabled`).
         const resolving = view.status.decision?.resolving;
-        const listed =
-            resolving &&
-            !view.stack.some((item) => said(item) === said(resolving))
-                ? [...view.stack, resolving]
-                : view.stack;
+        const listed = resolving ? [...view.stack, resolving] : view.stack;
         for (const item of phone ? [] : listed) {
             if (item.kind !== "spell") {
                 abilities.push(said(marked(item.controller, item.x)));
