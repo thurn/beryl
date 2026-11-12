@@ -867,10 +867,17 @@ fn a_session_takes_clicks_and_its_latest_view_keeps_the_prompt() {
         button: ButtonId::Confirm,
     };
     assert_eq!(sessions.click(click(1, confirm)), Ok(ClickReply::Answered));
-    assert_eq!(
-        sessions.click(click(1, confirm)),
-        Err(SessionError::NotDeciding)
-    );
+    // A second click is refused. The game plays on in the background, so by then the player
+    // has no decision open or has a later one: either way, not this one.
+    let again = sessions.click(click(1, confirm));
+    let refused = match again {
+        Err(SessionError::NotDeciding) => true,
+        Err(SessionError::StaleDecision {
+            decision: answered, ..
+        }) => answered == decision.id,
+        _ => false,
+    };
+    assert!(refused, "{again:?}");
     assert_ne!(deciding().id, decision.id);
 }
 

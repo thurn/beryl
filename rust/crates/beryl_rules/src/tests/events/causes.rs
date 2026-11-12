@@ -170,8 +170,36 @@ static STRIP: CardDef = CardDef {
     tokens: &[],
 };
 
+/// "When this dies, draw a card."
+static MOURNER: CardDef = CardDef {
+    name: "Cause Mourner",
+    faces: &[Face {
+        cost: W,
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::triggered(&Trigger::DIES).effect(&draw(YOU, 1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// "Destroy target creature."
+static DOOM: CardDef = CardDef {
+    name: "Cause Doom",
+    faces: &[Face {
+        cost: W,
+        types: Types::INSTANT,
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURE)])
+            .effect(&destroy(TARGET))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &SAGE, &LOOT, &SHOCK, &DENY, &TITHE, &BEAR, &HATCHER, &STINGER, &STRIP,
+    &LAND, &SAGE, &LOOT, &SHOCK, &DENY, &TITHE, &BEAR, &HATCHER, &STINGER, &STRIP, &MOURNER, &DOOM,
 ]);
 
 const DECK: &Decklist = &[
@@ -185,6 +213,8 @@ const DECK: &Decklist = &[
     (2, "Cause Hatcher"),
     (2, "Cause Stinger"),
     (2, "Cause Strip"),
+    (1, "Cause Mourner"),
+    (1, "Cause Doom"),
 ];
 
 /// A game of [`DECK`] mirrors in the starting player's main phase, recording its events.
@@ -650,4 +680,52 @@ fn a_run_discarded_at_its_question_leaves_no_event_and_no_tag() {
     assert_eq!(who(&events, moves(Reason::Discard)), effect);
     assert_eq!(who(&events, departure), effect);
     assert!(stack.is_empty());
+}
+
+#[test]
+fn a_trigger_from_inside_a_resolution_goes_above_what_waits_below() {
+    let mut g = game();
+    let (me, them) = (g.me, g.them);
+    g.give(me, "Test Land", Zone::Battlefield);
+    g.give(them, "Test Land", Zone::Battlefield);
+    let mourner = g.give(me, "Cause Mourner", Zone::Battlefield);
+    let sage = g.give(me, "Cause Sage", Zone::Hand);
+    let doom = g.give(them, "Cause Doom", Zone::Hand);
+    let mut stack = Vec::new();
+    g.pick(cast(sage));
+    g.choose(Choice(0));
+    g.pick(cast(doom));
+    told(&mut g, &mut stack);
+    assert_eq!(stack.len(), 2);
+
+    // The creature dies as the instant above resolves, so its ability triggers then. CR
+    // 603.3: "Once an ability has triggered, its controller puts it on the stack as an object
+    // that's not a card the next time a player would receive priority": after the instant
+    // has left, on top of the sorcery still waiting, and as its controller's doing, not the
+    // instant's effect.
+    g.pass_both();
+    let events = told(&mut g, &mut stack);
+    let effect = Who::Effect(doom);
+    assert_eq!(who(&events, moves(Reason::Destroy)), effect);
+    assert_eq!(who(&events, departure), effect);
+    let putting = Who::Player(me, Some(mourner));
+    assert_eq!(who(&events, arrival), putting);
+    let at = |is: fn(&Event) -> bool| events.iter().position(|(e, _)| is(e)).unwrap();
+    assert!(at(departure) < at(arrival));
+    assert_eq!(stack.len(), 2);
+    assert_eq!(stack[0].object.map(|o| o.slot), Some(sage));
+    assert!(stack[1].ability.is_some());
+
+    // The trigger resolves before the sorcery under it: its draw and its leaving are its
+    // own, and the sorcery stays.
+    g.pass_both();
+    let events = told(&mut g, &mut stack);
+    let trigger = Who::Effect(mourner);
+    assert_eq!(who(&events, |e| matches!(e, Event::Draw { .. })), trigger);
+    assert_eq!(
+        events.iter().find(|(e, _)| departure(e)).copied(),
+        Some((Event::StackDeparture { entry: StackIx(1) }, trigger))
+    );
+    assert_eq!(stack.len(), 1);
+    assert_eq!(stack[0].object.map(|o| o.slot), Some(sage));
 }
