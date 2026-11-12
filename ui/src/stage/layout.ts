@@ -44,6 +44,9 @@ export interface Dress {
   rim: boolean;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
+  /** How far a card of your hand rises under the pointer, where the layout raises it and by
+   * less than it would with nothing over it (game/placement.ts `RAISE`). */
+  lift?: number;
 }
 
 /** One thing at rest: where it lies, how it is dressed, and what its face is drawn from. A
@@ -69,7 +72,8 @@ export const sameDress = (a: Dress, b: Dress) =>
   a.frame === b.frame &&
   a.back === b.back &&
   a.rim === b.rim &&
-  a.count === b.count;
+  a.count === b.count &&
+  a.lift === b.lift;
 
 /** A point on the stage. */
 export interface Point {

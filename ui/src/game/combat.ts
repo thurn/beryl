@@ -70,8 +70,13 @@ export function aimAttacks(draft: Draft, target: number | null): Draft {
  * ([CR 510.1b](https://yawgatog.com/resources/magic-rules/#R5101b)): "An unblocked creature
  * assigns its combat damage to the player, planeswalker, or battle it's attacking." The engine
  * has no trample or double strike, so a blocked creature deals the player none and each
- * deals its power once. */
-export function incoming(view: PlayerView, side: Side): number | undefined {
+ * deals its power once. An attacker among `blocked` is counted as blocked: one a blocker is
+ * aimed at while the blocks are still being declared. */
+export function incoming(
+  view: PlayerView,
+  side: Side,
+  blocked?: ReadonlySet<number>,
+): number | undefined {
   let total: number | undefined;
   const pending = pendingAttackers(view);
   for (const o of view.objects) {
@@ -80,7 +85,8 @@ export function incoming(view: PlayerView, side: Side): number | undefined {
       continue;
     if (pending.includes(o.slot)) continue;
     if (o.controller === side) continue;
-    total = (total ?? 0) + (c.blocked ? 0 : Math.max(0, o.pt?.power ?? 0));
+    const stopped = c.blocked || blocked?.has(o.slot);
+    total = (total ?? 0) + (stopped ? 0 : Math.max(0, o.pt?.power ?? 0));
   }
   return total;
 }

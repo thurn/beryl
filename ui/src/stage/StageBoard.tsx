@@ -12,16 +12,20 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentProps,
 } from "react";
 import type { Board } from "../game/Board";
 import { Corner, UndoButton } from "../game/Corner";
+import { RAISE } from "../game/placement";
 import { useStageWidth } from "../game/Stage";
+import { linked } from "../game/zoneViews";
 import { Aim } from "./Aim.tsx";
 import { Entries, Shares, Ways } from "./Choose.tsx";
-import { Controls, Hud } from "./Chrome.tsx";
+import { Controls, Hud, useHovered } from "./Chrome.tsx";
 import type { ObjectView } from "../generated/protocol";
 import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
@@ -30,6 +34,7 @@ import { pageStage } from "./playback.ts";
 import {
   PlayerTarget,
   PromptDock,
+  useLostMana,
   usePaying,
   usePrompt,
   usePromptKeys,
@@ -82,7 +87,30 @@ export function StageBoard({
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
   const { pay, suggest } = usePaying(asked);
-  const press = prompts.press.bind(prompts);
+  const { press, lost } = useLostMana(
+    asked,
+    () => stage.shown.table,
+    prompts.press.bind(prompts),
+  );
+  const { table, resting } = useSyncExternalStore(
+    stage.subscribe,
+    () => stage.shown,
+  );
+  const hovered = useHovered(stage, prompts);
+  // The card of your hand the pointer is on rises out of the fan (UI Conventions, "Hover
+  // inspection").
+  useLayoutEffect(() => {
+    const lies = hovered === undefined ? undefined : resting.get(hovered);
+    if (!surface || !lies || lies.dress.look !== "hand" || dimmed) return;
+    surface.raise(hovered, lies.pose.rotation, lies.dress.lift ?? RAISE.lift);
+    return () => surface.raise();
+  }, [surface, hovered, resting, dimmed]);
+  // What is attached to the permanent the pointer is on, and what that is attached to, wear
+  // a ring.
+  const links = useMemo(
+    () => (table && typeof hovered === "number" ? linked(table, hovered) : []),
+    [table, hovered],
+  );
   const number = prompts.number.bind(prompts);
   const answers = { waiting, press, cancel, suggest, number };
   // A prompt's keys answer it while nothing else takes them.
@@ -96,7 +124,13 @@ export function StageBoard({
     } else if (e.key.toLowerCase() === "z" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       if (undoable) undo();
-    } else if ((e.key === " " || e.key === "Enter") && onSkip) {
+    } else if (
+      (e.key === " " || e.key === "Enter") &&
+      onSkip &&
+      // The press that answered a prompt (`usePromptKeys`) skips nothing of what it led to,
+      // however soon that came.
+      !e.defaultPrevented
+    ) {
       // A control that has the focus keeps its own key.
       const control =
         e.target instanceof Element &&
@@ -126,6 +160,8 @@ export function StageBoard({
         <Hud
           stage={stage}
           view={view}
+          asked={asked}
+          lost={lost}
           log={log}
           waiting={waiting}
           logOpen={logOpen}
@@ -135,7 +171,14 @@ export function StageBoard({
           )}
         />
         <div className="card-layer" ref={layer} />
-        {surface && <Faces stage={stage} surface={surface} skin={DESKTOP} />}
+        {surface && (
+          <Faces
+            stage={stage}
+            surface={surface}
+            skin={DESKTOP}
+            linked={links}
+          />
+        )}
         {surface && (
           // Keyed by the width its places are read at (game/layout.ts STAGE).
           <TrayUnder
@@ -177,6 +220,8 @@ export function StageBoard({
         <Controls
           stage={stage}
           prompts={prompts}
+          asked={asked}
+          hovered={hovered}
           stops={stops}
           setStops={setStops}
           inert={inert}

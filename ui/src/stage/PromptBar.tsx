@@ -6,10 +6,10 @@
 // round one beside it; and the others stacked over, in the order they came. A cost paid with
 // permanents says after what it asks how much is still to pay, and its Auto Pay shows what
 // it would tap while the pointer is over it or a touch is held on it (UI Conventions,
-// "Paying with permanents"). A division says the same of what is still to give out. A number
-// is set by the two steps beside it, over the button that answers with it, as Arena sets an
-// X (`0VsYGs88NXA 55:32.0`). The ways to use a card are not buttons here: the card is shown
-// once for each (Choose.tsx).
+// "Paying with permanents"), as does the yes of a question that pays a cost. A division says
+// the same of what is still to give out. A number is set by the two steps beside it, over the
+// button that answers with it, as Arena sets an X (`0VsYGs88NXA 55:32.0`). The ways to use a
+// card are not buttons here: the card is shown once for each (Choose.tsx).
 import {
   useEffect,
   useRef,
@@ -27,8 +27,10 @@ import {
   TurnButton,
 } from "../components/Controls";
 import { RulesText } from "../components/Mana";
+import { floating } from "../components/Player";
 import type {
   ButtonId,
+  PlayerView,
   PromptButton,
   PromptView,
   Side,
@@ -52,18 +54,68 @@ interface Answers {
   number?: (n: number) => void;
 }
 
+/** Whether `prompt` is a yes or no that says what its yes would tap: a cost a spell or
+ * ability asks for, paid at once by the button. */
+const asksToPay = (prompt: PromptView | undefined) =>
+  prompt?.state?.shape === "yesNo" &&
+  prompt.marks.some(({ mark }) => mark === "suggested");
+
+/** The button of `prompt` that shows what it would tap while the pointer is over it or a
+ * touch is held on it: a payment's Auto Pay, or the yes of a question that pays. */
+const shows = (
+  prompt: PromptView | undefined,
+  { id, primary }: PromptButton,
+) =>
+  prompt?.state?.shape === "pay"
+    ? id.kind === "auto"
+    : asksToPay(prompt) && primary;
+
 /** What a board shows of a cost paid with permanents: `pay`, for its `data-pay`, is `quiet`
- * while the open prompt is such a payment and `suggesting` while it shows what Auto Pay would
- * tap (stage.css), and `suggest` is the dock's to call. */
+ * while the open prompt is such a payment, `asking` while it is a question whose yes pays,
+ * which shows nothing of it until asked, and `suggesting` while either shows what its button
+ * would tap (stage.css); `suggest` is the dock's to call. */
 export function usePaying({ prompt }: Asked) {
   const [suggesting, suggest] = useState(false);
   const paying = prompt?.state?.shape === "pay";
+  const asking = asksToPay(prompt);
   // A button that goes while the pointer is on it never says the pointer left.
   useEffect(() => {
-    if (!paying) suggest(false);
-  }, [paying]);
-  const pay = !paying ? undefined : suggesting ? "suggesting" : "quiet";
-  return { pay, suggest } as const;
+    if (!paying && !asking) suggest(false);
+  }, [paying, asking]);
+  const pay = suggesting
+    ? "suggesting"
+    : paying
+      ? "quiet"
+      : asking
+        ? "asking"
+        : undefined;
+  return { pay: paying || asking ? pay : undefined, suggest } as const;
+}
+
+/** Whether any mana is unspent in `view`'s pool of the player's own. */
+const unspent = (view: PlayerView | undefined) =>
+  view !== undefined && floating(view.players.you.mana);
+
+/** `press`, counting in `lost` each press that passes on with mana unspent: the mana empties
+ * as the step ends ([CR 500.5](https://yawgatog.com/resources/magic-rules/#R5005): "Then
+ * any unspent mana left in a player's mana pool empties"), and the pool
+ * pulses instead of the player being asked (Chrome.tsx). A pass that lets the top of the
+ * stack resolve ends no step. */
+export function useLostMana(
+  { decision, prompt }: Asked,
+  table: () => PlayerView | undefined,
+  press: (button: ButtonId) => void,
+) {
+  const [lost, setLost] = useState(0);
+  const counted = (button: ButtonId) => {
+    const passes =
+      prompt?.purpose === "priority" &&
+      (button.kind === "passOn" ||
+        (button.kind === "decline" && decision?.passTo?.kind !== "resolve"));
+    if (passes && unspent(table())) setLost((n) => n + 1);
+    press(button);
+  };
+  return { press: counted, lost } as const;
 }
 
 /** How many letters a prompt asks in as a heading: what asks in more, a sentence of rules
@@ -79,8 +131,9 @@ const BESIDE = 20;
 const HELD = 450;
 
 /** What each button of `prompt` does with the pointer: a press of it, and for a payment's Auto
- * Pay the showing of what it would tap, while the pointer is over it or a touch is held on
- * it. A touch held only shows: letting go of it presses nothing. */
+ * Pay or the yes of a question that pays, the showing of what it would tap, while the pointer
+ * is over it or a touch is held on it. A touch held only shows: letting go of it presses
+ * nothing. */
 function usePresses(
   prompt: PromptView | undefined,
   { press, suggest }: Pick<Answers, "press" | "suggest">,
@@ -88,10 +141,11 @@ function usePresses(
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const held = useRef(false);
   useEffect(() => () => clearTimeout(timer.current), []);
-  return ({ id }: PromptButton): ButtonHTMLAttributes<HTMLButtonElement> => {
-    const shows =
-      suggest && id.kind === "auto" && prompt?.state?.shape === "pay";
-    if (!shows) return { onClick: () => press(id) };
+  return (button: PromptButton): ButtonHTMLAttributes<HTMLButtonElement> => {
+    const { id } = button;
+    if (!suggest || !shows(prompt, button)) {
+      return { onClick: () => press(id) };
+    }
     const end = () => {
       clearTimeout(timer.current);
       suggest(false);

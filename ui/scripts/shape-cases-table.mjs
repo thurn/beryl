@@ -16,14 +16,43 @@ export function leftOf(prompt) {
     return state?.shape === "pay" ? state.left : "";
 }
 
+/** The combat damage on its way to the player asked to block, as the blocks `state` has
+ * picked leave it (by-w8gv.21.63: the old board's "the unblocked attackers' damage shows by
+ * your orb as blocks are declared"): the power of each creature of `view` attacking them
+ * that no blocker is yet aimed at, which the screen says by their life total and lowers with
+ * each block picked. */
+function damageLeft(state, view) {
+    const blocked = new Set(
+        state.pairs.flatMap(({ to }) =>
+            to.kind === "object" ? [to.slot] : [],
+        ),
+    );
+    const attacking = view.objects.filter(
+        ({ combat, controller }) =>
+            combat?.kind === "attacking" &&
+            !combat.targetDeparted &&
+            combat.planeswalker === null &&
+            controller !== "you",
+    );
+    return attacking
+        .filter(({ slot, combat }) => !combat.blocked && !blocked.has(slot))
+        .reduce((sum, { pt }) => sum + Math.max(0, pt?.power ?? 0), 0);
+}
+
 /** The line `prompt` draws from each attacker or blocker to what it is aimed at, and none
  * for a prompt that declares nothing or whose lines the session leaves out (an attack with
- * one thing to aim at): which lines, and each as the stage names it. */
-export function declared(prompt) {
+ * one thing to aim at): which lines, and each as the stage names it. With them, for a prompt
+ * that declares blocks over `view`, the damage still on its way to the player (`damageLeft`),
+ * and null for any other, or with no view given. */
+export function declared(prompt, view) {
     const state = prompt?.state;
-    if (state?.shape !== "declare") return { arrow: null, lines: [] };
+    if (state?.shape !== "declare") {
+        return { arrow: null, lines: [], damage: null };
+    }
     return {
         arrow: state.arrow,
+        damage:
+            state.arrow === "block" && view ? damageLeft(state, view) : null,
         lines: (state.lined ? state.pairs : [])
             .map(({ from, to }) => `${state.arrow} ${from} ${named(to)}`)
             .sort(),

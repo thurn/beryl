@@ -226,8 +226,10 @@ recordings do not show them.
   three-creature Convoke, pick A, B and D directly even if Auto Pay would use A,
   B and C. After each manual pick, recalculate the proposal for the remaining
   cost and keep the player's picks. Let the player finish manually or accept
-  Auto Pay for the remainder, and stop taking picks once the cost is covered.
-  Arena documents the preview and acceptance gestures in its
+  Auto Pay for the remainder, and stop taking picks once the cost is covered. A
+  question whose yes pays a cost at once (pay {1}, or the spell is countered)
+  shows what that button would tap the same way, on hover or a long press, and
+  nothing before. Arena documents the preview and acceptance gestures in its
   [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes).
   A selected permanent turns and carries a tap mark, and an outline means one
   thing at a time: at rest every permanent that can pay wears the outline of

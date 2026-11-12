@@ -21,8 +21,16 @@ const STALLS: Record<Stall, string> = {
 
 /** The result over the table once the game has ended, its final events have played and the
  * table has held a beat more (`HOLD.ending`), so the play that ended it is seen: shown
- * until the player puts it aside to see the battlefield, and back on asking. */
-export function useResult(ended: boolean, live: boolean, view: PlayerView) {
+ * until the player puts it aside to see the battlefield, and back on asking. On the stage
+ * (`staged`) the view of the end comes only once its script has played out, the table held
+ * still at its end (UI Conventions, Verbs, dwell, "game's end"), so the result waits no
+ * longer. */
+export function useResult(
+  ended: boolean,
+  live: boolean,
+  view: PlayerView,
+  staged: boolean,
+) {
   // A game that ended in the past (a reloaded page, a recording) shows its result at once.
   const [state, setState] = useState<"waiting" | "shown" | "aside">(() =>
     ended && !live ? "shown" : "waiting",
@@ -31,7 +39,7 @@ export function useResult(ended: boolean, live: boolean, view: PlayerView) {
     if (!ended) return;
     const timer = setTimeout(
       () => setState((s) => (s === "waiting" ? "shown" : s)),
-      live ? eventsHold(view) + HOLD.ending : 0,
+      live && !staged ? eventsHold(view) + HOLD.ending : 0,
     );
     return () => clearTimeout(timer);
     // Only a new view ends the game.

@@ -99,6 +99,31 @@ export class DomSurface implements Surface {
     else delete node.dataset.card;
   }
 
+  /** Draws the card of the node `name` raised out of the fan it lies in, and no other node's:
+   * turned back upright from the `turn` degrees its pose leans it, `lift` straight up the
+   * screen and a little larger, about the middle of its top edge (stage.css). With no name,
+   * none is raised. The node itself stays where the stage has it, so nothing else moves and
+   * the pointer that found the card keeps it: the one look of a node that follows the pointer
+   * and not the clock, as a held card's pose does (pointer.ts). */
+  raise(name?: Name, turn = 0, lift = 0) {
+    for (const [other, node] of this.#nodes) {
+      if (other === name) continue;
+      if (!("raised" in node.dataset)) continue;
+      delete node.dataset.raised;
+      for (const of of ["x", "y", "turn"]) {
+        node.style.removeProperty(`--raise-${of}`);
+      }
+    }
+    const node = name === undefined ? undefined : this.#nodes.get(name);
+    if (!node) return;
+    // Straight up the screen, in the turned node's own axes.
+    const leaned = (turn * Math.PI) / 180;
+    node.dataset.raised = "";
+    node.style.setProperty("--raise-x", `${-lift * Math.sin(leaned)}px`);
+    node.style.setProperty("--raise-y", `${-lift * Math.cos(leaned)}px`);
+    node.style.setProperty("--raise-turn", `${-turn}deg`);
+  }
+
   /** Tells `pointer` what the browser's pointer does on the nodes, by their names and in stage
    * pixels, until the returned function is called: the one place the page's pointer events
    * become the stage's (pointer.ts). A touch has no hover: it presses, and is let go. */

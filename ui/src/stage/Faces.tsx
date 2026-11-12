@@ -16,15 +16,20 @@ import type { Dress, StackAbility } from "./layout.ts";
 import type { ScriptStage } from "./stage.ts";
 
 /** The skin's own highlights mark no card here: a mark of script/verb.rs is the stage's, an
- * element of its own on the node with its one look (spans.ts, stage.css). */
+ * element of its own on the node with its one look (spans.ts, stage.css). The one the skin
+ * draws is the ring of what is attached to the permanent the pointer is on, or what that is
+ * attached to (`linked`): the pointer's, and no script's. */
 const UNMARKED: CardState = {};
+const LINKED: CardState = { linked: true };
 
 const Face = memo(function Face({
   object,
   dress,
+  linked,
 }: {
   object: ObjectView;
   dress: Dress;
+  linked?: boolean;
 }) {
   // Under the top of a pile nothing of a card shows, or only its paper edge.
   if (dress.look === "hidden") return null;
@@ -42,7 +47,7 @@ const Face = memo(function Face({
     <Look
       object={object}
       place={{ look: dress.look, width: dress.frame, count: dress.count }}
-      state={UNMARKED}
+      state={linked ? LINKED : UNMARKED}
     />
   );
 });
@@ -77,7 +82,7 @@ const AbilityFace = memo(function AbilityFace({
  * ability's from its stack item and its source's record. Each is memoised, so that motion
  * draws none again. */
 export interface Skin {
-  Card: ComponentType<{ object: ObjectView; dress: Dress }>;
+  Card: ComponentType<{ object: ObjectView; dress: Dress; linked?: boolean }>;
   Ability: ComponentType<{
     ability: StackAbility;
     source: ObjectView | undefined;
@@ -95,10 +100,13 @@ export function Faces({
   stage,
   surface,
   skin,
+  linked,
 }: {
   stage: ScriptStage;
   surface: DomSurface;
   skin: Skin;
+  /** The permanents ringed as linked to the one the pointer is on. */
+  linked?: readonly number[];
 }) {
   const { resting } = useSyncExternalStore(stage.subscribe, () => stage.shown);
   return (
@@ -107,7 +115,11 @@ export function Faces({
         const node = surface.node(name);
         if (!node) return null;
         const face = object ? (
-          <skin.Card object={object} dress={dress} />
+          <skin.Card
+            object={object}
+            dress={dress}
+            linked={linked?.includes(object.slot)}
+          />
         ) : (
           <skin.Ability ability={ability} source={source} dress={dress} />
         );

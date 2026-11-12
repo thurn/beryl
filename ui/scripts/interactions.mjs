@@ -156,6 +156,46 @@ const chosen = (page) =>
             .map((c) => c.args.request.index),
     );
 
+/** The clicks the page has sent, as recorded by the fixture transport. */
+const clicksSent = (page) =>
+    page.evaluate(() =>
+        window.berylFixture.calls
+            .filter((c) => c.command === "click")
+            .map((c) => c.args.request.click),
+    );
+/** The clicks sent once there are `count` of them, or as many as there are after a while. */
+async function clicked(page, count) {
+    for (let i = 0; i < 20 && (await clicksSent(page)).length < count; i++) {
+        await page.clock.runFor(100);
+    }
+    return clicksSent(page);
+}
+
+/** Writes the fixture `name`: `source` with `replies` to the clicks the page sends, in order
+ * (the last again once they run out). On the stage the session holds a prompt's state, so a
+ * click on a card or a button is one it answers: with the prompt as it then is (`SAME`, for
+ * a click that changes nothing), or by saying the click answered it (`ANSWERED`), after which
+ * the recording plays on. The old board sends no click. */
+async function replied(name, source, replies) {
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, `${source}.json`), "utf8"),
+    );
+    fixture.messages.unshift(
+        ...replies.map((value) => ({
+            kind: "response",
+            command: "click",
+            value,
+        })),
+    );
+    await writeFixture(name, fixture);
+}
+const SAME = (decision) => ({ kind: "open", prompt: decision.prompt });
+const ANSWERED = { kind: "answered" };
+/** A click on the card in `slot`, as the page sends it. */
+const ON = (slot) => ({ kind: "on", on: { kind: "object", slot } });
+/** A press of the button `kind`, as the page sends it. */
+const PRESS = (kind) => ({ kind: "button", button: { kind } });
+
 /** Where an element's box is, rounded to whole stage pixels. */
 const where = (handle) =>
     handle.evaluate((e) => {
@@ -835,6 +875,9 @@ for (const [title, target] of [
                 "the pointer is still over the hovered card",
             );
             assert.ok(await page.$(".inspect"), "the card is inspected");
+        },
+        {
+            stage: "what a hover moves, and that the card it raises keeps the pointer: a sweep of every card's box as the pointer rests",
         },
     );
 }
@@ -2000,6 +2043,15 @@ await check(
             exiledBy: swap(o.exiledBy),
         })),
     };
+    // On the stage the click is the open prompt's first, which has no use for it.
+    const asked = last.payload.view.status.decision;
+    if (asked) {
+        fixture.messages.unshift({
+            kind: "response",
+            command: "click",
+            value: SAME(asked),
+        });
+    }
     await writeFixture("exiled-beneath-first", fixture);
 }
 
@@ -2016,7 +2068,11 @@ await check(
             .locator(`.zone-viewer [data-viewer-slot="${exiled.slot}"]`)
             .waitFor();
     },
-    { ...beneathRun, fixture: "exiled-beneath-first" },
+    {
+        ...beneathRun,
+        fixture: "exiled-beneath-first",
+        stage: "what a click on a card tucked under its host opens: a viewer no screen at rest shows",
+    },
 );
 
 // The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
@@ -2089,6 +2145,7 @@ await check(
         fixture: "attached-across",
         at: (await load("attached-across")).length,
         ready: `[data-slot="${aura.slot}"]`,
+        stage: "a ring only the pointer brings up, and which card lies over which where two overlap",
     },
 );
 
@@ -2476,6 +2533,9 @@ const timingView = timingViews[0];
 const timingCard = (name) =>
     `[data-slot="${timingView.objects.find((o) => o.name === name).slot}"]`;
 
+await replied("teferi-timing-refused", "teferi-timing", [
+    SAME(timingView.status.decision),
+]);
 await check(
     "Teferi's timing refusal appears briefly beside its source",
     async (page) => {
@@ -2514,10 +2574,11 @@ await check(
         );
     },
     {
-        fixture: "teferi-timing",
+        fixture: "teferi-timing-refused",
         at: 1,
         ready: timingCard("Thirst for Discovery"),
         reducedMotion: "reduce",
+        stage: "a word a refused click brings up for a moment, and where it stands by the permanent that forbids",
     },
 );
 
@@ -3562,19 +3623,47 @@ const decline = pay.decision.candidates.findIndex(
 const payTaps = pay.decision.candidates.find((c) => c.option.kind === "yes")
     .payments[0].taps;
 assert.equal(payTaps.length, 1, "one land pays {1}");
+/** On the stage: the permanents whose mark of what a button would tap shows. */
+const suggested = (page) =>
+    page.$$eval(".stage-mark-suggested", (marks) =>
+        marks
+            .filter((mark) => Number(getComputedStyle(mark).opacity) > 0)
+            .map((mark) => Number(mark.parentElement.dataset.slot))
+            .sort(),
+    );
+await replied("choice-pay-click", "choice-pay", [ANSWERED]);
 await check(
     "a pay-or-counter prompt lights the land that would pay",
     async (page) => {
         await page.clock.runFor(2000);
+        const shown = STAGED ? suggested : lit;
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         assert.equal(await page.$(".table-dimmed"), null, "the table shows");
-        assert.deepEqual(await lit(page), []);
+        assert.deepEqual(await shown(page), []);
         await page.getByRole("button", { name: /^Pay/ }).hover();
-        assert.deepEqual(await lit(page), payTaps, "the paying land glows");
+        await committed(page);
+        assert.deepEqual(await shown(page), payTaps, "the paying land glows");
+        await page.mouse.move(2, 2);
+        await committed(page);
+        assert.deepEqual(await shown(page), [], "and no longer once it leaves");
         await page.getByRole("button", { name: "Decline" }).click();
-        assert.deepEqual(await settled(page, 1), [decline]);
+        if (STAGED) {
+            const { id } = pay.decision.prompt.buttons.find(
+                (button) => button.label === "Decline",
+            );
+            assert.deepEqual(await clicked(page, 1), [
+                { kind: "button", button: id },
+            ]);
+        } else {
+            assert.deepEqual(await settled(page, 1), [decline]);
+        }
     },
-    { fixture: "choice-pay", at: pay.views.length, ready: ".prompt" },
+    {
+        fixture: "choice-pay-click",
+        at: pay.views.length,
+        ready: STAGED ? ".stage-prompt" : ".prompt",
+        stage: "what the pointer over a button lights on the table, and puts out as it leaves",
+    },
 );
 
 await check(
@@ -3714,6 +3803,7 @@ assert.deepEqual(
     { kind: "target" },
     "the view refuses Counterspell for want of a target",
 );
+await replied("menu-refused", "menu-choices", [SAME(menus.decision)]);
 await check(
     "clicking a refused card shows why in the inspector",
     async (page) => {
@@ -3743,7 +3833,12 @@ await check(
             "the reason goes once the pointer leaves",
         );
     },
-    { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
+    {
+        fixture: "menu-refused",
+        at: menus.views.length,
+        ready: ".turn-action",
+        stage: "what the inspector says after a refused click, and its sound: a state a click enters and the pointer leaves",
+    },
 );
 
 // A target prompt with two cards of one name (by-isv.8): `namesake-target` stops on a
@@ -7059,6 +7154,7 @@ const exileRun = {
     ready: `${slotOf(exiledSlot)}.card-el-hand`,
 };
 
+await replied("exile-cast-click", "exile-cast", [ANSWERED]);
 await check(
     "a card castable from exile waits in the hand fan and is cast from there",
     async (page) => {
@@ -7069,14 +7165,23 @@ await check(
         );
         assert.equal(await page.$(yourExile), null, "its exile pile is gone");
         await page.click(slotOf(exiledSlot));
-        // With nothing to choose, the pick casts it at once.
-        assert.deepEqual(
-            await chosen(page),
-            [exileCast],
-            `chose "${exileView.status.decision.candidates[exileCast].label}"`,
-        );
+        // With nothing to choose, the pick casts it at once: the session's to say on the
+        // stage, which sends it the click.
+        if (STAGED) {
+            assert.deepEqual(await clicked(page, 1), [ON(exiledSlot)]);
+        } else {
+            assert.deepEqual(
+                await chosen(page),
+                [exileCast],
+                `chose "${exileView.status.decision.candidates[exileCast].label}"`,
+            );
+        }
     },
-    exileRun,
+    {
+        ...exileRun,
+        fixture: "exile-cast-click",
+        stage: "the outline of a card the hand holds from another zone, whose pile is gone: a look and an absence no audit reads",
+    },
 );
 
 const theirHand = exileView.objects.filter(
@@ -7609,6 +7714,7 @@ for (const { fixture, at, budget } of WORD_BUDGETS) {
     );
 }
 
+await replied("mana-floating-pass", "mana-floating", [ANSWERED]);
 await check(
     "unspent mana shows by the life orb and pulses on a pass, unasked",
     async (page) => {
@@ -7628,17 +7734,22 @@ await check(
             0,
             "passing asks nothing",
         );
-        assert.deepEqual(await chosen(page), [
-            decision.candidates.findIndex((c) => c.option.kind === "pass"),
-        ]);
+        if (STAGED) {
+            assert.deepEqual(await clicked(page, 1), [PRESS("decline")]);
+        } else {
+            assert.deepEqual(await chosen(page), [
+                decision.candidates.findIndex((c) => c.option.kind === "pass"),
+            ]);
+        }
         // The step ends and the pool empties; it goes once the pulse is over.
         await page.clock.runFor(5000);
         assert.equal(await pool.count(), 0, "the emptied pool goes");
     },
     {
-        fixture: "mana-floating",
+        fixture: "mana-floating-pass",
         at: floatingAt,
         ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+        stage: "a pulse a press begins and a moment ends, and that the press asks nothing",
     },
 );
 
@@ -8591,8 +8702,23 @@ for (const [fixture, at] of [
         `hovering a card in ${fixture}'s prompt keeps its inspector off the prompt`,
         async (page) => {
             await page.clock.runFor(2000);
+            // On the stage the cards looked at are the library's own, held up over the
+            // table (its depths 850 to 899, desktop.ts), and the prompt is the dock's.
+            if (STAGED) {
+                await page.evaluate(() => {
+                    for (const node of document.querySelectorAll(
+                        "[data-stage]",
+                    )) {
+                        const depth = Number(node.style.zIndex);
+                        if (depth >= 850 && depth < 900)
+                            node.classList.add("held-up");
+                    }
+                });
+            }
             const prompt = await page.$$eval(
-                ".overlay-main :is(.overlay-title, button, .shown-card)",
+                STAGED
+                    ? ".stage-prompt :is(.prompt-title, button), .held-up"
+                    : ".overlay-main :is(.overlay-title, button, .shown-card)",
                 (els) =>
                     els.map((e) => {
                         const r = e.getBoundingClientRect();
@@ -8611,7 +8737,7 @@ for (const [fixture, at] of [
                 prompt.some((p) => p.what) && prompt.length >= 3,
                 "the prompt is drawn",
             );
-            const cards = ".overlay .shown-card";
+            const cards = STAGED ? ".held-up" : ".overlay .shown-card";
             const count = await page.locator(cards).count();
             assert.ok(count >= 1, "the prompt shows a card");
             for (let i = 0; i < count; i++) {
@@ -8639,7 +8765,12 @@ for (const [fixture, at] of [
                 );
             }
         },
-        { fixture, at, ready: ".overlay .shown-card" },
+        {
+            fixture,
+            at,
+            ready: STAGED ? ".stage-prompt" : ".overlay .shown-card",
+            stage: "where the inspector stands against a prompt's cards and buttons: a place only the pointer on each card gives it",
+        },
     );
 }
 
@@ -8654,7 +8785,9 @@ for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
         async (page) => {
             await page.clock.runFor(2000);
             const targets = await page.$$eval(
-                '[data-zone="battlefield"]:has(.card-target)',
+                STAGED
+                    ? '[data-zone="battlefield"]:has(> .stage-mark)'
+                    : '[data-zone="battlefield"]:has(.card-target)',
                 (els) =>
                     els.map((e) => {
                         const r = e.getBoundingClientRect();
@@ -8693,6 +8826,7 @@ for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
             at: at + 1,
             ready: '[data-zone="battlefield"]',
             reducedMotion: "reduce",
+            stage: "where the inspector stands against every target, for the pointer on each card in turn",
         },
     );
 }
@@ -10354,33 +10488,7 @@ const markedBy = (prompt, mark) =>
 const suggestedTaps = markedBy(bending.prompt, "suggested");
 assert.ok(suggestedTaps.length > 0, "the payment opens with a default");
 /** `choice-scry` with `replies` to the clicks the page sends, in order. */
-async function bendFixture(name, replies) {
-    const fixture = JSON.parse(
-        await readFile(join(fixtures, "choice-scry.json"), "utf8"),
-    );
-    fixture.messages.unshift(
-        ...replies.map((value) => ({
-            kind: "response",
-            command: "click",
-            value,
-        })),
-    );
-    await writeFixture(name, fixture);
-}
-/** The clicks the page has sent, as recorded by the fixture transport. */
-const clicksSent = (page) =>
-    page.evaluate(() =>
-        window.berylFixture.calls
-            .filter((c) => c.command === "click")
-            .map((c) => c.args.request.click),
-    );
-/** The clicks sent once there are `count` of them, or as many as there are after a while. */
-async function clicked(page, count) {
-    for (let i = 0; i < 20 && (await clicksSent(page)).length < count; i++) {
-        await page.clock.runFor(100);
-    }
-    return clicksSent(page);
-}
+const bendFixture = (name, replies) => replied(name, "choice-scry", replies);
 const AUTO = { kind: "button", button: { kind: "auto" } };
 const autoPayButton = (page) =>
     page.getByRole("button", { name: "Auto Pay", exact: true });
@@ -10642,6 +10750,15 @@ const lifeShown = async (page) =>
                 .textContent()
         ).replace("\u2212", "-"),
     );
+/** How long the stage holds the table still as a game ends, before the result covers it
+ * (UI Conventions, Verbs, dwell, "game's end"), in ms. */
+const endDwell = JSON.parse(
+    await readFile(
+        new URL("../../data/ui-conventions.json", import.meta.url),
+        "utf8",
+    ),
+).verbs.find((verb) => verb.name === "dwell").cases["game's end"].duration;
+await replied("game-over-pass", "game-over", [ANSWERED]);
 await check(
     "the life-loss result waits for the killing blow and can be put aside",
     async (page) => {
@@ -10652,7 +10769,7 @@ await check(
         let [lost, ended] = [undefined, undefined];
         let t = 0;
         await committed(page);
-        for (; t < 60 && !(await result.count()); t++) {
+        for (; t < 100 && !(await result.count()); t++) {
             lost ??= (await lifeShown(page)) < 0 ? t : undefined;
             const log = await page.locator(".game-log-entry").allTextContents();
             ended ??= log.some((e) => e.includes("lost the game"))
@@ -10663,11 +10780,20 @@ await check(
         }
         assert.ok(await result.count(), "the result shows");
         assert.ok(lost !== undefined && lost < t, "the damage shows first");
-        // The end's events (the loss) hold it as long as an action (playback.ts' HOLD).
-        assert.ok(
-            ended !== undefined && (t - ended) * 100 >= 800,
-            `the end plays first: ${ended}, then ${t}`,
-        );
+        if (STAGED) {
+            // The view of the end reaches the screen once its script has played out, the
+            // table held still at its end: the result waits out that hold after the blow.
+            assert.ok(
+                (t - lost) * 100 >= endDwell,
+                `the table holds after the blow: ${lost}, then ${t}`,
+            );
+        } else {
+            // The end's events (the loss) hold it as long as an action (playback.ts' HOLD).
+            assert.ok(
+                ended !== undefined && (t - ended) * 100 >= 800,
+                `the end plays first: ${ended}, then ${t}`,
+            );
+        }
         assert.equal(
             await result.locator(".game-over-reason, .game-over-card").count(),
             0,
@@ -10690,7 +10816,11 @@ await check(
             .getByRole("button", { name: "New Game", exact: true })
             .waitFor();
     },
-    overAt,
+    {
+        ...overAt,
+        fixture: "game-over-pass",
+        stage: "when a result comes up against the blow that ended the game: an order in time, and a result put aside and asked back",
+    },
 );
 
 for (const [reason, title, description, by] of [

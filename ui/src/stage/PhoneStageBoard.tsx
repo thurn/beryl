@@ -20,6 +20,7 @@ import {
 import { ManaPool, Thinking } from "../components/Player";
 import type { ObjectView, StopsSetting } from "../generated/protocol";
 import { incoming } from "../game/combat";
+import { blockedBy } from "./Chrome.tsx";
 import { interactions } from "../game/decisions";
 import type { LogEntry } from "../game/log";
 import { opponentActing } from "../game/Narration";
@@ -58,6 +59,7 @@ import {
   PhonePromptDock,
   PhonePromptOver,
   PlayerTarget,
+  useLostMana,
   usePaying,
   usePrompt,
 } from "./PromptBar.tsx";
@@ -96,7 +98,11 @@ export function PhoneStageBoard({
   const { stage, feed, prompts } = pageStage();
   const asked = usePrompt(prompts);
   const { pay, suggest } = usePaying(asked);
-  const press = prompts.press.bind(prompts);
+  const { press, lost } = useLostMana(
+    asked,
+    () => stage.shown.table,
+    prompts.press.bind(prompts),
+  );
   const number = prompts.number.bind(prompts);
   const answers = { waiting, press, cancel, suggest, number };
   const { ref, viewport } = useViewport();
@@ -178,7 +184,9 @@ export function PhoneStageBoard({
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
-  // The damage shows from the attack's declaration until it is dealt.
+  // The damage shows from the attack's declaration until it is dealt, less that of the
+  // attackers the open prompt has a blocker aimed at.
+  const blocked = blockedBy(asked);
   const beforeDamage =
     table?.turn.step === "declareAttackers" ||
     table?.turn.step === "declareBlockers";
@@ -204,12 +212,17 @@ export function PhoneStageBoard({
             >
               <Piles side={side} view={landed(table, resting)} tops={false} />
               <div className="phone-pool">
-                <ManaPool pool={table.players[side].mana} />
+                <ManaPool
+                  pool={table.players[side].mana}
+                  pulse={side === "you" ? lost : 0}
+                />
               </div>
               <Orb
                 side={side}
                 view={table}
-                incoming={beforeDamage ? incoming(table, side) : undefined}
+                incoming={
+                  beforeDamage ? incoming(table, side, blocked) : undefined
+                }
                 change={lifeChange(counts, side)}
               >
                 <PlayerTarget prompts={prompts} asked={asked} side={side} />

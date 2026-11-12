@@ -26,7 +26,8 @@
 // is a case of the split: the cards a scry looks at, from the look to the library again.
 // A cost paid with permanents says how much is left as the session wrote it, and a
 // declaration draws a line from each creature to what the session has it aimed at, where
-// the session has one drawn; paying with permanents and the combat line are their cases
+// the session has one drawn, and says by the player's life total the combat damage the blocks
+// picked so far leave on its way; paying with permanents and the combat line are their cases
 // (shape-cases-table.mjs), the combat line followed on every recording. The ways to
 // use a card are buttons over the table, each named as the session names the way; a number,
 // a catalog's entries and a division's shares are held to the session's state, and set by
@@ -187,7 +188,7 @@ function expected(held, layout) {
         up: heldUp(prompt),
         left: leftOf(prompt),
         panel: panelOf(prompt),
-        ...declared(prompt),
+        ...declared(prompt, held.view),
     };
     if (!prompt) return { title: "", buttons: [], marks: [], ...more };
     const where = (button) =>
@@ -232,6 +233,7 @@ const whole = (want) => ({
     left: want.left,
     panel: want.panel,
     lines: { page: want.lines, model: want.lines },
+    damage: want.damage,
 });
 
 const subject = (on) =>
@@ -249,8 +251,9 @@ const byPlace = (a, b) =>
  * over), every mark the page and the stage's model hold, each as `<mark> <on>`, and what is
  * held up (`heldUp`): the cards lying over everything at rest and under what flies, those in
  * a pile's box by that box, and the triggers listed; how much of a cost it says is left; and
- * the lines of `arrow`, a declaration's, that the page and the model hold. */
-function drawn({ dock, title, captions, arrow }) {
+ * the lines of `arrow`, a declaration's, that the page and the model hold; and with
+ * `blocks`, the combat damage it says is on its way to the player. */
+function drawn({ dock, title, captions, arrow, blocks }) {
     // A label as the session wrote it: a mana symbol is drawn from its `{...}`.
     const words = (element) => {
         const copy = element.cloneNode(true);
@@ -390,13 +393,23 @@ function drawn({ dock, title, captions, arrow }) {
             ),
             model: ours(stage.lines().map((line) => line.key)),
         },
+        damage: blocks
+            ? Number(
+                  document.querySelector('[data-life="you"] .life-incoming')
+                      ?.dataset.incoming ?? NaN,
+              )
+            : null,
     };
 }
 
 /** Holds the page to draw `want` (`expected`), once it has drawn what it was sent: the
  * screen is React's, which draws a reply a moment after the stage's model has it. */
 async function holds(page, layout, want, what) {
-    const asked = { ...layout, arrow: want.arrow };
+    const asked = {
+        ...layout,
+        arrow: want.arrow,
+        blocks: want.damage !== null,
+    };
     const wanted = JSON.stringify(whole(want));
     const sorted = (got) => ({
         ...got,

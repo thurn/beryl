@@ -377,7 +377,7 @@ function Playing({ playback }: { playback: Playback }) {
       ? decision
       : undefined;
   const ended = status.kind === "over" || status.kind === "stopped";
-  const result = useResult(ended, live, view);
+  const result = useResult(ended, live, view, onStage !== undefined);
   const over = result.state === "shown";
   const phone = usePhone();
   const leave = () => (window.location.hash = "#/");

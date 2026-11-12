@@ -18,6 +18,29 @@
   left: 0;
   top: 0;
 }
+/* The card of your hand the pointer is on (stage/dom.ts `raise`; UI Conventions, "Hover
+   inspection"): everything in its node, each as large as the card, stands upright, higher and
+   a little larger (game/placement.ts `RAISE`), over the rest of the hand. The node keeps its
+   place and its size, so the pointer stays on it. It follows the pointer and no clock, so it
+   is there at once. */
+.stage-node[data-raised] {
+  z-index: 300 !important;
+}
+.stage-node[data-raised] > * {
+  transform-origin: 50% 0;
+  translate: var(--raise-x) var(--raise-y);
+  rotate: var(--raise-turn);
+  scale: 1.06;
+}
+/* The word at the permanent that forbids a click (Refusal.tsx), centred under it. */
+.stage-timing-refusal {
+  translate: -50% 0;
+}
+/* A question whose yes pays a cost shows what it would tap only while the pointer is over
+   that button or a touch is held on it (PromptBar.tsx `usePaying`). */
+[data-pay="asking"] .stage-mark-suggested {
+  opacity: 0;
+}
 /* A card that is tapping or untapping (stage/tracks.ts `turned`): the node is dressed as its
    record now says, the frame a quarter round in its slot or upright (components/Card.tsx), and
    the stage says how far the frame has yet to turn, about its own middle as the skin turns it.
