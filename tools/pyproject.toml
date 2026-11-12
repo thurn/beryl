@@ -23,6 +23,8 @@ dev = [
     "pytest",
     "mdformat",
     "mdformat-gfm",
+    # The python lane runs the suite in four processes, in about half the time.
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.black]
