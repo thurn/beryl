@@ -11,6 +11,7 @@ mod view_predicates;
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, channel};
 
 use beryl_cards::CARDS;
@@ -18,6 +19,7 @@ use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_search::GameAgent;
 use beryl_session::ipc::{Fixture, FixtureMessage};
+use beryl_session::protocol::PlayerView;
 use beryl_session::{
     GameUpdate, HandOver, Prepared, Seat, SessionError, SessionId, Sessions, StartGame, Status,
     StopsSetting, agents, ipc,
@@ -63,6 +65,7 @@ pub(crate) struct Definition {
     /// The clicks made on the human's prompts from the stop on, each as [`Written::parse`]
     /// reads it, in place of the stand-in's answers: a board's alone, whose scripts are done
     /// by its stop, where the seat is handed over as a spec's moment hands it to its player.
+    /// The stand-in answers what the human is asked between the scripts' end and the stop.
     #[serde(default)]
     clicks: Vec<String>,
 }
@@ -111,41 +114,65 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
     Ok(())
 }
 
+/// Where a recording stops: its stopping condition, and what else must hold of the view.
+struct Stop {
+    until: Until,
+    conditions: Vec<Condition>,
+}
+
+impl Stop {
+    fn parse(def: &Definition) -> Result<Stop, String> {
+        Ok(Stop {
+            until: Until::parse(&def.until)?,
+            conditions: (def.conditions.iter())
+                .map(|c| Condition::parse(c))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
+    /// Whether `view` is the stop.
+    fn reached(&self, view: &PlayerView) -> bool {
+        self.until.reached(view) && self.conditions.iter().all(|c| c.holds(view))
+    }
+}
+
 /// The messages of `def`'s recording, or why it could not be made: a session whose thread
 /// panicked (in a debug build, a script that breaks its checks, plan K24) says where.
 pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
-    let until = Until::parse(&def.until)?;
-    let conditions = def
-        .conditions
-        .iter()
-        .map(|c| Condition::parse(c))
-        .collect::<Result<Vec<_>, _>>()?;
+    let stop = Arc::new(Stop::parse(def)?);
     let clicks = (def.clicks.iter())
         .map(|c| Written::parse(c))
         .collect::<Result<Vec<_>, _>>()?;
     if !clicks.is_empty() && (def.board.is_none() || def.after > 0) {
         return Err("clicks are a board's, with nothing recorded `after` its stop".to_owned());
     }
-    let human = until.seat();
+    let human = stop.until.seat();
     let (sent, updates) = channel();
     let told = sent.clone();
     let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
     let progress = Shared::default();
-    // Whether the board's scripts were done as each view was sent, in the views' order: what
+    // Whether each view was the stop with the board's scripts done, in the views' order: what
     // the session then goes by to hand the seat over, on the thread that sends the view.
     let (done, handed) = channel();
-    let scripts = Arc::clone(&progress);
+    let at_stop = Arc::new(AtomicBool::new(false));
+    let (scripts, at, said) = (
+        Arc::clone(&progress),
+        Arc::clone(&stop),
+        Arc::clone(&at_stop),
+    );
     let sessions = Sessions::new(None, move |update| {
         crate::panics::watch(|| {
             let told = sent.clone();
             move |panic| drop(told.send(Err(panic)))
         });
-        let _ = done.send(boards::lock(&scripts).done());
+        let stopped = boards::lock(&scripts).done() && at.reached(&update.view);
+        said.store(stopped, Ordering::SeqCst);
+        let _ = done.send(stopped);
         // The recording stops listening once it has what it came for.
         let _ = sent.send(Ok(update));
     });
     let before = crate::panics::mark();
-    let (session, unused) = start(def, &sessions, human, &progress, guard)?;
+    let (session, unused) = start(def, &sessions, human, &progress, &at_stop, guard)?;
     // A seeded game owns no guard, so nothing tells of a panic before its first view.
     let mut unguarded = unused.is_some();
     let mut messages = vec![
@@ -170,9 +197,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             .map_err(|_| "the session ended without a view".to_owned())?
             .map_err(|panic| format!("the session {panic}"))?;
         let handed = handed.recv().unwrap_or(false);
-        let reached = left.is_none()
-            && until.reached(&update.view)
-            && conditions.iter().all(|c| c.holds(&update.view));
+        let reached = left.is_none() && stop.reached(&update.view);
         let status = &update.view.status;
         let (deciding, ended) = (
             matches!(status, Status::Deciding { .. }),
@@ -180,8 +205,8 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         );
         messages.push(FixtureMessage::game_update(&update));
         if !clicks.is_empty() && deciding {
-            // The seat is the recording's from the scripts' end: a decision before the stop
-            // would wait for an answer nobody gives.
+            // The seat is the recording's from its stop, which the scripts must be done by:
+            // a decision handed over anywhere else would wait for an answer nobody gives.
             if reached != handed {
                 return Err(format!(
                     "the board's scripts must end at {:?}, where its clicks begin",
@@ -250,12 +275,15 @@ fn first_view(
 }
 
 /// Starts the fixture's game in `sessions`: its seeded deal, or its board, whose scripts
-/// report to `progress` and whose thread owns `guard`; the guard back if nothing owns it.
+/// report to `progress` and whose thread owns `guard`; the guard back if nothing owns it. A
+/// board with clicks hands its human seat over once `at_stop` says the view last sent was
+/// its stop.
 fn start(
     def: &Definition,
     sessions: &Sessions,
     human: Seat,
     progress: &Shared,
+    at_stop: &Arc<AtomicBool>,
     guard: crate::panics::Guard,
 ) -> Result<(SessionId, Option<crate::panics::Guard>), String> {
     let mut guard = Some(guard);
@@ -283,10 +311,10 @@ fn start(
                 let opponent =
                     Scripted::new(board, human.opponent(), &table, Arc::clone(progress))?;
                 let guard = guard.take().expect("the guard is given once");
-                // Its clicks are the human's answers once the scripts are done.
-                let done = Arc::clone(progress);
+                // Its clicks are the human's answers from the stop on.
+                let stopped = Arc::clone(at_stop);
                 let hand_over = (!def.clicks.is_empty())
-                    .then(|| Box::new(move || boards::lock(&done).done()) as HandOver);
+                    .then(|| Box::new(move || stopped.load(Ordering::SeqCst)) as HandOver);
                 sessions.start_prepared(Prepared {
                     opponent: Box::new(opponent.guarded(guard)),
                     stand_in: agent(human)?,

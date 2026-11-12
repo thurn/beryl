@@ -22,12 +22,17 @@ pub(super) enum Written {
     Player(Side),
     /// On one of the prompt's buttons.
     Press(ButtonId),
+    /// A card, by its name, dropped into the pile `pile` before what lies at `at` there.
+    Drop { card: String, pile: u8, at: u16 },
+    /// The item `item` of an order moved to before what lies at `at`.
+    Move { item: u32, at: u16 },
 }
 
 impl Written {
     /// Parses "press confirm", "press decline", "press auto", "press passOn" or "press
-    /// option <n>" for a button, "player you" or "player opponent" for a player, and
-    /// anything else as the name of a card.
+    /// option <n>" for a button, "player you" or "player opponent" for a player, "drop
+    /// <pile> <at> <card>" for a card dropped into a pile, "move <item> <at>" for an item of
+    /// an order moved, and anything else as the name of a card.
     pub(super) fn parse(text: &str) -> Result<Written, String> {
         let words: Vec<&str> = text.split_whitespace().collect();
         match words.as_slice() {
@@ -42,6 +47,17 @@ impl Written {
             ["player", "you"] => Ok(Written::Player(Side::You)),
             ["player", "opponent"] => Ok(Written::Player(Side::Opponent)),
             ["player", ..] => Err(format!("{text:?}: no such player")),
+            ["drop", pile, at, card @ ..] if !card.is_empty() => Ok(Written::Drop {
+                card: card.join(" "),
+                pile: super::number(text, pile)?,
+                at: super::number(text, at)?,
+            }),
+            ["drop", ..] => Err(format!("{text:?}: a drop is of a card, into a pile")),
+            ["move", item, at] => Ok(Written::Move {
+                item: super::number(text, item)?,
+                at: super::number(text, at)?,
+            }),
+            ["move", ..] => Err(format!("{text:?}: a move is of an item, to a place")),
             [] => Err("an empty click".to_owned()),
             _ => Ok(Written::Card(text.to_owned())),
         }
@@ -49,26 +65,42 @@ impl Written {
 
     /// The click this is on `prompt`, open in `view`.
     fn click(&self, view: &PlayerView, prompt: &PromptView) -> Result<Click, String> {
-        let on = match self {
-            Written::Press(button) => return Ok(Click::Button { button: *button }),
-            Written::Player(player) => Subject::Player { player: *player },
-            Written::Card(name) => {
-                let named = || {
-                    (view.objects.iter())
-                        .filter(|o| o.name.as_deref() == Some(name))
-                        .map(|o| o.slot)
-                };
-                let marked = |slot: &u16| {
-                    (prompt.marks.iter()).any(|m| m.on == Subject::Object { slot: *slot })
-                };
-                let slot = named()
-                    .find(marked)
-                    .or_else(|| named().next())
-                    .ok_or_else(|| format!("the view shows no {name}"))?;
-                Subject::Object { slot }
-            }
+        // The card named `name`: the one the open prompt marks, or the first the view shows.
+        let card = |name: &String| {
+            let named = || {
+                (view.objects.iter())
+                    .filter(|o| o.name.as_deref() == Some(name))
+                    .map(|o| o.slot)
+            };
+            let marked =
+                |slot: &u16| (prompt.marks.iter()).any(|m| m.on == Subject::Object { slot: *slot });
+            named()
+                .find(marked)
+                .or_else(|| named().next())
+                .map(|slot| Subject::Object { slot })
+                .ok_or_else(|| format!("the view shows no {name}"))
         };
-        Ok(Click::On { on })
+        Ok(match self {
+            Written::Press(button) => Click::Button { button: *button },
+            Written::Player(player) => Click::On {
+                on: Subject::Player { player: *player },
+            },
+            Written::Card(name) => Click::On { on: card(name)? },
+            Written::Drop {
+                card: name,
+                pile,
+                at,
+            } => Click::Drop {
+                on: card(name)?,
+                pile: *pile,
+                at: *at,
+            },
+            Written::Move { item, at } => Click::Drop {
+                on: Subject::Ability { id: *item },
+                pile: 0,
+                at: *at,
+            },
+        })
     }
 }
 
@@ -137,6 +169,8 @@ pub(super) fn next_view(
 
 #[cfg(test)]
 mod tests {
+    use beryl_session::prompt::ShapeView;
+
     use super::*;
 
     #[test]
@@ -161,6 +195,20 @@ mod tests {
             Written::parse("Jace, the Mind Sculptor"),
             Ok(Written::Card("Jace, the Mind Sculptor".to_owned()))
         );
+        assert_eq!(
+            Written::parse("drop 1 0 Jace, the Mind Sculptor"),
+            Ok(Written::Drop {
+                card: "Jace, the Mind Sculptor".to_owned(),
+                pile: 1,
+                at: 0
+            })
+        );
+        assert_eq!(
+            Written::parse("move 2 0"),
+            Ok(Written::Move { item: 2, at: 0 })
+        );
+        assert!(Written::parse("drop 1 0").is_err());
+        assert!(Written::parse("move 2").is_err());
         assert!(Written::parse("press harder").is_err());
         assert!(Written::parse("player three").is_err());
         assert!(Written::parse("").is_err());
@@ -214,6 +262,51 @@ mod tests {
         };
         let update: GameUpdate = serde_json::from_value(payload.clone()).unwrap();
         assert!(matches!(update.view.status, Status::Deciding { .. }));
+    }
+
+    /// A board's own play may lead on from its scripts to the stop, the stand-in answering
+    /// what the human is asked on the way (a cost to pay, a pass): the clicks begin at the
+    /// stop, and a drop there is the session's to place.
+    #[test]
+    fn clicks_begin_at_the_stop_a_boards_play_leads_to() {
+        let def: super::super::Definition = serde_json::from_value(serde_json::json!({
+            "name": "t",
+            "board": "shape-split",
+            "until": "first chooseUpTo decision for seat 0",
+            "clicks": ["drop 0 0 Island", "press confirm"],
+        }))
+        .unwrap();
+        let messages = super::super::record(&def).unwrap();
+        let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
+            .filter_map(|message| match message {
+                FixtureMessage::Response {
+                    command,
+                    request: Some(request),
+                    value,
+                } if command == ipc::CLICK => Some((
+                    serde_json::from_value(request.clone()).unwrap(),
+                    serde_json::from_value(value.clone()).unwrap(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let [(drop, sorted), (_, done)] = &replies[..] else {
+            panic!("two clicks, not {replies:?}");
+        };
+        let Click::Drop { on, pile: 0, at: 0 } = drop.click else {
+            panic!("a drop into the first pile, not {:?}", drop.click);
+        };
+        let ClickReply::Open { prompt } = sorted else {
+            panic!("the scry stays open, not {sorted:?}");
+        };
+        let Some(ShapeView::Split { piles }) = &prompt.state else {
+            panic!("a split, not {:?}", prompt.state);
+        };
+        let Subject::Object { slot } = on else {
+            panic!("a card, not {on:?}");
+        };
+        assert_eq!(piles[0].cards, [slot]);
+        assert_eq!(*done, ClickReply::Answered);
     }
 
     /// A seat its board's scripts still play is not the recording's to click for.
