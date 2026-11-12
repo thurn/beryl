@@ -7,7 +7,9 @@ Each entry has a kind: a numbered Beryl `exception`, a rule `settled` as Arena, 
 rule, the report beads behind it, and what Arena does with the recording moments that show it.
 One that shows a prompt's cards a second time names that prompt's shape as `twice`: the
 duplicate audit lets the cards such a prompt is about show again while it is open
-(`ui/scripts/stage-audit.mjs`), and nothing else.
+(`ui/scripts/stage-audit.mjs`). A verb whose step holds up a second face of its card, the card
+lying where it was, says `twice: true`, and the audit lets that face be. Nothing else may show
+a card twice.
 
 The closed lists follow: the `verbs` a script's steps apply, each with what it shows, what Arena
 does and the values the stage plays it with, and the `marks` a card can carry, each with what it
@@ -119,6 +121,8 @@ def list_problems(data: dict[str, Any]) -> list[str]:
                 if not member.get(field):
                     found.append(f"{where}: needs {field}")
             if key == "verbs":
+                if member.get("twice", True) is not True:
+                    found.append(f"{where}: twice is true or left out")
                 found += value_problems(where, member, exceptions(data))
                 found += use_problems(where, member, data)
             if key == "effects":
@@ -361,6 +365,8 @@ def member(key: str, entry: dict[str, Any]) -> str:
     said = " ".join(entry[field] for field in LISTS[key])
     if key == "effects":
         said += f" Drawn {entry['layer']} its card."
+    if entry.get("twice"):
+        said += " The face it holds up is on screen beside its card: the duplicate audit allows it."
     return f"**{entry['name']}.** {said}{arena(entry)}{timing(entry)}{uses(entry)}"
 
 

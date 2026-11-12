@@ -1662,6 +1662,7 @@
     {
       "name": "showcase",
       "shows": "A card an effect reveals is held up for both players to read: its face joins the \"Revealed Cards\" pile at the top left, growing into its place there, and the card itself lies where it was.",
+      "twice": true,
       "arena": {
         "does": "Revealed cards gather under a \"Revealed Cards\" pill at the top left, each growing into place in about 0.2 s. A click on the pile opens a browser of them under the same words, with a Done button, and the pile stays afterward until the cross on its pill puts it away.",
         "evidence": [

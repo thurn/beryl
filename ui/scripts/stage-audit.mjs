@@ -17,8 +17,9 @@
 //             may be no time at all (UI Conventions, "Tokens", "A finished ability")
 //   unseen    what the step is about was off screen, covered or transparent the while
 //   crowded   more than CROWDED different moves began at once in one beat
-//   duplicate two painted instances of one object shared a tick, but for the cards of a
-//             prompt the design language shows twice (data/ui-conventions.json, `twice`)
+//   duplicate two painted instances of one object shared a tick, but for what the design
+//             language shows twice (data/ui-conventions.json, `twice`): the cards of a prompt
+//             of a shape an entry names, and the face a verb holds up beside its card
 //   jump      an arrow or line whole on the table changed shape while both its ends stood
 //             still, read from the stage's model (`stage.lines`). One redrawn as an end of it
 //             moves is no finding here, where audit.mjs has `stretch`: a line is "drawn every
@@ -44,16 +45,19 @@ import { LONGEST, rest, settled } from "./moments.mjs";
  * verdict turns on (MIN_MS). */
 export const TICK = 1000 / 30;
 
-/** The prompt shapes whose cards are on screen twice while the prompt is open, from the design
- * language's entries (`twice`). */
-export const TWICE = new Set(
-    JSON.parse(
-        await readFile(
-            new URL("../../data/ui-conventions.json", import.meta.url),
-            "utf8",
-        ),
-    ).entries.flatMap((entry) => (entry.twice ? [entry.twice] : [])),
-);
+/** What the design language shows twice (`twice`): the prompt `shapes` whose cards are on
+ * screen again while the prompt is open, from its entries, and the `verbs` whose step holds up
+ * a second face of its card. */
+export const TWICE = await readFile(
+    new URL("../../data/ui-conventions.json", import.meta.url),
+    "utf8",
+).then((text) => {
+    const { entries, verbs } = JSON.parse(text);
+    return {
+        shapes: new Set(entries.flatMap((e) => (e.twice ? [e.twice] : []))),
+        verbs: new Set(verbs.flatMap((v) => (v.twice ? [v.name] : []))),
+    };
+});
 
 /** In the page, after `record` with `stepped`: holds the stage's clock and starts keeping what
  * the stage is told to show and what it says it played, and measures the page as it stands. */
@@ -517,8 +521,8 @@ function lineFindings(frames) {
 }
 
 /** Each finding of one seat's run under the stage (`walk`'s return): per view, each step of
- * its script and any crowd, then each duplicate and each arrow that jumped. `twice` is the
- * prompt shapes whose cards may show again. Each finding has `at`, stage ms from the run's
+ * its script and any crowd, then each duplicate and each arrow that jumped. `twice` is what
+ * may show again (`TWICE`). Each finding has `at`, stage ms from the run's
  * start to when its step began. */
 export function judge(
     { frames: measured, views, edges, since },
@@ -575,11 +579,20 @@ export function judge(
             findings.push({ view: view.turn, ...crowd });
         }
     });
+    // A face a verb holds up is a node of the stage's own, named for no slot, that shows a
+    // card (src/stage/layout.ts `Name`): it outlasts the script that held it up, so it is
+    // known by what it is, not by this run's steps.
+    const held = (card) =>
+        twice.verbs.size > 0 &&
+        card.node !== undefined &&
+        card.slot == null &&
+        card.name != null;
     const allows = (frame, card) =>
-        frame.prompt != null &&
-        twice.has(frame.prompt.shape) &&
-        (frame.prompt.about.includes(Number(card.slot)) ||
-            (card.slot == null && frame.prompt.names.includes(card.name)));
+        held(card) ||
+        (frame.prompt != null &&
+            twice.shapes.has(frame.prompt.shape) &&
+            (frame.prompt.about.includes(Number(card.slot)) ||
+                (card.slot == null && frame.prompt.names.includes(card.name))));
     for (const found of [
         ...duplicates(frames, allows),
         ...lineFindings(frames),

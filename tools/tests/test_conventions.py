@@ -51,7 +51,7 @@ def test_the_page_cites_reports_and_evidence_under_its_kind() -> None:
     )
 
 
-def test_an_entry_says_which_prompts_cards_show_twice() -> None:
+def test_the_data_says_what_shows_twice() -> None:
     chooser = {**SETTLED, "twice": "mode"}
     page = " ".join(conventions.render(data(chooser)).split())
     assert "The cards a `mode` prompt is about are the one thing on screen" in page
@@ -59,6 +59,13 @@ def test_an_entry_says_which_prompts_cards_show_twice() -> None:
     assert conventions.problems(data(chooser)) == []
     found = conventions.problems(data({**SETTLED, "twice": "Choose One"}))
     assert found == ["entry 0 (Tokens): twice 'Choose One' is not a prompt shape"]
+    held = listed([{**VERB, "twice": True}], [MARK])
+    assert "The face it holds up is on screen beside its card" in " ".join(
+        conventions.render(held).split()
+    )
+    assert conventions.problems(listed([{**VERB, "twice": "yes"}], [MARK])) == [
+        "verbs 0 (fly): twice is true or left out"
+    ]
 
 
 def test_bad_data_is_refused() -> None:

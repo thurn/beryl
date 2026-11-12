@@ -185,7 +185,7 @@ test("an ability whose source is gone appears on the stack", () => {
 });
 
 test("only the cards of a prompt the data shows twice may show again", () => {
-    assert.deepEqual([...TWICE], ["mode"]);
+    assert.deepEqual([...TWICE.shapes], ["mode"]);
     const twice = (shape) =>
         judge(
             run(
@@ -216,6 +216,24 @@ test("only the cards of a prompt the data shows twice may show again", () => {
     assert.deepEqual(twice("mode"), []);
     assert.deepEqual(twice("pick"), ["duplicate", "duplicate"]);
     assert.deepEqual(twice(null), ["duplicate", "duplicate"]);
+});
+
+test("the face a verb holds up beside its card is no duplicate", () => {
+    assert.deepEqual([...TWICE.verbs], ["showcase"]);
+    // The card in a hand and its face in the Revealed Cards pile, a node of the stage's own.
+    const both = () => [
+        card(7, 300, 700, { name: "Spirit", zone: "hand" }),
+        {
+            ...card("r7", 150, 200, { name: "Spirit", id: 2 }),
+            slot: undefined,
+        },
+    ];
+    const found = (twice) =>
+        judge(run([], frames(100, both)), twice).map((f) => f.verdict);
+    assert.deepEqual(found(TWICE), []);
+    assert.deepEqual(found({ shapes: new Set(), verbs: new Set() }), [
+        "duplicate",
+    ]);
 });
 
 test("an arrow that changes shape with its ends still jumped", () => {

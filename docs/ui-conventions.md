@@ -456,7 +456,8 @@ held to by `just motion`.
   19:36.5, IEXcjBn3BXk 28:10.5). Beryl: 25 ms, in place.
 - **showcase.** A card an effect reveals is held up for both players to read:
   its face joins the "Revealed Cards" pile at the top left, growing into its
-  place there, and the card itself lies where it was. Revealed cards gather
+  place there, and the card itself lies where it was. The face it holds up is on
+  screen beside its card: the duplicate audit allows it. Revealed cards gather
   under a "Revealed Cards" pill at the top left, each growing into place in
   about 0.2 s. A click on the pile opens a browser of them under the same words,
   with a Done button, and the pile stays afterward until the cross on its pill
