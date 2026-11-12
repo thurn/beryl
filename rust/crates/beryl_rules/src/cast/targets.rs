@@ -214,6 +214,7 @@ pub(crate) fn target_trigger<L: Layout>(
         spec: SpecIx::default(),
         part: 0,
         graveyard_from: 0,
+        chosen: Bitboard::EMPTY,
         left: 0,
         free: false,
         resolving: false,
@@ -226,7 +227,11 @@ pub(crate) fn target_trigger<L: Layout>(
 
 /// The objects or players the current target spec can still choose: not one already chosen
 /// for it.
-pub(super) fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> TargetSet<L> {
+pub(super) fn target_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    c: &Casting<L>,
+) -> TargetSet<L> {
     let entry = top(s);
     let spec = &specs(t, &entry)[c.spec.index()];
     let itself = entry.spell().map(|r| r.slot);

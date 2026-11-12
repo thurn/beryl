@@ -13,7 +13,7 @@ use crate::card::{
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::{collapse, collapse_in_order};
-use crate::event::{self, Reason, Sink};
+use crate::event::{self, Entry, Reason, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -60,7 +60,7 @@ fn itself<L: Layout>(entry: &StackEntry<L>) -> L::Slot {
 fn part_being_paid<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> (CostAction, &'static Chosen) {
     match part_at(t, entry, c.part) {
         Some(CostPart::Chosen(action, chosen)) => (*action, chosen),
@@ -262,7 +262,7 @@ pub(super) fn pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
     while let Some(part) = part_at(t, &entry, c.part) {
@@ -284,6 +284,7 @@ pub(super) fn pay<L: Layout>(
                     c.step = CastStep::Objects;
                     c.left = n;
                     c.graveyard_from = 0;
+                    c.chosen = Bitboard::EMPTY;
                     s.ask(Pending::Casting(c));
                     return Ok(());
                 }
@@ -310,7 +311,7 @@ fn pay_substitutes<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     entry: &StackEntry<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost().parts()) {
         c.part = part;
@@ -332,7 +333,7 @@ fn pay_substitutes<L: Layout>(
 fn substitute_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     let entry = top(s);
@@ -385,10 +386,10 @@ fn choices<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     entry: &StackEntry<L>,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> Bitboard<L::Slot> {
     let (action, chosen) = part_being_paid(t, entry, c);
-    let able = candidates(s, t, c.player, itself(entry), action, chosen);
+    let able = candidates(s, t, c.player, itself(entry), action, chosen) & !c.chosen;
     match (chosen.measure, chosen.zone) {
         (Measure::Count(_), Zone::Graveyard) => {
             let graveyard = s.graveyard(c.player);
@@ -427,7 +428,7 @@ fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
 pub(super) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> Result<Decision<L>, Full> {
     let entry = top(s);
     let (action, chosen) = part_being_paid(t, &entry, c);
@@ -470,7 +471,28 @@ fn pay_with<L: Layout>(
 ) -> Result<(), Full> {
     match action {
         CostAction::Tap => event::set_tapped(s, t, sink, s.object_ref(slot), true),
-        CostAction::Exile => event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile),
+        _ => unreachable!("the card table refuses a cost the engine cannot pay"),
+    }
+}
+
+/// Does the part's action to all the objects chosen for it, at once.
+fn pay_with_all<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    action: CostAction,
+    objects: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    match action {
+        CostAction::Exile => event::move_batch(
+            s,
+            t,
+            sink,
+            objects,
+            Zone::Exile,
+            Reason::Exile,
+            Entry::default(),
+        ),
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }
 }
@@ -481,7 +503,7 @@ pub(super) fn perform<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
     option: Option<Opt<L>>,
     object: Option<L::Slot>,
 ) -> Result<(), Full> {
@@ -512,15 +534,20 @@ pub(super) fn perform<L: Layout>(
             c.left = c.left.saturating_sub(power);
         }
         Measure::Count(_) => {
-            // CR 601.2h: "The player pays the total cost." The cards go from the hand or the
-            // graveyard to exile as part of it.
+            // CR 601.2h: "The player pays the total cost." The cards stay where they are
+            // until the last is chosen, then go from the hand or the graveyard to exile at
+            // once ([`pay_with_all`]).
             let slot = object.expect("an object to pay with");
             if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
-                // The cards above it move down one, so the next pick starts here.
-                c.graveyard_from = i as u8;
+                // The next pick starts above it.
+                c.graveyard_from = i as u8 + 1;
             }
-            pay_with(s, t, sink, action, slot)?;
+            c.chosen.insert(slot);
             c.left -= 1;
+            if c.left == 0 {
+                pay_with_all(s, t, sink, action, c.chosen)?;
+                c.chosen = Bitboard::EMPTY;
+            }
         }
     }
     if c.left == 0 && !matches!(chosen.measure, Measure::ForGeneric(_)) {

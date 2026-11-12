@@ -10,8 +10,8 @@ use crate::event::{Event, LossCause, Recipient, Tagged};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
-    Derived, GrantRef, Lki, Object, ObjectRef, Pending, PendingTrigger, Player, Resolving, SLOTS,
-    StackEntry, State, Target, TriggerInfo, Zones,
+    Casting, Derived, GrantRef, Lki, Object, ObjectRef, Pending, PendingTrigger, Player, Resolving,
+    SLOTS, StackEntry, State, Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -291,7 +291,20 @@ impl<L: Layout> Relayout for Pending<L> {
                 done: bits(done),
                 lethal: bits(lethal),
             },
-            &Pending::Casting(c) => Pending::Casting(c),
+            &Pending::Casting(c) => Pending::Casting(Casting {
+                player: c.player,
+                step: c.step,
+                spec: c.spec,
+                part: c.part,
+                graveyard_from: c.graveyard_from,
+                chosen: bits(c.chosen),
+                left: c.left,
+                free: c.free,
+                resolving: c.resolving,
+                remaining: c.remaining,
+                substituted: c.substituted,
+                triggered: c.triggered,
+            }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             &Pending::CastOffer {
                 object,

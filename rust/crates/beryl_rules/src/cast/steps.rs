@@ -72,6 +72,7 @@ pub(crate) fn begin_cast<L: Layout>(
         spec: SpecIx::default(),
         part: 0,
         graveyard_from: 0,
+        chosen: Bitboard::EMPTY,
         left: 0,
         free,
         resolving: resolving.is_some(),
@@ -122,6 +123,7 @@ pub(crate) fn begin_activate<L: Layout>(
         spec: SpecIx::default(),
         part: 0,
         graveyard_from: 0,
+        chosen: Bitboard::EMPTY,
         left: 0,
         free: false,
         resolving: false,
@@ -149,7 +151,7 @@ pub(super) fn advance<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     loop {
         match c.step {
@@ -197,7 +199,7 @@ fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     if top(s).is_spell() {
         return pay_mana(s, t, sink, c);
@@ -211,7 +213,7 @@ pub(super) fn pay_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
     let cost = total_cost(s, t, &entry, &c);
@@ -259,7 +261,7 @@ fn after_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
 ) -> Result<(), Full> {
     if top(s).is_spell() {
         c.part = 0;
@@ -279,7 +281,7 @@ pub(super) fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    c: Casting,
+    c: Casting<L>,
 ) -> Result<(), Full> {
     s.settle_question();
     let active = s.turn().active();
@@ -329,7 +331,7 @@ pub(super) fn ability_event<L: Layout>(entry: &StackEntry<L>) -> Event<L> {
 fn x_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let entry = top(s);
     let face = t.def(entry.card).face(entry.face);
@@ -356,7 +358,7 @@ pub(crate) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> Result<Decision<L>, Full> {
     let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>, prompt: Prompt| Decision {
         player: c.player,
@@ -428,7 +430,7 @@ pub(crate) fn perform<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting,
+    mut c: Casting<L>,
     option: Option<Opt<L>>,
     object: Option<L::Slot>,
 ) -> Result<(), Full> {

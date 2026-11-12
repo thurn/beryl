@@ -69,9 +69,8 @@ fn arrows(script: &str) -> Vec<&str> {
 
 /// A cast's costs in the order they are paid, and the spell on the stack throughout: the card
 /// flies to the stack, its lands tap and their mana streaks into it, and only then do the
-/// cards exiled for it leave the graveyard. No step takes the spell off the stack. Each card
-/// leaves in a beat of its own, as the engine moves it at its pick, one group each, though
-/// the rules exile one cost's cards together (CR 601.2h): by-w8gv.21.78 makes them one group.
+/// cards exiled for it leave the graveyard, together: the engine moves one cost's cards in
+/// one group after the last is chosen (CR 601.2h). No step takes the spell off the stack.
 /// A session sends the whole cast as one view when nothing is asked on the way, so the
 /// scenario's three views of it (the cast, the payment, the cards chosen) are joined here.
 #[test]
@@ -98,12 +97,12 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
                 "& streak #1 > #5 blue 1 <- #1".to_owned(),
                 "& streak #3 > #5 blue 1 <- #3".to_owned(),
                 "& streak #8 > #5 blue 1 <- #8".to_owned(),
-                format!("fly #6 (Jace, the Mind Sculptor) graveyard>exile exile <- {who}"),
-                format!("fly #4 (Oust) graveyard>exile exile <- {who}"),
-                format!("fly #10 (Portable Hole) graveyard>exile exile <- {who}"),
-                format!("fly #0 (Timetwister) graveyard>exile exile <- {who}"),
-                format!("fly #7 (Sink into Stupor) graveyard>exile exile <- {who}"),
                 format!("fly #2 (Counterspell) graveyard>exile exile <- {who}"),
+                format!("& fly #6 (Jace, the Mind Sculptor) graveyard>exile exile <- {who}"),
+                format!("& fly #4 (Oust) graveyard>exile exile <- {who}"),
+                format!("& fly #10 (Portable Hole) graveyard>exile exile <- {who}"),
+                format!("& fly #7 (Sink into Stupor) graveyard>exile exile <- {who}"),
+                format!("& fly #0 (Timetwister) graveyard>exile exile <- {who}"),
             ]),
             "seat {seat}"
         );

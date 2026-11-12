@@ -87,7 +87,7 @@ pub(super) fn total_cost<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     entry: &StackEntry<L>,
-    c: &Casting,
+    c: &Casting<L>,
 ) -> ManaCost {
     let face = t.def(entry.card).face(entry.face);
     match entry.ability {

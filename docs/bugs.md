@@ -325,3 +325,13 @@ fixed in the same session. Newest first.
   the interpreter keeps, or the definition check refuses it as the card compiles
   (`Malformed::LastKnown`); a comment promising a value is no guard, and neither
   is an assertion a release build drops.
+
+- A counted cost's cards (Abhorrent Oculus exiling six from a graveyard) and the
+  cards of a put-back (Brainstorm) each moved as its own event, one per pick,
+  though CR 601.2h pays a cost whole and CR 401.4 puts the cards in the library
+  at the same time. Scripts read simultaneity from the engine's groups, so they
+  showed one beat per card. The move came where the pick was answered, and a
+  group cannot stay open across a decision. Prevention: when the rules do one
+  thing to cards chosen one at a time, keep the picks (`Casting::chosen`, or a
+  set in the resolution as `dig` does) and move the cards in one batch after the
+  last; never move a card where its pick is answered.

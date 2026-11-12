@@ -98,27 +98,36 @@ pub fn put_on_bottom_in_random_order<L: Layout>(
 /// more cards in a specific position in a library at the same time, the owner of those cards
 /// may arrange them in any order." One pick for each, each card going on top of the one
 /// before, so the last picked is the top card: the first part of a split alone
-/// ([`choices`]). Returns the cards, in the library.
+/// ([`choices`]). The cards stay in the hand until the last is picked, then go to the
+/// library at once, in the order picked. Returns the cards, in the library.
 pub fn put_back<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     n: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
+    let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
     let mut put = Bitboard::EMPTY;
+    let mut order: L::Queue<L::Slot, 64> = Default::default();
     for left in (1..=n).rev() {
-        let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
-        if hand.is_empty() {
+        if (hand & !put).is_empty() {
             break;
         }
         let put_back = Prompt::new(Purpose::PutBack)
             .most(left)
             .places(prompt::Place::OnTop, prompt::Place::None)
             .part(Part::First);
-        let card = choices::pick(game, resolution, player, hand, put_back)?;
-        let card = game.state.object_ref(card);
-        zones::move_to(game, card, Zone::Library, Reason::Effect)?;
-        put.insert(card.slot);
+        let card = choices::pick(game, resolution, player, hand & !put, put_back)?;
+        put.insert(card);
+        order.push(card)?;
+    }
+    zones::move_all(game, put, Zone::Library, Reason::Effect)?;
+    // The batch lands in game order; each card then goes on top of those picked before it.
+    let s = &mut *game.state;
+    for &slot in order.as_slice() {
+        if s.object(slot).zone() == Zone::Library {
+            s.reorder_library(slot, Place::Top)?;
+        }
     }
     Ok(put)
 }

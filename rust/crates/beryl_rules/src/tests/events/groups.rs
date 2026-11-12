@@ -1,12 +1,12 @@
 //! Which recorded events happened as one event of the rules: the groups a recording sink's
 //! tags tell, and the blocks a declaration says.
 
-use beryl_card::effect::build::{TARGET, YOU, destroy, draw, exile_until_this_leaves};
+use beryl_card::effect::build::{TARGET, YOU, destroy, draw, exile_until_this_leaves, put_back};
 use beryl_card::{Amount, Effect, Objects, Recipients};
 
 use crate::card::{
-    Ability, CardDef, Face, ManaCost, Players, Subtype, Subtypes, TargetKind, TargetSpec, Trigger,
-    Types,
+    Ability, CardDef, CostPart, Face, ManaCost, Players, Subtype, Subtypes, TargetKind, TargetSpec,
+    Trigger, Types,
 };
 use crate::event::{Event, Reason, Recipient, Tag};
 use crate::filter::Filter;
@@ -114,8 +114,34 @@ static JAILER: CardDef = CardDef {
     tokens: &[],
 };
 
+/// "As an additional cost to cast this spell, exile two cards from your graveyard. Draw a
+/// card."
+static DELVER: CardDef = CardDef {
+    name: "Group Delver",
+    faces: &[Face {
+        cost: W,
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&draw(YOU, 1))],
+        ..Face::EMPTY
+    }
+    .additional_cost(&[CostPart::exile(2, Zone::Graveyard, Filter::Any)])],
+    tokens: &[],
+};
+
+/// "Put two cards from your hand on top of your library in any order."
+static STORM: CardDef = CardDef {
+    name: "Group Storm",
+    faces: &[Face {
+        cost: W,
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&put_back(YOU, 2))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &BEAR, &OGRE, &AURA, &WRATH, &QUAKE, &INSIGHT, &JAILER,
+    &LAND, &BEAR, &OGRE, &AURA, &WRATH, &QUAKE, &INSIGHT, &JAILER, &DELVER, &STORM,
 ]);
 
 const DECK: &Decklist = &[
@@ -127,6 +153,8 @@ const DECK: &Decklist = &[
     (2, "Group Quake"),
     (4, "Group Insight"),
     (2, "Group Jailer"),
+    (1, "Group Delver"),
+    (1, "Group Storm"),
 ];
 
 /// A game of [`DECK`] mirrors in the starting player's main phase, recording its events.
@@ -369,4 +397,72 @@ fn a_declaration_is_one_event_and_so_is_the_combat_damage() {
     let died = group(&events, moves(Reason::StateBased));
     assert!(attacked < declaring && declaring < dealt && dealt < died);
     assert_eq!(g.s.player(them).life(), 17);
+}
+
+#[test]
+fn the_cards_a_cost_exiles_leave_as_one_event_after_the_last_is_chosen() {
+    let mut g = game();
+    let me = g.me;
+    g.give(me, "Test Land", Zone::Battlefield);
+    // Three cards no two alike, so each choice is asked.
+    let cards = ["Group Bear", "Group Ogre", "Group Aura"].map(|c| g.give(me, c, Zone::Graveyard));
+    let delver = g.give(me, "Group Delver", Zone::Hand);
+    g.pick(cast(delver));
+    // Each card is chosen by its own answer, and none leaves until the last is chosen.
+    let mut picks = 0;
+    while g.current().kind == DecisionKind::ChooseObject {
+        assert!(
+            cards
+                .iter()
+                .all(|&c| g.s.object(c).zone() == Zone::Graveyard)
+        );
+        g.choose(Choice(0));
+        picks += 1;
+    }
+    assert_eq!(picks, 2);
+    let events = told(&mut g);
+    // CR 601.2h: "The player pays the total cost." The two cards are one payment of one
+    // cost, exiled at once, after the mana.
+    assert_eq!(count(&events, moves(Reason::Exile)), 2);
+    let exiled = group(&events, moves(Reason::Exile));
+    let paid = group(&events, |e| {
+        matches!(e, Event::Tap { .. } | Event::Mana { .. })
+    });
+    assert!(paid < exiled);
+    let left = cards
+        .iter()
+        .filter(|&&c| g.s.object(c).zone() == Zone::Graveyard);
+    assert_eq!(left.count(), 1);
+}
+
+#[test]
+fn cards_put_back_from_a_hand_go_to_the_library_as_one_event_in_the_order_chosen() {
+    let mut g = game();
+    let me = g.me;
+    g.give(me, "Test Land", Zone::Battlefield);
+    let first = g.give(me, "Group Bear", Zone::Hand);
+    let second = g.give(me, "Group Ogre", Zone::Hand);
+    let storm = g.give(me, "Group Storm", Zone::Hand);
+    g.pick(cast(storm));
+    told(&mut g);
+    g.pass_both();
+    // The second card is the one left to choose, and is chosen unasked.
+    g.pick_object(first);
+    let events = told(&mut g);
+    // CR 401.4: "If an effect puts two or more cards in a specific position in a library at
+    // the same time, the owner of those cards may arrange them in any order." One event puts
+    // both there, each chosen going on top of the one before.
+    let put = |e: &Event| {
+        matches!(
+            *e,
+            Event::ZoneChange {
+                to: Zone::Library,
+                ..
+            }
+        )
+    };
+    assert_eq!(count(&events, put), 2);
+    group(&events, put);
+    let library = g.s.library(me);
+    assert_eq!(library[library.len() - 2..], [first, second]);
 }

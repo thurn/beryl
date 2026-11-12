@@ -37,7 +37,7 @@ pub enum CastStep {
 
 /// A spell being cast or an ability being activated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Casting {
+pub struct Casting<L: Layout = Small> {
     pub player: Seat,
     pub step: CastStep,
     /// The target spec being chosen (CR 601.2c).
@@ -47,6 +47,11 @@ pub struct Casting {
     pub part: u8,
     /// For [`CastStep::Objects`], the graveyard position picks continue from.
     pub graveyard_from: u8,
+    /// For [`CastStep::Objects`], the objects chosen so far for a part whose objects all
+    /// move once the last is chosen
+    /// ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays
+    /// the total cost."): they stay where they are until then.
+    pub chosen: Bitboard<L::Slot>,
     /// Targets still to choose for it, or what another step still has to pay.
     pub left: u8,
     /// Cast without paying its mana cost
@@ -116,7 +121,7 @@ pub enum Pending<L: Layout = Small> {
         lethal: Bitboard<L::Slot>,
     },
     /// A spell being cast or an ability being activated.
-    Casting(Casting),
+    Casting(Casting<L>),
     /// A body paused for an answer.
     Resolving(Resolving<L>),
     /// A resolving spell or ability lets `player` cast this card now (CR 608.2g).
