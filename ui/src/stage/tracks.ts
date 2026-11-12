@@ -30,6 +30,10 @@ export interface Timing {
   /** For a step that ends a span: it begins no sooner than this long after the span has
    * come in whole (beat.ts). An arrow whose spell resolves at once is still read. */
   hold?: number;
+  /** What follows it in its beat begins no sooner than it is over (beat.ts). The step that
+   * ends an arrow or a line of combat, over which the line drains away: nothing it lay
+   * between moves until it has gone. */
+  leads?: boolean;
   /** It passes over the table: its beat does not wait for it, and it plays on to its own
    * end over the beats, and the scripts, that follow. The turn's banner. */
   passes?: boolean;

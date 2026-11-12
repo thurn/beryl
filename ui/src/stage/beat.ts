@@ -79,7 +79,8 @@ export function under<T>(
  * stagger after. One played `with` the step before it takes that step's turn, and one that is
  * drawn between things at rest (`Timing.after`) waits for the steps of the beat that move
  * them. One that ends a span waits until the span has stood whole for its hold
- * (`Timing.hold`), `whole` saying since when the span a step ends has. The beat is over
+ * (`Timing.hold`), `whole` saying since when the span a step ends has; and what follows one
+ * that leads (`Timing.leads`) waits until it is over. The beat is over
  * with the last step that does not pass over the table (`Timing.passes`): one that does
  * holds the beat only until it has begun, and plays on over what follows; and a step that
  * has the table to itself (`Timing.alone`) waits until `passed`, the stage time by which
@@ -117,8 +118,10 @@ export function laid(
     if (open <= opens) open = from;
     if (!timing.with) turn = own + timing.stagger;
     last = own;
-    const to = from + timing.duration;
-    end = Math.max(end, timing.passes ? from : to);
+    const began = from;
+    const to = began + timing.duration;
+    end = Math.max(end, timing.passes ? began : to);
+    if (timing.leads) from = to;
     const mover = moverOf(step.act);
     if (mover !== undefined) {
       landed.set(mover, Math.max(landed.get(mover) ?? at, to));
@@ -127,7 +130,7 @@ export function laid(
       index: played + i,
       verb: step.act.verb,
       turn: own,
-      from,
+      from: began,
       to,
       step,
       ease: timing.ease,

@@ -205,8 +205,9 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     verbs.get(act.verb) ??
     SNAP;
   // An arrow or a line is no turn of its beat: it goes with the step that calls for it and
-  // holds up none after it. Its end is a cut, the data's cases of no time, as Arena cuts its
-  // own (data/arena-motion.json, point: "It is cut, not faded, when it ends"). An arrow or a
+  // holds up none after it. Arena cuts its own (data/arena-motion.json, point: "It is cut,
+  // not faded, when it ends"); Beryl's arrow or line of combat drains into what it pointed at
+  // over its end, which what follows waits for, and the line to a source is cut. An arrow or a
   // line of combat is drawn between things at rest: it waits for the spell or ability it
   // leaves to land. The line from an ability to its source does not: it stretches as the
   // ability lifts. The marks of one beat come up together, their delay after its turn comes.
@@ -221,7 +222,7 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     if (act.span === "end") {
       const read = led && act.arrow !== "source";
       return read
-        ? { ...own, delay: 0, hold: own.delay, with: true }
+        ? { ...own, delay: 0, hold: own.delay, with: true, leads: true }
         : { ...own, with: led };
     }
     const waits = led && act.arrow !== "source";

@@ -193,6 +193,36 @@
       }
     },
     {
+      "kind": "exception",
+      "number": 9,
+      "name": "Lines and combat marks of light",
+      "rule": "Arrows, lines of combat and the marks of combat are painted as light, in Beryl's colors. An attacker wears a wedge of ember light on its leading edge, which pops as it is declared and turns gold once it is blocked; a blocker has a gold crescent under it and a gold beam to the tip of its attacker's wedge, over the cards. An arrow strikes and drains where Arena's appears and is cut (exception 8). This replaces the thin flat lines and pale gold marks, which read as a diagram: \"crummy and cartoony\". The line a declaration pulls toward the pointer follows the pointer itself, with no lag.",
+      "reports": [
+        "by-w8gv.21.67"
+      ],
+      "arena": {
+        "does": "A target arrow is a cyan ribbon of light that appears whole in one frame and is cut as its spell resolves. An attacker's chevron appears in one frame, a little wide and bright, and settles; it is red, and gold once blocked. A blocker's line is a gold beam with a head and a crescent under the blocker, cut as combat damage begins.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "31:35.05"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:16.53"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:22.3"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "35:26.0"
+          }
+        ]
+      }
+    },
+    {
       "kind": "settled",
       "name": "Tokens",
       "rule": "They appear at their slot; they do not fly out of their source.",
@@ -1841,7 +1871,7 @@
     },
     {
       "name": "point",
-      "shows": "An arrow or line between two things, from the step that begins it to the step that ends it: to a target, from an ability to its source, from an attacker to what it attacks, from a blocker to its attacker. An arrow at a target is a bowed arc with a head, drawn out of its spell or ability once that has landed on the stack. It comes onto a card from the open table in front of it, never along its row, and its head lies on the card's face; at a player it goes over the top onto their life total; between two things that all but touch it goes round their side. One at the stack item its own lies over leaves the side of its own item and comes round into the end of the other's strip, its head on the table beside the stack, pointing at that item's name. The line to a source is the same arc, thin and faint with no head, and stretches as the ability lifts. A line of combat is thin and straight, from the tip of the attacker's chevron or from a blocker's edge. Each is one line for as long as it lasts, drawn every moment from where its two ends are, and is cut as the step that ends it begins, which waits until an arrow or a line of combat has stood whole for its end's delay: one whose spell resolves at once is still read. An ability and the line to its source stay a moment after what the ability did, and go in one tick. A line of combat lies on the table, under the cards and the step's banner.",
+      "shows": "An arrow or line between two things, from the step that begins it to the step that ends it: to a target, from an ability to its source, from an attacker to what it attacks, from a blocker to its attacker. Each is drawn as light: a ribbon with a hot core, laid over everything at rest and under what flies. An arrow at a target is a bowed arc, a thread at its spell that swells to a spear head, which strikes out of its spell or ability once that has landed on the stack, lands with a flash and sparks, and has light run along it toward its target while it stands. It comes onto a card from the open table in front of it, never along its row, and its head lies on the card's face; at a player it goes over the top onto their life total; between two things that all but touch it goes round their side. One at the stack item its own lies over leaves the side of its own item and comes round into the end of the other's strip, its head on the table beside the stack, pointing at that item's name. The line to a source is the same arc, thin and faint with no head, and stretches as the ability lifts. A line of combat is a straight beam that narrows to a dart, from the tip of the wedge an attacker wears, or from a blocker's edge to the tip of its attacker's wedge. Each is one line for as long as it lasts, drawn every moment from where its two ends are, and an arrow or a line of combat drains into what it points at over the step that ends it, which waits until it has stood whole for its end's delay, so that one whose spell resolves at once is still read, and which what follows waits for, so that neither end moves under it. An ability and the line to its source stay a moment after what the ability did, and go in one tick. A browser with no WebGL draws each as a path instead, a line of combat under the cards.",
       "arena": {
         "does": "A cyan arc runs from a spell or ability to its target until it resolves. A thin line joins an ability to its source from the frame it lifts. A thin gold line runs from a blocker to its attacker until combat damage is done. An attacker has no line to the player, only its chevron.",
         "evidence": [
@@ -1909,10 +1939,10 @@
           "curve": "none"
         },
         "end": {
-          "duration": 0,
-          "delay": 400,
+          "duration": 110,
+          "delay": 290,
           "stagger": null,
-          "curve": "none"
+          "curve": "ease-in"
         },
         "source line end": {
           "duration": 33,

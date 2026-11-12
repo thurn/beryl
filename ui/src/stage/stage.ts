@@ -728,7 +728,7 @@ export class ScriptStage {
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
-    this.#over.write(this.#surface, now, this.#prompt);
+    this.#over.write(this.#surface, now, this.#prompt, this.#entries);
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
     this.#stale = false;

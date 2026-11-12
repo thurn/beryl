@@ -173,7 +173,8 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
     // moves nothing: the stage's poses are as they were.
     // Nor what is drawn over the table meanwhile: a line, and an announcement passing over
     // it (the turn's banner, under which the turn's first cards move).
-    const OVER = ".stage-lines, .stage-notice, .stage-notice-scry";
+    const OVER =
+        ".stage-lines, .stage-lights, .stage-notice, .stage-notice-scry";
     const alone = document.head.appendChild(document.createElement("style"));
     const ticks = [];
     let abilities = false;

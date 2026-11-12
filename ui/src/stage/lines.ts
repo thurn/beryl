@@ -243,6 +243,34 @@ function straight(
   return [a, b];
 }
 
+/** The whole way of the line that says `arrow` between `from` and `to` as they lie, as a
+ * curve from its first point round its second to its third (a line of combat is straight, its
+ * second point half way): what its path is cut from, and what its light is drawn along
+ * (light.ts). None where there is nothing to draw: an ability has yet to come clear of the
+ * source it lifts out of, or a creature has closed on what it strikes. */
+export function wayOf(
+  arrow: Arrow,
+  from: Reach,
+  to: Reach,
+): [Point, Point, Point] | null {
+  if (arrow === "attack" || arrow === "block") {
+    const ends = straight(arrow, from, to);
+    return ends ? [ends[0], mix(ends[0], ends[1], 0.5), ends[1]] : null;
+  }
+  const over = overlap(from, to);
+  if (arrow === "source") return (over ? undefined : arc(from, to)) ?? null;
+  // Onto a card from the table in front of it; round the side of one that stands right by;
+  // over the top to a player; and into the strip of the stack item under its own. But for
+  // that strip, the head lies on the face of what it is aimed at, not at its edge.
+  const apart = over ? undefined : arc(from, to);
+  const faced =
+    apart && to.toward !== 0 && !tight(from, to) ? onto(from, to) : undefined;
+  const reached = faced ?? apart;
+  return reached
+    ? [reached[0], reached[1], mix(reached[2], to.middle, ONTO.into)]
+    : loop(from, to);
+}
+
 /** The line that says `arrow` between `from` and `to` as they lie, `shown` of it drawn (the
  * line from an ability to its source grows out of the source, every other out of `from`);
  * none where there is nothing to draw: nothing is shown yet, an ability has yet to come
@@ -254,16 +282,13 @@ export function shapeOf(
   shown: number,
 ): Shape | null {
   if (shown <= 0) return null;
+  const whole = wayOf(arrow, from, to);
+  if (!whole) return null;
   if (arrow === "attack" || arrow === "block") {
-    const ends = straight(arrow, from, to);
-    if (!ends) return null;
-    const [a, b] = ends;
+    const [a, , b] = whole;
     return { d: `M${said(a)} L${said(mix(a, b, shown))}`, from: a, to: b };
   }
-  const over = overlap(from, to);
   if (arrow === "source") {
-    const whole = over ? undefined : arc(from, to);
-    if (!whole) return null;
     const [a, c, b] = whole;
     const [start, round, end] = part([b, c, a], shown);
     return {
@@ -272,16 +297,6 @@ export function shapeOf(
       to: b,
     };
   }
-  // Onto a card from the table in front of it; round the side of one that stands right by;
-  // over the top to a player; and into the strip of the stack item under its own. But for
-  // that strip, the head lies on the face of what it is aimed at, not at its edge.
-  const apart = over ? undefined : arc(from, to);
-  const faced =
-    apart && to.toward !== 0 && !tight(from, to) ? onto(from, to) : undefined;
-  const reached = faced ?? apart;
-  const whole: [Point, Point, Point] = reached
-    ? [reached[0], reached[1], mix(reached[2], to.middle, ONTO.into)]
-    : loop(from, to);
   const [a, c, tip] = part(whole, shown);
   // The head lies along the way the arc arrives, its tip where the arc ends, and the shaft
   // goes there and back so that only the head is filled.

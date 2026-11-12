@@ -10,14 +10,20 @@
 // open. An arrow or line is one path in a drawing of the layer's own, from the step that
 // begins it to the step that ends it: over everything at rest and under what flies, or for a
 // line of combat on the table, under the cards. The stage writes its shape in stage pixels
-// each tick. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
+// each tick. Where the browser has WebGL the lines and the marks of combat are painted as
+// light instead (light.ts, glow.ts), on a canvas of the layer's own; the paths stay on the
+// page as the record of what is drawn, which the checks read, and are not painted, and the
+// layer says so (`data-light`) for the styles that hide them and the marks a card's face
+// would wear. A streak (streaks.ts) is a path of the same drawing for as long as its step. How
 // far through an announcement is (shown.ts) is a number on the layer's parent, which the
 // chrome's banners are drawn in. The elements keep the names the old board gave its
 // own (`card-el` and its looks, `stack-ability`), which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
+import { Glow } from "./glow.ts";
 import type { Name, Point, Resting } from "./layout.ts";
+import type { Ribbon, Scene } from "./light.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
@@ -36,6 +42,12 @@ export class DomSurface implements Surface {
    * the table, for the lines of combat. */
   readonly #drawings: { over?: SVGSVGElement; under?: SVGSVGElement } = {};
   readonly #lines = new Map<string, SVGPathElement>();
+  /** What paints the light: none yet, or `null` where the browser has none to give. */
+  #glow: Glow | null | undefined;
+  #scene: Scene | undefined;
+  /** The trace a declaration pulls toward the pointer (Aim.tsx), which is no part of the
+   * stage's scene. */
+  #aim: readonly Ribbon[] = [];
   /** Where the browser's pointer was last, in the window. */
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
@@ -212,6 +224,44 @@ export class DomSurface implements Surface {
     }
     const d = shape?.d ?? "";
     if (path.getAttribute("d") !== d) path.setAttribute("d", d);
+  }
+
+  /** Paints `scene`; with none, the stage no longer draws here, and the painter goes. */
+  light(scene?: Scene) {
+    this.#scene = scene;
+    if (scene) return this.#paint();
+    this.#glow?.gone();
+    this.#glow = undefined;
+    delete this.#layer.dataset.light;
+  }
+
+  /** Draws the pointer's trace as `ribbons`, at once: it follows the pointer, not the tick. */
+  aim(ribbons: readonly Ribbon[]) {
+    this.#aim = ribbons;
+    this.#paint();
+  }
+
+  #paint() {
+    const drawn = this.#scene ?? { now: 0, ribbons: [], glints: [], dots: [] };
+    // With reduced motion asked for, light stands still: nothing runs along it or flies off.
+    const still = this.#layer.ownerDocument.defaultView?.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const scene = still ? { ...drawn, now: 0, dots: [] } : drawn;
+    const ribbons = [...scene.ribbons, ...this.#aim];
+    const lit = ribbons.length + scene.glints.length + scene.dots.length > 0;
+    // A painter is made with the first light there is to paint.
+    if (this.#glow === undefined && lit) {
+      this.#glow = Glow.on(this.#layer) ?? null;
+      if (this.#glow) this.#layer.dataset.light = "";
+    }
+    // A context the browser took back paints nothing: the paths are drawn again.
+    if (this.#glow?.lost) {
+      this.#glow.gone();
+      this.#glow = null;
+      delete this.#layer.dataset.light;
+    }
+    this.#glow?.paint({ ...scene, ribbons });
   }
 
   streak(key: string, look?: string, shape?: StreakShape | null) {

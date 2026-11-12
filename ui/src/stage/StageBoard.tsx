@@ -145,7 +145,9 @@ export function StageBoard({
             layer={layer.current}
           />
         )}
-        {surface && <Aim asked={asked} layer={layer.current} />}
+        {surface && (
+          <Aim asked={asked} layer={layer.current} surface={surface} />
+        )}
         <OrderRow
           key={`order-${width}`}
           asked={asked}

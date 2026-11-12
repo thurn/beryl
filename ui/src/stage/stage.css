@@ -238,6 +238,25 @@
 .stage-lines-under {
   z-index: 0;
 }
+/* Where the browser paints the lines as light (stage/dom.ts `data-light`; stage/light.ts,
+   stage/glow.ts), on a canvas over everything at rest and under what flies, the paths are
+   the record of what is drawn and are not painted; nor are the marks of combat a card's face
+   would wear, which the light draws from where the stage has the card. */
+.stage-lights {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 850;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.card-layer[data-light] .stage-line {
+  visibility: hidden;
+}
+.card-layer[data-light] .combat-marker {
+  display: none;
+}
 .stage-line {
   --tone: 255 233 176;
   fill: none;

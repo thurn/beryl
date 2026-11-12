@@ -4,6 +4,8 @@
 // passing over the table is, which the chrome that draws it reads (shown.ts). Each plays on
 // the stage's clock and is a function of stage time and of where the model has what it is
 // on, which the stage says (`reach`); nothing here is a node, moves one or holds up a step.
+// The lines, and the marks of the creatures in combat, are drawn as light where the surface
+// can paint it (light.ts): the scene of it is worked out here, each tick.
 import type { Arrow } from "../generated/protocol";
 import type { Edge, Run } from "./beat.ts";
 import {
@@ -12,8 +14,9 @@ import {
   type EffectSurface,
   type On,
 } from "./effects.ts";
-import type { Name } from "./layout.ts";
-import { shapeOf, type Reach } from "./lines.ts";
+import type { Name, Resting } from "./layout.ts";
+import { lightOf, type Fighter, type LitLine, type Scene } from "./light.ts";
+import { shapeOf, wayOf, type Reach } from "./lines.ts";
 import type { NoticeSurface } from "./shown.ts";
 import {
   namedBy,
@@ -26,9 +29,18 @@ import { Streaks, type Streak, type StreakSurface } from "./streaks.ts";
 import type { Act } from "./table.ts";
 import { litBy, SNAP } from "./tracks.ts";
 
-/** Where all of it is drawn. */
+/** Where all of it is drawn. One that paints light is given the scene of it each tick, and
+ * none once the stage no longer draws on it. */
 export interface OverlaySurface
-  extends EffectSurface, SpanSurface, StreakSurface, NoticeSurface {}
+  extends EffectSurface, SpanSurface, StreakSurface, NoticeSurface {
+  light?(scene?: Scene): void;
+}
+
+/** What the stage holds at rest, by name. */
+export type Held = ReadonlyMap<Name, { resting: Resting }>;
+
+/** Since when each creature in combat has fought as it does, and been blocked. */
+type Fought = Map<Name, Pick<Fighter, "fights" | "since" | "blocked">>;
 
 /** How what the stage names `on` lies at stage time `at`, as an end of a line or a streak: a
  * node, or a player's life total, or with `pool` their unspent mana; none for what the stage
@@ -47,6 +59,10 @@ export class Overlay {
    * (`Timing.passes`) is here after its beat and its script are over, until its own end. */
   notices: Run[] = [];
   readonly #reach: Reaching;
+  #fought: Fought = new Map();
+  /** Nothing has been drawn since the stage started over: what fights then has fought since
+   * before it, and its mark does not pop. */
+  #fresh = true;
 
   constructor(reach: Reaching) {
     this.#reach = reach;
@@ -98,6 +114,37 @@ export class Overlay {
     );
   }
 
+  /** Everything lit at stage time `now` (light.ts): the `lines` held then, and the marks of
+   * the creatures among `held` that attack or block. A creature's mark begins as the stage
+   * first draws it in combat, which is when the view that says so is shown. */
+  light(now: number, lines: readonly Line[], held: Held): Scene {
+    const lit = lines.flatMap((line): LitLine[] => {
+      const [a, b] = [this.#reach(line.from, now), this.#reach(line.to, now)];
+      const way = line.shape && a && b ? wayOf(line.arrow, a, b) : null;
+      return way && a && b ? [{ ...line, way, from: a, to: b }] : [];
+    });
+    const first = this.#fresh ? -Infinity : now;
+    const fought: Fought = new Map();
+    const fighters: Fighter[] = [];
+    for (const [name, { resting }] of held) {
+      const combat = resting.object?.combat;
+      if (!combat || resting.dress.zone !== "battlefield") continue;
+      const before = this.#fought.get(name);
+      const fights = combat.kind === "attacking" ? "attacks" : "blocks";
+      const since = before?.fights === fights ? before.since : first;
+      const blocked =
+        combat.kind === "attacking" && combat.blocked
+          ? (before?.blocked ?? first)
+          : undefined;
+      fought.set(name, { fights, since, blocked });
+      const reach = this.#reach(name, now);
+      if (reach) fighters.push({ reach, fights, since, blocked });
+    }
+    this.#fought = fought;
+    this.#fresh = false;
+    return lightOf(now, lit, fighters);
+  }
+
   /** The marks held at stage time `now`, on `on` or on anything. */
   marks(now: number, on?: On): Marked[] {
     return this.#spans.marks(now, on);
@@ -147,9 +194,16 @@ export class Overlay {
 
   /** Draws everything on `surface` as it is at stage time `now`, and takes off it what has
    * ended. */
-  write(surface: OverlaySurface | undefined, now: number, prompt: boolean) {
+  write(
+    surface: OverlaySurface | undefined,
+    now: number,
+    prompt: boolean,
+    held: Held,
+  ) {
     this.#effects.write(surface, now);
-    this.#spans.write(surface, now, this.lines(now, prompt));
+    const lines = this.lines(now, prompt);
+    this.#spans.write(surface, now, lines);
+    surface?.light?.(this.light(now, lines, held));
     this.#streaks.write(surface, now, this.streaks(now));
     for (const { step, from, to } of this.notices) {
       if (step.act.verb !== "announce") continue;
@@ -162,6 +216,7 @@ export class Overlay {
   erase(surface: OverlaySurface | undefined) {
     this.#spans.erase(surface);
     this.#streaks.clear(surface, false);
+    surface?.light?.();
   }
 
   /** Ends everything at once: the stage starts over. */
@@ -169,6 +224,8 @@ export class Overlay {
     this.#effects.clear(surface);
     this.#spans.clear(surface);
     this.#streaks.clear(surface, true);
+    this.#fought = new Map();
+    this.#fresh = true;
     for (const run of this.notices) this.over(surface, run);
   }
 }
