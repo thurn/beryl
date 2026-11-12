@@ -6,6 +6,23 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Two objects of one card were offered as one candidate while different
+  continuous effects were on them, whenever the effects came to the same layer
+  results today: a creature with +1/+1 until end of turn and its twin with +1/+1
+  for good, or a member of an effect's locked-in set and a creature the same
+  size without it. `State::signature` compared a permanent's layer results,
+  which say what its effects make of it now and not for how long, so the player
+  could not choose between two objects that lead to different games
+  (architecture §7.2). The rules kept a separate list of the objects an effect
+  that shows nowhere is on (a permission to cast, a spell's terms) to cover the
+  rest. Found by the review of the stores (by-w8gv.7.11); as old as continuous
+  effects. The signature now compares the effects on each object (`EffectsOn`),
+  behind the bit test it already paid, and the list is gone. Prevention: what
+  makes two objects interchangeable is everything the state holds about them, so
+  a store answers "what do you hold about this object" once, for the signature,
+  and a test of a new store shows two objects that differ only in it are told
+  apart.
+
 - The lands one effect untapped came untapped in slot order
   (`EffectCtx::untap_up_to_lands`, Teferi, Hero of Dominaria's +1 and Time
   Spiral, walked the chosen set in candidate order), so the order of the untap

@@ -7,7 +7,7 @@ pub use crate::counters::{
     COUNTERS, CounterRows, CounterTable, Counters, CountersHeld, CountersOf,
 };
 pub use crate::effects::{
-    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, LayerChange, LockedIn,
+    Affects, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange, LockedIn,
     MoveReplacement, Payload, Permission, Permitted, SETS,
 };
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
@@ -18,7 +18,7 @@ pub use crate::stack::{
     Lki, PendingTrigger, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces, TriggerInfo,
     placed,
 };
-pub use crate::store::Duration;
+pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Tracked, Tracker, Trackers};
 pub use crate::turn::Turn;
 

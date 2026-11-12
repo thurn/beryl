@@ -1356,6 +1356,31 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
     assert_eq!(removed, [(CounterKind::Story, 1), (CounterKind::Time, 3)]);
 }
 
+/// Two creatures of one card are one candidate only while the same effects are on them
+/// (§7.2): the same size today by a bonus that ends with the turn and by one that does
+/// not, they lead to different games.
+#[test]
+fn creatures_alike_today_by_effects_that_end_apart_are_not_interchangeable() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let [first, second] = [(); 2].map(|()| put(&t, &mut s, &mut x, p, "Test Bear"));
+    let source = put(&t, &mut s, &mut x, p, "Test Adeline");
+    let bigger = Payload::Layer(LayerChange::ModifyPt(1, 1));
+    let [this_turn, for_good] = [first, second].map(|slot| s.object_ref(slot));
+    // The same bonus for as long on each: still one candidate.
+    with_ctx(&t, &mut s, &mut x, source, |ctx| {
+        ctx.add_effect(this_turn, bigger, Duration::EndOfTurn);
+        ctx.add_effect(for_good, bigger, Duration::EndOfTurn);
+    });
+    assert!(crate::engine::interchangeable(&s, first, second));
+    with_ctx(&t, &mut s, &mut x, source, |ctx| {
+        ctx.add_effect(this_turn, bigger, Duration::EndOfTurn);
+        ctx.add_effect(for_good, bigger, Duration::Indefinite);
+    });
+    assert_eq!(s.derived(first), s.derived(second));
+    assert!(!crate::engine::interchangeable(&s, first, second));
+}
+
 #[test]
 fn gaining_control_changes_the_controller_until_the_effect_ends() {
     let (t, mut s, p) = game();

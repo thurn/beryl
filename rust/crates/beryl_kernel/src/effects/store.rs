@@ -145,30 +145,57 @@ impl<L: Layout> Store<L> for Effects<L> {
         )
     }
 
+    /// The first of: an effect on an object or a set that is no permission to cast, then
+    /// a permission, then a rule change on a player. That order and these words are what
+    /// saves hold for them: a permission is said by its player and card, not by what
+    /// granted it, and a rule change by its player, not by the card it came from.
     fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String> {
-        // The first entry about an object that is no permission to cast: those, and then a
-        // rule change on a player, are listed after these
-        // ([`State::cast_permission_lingering`], [`State::rule_change_lingering`]), where
-        // and as saves have always had them.
-        let (e, on) = self
-            .entries
-            .iter()
-            .filter(|e| !matches!(e.payload, Payload::Cast(_)))
-            .find_map(|e| {
-                let on = match e.affected {
-                    Affects::Object { slot, .. } => t.def(s.card(slot)).name.to_owned(),
-                    Affects::Set(set) => {
-                        format!("{} permanents", self.sets.members(set).count())
+        let name = |slot: L::Slot| t.def(s.card(slot)).name;
+        let on_objects = self.entries.iter().find_map(|e| {
+            let on = match (e.affected, e.payload) {
+                (Affects::Object { .. }, Payload::Cast(_)) | (Affects::Player(_), _) => {
+                    return None;
+                }
+                (Affects::Object { slot, .. }, _) => name(slot).to_owned(),
+                (Affects::Set(set), _) => {
+                    format!("{} permanents", self.sets.members(set).count())
+                }
+            };
+            Some(format!(
+                "an effect of {} on {on} lasting {}",
+                t.def(e.source).name,
+                e.duration.words()
+            ))
+        });
+        let permission = || {
+            self.entries
+                .iter()
+                .find_map(|e| match (e.affected, e.payload) {
+                    (Affects::Object { slot, .. }, Payload::Cast(terms)) => Some(format!(
+                        "player {}'s permission to cast {}",
+                        terms.player.get(),
+                        name(slot)
+                    )),
+                    _ => None,
+                })
+        };
+        let rule_change = || {
+            self.entries.iter().find_map(|e| {
+                let (player, rule) = e.player_rule()?;
+                let lasting = match e.duration {
+                    Duration::UntilYourNextTurn(theirs) if theirs == player => {
+                        "until their next turn".to_owned()
                     }
-                    Affects::Player(_) => return None,
+                    other => other.words(),
                 };
-                Some((e, on))
-            })?;
-        Some(format!(
-            "an effect of {} on {on} lasting {}",
-            t.def(e.source).name,
-            e.duration.words()
-        ))
+                Some(format!(
+                    "player {} {} {lasting}",
+                    player.get(),
+                    rule.words()
+                ))
+            })
+        };
+        on_objects.or_else(permission).or_else(rule_change)
     }
 }
 

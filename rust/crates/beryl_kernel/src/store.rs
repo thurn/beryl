@@ -6,8 +6,9 @@
 //! its mutators and queries (methods of `State`), and its `Store` implementation. The
 //! per-field lists of the state name the store once: [`State::empty`],
 //! [`crate::Large::clone_state`] and [`Relayout`] for `State`. Everything else reaches the
-//! stores through the functions below, so a new kind of entry adds a variant to its store's
-//! payload and nothing to any of them.
+//! stores through the functions below, [`Stored`] among them for what tells two objects
+//! apart, so a new kind of entry adds a variant to its store's payload and nothing to any
+//! of them.
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -16,7 +17,7 @@ use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
 use crate::ids::Seat;
 use crate::invariants::{Violation, check};
-use crate::layout::Layout;
+use crate::layout::{Layout, Small};
 use crate::relayout::Relayout;
 use crate::state::State;
 use crate::table::GameTable;
@@ -103,7 +104,67 @@ pub(crate) trait Store<L: Layout>: Clone + Debug + Eq + Hash + Relayout {
     fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String>;
 }
 
+/// What the stores hold about one object, to compare two objects by
+/// ([`State::signature`]): its memos ([`crate::memos::MemosOf`]), the counters it keeps in
+/// no field ([`crate::counters::CounterRows`]) and the continuous effects on it
+/// ([`crate::effects::EffectsOn`]). Two objects with nothing stored about either, which is
+/// nearly every pair, are told so by one bit of each.
+#[derive(Clone, Copy)]
+pub struct Stored<'a, L: Layout = Small> {
+    state: &'a State<L>,
+    slot: L::Slot,
+    /// Whether any store has an entry about the object.
+    keyed: bool,
+}
+
+impl<L: Layout> PartialEq for Stored<'_, L> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        if !self.keyed && !other.keyed {
+            return true;
+        }
+        self.differing(other)
+    }
+}
+
+impl<L: Layout> Eq for Stored<'_, L> {}
+
+impl<L: Layout> Stored<'_, L> {
+    /// The comparison with something stored about one of the two, out of line: the rare
+    /// path of what decides every pair of candidates.
+    #[cold]
+    #[inline(never)]
+    fn differing(&self, other: &Self) -> bool {
+        let (s, o) = (self.state, other.state);
+        s.memos(self.slot) == o.memos(other.slot)
+            && s.counter_rows(self.slot) == o.counter_rows(other.slot)
+            && s.effects_on(self.slot) == o.effects_on(other.slot)
+    }
+}
+
+impl<L: Layout> Debug for Stored<'_, L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = self.state;
+        f.debug_struct("Stored")
+            .field("memos", &s.memos(self.slot))
+            .field("counters", &s.counter_rows(self.slot))
+            .field("effects", &s.effects_on(self.slot))
+            .finish()
+    }
+}
+
 impl<L: Layout> State<L> {
+    /// What the stores hold about the object in `slot`, to compare it with another by:
+    /// with nothing stored about it, one bit test.
+    #[inline]
+    pub fn stored(&self, slot: L::Slot) -> Stored<'_, L> {
+        Stored {
+            state: self,
+            slot,
+            keyed: self.keyed.contains(slot),
+        }
+    }
+
     /// Ends everything stored that lasts for `ended`: the one expiry, which the rules call
     /// as that moment comes, since the kernel moves the turn and holds none of its rules
     /// ([CR 514.2](https://yawgatog.com/resources/magic-rules/#R5142): "all 'until end of

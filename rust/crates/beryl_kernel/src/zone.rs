@@ -7,25 +7,19 @@
 
 use crate::bitboard::Bitboard;
 use crate::chance;
-use crate::counters::CounterRows;
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::memos::MemosOf;
 use crate::rng::SplitMix64;
 use crate::state::{Counters, Derived, Object, ObjectFlags, State, Tracked, Zone, ZoneKey};
-use crate::store::Store;
+use crate::store::{Store, Stored};
 use beryl_card::FaceIx;
 
 /// What [`State::signature`] compares two objects by: the object, for a permanent its layer
-/// results and what is tracked of it, its memos, and the counters it keeps in no field.
-pub type Signature<'a, L> = (
-    Object<L>,
-    Option<(Derived<L>, Tracked)>,
-    MemosOf<'a, L>,
-    CounterRows<'a, L>,
-);
+/// results and what is tracked of it, and what the stores hold about it: its memos, the
+/// counters it keeps in no field and the continuous effects on it.
+pub type Signature<'a, L> = (Object<L>, Option<(Derived<L>, Tracked)>, Stored<'a, L>);
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -260,12 +254,15 @@ impl<L: Layout> State<L> {
 
     /// What makes two objects interchangeable (§7.2): every field but the incarnation, the
     /// timestamp and the battlefield index, for a permanent its characteristics after
-    /// continuous effects and what is tracked of it this turn, and what it remembers of how
-    /// it was cast, so two untapped basic lands match but a stolen Mana Crypt does not match
-    /// your own, nor a creature that got -2/-0 one that didn't, nor a kicked creature one
-    /// that was not, nor a planeswalker whose loyalty ability was activated one whose was
-    /// not, nor a permanent with a counter one without it. With nothing stored about the
-    /// object, its memos and the counters it keeps in no field cost one bit test.
+    /// continuous effects and what is tracked of it this turn, what it remembers of how
+    /// it was cast, and the continuous effects on it, so two untapped basic lands match but
+    /// a stolen Mana Crypt does not match your own, nor a creature that got -2/-0 one that
+    /// didn't, nor a kicked creature one that was not, nor a planeswalker whose loyalty
+    /// ability was activated one whose was not, nor a permanent with a counter one without
+    /// it, nor a creature that is bigger until end of turn one that is as big for good, nor
+    /// a card a player may cast from where it is one they may not. With nothing stored
+    /// about the object, its memos, the counters it keeps in no field and its effects cost
+    /// one bit test ([`Stored`]).
     pub fn signature(&self, slot: L::Slot) -> Signature<'_, L> {
         let o = self.object(slot);
         let permanent =
@@ -278,8 +275,7 @@ impl<L: Layout> State<L> {
                 ..*o
             },
             permanent,
-            self.memos(slot),
-            self.counter_rows(slot),
+            self.stored(slot),
         )
     }
 

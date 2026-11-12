@@ -70,13 +70,7 @@ impl<L: Layout> State<L> {
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.card).name));
         }
-        if let Some(stored) = self.stores_lingering(t) {
-            return Some(stored);
-        }
-        if let Some(permission) = self.cast_permission_lingering(t) {
-            return Some(permission);
-        }
-        self.rule_change_lingering()
+        self.stores_lingering(t)
     }
 }
 

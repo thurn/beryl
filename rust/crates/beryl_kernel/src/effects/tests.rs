@@ -4,6 +4,7 @@
 use beryl_card::Zone;
 
 use super::*;
+use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
 use crate::fixed::Full;
 use crate::ids::SlotId;
@@ -144,9 +145,8 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
     assert!(small.keyed.is_empty());
     assert_eq!(small.check_stores(&t), Ok(()));
     // A checkpoint would lose it, in the words saves hold.
-    assert_eq!(small.stores_lingering(&t), None);
     assert_eq!(
-        small.rule_change_lingering().as_deref(),
+        small.stores_lingering(&t).as_deref(),
         Some("player 1 casting sorceries as though they had flash until their next turn")
     );
 
@@ -168,7 +168,7 @@ fn a_rule_change_on_a_player_survives_a_relayout_and_ends_with_its_duration() {
     assert!(!small.rule_applies(&t, rule, you));
     assert!(!large.rule_applies(&t, rule, Affects::Player(Seat::P1)));
     assert!(small.effects().is_empty());
-    assert_eq!(small.rule_change_lingering(), None);
+    assert_eq!(small.stores_lingering(&t), None);
     assert!(!small.is_derived_stale(), "no layer result changed");
     assert_eq!(small.check_stores(&t), Ok(()));
 }
@@ -303,14 +303,10 @@ fn a_permission_to_cast_ends_with_its_turn_or_with_its_card() {
     );
     assert!(flashback.is_flashback() && !plain.is_flashback());
     // A permission is no input of the layers, changes no cost and replaces no move: its
-    // terms are the spell's, once there is one. Its card is no other card's twin.
+    // terms are the spell's, once there is one.
     assert!(!s.is_derived_stale());
     assert_eq!(s.cost_increase(this_turn), 0);
     assert_eq!(s.move_replacements(this_turn).count(), 0);
-    assert_eq!(
-        s.told_apart_by_effects(),
-        [this_turn.slot, while_there.slot].into_iter().collect()
-    );
     assert_eq!(s.check_stores(&t), Ok(()));
 
     // Another player's next turn ends neither; the end of the turn ends the one that lasts
@@ -325,7 +321,7 @@ fn a_permission_to_cast_ends_with_its_turn_or_with_its_card() {
     assert_eq!(permitted(&s).len(), 1);
     s.forget_stored(while_there.slot);
     assert_eq!(permitted(&s), []);
-    assert!(s.keyed.is_empty() && s.told_apart_by_effects().is_empty());
+    assert!(s.keyed.is_empty());
     assert_eq!(s.check_stores(&t), Ok(()));
 }
 
@@ -398,12 +394,21 @@ fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
         Duration::Indefinite,
     )
     .unwrap();
-    // After an effect on an object, where the list has always had permissions: the
-    // store's own entry for it names none.
-    assert_eq!(s.stores_lingering(&t), None);
     assert_eq!(
-        s.cast_permission_lingering(&t).as_deref(),
+        s.stores_lingering(&t).as_deref(),
         Some("player 1's permission to cast Test Card")
+    );
+    // After an effect on an object, where saves have always had permissions.
+    s.start_effect(
+        CardIx::FIRST,
+        Affects::object(nth(&s, 1)),
+        EXILE,
+        Duration::Indefinite,
+    )
+    .unwrap();
+    assert_eq!(
+        s.stores_lingering(&t).as_deref(),
+        Some("an effect of Test Card on Test Card lasting indefinitely")
     );
 }
 
@@ -473,6 +478,80 @@ fn one_effect_on_a_set_ends_with_its_duration_or_with_its_last_member() {
     s.expire(Duration::EndOfTurn);
     assert_eq!(s.effects, Effects::empty());
     assert!(s.keyed.is_empty() && s.is_derived_stale());
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+/// Stores the same layer results for every permanent, as the rules' recompute does for
+/// twins whose effects come to the same today.
+fn derive_alike(s: &mut State) {
+    let Some(mut cache) = s.rederive() else {
+        return;
+    };
+    for i in 0..cache.battlefield().len() {
+        cache.results()[i] = crate::state::Derived::default();
+    }
+    cache.finish(0, Default::default());
+}
+
+/// Two objects are interchangeable only if the same effects are on them (§7.2): their
+/// layer results say what the effects make of them now, not for how long.
+#[test]
+fn signature_tells_two_objects_apart_by_the_effects_on_them() {
+    let (t, mut s) = dealt();
+    let [a, b, c, d] = [3, 4, 5, 6].map(Slot::from_index);
+    permanents(&mut s, &[3, 4, 5]);
+    let same = |s: &mut State, x, y| {
+        derive_alike(s);
+        s.signature(x) == s.signature(y)
+    };
+    assert!(same(&mut s, a, b));
+
+    // A member of an effect's set is no twin of one that is no member; of another member,
+    // it is.
+    let members = [a, c].into_iter().collect();
+    s.start_effect_on_set(CardIx::FIRST, members, PUMPED, Duration::EndOfTurn)
+        .unwrap();
+    assert!(!same(&mut s, a, b));
+    assert!(same(&mut s, a, c));
+    // The same change for longer is another effect, on a set or alone.
+    let alone = Affects::object(s.object_ref(b));
+    s.start_effect(CardIx::FIRST, alone, PUMP, Duration::Indefinite)
+        .unwrap();
+    assert!(!same(&mut s, a, b));
+    // As the turn ends, the one that lasted is on one of them alone.
+    s.expire(Duration::EndOfTurn);
+    assert!(same(&mut s, a, c));
+    assert!(!same(&mut s, a, b));
+    s.board().place(b, Zone::Graveyard).unwrap();
+    s.board().place(b, Zone::Battlefield).unwrap();
+    assert!(same(&mut s, a, b));
+
+    // A card a player may cast from where it is is no twin of one they may not, and is
+    // one of a card they may cast on the same terms.
+    let (in_hand, other) = (d, Slot::from_index(7));
+    assert!(same(&mut s, in_hand, other));
+    let permit = |s: &mut State, slot, player| {
+        let terms = Permission {
+            player,
+            ..permission(None)
+        };
+        let card = Affects::object(s.object_ref(slot));
+        s.start_effect(
+            CardIx::FIRST,
+            card,
+            Payload::Cast(terms),
+            Duration::EndOfTurn,
+        )
+        .unwrap();
+    };
+    permit(&mut s, in_hand, Seat::P0);
+    assert!(!same(&mut s, in_hand, other));
+    permit(&mut s, other, Seat::P1);
+    assert!(!same(&mut s, in_hand, other));
+    s.expire(Duration::EndOfTurn);
+    permit(&mut s, in_hand, Seat::P0);
+    permit(&mut s, other, Seat::P0);
+    assert!(same(&mut s, in_hand, other));
     assert_eq!(s.check_stores(&t), Ok(()));
 }
 
