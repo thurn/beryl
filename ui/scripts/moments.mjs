@@ -196,14 +196,20 @@ export function rest() {
     return { owed, shown, busy, settled: !owed && shown && !busy };
 }
 
-/** Waits until `page` is settled. With a stage, that is when it is at rest (`rest`), asked
- * each frame: no fixed wait. Without, until it has heard no view for `QUIET` ms and queues
- * none, then `LAST_VIEW` more for its animation; or `LONGEST`. */
+/** Waits until `page` is settled, or `LONGEST`. With a stage, that is when it is at rest
+ * (`rest`), asked each frame: no fixed wait. Without, until it has heard no view for `QUIET`
+ * ms and queues none, then `LAST_VIEW` more for its animation. */
 export async function settled(page) {
     if (await page.evaluate(() => window.berylStage !== undefined)) {
-        await page.waitForFunction(`(${rest})().settled`, undefined, {
-            timeout: LONGEST,
-        });
+        // An opponent who never answers leaves a view owed for good: as without a stage, the
+        // wait ends there.
+        await page
+            .waitForFunction(`(${rest})().settled`, undefined, {
+                timeout: LONGEST,
+            })
+            .catch((e) => {
+                if (e.name !== "TimeoutError") throw e;
+            });
         return;
     }
     const started = await page.evaluate(() => performance.now());
