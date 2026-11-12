@@ -75,12 +75,20 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
   (`just blunders greedy --seeds 1`, 2026-11-11; greedy is deterministic, so one
   run decides). The 20 entries split three ways:
 
-| Where the fault is                                         | Entries | What repairs it                    |
-| ---------------------------------------------------------- | ------- | ---------------------------------- |
-| Greedy is right; the search loses it in a near-tie         | 8       | The root keeps greedy's answer     |
-| Greedy is right; the search clearly prefers the wrong play | 3       | The rollouts after the move (§6.4) |
-| Greedy's own answer is wrong                               | 9       | A policy rule (§6.2 to §6.4)       |
+| Where the fault is                                         | Entries | What repairs it                             |
+| ---------------------------------------------------------- | ------- | ------------------------------------------- |
+| Greedy is right; the search loses it in a near-tie         | 8       | The root keeps greedy's answer              |
+| Greedy is right; the search clearly prefers the wrong play | 3       | Combat played out in the tree (§6.4)        |
+| Greedy's own answer is wrong                               | 9       | A policy rule or the planner (§6.2 to §6.4) |
 
+- **The expert alone gets 18 of the 20 right**
+  (`just blunders expert --seeds 1`, 2026-11-11; it deals a world for combat, so
+  this is one sample). It misses only the main-phase Snapcaster Mage and the
+  attack on Jace, Wielder. The search beats the expert at winning and makes
+  blunders the expert does not. The expert is not the answer: it is 3,200 lines
+  for 29 cards (§1). But its two general ideas are the next rungs: a clock for
+  instant-speed plays (`hold`) and combat played out on a copy of the game
+  (`combat`).
 - **The search throws away answers its own policy had.** With rewards this
   close, 30M steps cannot tell a free land untap from none, so noise chooses.
   The anchor exists for this and covers only a cast against greedy's pass.
@@ -281,9 +289,9 @@ A check that gains measured at 1M and 3M hold at 10M.
 Each is its own bead in the lane, before the rung that needs it (by-97g.17 to
 by-97g.21).
 
-- **Rules.** The policy takes a set of named rules (`hold`, `waste`, `combat`),
-  each a part of the family's name after the options, each off by default. With
-  none set, greedy plays exactly as today.
+- **Rules.** The policy takes a set of named rules (`hold`, `waste`), each a
+  part of the family's name after the options, each off by default. With none
+  set, greedy plays exactly as today.
 - **`just gate CHALLENGER --claims A,B [--vs CHAMPION]`.** The suite for both
   agents and the verdict of §4.3, exit code 0 on a pass.
 - **Bars.** `--bar stronger` becomes 0 against +30 Elo at α = β = 0.05.
@@ -313,34 +321,35 @@ A ledger of every blunder a human has caught, and the gate's first condition.
 - **Fixed and open.** An entry is *fixed* when all 10 runs pass and *open*
   otherwise. The champion made every play the suite forbids, so some entries are
   always open; those are what the rungs are for.
-- **Greedy's own answer is recorded for every entry.**
+- **Greedy's and the expert's own answers are recorded for every entry.**
   `just blunders greedy --seeds 1` takes seconds. Where greedy passes, the
   search lost a good answer and a root rule may keep it. Where greedy fails,
-  only a policy rule can fix it. An incident's write-up says which.
+  only a policy rule can fix it. Where the expert passes, a rule for it is known
+  to exist. An incident's write-up says which.
 - **The entries, by the rung that claims them** (§6):
 
-| Entry                              | Class                                  | Greedy | Rung     |
-| ---------------------------------- | -------------------------------------- | ------ | -------- |
-| `decline-mana-crypt`               | A free find declined                   | right  | `guard`  |
-| `decline-both-teferi-untaps`       | A free untap declined                  | right  | `guard`  |
-| `decline-second-teferi-untap`      | A free untap declined                  | right  | `guard`  |
-| `discard-emperor-over-spare-crypt` | A spell discarded over surplus mana    | right  | `guard`  |
-| `skip-beza-after-winds`            | A free attack not made                 | right  | `guard`  |
-| `snapcaster-sorcery-speed`         | Flash creature at sorcery speed        | wrong  | `hold`   |
-| `subtlety-main-phase-empty-stack`  | Flash creature at sorcery speed        | right  | `hold`   |
-| `subtlety-before-own-draw`         | Flash creature before the draw         | wrong  | `hold`   |
-| `staff-in-upkeep`                  | Activation that spends held mana early | wrong  | `hold`   |
-| `staff-before-combat-damage`       | Activation that spends held mana early | wrong  | `hold`   |
-| `jace-loots-before-draw`           | Activation before the draw             | wrong  | `hold`   |
-| `samurai-into-jace`                | Instant-speed loyalty spent at once    | wrong  | `hold`   |
-| `evoke-subtlety-no-target`         | Evoke with no target                   | wrong  | `waste`  |
-| `evoke-subtlety-empty-stack-hunt`  | Evoke with no target                   | right  | `waste`  |
-| `skip-teferi-plus-one`             | A free loyalty ability skipped         | right  | `waste`  |
-| `spare-jace-wielder`               | Attack leaves a lethal walker alive    | wrong  | `combat` |
-| `beza-trinket-into-blockers`       | Attack into blockers that win          | wrong  | `combat` |
-| `manifest-into-samurai`            | Attack into blockers that win          | right  | `combat` |
-| `spirits-stay-home`                | A free attack not made                 | right  | `combat` |
-| `oust-own-token`                   | Removal on its own permanent           | right  | none     |
+| Entry                              | Class                                  | Greedy | Expert | Rung     |
+| ---------------------------------- | -------------------------------------- | ------ | ------ | -------- |
+| `decline-mana-crypt`               | A free find declined                   | right  | right  | `guard`  |
+| `decline-both-teferi-untaps`       | A free untap declined                  | right  | right  | `guard`  |
+| `decline-second-teferi-untap`      | A free untap declined                  | right  | right  | `guard`  |
+| `discard-emperor-over-spare-crypt` | A spell discarded over surplus mana    | right  | right  | `guard`  |
+| `skip-beza-after-winds`            | A free attack not made                 | right  | right  | `guard`  |
+| `snapcaster-sorcery-speed`         | Flash creature at sorcery speed        | wrong  | wrong  | `hold`   |
+| `subtlety-main-phase-empty-stack`  | Flash creature at sorcery speed        | right  | right  | `hold`   |
+| `subtlety-before-own-draw`         | Flash creature before the draw         | wrong  | right  | `hold`   |
+| `staff-in-upkeep`                  | Activation that spends held mana early | wrong  | right  | `hold`   |
+| `staff-before-combat-damage`       | Activation that spends held mana early | wrong  | right  | `hold`   |
+| `jace-loots-before-draw`           | Activation before the draw             | wrong  | right  | `hold`   |
+| `samurai-into-jace`                | Instant-speed loyalty spent at once    | wrong  | right  | `hold`   |
+| `evoke-subtlety-no-target`         | Evoke with no target                   | wrong  | right  | `waste`  |
+| `evoke-subtlety-empty-stack-hunt`  | Evoke with no target                   | right  | right  | `waste`  |
+| `skip-teferi-plus-one`             | A free loyalty ability skipped         | right  | right  | `waste`  |
+| `spare-jace-wielder`               | Attack leaves a lethal walker alive    | wrong  | wrong  | none yet |
+| `beza-trinket-into-blockers`       | Attack into blockers that win          | wrong  | right  | `combat` |
+| `manifest-into-samurai`            | Attack into blockers that win          | right  | right  | `combat` |
+| `spirits-stay-home`                | A free attack not made                 | right  | right  | `combat` |
+| `oust-own-token`                   | Removal on its own permanent           | right  | right  | none     |
 
 Greedy is right at `subtlety-main-phase-empty-stack` and
 `evoke-subtlety-empty-stack-hunt` only because it prefers another spell there;
@@ -382,15 +391,15 @@ anchor was built for.
 
 In order. First the root keeps what greedy already gets right, which is built
 and cheap. Then the policy rules, which fix greedy's own wrong answers and make
-every rollout sounder. Then the search rungs, which pay more once rollouts are
-sound.
+every rollout sounder. Then the combat planner, which the expert already has.
+Then the search rungs, which pay more once rollouts are sound.
 
 | Order | Rung     | Kind   | Challenger (the champion's family, plus) | Claims | Beads (build, gate)  |
 | ----- | -------- | ------ | ---------------------------------------- | ------ | -------------------- |
 | 1     | `guard`  | Root   | `+guard`                                 | 5      | by-97g.22, by-97g.23 |
 | 2     | `hold`   | Policy | `+hold`                                  | 7      | by-97g.24, by-97g.25 |
 | 3     | `waste`  | Policy | `+waste`                                 | 3      | by-97g.26, by-97g.27 |
-| 4     | `combat` | Policy | `+combat`                                | 4      | by-97g.28, by-97g.29 |
+| 4     | `combat` | Root   | `+combat`                                | 3      | by-97g.28, by-97g.29 |
 | 5     | `mid`    | Search | `+mid`                                   | none   | built, by-97g.9      |
 | 6     | Worlds   | Search | `pimc18` in place of `pimc72`            | none   | none, by-97g.10      |
 | 7     | `order`  | Search | `+order`                                 | none   | by-97g.12, by-97g.30 |
@@ -436,7 +445,9 @@ until the opponent's end step.
 - The list is closed. A hold that is debatable is acceptable; the suite and the
   match judge the rule as a whole.
 - The turn and step come from the observation, as `Expert::timing`
-  (`expert/mod.rs`) reads them.
+  (`expert/mod.rs`) reads them. The expert's own timing rules, which name cards,
+  get six of this rung's seven entries right; `hold` is the same idea read from
+  card data.
 
 ### 6.3 `waste`: spend nothing on nothing
 
@@ -455,25 +466,50 @@ With the rule set:
 Before building, the bead runs `just why skip-teferi-plus-one` and writes the
 top differing events into its notes: that entry is why part 2 is suspected.
 
-### 6.4 `combat`: fights the rollouts get wrong
+### 6.4 `combat`: the combat planner
 
-Greedy is right at two of this rung's entries and the search clearly prefers the
-wrong play, so the fault is in what the rollouts do after the attack. The build
-bead first runs `just why` on `beza-trinket-into-blockers`,
+Combat is a small game inside the game, and the search handles it worst. An
+attack is a node for every attacker and every target, so the defender's blocks
+lie five or six nodes down in a tree four or five deep, and greedy's block rules
+decide them: one blocker an attacker, and a chump only to save the player.
+
+The expert already plans combat another way (`expert/combat.rs`, `Sim`):
+
+- It plays each attack or block it weighs to the end of combat on a copy of the
+  game, both players passing priority, and scores the position left: the
+  permanents on each side, life, and the damage the opponent could swing back
+  with next turn.
+- In an attack, the defender blocks by the same planner, one level deep.
+- It weighs a small set of plans: one attacker or two at each target, enough
+  power to kill each planeswalker, every safe attacker, and every attacker at
+  the player, which is the lethal check.
+- The engine resolves the damage, so first strike, deathtouch and trample need
+  no code of the planner's own.
+
+With the expert as the agent, the suite's combat entries come out right at four
+of five, including both attacks into blockers and both free attacks. It still
+sends Snapcaster Mage at the wrong Jace in `spare-jace-wielder`, so no rung
+claims that entry yet.
+
+With `combat` set, an option of the search:
+
+1. **The planner is its own module** and names no card. Three judgements of the
+   expert's that name cards stay in the expert, behind a hook.
+2. **At the root, the planner's answer is the default** at an attacker, an
+   attack's target, a blocker and a block's target, from a world dealt from what
+   the player sees. `guarded` holds it unless the search leads clearly.
+3. **In the tree, the combat of the root's own turn is the planner's**, for both
+   players, as `mid` lets greedy answer mid-resolution choices. An attack is
+   then priced against the blocks a defender would make, which is what the three
+   clear-lead entries need.
+
+Combats later in a rollout stay greedy's: the planner costs hundreds of engine
+steps a decision and a whole rollout is about 580.
+
+The build bead first runs `just why` on `beza-trinket-into-blockers`,
 `manifest-into-samurai` and `spirits-stay-home` and writes the top differing
-events into its notes. With the rule set:
-
-1. **Finish a planeswalker.** An attack target that the attackers able to attack
-   safely can kill outright scores above any it cannot
-   (`Policy::walker_target`). `guarded` then holds at an attack's target too.
-2. **Two blockers.** A second blocker joins an attacker when the first cannot
-   kill it and together they do (`Policy::block`).
-3. **Chump for a planeswalker** when the unblocked damage at it is at least its
-   loyalty and it is worth more than the blocker.
-4. **An attack two blockers punish is not safe** (`Policy::safe_attack`).
-
-This build bead needs judgement that the others do not: what `just why` shows
-may not be what is listed. It is not labeled `tier:light`.
+events into its notes. It needs judgement the others do not and is not labeled
+`tier:light`.
 
 ### 6.5 The search rungs
 
@@ -506,9 +542,15 @@ Engine speed is a multiplier on every rung.
   timing rule rests on dominance (the same play is available later at no loss),
   which does not depend on the deck; greedy's card values and combat rules do,
   and will need the first Legacy deck to test them.
-- **Combo decks.** A combo turn is 10 to 20 linked decisions. A tree under a
-  turn deep and a policy that scores one card at a time cannot sequence it. It
-  needs a turn planner that this plan does not have.
+- **Combo decks.** A combo turn is 10 to 20 linked decisions, which needs the
+  tree of turns (§9).
+- **A solver that weighs every attack and every block.** The planner weighs a
+  small set of plans. Four creatures a side is 16 attacks by 625 blocks; that is
+  the step after, if the suite shows the set is too small.
+- **Block rules in greedy** (a second blocker, a chump for a planeswalker): only
+  if the clear-lead combat entries stay open after `combat`, since they would
+  then be lost in combats after the root's turn.
+- **A lethal check of its own.** The planner's all-in attack is one.
 - **The Mac.** It plays no ladder games (§4.1).
 - **Hunts on a schedule** (§5).
 - **The long-think arena and round robins.** `just longthink` is retired;
@@ -520,7 +562,29 @@ Engine speed is a multiplier on every rung.
 - **Card-specific code.** Rules read definitions; numbers are table entries
   (§1).
 
-## 9. Open questions
+## 9. The next architecture: a tree of turns
+
+Not a rung yet. It is what the search should become once the rungs above have
+run, and it is recorded here so that they are built toward it.
+
+- **The problem.** The tree's unit is one priority decision. A turn is 10 to 20
+  of them, so 720 rollouts a tree never see a whole turn, and every rung above
+  works around that.
+- **The design, in outline.** At the root, enumerate what is left of the
+  player's own turn with the opponent passing; merge the sequences that reach
+  the same position; take combat from the planner; score each end-of-turn
+  position by rollouts. When the opponent acts, plan again.
+- **What it needs first.** Rollouts that are sound (the policy rungs), since its
+  leaves are still rollouts, and the planner (§6.4).
+- **What it does not fix.** Holding mana on the opponent's turn. A plan has to
+  name what it keeps up, which is the harder half and the reason `hold` comes
+  first.
+- **What it opens.** Combo decks, whose turns are one long sequence.
+- **How it is judged.** As one challenger with a new method in its family's
+  name, by a search rung's gate (§4.4). Its design is a bead of its own
+  (by-97g.31), blocked on the last rung.
+
+## 10. Open questions
 
 - How long does a 1,100-game match at 1M take on Cygnus? The first gate bead
   measures it.
@@ -533,7 +597,8 @@ Engine speed is a multiplier on every rung.
 - Why does the search prefer holding two fliers back from an empty board, and an
   attack into a blocker that kills the attacker? `just why` on those entries
   says, in the `combat` rung.
-- How much of greedy's combat can rules repair before the tree must search
-  blocks itself?
+- Is the planner's small set of plans enough, or does combat need every attack
+  and block weighed? `spare-jace-wielder` is the case it gets wrong today: it
+  has a plan that kills Jace, Wielder and scores another higher.
 - What does a plausibility promotion cost in Elo over a month of them? The log
   answers that, if every match is recorded.
