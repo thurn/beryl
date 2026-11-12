@@ -182,7 +182,10 @@ pub struct State {
     stack: Fixed<StackEntry, 64>,                                    // ~2 KiB
     triggers: Fixed<PendingTrigger, 64>,                             // ~1 KiB
     delayed: Fixed<DelayedTrigger, 32>,
-    effects: Fixed<FloatingEffect, 64>,
+    effects: Effects,              // the stores of what cards create:
+    memos: Memos,                  // continuous effects, what an object
+    trackers: Trackers,            // remembers, this turn's facts, and the
+    counters: CounterTable,        // counters no object keeps in a field
     pending: Pending,              // the open question and its choice record
     knowledge: [Bitboard; 2],      // who knows the identity in each slot
     rng: Rng,                      // two SplitMix64 streams
@@ -243,12 +246,12 @@ object in a slot:
 | `flags`                       | 4    | tapped, summoning sick, attacking, blocking, face down, transformed, phased out, token, ... |
 | `damage: u8`                  | 1    | Marked damage this turn                                                                     |
 | `counters`                    | 3    | +1/+1, -1/-1 and loyalty; any other kind is a row of a table keyed by object and kind       |
-| `attached_to`, `linked`       | 2    | `Option<Slot>`: equipment and auras; what exiled, imprinted or hid this card                |
+| `attached_to`                 | 1    | `Option<Slot>`: equipment and auras. What exiled a card is a memo of the card               |
 | `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
 | `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one        |
 | `combat: Option<Slot>`        | 1    | The planeswalker an attacker attacks, or the attacker a blocker blocks                      |
 
-About 21 bytes, so the table is under 6 KiB.
+About 20 bytes, 24 as laid out, so the table is about 6 KiB.
 
 - **Deck cards get fixed slots.** Each player's deck, up to 60 cards, is
   assigned slots by a random permutation drawn from the hidden RNG at game
@@ -275,7 +278,10 @@ About 21 bytes, so the table is under 6 KiB.
   | Stack entries                 | 64       |
   | Pending triggers              | 64       |
   | Delayed triggers              | 32       |
-  | Floating continuous effects   | 64       |
+  | Continuous effects            | 64       |
+  | Locked-in sets of an effect   | 4        |
+  | Memos                         | 32       |
+  | Rows of counters              | 32       |
   | Targets per stack entry       | 8        |
   | Choice record per process     | 32       |
   | Source classes per payment    | 16       |
@@ -293,9 +299,10 @@ About 21 bytes, so the table is under 6 KiB.
   zone, and a debug invariant keeps the two in agreement.
 - **Order** is kept for `library` and `graveyard`, as `Fixed<u8, 60>` per
   player, and for the stack. Hand, battlefield and exile are unordered.
-- **Linked information** rides on the object: `linked` points at the object that
-  exiled, imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar,
-  Shelldock Isle and Agatha's Soul Cauldron need no side tables. Dauthi
+- **Linked information** is a memo of the card (`beryl_kernel`'s contract,
+  "Stores"): a card in exile remembers the slot of the object that exiled,
+  imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar, Shelldock
+  Isle and Agatha's Soul Cauldron need no fields of their own. Dauthi
   Voidwalker's void counters are ordinary counters on exiled objects.
 - **Companions.** A companion starts outside the game, in the sideboard. Whether
   to support the mechanic is open (§20); if so, a per-player companion slot is

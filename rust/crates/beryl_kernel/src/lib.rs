@@ -131,8 +131,7 @@
 //! What a card creates lives in a store (plan K4): **Effects**, the continuous effects of
 //! resolved spells and abilities; **Memos**, what an object remembers of how it was cast or
 //! entered; **Trackers**, what happened this turn that a card of the game reads. This is the
-//! design every bead of milestone 4 (epic by-w8gv.7) builds on, written as it will stand
-//! when they land; a bead that builds a part amends its text. Built so far: the shared
+//! design milestone 4 (epic by-w8gv.7) built, each part by the bead named: the shared
 //! core ([`store`]), the Effects store for objects with its layer and zone-change payloads
 //! ([`effects`]) and the capability bits ([`table::Capability`]) (by-w8gv.7.2); a player as
 //! the affected side, the rule-change payload and [`State::rule_applies`] (by-w8gv.7.3);
@@ -143,7 +142,8 @@
 //! locked-in set of objects as the affected side (by-w8gv.7.5); the Trackers store
 //! ([`trackers`]) with the two facts about a permanent that end with the turn
 //! (by-w8gv.7.8); the table of counters ([`counters`]), where each kind of counter on an
-//! object has its own count (by-w8gv.7.9).
+//! object has its own count (by-w8gv.7.9); the comparison of the effects on two objects
+//! in [`State::signature`] (by-w8gv.7.11, the milestone's review).
 //!
 //! ### Where everything goes
 //!
@@ -213,14 +213,14 @@
 //! | by-w8gv.7.7 | 0 (landed: 0) | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
 //! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
-//! | by-w8gv.7.10 | 0 or lower | deletes only |
+//! | by-w8gv.7.10 | 0 or lower (landed: 0) | deletes only |
 //!
 //! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
-//! the limit; the target with all landed is at most 20,256. The plan does not count on
-//! [`state::Object`] shrinking: it stays 24 bytes while its flags are a `u32`, since
-//! `linked` and the long-tail pair free three bytes and alignment gives none back. Once
-//! by-w8gv.7.6 to by-w8gv.7.9 have landed the flags left fit a `u16` and the object 20
-//! bytes, 1,020 fewer in all; by-w8gv.7.10 takes that if the count holds, as a bonus.
+//! the limit; the target with all landed was at most 20,256, and the milestone ends at
+//! 20,176. [`state::Object`] did not shrink: it stays 24 bytes while its flags are a `u32`,
+//! since `linked` and the long-tail pair freed three bytes and alignment gave none back.
+//! The flags left fit a `u16` and the object 20 bytes, 1,020 fewer in all: not taken, and
+//! there for whoever needs the room, if the count holds with every object's fields moved.
 //!
 //! ### Affected sides and payloads
 //!
@@ -314,10 +314,9 @@
 //! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds; for an entry on a set, a pass over the battlefield testing each permanent's bit |
 //! | `event::destination` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
 //! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
-//! | the objects that are no other's twin for what an effect does to them ([`State::told_apart_by_effects`]) | one AND of the kinds that are no layer change | one pass |
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
 //! | the turn's reset | Effects: the store's length read twice a turn. Trackers: eight words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same eight words, in place of two flags on every permanent |
-//! | [`State::signature`] | one bit test of the keyed slots | the object's memos compared too; its layer changes already show in its layer results |
+//! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "does this rule apply" ([`State::rule_applies`]) | for a player, their two sets of rules joined and one AND, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::kind::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
@@ -360,6 +359,18 @@
 //! count behind the keyed bit where it read a field of the object in hand, and
 //! [`State::signature`] compares two objects' rows, nearly always none.
 //!
+//! The milestone in all, as slow CI counted each bead's tip: 404,858,188 before, then
+//! 402,475,964 (by-w8gv.7.2), 398,897,988 (.3), 396,070,902 (.4), 389,343,295 (.6),
+//! 387,776,236 (.7), 387,956,541 (.5), 389,728,983 (.8), 389,975,802 (.9 and .10): 3.7%
+//! fewer, with the gate's bar lowered twice and never raised. The one rise of note is the
+//! Trackers store's, above.
+//!
+//! Measured for by-w8gv.7.11 (389,975,802 before, 389,230,361 after): comparing the
+//! effects on two objects as their memos and rows were compared, each store's view beside
+//! the object, counted 390,514,859; one view of all three behind the one bit
+//! (`store::Stored`), with the comparison out of line, is smaller to build for each
+//! candidate than the two views it replaced.
+//!
 //! ### Static rule changes
 //!
 //! One question, [`State::rule_applies`], answers "does this rule change apply to this
@@ -401,8 +412,13 @@
 //! ### What a store implements once
 //!
 //! `store::Store`, in the store's own file, with `Clone` and equality, which it derives,
-//! `Hash` and [`relayout::Relayout`]. Nothing below grows with a new kind of entry, which
-//! is a variant of the store's payload:
+//! `Hash` and [`relayout::Relayout`]. Nothing below grows with a new kind of entry. A new
+//! kind is its own entry and its reader, and the compiler asks for no more (tried with a
+//! scratch kind in each store, by-w8gv.7.11): of effect, a variant of [`effects::Payload`]
+//! and its bit of the store's kinds; of memo, a variant of [`memos::Memo`] and its arm in
+//! each of the memo's own methods; of tracker, an entry of the list in [`trackers`] and
+//! the [`table::Capability`] of its name, with how a card is found to read it; of counter,
+//! an entry of `beryl_card::counter_kinds`.
 //!
 //! | Once | Where |
 //! | --- | --- |
@@ -411,10 +427,10 @@
 //! | the hash | `Hash` of the entries and not of the store's indices (its kinds, the keyed slots), so a hash of a state is a hash of the game: [`State`]'s own `Hash` feeds its fields in a fixed order whatever order they are laid out in, which `beryl_bench`'s pin of its corpus holds to |
 //! | another layout, and what does not fit one | [`relayout::Relayout`] and `Store::fits`, from [`State::fits`] |
 //! | the invariants | `Store::check`, from [`State::check_invariants`]: every entry about an object names its current incarnation, the kinds mask agrees with the entries, a tracker is of a permanent and of none in a game no card of which reads it, a row of counters is of one kind once for an object, of a kind no object keeps in a field and never of none, and the keyed slots are exactly the stores' keys |
-//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent, as its counters are |
+//! | the save description | `Store::lingering`, from [`State::off_board`], which a checkpoint records, the Effects store's with the words and the order saves hold for a permission to cast and a rule change. A memo of a permanent's spell is none of it: the one a later turn reads, a cost a static ability asks about, is saved with the permanent, as its counters are |
 //! | what a player may see | one accessor on [`Observation`] in the store's file ([`Observation::effects`], [`Observation::memos`], [`Observation::tracked`], [`Observation::counters`]): an effect is public, a memo and a counter as public as their object, a tracker as public as the battlefield |
 //! | an object ending, a duration ending | `Store::forget` and `Store::expire`, from the two moments above; the Trackers store's `forget` from the move's leaving of the battlefield, since it keys no slot |
-//! | [`State::signature`] | compares what the stores hold about the object for what its layer results do not already show: behind the keyed bit, its memos ([`memos::MemosOf`]) and the counters it keeps in no field ([`counters::CounterRows`]); for a permanent, what is tracked of it ([`trackers::Tracked`]) |
+//! | [`State::signature`] | compares what the stores hold about the object (`store::Stored`, which names each keyed store once): behind the keyed bit, its memos ([`memos::MemosOf`]), the counters it keeps in no field ([`counters::CounterRows`]) and the effects on it, alone or as a member of a set ([`effects::EffectsOn`]); for a permanent, what is tracked of it ([`trackers::Tracked`]). So no rule keeps a list of the objects an effect tells apart |
 //!
 //! ### The API
 //!
@@ -429,8 +445,9 @@
 //! ([`State::layer_effects`], [`State::move_replacements`], [`State::rule_applies`],
 //! [`State::cast_permissions`], [`State::cost_increase`], [`State::paid`],
 //! [`State::x_of`], [`State::exiled_with`], [`State::exiled_until`], [`State::tracked`],
-//! [`State::counters_of`]), with [`State::effects`], [`State::memos`], [`State::trackers`]
-//! and [`State::counters`] for tools, tests and views. No `&mut` to a store leaves the crate.
+//! [`State::counters_of`]), with [`State::effects`], [`State::effects_on`],
+//! [`State::memos`], [`State::trackers`] and [`State::counters`] for tools, tests and
+//! views. No `&mut` to a store leaves the crate.
 //!
 //! ## Sets and orders
 //!
