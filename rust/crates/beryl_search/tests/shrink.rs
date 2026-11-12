@@ -113,8 +113,8 @@ impl Game {
     /// The game as a scenario: from its first priority decision, where the active player
     /// holds priority with nothing on the stack, each hand and library as the game dealt them
     /// and every choice after as an action. What came before (the play-or-draw and the
-    /// mulligans) is in comments above it, and choices the vocabulary cannot name in
-    /// comments among the actions. Its seed draws the randomness after the setup anew, so
+    /// mulligans) is in comments above it, and choices the vocabulary cannot name or the
+    /// runner makes by itself ([`forced`]) in comments among the actions. Its seed draws the randomness after the setup anew, so
     /// a game that shuffles or flips a coin past its first priority may go another way.
     /// Returns the source and, when the game reached a first priority, the scenario.
     fn scenario(&self, check: Check, why: &str) -> (String, Option<Scenario>) {
@@ -137,6 +137,10 @@ impl Game {
                     return;
                 }
                 setup = Some(position(t, s, self.seed));
+            }
+            if forced(d) {
+                lines.push(format!("        // forced: {taken}"));
+                return;
             }
             match script(t, s, d, c) {
                 Some(action) if answer(t, s, d, &action) == Some(c) => {
@@ -161,6 +165,12 @@ impl Game {
         let _ = writeln!(text, "    .actions(&[\n{}\n    ])", lines.join("\n"));
         (text, Some(scenario))
     }
+}
+
+/// Whether the scenario runner answers `d` by itself, so that no action may: a question with
+/// one answer that is not priority, as a single trigger's order.
+fn forced(d: &Decision) -> bool {
+    d.len() == 1 && d.kind != DecisionKind::Priority
 }
 
 /// The setup of a scenario at position `s` of a game's first priority: each player's life,
@@ -262,7 +272,9 @@ fn a_broken_invariant_shrinks_to_a_scenario() {
     // The game's decisions from its first priority on, as the scenario must meet them.
     let mut decisions = Vec::new();
     let _ = game.play(graveyards_stay_empty, |t, s, d, _| {
-        decisions.push(seen(t, s, d));
+        if !forced(d) {
+            decisions.push(seen(t, s, d));
+        }
     });
     let decisions = &decisions[decisions.len() - scenario.actions.len()..];
     let mut live = Live::new(&CARDS, &scenario).unwrap();
