@@ -137,7 +137,8 @@ export function ZoneViewer({
   onPick,
   onClose,
 }: {
-  pile: ZonePile;
+  /** A zone's pile, or cards that lie in no one zone, which `title` names. */
+  pile: ZonePile | { cards: ObjectView[] };
   /** What the viewer is called, if not the pile's name: the permanent whose exiled cards it
    * shows. */
   title?: string;
@@ -150,7 +151,8 @@ export function ZoneViewer({
   const [inspector, inspect] = useHoverInspect();
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
-  const name = title ?? pileName(pile);
+  const zone = "zone" in pile ? pile : undefined;
+  const name = title ?? (zone ? pileName(zone) : "");
   const [list, more, onScroll] = useScrollEdges();
   const panel = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -192,8 +194,8 @@ export function ZoneViewer({
         className={closing ? "zone-viewer zone-viewer-going" : "zone-viewer"}
         role="dialog"
         aria-label={name}
-        data-pile={pile.zone}
-        data-side={pile.side}
+        data-pile={zone?.zone}
+        data-side={zone?.side}
       >
         <header className="zone-viewer-header">
           <h2 className="zone-viewer-title">{name}</h2>

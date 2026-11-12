@@ -26,7 +26,7 @@ import type { Surface } from "./stage.ts";
 
 /** The name a node's `data-stage` says. */
 const named = (said: string): Name =>
-  said.startsWith("a") ? (said as Name) : Number(said);
+  /^\d/.test(said) ? Number(said) : (said as Name);
 
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;

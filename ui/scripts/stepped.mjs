@@ -196,7 +196,7 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
         const boxes = {};
         abilities = false;
         for (const name of stage.shown.resting.keys()) {
-            abilities ||= typeof name === "string";
+            abilities ||= `${name}`.startsWith("a");
             const pose = stage.pose(name);
             if (!pose || pose.opacity === 0) continue;
             // As the node is drawn (src/stage/pose.ts transformOf): a card's frame, 63 by 88,

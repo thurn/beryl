@@ -34,6 +34,16 @@ export interface Heap {
   room?: number;
 }
 
+/** The cards held up for both players to read, the Revealed Cards pile: each as the `showcase`
+ * step that held it up had it, the first revealed first, one a slot. What one spell or
+ * ability reveals lies there together, and what another reveals takes its place. The pile is
+ * no part of a view: a table that starts over has none. */
+export interface Revealed {
+  cards: readonly ObjectView[];
+  /** What revealed them; none for the rules of the game. */
+  cause?: Subject;
+}
+
 /** The stage's own `lift`: the cards of `tray` come away from where they lie into it as the
  * span begins, lie as each later beginning has it, and go back to where the table has them
  * as it ends. `sorted` is a beginning that only moves cards within a tray already up. */
@@ -74,6 +84,8 @@ export interface Table {
   handled?: readonly number[];
   /** The cards the open prompt holds up for its player. */
   tray?: Tray;
+  /** The cards held up to be read. */
+  revealed?: Revealed;
 }
 
 /** The cards a look that begins at `view` handles: the top `count` of a library, top first,
@@ -256,8 +268,19 @@ function put(
   );
 }
 
-/** The table after the step `act`. */
-export function apply(table: Table, act: Act): Table {
+/** `table` with the record `object` held up to be read by `cause`: with the others `cause`
+ * revealed, in place of the face its slot had there; or alone, where another revealed what
+ * was held up. */
+function heldUp(table: Table, object: ObjectView, cause?: Subject): Table {
+  const before = table.revealed;
+  const same = JSON.stringify(before?.cause) === JSON.stringify(cause);
+  const others = same ? (before?.cards ?? []) : [];
+  const cards = [...others.filter((o) => o.slot !== object.slot), object];
+  return { ...table, revealed: { cards, ...(cause && { cause }) } };
+}
+
+/** The table after the step `act`, which `cause` is responsible for. */
+export function apply(table: Table, act: Act, cause?: Subject): Table {
   const { view } = table;
   const player = (
     side: Side,
@@ -308,8 +331,9 @@ export function apply(table: Table, act: Act): Table {
       };
     case "flip":
     case "tap":
-    case "showcase":
       return put(table, act.object);
+    case "showcase":
+      return heldUp(put(table, act.object), act.object, cause);
     case "strike":
     case "streak":
       return act.object ? put(table, act.object) : table;

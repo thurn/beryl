@@ -184,7 +184,7 @@ export async function walk({
         const seen = new Set();
         abilities = false;
         for (const name of stage.shown.resting.keys()) {
-            abilities ||= typeof name === "string";
+            abilities ||= `${name}`.startsWith("a");
             const pose = stage.pose(name);
             if (!pose || pose.opacity === 0) continue;
             // As the node is drawn (src/stage/pose.ts transformOf, as stepped.mjs reads it): a

@@ -18,7 +18,7 @@ import {
   type ComponentProps,
 } from "react";
 import { ManaPool, Thinking } from "../components/Player";
-import type { StopsSetting } from "../generated/protocol";
+import type { ObjectView, StopsSetting } from "../generated/protocol";
 import { incoming } from "../game/combat";
 import { interactions } from "../game/decisions";
 import type { LogEntry } from "../game/log";
@@ -38,7 +38,7 @@ import "../mobile/phone.css";
 import { Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { lifeChange } from "./notices.ts";
-import { phone, phoneTray } from "./phone.ts";
+import { phone, phoneRevealed, phoneTray } from "./phone.ts";
 import {
   Inspected,
   LogSheet,
@@ -60,6 +60,7 @@ import {
   usePaying,
   usePrompt,
 } from "./PromptBar.tsx";
+import { REVEALED, revealedIn, useRevealedOpen } from "./Revealed.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
@@ -121,8 +122,10 @@ export function PhoneStageBoard({
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
   >();
-  // The slot of the card a touch inspects.
-  const [inspecting, setInspecting] = useState<number>();
+  // The slot of the card a touch inspects, or the face of one of the Revealed Cards.
+  const [inspecting, setInspecting] = useState<number | ObjectView>();
+  const revealed = useMemo(() => revealedIn(resting), [resting]);
+  const [revealedOpen, setRevealedOpen] = useRevealedOpen(prompts, revealed);
   // A touch on a card the player can read inspects it, and a second one puts it away: one
   // the open prompt had no use for, or on a card of the hand, which the prompt leaves to be
   // read.
@@ -163,9 +166,9 @@ export function PhoneStageBoard({
     [stage, prompts],
   );
   const inspected =
-    inspecting === undefined
-      ? undefined
-      : table?.objects.find((o) => o.slot === inspecting);
+    typeof inspecting === "number"
+      ? table?.objects.find((o) => o.slot === inspecting)
+      : inspecting;
   const pile =
     typeof sheet === "object"
       ? piles.find((p) => p.side === sheet.side && p.zone === sheet.zone)
@@ -274,6 +277,23 @@ export function PhoneStageBoard({
             piles={piles}
             onOpen={({ side, zone }) => setSheet({ side, zone })}
           />
+          {revealed.length > 0 && viewport && (
+            // As large as a finger, over the faces the stage rests in the pile.
+            <button
+              type="button"
+              className="phone-pile-button"
+              style={{
+                left: phoneRevealed(table, viewport).x - 6,
+                top: bands.opponentStrip.top,
+                width: 52,
+                height: bands.opponentStrip.height,
+              }}
+              aria-label={REVEALED}
+              data-pile="revealed"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setRevealedOpen(true)}
+            />
+          )}
           <Notices
             stage={stage}
             view={view}
@@ -307,6 +327,19 @@ export function PhoneStageBoard({
           onInspect={setInspecting}
           onClose={() => {
             setSheet(undefined);
+            setInspecting(undefined);
+          }}
+        />
+      )}
+      {revealedOpen && (
+        <PileSheet
+          pile={{ cards: revealed }}
+          title={REVEALED}
+          onInspect={(slot) =>
+            setInspecting(revealed.find((o) => o.slot === slot))
+          }
+          onClose={() => {
+            setRevealedOpen(false);
             setInspecting(undefined);
           }}
         />

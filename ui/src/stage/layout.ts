@@ -13,11 +13,20 @@ import type { Pose } from "./pose.ts";
 import type { Table } from "./table.ts";
 
 /** What names a node, as scripts name what a step is about: a card or token by its slot, an
- * ability on the stack by the number its `emerge` gave it (script/mod.rs, Names). */
-export type Name = number | `a${number}`;
+ * ability on the stack by the number its `emerge` gave it (script/mod.rs, Names). One name is
+ * the stage's own: the face of a card held up to be read, in the Revealed Cards pile, by the
+ * slot of the card it is the face of (table.ts `Revealed`). */
+export type Name = number | `a${number}` | `r${number}`;
 
 /** The name of the ability a script numbered `id`. */
 export const abilityName = (id: number): Name => `a${id}`;
+
+/** The name of the face the Revealed Cards pile holds of the card in `slot`. */
+export const revealedName = (slot: number): Name => `r${slot}`;
+
+/** Whether `name` is of a face in the Revealed Cards pile. */
+export const isRevealed = (name: Name): name is `r${number}` =>
+  typeof name === "string" && name.startsWith("r");
 
 /** An ability on the stack. */
 export type StackAbility = Extract<StackItem, { kind: "ability" }>;

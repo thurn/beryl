@@ -90,7 +90,7 @@ export function laid(
   const landed = new Map<Name, number>();
   const steps = beat.map((step, i): Run => {
     const timing = timings(step.act, table.view, beat[i - 1]?.act);
-    table = apply(table, step.act);
+    table = apply(table, step.act, step.cause);
     const own = timing.with ? last : turn;
     const held = timing.hold === undefined ? undefined : whole(step.act);
     const rested = Math.max(

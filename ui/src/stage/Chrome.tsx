@@ -222,8 +222,7 @@ export function Controls({
     (p) => p.side === viewing?.side && p.zone === viewing.zone,
   );
   // The card the pointer is on, where it is shown alone: not one under the top of a pile.
-  const pointed =
-    typeof hovered === "number" ? resting.get(hovered) : undefined;
+  const pointed = hovered === undefined ? undefined : resting.get(hovered);
   const inspected =
     pointed?.object &&
     pointed.dress.look !== "hidden" &&

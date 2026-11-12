@@ -24,6 +24,7 @@ import {
   type StageLayout,
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
+import { fan, type PileSpace } from "./revealed.ts";
 import type { Table, Tray } from "./table.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
 
@@ -82,6 +83,19 @@ function held(rest: Map<Name, Resting>, tray: Tray) {
     });
   }
 }
+
+/** Where the Revealed Cards lie: at the table's left under the opponent's badge and over the
+ * game log's column, where Arena's do, at about a permanent's size; over the permanents, whose
+ * rows may reach under them, and under the cards a prompt holds up. */
+export const DESKTOP_REVEALED: PileSpace = {
+  x: 24,
+  y: 118,
+  width: 92,
+  step: 16,
+  reach: 64,
+  depth: 760,
+  dress: { look: "shown", frame: FULL_WIDTH },
+};
 
 /** No order of arrival is kept yet: a hand lies in its cards' slot order. */
 const NO_ORDER: ReadonlyMap<number, number> = new Map();
@@ -166,11 +180,13 @@ export interface Around {
   hold: HandHold;
   /** The game log stands open in its column, and the permanents' rows keep clear of it. */
   logOpen: boolean;
+  /** The Revealed Cards the player dismissed: they lie nowhere. */
+  cleared?: ReadonlySet<ObjectView>;
 }
 
 function rest(
-  { view, abilities, handled, tray }: Table,
-  { hold, logOpen }: Around,
+  { view, abilities, handled, tray, revealed }: Table,
+  { hold, logOpen, cleared }: Around,
   leaving: ReadonlySet<Name> = NONE,
 ): Map<Name, Resting> {
   // A card still leaving for a pile is off it as a borrowed one is: the pile lies as it did,
@@ -206,6 +222,7 @@ function rest(
     const source = from === undefined ? undefined : out.get(from)?.object;
     out.set(abilityName(id), ability(item, source, index, view.stack.length));
   });
+  fan(out, revealed, DESKTOP_REVEALED, cleared);
   if (tray) held(out, tray);
   return out;
 }

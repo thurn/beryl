@@ -121,6 +121,17 @@
       "where": ["step postcombatMain"]
     },
     {
+      "name": "verbs-reveal",
+      "board": "verbs-reveal",
+      "until": "first priority decision for seat 0 from turn 5"
+    },
+    {
+      "name": "verbs-reveal-theirs",
+      "board": "verbs-reveal",
+      "until": "first priority decision for seat 1 from turn 4",
+      "where": ["step postcombatMain"]
+    },
+    {
       "name": "verbs-scry",
       "board": "verbs-scry",
       "until": "first halt for seat 0 from turn 4"

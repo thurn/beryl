@@ -35,6 +35,7 @@ import {
   type StageLayout,
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
+import { fan, type PileSpace } from "./revealed.ts";
 import type { Table } from "./table.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
 
@@ -71,6 +72,20 @@ export function phoneTray(view: PlayerView, viewport: Viewport): TraySpace {
     second: { x, y: foot, width, height: bands.yourStrip.top - 40 - foot },
   };
 }
+
+/** Where the Revealed Cards lie on a phone: in the opponent's strip beside their graveyard,
+ * at a pile's size, short of their life total. */
+export const phoneRevealed = (
+  view: PlayerView,
+  viewport: Viewport,
+): PileSpace => ({
+  ...pileSpot(phoneLayout(view, viewport).bands, "opponent", "graveyard"),
+  x: PILE.graveyard + PILE.width + 12,
+  step: 8,
+  reach: 24,
+  depth: DEPTH.backs,
+  dress: { look: "pile", frame: PILE.width },
+});
 
 /** The life orb's size (phone.css `.phone-orb`: Player.tsx's 272 by 116 art at 0.37px). */
 const ORB = { width: 272 * 0.37, height: 116 * 0.37 };
@@ -117,7 +132,7 @@ const pileOf = (zone: ObjectView["zone"]) =>
   zone === "library" ? "library" : "graveyard";
 
 function rest(
-  { view, abilities, handled, tray }: Table,
+  { view, abilities, handled, tray, revealed }: Table,
   viewport: Viewport,
   left?: ReadonlySet<Name>,
 ) {
@@ -243,6 +258,7 @@ function rest(
       spot.item.source === null ? undefined : out.get(spot.item.source)?.object;
     out.set(abilityName(id), { ability: spot.item, source, pose, dress });
   }
+  fan(out, revealed, phoneRevealed(view, viewport));
   // The cards a prompt holds up, face up where it lays them out: each the node of its card.
   let depth = DEPTH.tray;
   const laid = tray ? laidOut(tray, phoneTray(view, viewport)).cards : [];

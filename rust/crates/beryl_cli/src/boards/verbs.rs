@@ -277,4 +277,31 @@ pub(super) const VERBS: &[Scenario] = &[
             Action::cast(P1, OUST),
             choose(P1, DecisionKind::Target, THIEVING_SKYDIVER),
         ]),
+    // Cards revealed: the first seat's Trinket Mage finds Mana Crypt, revealed before it goes
+    // to the hand; and in their turn the opponent Ousts the first seat's face-down Snapcaster
+    // Mage into its library, revealed as it goes. Each seat is left holding a card it could
+    // cast in its own main phase, which asks it once more before its recording ends.
+    Scenario::new("verbs-reveal")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE).face_down(),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+            ],
+        )
+        .hand(P0, &[TRINKET_MAGE])
+        .library(P0, &[ISLAND, PLAINS, ISLAND, MANA_CRYPT, PLAINS, ISLAND])
+        .battlefield(P1, &[PLAINS_, PLAINS_])
+        .hand(P1, &[OUST, PORTABLE_HOLE])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, TRINKET_MAGE),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            choose(P0, DecisionKind::ChooseUpTo, MANA_CRYPT),
+            Action::cast(P1, OUST),
+            choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
+        ]),
 ];

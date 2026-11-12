@@ -296,8 +296,8 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
                 `at ${clock.now - origin} ms the page has ${nodes} nodes for ${resting.size}`,
             );
         }
-        const abilities = [...resting.keys()].some(
-            (n) => typeof n === "string",
+        const abilities = [...resting.keys()].some((n) =>
+            `${n}`.startsWith("a"),
         );
         done ||= !whole && lifted && !abilities;
         lifted ||= abilities;
@@ -530,7 +530,9 @@ const CASES = Object.fromEntries(
 assert.deepEqual(
     [
         ...new Set(
-            [ZONES, PLACE, SPANS, REST].flatMap((cases) => Object.keys(cases)),
+            [ZONES, PLACE, PILES, SPANS, REST].flatMap((cases) =>
+                Object.keys(cases),
+            ),
         ),
     ].sort(),
     [...verbs].sort(),

@@ -206,14 +206,17 @@ export function LogSheet({
 /** A pile's cards, the top one first; a touch on one inspects it. */
 export function PileSheet({
   pile,
+  title,
   onInspect,
   onClose,
 }: {
-  pile: PhonePile;
+  /** A zone's pile, or cards that lie in no one zone, which `title` names. */
+  pile: PhonePile | { cards: readonly ObjectView[] };
+  title?: string;
   onInspect(slot: number | undefined): void;
   onClose(): void;
 }) {
-  const name = pileName(pile);
+  const name = title ?? ("zone" in pile ? pileName(pile) : "");
   return (
     <Sheet label={name} className="phone-sheet" onClose={onClose}>
       <h2 className="phone-sheet-title" onClick={() => onInspect(undefined)}>

@@ -8,6 +8,7 @@ import type { PlayerView } from "../generated/protocol";
 import type { Act } from "./table.ts";
 import {
   abilityName,
+  revealedName,
   type Name,
   type Point,
   type Resting,
@@ -273,6 +274,12 @@ function enters(
       if (!ability || !source) return undefined;
       const start = layout.emerging(source.pose, ability.resting.pose);
       return { name, track: own(glide(start, ease, true)) };
+    }
+    case "showcase": {
+      // Its face comes to be seen in the Revealed Cards pile, where the layout rests it:
+      // Arena's fades in there (`I3Te0m1bBFw 22:08.4`). The card itself lies where it was.
+      const name = revealedName(act.object.slot);
+      return placed(name) ? { name, track: own(fade(ease)) } : undefined;
     }
     case "appear":
       // No flight, wherever it was before.

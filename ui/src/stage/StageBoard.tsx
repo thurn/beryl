@@ -21,7 +21,8 @@ import { Corner, UndoButton } from "../game/Corner";
 import { useStageWidth } from "../game/Stage";
 import { Aim } from "./Aim.tsx";
 import { Controls, Hud } from "./Chrome.tsx";
-import { desktopTray, desktopWith } from "./desktop.ts";
+import type { ObjectView } from "../generated/protocol";
+import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { pageStage } from "./playback.ts";
@@ -32,6 +33,7 @@ import {
   usePrompt,
   usePromptKeys,
 } from "./PromptBar.tsx";
+import { RevealedCards } from "./Revealed.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
@@ -57,14 +59,16 @@ export function StageBoard({
   const [settings, setSettings] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((open) => !open), []);
+  // The Revealed Cards the player dismissed.
+  const [cleared, setCleared] = useState<ReadonlySet<ObjectView>>();
   // The hand sinks under a screen over the table: away under the opening, which shows it.
   const hold = !dimmed ? "held" : view.turn.number === 0 ? "away" : "tucked";
   // The table is laid out for the desktop while this board shows it, and afresh at each
   // width (the layout reads the stage's as it places, game/layout.ts STAGE) and whenever what
   // stands around it changes.
   useLayoutEffect(
-    () => stage.relayout(desktopWith({ hold, logOpen })),
-    [stage, width, hold, logOpen],
+    () => stage.relayout(desktopWith({ hold, logOpen, cleared })),
+    [stage, width, hold, logOpen, cleared],
   );
   // A card carried between a tray's piles lands where the desktop lays the tray out.
   useEffect(() => {
@@ -157,6 +161,14 @@ export function StageBoard({
         >
           <PromptDock asked={asked} {...answers} />
         </Controls>
+        {!dimmed && (
+          <RevealedCards
+            stage={stage}
+            prompts={prompts}
+            space={DESKTOP_REVEALED}
+            onDismiss={(cards) => setCleared(new Set(cards))}
+          />
+        )}
         <Corner
           inert={inert}
           open={settings}

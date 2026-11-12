@@ -40,7 +40,7 @@ import type {
   PlayerView,
   PromptView,
 } from "../generated/protocol";
-import type { Name, Point } from "./layout.ts";
+import { isRevealed, type Name, type Point } from "./layout.ts";
 import type { Drop, PointerEvents } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
@@ -354,6 +354,8 @@ export class Prompts {
 
   #clicked(name: Name, at: Point) {
     const elsewhere = () => this.#tell((to) => to.click?.(name, at));
+    // A face in the Revealed Cards pile is no prompt's: a click on it opens the pile.
+    if (isRevealed(name)) return elsewhere();
     // A card held up is the prompt's to click, wherever it came from.
     const held = this.#up?.piles.some((pile) =>
       pile.cards.includes(name as number),

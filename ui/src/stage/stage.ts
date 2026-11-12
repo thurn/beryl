@@ -504,7 +504,7 @@ export class ScriptStage {
       resting: moved.covered ?? moved.resting,
       pose: this.#poseOf(mover!, moved, run.from),
     };
-    this.#set(apply(this.#table!, run.step.act));
+    this.#set(apply(this.#table!, run.step.act, run.step.cause));
     this.#over.play(run.step.act, run.from, run.to, run.ease);
     // A step about what an earlier one is still taking from sight finds it gone already.
     const subject = subjectOf(run.step.act);

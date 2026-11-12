@@ -3,7 +3,9 @@
 // first turn and the mulligans that send them back (the seeded fixtures opening-bottom and
 // verbs-opening-theirs), and `piles`, the board verbs-piles: cards milled, a card cast from a
 // graveyard and one from exile, a card exiled under its host and back as the host leaves, and
-// a token that enters attacking. Nothing here touches a page.
+// a token that enters attacking; and `reveal`, the board verbs-reveal: Trinket Mage finds Mana
+// Crypt, revealed before it goes to the hand, and an Oust then puts a face-down Snapcaster
+// Mage into its library, revealed as it goes. Nothing here touches a page.
 import assert from "node:assert/strict";
 import {
     ALOFT,
@@ -19,6 +21,10 @@ const placeOf = ({ x, y, width }) => ({ x, y, width });
 /** Which half of the table a card of `owner` (as the recording's seat names them) lies in,
  * as `onSide` names it: the near half is `yours`. */
 const sideOf = (owner) => (owner === "you" ? "yours" : "theirs");
+
+/** The name of the face the Revealed Cards pile holds of the card in `slot`
+ * (src/stage/layout.ts `revealedName`). */
+const faceOf = (slot) => `r${slot}`;
 
 export const CASES = {
     // Milled cards fly from the library to the graveyard face up, one after another, and
@@ -302,5 +308,93 @@ export const CASES = {
             `its middle is at y ${b}, the attacker's at ${a}`,
         );
         onSide(piles, end, sideOf(token.act.object.controller), "it");
+    },
+
+    // A card held up to be read joins the Revealed Cards pile, at the top left of either
+    // seat's table: a face of it comes to be seen there, where the layout rests it, and
+    // travels nowhere, while the card itself lies where it was, so the step that then moves
+    // the card finds it there. What another spell or ability reveals takes the pile's place:
+    // the face-down permanent's face is there alone as it leaves.
+    showcase({ reveal, seat }) {
+        const shown = reveal.steps.filter((s) => s.verb === "showcase");
+        assert.equal(shown.length, 2, "two cards are revealed");
+        const [found, unveiled] = shown;
+        for (const step of shown) {
+            const { slot, name } = step.act.object;
+            const face = faceOf(slot);
+            const { from, middle, to } = step.at;
+            assert.ok(name, "the seat reads the card it is shown");
+            assert.equal(step.to - step.from, 200, "a showcase's 200 ms");
+            assert.ok(
+                !(face in before(reveal, step).poses),
+                "it was not there",
+            );
+            assert.equal(from.poses[face].opacity, 0, "it is unseen at first");
+            const half = middle.poses[face].opacity;
+            assert.ok(half > 0.5 && half < 1, `half way it is ${half} seen`);
+            assert.equal(to.poses[face].opacity, 1);
+            for (const sample of [from, middle]) {
+                assert.deepEqual(
+                    where({ ...sample.poses[face], opacity: 1 }),
+                    where(to.poses[face]),
+                    "it comes to be seen where it rests",
+                );
+            }
+            const lies = to.poses[face];
+            assert.equal(lies.face, "front");
+            assert.ok(lies.depth < ALOFT, "at rest, under what flies");
+            assert.ok(
+                lies.x + lies.width < reveal.middle &&
+                    lies.y < reveal.middle / 2,
+                `at the top left: ${JSON.stringify(where(lies))}`,
+            );
+            assert.equal(to.zones[face], "nowhere", "its face is in no zone");
+        }
+        // The card found lies in its library while its face comes up, and then flies to the
+        // hand; nothing else moves meanwhile.
+        const { slot } = found.act.object;
+        for (const [name, pose] of Object.entries(found.at.from.poses)) {
+            if (name === faceOf(slot)) continue;
+            // As it ends, the step after it has begun in the same tick.
+            assert.deepEqual(
+                found.at.middle.poses[name],
+                pose,
+                `${name} moved`,
+            );
+        }
+        assert.equal(found.at.middle.zones[slot], "library");
+        const taken = reveal.steps.find(
+            (s) => s.verb !== "showcase" && s.act.object?.slot === slot,
+        );
+        assert.equal(
+            taken?.act.object.zone,
+            "hand",
+            "it then goes to the hand",
+        );
+        assert.ok(taken.from >= found.to, "once it has been held up");
+        // Its face stays in the pile until another reveal takes its place.
+        const until = before(reveal, unveiled);
+        assert.equal(until.poses[faceOf(slot)]?.opacity, 1, "the pile stays");
+        const gone = unveiled.act.object.slot;
+        assert.ok(
+            !(faceOf(slot) in unveiled.at.to.poses),
+            "another's replaces it",
+        );
+        // The face-down permanent is held up in the beat that takes it: its face comes up
+        // while it goes from sight where it lay, face down for the seat that did not know it.
+        const leaves = reveal.steps.find(
+            (s) => s.verb === "vanish" && s.act.object?.slot === gone,
+        );
+        assert.ok(leaves, "the permanent leaves");
+        assert.ok(
+            unveiled.from >= leaves.from && unveiled.from < leaves.to,
+            "it is held up as it goes",
+        );
+        assert.equal(before(reveal, leaves).zones[gone], "battlefield");
+        assert.equal(
+            before(reveal, leaves).poses[gone].face,
+            "back",
+            `it lay face down for ${seat}`,
+        );
     },
 };

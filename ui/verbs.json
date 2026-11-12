@@ -1,5 +1,5 @@
 {
-  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. Each watches moments recorded as fixtures of ui/fixtures.json for each seat: yours, the seat that plays the moment, and theirs, the seat across from it. `moment` is the first, which every verb watched until there were more: a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), `whole`, in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). `more` are the others, each played to its recording's end: `zones`, cards changing zone (the board verbs-zones: draws alone and together, a discard, spells countered, resolved and returned, a creature and a token destroyed, a permanent exiled), `scry`, a scry of two with one put on the bottom (the board verbs-scry), `look`, the same scry's look left open, the cards still off the library as the recording ends (the board verbs-look), `combat`, combat damage every way with a Treasure tapped and sacrificed and life gained after (the board verbs-combat), `place`, changes on a card where it lies: a seventh land, a permanent turned face up, one taken across the table, counters and an Aura (the board verbs-place), `opening`, the hands dealt before the first turn and mulligans (the seeded games opening-bottom and verbs-opening-theirs), `burn`, a turn beginning under its banner and Mana Crypt's coin lost, whose trigger deals its controller three damage (the board verbs-burn), and `piles`, cards milled, put back from a hand, cast from a graveyard and from exile, a card exiled under its host and back as the host leaves, and a token that enters attacking (the board verbs-piles). `watches` names the moments of `more` a verb's check also plays. A verb of the design language (data/ui-conventions.json) not listed here is not played on the stage yet: `pending` names it with the bead that will play it, and scripts/verbs-complete.test.mjs holds the two lists to the data. `written` names the verbs whose steps the session's builder never writes (a mark comes with a prompt's state), each with the script written by hand that its check plays; every other verb has a hand-written expectation of the builder's script among beryl_session's tests. A verb listed here has a case of its name in verb-cases.mjs, verb-cases-place.mjs, verb-cases-spans.mjs or verb-cases-rest.mjs (`point`, the arrows and lines of the moments it watches, and `mark`, whose marks no recorded script draws: its check plays them from a script written by hand over the table the first moment leaves), and a layout an entry of its name in that script's LAYOUTS: the windows it is checked at (a phone's are the phone sizes of ui/shots.json) and what differs in it.",
+  "$comment": "The verb suite's checks (ui/scripts/verbs.mjs, which `just ui-test` runs beside interactions.mjs): one for each verb here, seat and layout, logged as `verb:<verb>/<seat>/<layout>` and named so to `just ui-test` to run it alone. Each watches moments recorded as fixtures of ui/fixtures.json for each seat: yours, the seat that plays the moment, and theirs, the seat across from it. `moment` is the first, which every verb watched until there were more: a permanent cast, its enters trigger and the tokens it makes (the board combat-declare's Overlord of the Mistmoors), `whole`, in one view, as a seat with nothing to answer gets it, and `cut`, the same play cut into a view at each priority (full-control stops). `more` are the others, each played to its recording's end: `zones`, cards changing zone (the board verbs-zones: draws alone and together, a discard, spells countered, resolved and returned, a creature and a token destroyed, a permanent exiled), `scry`, a scry of two with one put on the bottom (the board verbs-scry), `look`, the same scry's look left open, the cards still off the library as the recording ends (the board verbs-look), `combat`, combat damage every way with a Treasure tapped and sacrificed and life gained after (the board verbs-combat), `place`, changes on a card where it lies: a seventh land, a permanent turned face up, one taken across the table, counters and an Aura (the board verbs-place), `opening`, the hands dealt before the first turn and mulligans (the seeded games opening-bottom and verbs-opening-theirs), `burn`, a turn beginning under its banner and Mana Crypt's coin lost, whose trigger deals its controller three damage (the board verbs-burn), `piles`, cards milled, put back from a hand, cast from a graveyard and from exile, a card exiled under its host and back as the host leaves, and a token that enters attacking (the board verbs-piles), and `reveal`, a card found and revealed before it goes to the hand and a face-down permanent revealed as it leaves for a library (the board verbs-reveal). `watches` names the moments of `more` a verb's check also plays. A verb of the design language (data/ui-conventions.json) not listed here is not played on the stage yet: `pending` names it with the bead that will play it, and scripts/verbs-complete.test.mjs holds the two lists to the data. `written` names the verbs whose steps the session's builder never writes (a mark comes with a prompt's state), each with the script written by hand that its check plays; every other verb has a hand-written expectation of the builder's script among beryl_session's tests. A verb listed here has a case of its name in verb-cases.mjs, verb-cases-place.mjs, verb-cases-spans.mjs or verb-cases-rest.mjs (`point`, the arrows and lines of the moments it watches, and `mark`, whose marks no recorded script draws: its check plays them from a script written by hand over the table the first moment leaves), and a layout an entry of its name in that script's LAYOUTS: the windows it is checked at (a phone's are the phone sizes of ui/shots.json) and what differs in it.",
   "verbs": [
     "fly",
     "emerge",
@@ -15,11 +15,10 @@
     "streak",
     "announce",
     "dwell",
-    "set"
+    "set",
+    "showcase"
   ],
-  "pending": {
-    "showcase": "by-w8gv.21.27"
-  },
+  "pending": {},
   "written": {
     "mark": "ui/scripts/written-marks.mjs"
   },
@@ -66,6 +65,10 @@
     "burn": {
       "yours": "verbs-burn",
       "theirs": "verbs-burn-theirs"
+    },
+    "reveal": {
+      "yours": "verbs-reveal",
+      "theirs": "verbs-reveal-theirs"
     }
   },
   "watches": {
@@ -81,6 +84,7 @@
     "streak": ["zones", "combat", "burn"],
     "announce": ["scry", "burn"],
     "dwell": ["zones", "combat"],
-    "set": ["zones", "burn"]
+    "set": ["zones", "burn"],
+    "showcase": ["reveal"]
   }
 }
