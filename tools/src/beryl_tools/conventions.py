@@ -16,10 +16,9 @@ does and the values the stage plays it with, and the `marks` a card can carry, e
 means and its one look. Their names are the session's (`beryl_session`'s `script::Verb` and
 `script::Mark`), and a test there fails when the two disagree.
 
-A verb's values are Beryl's own (the exception "Motion is Beryl's own"): the stage plays it with
-them and `by motion` holds the stage to them. Where a verb has several cases (a draw, a
+A verb's values are what the stage plays it with, and `by motion` holds the stage to them. Where a verb has several cases (a draw, a
 discard), its `cases` hold each case's own, and a value a case leaves null is the verb's.
-`data/arena-motion.json` is the reference they started from (K27): each verb's instances in the
+`data/arena-motion.json` is Arena's measured beside them (K27): each verb's instances in the
 recordings, how each was taken and their summary, or why the recordings cannot show the verb.
 `by conventions` derives the summaries from the instances, and the check fails when they
 disagree. A verb another numbered exception covers is `exempt`.

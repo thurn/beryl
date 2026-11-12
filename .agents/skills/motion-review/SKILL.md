@@ -5,12 +5,9 @@ description: Get a verb's motion on Beryl's stage judged by an independent revie
 
 # Motion review
 
-How a motion looks on Beryl's cards is Beryl's own (UI Conventions, exception 8,
-"Motion is Beryl's own"): Arena settles what a motion shows and when, and the
-look is designed for full cards that tap, Beryl's frames, sizes and table
-distances. `just motion` only holds the stage to the values a verb declares. It
-cannot say whether the motion is any good: straight glides, bare arrivals and
-jostling batches pass it. This review can.
+`just motion` only holds the stage to the values a verb declares. It cannot say
+whether the motion is any good: straight glides, bare arrivals and jostling
+batches pass it. This review can.
 
 Run it only when the user asks (2026-11-12, of the reviews run on every verb: "I
 am really not finding that these are delivering useful results"). No verb, bead

@@ -37,7 +37,8 @@ export interface Run extends Playing {
   /** Its act is applied before it begins, `at` the stage time its delay does, and what makes
    * room for it has done so `by` the time it begins, or by the time the first of the steps
    * the table is then open for does: every token of a batch finds its row open
-   * (`Timing.opens`). */
+   * (`Timing.opens`). So is the act of a step that goes `ahead` with the one before it,
+   * which then waits where it was for its own turn (`Timing.ahead`). */
   opens?: { at: number; by: number };
   /** How long what it left room for takes to close up after it (`Timing.closes`). */
   closes?: number;
@@ -85,23 +86,34 @@ export function under<T>(
  * holds the beat only until it has begun, and plays on over what follows; and a step that
  * has the table to itself (`Timing.alone`) waits until `passed`, the stage time by which
  * everything that passes over the table now is over. The act of one that the table opens
- * for (`Timing.opens`) is applied as its delay begins. */
+ * for (`Timing.opens`) is applied as its delay begins, and the act of one that goes `ahead`
+ * as the act of the step before it is, if that goes ahead too: the first of them begins
+ * as its act is applied, and the hand makes room for every card of a draw at once. Each is
+ * timed with the acts of its whole beat beside it. */
 export function laid(
   beat: readonly ScriptStep[],
   played: number,
   at: number,
   table: Table,
-  timings: (act: Act, found?: PlayerView, before?: Act) => Timing,
+  timings: (
+    act: Act,
+    found?: PlayerView,
+    before?: Act,
+    beside?: readonly Act[],
+  ) => Timing,
   whole: (act: Act) => number | undefined,
   passed = at,
 ): { steps: Run[]; end: number } {
   let [from, turn, last, end, applied] = [at, at, at, at, at];
   /** When the first of the steps whose acts went ahead, and that have yet to begin, does. */
   let open = at;
+  /** Whether the step before went ahead (`Timing.ahead`). */
+  let led = false;
+  const beside = beat.map((step) => step.act);
   /** When each thing a step of the beat moves has come to rest. */
   const landed = new Map<Name, number>();
   const steps = beat.map((step, i): Run => {
-    const timing = timings(step.act, table.view, beat[i - 1]?.act);
+    const timing = timings(step.act, table.view, beat[i - 1]?.act, beside);
     table = apply(table, step.act, step.cause);
     const own = timing.with ? last : turn;
     const held = timing.hold === undefined ? undefined : whole(step.act);
@@ -113,8 +125,13 @@ export function laid(
     );
     from = Math.max(from, rested + timing.delay);
     // Its act goes ahead of it no sooner than the act of the step before it.
-    const opens = timing.opens ? Math.max(applied, rested) : from;
+    const opens = timing.opens
+      ? Math.max(applied, rested)
+      : timing.ahead && led
+        ? applied
+        : from;
     applied = opens;
+    led = timing.ahead === true;
     if (open <= opens) open = from;
     if (!timing.with) turn = own + timing.stagger;
     last = own;
@@ -156,6 +173,7 @@ export interface Edge {
   step: ScriptStep;
   /** The table as the step found it, before its act. */
   table: Table;
-  /** The steps of its beat before it, in order. */
+  /** The steps of its beat before it, in order, and every step of its beat. */
   earlier: readonly ScriptStep[];
+  beat: readonly ScriptStep[];
 }

@@ -1,5 +1,5 @@
-// Films a verb for the independent motion review (`by motion --film`, tools' motion_film.py;
-// UI Conventions, "Motion is Beryl's own"): the verb's moments of the verb suite
+// Films a verb for the independent motion review (`by motion --film`, tools' motion_film.py):
+// the verb's moments of the verb suite
 // (ui/verbs.json) played on the stage in stepped stage time, from both seats in both layouts,
 // and each take of the verb laid out as sheets a reviewer can judge its motion from. Usage:
 //   node scripts/verb-film.mjs <base-url> <fixtures-dir> <out-dir> <verb>

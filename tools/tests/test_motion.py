@@ -55,7 +55,7 @@ def test_a_number_is_held_within_a_tick_or_a_share_of_its_value() -> None:
     assert motion.held(reference, "fly", "duration", 50, 33, None, tick).failed
     # Arena's numbers are shown beside it, as reference.
     line = motion.held(reference, "fly", "duration", 600, 600, "draw", tick).line()
-    assert "Beryl 600 ms" in line and "Arena 1050 ms (700 to 1117)" in line
+    assert "Beryl 600 ms" in line and "Arena 1084 ms (1050 to 1117)" in line
 
 
 # The capture: a step held to its verb's values.
@@ -107,8 +107,13 @@ def test_a_card_that_leaves_is_held_to_the_case_of_where_it_goes_or_why() -> Non
     theirs = {"zone": "stack", "controller": "opponent"}
     cast = {"verb": "fly", "from": "hand", "object": theirs}
     assert motion.case_of(cast, "yours") == "opponent spell cast"
-    drawn = {"verb": "fly", "from": "library", "object": {"zone": "hand"}}
-    assert motion.case_of(drawn, "theirs") == "draw"
+    # A draw is held up only for the player who reads it; an effect's card is no draw.
+    hand = {"zone": "hand", "owner": "you", "name": "Island"}
+    drawn = {"verb": "fly", "from": "library", "why": "draw", "object": hand}
+    assert motion.case_of(drawn, "yours") == "draw"
+    unseen = {**drawn, "object": {"zone": "hand", "owner": "opponent", "name": None}}
+    assert motion.case_of(unseen, "theirs") == "opponent draw"
+    assert motion.case_of({**drawn, "why": "effect"}, "yours") is None
 
 
 def token_steps(second_from: int, second_to: int) -> dict[str, Any]:

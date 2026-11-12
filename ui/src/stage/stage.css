@@ -26,11 +26,17 @@
 .stage-node[data-turning] .card-slot > .card {
   rotate: var(--turn);
 }
-/* A card turning over on its way (stage/tracks.ts `flatAt`): the stage says how much of its
-   height shows, and everything in the node, each as large as the card, narrows to that about
-   its own middle. Only a node that is turning over carries the rule, as above. */
+/* A card turning over on its way (stage/tracks.ts `flatAt`): the stage says how far it is
+   tipped (stage/pose.ts `tippedOf`), and everything in the node, each as large as the card,
+   tips that far about its own middle, top over bottom, seen from four card widths off: the
+   edge that goes away draws in and the one that comes forward spreads, as a card tossed
+   over a table does (Arena's drawn card, `SswBO8aOOgc 20:28.6` to `28.77`). Only a node
+   that is turning over carries the rule, as above. */
+.stage-node[data-turning-over] {
+  perspective: calc(var(--frame) * 4);
+}
 .stage-node[data-turning-over] > * {
-  scale: var(--flat);
+  rotate: x var(--tipped);
 }
 /* An effect on a node (stage/effects.ts, stage/dom.ts): an element of the stage's inside the
    node, as large as the node's card (a tapped card's node is its turned footprint) and so

@@ -1,6 +1,6 @@
 """`by motion --film <verb> [case]`: a verb filmed for the independent motion review, which
-runs when the user asks and gates nothing (UI Conventions, "Motion is Beryl's own"; the
-motion-review skill, .agents/skills/motion-review/SKILL.md). Judgement is no check: nothing here passes or fails a
+runs when the user asks and gates nothing (the motion-review skill,
+.agents/skills/motion-review/SKILL.md). Judgement is no check: nothing here passes or fails a
 verb, and nothing is logged.
 
 It writes, into the cache (`motion/<checkout>/film/<verb>/`), all a reviewer is given:

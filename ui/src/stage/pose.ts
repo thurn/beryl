@@ -79,7 +79,13 @@ export const transformOf = (pose: Pose, frame: number) =>
  * tapped frame is added to (stage.css): none at rest. */
 export const turnOf = (pose: Pose) => (pose.turn ? `${pose.turn}deg` : "");
 
-/** The CSS `scale` of what is inside a node at `pose` as its card turns over, which narrows
- * each about its own middle, the card's (stage.css): none while it lies flat. */
-export const flatOf = (pose: Pose) =>
-  pose.flat === undefined || pose.flat === 1 ? "" : `1 ${pose.flat}`;
+/** How far what is inside a node at `pose` is tipped as its card turns over, top over bottom
+ * about its own middle, the card's, as the stage's rule for it tips it in depth (stage.css):
+ * its top going away while its back shows, and its foot coming down once its face does,
+ * half a turn in all, so that as much of its height shows as `flat` says. None while it
+ * lies flat. */
+export const tippedOf = (pose: Pose) => {
+  if (pose.flat === undefined || pose.flat === 1) return "";
+  const tipped = (Math.acos(pose.flat) * 180) / Math.PI;
+  return `${Math.round((pose.face === "back" ? tipped : -tipped) * 100) / 100}deg`;
+};

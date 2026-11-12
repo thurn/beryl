@@ -47,6 +47,11 @@ export interface Timing {
   /** How long what it left room for takes to close up after it, in stage ms, where that is
    * no share of its own time (`CLOSES`): it takes none, a cut. A finished ability. */
   closes?: number;
+  /** Its act is applied as the act of the step before it is, where that step is `ahead`
+   * too, and it then waits its turn where it was (`Run.opens`): the cards of one draw are
+   * all in the hand as the first leaves the library, so that the hand opens their places
+   * once and no place moves under a card on its way. */
+  ahead?: boolean;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -71,13 +76,40 @@ export const TURN = 0.55;
  * swap of back for face between two frames is no turn-over). */
 export const TURNING = 0.11;
 
+/** When a card turns over on its way: how far through its flight it is edge-on, and how
+ * long before and after that it turns, as shares of the flight. */
+export interface Turning {
+  at: number;
+  each: number;
+}
+
+/** A flight's turn-over unless it is a draw's. */
+const CAST: Turning = { at: TURN, each: TURNING };
+
+/** A drawn card's: it turns over as it leaves the library, while it is small and at its
+ * fastest, and has its face up for most of its way. Arena's is edge-on 100 to 150 ms after
+ * it leaves and face up by 170 to 220, of a flight of 580 to 740 (`SswBO8aOOgc 20:28.55` to
+ * `28.77`, `WQiYBv23buw 29:14.23` to `14.40`). */
+export const DRAW_TURN: Turning = { at: 0.2, each: 0.12 };
+
+/** Whether `act` is a card drawn: the flight from a library to its player's hand that the
+ * game calls a draw, and no other way a card comes to a hand. */
+export const draws = (act: Act) =>
+  act.verb === "fly" &&
+  act.why === "draw" &&
+  act.from === "library" &&
+  act.object.zone === "hand";
+
+/** How a card on the flight of the step `act` turns over, if it does. */
+export const turningOf = (act: Act): Turning => (draws(act) ? DRAW_TURN : CAST);
+
 /** How much of its height a card that turns over on its way shows `through` of its flight
  * (`Pose.flat`): it turns evenly, top over bottom, half a turn in all, as a card tossed
  * across a table lands the other side up. */
-export const flatAt = (through: number) =>
+export const flatAt = (through: number, { at, each }: Turning = CAST) =>
   Math.abs(
     Math.cos(
-      (Math.PI / 2) * Math.min(2, Math.max(0, (through - TURN) / TURNING + 1)),
+      (Math.PI / 2) * Math.min(2, Math.max(0, (through - at) / each + 1)),
     ),
   );
 
@@ -101,12 +133,16 @@ export interface Bow {
  * table's far edge, and a full bow carried the card along that edge, half out of sight,
  * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
- * (data/arena-motion.json, fly and emerge). */
+ * (data/arena-motion.json, fly and emerge). A drawn card that is not held up rises over the
+ * table on its way to the hand, away from its player's edge, so that it turns face up clear
+ * of the cards already held and comes down into its place: Arena's leave the library up
+ * the table and come down into the hand (`WQiYBv23buw 29:14.2`). */
 export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6 },
   lands: { share: 0.1, lean: 2 },
   lifts: { share: 0.12, peak: 0.6 },
+  drawn: { share: 0.2, peak: 0.42 },
 };
 
 /** How the flight of the step `act` bows, if it does, its card's controller sitting at the
@@ -117,6 +153,7 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
   if (act.object.zone === "stack") {
     return { ...(toward < 0 ? BOWS.theirs : BOWS.cast), toward };
   }
+  if (draws(act)) return { ...BOWS.drawn, toward: -toward };
   const lands = act.from === "stack" && act.object.zone === "battlefield";
   return lands ? { ...BOWS.lands, toward } : undefined;
 }
@@ -163,11 +200,14 @@ export function halfTurned(pose: Pose, middle: Point, near: number): Pose {
 }
 
 /** What is said of a glide besides its ends. With `over`, its card leaves face down and
- * lands face up, and turns over on the way (`flatAt`): `over` gives a pose half a turn round
- * (`halfTurned`). With `bow`, it leaves the straight line. */
+ * lands face up, and turns over on the way (`flatAt`), as `turning` says: `over` gives a
+ * pose half a turn round (`halfTurned`). With `bow`, it leaves the straight line. With
+ * `round`, which gives the same, it lands face down. */
 export interface Flown {
   over?: (pose: Pose, near: number) => Pose;
+  turning?: Turning;
   bow?: Bow;
+  round?: (pose: Pose, near: number) => Pose;
 }
 
 /** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
@@ -176,27 +216,37 @@ export interface Flown {
  * than it left, the turn-over is all that brings it round: a card tossed top over bottom
  * lands facing the other way, so it never spins in the table's plane besides. Until it is
  * edge-on it is on its way to where it rests half a turn round, and from then it comes from
- * where it was half a turn round; the two ways part by a hair, where nothing of it shows. */
+ * where it was half a turn round; the two ways part by a hair, where nothing of it shows.
+ * One that lands face down the other way up the table has nothing to turn it round, and a
+ * card back spinning half a turn across the table is all the eye would follow: it leaves
+ * the way up it will lie, turned in the tick it begins to move (the opponent's draw, from a
+ * library that lies upright to a hand that faces them). */
 export const glide =
   (
     start: Pose,
     ease: Timing["ease"],
     aloft: boolean,
-    { over, bow }: Flown = {},
+    { over, turning = CAST, bow, round }: Flown = {},
   ): Path =>
   (progress, rest) => {
     const through = ease(progress);
-    const back = over !== undefined && progress < TURN;
-    const round = over !== undefined && opposed(start, rest);
-    const from = round && !back ? over(start, rest.rotation) : start;
-    const to = round && back ? over(rest, start.rotation) : rest;
+    const back = over !== undefined && progress < turning.at;
+    const turned = over !== undefined && opposed(start, rest);
+    const hidden = over === undefined && round !== undefined;
+    const from =
+      turned && !back
+        ? over(start, rest.rotation)
+        : hidden && opposed(start, rest)
+          ? round(start, rest.rotation)
+          : start;
+    const to = turned && back ? over(rest, start.rotation) : rest;
     const straight = between(from, to, through, aloft);
     const pose = bow ? bowed(straight, from, to, through, bow) : straight;
     if (!over) return pose;
     return {
       ...pose,
       face: back ? "back" : pose.face,
-      flat: flatAt(progress),
+      flat: flatAt(progress, turning),
     };
   };
 
@@ -307,8 +357,9 @@ export function shareOf(
  * 20:28.4 and 16:52.4). */
 export const HELD = { in: 0.55, hold: 0.2 };
 
-/** When, as a share of its step, a card held up has turned over: `TURN` of its way in. */
-export const HELD_TURN = HELD.in * TURN;
+/** When, as a share of its step, a card held up has turned over: a draw's share of its way
+ * in (`DRAW_TURN`). */
+export const HELD_TURN = HELD.in * DRAW_TURN.at;
 
 /** The way of a card that is held up to be read before it lands: from `start` to where
  * `held` puts it for its resting place, turning over on the way, a hold there, and the drop
@@ -329,7 +380,7 @@ export const heldUp =
     return {
       ...pose,
       face: progress < HELD_TURN ? "back" : pose.face,
-      flat: flatAt(flying),
+      flat: flatAt(flying, DRAW_TURN),
     };
   };
 
@@ -571,7 +622,8 @@ export const carries = (run: Moving, at: number) =>
  * that track turns it over. Only the card a `fly` is about, or a `count` (a number that
  * lays its card elsewhere), travels over what rests, bowed if its flight is (`bowOf`) and
  * turning over on the way if it lands face up from face down, `halfTurn` giving a pose half
- * a turn round (`halfTurned`). What another verb's change moves goes there as what makes
+ * a turn round (`halfTurned`). It flies for its step's own time, where it is until then if
+ * its act went ahead of it (`Timing.ahead`). What another verb's change moves goes there as what makes
  * room does, when its verb has it go: over the step; once a card has turned (`WAITS`);
  * after a card that left has gone, for `CLOSES` of its step or, after a cut, for the time
  * the step says (`Timing.closes`); or before the step begins, where its act went ahead of it
@@ -590,21 +642,25 @@ export function carried(
   const about = verb === "fly" || verb === "count";
   const flies = about && litBy(run.step.act) === name;
   const turns = flies && start.face === "back" && resting.pose.face === "front";
-  const opens = run.opens !== undefined;
+  const opens = run.opens !== undefined && !flies;
   const [from, to] = opens
     ? [at, run.opens!.by]
     : run.closes !== undefined
       ? [end, end + run.closes]
-      : roomIn(verb, at, end);
+      : flies
+        ? [run.from, end]
+        : roomIn(verb, at, end);
   const ease = opens || run.closes !== undefined ? out : run.ease;
   const pose = run.each
     ? later(start, ease, ...shareOf(run, table, name))
     : ((opens ? undefined : makingRoom(verb, start, ease, toward)) ??
       glide(start, ease, flies, {
         over: turns ? halfTurn : undefined,
+        turning: turningOf(run.step.act),
         bow: flies ? bowOf(run.step.act, toward) : undefined,
+        round: flies && resting.pose.face === "back" ? halfTurn : undefined,
       }));
-  const turn = turns ? TURN : kept && 1;
+  const turn = turns ? turningOf(run.step.act).at : kept && 1;
   return [{ from, to, closes: to > end, pose, turn, own: flies }, kept];
 }
 
@@ -623,10 +679,8 @@ export function subjectOf(act: Act): Name | undefined {
 /** Whether `act` is your draw of a card you see: the one flight in which a card is held up
  * to be read (UI Conventions, Verbs, fly). */
 export const drawsToRead = (act: Act) =>
+  draws(act) &&
   act.verb === "fly" &&
-  act.why === "draw" &&
-  act.from === "library" &&
-  act.object.zone === "hand" &&
   act.object.owner === "you" &&
   act.object.name !== null;
 

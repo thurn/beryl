@@ -27,7 +27,7 @@ import { dark, type Lit, type Ribbon } from "./light.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
-import { flatOf, transformOf, turnOf, type Pose } from "./pose.ts";
+import { tippedOf, transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
 
 /** The name a node's `data-stage` says. */
@@ -351,9 +351,9 @@ export class DomSurface implements Surface {
     const turn = turnOf(pose);
     style.setProperty("--turn", turn);
     node.toggleAttribute("data-turning", turn !== "");
-    // And narrowed as it turns over on its way, only while it does.
-    const flat = flatOf(pose);
-    style.setProperty("--flat", flat);
-    node.toggleAttribute("data-turning-over", flat !== "");
+    // And tipped as it turns over on its way, only while it does.
+    const tipped = tippedOf(pose);
+    style.setProperty("--tipped", tipped);
+    node.toggleAttribute("data-turning-over", tipped !== "");
   }
 }

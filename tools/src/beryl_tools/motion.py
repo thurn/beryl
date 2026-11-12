@@ -1,7 +1,6 @@
 """`by motion`: the stage held to each verb's own values in `data/ui-conventions.json`, with
-Arena's numbers beside them as reference and no verdict (docs/project-50k.md, K27; UI
-Conventions, "Motion is Beryl's own"). How a motion looks on Beryl's cards is designed for them
-and never judged by how near it comes to Arena's numbers (`data/arena-motion.json`). This is a regression guard: it fails when the stage stops playing a
+Arena's numbers (`data/arena-motion.json`) beside them as reference and no verdict
+(docs/project-50k.md, K27). This is a regression guard: it fails when the stage stops playing a
 verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
@@ -363,8 +362,16 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
             ("stack", "battlefield"): "permanent resolves",
             ("hand", "battlefield"): "land played",
             ("hand", "graveyard"): "discard",
-            ("library", "hand"): "draw",
         }
+        if (origin, zone) == ("library", "hand"):
+            # A card an effect puts into a hand is no draw. A card no one reads flies face
+            # down. Whether a card read is drawn alone the act does not say: the page tells
+            # a capture so (`case_in`).
+            if act.get("why") != "draw":
+                return None
+            drawn: dict[str, Any] = act.get("object") or {}
+            read = drawn.get("owner") == "you" and drawn.get("name") is not None
+            return "draw" if read else "opponent draw"
         return cases.get((origin, zone))
     if verb == "emerge":
         triggered = (act.get("item") or {}).get("triggered")

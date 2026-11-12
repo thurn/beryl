@@ -25,6 +25,31 @@ const middleOf = (pose) => ({
     y: pose.y + pose.width / CARD_ASPECT / 2,
 });
 
+/** Holds a flight to leaving from where its card lay: at `start`, its first tick, it is as
+ * it was at `lay`. A card back that lands the other way up the table, at `end`, leaves that
+ * way up instead, half a turn round over the place it lay, and never spins on its way
+ * (tracks.ts `glide`): the opponent's draw and the cards they put back, on the desktop. */
+export function leavesFrom(start, lay, end, what) {
+    const round =
+        end.face === "back" && Math.abs(start.rotation - lay.rotation) > 90;
+    if (!round) {
+        assert.deepEqual(
+            where(start),
+            where(lay),
+            `${what}: it leaves from where it lay`,
+        );
+        return;
+    }
+    const [now, then] = [turnedMiddle(start), turnedMiddle(lay)];
+    const off = Math.hypot(now.x - then.x, now.y - then.y);
+    assert.ok(
+        off < lay.width / 4 && start.width === lay.width,
+        `${what}: it leaves ${off} from where it lay`,
+    );
+    const spun = Math.abs(end.rotation - start.rotation);
+    assert.ok(spun < 45, `${what}: it spun ${spun} degrees`);
+}
+
 /** The middle of the card drawn at `pose`, turned about its corner as the stage draws it. */
 const turnedMiddle = (pose) => {
     const turn = (pose.rotation * Math.PI) / 180;
@@ -279,11 +304,7 @@ export const CASES = {
             if (start) {
                 const was = before(zones, flight);
                 assert.equal(was.zones[name], from, what);
-                assert.deepEqual(
-                    where(start),
-                    where(was.poses[name]),
-                    `${what}: it leaves from where it lay`,
-                );
+                leavesFrom(start, was.poses[name], end, what);
             }
             if (half) assert.ok(half.depth >= ALOFT, `${what}: it flies`);
             // Whether it is larger than where it left and where it lands: told only of a
@@ -300,26 +321,34 @@ export const CASES = {
                     other.from < flight.to &&
                     flight.from < other.to,
             );
-            // A card held up to be read has turned over by the time it is.
-            const read =
-                route === "library>hand" &&
-                object.name !== null &&
-                others.length === 0;
+            // A drawn card turns over as it leaves the library, held up or not, and has
+            // its face up by half way; a spell turns over a little past half way.
+            const drawn = route === "library>hand" && flight.act.why === "draw";
+            const read = drawn && object.name !== null && others.length === 0;
             if (turns) {
                 assert.equal(
                     half.face,
-                    read ? "front" : "back",
+                    drawn ? "front" : "back",
                     `${what}: its face half way`,
                 );
-                // It turns over, top over bottom: flat as it leaves, narrowing toward
-                // edge-on by half way where its back still shows, and flat as it lands.
+                // It turns over, top over bottom: flat as it leaves and as it lands. A
+                // spell is narrowing toward edge-on by half way, its back still showing,
+                // and a drawn card lies flat again by then.
                 assert.equal(start.flat ?? 1, 1, `${what}: it leaves flat`);
                 assert.equal(end.flat ?? 1, 1, `${what}: it lands flat`);
-                if (!read) {
+                if (drawn) {
+                    assert.equal(
+                        half.flat ?? 1,
+                        1,
+                        `${what}: it has turned over`,
+                    );
+                } else {
                     assert.ok(
                         half.flat < 1,
                         `${what}: it has not begun to turn`,
                     );
+                }
+                if (!read) {
                     // And it never spins round in the table's plane besides.
                     const spun = Math.abs(half.rotation - start.rotation);
                     assert.ok(spun < 45, `${what}: it spun ${spun} degrees`);

@@ -121,7 +121,12 @@ export async function walk({
                 act,
                 subject: subjectOf(act, e.table.view),
                 ...endsOf(act),
-                case: window.berylCase(act, e.table.view) ?? null,
+                case:
+                    window.berylCase(
+                        act,
+                        e.table.view,
+                        e.beat.map((step) => step.act),
+                    ) ?? null,
                 from: at,
                 to: at,
             });

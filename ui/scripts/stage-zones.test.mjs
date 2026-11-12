@@ -10,10 +10,12 @@ import { ScriptStage, SNAP } from "../src/stage/stage.ts";
 import {
     CLOSES,
     halfTurned,
+    DRAW_TURN,
     HELD,
     TURN,
     TURNING,
 } from "../src/stage/tracks.ts";
+import { tippedOf } from "../src/stage/pose.ts";
 import { object, reach, row, stage, view } from "./stage-table.mjs";
 
 const vanish = (slot, why, to) => ({
@@ -387,23 +389,24 @@ test("a card that turns over on its way is edge-on as its face changes, and flat
     assert.equal(made.pose(5).flat, undefined, "at rest nothing is said of it");
 });
 
+/** The opponent's hand faces them: its cards lie half a turn round, about their middles. */
+const facing = {
+    ...row,
+    rest(table) {
+        const out = row.rest(table);
+        for (const [name, lies] of out) {
+            if (lies.dress.zone !== "hand") continue;
+            const middle = row.middle(lies, lies.pose);
+            out.set(name, {
+                ...lies,
+                pose: halfTurned(lies.pose, middle, 180),
+            });
+        }
+        return out;
+    },
+};
+
 test("a card that lands the other way up the table turns over, and never spins round", () => {
-    // The opponent's hand faces them: its cards lie half a turn round, about their middles.
-    const facing = {
-        ...row,
-        rest(table) {
-            const out = row.rest(table);
-            for (const [name, lies] of out) {
-                if (lies.dress.zone !== "hand") continue;
-                const middle = row.middle(lies, lies.pose);
-                out.set(name, {
-                    ...lies,
-                    pose: halfTurned(lies.pose, middle, 180),
-                });
-            }
-            return out;
-        },
-    };
     const made = new ScriptStage({
         layout: facing,
         timings: (act) => ({ ...SNAP, duration: act.verb === "fly" ? 400 : 0 }),
@@ -484,10 +487,10 @@ for (const tick of [10, 50]) {
         assert.deepEqual([made.pose(9).x, made.pose(9).y], [3000, 500]);
         assert.equal(made.pose(9).face, "back");
         assert.equal(made.shown.resting.get(9).dress.back, true);
-        // It turns over on its way in.
-        reach(made.clock, Math.floor(1000 * HELD.in * TURN) - 10, tick);
+        // It turns over as it leaves the library.
+        reach(made.clock, Math.floor(1000 * HELD.in * DRAW_TURN.at) - 10, tick);
         assert.equal(made.pose(9).face, "back");
-        reach(made.clock, Math.ceil(1000 * HELD.in * TURN) + 10, tick);
+        reach(made.clock, Math.ceil(1000 * HELD.in * DRAW_TURN.at) + 10, tick);
         assert.equal(made.pose(9).face, "front");
         assert.equal(made.shown.resting.get(9).dress.back, false);
         // It is held over where it will lie (the hand's second place, at x 400), large.
@@ -508,17 +511,39 @@ for (const tick of [10, 50]) {
     });
 }
 
-test("several cards drawn together fly straight to the hand", () => {
-    const { stage: made } = stage({ fly: { duration: 1000, stagger: 100 } });
+test("several cards drawn together rise over the table, to a hand that opens once", () => {
+    const ahead = { duration: 1000, stagger: 100, ahead: true };
+    const { stage: made } = stage({ fly: ahead });
     const table = drawing();
     table.objects.push(object(10, "library", { name: null }));
     table.players.you.library = [10, 9];
     made.play(table);
     made.play(view([1], [4, 9, 10]), { beats: [[draw(9), draw(10)]] });
-    made.clock.advance(500);
-    // Half way, the first is half way: linear, from (3000, 500) to (400, 500).
-    assert.deepEqual([made.pose(9).x, made.pose(9).y], [1700, 500]);
+    made.clock.advance(0);
+    // Both are in the hand as the first leaves: the second waits at the library for its
+    // turn, a card back, and the place the first flies to is where it stays.
+    const [first, second] = [
+        made.shown.resting.get(9),
+        made.shown.resting.get(10),
+    ];
+    assert.deepEqual([first.pose.x, second.pose.x], [400, 800]);
+    assert.deepEqual([made.pose(10).x, made.pose(10).y], [3000, 500]);
+    made.clock.advance(50);
+    assert.deepEqual([made.pose(10).x, made.pose(10).y], [3000, 500]);
+    assert.equal(made.pose(10).face, "back");
+    made.clock.advance(450);
+    // Half way, the first is half way along, linear, from (3000, 500) to (400, 500), and
+    // off that line toward the table, at its own size; it has turned face up.
+    assert.equal(made.pose(9).x, 1700);
+    assert.ok(made.pose(9).y < 300, `it rises: ${made.pose(9).y}`);
     assert.equal(made.pose(9).width, 100);
+    assert.equal(made.pose(9).face, "front");
+    // The second left a stagger after, and each lands where the hand had it from the first.
+    assert.ok(made.pose(10).x < 3000 && made.pose(10).x > 1700);
+    made.clock.advance(600);
+    assert.deepEqual([made.pose(9).x, made.pose(9).y], [400, 500]);
+    assert.deepEqual([made.pose(10).x, made.pose(10).y], [800, 500]);
+    assert.equal(made.shown.busy, false);
 });
 
 test("the opponent's draw flies face down, and is not held up", () => {
@@ -540,9 +565,59 @@ test("the opponent's draw flies face down, and is not held up", () => {
     after.objects.push(drawn.act.object);
     made.play(after, { beats: [[drawn]] });
     made.clock.advance(500);
-    assert.deepEqual([made.pose(9).x, made.pose(9).y], [1500, 500]);
+    // Half way along, and off the line toward the table, which lies down the stage of them.
+    assert.equal(made.pose(9).x, 1500);
+    assert.ok(made.pose(9).y > 700, `it dips: ${made.pose(9).y}`);
     assert.equal(made.pose(9).face, "back");
     assert.equal(made.pose(9).width, 100);
+});
+
+test("a card back that lands the other way up the table leaves that way up, and never spins", () => {
+    const made = new ScriptStage({
+        layout: facing,
+        timings: (act) => ({ ...SNAP, duration: act.verb === "fly" ? 400 : 0 }),
+    });
+    const table = view([1]);
+    const theirCard = { name: null, owner: "opponent", controller: "opponent" };
+    table.objects.push(object(9, "library", theirCard));
+    table.players.opponent.library = [9];
+    made.play(table);
+    assert.equal(made.pose(9).rotation, 0, "their library lies upright");
+    const left = made.pose(9);
+    const act = {
+        verb: "fly",
+        from: "library",
+        why: "draw",
+        object: object(9, "hand", theirCard),
+    };
+    const after = view([1]);
+    after.objects.push(act.object);
+    made.play(after, { beats: [[{ act }]] });
+    // Half a turn round from the tick it begins to move, over the place it left, and so all
+    // the way: a card back shows no other way up to turn through.
+    const lay = row.middle(made.shown.resting.get(9), left);
+    for (let at = 0; at <= 400; at += 10) {
+        made.clock.advance(at - made.clock.now);
+        const pose = made.pose(9);
+        assert.equal(pose.rotation, 180, `at ${at}`);
+        assert.equal(pose.face, "back", `at ${at}`);
+        if (at > 0) continue;
+        assert.deepEqual(
+            [pose.x, pose.y],
+            [2 * lay.x - left.x, 2 * lay.y - left.y],
+            "about its own middle",
+        );
+    }
+});
+
+test("a card turning over is tipped in depth, its top away and then its foot down", () => {
+    const pose = { face: "back", flat: 1 };
+    assert.equal(tippedOf(pose), "", "flat, nothing is said");
+    assert.equal(tippedOf({ ...pose, flat: undefined }), "");
+    assert.equal(tippedOf({ ...pose, flat: 0.5 }), "60deg");
+    assert.equal(tippedOf({ ...pose, flat: 0 }), "90deg");
+    assert.equal(tippedOf({ face: "front", flat: 0 }), "-90deg");
+    assert.equal(tippedOf({ face: "front", flat: 0.5 }), "-60deg");
 });
 
 test("a lift keeps the cards it began with lifted until it ends", () => {

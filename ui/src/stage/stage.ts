@@ -123,7 +123,7 @@ interface Playback {
 export class ScriptStage {
   readonly clock: StageClock;
   /** How each step is played, given the table it finds. */
-  timings: (act: Act, found?: PlayerView, before?: Act) => Timing;
+  timings: Parameters<typeof laid>[4];
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
   /** What is drawn besides the nodes: effects, spans, streaks and announcements. */
@@ -614,6 +614,7 @@ export class ScriptStage {
       earlier: steps
         .slice(0, Math.max(0, steps.indexOf(run)))
         .map((s) => s.step),
+      beat: steps.map((s) => s.step),
     };
     for (const follower of [...this.#following]) follower(told);
   }

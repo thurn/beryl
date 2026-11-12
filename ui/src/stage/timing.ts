@@ -1,7 +1,7 @@
 // How each step is played, from the design language's data (data/ui-conventions.json, `verbs`):
-// a verb's duration, delay and stagger in stage milliseconds and its curve, Beryl's own (UI
-// Conventions, "Motion is Beryl's own"), first set from Arena's medians (data/arena-motion.json,
-// plan K27). Where a verb has several cases (a draw, a discard), a step of a case is played with
+// a verb's duration, delay and stagger in stage milliseconds and its curve, with Arena's
+// measured beside them as reference (data/arena-motion.json, plan K27). Where a verb has
+// several cases (a draw, a discard), a step of a case is played with
 // that case's own (`cases`), and with the verb's where the case has none. A verb with a number
 // not taken has none, and one with no duration snaps. The effects a step begins are the data's
 // too (`effects`, and each verb's list of those its steps begin): `effectsOf`.
@@ -12,7 +12,7 @@ import type { Act } from "./table.ts";
 import type { Effect, Layer, On } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
 import { namedBy } from "./spans.ts";
-import { CLOSED, meets, STRIKE } from "./tracks.ts";
+import { CLOSED, draws, drawsToRead, meets, STRIKE } from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
  * verb in which nothing travels, which changes evenly. */
@@ -68,8 +68,13 @@ const cases = new Map(
 /** Arena's name for the case the step `act` is of (data/arena-motion.json's `case`; `by
  * motion` reads a capture's steps the same, tools' motion.py `case_of`): none for a case
  * Arena's instances do not have, which is played with its verb's values. `found` is the table
- * the step finds, which says whether a life total rises or falls. */
-export function caseOf(act: Act, found?: PlayerView): string | undefined {
+ * the step finds, which says whether a life total rises or falls, and `beside` the acts of
+ * its whole beat, which say whether a card is drawn alone. */
+export function caseOf(
+  act: Act,
+  found?: PlayerView,
+  beside: readonly Act[] = [],
+): string | undefined {
   switch (act.verb) {
     case "tap":
       return act.object.tapped ? "tap" : "untap";
@@ -102,7 +107,14 @@ export function caseOf(act: Act, found?: PlayerView): string | undefined {
         case "hand>graveyard":
           return "discard";
         case "library>hand":
-          return "draw";
+          // Yours, drawn alone, is held up to be read (enter.ts); one of several passes at
+          // its own size, and a card no one reads flies face down. Each takes its own time,
+          // and a card an effect puts into a hand the time any card flies.
+          if (!draws(act)) return undefined;
+          if (!drawsToRead(act)) return "opponent draw";
+          return beside.some((other) => other !== act && drawsToRead(other))
+            ? "draw of several"
+            : "draw";
         default:
           return undefined;
       }
@@ -195,11 +207,16 @@ const FINISHED: Timing = { ...SNAP, closes: CLOSED };
  * room for then closes up. So is a card's name
  * learned where it lies in no one's sight (a look at your own library, which its prompt
  * shows): only a permanent turns over (UI Conventions, "A card turning face up"). `before`
- * is the act of the step before it in its beat. */
-export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
+ * is the act of the step before it in its beat, and `beside` the acts of the whole beat. */
+export function timingOf(
+  act: Act,
+  table?: PlayerView,
+  before?: Act,
+  beside?: readonly Act[],
+): Timing {
   if (act.verb === "vanish" && act.subject.kind === "ability") return FINISHED;
   if (act.verb === "flip" && act.object.zone !== "battlefield") return SNAP;
-  const found = caseOf(act, table);
+  const found = caseOf(act, table, beside);
   const own =
     (found === undefined ? undefined : cases.get(act.verb)?.get(found)) ??
     verbs.get(act.verb) ??
@@ -249,6 +266,9 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
   if (act.verb === "appear" && act.object.zone === "battlefield") {
     return { ...own, opens: true };
   }
+  // The cards of one draw are all in the hand as the first leaves the library: the hand
+  // opens their places once, and each card then flies to a place that stays where it is.
+  if (draws(act)) return { ...own, ahead: true };
   // The blow a creature deals back is one with the strike at it, the step `before`.
   if (meets(act, before)) return { ...own, with: true };
   // The life a streak of damage takes from a player goes as the streak lands on them.
@@ -260,7 +280,11 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     before.to.kind === "player" &&
     before.to.player === act.tally.player
   ) {
-    return { ...own, delay: timingOf(before, table).duration, with: true };
+    return {
+      ...own,
+      delay: timingOf(before, table, undefined, beside).duration,
+      with: true,
+    };
   }
   // The life a strike takes from a player goes as its blow lands on them, not its own delay
   // after the strike's turn: the total flares on the frame the creature reaches it.
@@ -271,7 +295,8 @@ export function timingOf(act: Act, table?: PlayerView, before?: Act): Timing {
     before.to.kind === "player" &&
     before.to.player === act.tally.player
   ) {
-    const lands = STRIKE.hit * timingOf(before, table).duration;
+    const lands =
+      STRIKE.hit * timingOf(before, table, undefined, beside).duration;
     return { ...own, delay: lands, with: true };
   }
   // A look at several cards of a library takes them off it one after another, each as long

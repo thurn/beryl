@@ -13,6 +13,7 @@ import {
     beside,
     CARD_ASPECT,
     onSide,
+    leavesFrom,
     where,
 } from "./verb-cases.mjs";
 
@@ -74,13 +75,7 @@ export const CASES = {
                 (at) => flight.at[at]?.poses[name],
             );
             assert.equal(was.zones[name], "hand", what);
-            if (start) {
-                assert.deepEqual(
-                    where(start),
-                    where(was.poses[name]),
-                    `${what}: it leaves from where it lay`,
-                );
-            }
+            if (start) leavesFrom(start, was.poses[name], end, what);
             assert.ok(half.depth >= ALOFT, `${what}: it flies`);
             assert.ok(
                 half.width <= Math.max(was.poses[name].width, end.width) + 0.01,

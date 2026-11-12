@@ -1,10 +1,9 @@
 # UI Conventions
 
 MTG Arena is the reference for Beryl's flow, the order and timing of events,
-table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22);
-how a motion looks is Beryl's own (exception 8). This page lists only what Arena
-does not settle: where Beryl differs on purpose, what Arena has no equivalent
-for, and what the recordings do not show.
+table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22).
+This page lists only what Arena does not settle: where Beryl differs on purpose,
+what Arena has no equivalent for, and what the recordings do not show.
 
 The rulings were made on 2026-11-10 from an audit of 180 bug reports against the
 recordings in `~/arena`. Each Arena finding cites the recording moments that
@@ -43,31 +42,17 @@ removes an entry; nothing else does.
    shows no link on the table.
 7. **Own-target warning.** Confirm before a counter or removal spell targets the
    player's own spell or permanent (by-cp2y, by-jmx9).
-8. **Motion is Beryl's own.** Arena settles what a motion shows and when: what
-   changed, who did it, where it went, what happens in what order, what holds
-   still while it plays, where the eye is led. How it looks on Beryl's cards
-   (path, easing, duration, depth, rotation, effects, how a batch and its
-   neighbours move) is designed for them, starting from Arena's clip and numbers
-   but never copying them: "animations are not only about duration", and
-   "independent aesthetic judgement is needed here, our cards do not work the
-   same way". `just motion` holds the stage to the verb's own values below. No
-   review by an agent gates a verb (2026-11-12, of the motion reviews: "I am
-   really not finding that these are delivering useful results"): the judgement
-   is the user's, through his bug reports, and the `motion-review` skill runs
-   only when he asks (by-w8gv.21.42). Arena's motion is made for its art crops,
-   frames and distances, and copying its numbers onto Beryl's full cards does
-   not carry over what makes it work.
-9. **Lines and combat marks of light.** Arrows, lines of combat and the marks of
+8. **Lines and combat marks of light.** Arrows, lines of combat and the marks of
    combat are painted as light, in Beryl's colors. An attacker wears a wedge of
    ember light on its leading edge, which pops as it is declared and turns gold
    once it is blocked; a blocker has a gold crescent under it and a gold beam to
    the tip of its attacker's wedge. The lines and marks of combat lie on the
    table, under the cards and the step's banner ("it looks a bit dumb in places"
    over them); only an arrow at a target and the line to a source are drawn over
-   what rests. An arrow strikes and drains where Arena's appears and is cut
-   (exception 8). This replaces the thin flat lines and pale gold marks, which
-   read as a diagram: "crummy and cartoony". The line a declaration pulls toward
-   the pointer follows the pointer itself, with no lag (by-w8gv.21.67). A target
+   what rests. An arrow strikes and drains where Arena's appears and is cut.
+   This replaces the thin flat lines and pale gold marks, which read as a
+   diagram: "crummy and cartoony". The line a declaration pulls toward the
+   pointer follows the pointer itself, with no lag (by-w8gv.21.67). A target
    arrow is a cyan ribbon of light that appears whole in one frame and is cut as
    its spell resolves. An attacker's chevron appears in one frame, a little wide
    and bright, and settles; it is red, and gold once blocked. A blocker's line
@@ -271,9 +256,9 @@ recordings do not show them.
 - **Your own spell returned to hand.** It glides from the stack to the hand,
   turning as it goes. Only the opponent's spells are seen returned (by-e0l).
 - **The opponent's draws and discards.** A card the opponent draws flies face
-  down from their library to their hand. One they discard flies to their
-  graveyard and turns face up on the way, as their spells do. Only the player's
-  own are seen.
+  down from their library to their hand, as long as any card flies and never
+  spinning round on the way. One they discard flies to their graveyard and turns
+  face up on the way, as their spells do. Only the player's own are seen.
 - **A mulligan's hand.** It goes from sight where it lies, every card of it, as
   a permanent that leaves does; then the next hand is dealt as an opening hand
   is. No mulligan is filmed.
@@ -394,29 +379,37 @@ Every change on the table is shown by one of these, applied to a card, an
 ability or a player by a step of the script the session sends
 (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena
 does not show is composed from these. A verb's duration, delay, stagger and
-curve, and each case's, are Beryl's own (exception 8): first set from Arena's
-medians, whose instances `data/arena-motion.json` keeps as reference (K27), and
-held to by `just motion`.
+curve, and each case's, are the values below, which `just motion` holds the
+stage to; Arena's measured instances are kept beside them as reference in
+`data/arena-motion.json` (K27).
 
 - **fly.** A card travels from where it is to its new place, and flashes as it
   lands on the battlefield: a land played, a spell cast, a permanent spell
   resolving, a draw, a discard, an aura onto its permanent. One whose face
-  changes turns over on the way, top over bottom: it narrows to edge-on a little
-  past half way and lands face up, and one that lay the other way up the table
-  never spins round besides. A spell cast and a permanent resolving leave the
-  straight line in a shallow arc that bows toward their controller's edge of the
-  table, the permanent leaning a little into it. A played land glides from where
-  it is released to its slot in about 0.4 s. The opponent's spell leaves their
-  hand as a card back and is face up when it reaches the stack, about 0.4 s; the
+  changes turns over on the way, top over bottom and seen in depth: a spell is
+  edge-on a little past half way and lands face up, a drawn card turns over as
+  it leaves the library and flies face up, and one that lay the other way up the
+  table never spins round besides. A card you draw alone is held up large to be
+  read and then drops into the hand; each of several drawn together rises over
+  the table, clear of the cards held, and comes down into its place, the hand
+  having made room for them all as the first left. A card that lands face down
+  the other way up the table, as the opponent's draw does, leaves the way up it
+  will lie. A spell cast and a permanent resolving leave the straight line in a
+  shallow arc that bows toward their controller's edge of the table, the
+  permanent leaning a little into it. A played land glides from where it is
+  released to its slot in about 0.4 s. The opponent's spell leaves their hand as
+  a card back and is face up when it reaches the stack, about 0.4 s; the
   player's own flies from where it is released in about 0.35 s. A resolving
   permanent flies to its slot in about 0.6 s and the slot flashes. A drawn card
-  flies large beside the library, holds about 0.2 s and drops into the hand,
-  about 1.1 s in all; three are drawn a quarter second apart. A discard drops to
-  the graveyard at hand size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w
-  16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5,
-  UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE
-  39:04.3, 5UHzpVvUkfI 1:01:50.3). Beryl: 475 ms, 326 ms apart, ease-out.
-  Effects: settle as it ends (into the battlefield).
+  leaves the library turning face up within about 0.2 s, flies large beside the
+  stack, holds about 0.2 s and drops into the hand, about 1.1 s in all; three
+  drawn by one spell leave a quarter second apart and fly the same way with no
+  hold, about 0.7 s each. A discard drops to the graveyard at hand size in about
+  0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15,
+  pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w
+  16:15.8, WQiYBv23buw 29:14.3, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3).
+  Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle as it ends (into the
+  battlefield).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. Its row makes room in its
   delay, so it shows at a place already open. A token appears whole with a short

@@ -1,6 +1,6 @@
 {
   "about": [
-    "Arena's motion per verb, measured in the gameplay recordings in ~/Movies/arena (indexed in ~/arena) for docs/project-50k.md, K27. The verbs are data/ui-conventions.json's. These are reference, not a target: a verb's values there are Beryl's own (UI Conventions, \"Motion is Beryl's own\"), first set from these medians. `just conventions` derives each verb's summary here from its instances.",
+    "Arena's motion per verb, measured in the gameplay recordings in ~/Movies/arena (indexed in ~/arena) for docs/project-50k.md, K27. The verbs are data/ui-conventions.json's. These are reference: a verb's values there are what the stage plays, and `by motion` prints these beside them. `just conventions` derives each verb's summary here from its instances.",
     "Each instance names its recording, the clip's start and span, its crop in the recording's pixels (1920x1080; SN9QFe2kM4Y is 2560x1440), and how it was taken: `tracker` is `just video measure`, which follows one moving card; `filmstrip` counts frames of `just video film` at the recording's frame rate (30 fps, 60 for UrGalw_f35w and SN9QFe2kM4Y), with `why` the tracker was not used. Its `command` retakes it.",
     "duration_ms runs from the first frame of change to the first frame at rest; delay_ms from the instant `since` names; stagger_ms between like motions of one batch, start to start; peak is the largest size over the size at rest; curve is one of linear, ease-in, ease-out, ease-in-out, or none where nothing travels. A number not taken is null. Filmstrip numbers are good to a frame at the rate filmed, and the coarser strips' to about 100 ms.",
     "start is the size where the motion begins over the size at rest, null where not taken; emerge's are read by eye from the first frame its copy shows (about +-30%, as each note says). `by motion` (tools/src/beryl_tools/motion.py) prints a verb's summary here beside what a capture of Beryl's stage measures, as reference, with no verdict.",
@@ -410,7 +410,7 @@
           "note": "Turn start (YOUR TURN 16:53.0). Card leaves the library at 16:52.52-52.55; the banner is faint at 16:52.75, so again no delay. Fly-in to hold 16:52.55-53.17 = about 620 ms, hold 53.17-53.37 = 200 ms, drop 53.37-53.60 = about 230 ms. Tracker end 53.77 includes the tracker losing the card in the fan at 53.60 (sizes 0.2), so 53.60 is used. Hold size 1.55x the card at the hand."
         },
         {
-          "case": "draw",
+          "case": "draw of several",
           "recording": "WQiYBv23buw",
           "time": "29:14.2",
           "span": 1.0,
@@ -428,9 +428,9 @@
           "delay_ms": null,
           "stagger_ms": 233,
           "peak": null,
-          "path": "each card comes out from behind the spell on the right, glides left across the table and down into the hand at the bottom; no pause",
+          "path": "each card leaves the library at the lower left as a card back, turns face up as it rises up and right across the table, passes beside the spell on the stack and comes down into the hand at the bottom; no pause",
           "curve": "ease-out",
-          "note": "Three cards from Ancestral Recall (the draws begin about 2.3 s after the spell reaches the stack). Starts at 14.27 (Animate Dead), 14.53 (Island), 14.73-14.80 (Booster Tutor): stagger about 233 ms start to start, read at 15 fps so +-67 ms. Arrivals in the hand about 14.97, 15.20, 15.50 (700, 670, 770 ms each). Unlike the turn-start draw there is no large hold by the library here; the cards pass beside the stack at their natural size. Peak null."
+          "note": "Three cards from Ancestral Recall (the draws begin about 2.3 s after the spell reaches the stack). Starts at 14.27 (Animate Dead), 14.53 (Island), 14.73-14.80 (Booster Tutor): stagger about 233 ms start to start, read at 15 fps so +-67 ms. At 30 fps ('just video film WQiYBv23buw 29:14.2 --span 0.8 --fps 30 --cols 8 --width 320 --crop 300,300,1300,700') each leaves the library as a card back (14.23, 14.45, 14.68), is edge-on 100 to 130 ms later (14.30-14.33, 14.57-14.60, 14.80) and face up by about 170 ms, as the turn-start draw is; an earlier reading had them come out from behind the spell. Arrivals in the hand about 14.97, 15.20, 15.50 (700, 670, 770 ms each). Unlike the turn-start draw there is no large hold by the library here; the cards pass beside the stack at their natural size. Peak null."
         }
       ],
       "summary": {
@@ -531,9 +531,25 @@
           },
           "draw": {
             "duration_ms": {
-              "median": 1050,
-              "min": 700,
+              "median": 1084,
+              "min": 1050,
               "max": 1117
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": {
+              "median": 1.57,
+              "min": 1.55,
+              "max": 1.59
+            },
+            "start": null,
+            "curve": "ease-out"
+          },
+          "draw of several": {
+            "duration_ms": {
+              "median": 700,
+              "min": 700,
+              "max": 700
             },
             "delay_ms": null,
             "stagger_ms": {
@@ -541,11 +557,7 @@
               "min": 233,
               "max": 233
             },
-            "peak": {
-              "median": 1.57,
-              "min": 1.55,
-              "max": 1.59
-            },
+            "peak": null,
             "start": null,
             "curve": "ease-out"
           }
