@@ -362,6 +362,51 @@ test("a step played with the one before it begins its delay after that one begin
     ]);
 });
 
+test("a strike waits for a fight in its way to be home before it passes over it", () => {
+    const timed = (act, _, before) => ({
+        duration: 1000,
+        stagger: 300,
+        with: meets(act, before),
+    });
+    const { stage: made } = stage(timed);
+    made.play(view([1, 2, 3, 4, 5]));
+    const told = new Map();
+    made.follow(({ edge, at, step }) => {
+        if (edge === "start") told.set(step.act.source, at);
+    });
+    // 2 and 3 fight; 1 strikes 4 along the row, over both of them; 5 strikes a player, up
+    // and away from every other strike.
+    made.play(view([1, 2, 3, 4, 5]), {
+        beats: [
+            [
+                strike(2, { kind: "object", slot: 3 }),
+                strike(3, { kind: "object", slot: 2 }),
+                strike(1, { kind: "object", slot: 4 }),
+                strike(5, { kind: "player", player: "opponent" }),
+            ],
+        ],
+    });
+    // Until the fight is as good as home, it is over the middle of neither of the two, each
+    // 100 wide in its row, and then it is: it was held back, not sent another way.
+    const over = (slot) => Math.abs(made.pose(1).x - made.pose(slot).x) < 50;
+    for (let at = 0; at < STRIKE.home * 1000; at += 10) {
+        assert.ok(!over(2) && !over(3), `clear of the fight at ${at} ms`);
+        made.clock.advance(10);
+    }
+    let passed = false;
+    for (let at = 0; at < 1000 && !passed; at += 10) {
+        made.clock.advance(10);
+        passed = over(2);
+    }
+    assert.ok(passed, "it passes over the fight's creature at rest");
+    made.settle();
+    // It began later than its stagger after the fight, and what follows it, with nothing in
+    // its way, follows by one stagger.
+    assert.deepEqual([told.get(2), told.get(3)], [0, 0]);
+    assert.ok(told.get(1) > 300);
+    assert.equal(told.get(5), told.get(1) + 300);
+});
+
 test("creatures that strike one another meet half way, at one time", () => {
     // The blow dealt back is played with the strike it answers, as timing.ts has it.
     const timed = (act, _, before) => ({

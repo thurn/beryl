@@ -24,6 +24,7 @@ import {
   lunge,
   meets,
   STRIKE,
+  struck,
   turned,
   turnedOver,
   type Track,
@@ -93,6 +94,156 @@ const sized =
       width: pose.width * size,
     };
   };
+
+/** A strike's way: the middle of its creature's card and how far that reaches (its `half`),
+ * the line from there to what it strikes, how far along that line its blow is, and how large
+ * it lands. */
+interface Way {
+  middle: Point;
+  half: Point;
+  unit: Point;
+  go: number;
+  size: number;
+}
+
+type Strike = Extract<Act, { verb: "strike" }>;
+
+/** The way of the strike `act` from where its creature is, if both it and what it strikes
+ * are on the table. */
+function wayOf(
+  act: Strike,
+  scene: Pick<Scene, "layout" | "table" | "placed" | "beat">,
+): Way | undefined {
+  const { layout, placed } = scene;
+  const striker = placed(act.source);
+  if (!striker) return undefined;
+  const target = act.to.kind === "object" ? placed(act.to.slot) : undefined;
+  const life =
+    act.to.kind === "player"
+      ? layout.anchors(scene.table).life(act.to.player)
+      : undefined;
+  const at = life?.middle ?? (target && middleOf(layout, target));
+  if (!at) return undefined;
+  // The blow is along the line between their middles, where the two cards overlap by a
+  // little on whichever side they meet. Two that strike each other meet half way.
+  const middle = middleOf(layout, striker);
+  const line = away(middle, at);
+  const far = Math.hypot(line.x, line.y) || 1;
+  const unit = { x: line.x / far, y: line.y / far };
+  const { width } = striker.pose;
+  const mine = layout.half(striker.resting, striker.pose);
+  const art = life ? life.middle.y - life.corner.y : 0;
+  const theirs = life
+    ? { x: art * FACE, y: art * FACE }
+    : layout.half(target!.resting, target!.pose);
+  // What is much smaller than it, it shrinks toward the size of and lands on.
+  const long = (half: Point) => Math.max(half.x, half.y);
+  const ratio = (life ? art : long(theirs)) / long(mine);
+  const { from, to, least } = STRIKE.small;
+  const dive = Math.min(1, Math.max(0, (from - ratio) / (from - to)));
+  const size = 1 - dive * (1 - least);
+  // How far apart their middles are with each side's edges `into` the other's.
+  const apart = (into: number) =>
+    Math.min(
+      ...(["x", "y"] as const).map((side) =>
+        unit[side] === 0
+          ? Infinity
+          : (mine[side] * size + theirs[side] - into) / Math.abs(unit[side]),
+      ),
+    );
+  // On a player it stops at the rim of the orb's face, which the total is read on, or
+  // where it dives, with its edge short of the number in the orb's middle.
+  const bitten = apart(life ? 0 : STRIKE.bite * width * size);
+  const landed = life ? apart(Math.min(theirs.x, theirs.y) * INTO) : 0;
+  const near = bitten + (landed - bitten) * dive;
+  const met = scene.beat.some((other) => meets(other, act));
+  const go = Math.max(STRIKE.least * width, (far - near) / (met ? 2 : 1));
+  return { middle, half: mine, unit, go, size };
+}
+
+/** A step of a beat laid out in time (stage.ts `#beat`). */
+interface Span {
+  turn: number;
+  from: number;
+  to: number;
+  step: { act: Act };
+}
+
+/** Where the middle of the card that goes `way` is at stage time `at`, its strike being
+ * played over `span`: where it rests before and after, and its pull back left out. */
+function middleAt(way: Way, span: Span, at: number): Point {
+  const progress = (at - span.from) / (span.to - span.from);
+  const [toward] = struck(Math.min(1, Math.max(0, progress)));
+  return {
+    x: way.middle.x + way.unit.x * way.go * toward,
+    y: way.middle.y + way.unit.y * way.go * toward,
+  };
+}
+
+/** How often a strike is looked at for what is in its way, and by how much it is held back
+ * at a time, in stage ms. */
+const LOOK = { every: 1000 / 60, wait: 25 };
+
+/** Whether the strike that goes `way` over `span`, held back by `wait`, meets the earlier
+ * one that goes `other` over `theirs` before that one is home (`STRIKE.home` of it): at some
+ * time one of the two cards lies over the middle of the other, which is more than brushing
+ * past it. */
+function meetsOnTheWay(
+  [way, span]: [Way, Span],
+  [other, theirs]: [Way, Span],
+  wait: number,
+): boolean {
+  const home = theirs.from + STRIKE.home * (theirs.to - theirs.from);
+  for (let at = span.from + wait; at < home; at += LOOK.every) {
+    const mine = middleAt(way, span, at - wait);
+    const its = middleAt(other, theirs, at);
+    const [x, y] = [Math.abs(mine.x - its.x), Math.abs(mine.y - its.y)];
+    const over = (half: Point) => x < half.x && y < half.y;
+    if (over(way.half) || over(other.half)) return true;
+  }
+  return false;
+}
+
+/** Holds back each strike of the beat `runs` that would pass over a creature of an earlier
+ * strike still on its way out or back, and every step after it as long, until it no longer
+ * does: no blow is dealt across a fight still drawing apart, to be taken for a blow at it.
+ * `resting` is how the table holds a name as the beat begins: no strike changes where a
+ * card rests. */
+export function awaited(
+  runs: Span[],
+  layout: StageLayout,
+  table: PlayerView,
+  resting: (name: Name) => Resting | undefined,
+) {
+  const placed = (name: Name) => {
+    const lies = resting(name);
+    return lies && { resting: lies, pose: lies.pose };
+  };
+  const beat = runs.map((run) => run.step.act);
+  const ways = beat.map((act) =>
+    act.verb === "strike"
+      ? wayOf(act, { layout, table, placed, beat })
+      : undefined,
+  );
+  runs.forEach((run, nth) => {
+    const way = ways[nth];
+    // The blow dealt back goes with the strike it answers.
+    if (!way || meets(run.step.act, beat[nth - 1])) return;
+    const earlier = runs.slice(0, nth).flatMap((span, i): [Way, Span][] => {
+      const theirs = ways[i];
+      return theirs ? [[theirs, span]] : [];
+    });
+    let wait = 0;
+    while (earlier.some((other) => meetsOnTheWay([way, run], other, wait))) {
+      wait += LOOK.wait;
+    }
+    for (const later of wait > 0 ? runs.slice(nth) : []) {
+      later.turn += wait;
+      later.from += wait;
+      later.to += wait;
+    }
+  });
+}
 
 /** The own motions of the step `act`, played with `ease`: none for most verbs. */
 export function entering(
@@ -172,51 +323,13 @@ function enters(
     }
     case "strike": {
       const striker = placed(act.source);
-      if (!striker) return undefined;
+      const way = wayOf(act, scene);
+      if (!striker || !way) return undefined;
       const target = act.to.kind === "object" ? placed(act.to.slot) : undefined;
-      const life =
-        act.to.kind === "player"
-          ? layout.anchors(scene.table).life(act.to.player)
-          : undefined;
-      const at = life?.middle ?? (target && middleOf(layout, target));
-      if (!at) return undefined;
-      // The blow is along the line between their middles, where the two cards overlap by a
-      // little on whichever side they meet. Two that strike each other meet half way.
-      const way = away(middleOf(layout, striker), at);
-      const far = Math.hypot(way.x, way.y) || 1;
-      const unit = { x: way.x / far, y: way.y / far };
       const { width } = striker.pose;
-      const mine = layout.half(striker.resting, striker.pose);
-      const art = life ? life.middle.y - life.corner.y : 0;
-      const theirs = life
-        ? { x: art * FACE, y: art * FACE }
-        : layout.half(target!.resting, target!.pose);
-      // What is much smaller than it, it shrinks toward the size of and lands on.
-      const long = (half: Point) => Math.max(half.x, half.y);
-      const ratio = (life ? art : long(theirs)) / long(mine);
-      const { from, to, least } = STRIKE.small;
-      const dive = Math.min(1, Math.max(0, (from - ratio) / (from - to)));
-      const size = 1 - dive * (1 - least);
-      // How far apart their middles are with each side's edges `into` the other's.
-      const apart = (into: number) =>
-        Math.min(
-          ...(["x", "y"] as const).map((side) =>
-            unit[side] === 0
-              ? Infinity
-              : (mine[side] * size + theirs[side] - into) /
-                Math.abs(unit[side]),
-          ),
-        );
-      // On a player it stops at the rim of the orb's face, which the total is read on, or
-      // where it dives, with its edge short of the number in the orb's middle.
-      const bitten = apart(life ? 0 : STRIKE.bite * width * size);
-      const landed = life ? apart(Math.min(theirs.x, theirs.y) * INTO) : 0;
-      const near = bitten + (landed - bitten) * dive;
-      const met = scene.beat.some((other) => meets(other, act));
-      const go = Math.max(STRIKE.least * width, (far - near) / (met ? 2 : 1));
       const by = (length: number) => ({
-        x: unit.x * length,
-        y: unit.y * length,
+        x: way.unit.x * length,
+        y: way.unit.y * length,
       });
       const about = sized(layout, striker.resting);
       const nth = scene.beat.indexOf(act);
@@ -229,7 +342,9 @@ function enters(
       const lunging: Entering = {
         name: act.source,
         track: {
-          ...own(lunge(by(go), by(STRIKE.back * width), size, about, deep)),
+          ...own(
+            lunge(by(way.go), by(STRIKE.back * width), way.size, about, deep),
+          ),
           turn: veiled ? STRIKE.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,

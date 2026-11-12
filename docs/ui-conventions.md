@@ -388,14 +388,15 @@ held to by `just motion`.
 - **strike.** A creature pulls back, lunges at what it deals combat damage to,
   which flashes as the blow lands, and draws back; a player's life total changes
   on that blow. Two creatures that strike each other meet half way, at one time.
-  On something much smaller than itself it lands whole, shrinking as it goes.
-  Each attacker winds back, lunges from its row to the player's avatar or to its
-  blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all. A
-  blocked attacker strikes about 0.4 s before an unblocked one. First strike is
-  a strike of its own, seconds earlier (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk
-  25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg 54:57.5).
-  Beryl: 850 ms, 285 ms apart. Effects: impact as its blow lands (on what it
-  strikes).
+  A strike that would pass over a creature of an earlier strike still on its way
+  out or back waits until that one is home. On something much smaller than
+  itself it lands whole, shrinking as it goes. Each attacker winds back, lunges
+  from its row to the player's avatar or to its blocker, the screen flashes, and
+  it drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s
+  before an unblocked one. First strike is a strike of its own, seconds earlier
+  (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg
+  54:54.0, sMpAJ0HKDdg 54:57.5). Beryl: 850 ms, 285 ms apart. Effects: impact as
+  its blow lands (on what it strikes).
 - **streak.** A streak leaves one thing and lands on another, which flashes:
   mana from its source into the spell or ability it pays for, and damage from a
   spell or ability to what it hits. Each tapped land sends one streak of its

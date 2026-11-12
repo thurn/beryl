@@ -207,11 +207,14 @@ const inOut = (progress: number) =>
  * shrinking as it goes, or it would lie over the neighbours more than over what it strikes:
  * not at all for something `small.from` of its length, wholly for something `small.to`, when
  * it lands `small.least` of its own size. Its blow has been seen by `seen` of its step,
- * when it gives way to the strikers still on their way (`depths`). */
+ * when it gives way to the strikers still on their way (`depths`), and by `home` it is as
+ * good as back where it rests, all but the last of its slowing: a strike that would pass
+ * over it before then is held back (enter.ts `awaited`). */
 export const STRIKE = {
   wind: 0.15,
   hit: 0.45,
   seen: 0.57,
+  home: 0.9,
   back: 0.3,
   bite: 0.38,
   least: 0.3,

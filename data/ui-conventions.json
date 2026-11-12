@@ -1388,7 +1388,7 @@
     },
     {
       "name": "strike",
-      "shows": "A creature pulls back, lunges at what it deals combat damage to, which flashes as the blow lands, and draws back; a player's life total changes on that blow. Two creatures that strike each other meet half way, at one time. On something much smaller than itself it lands whole, shrinking as it goes.",
+      "shows": "A creature pulls back, lunges at what it deals combat damage to, which flashes as the blow lands, and draws back; a player's life total changes on that blow. Two creatures that strike each other meet half way, at one time. A strike that would pass over a creature of an earlier strike still on its way out or back waits until that one is home. On something much smaller than itself it lands whole, shrinking as it goes.",
       "arena": {
         "does": "Each attacker winds back, lunges from its row to the player's avatar or to its blocker, the screen flashes, and it drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s before an unblocked one. First strike is a strike of its own, seconds earlier.",
         "evidence": [

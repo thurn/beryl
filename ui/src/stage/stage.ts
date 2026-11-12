@@ -48,7 +48,7 @@ import type {
   Verb,
 } from "../generated/protocol";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
-import { entering } from "./enter.ts";
+import { awaited, entering } from "./enter.ts";
 import { Effects, type Effect, type EffectSurface } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
@@ -486,7 +486,6 @@ export class ScriptStage {
     playback.played += playback.steps.length;
     playback.beat += 1;
     let [from, turn, last] = [this.#at, this.#at, this.#at];
-    playback.end = this.#at;
     // Each step is timed by the table it will find; one played `with` the last begins by it.
     let table = this.#table!;
     playback.steps = playback.beats[playback.beat]!.map((step, i, beat) => {
@@ -496,14 +495,12 @@ export class ScriptStage {
       from = Math.max(from, (timing.with ? from : own) + timing.delay);
       if (!timing.with) turn = own + timing.stagger;
       last = own;
-      const to = from + timing.duration;
-      playback.end = Math.max(playback.end, to);
       return {
         index: playback.played + i,
         verb: step.act.verb,
         turn: own,
         from,
-        to,
+        to: from + timing.duration,
         step,
         ease: timing.ease,
         each: timing.each,
@@ -511,6 +508,9 @@ export class ScriptStage {
         ended: false,
       };
     });
+    const rests = (name: Name) => this.#entries.get(name)?.resting;
+    awaited(playback.steps, this.#layout, this.#table!.view, rests);
+    playback.end = Math.max(this.#at, ...playback.steps.map((run) => run.to));
   }
 
   /** Begins a step at its own time: the table is as the step leaves it, and what its change
