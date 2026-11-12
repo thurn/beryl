@@ -19,10 +19,6 @@ const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest
 fn constants_used<'a>(text: &'a str, module: &str) -> Vec<&'a str> {
     let mut found = Vec::new();
     for (at, _) in text.match_indices(module) {
-        // `printed::token::` is no `names::`, nor is `printed::names::`.
-        if at > 0 && text.as_bytes()[at - 1] == b':' {
-            continue;
-        }
         let rest = &text[at + module.len()..];
         let end = rest
             .find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
@@ -131,6 +127,7 @@ impl<'a> Printed<'a> {
                 _ => return Err(format!("{name}: a token of more than one face")),
             }
         }
+        sources.sort_unstable();
         sources.dedup();
         match &sources[..] {
             [source] => Ok(source.clone()),
