@@ -2,6 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
+use crate::choices;
 use crate::filter::{Evaluate, Filter};
 use crate::game::Game;
 use crate::ids::Seat;
@@ -44,5 +45,5 @@ pub fn search_library_up_to<L: Layout>(
     zones::look_at(game, player, library);
     let found = filter.select(game.state, game.table, library, player);
     let prompt = Prompt::new(Purpose::Search).most(n);
-    resolution.choose_up_to(game, player, found, n, prompt)
+    choices::pick_up_to(game, resolution, player, found, n, prompt)
 }

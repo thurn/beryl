@@ -9,36 +9,32 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::actions::{
-    counter, destroy, explore, manifest_dread, reveal, sacrifice, scry, search, shuffle, tap,
-    transform,
+    counter, destroy, discard, explore, manifest_dread, reveal, sacrifice, scry, search, shuffle,
+    tap, transform,
 };
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, CardDef, CastingIx, CastingKind, FaceAbility, Flow, ManaColor, ManaCost,
-    Part, Prompt, Purpose, Stop, Types,
+    Prompt, Stop, Types,
 };
-use crate::chance;
-use crate::decision::{DecisionKind, Opt};
-use crate::event::{self, Reason, Recipient, Sink, TokenEntry};
+use crate::event::{Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue, Small, index};
-use crate::mana;
-use crate::profile::Payment;
+use crate::layout::{Layout, Small};
 use crate::query::Copiable;
 use crate::resolution::Resolution;
 use crate::state::{
     CounterKind, ObjectRef, PendingTrigger, StackEntry, State, Target, TargetPlace, TargetPlaces,
-    TriggerInfo, Zone,
+    TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use crate::zone::Place;
+use crate::{casting, choices, coins, costs};
 use crate::{counters, damage, drawing, library, life, linked, one_shot, stack, tokens, zones};
 use crate::{layers, trigger};
 
-mod ask;
 mod continuous;
 mod permit;
 
@@ -190,115 +186,100 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         stack::spell_mana_value(self.game.state, self.game.table, spell)
     }
 
-    /// "[Effect] unless [player] pays [cost]"
-    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the
-    /// same thing as '[A player may do something else]. If [that player doesn't], [do
-    /// something].'" Asks `player` whether to pay if they can, and pays if they do. Returns
-    /// whether they paid.
-    ///
-    /// [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g): "If an effect gives a
-    /// player the option to pay mana, they may activate mana abilities before taking that
-    /// action."
+    /// [`choices::yes_no`].
+    pub fn choose_yes_no(
+        &mut self,
+        player: Seat,
+        prompt: Prompt,
+        about: Bitboard<L::Slot>,
+    ) -> Result<bool, Stop> {
+        choices::yes_no(&mut self.game, &mut self.resolution, player, prompt, about)
+    }
+
+    /// [`choices::pick_up_to`].
+    pub fn choose_up_to(
+        &mut self,
+        player: Seat,
+        candidates: Bitboard<L::Slot>,
+        n: u8,
+        prompt: Prompt,
+    ) -> Result<Bitboard<L::Slot>, Stop> {
+        choices::pick_up_to(
+            &mut self.game,
+            &mut self.resolution,
+            player,
+            candidates,
+            n,
+            prompt,
+        )
+    }
+
+    /// [`choices::pick`].
+    pub fn choose_object(
+        &mut self,
+        player: Seat,
+        candidates: Bitboard<L::Slot>,
+        prompt: Prompt,
+    ) -> Result<L::Slot, Stop> {
+        choices::pick(
+            &mut self.game,
+            &mut self.resolution,
+            player,
+            candidates,
+            prompt,
+        )
+    }
+
+    /// [`choices::may_pick`].
+    pub fn may_choose_object(
+        &mut self,
+        player: Seat,
+        candidates: Bitboard<L::Slot>,
+        prompt: Prompt,
+    ) -> Result<Option<L::Slot>, Stop> {
+        choices::may_pick(
+            &mut self.game,
+            &mut self.resolution,
+            player,
+            candidates,
+            prompt,
+        )
+    }
+
+    /// [`discard::discard_one_of`] the cards in `player`'s hand.
+    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef<L>>, Stop> {
+        let hand = self.game.state.zone(ZoneKey::Of(player, Zone::Hand));
+        discard::discard_one_of(&mut self.game, &mut self.resolution, player, hand)
+    }
+
+    /// [`discard::discard_cards`].
+    pub fn discard_cards(&mut self, player: Seat, n: u8) -> Result<Bitboard<L::Slot>, Stop> {
+        discard::discard_cards(&mut self.game, &mut self.resolution, player, n)
+    }
+
+    /// [`discard::discard_one_of`].
+    pub fn discard_one_of(
+        &mut self,
+        player: Seat,
+        cards: Bitboard<L::Slot>,
+    ) -> Result<Option<ObjectRef<L>>, Stop> {
+        discard::discard_one_of(&mut self.game, &mut self.resolution, player, cards)
+    }
+
+    /// [`costs::may_pay`], asked as [`Effect::Unless`](beryl_card::Effect::Unless) asks.
     pub fn unless_pays(&mut self, player: Seat, cost: ManaCost) -> Result<bool, Stop> {
-        let r = mana::payable(
-            self.game.state,
-            self.game.table,
+        costs::may_pay(
+            &mut self.game,
+            &mut self.resolution,
             player,
             cost,
-            Bitboard::EMPTY,
-        );
-        if !self.checked(r) {
-            return Ok(false);
-        }
-        let prompt = Prompt::new(Purpose::UnlessPays).cost(cost);
-        if !self.choose_yes_no(player, prompt, Bitboard::EMPTY)? {
-            return Ok(false);
-        }
-        self.pay(player, cost)?;
-        self.game.sink.note(event::Event::ResolutionPayment {
-            player,
-            item: self.resolution.entry.clone(),
-        });
-        Ok(true)
+            costs::UNLESS,
+        )
     }
 
-    /// Pays a mana cost `player` can pay, under the profile's payment rules (§10).
-    fn pay(&mut self, player: Seat, cost: ManaCost) -> Result<(), Stop> {
-        if self.game.state.profile().payment == Payment::Manual {
-            let mut remaining = cost;
-            while !remaining.is_zero() {
-                let r = mana::manual_options(
-                    self.game.state,
-                    self.game.table,
-                    player,
-                    remaining,
-                    Bitboard::EMPTY,
-                );
-                let options = self.checked(r);
-                let option = self.ask_options(
-                    player,
-                    DecisionKind::ManaPayment,
-                    options.as_slice(),
-                    Prompt::new(Purpose::Mana).cost(remaining),
-                    Bitboard::EMPTY,
-                )?;
-                let r = mana::manual_pay(
-                    self.game.state,
-                    self.game.table,
-                    self.game.sink,
-                    player,
-                    remaining,
-                    option,
-                );
-                remaining = self.checked(r);
-            }
-            return Ok(());
-        }
-        let greedy = self.game.state.profile().payment == Payment::Greedy;
-        let r = mana::plans(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            player,
-            cost,
-            Bitboard::EMPTY,
-            greedy,
-        );
-        let plans = self.checked(r);
-        let mut opts: L::Queue<Opt<L>, 64> = Default::default();
-        for i in 0..plans.len() {
-            self.check(opts.push(Opt::Plan(index::<L>(i))));
-        }
-        let Opt::Plan(i) = self.ask_options(
-            player,
-            DecisionKind::PaymentPlan,
-            opts.as_slice(),
-            Prompt::new(Purpose::Mana).cost(cost).part(Part::Plan),
-            Bitboard::EMPTY,
-        )?
-        else {
-            unreachable!("a plan");
-        };
-        let r = mana::pay(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            player,
-            cost,
-            Bitboard::EMPTY,
-            &plans.as_slice()[Into::<usize>::into(i)],
-        );
-        self.checked(r);
-        Ok(())
-    }
-
-    /// Lets `player` cast the card in `object`'s slot during this resolution, without paying
-    /// its mana cost when `free`. The body's last action: the card is offered as it finishes
-    /// resolving, which is when a spell cast during resolution would otherwise have
-    /// mattered, since "no player receives priority after it's cast"
-    /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
+    /// [`casting::offer`].
     pub fn offer_cast(&mut self, object: ObjectRef<L>, player: Seat, free: bool) {
-        self.resolution.offer = Some((object, player, free));
+        casting::offer(&mut self.resolution, object, player, free);
     }
 
     /// Adds mana to a player's mana pool
@@ -630,27 +611,14 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         tap::untap_up_to(&mut self.game, &mut self.resolution, you, lands, n)
     }
 
-    /// Flips a coin and returns whether the player won the flip
-    /// ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "the player that flips
-    /// the coin calls 'heads' or 'tails.' If the call matches the result, the player wins the
-    /// flip." A fair coin against any call is a fair win, so one draw from the game's
-    /// randomness decides it (architecture §14), or while a save replays, its record
-    /// ([`chance`]).
+    /// [`coins::flip`], for this ability's source.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
     pub fn flip_coin(&mut self, player: Seat) -> bool {
-        let won = chance::flip(self.game.state, self.game.sink, player);
-        let source = self.source();
-        let r = event::settle(
-            self.game.state,
-            self.game.table,
-            self.game.sink,
-            event::Event::CoinFlip {
-                player,
-                won,
-                source,
-            },
-        );
-        self.check(r);
-        won
+        let r = coins::flip(&mut self.game, player, self.resolution.source());
+        self.checked(r)
     }
 }
 

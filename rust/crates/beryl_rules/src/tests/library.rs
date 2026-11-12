@@ -3,9 +3,10 @@
 //! card it was first written for or the source of what is resolving.
 
 use crate::actions::{manifest, tap, transform};
-use crate::card::{Ability, Behavior, FaceIx, Stop, Types};
+use crate::bitboard::Bitboard;
+use crate::card::{Ability, Behavior, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
 use crate::decision::Candidates;
-use crate::event::{self, Reason};
+use crate::event::{self, Event, Reason};
 use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
@@ -13,8 +14,8 @@ use crate::resolution::Resolution;
 use crate::state::{ObjectFlags, ObjectRef, StackEntry, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
-    Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, library,
-    tokens,
+    Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
+    coins, costs, library, tokens,
 };
 use beryl_card::effect::build::{YOU, scry};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
@@ -281,4 +282,95 @@ fn any_tokens_enter_attacking_one_of_the_defending_players_given() {
         assert_eq!(flags(&s, token), (true, false));
         assert_eq!(s.controller(token), controller);
     }
+}
+
+/// [CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812): "[A player] may [do
+/// something]. If [that player] [does, doesn't, or can't], [effect]." Here an opponent of
+/// the ability's controller is offered a cost no card names, behind a question that is not
+/// an "unless": they decline it, then pay it.
+#[test]
+fn any_player_pays_or_declines_any_mana_cost_an_effect_offers() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let source = s.object_ref(bear);
+    let payer = p.opponent();
+    let lands = [(); 2].map(|()| put(&t, &mut s, &mut x, payer, "Test Land"));
+    let two = ManaCost::generic(2);
+    let may = Prompt::new(Purpose::May);
+    let offer = |cost| {
+        move |game: &mut Game, resolution: &mut Resolution| {
+            costs::may_pay(game, resolution, payer, cost, may)
+        }
+    };
+
+    // A cost they cannot pay is not offered (CR 118.3).
+    let (paid, question) = resolving(&t, &mut s, &mut x, source, &[], offer(ManaCost::generic(3)));
+    assert_eq!((paid, question), (Ok(false), None));
+
+    let (paused, question) = resolving(&t, &mut s.clone(), &mut x, source, &[], offer(two));
+    let d = question.expect("a question");
+    assert_eq!(paused, Err(Stop::Pause));
+    assert_eq!((d.player, d.kind), (payer, DecisionKind::YesNo));
+    assert_eq!(d.prompt, may.cost(two));
+
+    x.events.drain();
+    let no = [pick(&d, Opt::No)];
+    let (paid, question) = resolving(&t, &mut s, &mut x, source, &no, offer(two));
+    assert_eq!((paid, question), (Ok(false), None));
+    assert!(lands.iter().all(|&land| !tapped(&s, land)));
+    assert!(!(x.events.drain()).any(|e| matches!(e, Event::ResolutionPayment { .. })));
+
+    // Two lands alike pay it one way, so the payment itself asks nothing.
+    let yes = [pick(&d, Opt::Yes)];
+    let (paid, question) = resolving(&t, &mut s, &mut x, source, &yes, offer(two));
+    assert_eq!((paid, question), (Ok(true), None));
+    assert!(lands.iter().all(|&land| tapped(&s, land)));
+    assert!(
+        (x.events.drain())
+            .any(|e| matches!(e, Event::ResolutionPayment { player, .. } if player == payer))
+    );
+}
+
+/// [CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052): "Only the player who flips
+/// the coin wins or loses the flip; no other players are involved." Here a player flips for
+/// an effect of a permanent they do not control, and every flip is told with its source.
+#[test]
+fn any_player_flips_a_coin_for_any_source() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let source = s.object_ref(bear);
+    let flipper = p.opponent();
+    x.events.drain();
+    let mut results = [0, 0];
+    for _ in 0..32 {
+        let mut game = Game::new(&mut s, &t, &mut x.events);
+        let won = coins::flip(&mut game, flipper, source).unwrap();
+        results[usize::from(won)] += 1;
+        let told: Vec<Event> = x.events.drain().collect();
+        let flip = Event::CoinFlip {
+            player: flipper,
+            won,
+            source,
+        };
+        assert_eq!(told, [flip]);
+    }
+    assert!(results[0] > 0 && results[1] > 0, "{results:?}");
+}
+
+/// A prompt is asked in its purpose's shape: a question that cannot answer it is refused
+/// where it is written, before any player sees it.
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "is not answered yes or no")]
+fn a_prompt_asked_through_another_shapes_function_is_refused() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let source = s.object_ref(bear);
+    let search = Prompt::new(Purpose::Search);
+    let _ = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
+        choices::yes_no(game, resolution, p, search, Bitboard::EMPTY)
+    });
 }

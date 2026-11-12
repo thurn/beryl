@@ -5,6 +5,7 @@ use beryl_card::prompt;
 use super::reveal::reveal;
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Prompt, Purpose, Types};
+use crate::choices;
 use crate::event::Reason;
 use crate::game::Game;
 use crate::layout::Layout;
@@ -54,7 +55,7 @@ pub fn explore<L: Layout>(
         .count(1)
         .places(prompt::Place::Graveyard, prompt::Place::Top);
     if let Some(slot) = top
-        && resolution.choose_yes_no(game, player, prompt, Bitboard::single(slot))?
+        && choices::yes_no(game, resolution, player, prompt, Bitboard::single(slot))?
     {
         let card = game.state.object_ref(slot);
         zones::move_to(game, card, Zone::Graveyard, Reason::Effect)?;

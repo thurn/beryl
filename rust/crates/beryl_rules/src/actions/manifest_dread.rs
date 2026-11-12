@@ -4,6 +4,7 @@ use beryl_card::prompt;
 
 use super::manifest::manifest;
 use crate::card::{Flow, Prompt, Purpose};
+use crate::choices;
 use crate::event::Reason;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -31,7 +32,7 @@ pub fn manifest_dread<L: Layout>(
         .count(2)
         .most(1)
         .places(prompt::Place::Battlefield, prompt::Place::Graveyard);
-    let chosen = resolution.choose_object(game, player, top, prompt)?;
+    let chosen = choices::pick(game, resolution, player, top, prompt)?;
     manifest(game, chosen, player)?;
     let mut rest = top;
     rest.remove(chosen);

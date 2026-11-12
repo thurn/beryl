@@ -1,18 +1,18 @@
 //! Carrying out effect data's instructions. [`Run::carry_out`] is the table of them: an
 //! entry whose library function is written has its arm in that function's module, named
-//! `instruction` (the crate's contract, "Modules"), and the others (the choices, paying,
-//! adding mana, continuous effects) are still done here through the [`EffectCtx`] method a
-//! Rust body would call, until their modules are written.
+//! `instruction` (the crate's contract, "Modules"), and the others (adding mana, continuous
+//! effects) are still done here through the [`EffectCtx`] method a Rust body would call,
+//! until their modules are written.
 //!
 //! An instruction acts on every object it names at once where the engine has a primitive
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random).
 
-use beryl_card::{Duration, Effect, Objects, Players, Prompt, Purpose};
+use beryl_card::{Duration, Effect, Objects, Players};
 
 use crate::actions::{counter, destroy, discard, exile, mill, sacrifice, scry};
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, FaceAbility, Flow, ManaCost, ManaSet, Modification, Stop};
+use crate::card::{AbilityIx, FaceAbility, Flow, ManaSet, Modification};
 use crate::effect::EffectCtx;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -20,10 +20,7 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{self, LayerChange, ObjectRef, PendingTrigger, State, Zone, placed};
-use crate::{counters, drawing, library, life, one_shot, tokens, zones};
-
-/// The yes or no of an [`Effect::May`], about nothing but the effect.
-const MAY: Prompt = Prompt::new(Purpose::May);
+use crate::{choices, costs, counters, drawing, library, life, one_shot, tokens, zones};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -120,22 +117,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             // CR 608.2d: "If an effect of a spell or ability offers any choices ..., the
             // player announces these while applying the effect."
             Effect::May { player, effect } => {
-                let agreed = match self.one(player) {
-                    Some(player) => self.ctx.choose_yes_no(player, MAY, Bitboard::EMPTY)?,
-                    None => false,
-                };
-                return self.carry_out_or_nothing(agreed.then_some(effect));
+                return choices::may_instruction(self, player, effect);
             }
-            // CR 118.12a: "[A player may do something else]. If [that player doesn't], [do
-            // something]." With no such player, no one pays.
             Effect::Unless {
                 effect,
                 player,
                 cost,
-            } => {
-                let paid = self.unless_pays(player, cost)?;
-                return self.carry_out_or_nothing((!paid).then_some(effect));
-            }
+            } => return costs::unless_instruction(self, effect, player, cost),
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
@@ -189,7 +177,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// Carries out the effect an [`Effect::If`], [`Effect::May`] or [`Effect::Unless`] came
     /// to, whose outcome is then its own; one that came to nothing did nothing.
-    fn carry_out_or_nothing(&mut self, effect: Option<&'static Effect>) -> Flow {
+    pub(crate) fn carry_out_or_nothing(&mut self, effect: Option<&'static Effect>) -> Flow {
         let Some(effect) = effect else {
             self.registers.outcome = Outcome::NOTHING;
             return Ok(());
@@ -221,16 +209,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// The one player who makes a choice the effect offers `players`.
-    fn one(&self, players: Players) -> Option<Seat> {
+    pub(crate) fn one(&self, players: Players) -> Option<Seat> {
         self.in_turn_order(players).next()
-    }
-
-    /// "Unless [player] pays [cost]" (CR 118.12a): whether they paid.
-    fn unless_pays(&mut self, player: Players, cost: ManaCost) -> Result<bool, Stop> {
-        match self.one(player) {
-            Some(player) => self.ctx.unless_pays(player, cost),
-            None => Ok(false),
-        }
     }
 
     /// The permanents among the objects `objects` names

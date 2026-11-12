@@ -1,11 +1,10 @@
-//! [`Resolution`]: the spell or ability that is resolving, and how it asks its players
-//! something (the crate's contract, "Resolution"; architecture §7.3).
+//! [`Resolution`]: the spell or ability that is resolving, and the record its questions are
+//! answered from (the crate's contract, "Resolution"; architecture §7.3). The questions
+//! themselves are [`crate::choices`]'.
 
-use crate::bitboard::Bitboard;
-use crate::card::{Ability, CastingIx, ManaColor, Part, Prompt, Stop};
+use crate::card::{Ability, CastingIx, ManaColor, Stop};
 use crate::cast;
-use crate::decision::StallReason;
-use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome};
+use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
@@ -117,11 +116,16 @@ impl<'a, L: Layout> Resolution<'a, L> {
         self.target(game, place).and_then(Target::as_player)
     }
 
-    /// Asks a question (§7.3). A question with one answer is answered silently, except under
-    /// [`Stops::Forced`]. Otherwise the choice record answers it, or an inline source does, or
-    /// the resolution pauses here. Once the game is over, as when a player won it
-    /// mid-resolution, it asks nothing more.
-    fn ask(&mut self, game: &mut Game<'_, L>, d: &Decision<L>) -> Result<Choice, Stop> {
+    /// The answer to the question `d`, which [`crate::choices`] made of a prompt (§7.3). A
+    /// question with one answer is answered silently, except under [`Stops::Forced`].
+    /// Otherwise the choice record answers it, or an inline source does, or the resolution
+    /// pauses here. Once the game is over, as when a player won it mid-resolution, it asks
+    /// nothing more.
+    pub(crate) fn answer(
+        &mut self,
+        game: &mut Game<'_, L>,
+        d: &Decision<L>,
+    ) -> Result<Choice, Stop> {
         debug_assert!(
             self.ability.asks(),
             "a body asked a question without declaring may_pause"
@@ -159,150 +163,5 @@ impl<'a, L: Layout> Resolution<'a, L> {
         }
         self.question = Some(d.clone());
         Err(Stop::Pause)
-    }
-
-    /// Asks `player` to pick one of `opts`, as a pick of `prompt` about the objects `about`.
-    pub(crate) fn ask_options(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        kind: DecisionKind,
-        opts: &[Opt<L>],
-        prompt: Prompt,
-        about: Bitboard<L::Slot>,
-    ) -> Result<Opt<L>, Stop> {
-        let mut list: L::Queue<Opt<L>, 64> = Default::default();
-        for &o in opts {
-            list.push(o)?;
-        }
-        let d = Decision {
-            player,
-            kind,
-            candidates: Candidates::Options(list),
-            prompt,
-            about,
-        };
-        let c = self.ask(game, &d)?;
-        Ok(d.candidates.option(c).expect("an answer among the options"))
-    }
-
-    /// Asks `player` yes or no, as `prompt` says, about the objects `about`: the cards the
-    /// question concerns, or what a yes goes on to pick among ([`beryl_card::prompt`], "The
-    /// object set").
-    pub fn choose_yes_no(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        prompt: Prompt,
-        about: Bitboard<L::Slot>,
-    ) -> Result<bool, Stop> {
-        let yes_no = &[Opt::Yes, Opt::No];
-        let kind = DecisionKind::YesNo;
-        Ok(self.ask_options(game, player, kind, yes_no, prompt, about)? == Opt::Yes)
-    }
-
-    /// Asks `player` to choose up to `n` of `candidates`, one at a time, each answer either one
-    /// more object or [`Opt::Done`], as picks of `prompt`. Interchangeable candidates are one
-    /// answer (§7.2).
-    pub fn choose_up_to(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        n: u8,
-        prompt: Prompt,
-    ) -> Result<Bitboard<L::Slot>, Stop> {
-        let mut chosen = Bitboard::EMPTY;
-        while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
-            match self.choose_or_done(game, player, candidates & !chosen, prompt)? {
-                Some(slot) => chosen.insert(slot),
-                None => break,
-            }
-        }
-        Ok(chosen)
-    }
-
-    /// Asks `player` for one more of `candidates`, as an [`Opt::Object`], or [`Opt::Done`].
-    /// Interchangeable candidates are one answer (§7.2).
-    pub fn choose_or_done(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        prompt: Prompt,
-    ) -> Result<Option<L::Slot>, Stop> {
-        let mut opts: L::Queue<Opt<L>, 64> = Default::default();
-        let left = crate::engine::collapse(game.state, candidates);
-        // Candidates are listed in the candidate order, which a `Choice` counts in.
-        let left = game.state.in_candidate_order(left).map(Opt::Object);
-        for o in core::iter::once(Opt::Done).chain(left) {
-            opts.push(o)?;
-        }
-        let kind = DecisionKind::ChooseUpTo;
-        let none = Bitboard::EMPTY;
-        Ok(
-            match self.ask_options(game, player, kind, opts.as_slice(), prompt, none)? {
-                Opt::Object(slot) => Some(slot),
-                _ => None,
-            },
-        )
-    }
-
-    /// Asks `player` to choose one of `candidates`, which must not be empty, as a pick of
-    /// `prompt`.
-    pub fn choose_object(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        prompt: Prompt,
-    ) -> Result<L::Slot, Stop> {
-        let kind = DecisionKind::ChooseObject;
-        self.ask_object(game, player, kind, candidates, prompt, Bitboard::EMPTY)
-    }
-
-    /// Asks `player` for one of `candidates` as a question of `kind`, a pick of `prompt` about
-    /// the objects `about`.
-    pub(crate) fn ask_object(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        kind: DecisionKind,
-        candidates: Bitboard<L::Slot>,
-        prompt: Prompt,
-        about: Bitboard<L::Slot>,
-    ) -> Result<L::Slot, Stop> {
-        let d = Decision {
-            player,
-            kind,
-            candidates: Candidates::Objects(crate::engine::collapse(game.state, candidates)),
-            prompt,
-            about,
-        };
-        let c = self.ask(game, &d)?;
-        Ok(d.candidates.object(c).expect("an answer among the objects"))
-    }
-
-    /// Asks `player` to choose one of `candidates`, or none when they may decline: a yes or
-    /// no first ([`Part::Whether`]), then the object, both picks of `prompt`. Both carry the
-    /// candidates as the prompt's object set: the yes or no does not offer them, and the
-    /// pick offers one of each group of interchangeable ones (§7.2). With no candidates there
-    /// is nothing to ask.
-    pub fn may_choose_object(
-        &mut self,
-        game: &mut Game<'_, L>,
-        player: Seat,
-        candidates: Bitboard<L::Slot>,
-        prompt: Prompt,
-    ) -> Result<Option<L::Slot>, Stop> {
-        if candidates.is_empty()
-            || !self.choose_yes_no(game, player, prompt.part(Part::Whether), candidates)?
-        {
-            return Ok(None);
-        }
-        let kind = DecisionKind::ChooseObject;
-        let pick = prompt.part(Part::Pick);
-        self.ask_object(game, player, kind, candidates, pick, candidates)
-            .map(Some)
     }
 }

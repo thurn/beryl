@@ -4,6 +4,7 @@ use beryl_card::{Amount, Players, prompt};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Prompt, Purpose, Stop};
+use crate::choices;
 use crate::event::Event;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -40,7 +41,7 @@ pub fn scry<L: Layout>(
         let bottom_pick = scry
             .most(u8::try_from(left.count()).unwrap_or(n))
             .part(Part::First);
-        let Some(slot) = resolution.choose_or_done(game, player, left, bottom_pick)? else {
+        let Some(slot) = choices::pick_or_end(game, resolution, player, left, bottom_pick)? else {
             break;
         };
         game.state.reorder_library(slot, Place::Bottom)?;
@@ -49,7 +50,7 @@ pub fn scry<L: Layout>(
     }
     let mut order: L::Queue<L::Slot, 60> = Default::default();
     while left.count() > 1 {
-        let slot = resolution.choose_object(game, player, left, scry.part(Part::Second))?;
+        let slot = choices::pick(game, resolution, player, left, scry.part(Part::Second))?;
         left.remove(slot);
         order.push(slot)?;
     }

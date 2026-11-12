@@ -24,8 +24,8 @@
 //! `docs/project-50k.md`, "Rules library"). This is the design every bead of milestone 5
 //! (epic by-w8gv.9) builds on, written as it will stand when they land; a bead that builds a
 //! part amends its text. What moves an object between zones, the keyword actions, drawing,
-//! counters, damage, life and tokens are built. The choices, paying a cost, continuous effects,
-//! emblems, delayed triggers and coins are still methods of the shim ("The shim").
+//! counters, damage, life, tokens, the choices, paying a cost and coins are built. Continuous
+//! effects, emblems and delayed triggers are still methods of the shim ("The shim").
 //!
 //! ## Game
 //!
@@ -57,12 +57,13 @@
 //! only while something resolves: it reads the source or the controller, or it asks. Destroy
 //! takes none; scry takes one.
 //!
-//! The questions are the resolution's methods, each taking the game
-//! ([`Resolution::choose_yes_no`] and those beside it). A question the record cannot answer
-//! pauses the resolution, which is run again from the top with the answers so far (§7.3). So
-//! a function asks the same questions, in the same order, with the same options, every time
-//! it runs: a save and a rollout replay the answers, and a change to any of the three breaks
-//! them.
+//! A choice made while resolving (CR 608.2d) is asked through [`choices`], which has the
+//! functions for each shape of prompt and is the one module that makes a resolution's
+//! question into a decision. A question the record cannot answer pauses the resolution,
+//! which is run again from the top with the answers so far (§7.3). So a function asks the
+//! same questions, in the same order, with the same options, every time it runs: a save and
+//! a rollout replay the answers, and a change to any of the three breaks them. [`choices`]
+//! says how an effect that needs several answers asks them.
 //!
 //! The kind of mana an [`Effect::AddMana`](beryl_card::Effect::AddMana) adds comes from, in
 //! order: the choice of a mana ability's activator (CR 605.3b), which the resolution carries;
@@ -99,7 +100,7 @@
 //! | --- | --- | --- |
 //! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | flashback, kicker |
-//! | any other rule | a module named for the rule's title | [`tokens`] (CR 111), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`linked`] abilities (CR 607), [`one_shot`] effects (CR 610); emblems (CR 114), costs (CR 118), continuous effects (CR 611), coins (CR 705), copies (CR 707) |
+//! | any other rule | a module named for the rule's title | [`tokens`] (CR 111), [`costs`] (CR 118), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting`] spells as an effect allows (CR 601), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`coins`] (CR 705); emblems (CR 114), continuous effects (CR 611), copies (CR 707) |
 //!
 //! A module holds, in this order:
 //!
@@ -164,7 +165,11 @@ mod announced;
 mod bodies;
 pub mod card;
 mod cast;
+pub mod casting;
+pub mod choices;
+pub mod coins;
 mod combat;
+pub mod costs;
 pub mod counters;
 pub mod coverage;
 pub mod damage;

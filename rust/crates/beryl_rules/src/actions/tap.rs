@@ -1,6 +1,7 @@
 //! Tap and untap ([CR 701.26](https://yawgatog.com/resources/magic-rules/#R70126)).
 
 use crate::card::{Flow, Prompt, Purpose};
+use crate::choices;
 use crate::event;
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
@@ -42,7 +43,7 @@ pub fn untap_up_to<L: Layout>(
         .select(s, game.table, s.in_zone(Zone::Battlefield), you)
         .filter(|slot| s.object(slot).is_tapped());
     let prompt = Prompt::new(Purpose::Untap).most(n);
-    let chosen = resolution.choose_up_to(game, player, tapped, n, prompt)?;
+    let chosen = choices::pick_up_to(game, resolution, player, tapped, n, prompt)?;
     // In battlefield order, never slot order: the untaps' events are seen in this order.
     let permanents = game.state.in_game_order(game.table, chosen)?;
     for &slot in permanents.as_slice() {

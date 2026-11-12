@@ -4,7 +4,7 @@ use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
-use crate::decision::DecisionKind;
+use crate::choices;
 use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -74,8 +74,7 @@ fn discard_of<L: Layout>(
         return Ok(None);
     }
     let prompt = Prompt::new(Purpose::Discard).most(left);
-    let (kind, none) = (DecisionKind::ChooseObject, Bitboard::EMPTY);
-    let slot = resolution.ask_object(game, player, kind, cards, prompt, none)?;
+    let slot = choices::pick(game, resolution, player, cards, prompt)?;
     discard(game, game.state.object_ref(slot))?;
     Ok(Some(game.state.object_ref(slot)))
 }

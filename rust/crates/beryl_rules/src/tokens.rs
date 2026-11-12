@@ -5,8 +5,9 @@ use beryl_card::{Amount, CopyException, Objects, Players};
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::{CardDef, FaceIx, Part, Prompt, Purpose, Stop};
+use crate::choices;
 use crate::combat;
-use crate::decision::{DecisionKind, Opt};
+use crate::decision::Opt;
 use crate::event::{self, Entry, Event, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
@@ -126,11 +127,9 @@ pub fn create_attacking<L: Layout>(
         // controller of the spell or ability follows its instructions in the order
         // written").
         let opts = combat::attack_targets(game.state)?;
-        let (kind, opts) = (DecisionKind::AttackTarget, opts.as_slice());
-        let prompt = Prompt::new(Purpose::Attack).part(Part::Aim);
-        let Opt::Defender(walker) =
-            resolution.ask_options(game, controller, kind, opts, prompt, tokens)?
-        else {
+        let aim = Prompt::new(Purpose::Attack).part(Part::Aim);
+        let (opts, you) = (opts.as_slice(), controller);
+        let Opt::Defender(walker) = choices::aim(game, resolution, you, tokens, opts, aim)? else {
             unreachable!("a defender")
         };
         if let Some(walker) = walker {
