@@ -140,7 +140,7 @@ def register(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     h = commands.add_parser(
         "header", help="rewrite card files' generated headers from the card store"
     )
-    h.add_argument("names", nargs="*", help="the cards, e.g. 'Counterspell'")
+    h.add_argument("names", nargs="*", help="the cards' names")
     h.add_argument("--all", action="store_true", help="every card with a file")
     h.set_defaults(func=run)
 
