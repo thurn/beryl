@@ -182,16 +182,26 @@ def stage_shape(clip: video_measure.Clip, rest: tuple[float, float]) -> str:
 
 
 def center(pose: dict[str, Any]) -> tuple[float, float]:
+    """The middle of a pose's card, leaned and then turned about the pose's corner as the
+    stage draws it (ui/src/stage/desktop.ts `middle`)."""
     width = float(pose["width"])
-    return (float(pose["x"]) + width / 2, float(pose["y"]) + width * ASPECT / 2)
+    down = width * ASPECT / 2
+    across = width / 2 + math.tan(math.radians(float(pose["skew"]))) * down
+    turn = math.radians(float(pose["rotation"]))
+    return (
+        float(pose["x"]) + across * math.cos(turn) - down * math.sin(turn),
+        float(pose["y"]) + across * math.sin(turn) + down * math.cos(turn),
+    )
 
 
 def pose_lines(step: dict[str, Any], tick: float) -> list[str]:
     """The stage's own pose of a step's subject thirty times a second as it plays, from a
     tick before to a tick after: how far along the line between its ends it is and how far
-    off it to the left of its way (shares of that line), its size over its size as the step
-    ends, its turn and lean in degrees, its opacity, its depth and its face; and the bow of
-    the whole path. In place, where it lies instead."""
+    off it to the left of its way (shares of that line), its size over its size at rest, its
+    turn and lean in degrees, how much of its height shows as it turns over (`flat`), its
+    opacity, its depth and its face; and the bow of the whole path. The line ends where the
+    subject rests once the step is over, the tick after it, if the stage still holds it
+    then. In place, where it lies instead."""
     shown = [
         p
         for p in step["poses"]
@@ -200,19 +210,21 @@ def pose_lines(step: dict[str, Any], tick: float) -> list[str]:
     if not shown:
         return ["  no card of the stage's to follow: read the sheets"]
     playing = [p for p in shown if step["from"] <= p["at"] <= step["to"]] or shown
-    (ax, ay), (bx, by) = center(playing[0]), center(playing[-1])
+    rest = next((p for p in shown if p["at"] > step["to"]), playing[-1])
+    (ax, ay), (bx, by) = center(playing[0]), center(rest)
     dx, dy = bx - ax, by - ay
     length = math.hypot(dx, dy)
-    end = float(playing[-1]["width"])
+    end = float(rest["width"])
     out: list[str] = []
     if length >= 1:
-        bow = video_shape.bow([center(p) for p in playing], [p["at"] for p in playing])
+        flown = playing if rest is playing[-1] else [*playing, rest]
+        bow = video_shape.bow([center(p) for p in flown], [p["at"] for p in flown])
         if bow is not None:
             out.append(f"  the path's {said(video_shape.words(bow, None)[:1])}")
     out.append(
-        "  ms      along   off     size   turn   lean  opacity  depth  face"
+        "  ms      along   off     size   turn   lean   flat  opacity  depth  face"
         if length >= 1
-        else "  ms      x       y       size   turn   lean  opacity  depth  face"
+        else "  ms      x       y       size   turn   lean   flat  opacity  depth  face"
     )
     # Thirty a second, as the strip: every other tick from the step's first, and its last.
     first = shown.index(playing[0])
@@ -229,6 +241,7 @@ def pose_lines(step: dict[str, Any], tick: float) -> list[str]:
         out.append(
             f"  {pose['at']:+5.0f}  {place}  {float(pose['width']) / end:5.2f}x"
             f"  {float(pose['turn']):5.1f}  {float(pose['rotation']):5.1f}"
+            f"  {float(pose.get('flat', 1)):5.2f}"
             f"  {float(pose['opacity']):6.2f}  {float(pose['depth']):6.0f}  {pose['face']}"
         )
     return out

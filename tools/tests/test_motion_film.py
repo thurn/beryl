@@ -61,6 +61,7 @@ def pose(at: float, x: float, y: float, width: float = 63.0) -> dict[str, Any]:
         "y": y,
         "width": width,
         "rotation": 0,
+        "skew": 0,
         "turn": 0,
         "opacity": 1,
         "depth": 900,
@@ -88,6 +89,22 @@ def test_a_steps_poses_are_told_along_its_path_with_its_bow() -> None:
     # Thirty a second: every other tick it plays, and its last.
     assert [line.split()[0] for line in lines[2:]] == ["+0", "+50", "+100"]
     assert lines[3].split()[:4] == ["+50", "0.750", "0.100", "1.00x"]
+    # The line ends where it rests the tick after the step, not where its last tick has it:
+    # a flight still at speed as it lands is not told as overshooting. A card turning over
+    # is told as flat as it shows, and one turned half round by where its middle is.
+    late = {
+        "from": 0,
+        "to": 40,
+        "poses": [
+            pose(0, 0, 0),
+            {**pose(34, 160, 0), "flat": 0.25},
+            {**pose(51, 263, 88), "rotation": 180},
+        ],
+    }
+    lines = motion_film.pose_lines(late, 17)
+    assert "straight" in lines[0] and lines[1].split()[6] == "flat"
+    assert lines[3].split()[:2] == ["+34", "0.800"] and lines[3].split()[6] == "0.25"
+    assert lines[4].split()[:3] == ["+51", "1.000", "0.000"]
     # A card that changes where it lies is told where, and one the stage has no pose of is not.
     still = {"from": 0, "to": 33, "poses": [pose(0, -21.5, -24, 126), pose(33, 10, 20)]}
     lines = motion_film.pose_lines(still, 17)

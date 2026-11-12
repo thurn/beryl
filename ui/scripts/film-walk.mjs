@@ -248,9 +248,10 @@ export async function walk({
                 Math.round((ticks.length - 1) * tick);
             clock.advance(took);
             await sample();
-            // Over once an ability has come onto the stack and gone, as verbs.mjs's walk is.
+            // Over once an ability has come onto the stack and gone, as verbs.mjs's walk is,
+            // and what it left room for has closed up after it.
             finished ||= !whole && lifted && !abilities;
-            if (finished) after += 1;
+            if (finished && !stage.shown.busy) after += 1;
             // No step plays while what a card left room for closes up after its step.
             idle = stage.step || stage.shown.busy ? 0 : idle + took;
         }

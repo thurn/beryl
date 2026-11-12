@@ -87,9 +87,10 @@ const MOMENTS = [
         whole: true,
     })),
 ];
-/** Ticks filmed before a take and after it. */
+/** Ticks filmed before a take and after it: after, as long as what a finished ability left
+ * room for takes to close up (src/stage/tracks.ts CLOSED). */
 const LEAD = 6;
-const TAIL = 12;
+const TAIL = 16;
 /** The span filmed tick by tick, in stage ms. */
 const KEY = 300;
 /** Device pixels a CSS pixel: frames sharp enough to read a card in a crop. */
