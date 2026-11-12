@@ -483,6 +483,7 @@ fn the_most_any_player_has_is_read_with_each_in_your_place() {
 /// is no token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
 #[test]
 fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
+    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
     static SINGE: Ability = does(&sequence(&[
         Effect::DealDamage {
             to: Recipients::Permanents(Objects::All {
@@ -502,17 +503,14 @@ fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
-    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &COPY, &targets, &[]).is_none());
     assert!(resolve(&t, &mut s, &mut x, source, &SINGE, &[], &[]).is_none());
-    let damage: Vec<u8> = (s.battlefield().iter())
-        .filter(|&&slot| s.name(&t, slot) == "Test Bear")
-        .map(|&slot| s.object(slot).damage())
-        .collect();
+    let bears = || (s.battlefield().iter()).filter(|&&slot| s.name(&t, slot) == "Test Bear");
     // The bear, its first copy, and the two copies made after the damage.
-    assert_eq!(damage.iter().filter(|&&d| d == 1).count(), 2);
-    assert_eq!(damage.len(), 4);
+    assert_eq!(bears().count(), 4);
+    let damaged = bears().filter(|&&slot| s.object(slot).damage() == 1);
+    assert_eq!(damaged.count(), 2);
     assert_eq!(life(&s, p), 21);
 }
 

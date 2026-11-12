@@ -350,13 +350,13 @@ impl<L: Layout> Scene<'_, L> {
     /// Whether `condition` holds.
     pub(crate) fn holds(&self, condition: &Condition) -> bool {
         match *condition {
-            Condition::Did => self.registers.outcome.did,
+            // A coin flip did something when its player won it (`coins::instruction`).
+            Condition::Did | Condition::WonFlip => self.registers.outcome.did,
             Condition::Paid(kind) => self.paid(kind),
             // Each side is never less than zero (CR 107.1b).
             Condition::Compare(left, comparison, right) => {
                 comparison.holds(self.value(left).max(0), self.value(right).max(0))
             }
-            Condition::WonFlip => self.registers.outcome.did,
             Condition::Token(names) => self.is_a_token(names),
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds

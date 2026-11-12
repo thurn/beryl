@@ -150,6 +150,15 @@ impl Players {
     }
 }
 
+impl Recipients {
+    fn filters(&self, visit: Visit) {
+        match self {
+            Recipients::Players(players) => players.filters(visit),
+            Recipients::Permanents(objects) => objects.filters(visit),
+        }
+    }
+}
+
 impl Amount {
     fn filters(&self, visit: Visit) {
         match self {
@@ -234,10 +243,7 @@ impl Effect {
                 spells: objects, ..
             } => objects.filters(visit),
             Effect::DealDamage { to, amount } => {
-                match to {
-                    Recipients::Players(players) => players.filters(visit),
-                    Recipients::Permanents(objects) => objects.filters(visit),
-                }
+                to.filters(visit);
                 amount.filters(visit);
             }
             Effect::MayCast { player, card, .. } => {
