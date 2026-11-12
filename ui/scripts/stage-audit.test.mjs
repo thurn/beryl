@@ -147,7 +147,7 @@ test("a card that flies is seen to travel, and one that jumps is not", () => {
     const covered = (t) => glide(t).map((c) => ({ ...c, top: false }));
     assert.match(
         verdicts(judge(run([[fly, [50, 450]]], frames(600, covered))))[0],
-        /^unseen fly: visible in 0 of \d+ frames$/,
+        /^unseen fly: visible in 0 of \d+ frames, mostly covered$/,
     );
     // Under the turn's banner it is seen: play goes on beneath an announcement.
     const announced = (t) =>

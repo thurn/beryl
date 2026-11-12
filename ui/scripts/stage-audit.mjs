@@ -80,6 +80,8 @@ export function watch() {
                     ? view.status.decision.prompt
                     : undefined;
             const prompt = window.berylPrompts?.asked().prompt ?? decision;
+            frame.opening = document.querySelector(".opening") !== null;
+            frame.phone = document.querySelector(".phone-board") !== null;
             const names = new Map(
                 (view?.objects ?? []).map((o) => [o.slot, o.name]),
             );
@@ -298,14 +300,41 @@ export function describe(act, names) {
  * top; or under an announcement, which passes over the cards in flight while play goes on
  * (UI Conventions, Verbs, announce); or under its like in a pile, a card of its name lying over
  * it in its zone, which shows it as the pile does (UI Conventions, "Lands unstacked until
- * seven"). */
+ * seven"). While the opening's screen is up (src/screens/Opening.tsx) it is that screen that
+ * shows the hands dealt, the mulligans and the cards put back, over a table that plays them
+ * beneath it or holds its hand out of sight: there every instance counts as shown. */
 function seen(card, frame) {
-    if (card === undefined || card.o <= 0.3 || !card.on) return false;
+    if (card === undefined) return false;
+    if (frame.opening) return true;
+    if (card.o <= 0.3 || !card.on) return false;
     if (card.top || card.cover === ".stage-notice") return true;
     const over = frame.nodes.get(card.cover);
     return (
         over !== undefined && over.name === card.name && over.zone === card.zone
     );
+}
+
+/** What kept a measured instance from being seen in `frame`, for a finding's words. */
+const hiddenBy = (card, frame) =>
+    !card.on
+        ? "off screen"
+        : card.o <= 0.3
+          ? "transparent"
+          : card.cover === undefined
+            ? "covered"
+            : `under ${frame.nodes.get(card.cover)?.name ?? card.cover}`;
+
+/** What mostly kept a step's subject from being seen along `path`, for a finding's words. */
+function hidden(path) {
+    const why = path
+        .filter(({ card, frame }) => !seen(card, frame))
+        .map(({ card, frame }) => hiddenBy(card, frame));
+    const most = [...new Set(why)].sort(
+        (a, b) =>
+            why.filter((w) => w === b).length -
+            why.filter((w) => w === a).length,
+    )[0];
+    return most ? `, mostly ${most}` : "";
 }
 
 /** How far apart two measurements of a node are: its middle, or its size, which a turn or a
@@ -337,6 +366,20 @@ function judgeStep(act, start, end, frames, taken) {
         ["streak", "count", "set", "showcase", "dwell", "lift"].includes(
             act.verb,
         )
+    ) {
+        return played;
+    }
+    // The phone draws no exile pile yet: an exiled card rests unseen under its owner's
+    // graveyard (UI Conventions, "The phone"), so a card's way into or out of exile there has
+    // no place of its own to be seen at. One a permanent holds is tucked under it, as on the
+    // desktop, and is judged as any.
+    const exiled = (object) =>
+        object?.zone === "exile" &&
+        object.exiledBy == null &&
+        object.exiledWith == null;
+    if (
+        frames.at(-1).phone &&
+        (exiled(act.object) || (act.from === "exile" && act.verb === "fly"))
     ) {
         return played;
     }
@@ -390,17 +433,19 @@ function judgeStep(act, start, end, frames, taken) {
         }
         // Read once it is whole: for as long as a move must take to be seen.
         const whole = frames.filter((f) => f.t >= to && f.t <= to + MIN_MS);
-        return whole.some((f) => seen(f.nodes.get(name), f))
-            ? { verdict: "ok", why: `appeared over ${took} ms` }
-            : {
-                  verdict: "unseen",
-                  why: "it came to be off screen, covered or transparent",
-              };
+        if (whole.some((f) => seen(f.nodes.get(name), f))) {
+            return { verdict: "ok", why: `appeared over ${took} ms` };
+        }
+        const last = whole.findLast((f) => f.nodes.has(name));
+        return {
+            verdict: "unseen",
+            why: `it came to be ${last ? hiddenBy(last.nodes.get(name), last) : "nowhere on the page"}`,
+        };
     }
     const visible = path.filter(({ card, frame }) => seen(card, frame)).length;
     const unseen = visible < path.length * SEEN && {
         verdict: "unseen",
-        why: `visible in ${visible} of ${path.length} frames`,
+        why: `visible in ${visible} of ${path.length} frames${hidden(path)}`,
     };
     if (act.verb === "flip") return unseen || played;
     // How far it went from where it was, and over how long it kept changing.
