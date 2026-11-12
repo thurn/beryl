@@ -139,9 +139,37 @@ def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
 
 
 def oracle_args(
-    *cards: str, no_sim: bool = False, lock_wait: float | None = None
+    *cards: str,
+    no_sim: bool = False,
+    lock_wait: float | None = None,
+    select: bool = False,
 ) -> argparse.Namespace:
-    return argparse.Namespace(cards=list(cards), no_sim=no_sim, lock_wait=lock_wait)
+    return argparse.Namespace(
+        cards=list(cards), no_sim=no_sim, lock_wait=lock_wait, select=select
+    )
+
+
+def test_select_plays_slow_cis_cards_and_logs_why(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    played = fake_oracles(monkeypatch)
+    results = tmp_path / "results.jsonl"
+    monkeypatch.setenv("BERYL_CHECK_RESULTS", str(results))
+    chosen: dict[str, str] | None = {"Ponder": "card file changed"}
+    monkeypatch.setattr(oracles.oracle_selection, "slow_ci", lambda every: chosen)
+    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
+    assert played == [["Ponder"], ["Ponder"]]
+    logged = [json.loads(line) for line in results.read_text().splitlines()]
+    assert {r["chosen"] for r in logged} == {"card file changed"}
+    # Cards named too are a rerun's: they narrow the run.
+    played.clear()
+    assert oracles.oracle(oracle_args("Counterspell", select=True, no_sim=True)) == 0
+    assert played == [["Counterspell"], ["Counterspell"]]
+    # None selects every card.
+    played.clear()
+    chosen = None
+    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
+    assert played == [["Counterspell", "Ponder"]] * 2
 
 
 def test_no_sim_skips_forge_s_games_and_cards_narrow_the_scenarios(

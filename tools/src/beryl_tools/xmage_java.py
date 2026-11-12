@@ -13,7 +13,7 @@ from typing import cast
 
 from . import xmage_classes
 from .cards import listed
-from .xmage_facts import Json, Unsupported
+from .card_facts import Json, Unsupported
 
 PACKAGE = "org.mage.test.beryl"
 BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"

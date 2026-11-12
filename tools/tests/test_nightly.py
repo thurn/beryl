@@ -185,3 +185,28 @@ def test_the_motion_capture_runs_at_low_priority_and_logs_each_verb(
         ("motion:emerge/desktop", "fail"),
     }
     assert all(r["script"] == "nightly" for r in records)
+
+
+def test_the_oracles_play_every_scenario_at_low_priority_and_log_each(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def in_tree(
+        commit: str,
+        command: list[str],
+        out: IO[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> int:
+        # The full sweep: no cards named and no selection.
+        unwrapped = [sys.executable, "-m", "beryl_tools.cli", "oracle"]
+        assert command[-4:] == unwrapped and command != unwrapped
+        with open((env or {})[runlog.RESULTS_ENV], "a") as f:
+            f.write('{"check": "oracle:A/a/forge", "outcome": "fail", "seconds": 1}\n')
+        return 1
+
+    monkeypatch.setattr(nightly.coverage, "in_tree", in_tree)
+    assert "oracle" in [step.name for step in nightly.STEPS]
+    with open(nightly.folder() / "out.txt", "w") as out:
+        assert nightly.oracle_step("abc123", out) == 1
+    [record] = runlog.read_log(NOW - timedelta(days=3650))
+    assert (record["check"], record["outcome"]) == ("oracle:A/a/forge", "fail")
+    assert (record["script"], record["commit"]) == ("nightly", "abc123")

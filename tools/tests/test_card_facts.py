@@ -4,7 +4,7 @@ stands for a difference between Beryl's questions and XMage's, read from what a 
 
 import pytest
 
-from beryl_tools.xmage_facts import Cards, Json, Unsupported
+from beryl_tools.card_facts import Cards, Json, Unsupported
 
 TAP: Json = {"action": "Tap", "of": "This"}
 SACRIFICE: Json = {"action": "Sacrifice", "of": "This"}

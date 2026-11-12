@@ -53,13 +53,19 @@ def warn(e: BaseException) -> None:
     print(f"run log: not written: {e}", file=sys.stderr)
 
 
-def result(check: str, outcome: str, seconds: float) -> None:
-    """Reports one check's result to the run log, when a run asked for results; a no-op outside
-    `by check` and `by ci`."""
+def result(check: str, outcome: str, seconds: float, chosen: str | None = None) -> None:
+    """Reports one check's result to the run log, when a run asked for results, with why it
+    ran when the step chose it (`chosen`); a no-op outside `by check` and `by ci`."""
     path = os.environ.get(RESULTS_ENV)
     if not path:
         return
-    line = {"check": check, "outcome": outcome, "seconds": round(seconds, 3)}
+    line: dict[str, object] = {
+        "check": check,
+        "outcome": outcome,
+        "seconds": round(seconds, 3),
+    }
+    if chosen is not None:
+        line["chosen"] = chosen
     try:
         with open(path, "a") as f:
             f.write(json.dumps(line) + "\n")

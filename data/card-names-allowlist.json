@@ -2,7 +2,6 @@
   "names": {
     "rust/crates/beryl_search/src/values.rs": 61,
     "rust/crates/beryl_session/src/sessions.rs": 1,
-    "tools/src/beryl_tools/forge.py": 32,
     "tools/src/beryl_tools/specs.py": 1,
     "ui/src/screens/samples.ts": 1
   },

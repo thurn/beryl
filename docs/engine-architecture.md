@@ -1123,22 +1123,28 @@ trace. Python exporters in `tools/` generate:
   `Mage.Tests`, on `CardTestPlayerBase` through Beryl's `BerylScenarioTest`
   helpers: `addCard`, `castSpell`, `attack`, `addTarget`, `setChoice`,
   `setStrictChooseMode(true)`, the `assert*` family. Where XMage asks a card's
-  questions differently from Beryl, rules in `xmage_facts.py` translate them,
+  questions differently from Beryl, rules in `card_facts.py` translate them,
   reading the dump's description of each card a scenario names (its abilities'
   costs, mana, casting options and effects), never its name; a new card's
   scenario that fails on XMage usually needs a rule there for what it does.
 - **Forge**, the secondary oracle. Each scenario becomes a
   `forge.game.GameState` text setup (`p0life`, `p0hand`, `p0battlefield` with
   `|Tapped` and `|Counters:LOYALTY=3`) and a list of steps that Beryl's own
-  scripted harness, `tools/oracles/BerylForgeHarness.java`, plays. A scenario
-  outside that vocabulary is reported as unsupported with the reason.
+  scripted harness, `tools/oracles/BerylForgeHarness.java`, plays. It picks an
+  ability or casting option from the same card descriptions (`card_facts.py`): a
+  loyalty change, a keyword, or the first words of the ability's effect in its
+  Oracle text. A scenario outside that vocabulary is reported as unsupported
+  with the reason.
 
 `just oracle-setup` installs Maven with Homebrew if it is missing,
 shallow-clones XMage and Forge at pinned commits into
 `~/Library/Caches/beryl/oracles` and builds them once with JDK 21; agents run it
 unattended. `just oracle [cards]` exports the scenarios and runs them on both,
 in under a minute once built, and writes its full report to
-`oracles/logs/oracle.json` there; it is `just ci`'s `oracle` lane.
+`oracles/logs/oracle.json` there. The nightly runs that full sweep on staging;
+`just ci`'s `oracle` lane plays the cards changed since master and a sample
+fixed by the commit, or every card when the exporters or harnesses changed
+(`oracle_selection.py`).
 
 - The dump ends each scenario that ends at a quiet position (priority over an
   empty stack) with its snapshot: assertions of the whole public position, life,

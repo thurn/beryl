@@ -41,7 +41,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, cards, checks, forge, paths, runlog, system, xmage, xmage_java
+from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
+from . import xmage, xmage_java
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -668,11 +669,13 @@ RUN_LOG_OUTCOMES = {
 
 
 def log_results(
-    results: dict[str, dict[str, object]], seconds: dict[str, float]
+    results: dict[str, dict[str, object]],
+    seconds: dict[str, float],
+    chosen: dict[str, str] | None = None,
 ) -> None:
-    """Reports each scenario of each oracle to the run log as `oracle:<card>/<scenario>/<engine>`.
-    Neither oracle times a scenario, so each engine's seconds are shared evenly among those it
-    played."""
+    """Reports each scenario of each oracle to the run log as `oracle:<card>/<scenario>/<engine>`,
+    with why its card was chosen when cards were (`oracle_selection`). Neither oracle times a
+    scenario, so each engine's seconds are shared evenly among those it played."""
     for engine, result in results.items():
         scenarios = cast(list[dict[str, object]], result["scenarios"])
         played = sum(1 for s in scenarios if s["status"] != "unsupported") or 1
@@ -682,6 +685,7 @@ def log_results(
                 f"oracle:{s['card']}/{s['name']}/{engine}",
                 outcome,
                 0.0 if outcome == "skip" else seconds[engine] / played,
+                chosen.get(cast(str, s["card"])) if chosen is not None else None,
             )
 
 
@@ -706,8 +710,16 @@ def oracle(args: argparse.Namespace) -> int:
             entries = dump_scenarios(
                 Path(dump) / "scenarios.json", log_dir() / "dump.log"
             )
-        if args.cards:
-            entries = [e for e in entries if e["card"] in args.cards]
+        # Cards named with --select are a rerun's or a bisection's, narrowing the selection.
+        every = sorted({cast(str, e["card"]) for e in entries})
+        chosen = (
+            oracle_selection.slow_ci(every) if args.select and not args.cards else None
+        )
+        if chosen is not None:
+            print(f"oracle: chosen: {json.dumps(chosen)}")
+        wanted = chosen or args.cards
+        if wanted:
+            entries = [e for e in entries if e["card"] in wanted]
         try:
             with locked(args.lock_wait):
                 require_built()  # Again: a setup may have held the lock to rebuild one.
@@ -730,7 +742,7 @@ def oracle(args: argparse.Namespace) -> int:
                 stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
                 for r in results.values():
                     mark_generated(r)
-                log_results(results, seconds)
+                log_results(results, seconds, chosen)
         except system.LockHeld:
             # Another run holds the oracles, as slow CI's oracle lane does for a minute or more.
             skip_all(
@@ -769,6 +781,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("cards", nargs="*", help="only these cards' scenarios")
     p.add_argument(
         "--no-sim", action="store_true", help="skip Forge's AI games of the deck"
+    )
+    p.add_argument(
+        "--select",
+        action="store_true",
+        help="only the cards slow CI chooses: those changed since origin/master and a "
+        "sample, or every card when the exporters or harness changed",
     )
     p.add_argument(
         "--lock-wait",

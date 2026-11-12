@@ -342,6 +342,8 @@ def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
     assert checks.changed_cards(None) == []
     lane = checks.card_oracle_lane(["Counterspell"])
     assert lane.steps[0].cmd[-4:] == ["--no-sim", "--lock-wait", "10", "Counterspell"]
+    # Slow CI's lane chooses its cards itself (oracle_selection.py).
+    assert checks.oracle_lane().steps[0].cmd[-2:] == ["oracle", "--select"]
 
 
 def lanes_for(

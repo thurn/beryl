@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import card_store, checks, oracles, xmage, xmage_facts, xmage_java
+from beryl_tools import card_store, checks, oracles, xmage, card_facts, xmage_java
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-xmage.json"
 XMAGE_CARDS = {
@@ -223,11 +223,11 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:
     # XMage asks to untap all only when tapped lands <= the limit. With three tapped
     # lands and a limit of two, a mandatory No consumes the first land choice.
     source = "Untapper"
-    untap: xmage_facts.Json = {"kind": "UntapUpTo", "count": 2, "player": "You"}
-    ability: xmage_facts.Json = {"index": "Own 0", "kind": "Spell"}
+    untap: card_facts.Json = {"kind": "UntapUpTo", "count": 2, "player": "You"}
+    ability: card_facts.Json = {"index": "Own 0", "kind": "Spell"}
     ability |= {"instructions": [untap]}
     described = {source: {"faces": [{"name": source, "abilities": [ability]}]}}
-    entry: xmage_facts.Json = {
+    entry: card_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
         "cards": described,
@@ -265,7 +265,7 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:
 def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
     # Beryl asks a waterbend's permanents as a mana payment and a crew's creatures as a choice
     # of an object, as it asks an effect's: the trace's purpose says which they are.
-    entry: xmage_facts.Json = {
+    entry: card_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
     }
@@ -285,13 +285,13 @@ def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
         face_down=[],
         creatures=[1, 0],
     )
-    crypt: xmage_facts.Json = {"pick": "Card", "card": "Mana Crypt"}
+    crypt: card_facts.Json = {"pick": "Card", "card": "Mana Crypt"}
     writer.answer({"player": 0, "kind": "ManaPayment", "pick": crypt}, position)
     writer.answer(
         {"player": 0, "kind": "ManaPayment", "pick": {"pick": "Done"}}, position
     )
     # XMage asks a cost's one answer, and an effect's only when it stands for several cards.
-    forced: xmage_facts.Json = {"player": 0, "kind": "ChooseObject", "turn": 1}
+    forced: card_facts.Json = {"player": 0, "kind": "ChooseObject", "turn": 1}
     forced |= {"step": "PrecombatMain", "pick": {"pick": "Card", "card": "Island"}}
     writer.forced(forced | {"purpose": "crew"}, position)
     writer.forced(forced | {"purpose": "discard"}, position)

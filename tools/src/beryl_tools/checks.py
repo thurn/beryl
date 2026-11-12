@@ -595,9 +595,12 @@ def ui_test_lane(select: bool = False) -> Lane:
 
 
 def oracle_lane() -> Lane:
-    """Plays every card scenario in XMage and Forge (`by oracle`): a failure the divergence
-    allowlist does not explain fails it, as does an oracle not built at its pin."""
-    return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"], rerun=failed_cards)
+    """Plays in XMage and Forge the scenarios of the cards changed since master and a sample,
+    or of every card when the exporters or harness changed (`by oracle --select`,
+    oracle_selection.py; the nightly plays them all): a failure the divergence allowlist does
+    not explain fails it, as does an oracle not built at its pin."""
+    cmd = [*BY, "oracle", "--select"]
+    return Lane("oracle", warm=True).step("oracle", cmd, rerun=failed_cards)
 
 
 # How long the fast check's oracle lane waits for another oracle run, such as slow CI's, before

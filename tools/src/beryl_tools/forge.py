@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, paths
+from .card_facts import Cards, Unsupported, cost_text, keyword_cost
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
 HARNESS_CLASS = "beryl.BerylForgeHarness"
@@ -73,74 +75,38 @@ COLORS: Mapping[str, str] = {
     "Colorless": "COLORLESS",
 }
 
-# The casting options a scenario pays (bit 0 of Cast's `costs`, over the face's casting list),
-# as the text that names the option in Forge: an alternative cost's spell description, or an
-# optional cost's type.
-COSTS: Mapping[str, str] = {
-    "Overlord of the Mistmoors": "Impending",
-    "Damn": "Overload",
-    "Winds of Abandon": "Overload",
-    "Subtlety": "Evoke",
-    "Thieving Skydiver": "Kicker",
-    "Thundertrap Trainer": "Offspring",
-}
+# How many words of an ability's effect pick it out of Forge's description, which Forge builds
+# from the card's text: enough to tell a card's abilities apart.
+EFFECT_WORDS = 3
 
-# Beryl's ability indexes (Own over the face's abilities, Granted over those other objects
-# grant) as text that picks the ability out of Forge's description of it.
-ABILITIES: Mapping[tuple[str, str, int], str] = {
-    ("Aang's Iceberg", "Own", 1): "Waterbend",
-    ("Currency Converter", "Own", 1): "Draw a card",
-    ("Currency Converter", "Own", 2): "Put a card exiled",
-    ("Jace, Telepath Unbound", "Own", 0): "+1",
-    ("Jace, Telepath Unbound", "Own", 1): "-3",
-    ("Jace, Telepath Unbound", "Own", 2): "-9",
-    ("Jace, Vryn's Prodigy", "Own", 0): "Draw a card",
-    ("Jace, Vryn's Prodigy", "Granted", 0): "Crew",
-    ("Jace, Wielder of Mysteries", "Own", 1): "+1",
-    ("Jace, Wielder of Mysteries", "Own", 2): "-8",
-    ("Jace, the Mind Sculptor", "Own", 0): "+2",
-    ("Jace, the Mind Sculptor", "Own", 1): "0:",
-    ("Jace, the Mind Sculptor", "Own", 2): "-1",
-    ("Jace, the Mind Sculptor", "Own", 3): "-12",
-    ("Map Token", "Own", 0): "explore",
-    ("Spara's Headquarters", "Own", 4): "Cycling",
-    ("Staff of the Storyteller", "Own", 2): "Draw a card",
-    ("Strip Mine", "Own", 1): "Destroy target land",
-    ("Teferi, Hero of Dominaria", "Own", 0): "+1",
-    ("Teferi, Hero of Dominaria", "Own", 1): "-3",
-    ("Teferi, Hero of Dominaria", "Own", 2): "-8",
-    ("Teferi, Time Raveler", "Own", 1): "+1",
-    ("Teferi, Time Raveler", "Own", 2): "-3",
-    ("The Wandering Emperor", "Own", 1): "+1",
-    ("The Wandering Emperor", "Own", 2): "-1",
-    ("The Wandering Emperor", "Own", 3): "-2",
-}
+# Where an effect's words stop: at the end of its first clause, or at the card's reference to
+# itself, which Forge writes as the card's name.
+EFFECT_END: re.Pattern[str] = re.compile(r"[.,(]| this \w+")
+
 
 # Asserts about Beryl's decision surface (who decides what among how many candidates) have no
 # Forge counterpart: Forge's questions are its own. They are left unchecked and counted.
 UNCHECKED_ASSERTS: frozenset[str] = frozenset({"Decision"})
 
 
-class Unsupported(Exception):
-    """The scenario is outside what the Forge harness can play."""
-
-
 @dataclass(frozen=True)
 class Card:
     loyalty: int | None
+    oracle: str
 
 
 def card_faces(store: Path) -> dict[str, Card]:
     """Every face name of the decks' cards and their tokens in the card store with what a
-    GameState line needs: its printed loyalty, which GameState does not supply on its own.
-    """
+    GameState line needs, its printed loyalty, which GameState does not supply on its own, and
+    its Oracle text, from which Forge builds its description of an ability."""
     faces: dict[str, Card] = {}
     listed, tokens = cards.listed(store)
     for record in [*listed, *tokens]:
         for face in cast(list[JsonObject], record["faces"]):
             loyalty = face.get("loyalty")
             faces[cast(str, face["name"])] = Card(
-                int(cast(str, loyalty)) if loyalty is not None else None
+                int(cast(str, loyalty)) if loyalty is not None else None,
+                cast(str, face.get("oracle_text", "")),
             )
     return faces
 
@@ -204,10 +170,53 @@ def permanent_text(
     return "|".join(parts)
 
 
-def step(action: JsonObject, purpose: object = None) -> JsonObject | None:
-    """One Beryl action as a harness step, or None for an assert left unchecked. `purpose` is
-    what the prompt of the decision an answer answers is for, as the trace names it: a kind
-    says only the form of the answer."""
+def casting_option(cards: Cards, card: str, costs: int) -> str:
+    """The casting option a Cast's `costs` pays, as the text that names it in Forge: its
+    keyword, which is an alternative cost's name and an optional cost's type there. The harness
+    takes one option."""
+    options = [o for o in cards.casting(card) if costs == 1 << cast(int, o["bit"])]
+    if not options:
+        raise Unsupported("paying more than one casting option, or one not described")
+    return cast(str, options[0]["keyword"])
+
+
+def ability_selector(cards: Cards, card: str, how: str, index: int) -> str:
+    """Text that picks the ability a scenario activates out of Forge's descriptions of the
+    card's abilities, which the harness matches by containment: a loyalty ability's loyalty
+    change (CR 606.4), a keyword ability's keyword, and any other activated ability the first
+    words of its effect in its paragraph of Oracle text, from which Forge builds its
+    description."""
+    ability = cards.ability(card, how, index)
+    if ability is None:
+        raise Unsupported("an ability the scenario's card descriptions do not list")
+    cost = cast(JsonObject, ability.get("cost", {}))
+    parts = cast(list[JsonObject], cost.get("parts", []))
+    if ability["kind"] == "Loyalty":
+        amount = cast(int, parts[0]["amount"])
+        return f"+{amount}:" if amount > 0 else f"{amount}:"
+    if ability["kind"] != "Activated":
+        raise Unsupported("activating an ability that is not an activated ability")
+    keyword = keyword_cost(ability, cost, parts)
+    if keyword is not None:
+        # Forge's description of a keyword ability names the keyword.
+        return keyword.split(" ")[0].capitalize()
+    text = cost_text(ability, cost, parts)
+    if text is None:
+        raise Unsupported("an activated ability of a cost the exporter cannot write")
+    written = [p for p in cards.paragraphs(card) if p.startswith(text)]
+    if len(written) != 1:
+        raise Unsupported("an activated ability not found by its cost in Oracle text")
+    effect = written[0].partition(": ")[2]
+    words = EFFECT_END.split(effect, maxsplit=1)[0].split()[:EFFECT_WORDS]
+    if not words:
+        raise Unsupported("an activated ability whose effect starts with its card")
+    return " ".join(words)
+
+
+def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject | None:
+    """One Beryl action as a harness step, or None for an assert left unchecked. `cards`
+    describes the scenario's cards. `purpose` is what the prompt of the decision an answer
+    answers is for, as the trace names it: a kind says only the form of the answer."""
     kind = action["action"]
     if kind == "PlayLand":
         return {"op": "play_land", "player": action["player"], "card": action["card"]}
@@ -221,22 +230,18 @@ def step(action: JsonObject, purpose: object = None) -> JsonObject | None:
         }
         costs = cast(int, action["costs"])
         if costs:
-            label = COSTS.get(cast(str, action["card"]))
-            if label is None or costs != 1:
-                raise Unsupported(f"casting option {costs} of {action['card']}")
-            out["cost"] = label
+            out["cost"] = casting_option(cards, cast(str, action["card"]), costs)
         return out
     if kind == "Activate":
         ability = cast(dict[str, int], action["ability"])
         [(source, index)] = ability.items()
-        selector = ABILITIES.get((cast(str, action["card"]), source, index))
-        if selector is None:
-            raise Unsupported(f"ability {source} {index} of {action['card']}")
         return {
             "op": "activate",
             "player": action["player"],
             "card": action["card"],
-            "ability": selector,
+            "ability": ability_selector(
+                cards, cast(str, action["card"]), source, index
+            ),
         }
     if kind == "TurnFaceUp":
         # Forge offers turning a manifested permanent face up as its "Unmanifest" ability.
@@ -293,24 +298,26 @@ def export(
 ) -> tuple[list[JsonObject], list[JsonObject]]:
     """The dump's scenarios as harness input, and the unsupported ones with their reasons."""
     faces = card_faces(store)
+    oracle = {name: face.oracle for name, face in faces.items()}
     exported: list[JsonObject] = []
     skipped: list[JsonObject] = []
     for entry in entries:
         try:
             if "failure" in entry:
                 raise Unsupported(f"Beryl fails it: {entry['failure']}")
+            described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
             steps: list[JsonObject] = []
             unchecked = 0
             actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
             for i, action in enumerate(actions):
                 # A target or X Beryl chose silently, the only legal one, before this action:
-                # the harness takes it where Forge offers more, such as Sink into Stupor's
-                # "target spell" offering a triggered ability too, or would take X as 0, as
-                # for Thieving Skydiver's kicker {X} with one mana to pay it.
+                # the harness takes it where Forge offers more, as a "target spell" that may
+                # be a triggered ability in Forge, or would take X as 0, as for a kicker {X}
+                # with one mana to pay it.
                 if i < len(trace):
                     steps.extend(
-                        cast(JsonObject, step(forced, forced.get("purpose")))
+                        cast(JsonObject, step(forced, described, forced.get("purpose")))
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
                         if forced["kind"] in ("Target", "X")
                     )
@@ -321,9 +328,9 @@ def export(
                 )
                 if action["action"] == "Cast" and action["card"] in flashback:
                     # The harness finds Forge's flashback spell but fails to play it.
-                    raise Unsupported(f"casting {action['card']} with flashback")
+                    raise Unsupported("casting a spell with flashback")
                 purpose = trace[i].get("purpose") if i < len(trace) else None
-                converted = step(action, purpose)
+                converted = step(action, described, purpose)
                 if converted is None:
                     unchecked += 1
                 else:

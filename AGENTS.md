@@ -247,11 +247,14 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - `just ci` (slow, budget 300 s; 450 s on Windows) runs every lane plus `app`
   (`just smoke`), `shots` (`just ui-shots`, which fails on any page error),
   `ui-test` (`just ui-test`, which plays the game screen through a fixture),
-  `oracle` (`just oracle`, which needs `just oracle-setup` once per machine),
-  `counts` (`just count-gate`: the rollout benchmark's instruction count, held
-  to the bar in `rust/crates/beryl_bench/count-gate.toml`, whose comments say
-  when it may rise) and `mobile` (`cargo check` of the app for the iOS Simulator
-  and Android, which needs `just mobile-setup`). Windows leaves `app`, `shots`,
+  `oracle` (`just oracle --select`, which needs `just oracle-setup` once per
+  machine: the cards changed since `origin/master` and a sample fixed by the
+  commit, or every card when the exporters or harnesses changed; the nightly
+  plays every card on staging), `counts` (`just count-gate`: the rollout
+  benchmark's instruction count, held to the bar in
+  `rust/crates/beryl_bench/count-gate.toml`, whose comments say when it may
+  rise) and `mobile` (`cargo check` of the app for the iOS Simulator and
+  Android, which needs `just mobile-setup`). Windows leaves `app`, `shots`,
   `ui-test`, `oracle`, `counts` and `mobile` to the Mac, and its fast check runs
   no browser checks or `motion` (`checks.py`, `WINDOWS_SKIPS`). A run over
   budget fails: speed up, move or delete the slowest step rather than raise it.

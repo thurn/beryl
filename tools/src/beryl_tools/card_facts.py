@@ -1,8 +1,9 @@
-"""What the XMage exporter needs to know of a scenario's cards, read from the description
-`beryl_scenario dump` gives of each card a scenario names (each entry's `cards`): its faces'
-abilities with their costs, the mana they make, casting options and what resolving them does.
+"""What the oracle exporters (`xmage.py`, `forge.py`) need to know of a scenario's cards, read
+from the description `beryl_scenario dump` gives of each card a scenario names (each entry's
+`cards`): its faces' abilities with their costs, the mana they make, casting options and what
+resolving them does.
 
-Where Beryl's questions and XMage's differ, the difference follows from what a card does, not
+Where Beryl's questions and an oracle's differ, the difference follows from what a card does, not
 from which card it is: a loyalty ability's text in XMage starts with its loyalty change, a land
 with one mana ability taps by that ability's text, a spell that scries asks the cards for the
 bottom as one target list. Each rule below says what difference it encodes. No rule names a
@@ -123,16 +124,19 @@ class Cards:
         # A full cost ends at its colon, where another permanent's ability of the same cost
         # would match too, as a land's "{T}: Add" does an ability "{T}: Draw". XMage's rule
         # text goes on as the ability's Oracle text does: its first words tell them apart.
-        written = [
-            p
-            for face in self.faces.get(card, [])
-            for p in self.oracle.get(cast(str, face["name"]), "").split("\n")
-            if p.startswith(f"{text} ")
-        ]
+        written = [p for p in self.paragraphs(card) if p.startswith(f"{text} ")]
         if len(written) != 1:
             return None
         words = written[0][len(text) :].split()
         return " ".join([text, *words[:EFFECT_WORDS]])
+
+    def paragraphs(self, card: str) -> list[str]:
+        """The paragraphs of the Oracle text of every face of `card`."""
+        return [
+            p
+            for face in self.faces.get(card, [])
+            for p in self.oracle.get(cast(str, face["name"]), "").split("\n")
+        ]
 
     def mana_text(self, source: str) -> str | None:
         """The text of a mana source's one mana ability, `{T}: Add` and what it makes, where
@@ -337,20 +341,12 @@ def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     cost is a keyword's (cycling, crew, waterbend), else the mana, `{T}` and the other parts in
     that order. A full cost ends with its colon; a part whose wording is XMage's own, as what a
     sacrifice names, ends the text before it is written out."""
-    actions = [p["action"] for p in parts]
-    instructions = cast(list[Json], ability.get("instructions", []))
-    if actions == ["Discard"] and parts[0].get("of") == "This":
-        # CR 702.29a: "Cycling [cost]" means "[Cost], Discard this card: Draw a card."
-        draws = [i["kind"] for i in instructions] == ["Draw"]
-        return "Cycling" if draws and instructions[0].get("count") == 1 else None
-    if len(parts) == 1 and "total_power" in parts[0]:
-        # CR 702.122a: "Crew N" means "Tap any number of other untapped creatures you control
-        # with total power N or greater: This permanent becomes an artifact creature until end
-        # of turn."
-        return f"Crew {parts[0]['total_power']}"
-    if any("for_generic" in p for p in parts):
-        # Waterbend {N}: each permanent tapped for it pays for {1}.
-        return f"waterbend {cost.get('mana', '')}"
+    keyword = keyword_cost(ability, cost, parts)
+    discards_this = [p["action"] for p in parts] == ["Discard"] and parts[0].get(
+        "of"
+    ) == "This"
+    if keyword is not None or discards_this:
+        return keyword
     words: list[str] = []
     if "mana" in cost:
         words.append(cast(str, cost["mana"]))
@@ -370,3 +366,23 @@ def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
             return ", ".join([*words, f"Remove a {counter} counter"])
         return None
     return ", ".join(words) + ":" if words else None
+
+
+def keyword_cost(ability: Json, cost: Json, parts: list[Json]) -> str | None:
+    """An activated ability's keyword and its cost where its cost is a keyword's (cycling,
+    crew, waterbend), as its text starts; None for any other."""
+    actions = [p["action"] for p in parts]
+    instructions = cast(list[Json], ability.get("instructions", []))
+    if actions == ["Discard"] and parts[0].get("of") == "This":
+        # CR 702.29a: "Cycling [cost]" means "[Cost], Discard this card: Draw a card."
+        draws = [i["kind"] for i in instructions] == ["Draw"]
+        return "Cycling" if draws and instructions[0].get("count") == 1 else None
+    if len(parts) == 1 and "total_power" in parts[0]:
+        # CR 702.122a: "Crew N" means "Tap any number of other untapped creatures you control
+        # with total power N or greater: This permanent becomes an artifact creature until end
+        # of turn."
+        return f"Crew {parts[0]['total_power']}"
+    if any("for_generic" in p for p in parts):
+        # Waterbend {N}: each permanent tapped for it pays for {1}.
+        return f"waterbend {cost.get('mana', '')}"
+    return None

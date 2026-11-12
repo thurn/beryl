@@ -21,7 +21,7 @@ trace is what places each Beryl action as XMage commands:
   them, as optional ones (`setOptionalChoice`) where it may not. Coin flips replay Beryl's
   results, and mana payments replay the sources Beryl tapped. Where XMage asks a card's
   questions differently, rules over the dump's description of each card the scenario names
-  (`xmage_facts.py`) translate them.
+  (`card_facts.py`) translate them.
 - Assertions run inside `runCode` at their position, through XMage's `assert*` family where it
   states the same fact and `BerylScenarioTest`'s helpers where it does not. Beryl's decision
   assertions (who decides, among how many candidates) are about Beryl's decision surface and are
@@ -37,7 +37,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import cast
 
-from .xmage_facts import Cards, Json, Unsupported
+from .card_facts import Cards, Json, Unsupported
 from .xmage_java import (
     EVERY_TURN,
     ORDER,

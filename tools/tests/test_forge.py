@@ -2,7 +2,10 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from beryl_tools import card_store, forge, paths
+from beryl_tools.card_facts import Cards, Unsupported
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-forge.json"
 
@@ -66,7 +69,7 @@ def test_activations_name_forge_abilities() -> None:
         "op": "activate",
         "player": 0,
         "card": "Jace, Telepath Unbound",
-        "ability": "+1",
+        "ability": "+1:",
     }
 
 
@@ -134,3 +137,98 @@ def test_summary_applies_the_allowlist() -> None:
 
 def test_the_allowlist_parses() -> None:
     forge.divergences(paths.REPO / "data" / "oracle-divergences.json", "forge")
+
+
+# A made-up card's description, as the dump gives it, with each kind of ability the rules read.
+TAP: Json = {"action": "Tap", "of": "This"}
+SAMPLE: Json = {
+    "Made-Up Relic": {
+        "faces": [
+            {
+                "name": "Made-Up Relic",
+                "abilities": [
+                    {"index": "Own 0", "kind": "Mana", "cost": {"parts": [TAP]}},
+                    {
+                        "index": "Own 1",
+                        "kind": "Activated",
+                        "cost": {"mana": "{2}", "parts": [TAP]},
+                    },
+                    {
+                        "index": "Own 2",
+                        "kind": "Activated",
+                        "cost": {"parts": [TAP, {"action": "Sacrifice", "of": "This"}]},
+                    },
+                    {
+                        "index": "Own 3",
+                        "kind": "Activated",
+                        "cost": {
+                            "mana": "{1}",
+                            "parts": [{"action": "Discard", "of": "This"}],
+                        },
+                        "instructions": [{"kind": "Draw", "count": 1}],
+                    },
+                    {
+                        "index": "Own 6",
+                        "kind": "Activated",
+                        "cost": {"parts": [{"action": "Sacrifice", "of": "This"}]},
+                    },
+                    {
+                        "index": "Own 4",
+                        "kind": "Loyalty",
+                        "cost": {"parts": [{"action": "Loyalty", "amount": -2}]},
+                    },
+                    {
+                        "index": "Own 5",
+                        "kind": "Loyalty",
+                        "cost": {"parts": [{"action": "Loyalty", "amount": 0}]},
+                    },
+                ],
+                "casting": [
+                    {"bit": 1, "keyword": "Kicker", "alternative": False, "cost": {}},
+                    {"bit": 0, "keyword": "Evoke", "alternative": True, "cost": {}},
+                ],
+            }
+        ]
+    }
+}
+ORACLE = {
+    "Made-Up Relic": "{T}: Add {C}.\n{2}, {T}: Draw a card, then discard a card.\n"
+    "{T}, Sacrifice this artifact: Exile target card from a graveyard.\nCycling {1}\n"
+    "Sacrifice this artifact: You gain 2 life."
+}
+
+
+def selector(index: int) -> str:
+    return forge.ability_selector(Cards(SAMPLE, ORACLE), "Made-Up Relic", "Own", index)
+
+
+def test_a_loyalty_ability_is_picked_by_its_loyalty_change() -> None:
+    assert selector(4) == "-2:"
+    assert selector(5) == "0:"
+
+
+def test_a_keyword_ability_is_picked_by_its_keyword() -> None:
+    assert selector(3) == "Cycling"
+
+
+def test_an_activated_ability_is_picked_by_its_effect_in_oracle_text() -> None:
+    # Found by its cost, not the mana ability's "{T}:"; the effect stops at its first clause.
+    assert selector(1) == "Draw a card"
+    assert selector(2) == "Exile target card"
+    # A cost of words alone is no keyword's.
+    assert selector(6) == "You gain 2"
+
+
+def test_an_ability_without_a_paragraph_is_unsupported() -> None:
+    with pytest.raises(Unsupported):
+        forge.ability_selector(Cards(SAMPLE, {}), "Made-Up Relic", "Own", 1)
+    with pytest.raises(Unsupported):
+        selector(9)
+
+
+def test_a_casting_option_is_named_by_its_keyword() -> None:
+    cards = Cards(SAMPLE, ORACLE)
+    assert forge.casting_option(cards, "Made-Up Relic", 0b01) == "Evoke"
+    assert forge.casting_option(cards, "Made-Up Relic", 0b10) == "Kicker"
+    with pytest.raises(Unsupported):
+        forge.casting_option(cards, "Made-Up Relic", 0b11)
