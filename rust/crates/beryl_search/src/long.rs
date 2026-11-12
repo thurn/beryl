@@ -1856,28 +1856,6 @@ mod tests {
         assert!(answered > 0, "no question below the root was met");
     }
 
-    /// Reserving the `hold` option leaves search choices alone until its rule is implemented.
-    #[test]
-    fn hold_flag_alone_does_not_change_search_choices() {
-        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
-        let settings = |hold| Settings {
-            family: family(Options {
-                anchor: true,
-                hold,
-                ..Options::default()
-            }),
-            work: 10_000,
-            threads: 1,
-        };
-        let mut x = Scratch::new();
-        for (s, d) in &positions(&t, 1)[..10] {
-            let obs = observe(s, &t, &mut x, d.player);
-            let mut anchor = LongSearch::new(&t, settings(false), 7);
-            let mut hold = LongSearch::new(&t, settings(true), 7);
-            assert_eq!(anchor.choose(obs, d), hold.choose(obs, d));
-        }
-    }
-
     /// Walks `tree` a few levels below `node`, reached in `s` at decision `d`: every node at a
     /// question greedy answers has at most one child. Returns how many it met.
     fn walk(

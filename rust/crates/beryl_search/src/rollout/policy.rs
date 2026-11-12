@@ -9,10 +9,13 @@ use beryl_engine::card::{
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
-use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, Zone, ZoneKey};
+use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, TurnStep, Zone, ZoneKey};
 
 use super::{COUNTER_MIN, Candidate, LAND_MAX, LIBRARY_LOW, REMOVAL_MIN, Rules};
 use crate::values::{CardInfo, CardValues};
+
+#[cfg(test)]
+mod hold_tests;
 
 /// One decision's view, for the rules above.
 pub(crate) struct Policy<'a, L: Layout> {
@@ -22,7 +25,6 @@ pub(crate) struct Policy<'a, L: Layout> {
     pub(crate) me: Seat,
     /// Whether permanents are valued as the expert values them ([`crate::expert`]).
     pub(crate) expert: bool,
-    #[expect(dead_code, reason = "the ladder's policy rungs will read these flags")]
     pub(super) rules: Rules,
     /// [`Policy::may_draw`], once asked: every option of a decision may ask it.
     pub(super) may_draw: Cell<Option<bool>>,
@@ -117,6 +119,9 @@ impl<L: Layout> Policy<'_, L> {
 
     /// The score of a priority action or a cast offer; 0 is passing.
     pub(crate) fn action(&self, o: Opt<L>) -> i32 {
+        if self.rules.hold && self.held(o) {
+            return 0;
+        }
         match o {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
@@ -125,6 +130,99 @@ impl<L: Layout> Policy<'_, L> {
                 ObjectAbility::Granted(_) => 0,
             },
             _ => 0,
+        }
+    }
+
+    /// Save instant-speed plays for the opponent's end step, except in windows
+    /// where the opportunity could go away or drawing can inform this turn.
+    fn held(&self, o: Opt<L>) -> bool {
+        let (Opt::Cast { slot, .. } | Opt::Activate { slot, .. }) = o else {
+            return false;
+        };
+        let turn = self.obs.turn();
+        let ours = turn.active() == self.me;
+        let step = turn.step();
+        if step == TurnStep::End
+            && (!ours || self.obs.zone(ZoneKey::Of(self.me, Zone::Hand)).count() > 7)
+        {
+            return false;
+        }
+        let top = self.obs.stack().last();
+        let main = ours
+            && top.is_none()
+            && matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain);
+        let Some(card) = self.obs.card(slot) else {
+            return false;
+        };
+        let face = match o {
+            Opt::Cast { face, .. } => face,
+            _ => self.obs.object(slot).face(),
+        };
+        let f = self.t.def(card).face(face);
+        let (ability, permanent_spell) = match o {
+            Opt::Cast { costs, .. } => {
+                if main
+                    && !f.types.intersects(Types::INSTANT)
+                    && !f.keywords.intersects(Keywords::FLASH)
+                {
+                    return false;
+                }
+                (f.spell_ability_with(costs), !f.is_instant_or_sorcery())
+            }
+            Opt::Activate {
+                ability: ObjectAbility::Own(i),
+                ..
+            } => {
+                let a = &f.abilities[i.index()];
+                if main && a.cost.loyalty_change().is_some() {
+                    return false;
+                }
+                (Some(a), false)
+            }
+            // The policy already scores granted abilities as a pass.
+            _ => return false,
+        };
+
+        if main {
+            return !(face == FaceIx::FRONT
+                && ability.is_some_and(|a| self.values.get(card).draws(index_of(f, a))));
+        }
+
+        let target = ability.and_then(|a| a.targets.first());
+        let enters_target = if permanent_spell {
+            targeted_enters(f).next().and_then(|a| a.targets.first())
+        } else {
+            None
+        };
+        let response_target = if permanent_spell {
+            enters_target
+        } else {
+            target
+        };
+        if top.is_some_and(|e| e.controller != self.me && e.spell().is_some())
+            && response_target.is_some_and(|spec| {
+                matches!(spec.kind, TargetKind::Spell | TargetKind::SpellOrPermanent)
+            })
+        {
+            return false;
+        }
+        if ours {
+            let combat = matches!(
+                step,
+                TurnStep::BeginningOfCombat
+                    | TurnStep::DeclareAttackers
+                    | TurnStep::DeclareBlockers
+                    | TurnStep::FirstStrikeDamage
+                    | TurnStep::CombatDamage
+                    | TurnStep::EndOfCombat
+            );
+            !(combat && (target.is_some() || enters_target.is_some()))
+        } else {
+            !self
+                .obs
+                .battlefield()
+                .iter()
+                .any(|&slot| self.flags(slot).has(ObjectFlags::ATTACKING) && self.creature(slot))
         }
     }
 
@@ -186,16 +284,9 @@ impl<L: Layout> Policy<'_, L> {
         if f.types.intersects(Types::CREATURE) {
             return v;
         }
-        f.abilities
-            .iter()
-            .filter(|a| {
-                a.kind == AbilityKind::Triggered
-                    && a.trigger.is_some_and(|t| t.is_this(TriggerEvent::Enters))
-                    && !a.targets.is_empty()
-            })
-            .fold(v, |v, a| {
-                self.worth_targeting(a, info.friendly(index_of(f, a)), v)
-            })
+        targeted_enters(f).fold(v, |v, a| {
+            self.worth_targeting(a, info.friendly(index_of(f, a)), v)
+        })
     }
 
     pub(crate) fn activate(&self, slot: L::Slot, i: u8) -> i32 {
@@ -544,6 +635,14 @@ impl<L: Layout> Policy<'_, L> {
                 && o.combat().is_none()
         })
     }
+}
+
+fn targeted_enters(face: &Face) -> impl Iterator<Item = &'static Ability> {
+    face.abilities.iter().filter(|a| {
+        a.kind == AbilityKind::Triggered
+            && a.trigger.is_some_and(|t| t.is_this(TriggerEvent::Enters))
+            && !a.targets.is_empty()
+    })
 }
 
 /// Whose objects a filter requires, if it says.
