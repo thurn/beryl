@@ -78,7 +78,7 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
 | Where the fault is                                         | Entries | What repairs it                             |
 | ---------------------------------------------------------- | ------- | ------------------------------------------- |
 | Greedy is right; the search loses it in a near-tie         | 8       | The root keeps greedy's answer              |
-| Greedy is right; the search clearly prefers the wrong play | 3       | Combat played out in the tree (§6.4)        |
+| Greedy is right; the search clearly prefers the wrong play | 3       | Not known yet (below)                       |
 | Greedy's own answer is wrong                               | 9       | A policy rule or the planner (§6.2 to §6.4) |
 
 - **The expert alone gets 18 of the 20 right**
@@ -99,20 +99,33 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
     Wielder entry worse, because greedy's own attack target is wrong there.
 - **Six of greedy's nine wrong answers are timing.** The others are an evoke
   with no target, an attack target and an attack into two blockers.
-- **Two policy faults were read from the code and are not yet confirmed by a
-  test.** The rung that claims one writes the failing test first (§6).
-  - A choice of lands to untap is scored by each land's value with no check of
-    who controls it (`rollout.rs`, `DecisionKind::ChooseUpTo`). Teferi, Hero of
-    Dominaria's untap offers both players' lands, so a rollout may untap the
-    opponent's. That would explain Teferi's +1 scoring 0.025 to 0.04 below a
-    pass. Greedy took its own land at both suite positions, so this is not
-    shown.
-  - `Policy::block` never adds a second blocker to an attacker and chumps only
-    when the player would die, never to save a planeswalker. An attack that two
-    blockers punish looks safe to it.
-- **Two incidents ended "cause not found".** Each is a policy fault that also
-  costs strength in every game. Finding them needs a tool that shows what the
-  rollouts do after each candidate (`just why`, §4.7).
+- **The clear leads are not the rollouts'.** `just why` plays the same 2,000
+  worlds out after each of two candidates with the champion's rollout policy
+  (2026-11-11). On the four entries where the search prefers the wrong play
+  clearly, the rollouts do not:
+
+| Entry                        | The search's lead for the wrong play | The rollouts' lead for it |
+| ---------------------------- | ------------------------------------ | ------------------------- |
+| `beza-trinket-into-blockers` | +0.07                                | −0.6 ± 1.0 points         |
+| `manifest-into-samurai`      | +0.03                                | −0.7 ± 1.1 points         |
+| `spirits-stay-home`          | +0.02 to +0.03                       | +0.9 ± 1.2 points         |
+| `skip-teferi-plus-one`       | +0.03 to +0.04                       | −2.9 ± 1.2 points         |
+
+- In those rollouts the defender blocks as a player would: Beza is blocked by
+  Beza in 999 of 1,000, the manifest by the Samurai in 1,000 of 1,000.
+- So the lead is made above the rollouts: in how the search scores them (the
+  turn discount, if one play makes games longer) or in the tree below the move
+  (a node whose few visits are spread over plays nobody would make). `just why`
+  reports raw win rates and cannot see either yet (by-97g.34).
+- `mid` is not the answer: with it set, all four stay wrong in 10 runs of 10.
+- **One policy fault was read from the code and is not confirmed.** A choice of
+  lands to untap is scored by each land's value with no check of who controls it
+  (`rollout.rs`, `DecisionKind::ChooseUpTo`), and Teferi, Hero of Dominaria's
+  untap offers both players' lands. It does not explain the skipped +1, which
+  the rollouts prefer. The `waste` rung tests it first (§6.3).
+- **Greedy's block rules are narrow.** `Policy::block` never adds a second
+  blocker to an attacker and chumps only when the player would die. That is
+  greedy's fault at `beza-trinket-into-blockers`, where two blockers win.
 - **The process produced nothing in three days.** No match was played and no row
   was written, while the suite grew from 4 entries to 20. Rung 2 fixed two
   entries, re-opened none and cost 0.006 a game on the screen. It was closed
@@ -287,8 +300,9 @@ A check that gains measured at 1M and 3M hold at 10M.
 
 ### 4.7 Tools to build first
 
-Each is its own bead in the lane, before the rung that needs it (by-97g.17 to
-by-97g.21).
+Each is its own bead in the lane, before the rung that needs it. The first four
+are built and on `master` (by-97g.17 to by-97g.20), and so is the games ledger
+(by-97g.21).
 
 - **Rules.** The policy takes a set of named rules (`hold`, `waste`), each a
   part of the family's name after the options, each off by default. With none
@@ -302,8 +316,11 @@ by-97g.21).
   candidates: the same worlds and seeds played out after each by the champion's
   rollouts; each one's win rate; the events of the next two turns counted per
   thousand rollouts after each, sorted by how much they differ; and three
-  transcripts each way where the two ended differently. It answers "what do the
-  rollouts do that makes this look good".
+  transcripts each way where the two ended differently. Built (by-97g.20).
+  - **Next** (by-97g.34): the score as the search counts it, with the turns to
+    the game's end; `--family`; and `--tree`, which searches the position and
+    prints the tree below each candidate, four levels down. It answers "where
+    does the search's lead come from".
 - **A games ledger.** The app appends a line for every finished game to a file
   it never rotates (date, build, agent, result), and a bug report carries the
   count of games finished against that champion. The measure of §5 needs it.
@@ -345,7 +362,7 @@ A ledger of every blunder a human has caught, and the gate's first condition.
 | `samurai-into-jace`                | Instant-speed loyalty spent at once    | wrong  | right  | `hold`   |
 | `evoke-subtlety-no-target`         | Evoke with no target                   | wrong  | right  | `waste`  |
 | `evoke-subtlety-empty-stack-hunt`  | Evoke with no target                   | right  | right  | `waste`  |
-| `skip-teferi-plus-one`             | A free loyalty ability skipped         | right  | right  | `waste`  |
+| `skip-teferi-plus-one`             | A free loyalty ability skipped         | right  | right  | none yet |
 | `spare-jace-wielder`               | Attack leaves a lethal walker alive    | wrong  | wrong  | none yet |
 | `beza-trinket-into-blockers`       | Attack into blockers that win          | wrong  | right  | `combat` |
 | `manifest-into-samurai`            | Attack into blockers that win          | right  | right  | `combat` |
@@ -399,7 +416,7 @@ Then the search rungs, which pay more once rollouts are sound.
 | ----- | -------- | ------ | ---------------------------------------- | ------ | -------------------- |
 | 1     | `guard`  | Root   | `+guard`                                 | 5      | by-97g.22, by-97g.23 |
 | 2     | `hold`   | Policy | `+hold`                                  | 7      | by-97g.24, by-97g.25 |
-| 3     | `waste`  | Policy | `+waste`                                 | 3      | by-97g.26, by-97g.27 |
+| 3     | `waste`  | Policy | `+waste`                                 | 2      | by-97g.26, by-97g.27 |
 | 4     | `combat` | Root   | `+combat`                                | 3      | by-97g.28, by-97g.29 |
 | 5     | `mid`    | Search | `+mid`                                   | none   | built, by-97g.9      |
 | 6     | Worlds   | Search | `pimc18` in place of `pimc72`            | none   | none, by-97g.10      |
@@ -464,15 +481,19 @@ With the rule set:
    policy takes an opponent's land. If it never does, the reading in §2.2 was
    wrong: say so in the bead and leave this part out.
 
-Before building, the bead runs `just why skip-teferi-plus-one` and writes the
-top differing events into its notes: that entry is why part 2 is suspected.
+Part 2 was suspected because of `skip-teferi-plus-one`. The rollouts turn out to
+prefer the +1 (§2.2), so this rung no longer claims that entry; the test still
+says whether the fault is real.
 
 ### 6.4 `combat`: the combat planner
 
 Combat is a small game inside the game, and the search handles it worst. An
 attack is a node for every attacker and every target, so the defender's blocks
-lie five or six nodes down in a tree four or five deep, and greedy's block rules
-decide them: one blocker an attacker, and a chump only to save the player.
+lie five or six nodes down in a tree four or five deep. At three combat entries
+the search prefers the wrong play clearly and the rollouts do not (§2.2), so the
+suspect is those few nodes, where a block's handful of visits are spread over
+every way to block. That is not confirmed: by-97g.34 shows the tree below a
+move, and this rung's build bead reads it first.
 
 The expert already plans combat another way (`expert/combat.rs`, `Sim`):
 
@@ -507,10 +528,11 @@ With `combat` set, an option of the search:
 Combats later in a rollout stay greedy's: the planner costs hundreds of engine
 steps a decision and a whole rollout is about 580.
 
-The build bead first runs `just why` on `beza-trinket-into-blockers`,
-`manifest-into-samurai` and `spirits-stay-home` and writes the top differing
-events into its notes. It needs judgement the others do not and is not labeled
-`tier:light`.
+The build bead first runs `just why --tree` on `beza-trinket-into-blockers`,
+`manifest-into-samurai` and `spirits-stay-home` and writes what the tree shows
+below each attack into its notes. If the lead turns out to come from the turn
+discount and not from the tree, it builds part 2 alone and says so. It needs
+judgement the others do not and is not labeled `tier:light`.
 
 ### 6.5 The search rungs
 
@@ -619,9 +641,11 @@ run, and it is recorded here so that they are built toward it.
 - Does a fixed entry stay fixed from run to run? An entry is fixed at 10 of 10,
   so one unlucky run re-opens it and fails a gate. If that happens to a rung
   whose change cannot have touched the entry, the gate needs a rerun rule.
-- Why does the search prefer holding two fliers back from an empty board, and an
-  attack into a blocker that kills the attacker? `just why` on those entries
-  says, in the `combat` rung.
+- Where do the search's clear leads for a wrong play come from, if not from the
+  rollouts (§2.2)? The turn discount and the tree below the move are the two
+  suspects. by-97g.34 measures both; until it has, no rung claims
+  `skip-teferi-plus-one`, and `combat`'s claim on its three entries rests on the
+  second suspect.
 - Is the planner's small set of plans enough, or does combat need every attack
   and block weighed? `spare-jace-wielder` is the case it gets wrong today: it
   has a plan that kills Jace, Wielder and scores another higher.
