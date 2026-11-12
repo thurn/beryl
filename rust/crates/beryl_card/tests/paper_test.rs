@@ -7,12 +7,14 @@
 //! `Subtype` lacks is left out; what is under test is the abilities.
 
 use beryl_card::effect::build::{
-    EACH_OPPONENT, EACH_PLAYER, TARGET, YOU, create_tokens, destroy, draw, sequence,
+    EACH_OPPONENT, EACH_PLAYER, TARGET, THAT_PLAYER, THIS, YOU, create_tokens, destroy, draw,
+    sequence,
 };
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Colors, Cost, Effect, Face, Filter, Keywords,
-    Objects, Subject, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep,
-    Types, Whose, Zone, mana,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost,
+    CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subject,
+    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types,
+    Zone, mana,
 };
 
 /// Fire Nation Warship {3}, Artifact — Vehicle 4/4. "Reach / When this Vehicle dies, create a
@@ -109,7 +111,7 @@ static DEMONIC_LORE: CardDef = CardDef {
 
 const CARDS_IN_YOUR_HAND: Objects = Objects::All {
     zone: Zone::Hand,
-    filter: Filter::Whose(Whose::You),
+    filter: Filter::Whose(&YOU),
 };
 
 /// Azure Drake {3}{U}, Creature — Drake 2/4. "Flying"
@@ -182,7 +184,7 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
             TriggerEvent::Attacks,
             Subject::A(Filter::All(&[
                 Filter::Types(Types::CREATURE),
-                Filter::Whose(Whose::You),
+                Filter::Whose(&YOU),
             ])),
         ),
     ),
@@ -202,6 +204,112 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
         Trigger::casts(EACH_OPPONENT, Filter::Any),
     ),
 ];
+
+const CREATURES: Filter = Filter::Types(Types::CREATURE);
+
+/// The static abilities of the paper test's misfits. Six of its cards asked for a static
+/// ability over a filtered set, and four for an "as long as" that is a general condition. A
+/// static ability's affected side is now the object expression effects use and its "as long
+/// as" a `Condition`, so those whose every other entry exists are said whole, each under its
+/// card and its words.
+///
+/// Not here, for want of an entry elsewhere in the vocabulary: "other Squirrels you control
+/// have menace" (Camellia, the Seedmiser: a `Filter` for an object other than this one, and
+/// menace), "attacking Pirates you control get +2/+0" (Dire Fleet Neckbreaker: an attacking
+/// `Filter`), "commander creatures you own have ..." (Acolyte of Bahamut: a commander
+/// `Filter`, a `Filter` for a permanent's owner, and a cost-changing static ability),
+/// "legendary creature spells you cast have convoke" and "all creatures have double strike"
+/// (We Ride at Dawn, Avatar of Slaughter: the keywords; their sets are in [`AFFECTED`]),
+/// "all Goblins are black" (Dralnu's Crusade: a color `Modification`), "as long as you
+/// control a red creature" (Blazethorn Scarecrow: a color `Filter`, and haste), "as long as
+/// you've completed a dungeon" and "as long as two or more nonland permanents entered the
+/// battlefield under your control this turn" (Cloister Gargoyle, Tuinvale Guide: something
+/// read from a tracker), and Vadmir's menace and lifelink (its condition is in
+/// [`AS_LONG_AS`]).
+const STATICS: [(&str, &str, LayerSpec); 1] = [
+    // Goblin is a subtype `Subtype` lacks, left out as the printed ones are.
+    (
+        "Dralnu's Crusade",
+        "All Goblins get +1/+1",
+        LayerSpec {
+            affected: Objects::All {
+                zone: Zone::Battlefield,
+                filter: CREATURES,
+            },
+            condition: None,
+            modification: Modification::ModifyPt(1, 1),
+        },
+    ),
+];
+
+/// The sets the misfits' static abilities affect, where the set is all the vocabulary can
+/// say of the ability: what it does to them is a keyword `Keywords` lacks.
+const AFFECTED: [(&str, &str, Objects); 2] = [
+    (
+        "We Ride at Dawn",
+        "Legendary creature spells you cast",
+        Objects::All {
+            zone: Zone::Stack,
+            filter: Filter::All(&[
+                Filter::Supertypes(Supertypes::LEGENDARY),
+                CREATURES,
+                Filter::Whose(&YOU),
+            ]),
+        },
+    ),
+    (
+        "Avatar of Slaughter",
+        "All creatures",
+        Objects::All {
+            zone: Zone::Battlefield,
+            filter: CREATURES,
+        },
+    ),
+];
+
+/// The misfits' "as long as", where the condition is all the vocabulary can say of the
+/// ability.
+const AS_LONG_AS: [(&str, &str, Condition); 1] = [(
+    "Vadmir, New Blood",
+    "As long as Vadmir has four or more +1/+1 counters on it",
+    Condition::Compare(
+        Amount::Counters(THIS, CounterKind::PlusOne),
+        Comparison::AtLeast,
+        Amount::Fixed(4),
+    ),
+)];
+
+/// "[Player] controls" in the misfits' filters. Three cards asked for it of a player who is
+/// neither you nor an opponent; a filter now takes any `Players` value, so the one whose
+/// player has an entry is said.
+///
+/// Not here: "defending player controls more lands than you" (Aerial Surveyor: a `Players`
+/// entry for the defending player) and "if that player controls a Plains" (Spiritual
+/// Sanctuary: a `Players` entry for the player of the trigger's event).
+const CONTROLS: [(&str, &str, Filter); 1] = [(
+    "Hurloon Shaman",
+    "Each player sacrifices a land of their choice",
+    Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&THAT_PLAYER)]),
+)];
+
+/// A static ability is read with no spell or ability resolving (CR 604.1), so its text
+/// says nothing only a resolution has; "that player" is such a thing, said within "each
+/// player".
+#[test]
+fn the_misfits_static_abilities_need_no_resolution() {
+    for (card, words, spec) in STATICS {
+        assert!(!spec.needs_a_resolution(), "{card}: {words}");
+    }
+    for (card, words, affected) in AFFECTED {
+        assert!(!affected.needs_a_resolution(), "{card}: {words}");
+    }
+    for (card, words, condition) in AS_LONG_AS {
+        assert!(!condition.needs_a_resolution(), "{card}: {words}");
+    }
+    for (card, words, filter) in CONTROLS {
+        assert!(filter.needs_a_resolution(), "{card}: {words}");
+    }
+}
 
 /// A printed trigger is no delayed one: an effect makes those (CR 603.7).
 #[test]
