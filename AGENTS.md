@@ -270,7 +270,9 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 MTG Arena is the reference for Beryl's flow, the order and timing of events,
 table layout and wording (`docs/project-50k.md`, K22). Before you design or
 change a prompt, an animation, an arrow or a label, find how Arena does it with
-the `arena-video` skill. A still or a filmstrip settles what prose cannot.
+the `arena-video` skill. A still or a filmstrip settles what prose cannot. To
+make one thing match Arena as nearly pixel for pixel as can be, use the
+`arena-pixel-match` skill.
 
 - Motion follows Arena in what it shows and when: what changed, who did it,
   where it went, in what order, what holds still. No review gates a verb:
