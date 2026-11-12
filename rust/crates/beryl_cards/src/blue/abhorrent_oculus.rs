@@ -2,27 +2,12 @@
 //! exile six cards from your graveyard. Flying. At the beginning of each opponent's upkeep,
 //! manifest dread."
 
-use beryl_card::Players;
-use beryl_engine::card::{
-    Ability, CardDef, Colors, CostPart, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, Trigger,
-    Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Layout, bodies};
-use beryl_engine::{TurnStep, Zone};
-
 use crate::names;
-
-/// Manifest dread ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "Look
-/// at the top two cards of your library. Manifest one of them, then put the cards you looked
-/// at that were not manifested this way into your graveyard." The ability's controller does,
-/// whether or not Oculus is still there
-/// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
-fn manifest_dread<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.manifest_dread(you)
-}
+use beryl_card::effect::build::{YOU, manifest_dread};
+use beryl_card::{
+    Ability, CardDef, Colors, CostPart, Face, Filter, Keywords, Players, Subtype, Subtypes,
+    Trigger, TurnStep, Types, Zone, card, mana,
+};
 
 /// The six cards are an additional cost
 /// ([CR 118.8](https://yawgatog.com/resources/magic-rules/#R1188)): "Some spells and abilities
@@ -33,26 +18,27 @@ fn manifest_dread<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// ([CR 503.1a](https://yawgatog.com/resources/magic-rules/#R5031a)): "Any abilities that
 /// triggered during the untap step and any abilities that triggered at the beginning of the
 /// upkeep are put onto the stack before the active player gets priority".
-pub static CARD: CardDef = CardDef {
-    name: names::ABHORRENT_OCULUS,
-    faces: &[Face {
-        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Eye]),
-        colors: Colors::BLUE,
-        power: Some(5),
-        toughness: Some(5),
-        keywords: Keywords::FLYING,
-        abilities: &[
+///
+/// Manifest dread ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "Look
+/// at the top two cards of your library. Manifest one of them, then put the cards you looked
+/// at that were not manifested this way into your graveyard." The ability's controller does,
+/// whether or not Oculus is still there
+/// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
+pub static CARD: CardDef = card(
+    names::ABHORRENT_OCULUS,
+    &[Face::EMPTY
+        .cost(mana("{2}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Eye]))
+        .colors(Colors::BLUE)
+        .power_toughness(5, 5)
+        .keywords(Keywords::FLYING)
+        .abilities(&[
             Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-                .custom(bodies!(manifest_dread))
-                .pauses(),
-        ],
-        additional_cost: &[CostPart::exile(6, Zone::Graveyard, Filter::Any)],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+                .effect(&manifest_dread(YOU)),
+        ])
+        .additional_cost(&[CostPart::exile(6, Zone::Graveyard, Filter::Any)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

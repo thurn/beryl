@@ -198,9 +198,6 @@ pub struct Ability {
     /// to activate an ability that's prohibited from being activated." Held by reference, as
     /// the trigger is: the ability's size is a power of two with its cost's parts in it.
     only_if_you_control: Option<&'static Filter>,
-    /// For a Rust body on an activated ability: what the effect needs to do anything, so
-    /// that a human isn't offered an activation that would do nothing ([`Needs`]).
-    needs: Needs,
     /// Whether its card's rules text says it in the paragraph of the ability before it, as
     /// "Whenever this creature enters or attacks" says the two triggered abilities a face
     /// lists for it, so that a view finds its words. The rules make a paragraph one ability
@@ -208,30 +205,6 @@ pub struct Ability {
     /// break in a card's text marks a separate ability"); a face lists one ability for each
     /// event it triggers on. Read [`Ability::shares_paragraph`].
     shares_paragraph: bool,
-}
-
-/// What an activated ability's effect needs to do anything. A Rust body is code, which
-/// nothing can read, so its card says it as data: one variant for each way an effect can be
-/// empty, shared by every card whose effect is empty that way.
-///
-/// Activating such an ability is legal whatever it would do
-/// ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022): "To activate an ability is
-/// to put it onto the stack and pay its costs"), and paying its cost (tapping, say) still
-/// changes the game, so full control and the exact stops offer it. No player under the smart
-/// stops is offered it, search and rollouts included:
-/// every line stays legal, since a player may always pass instead ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Needs {
-    /// Nothing: the effect may do something whatever the game.
-    #[default]
-    Nothing,
-    /// A card exiled with the ability's source, which the effect chooses among
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
-    /// refers only to cards in the exile zone that were put there as a result of an
-    /// instruction to exile them in the first ability." With none, it does nothing, as
-    /// Currency Converter's "{T}: Put a card exiled with this artifact into its owner's
-    /// graveyard. ..."
-    ExiledWithSource,
 }
 
 const _: () = assert!(size_of::<Ability>().is_power_of_two());
@@ -254,7 +227,6 @@ impl Ability {
             layer: None,
             rule: None,
             only_if_you_control: None,
-            needs: Needs::Nothing,
             shares_paragraph: false,
         }
     }
@@ -499,17 +471,6 @@ impl Ability {
         }
     }
 
-    /// Declares what its Rust body needs to do anything ([`Needs`]). Effect data says so
-    /// itself ([`Ability::needs`]), so this goes when the last body does.
-    #[must_use]
-    pub const fn needing(self, needs: Needs) -> Ability {
-        assert!(
-            matches!(self.body, Behavior::Custom(_)),
-            "effect data says what it needs: declare it only of a Rust body"
-        );
-        Ability { needs, ..self }
-    }
-
     /// Declares that its card's rules text says it in the paragraph of the ability before it
     /// in the face's list, as "Whenever this creature enters or attacks" says an enters
     /// trigger and an attacks trigger.
@@ -671,14 +632,25 @@ impl Ability {
         }
     }
 
-    /// What its effect needs to do anything ([`Needs`]): for a Rust body, what its card
-    /// declared with [`Ability::needing`]. No instruction of the vocabulary is empty in a way
-    /// [`Needs`] names, so effect data needs nothing.
+    /// The objects its effect needs one of to do anything, where the game can be asked for
+    /// them before the ability is activated ([`Effect::needs`]): the cards exiled with its
+    /// source, say, and not a target or what an instruction did. With none of them,
+    /// activating it is legal all the same
+    /// ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022): "To activate an
+    /// ability is to put it onto the stack and pay its costs"), and paying its cost still
+    /// changes the game, so full control and the exact stops offer it. No player under the
+    /// smart stops is offered it, search and rollouts included: every line stays legal, since
+    /// a player may always pass instead
+    /// ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)). A Rust body is
+    /// code, which nothing can read.
     #[inline]
-    pub const fn needs(&self) -> Needs {
+    pub const fn needs(&self) -> Option<Objects> {
         match self.body {
-            Behavior::Data(_) => Needs::Nothing,
-            Behavior::Custom(_) => self.needs,
+            Behavior::Data(effect) => match effect.needs() {
+                Some(objects) if !objects.needs_a_resolution() => Some(objects),
+                _ => None,
+            },
+            Behavior::Custom(_) => None,
         }
     }
 

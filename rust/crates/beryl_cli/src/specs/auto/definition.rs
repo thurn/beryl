@@ -6,7 +6,7 @@ use beryl_cards::names::{
     COUNTERSPELL, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP, SWAMP,
     THIEVING_SKYDIVER,
 };
-use beryl_engine::card::{AbilityKind, CardDef, CostAction, Face, Measure, Needs, Timing, Types};
+use beryl_engine::card::{AbilityKind, CardDef, CostAction, Face, Measure, Objects, Timing, Types};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
@@ -256,24 +256,21 @@ pub(super) fn stops(
             .hand(P0, LAND_IN_HAND);
         out.push(probe("lands-tapped", "Lands tapped", board, Vec::new()));
     }
-    if abilities.iter().any(|(_, a)| a.needs() != Needs::Nothing) {
+    if abilities.iter().any(|(_, a)| a.needs().is_some()) {
         // Nothing paid for and nothing for the ability that needs something: no stop.
         let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).battlefield(P0, tapped);
         out.push(probe("nothing-to-do", "Nothing to do", board, Vec::new()));
     }
     // The same board with what the ability needs: it stops the human here.
-    for need in abilities
-        .iter()
-        .map(|(_, a)| a.needs())
-        .filter(|&n| n != Needs::Nothing)
-    {
-        let (name, title, board) = match need {
-            Needs::ExiledWithSource => {
+    for needs in abilities.iter().filter_map(|(_, a)| a.needs()) {
+        let (name, title, board) = match needs {
+            Objects::ExiledWithThis => {
                 let mut met = tapped.to_vec();
                 met[0] = met[0].exiled_with(&[OUST]);
                 ("card-exiled", "Stops: card exiled", leak(met))
             }
-            Needs::Nothing => continue,
+            // A board for any other set is written when a card first needs one.
+            _ => continue,
         };
         if out.iter().any(|c| c.name == name) {
             continue;

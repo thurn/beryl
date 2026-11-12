@@ -22,12 +22,13 @@ use crate::continuous::{Duration, Modification, RuleChange};
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
-    Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
-    Recipients,
+    Amount, CastTerms, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects,
+    Players, Recipients,
 };
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
+use crate::prompt::Prompt;
 
 /// "This creature", "this spell": [`Objects::This`].
 pub const THIS: Objects = Objects::This;
@@ -35,6 +36,11 @@ pub const THIS: Objects = Objects::This;
 pub const TARGET: Objects = target(0);
 /// "It", "them", "that card": [`Objects::Those`].
 pub const THOSE: Objects = Objects::Those;
+
+/// "That card", "that spell", of a triggered ability's event: [`Objects::TriggeredOn`].
+pub const THAT_CARD: Objects = Objects::TriggeredOn;
+/// "The cards exiled with this": [`Objects::ExiledWithThis`].
+pub const EXILED_WITH_THIS: Objects = Objects::ExiledWithThis;
 
 /// The `n`th target, counting from 0.
 pub const fn target(n: u8) -> Objects {
@@ -69,6 +75,11 @@ pub const fn controller_of(objects: Objects) -> Players {
 /// "Its owner", of any objects.
 pub const fn owner_of(objects: Objects) -> Players {
     Players::OwnerOf(objects)
+}
+
+/// "Each player other than [players]": [`Players::EachOther`].
+pub const fn each_player_other_than(players: &'static Players) -> Players {
+    Players::EachOther(players)
 }
 
 /// X: [`Amount::X`].
@@ -139,6 +150,32 @@ pub const fn for_each_player(players: Players, effect: &'static Effect) -> Effec
     Effect::ForEachPlayer { players, effect }
 }
 
+/// [`Effect::Choose`]: "[player] chooses one of [among]", for what `prompt` says.
+pub const fn choose(player: Players, among: Objects, prompt: Prompt) -> Effect {
+    Effect::Choose {
+        player,
+        among,
+        prompt,
+        optional: false,
+    }
+}
+
+/// [`Effect::Choose`], optional: "[player] may choose one of [among]", for what `prompt`
+/// says.
+pub const fn may_choose(player: Players, among: Objects, prompt: Prompt) -> Effect {
+    Effect::Choose {
+        player,
+        among,
+        prompt,
+        optional: true,
+    }
+}
+
+/// [`Effect::LookAt`]: "[player] looks at [cards]".
+pub const fn look_at(player: Players, cards: Objects) -> Effect {
+    Effect::LookAt { player, cards }
+}
+
 /// [`Effect::Counter`]: "counter [spell]".
 pub const fn counter(objects: Objects) -> Effect {
     Effect::Counter(objects)
@@ -168,6 +205,11 @@ pub const fn exile_until_this_leaves(objects: Objects) -> Effect {
     Effect::ExileUntilThisLeaves(objects)
 }
 
+/// [`Effect::ExileLinked`]: "exile [cards]", to be found among "the cards exiled with this".
+pub const fn exile_linked(cards: Objects) -> Effect {
+    Effect::ExileLinked(cards)
+}
+
 /// [`Effect::Sacrifice`]: "sacrifice [permanents]".
 pub const fn sacrifice(objects: Objects) -> Effect {
     Effect::Sacrifice(objects)
@@ -176,6 +218,17 @@ pub const fn sacrifice(objects: Objects) -> Effect {
 /// [`Effect::ReturnToHand`]: "return [objects] to their owners' hands".
 pub const fn return_to_hand(objects: Objects) -> Effect {
     Effect::ReturnToHand(objects)
+}
+
+/// [`Effect::PutIntoGraveyard`]: "put [objects] into their owners' graveyards".
+pub const fn put_into_graveyard(objects: Objects) -> Effect {
+    Effect::PutIntoGraveyard(objects)
+}
+
+/// [`Effect::ReturnTransformed`]: "return [cards] to the battlefield transformed under their
+/// owners' control".
+pub const fn return_transformed(cards: Objects) -> Effect {
+    Effect::ReturnTransformed(cards)
 }
 
 /// [`Effect::PutIntoLibrary`]: "put [objects] into their owners' libraries [position]".
@@ -220,6 +273,11 @@ pub const fn explore(permanents: Objects) -> Effect {
     Effect::Explore(permanents)
 }
 
+/// [`Effect::ManifestDread`]: "[player] manifests dread".
+pub const fn manifest_dread(player: Players) -> Effect {
+    Effect::ManifestDread(player)
+}
+
 /// [`Effect::FlipCoin`]: "[player] flips a coin".
 pub const fn flip_coin(player: Players) -> Effect {
     Effect::FlipCoin(player)
@@ -255,6 +313,22 @@ pub const fn create_tokens(player: Players, token: &'static CardDef, count: u8) 
         player,
         token,
         count: Amount::Fixed(count),
+    }
+}
+
+/// [`Effect::CreateAttackingTokens`]: "[player] creates [count] [token] tokens that are tapped
+/// and attacking [attacking] or a planeswalker they control".
+pub const fn create_attacking_tokens(
+    player: Players,
+    token: &'static CardDef,
+    count: u8,
+    attacking: Players,
+) -> Effect {
+    Effect::CreateAttackingTokens {
+        player,
+        token,
+        count: Amount::Fixed(count),
+        attacking,
     }
 }
 
@@ -304,6 +378,27 @@ pub const fn modify(objects: Objects, modification: Modification, duration: Dura
 /// [`Effect::ChangeRule`]: "[rule change] [duration]".
 pub const fn change_rule(rule: &'static RuleChange, duration: Duration) -> Effect {
     Effect::ChangeRule { rule, duration }
+}
+
+/// [`Effect::GainFlashback`]: "[cards] gain flashback until end of turn. The flashback cost
+/// is equal to its mana cost."
+pub const fn gain_flashback(cards: Objects) -> Effect {
+    Effect::GainFlashback(cards)
+}
+
+/// [`Effect::PermitCast`]: "[player] may cast [cards] [duration]", on `terms`.
+pub const fn permit_cast(
+    player: Players,
+    cards: Objects,
+    duration: Duration,
+    terms: CastTerms,
+) -> Effect {
+    Effect::PermitCast {
+        player,
+        cards,
+        duration,
+        terms,
+    }
 }
 
 /// [`Effect::MayCast`] for nothing: "[player] may cast [card] without paying its mana cost".

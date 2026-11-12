@@ -227,7 +227,7 @@ pub struct Profile {
     ///   step and phase".
     pub taps_mana: Option<Seat>,
     /// By seat, whether the player isn't offered activations that would do nothing
-    /// ([`beryl_card::Needs`]): everyone under the smart stops, search and rollouts included,
+    /// ([`beryl_card::Ability::needs`]): everyone under the smart stops, search and rollouts included,
     /// which then spend no effort on them, and a human not in full control. Full control and
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
     /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).

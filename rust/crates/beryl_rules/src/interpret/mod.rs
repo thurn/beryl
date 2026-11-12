@@ -138,6 +138,41 @@ pub(crate) fn static_condition_holds<L: Layout>(
     condition_holds(s, t, &subject, ability)
 }
 
+/// Whether `objects` names nothing, read for the object in `slot` as "this" and its
+/// controller as "you": what an ability of it would find to act on, were it activated now
+/// ([`Ability::needs`]).
+#[inline]
+pub(crate) fn names_nothing<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    objects: Objects,
+) -> bool {
+    // CR 607.2a: a linked ability finds only the cards exiled with its own source.
+    if objects == Objects::ExiledWithThis {
+        return s.exiled_with(slot).is_empty();
+    }
+    let (card, face) = s.copiable(slot).record(t);
+    let subject = PendingTrigger {
+        source: Some(s.object_ref(slot)),
+        card,
+        face,
+        ability: AbilityIx::default(),
+        controller: s.controller(slot),
+        info: TriggerInfo::default(),
+    };
+    let scene = Scene {
+        s,
+        t,
+        subject: &subject,
+        costs: None,
+        x: 0,
+        targets: &[],
+        registers: &Registers::default(),
+    };
+    scene.objects(objects).is_empty()
+}
+
 /// Whether `condition` holds for the permanent in `slot` as "this" and its controller as
 /// "you", where that can be read of the permanent and its controller's own zones: what a
 /// scene would answer ([`Scene::holds`]), with none made. None for any other condition. A

@@ -1,7 +1,7 @@
 //! Zones ([CR 400](https://yawgatog.com/resources/magic-rules/#R400)): moving an object from
 //! one to another, and looking at the cards of a hidden one.
 
-use beryl_card::Objects;
+use beryl_card::{Objects, Players};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
@@ -123,6 +123,20 @@ pub fn look_at<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: Bitboard<
     game.state.look(game.sink, player, cards);
 }
 
+/// [`Effect::LookAt`](beryl_card::Effect::LookAt): "[Player] looks at [cards]" (CR 400.2):
+/// [`look_at`], for each player. The outcome is the cards.
+pub(crate) fn look_at_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+    cards: Objects,
+) -> Outcome<L> {
+    let cards = run.scene().objects(cards);
+    for player in run.in_turn_order(players) {
+        look_at(run.game(), player, cards);
+    }
+    Outcome::acted_on(cards)
+}
+
 /// [`Effect::ReturnToHand`](beryl_card::Effect::ReturnToHand): "Return [objects] to their
 /// owners' hands." The outcome is the cards that are there.
 pub(crate) fn return_to_hand_instruction<L: Layout>(
@@ -130,6 +144,27 @@ pub(crate) fn return_to_hand_instruction<L: Layout>(
     objects: Objects,
 ) -> Result<Outcome<L>, Full> {
     put_instruction(run, objects, Zone::Hand, Place::Top)
+}
+
+/// [`Effect::PutIntoGraveyard`](beryl_card::Effect::PutIntoGraveyard): "Put [objects] into
+/// their owners' graveyards" (CR 400.3), each in the order the game lists them. The outcome
+/// is the cards it moved, wherever a replacement effect put them: what the effect goes on
+/// to say of "it" is said of the card, not of where it went.
+pub(crate) fn put_into_graveyard_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Full> {
+    let objects = run.elsewhere_than(objects, Zone::Graveyard);
+    run.remember(objects);
+    let mut moved = Bitboard::EMPTY;
+    for slot in run.state().in_candidate_order(objects) {
+        let object = run.state().object_ref(slot);
+        move_to(run.game(), object, Zone::Graveyard, Reason::Effect)?;
+        if !run.state().is_current(object) {
+            moved.insert(slot);
+        }
+    }
+    Ok(Outcome::acted_on(moved))
 }
 
 /// Puts the objects `objects` names into their owners' hands or libraries, at `place` in a

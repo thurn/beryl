@@ -2,16 +2,12 @@
 //! target instant or sorcery card in your graveyard gains flashback until end of turn. The
 //! flashback cost is equal to its mana cost."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Players, Subtype, Subtypes,
-    TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{TARGET, gain_flashback};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, Keywords, Players, Subtype, Subtypes, TargetKind,
+    TargetSpec, Trigger, Types, card, mana,
+};
 
 /// Flashback for the card's mana cost, an alternative cost
 /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback [cost]'
@@ -20,39 +16,29 @@ use crate::names;
 /// cost was paid, exile this card instead of putting it anywhere else any time it would leave
 /// the stack.'" The card is in its owner's graveyard, and its owner is the trigger's
 /// controller.
-fn grant<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.grant_flashback(card, ctx.controller());
-    }
-    Ok(())
-}
-
+///
 /// With no instant or sorcery card in its controller's graveyard the trigger has no target,
 /// and is removed from the stack
 /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
-pub static CARD: CardDef = CardDef {
-    name: names::SNAPCASTER_MAGE,
-    faces: &[Face {
-        cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human, Subtype::Wizard]),
-        colors: Colors::BLUE,
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::FLASH,
-        abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .custom(bodies!(grant))
+pub static CARD: CardDef = card(
+    names::SNAPCASTER_MAGE,
+    &[Face::EMPTY
+        .cost(mana("{1}{U}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
+        .colors(Colors::BLUE)
+        .power_toughness(2, 1)
+        .keywords(Keywords::FLASH)
+        .abilities(&[Ability::triggered(&Trigger::ENTERS)
             .targeting(&[TargetSpec::one(
                 TargetKind::GraveyardCard,
                 Filter::All(&[
                     Filter::Types(Types::INSTANT.union(Types::SORCERY)),
                     Filter::Whose(&Players::You),
                 ]),
-            )])],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            )])
+            .effect(&gain_flashback(TARGET))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

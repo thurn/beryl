@@ -9,12 +9,13 @@
 //! card's own file.
 
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{LayerSpec, Modification};
+use crate::continuous::{Duration, LayerSpec, Modification};
 use crate::definition::{CardDef, Face};
 use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Players, Recipients};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
+use crate::prompt::Shape;
 use crate::target::TargetKind;
 
 /// What is wrong with a definition.
@@ -49,6 +50,19 @@ pub enum Malformed {
     /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
     /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it.
     Delayed,
+    /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about
+    /// anything.
+    TriggeredOn,
+    /// [`Effect::Choose`] with a prompt that is not a pick of one object, which is the one
+    /// choice the interpreter asks.
+    Chosen,
+    /// [`Objects::InZoneOf`] a zone the players share: each has a library, a hand and a
+    /// graveyard of their own, and no other
+    /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)).
+    ZoneOf,
+    /// [`Effect::PermitCast`] for a duration other than this turn or for as long as the card
+    /// stays where it is, which are the two a permission lasts.
+    Permitted,
 }
 
 impl Malformed {
@@ -69,6 +83,14 @@ impl Malformed {
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Delayed => {
                 "an effect delays an ability that is not a delayed trigger of its face"
+            }
+            Malformed::TriggeredOn => {
+                "an effect names what its trigger event was about, and its ability has none"
+            }
+            Malformed::Chosen => "a choice among objects is not a pick of one of them",
+            Malformed::ZoneOf => "a zone of a player's own is not a library, hand or graveyard",
+            Malformed::Permitted => {
+                "a permission to cast lasts neither this turn nor while the card stays put"
             }
         }
     }
@@ -228,10 +250,48 @@ impl Scope<'_> {
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
+            | Effect::ExileLinked(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
+            | Effect::PutIntoGraveyard(objects)
+            | Effect::ReturnTransformed(objects)
             | Effect::PutIntoLibrary { objects, .. }
-            | Effect::Explore(objects) => self.objects(objects),
+            | Effect::Explore(objects)
+            | Effect::GainFlashback(objects) => self.objects(objects),
+            Effect::LookAt { player, cards } => both(self.players(player), self.objects(cards)),
+            // One object, picked: the one run of picks the interpreter asks.
+            Effect::Choose {
+                player,
+                among,
+                prompt,
+                ..
+            } => {
+                if matches!(prompt.purpose.shape(), Shape::Pick) && prompt.most == 1 {
+                    both(self.players(player), self.objects(among))
+                } else {
+                    Err(Malformed::Chosen)
+                }
+            }
+            Effect::PermitCast {
+                player,
+                cards,
+                duration,
+                ..
+            } => match duration {
+                Duration::EndOfTurn | Duration::Indefinite => {
+                    both(self.players(player), self.objects(cards))
+                }
+                Duration::UntilYourNextTurn => Err(Malformed::Permitted),
+            },
+            Effect::CreateAttackingTokens {
+                player,
+                count,
+                attacking,
+                ..
+            } => both(
+                both(self.players(player), self.players(attacking)),
+                self.amount(count),
+            ),
             Effect::CounterInto { spells, zone } => match zone {
                 Zone::Exile => self.objects(spells),
                 _ => Err(Malformed::Countered),
@@ -312,6 +372,7 @@ impl Scope<'_> {
                 }
             }
             Effect::GetEmblem { player, .. }
+            | Effect::ManifestDread(player)
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player) => self.players(player),
@@ -340,12 +401,30 @@ impl Scope<'_> {
 
     const fn objects(self, objects: &Objects) -> Checked {
         match objects {
-            Objects::This | Objects::AttachedTo | Objects::Those | Objects::Paid(_) => Ok(()),
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::Paid(_)
+            | Objects::ExiledWithThis => Ok(()),
+            Objects::TriggeredOn => match self.ability.trigger() {
+                Some(_) => Ok(()),
+                None => Err(Malformed::TriggeredOn),
+            },
             Objects::Target(target) => match self.target(*target) {
                 None | Some(TargetKind::Player) => Err(Malformed::Target),
                 Some(_) => Ok(()),
             },
             Objects::All { filter, .. } => self.filter(filter),
+            Objects::InZoneOf {
+                zone,
+                players,
+                filter,
+            } => match zone {
+                Zone::Library | Zone::Hand | Zone::Graveyard => {
+                    both(self.players(players), self.filter(filter))
+                }
+                _ => Err(Malformed::ZoneOf),
+            },
         }
     }
 
@@ -357,6 +436,7 @@ impl Scope<'_> {
                 _ => Err(Malformed::Target),
             },
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => self.objects(objects),
+            Players::EachOther(players) => self.players(players),
             Players::ThatPlayer if self.for_a_player => Ok(()),
             Players::ThatPlayer => Err(Malformed::ThatPlayer),
         }

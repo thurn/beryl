@@ -3,7 +3,7 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, Behavior, CardDef, Condition, CostAction, CostPart, Effect,
-    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, RuleChange,
+    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, RuleChange,
 };
 
 #[cfg(doc)]
@@ -144,7 +144,7 @@ pub struct GameTable {
     /// it.
     face_down_copy: (CardIx, LargeCardIx),
     /// Whether a card of the game has an activated ability that may do nothing
-    /// ([`beryl_card::Needs`]), so that no other game pays to check.
+    /// ([`beryl_card::Ability::needs`]), so that no other game pays to check.
     needy: bool,
     /// A bit per [`Capability`] a card of the game has.
     capabilities: u8,
@@ -298,7 +298,7 @@ impl GameTable {
             d.faces
                 .iter()
                 .flat_map(|f| f.abilities)
-                .any(|a| a.needs() != Needs::Nothing)
+                .any(|a| a.needs().is_some())
         });
         let faces = defs
             .iter()

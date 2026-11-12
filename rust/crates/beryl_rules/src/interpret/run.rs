@@ -8,18 +8,22 @@
 
 use beryl_card::{Effect, Objects, Players};
 
-use crate::actions::{counter, destroy, discard, exile, explore, mill, sacrifice, scry, tap};
+use crate::actions::{
+    counter, destroy, discard, exile, explore, manifest_dread, mill, sacrifice, scry, tap,
+    transform,
+};
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow};
 use crate::effect::EffectCtx;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
+use crate::keywords::flashback;
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
-use crate::{delayed_triggers, emblems, library, life, mana, one_shot, tokens, zones};
+use crate::{delayed_triggers, emblems, library, life, linked, mana, one_shot, tokens, zones};
 
 /// One resolution of an ability written as data: its context, and what it keeps between
 /// instructions.
@@ -126,6 +130,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
+            Effect::Choose {
+                player,
+                among,
+                prompt,
+                optional,
+            } => choices::choose_instruction(self, player, among, prompt, optional)?,
+            Effect::LookAt { player, cards } => zones::look_at_instruction(self, player, cards),
             Effect::Counter(objects) => counter::instruction(self, objects)?,
             Effect::CounterInto { spells, zone } => counter::into_instruction(self, spells, zone)?,
             Effect::Destroy(objects) => destroy::instruction(self, objects)?,
@@ -133,8 +144,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ExileUntilThisLeaves(objects) => {
                 one_shot::exile_until_this_leaves_instruction(self, objects)?
             }
+            Effect::ExileLinked(cards) => linked::exile_instruction(self, cards)?,
             Effect::Sacrifice(objects) => sacrifice::instruction(self, objects)?,
             Effect::ReturnToHand(objects) => zones::return_to_hand_instruction(self, objects)?,
+            Effect::PutIntoGraveyard(objects) => {
+                zones::put_into_graveyard_instruction(self, objects)?
+            }
+            Effect::ReturnTransformed(cards) => transform::return_instruction(self, cards)?,
             Effect::PutIntoLibrary { objects, position } => {
                 library::put_instruction(self, objects, position)?
             }
@@ -143,6 +159,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,
             Effect::Scry { player, count } => scry::instruction(self, player, count)?,
             Effect::Explore(objects) => explore::instruction(self, objects)?,
+            Effect::ManifestDread(players) => manifest_dread::instruction(self, players)?,
             Effect::FlipCoin(players) => coins::instruction(self, players)?,
             Effect::DealDamage { to, amount } => damage::instruction(self, to, amount)?,
             Effect::GainLife { player, amount } => life::gain_instruction(self, player, amount)?,
@@ -152,6 +169,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 token,
                 count,
             } => tokens::create_instruction(self, player, token, count)?,
+            Effect::CreateAttackingTokens {
+                player,
+                token,
+                count,
+                attacking,
+            } => tokens::create_attacking_instruction(self, player, token, count, attacking)?,
             Effect::CreateCopies {
                 player,
                 of,
@@ -177,6 +200,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ChangeRule { rule, duration } => {
                 continuous::change_rule_instruction(self, rule, duration)?
             }
+            Effect::GainFlashback(cards) => flashback::instruction(self, cards)?,
+            Effect::PermitCast {
+                player,
+                cards,
+                duration,
+                terms,
+            } => casting::permit_instruction(self, player, cards, duration, terms)?,
             Effect::MayCast { player, card, free } => {
                 casting::may_cast_instruction(self, player, card, free)
             }

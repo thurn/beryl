@@ -1,9 +1,12 @@
 //! Flashback ([CR 702.34](https://yawgatog.com/resources/magic-rules/#R70234)).
 
+use beryl_card::Objects;
+
 use crate::casting;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
 use crate::state::{Duration, MoveReplacement, ObjectRef, Permission, State};
@@ -37,4 +40,24 @@ pub fn grant<L: Layout>(
 pub fn paid<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> bool {
     s.move_replacements(spell)
         .any(|r| r == MoveReplacement::Flashback)
+}
+
+/// [`Effect::GainFlashback`](beryl_card::Effect::GainFlashback): "[Cards] gain flashback until
+/// end of turn. The flashback cost is equal to its mana cost" (CR 702.34a): [`grant`], each
+/// card for its owner, who alone can cast it from their graveyard. The outcome is the cards.
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    cards: Objects,
+) -> Result<Outcome<L>, Full> {
+    let cards = run.scene().objects(cards);
+    // Each permission is an entry of its own card, so the order they start in is nothing.
+    for slot in run.state().in_candidate_order(cards) {
+        let (card, owner) = (
+            run.state().object_ref(slot),
+            run.state().object(slot).owner(),
+        );
+        let (game, resolution) = run.resolving();
+        grant(game, resolution, card, owner)?;
+    }
+    Ok(Outcome::acted_on(cards))
 }

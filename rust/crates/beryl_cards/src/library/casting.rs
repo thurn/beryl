@@ -3,7 +3,7 @@
 
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -81,6 +81,64 @@ pub const SCENARIOS: &[Scenario] =
                     zone: Zone::Hand,
                     card: Some(names::ISLAND),
                     count: 3,
+                }),
+            ]),
+    ];
+
+const JACE: &str = names::JACE_VRYNS_PRODIGY;
+
+const TELEPATH: &str = "Jace, Telepath Unbound";
+
+/// A permission to cast a card "this turn" ends with the turn
+/// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
+/// cast a spell only if a rule or effect allows that player to cast it and no rule or effect
+/// prohibits that player from casting it." On the player's next turn the sorcery in their
+/// graveyard is no card they may cast.
+pub const PERMITTED: &[Scenario] =
+    &[
+        Scenario::new("A card a player may cast this turn is not one they may cast the next")
+            .battlefield(
+                P0,
+                &[
+                    Permanent::new(JACE).transformed(),
+                    Permanent::new(names::PLAINS),
+                ],
+            )
+            .graveyard(P0, &[names::OUST])
+            .hand(P0, &[names::ISLAND])
+            .battlefield(P1, &[Permanent::new(JACE)])
+            .library(P0, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[names::PLAINS, names::ISLAND])
+            .actions(&[
+                Action::activate(P0, TELEPATH, 1),
+                Action::Resolve,
+                // To pass, the land or the sorcery.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 3,
+                }),
+                Action::AdvanceTo {
+                    turn: 2,
+                    step: TurnStep::BeginningOfCombat,
+                },
+                Action::pass(P1),
+                Action::answer(P1, DecisionKind::Attacker, Pick::Done),
+                Action::AdvanceTo {
+                    turn: 3,
+                    step: TurnStep::PrecombatMain,
+                },
+                // To pass, the land or the planeswalker's first ability: no sorcery.
+                Action::assert(Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Priority,
+                    candidates: 3,
+                }),
+                Action::assert(Assertion::Count {
+                    player: P0,
+                    zone: Zone::Graveyard,
+                    card: Some(names::OUST),
+                    count: 1,
                 }),
             ]),
     ];

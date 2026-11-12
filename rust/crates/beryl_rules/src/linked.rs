@@ -1,10 +1,13 @@
 //! Linked abilities ([CR 607](https://yawgatog.com/resources/magic-rules/#R607)): the cards
 //! one ability of an object exiles, which another of its abilities refers to.
 
+use beryl_card::Objects;
+
 use crate::bitboard::Bitboard;
 use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::state::{Memo, ObjectRef, State, Zone};
 use crate::zones;
@@ -36,4 +39,25 @@ pub fn exile_linked<L: Layout>(
 /// cards that object exiled.
 pub fn exiled_with<L: Layout>(s: &State<L>, source: ObjectRef<L>) -> Bitboard<L::Slot> {
     s.exiled_with(source.slot)
+}
+
+/// [`Effect::ExileLinked`](beryl_card::Effect::ExileLinked): "Exile [cards]", linked to the
+/// object the ability is on (CR 607.2a): [`exile_linked`], each in the order the game lists
+/// them. The outcome is the cards that are in exile.
+///
+/// # Panics
+///
+/// For an emblem's ability, which has no source.
+pub(crate) fn exile_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    cards: Objects,
+) -> Result<Outcome<L>, Full> {
+    let cards = run.elsewhere_than(cards, Zone::Exile);
+    run.remember(cards);
+    let source = run.resolution().source();
+    for slot in run.state().in_candidate_order(cards) {
+        let card = run.state().object_ref(slot);
+        exile_linked(run.game(), card, source)?;
+    }
+    Ok(run.now_in(cards, Zone::Exile))
 }

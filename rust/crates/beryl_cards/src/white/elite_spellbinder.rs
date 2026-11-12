@@ -3,67 +3,70 @@
 //! as that card remains exiled, its owner may play it. A spell cast this way costs {2} more
 //! to cast."
 
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Place, Players, Prompt, Purpose,
-    Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::Reason;
-use beryl_engine::filter::{Evaluate, Filter};
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-use beryl_engine::{Zone, ZoneKey};
-
 use crate::names;
+use beryl_card::effect::build::{
+    TARGET_PLAYER, THOSE, YOU, exile, look_at, may_choose, owner_of, permit_cast, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, CastTerms, Colors, Duration, Effect, Face, Filter, Keywords, Objects, Place,
+    Players, Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types, Zone,
+    card, mana,
+};
+
+/// "Target opponent's hand".
+const THEIR_HAND: Objects = Objects::InZoneOf {
+    zone: Zone::Hand,
+    players: &TARGET_PLAYER,
+    filter: Filter::Any,
+};
+
+/// "A nonland card from it".
+const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
+    zone: Zone::Hand,
+    players: &TARGET_PLAYER,
+    filter: Filter::Not(&Filter::Types(Types::LAND)),
+};
 
 /// Looking at a hand shows it to the looker alone; the exiled card is public. Its owner may
 /// cast it from exile for as long as it stays there
 /// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)), and the {2} is a cost
 /// increase ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): the total cost
 /// is the mana cost "plus all additional costs and cost increases". The card is nonland, so
-/// playing it is casting it.
-fn spellbind<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(them) = ctx.target_player(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let you = ctx.controller();
-    let hand = ctx.state().zone(ZoneKey::Of(them, Zone::Hand));
-    ctx.look_at(you, hand);
-    let nonland =
-        Filter::Not(&Filter::Types(Types::LAND)).select(ctx.state(), ctx.table(), hand, you);
-    // The whole hand is looked at, for one card to exile.
-    let look = Prompt::new(Purpose::Look)
-        .most(1)
-        .places(Place::Exile, Place::None);
-    if let Some(slot) = ctx.may_choose_object(you, nonland, look)? {
-        ctx.move_to(ctx.state().object_ref(slot), Zone::Exile, Reason::Exile);
-        let exiled = ctx.state().object_ref(slot);
-        ctx.allow_cast(exiled, them, 2, false, false);
-    }
-    Ok(())
-}
+/// playing it is casting it. The whole hand is looked at, for one card to exile.
+static SPELLBIND: Effect = sequence(&[
+    look_at(YOU, THEIR_HAND),
+    may_choose(
+        YOU,
+        A_NONLAND_CARD_FROM_IT,
+        Prompt::new(Purpose::Look)
+            .most(1)
+            .places(Place::Exile, Place::None),
+    ),
+    exile(THOSE),
+    permit_cast(
+        owner_of(THOSE),
+        THOSE,
+        Duration::Indefinite,
+        CastTerms::PLAIN.costing_more(2),
+    ),
+]);
 
-pub static CARD: CardDef = CardDef {
-    name: names::ELITE_SPELLBINDER,
-    faces: &[Face {
-        cost: ManaCost::new(2, [1, 0, 0, 0, 0, 0]),
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human, Subtype::Cleric]),
-        colors: Colors::WHITE,
-        power: Some(3),
-        toughness: Some(1),
-        keywords: Keywords::FLYING,
-        abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .custom(bodies!(spellbind))
+pub static CARD: CardDef = card(
+    names::ELITE_SPELLBINDER,
+    &[Face::EMPTY
+        .cost(mana("{2}{W}"))
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Cleric]))
+        .colors(Colors::WHITE)
+        .power_toughness(3, 1)
+        .keywords(Keywords::FLYING)
+        .abilities(&[Ability::triggered(&Trigger::ENTERS)
             .targeting(&[TargetSpec::one(
                 TargetKind::Player,
                 Filter::Whose(&Players::EachOpponent),
             )])
-            .pauses()],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+            .effect(&SPELLBIND)])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

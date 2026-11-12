@@ -3,37 +3,30 @@
 //! with this artifact into its owner's graveyard. If it's a land card, create a Treasure
 //! token. If it's a nonland card, create a 2/2 black Rogue creature token."
 
-use beryl_card::effect::build::{YOU, discard, draw, sequence};
-use beryl_card::{Effect, Players};
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Cost, CostPart, Face, Flow, ManaCost, Needs, Place, Prompt, Purpose,
-    Subtype, Subtypes, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::{Reason, TokenEntry};
-use beryl_engine::{Bitboard, Zone};
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
 use crate::tokens::TREASURE;
+use beryl_card::effect::build::{
+    EXILED_WITH_THIS, IF_YOU_DO, THAT_CARD, THOSE, YOU, choose, create_tokens, discard, draw,
+    exile_linked, if_else, if_then, may, put_into_graveyard, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Condition, Cost, CostPart, Effect, Face, Filter, ManaCost, Players,
+    Prompt, Purpose, Subtype, Subtypes, Trigger, Types, card, mana,
+};
 
 /// The Rogue token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
 pub const ROGUE_TOKEN: &str = "Rogue Token";
 
 /// The Rogue token: a 2/2 black Rogue creature token.
-pub static ROGUE: CardDef = CardDef {
-    name: ROGUE_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Rogue]),
-        colors: Colors::BLACK,
-        power: Some(2),
-        toughness: Some(2),
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static ROGUE: CardDef = card(
+    ROGUE_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Rogue]))
+        .colors(Colors::BLACK)
+        .power_toughness(2, 2)],
+);
 
 /// "That card" is the card as it was put into the graveyard: once it has left, it is a new
 /// object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and nothing is
@@ -41,20 +34,7 @@ pub static ROGUE: CardDef = CardDef {
 /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
 /// refers only to cards in the exile zone that were put there as a result of an instruction
 /// to exile them in the first ability."
-fn exile_discarded<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(card) = ctx.trigger().object else {
-        return Ok(());
-    };
-    let s = ctx.state();
-    if !s.is_current(card) || s.object(card.slot).zone() != Zone::Graveyard {
-        return Ok(());
-    }
-    let exile = Prompt::new(Purpose::Move).places(Place::Exile, Place::None);
-    if ctx.choose_yes_no(ctx.controller(), exile, Bitboard::single(card.slot))? {
-        ctx.exile_linked(card);
-    }
-    Ok(())
-}
+static EXILE_DISCARDED: Effect = may(YOU, &exile_linked(THAT_CARD));
 
 /// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
@@ -64,49 +44,34 @@ static LOOT: Effect = sequence(&[draw(YOU, 1), discard(YOU, 1)]);
 /// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a
 /// modal double-faced card has only its front face's characteristics
 /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), so Sink into Stupor is
-/// a nonland card.
-fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let exiled = ctx.exiled_with_source();
-    if exiled.is_empty() {
-        return Ok(());
-    }
-    let slot = ctx.choose_object(
-        ctx.controller(),
-        exiled,
-        Prompt::new(Purpose::Choose).most(1),
-    )?;
-    let card = ctx.state().object_ref(slot);
-    // A card in exile has its front face's characteristics (CR 712.6a).
-    let face = ctx.state().copiable(slot).face(ctx.table());
-    let land = face.types.contains(Types::LAND);
-    ctx.move_to(card, Zone::Graveyard, Reason::Effect);
-    if land {
-        ctx.create_tokens(&TREASURE, 1, TokenEntry::default());
-    } else {
-        ctx.create_tokens(&ROGUE, 1, TokenEntry::default());
-    }
-    Ok(())
-}
+/// a nonland card. With no card exiled with it there is no "it", and no token.
+static CONVERT: Effect = sequence(&[
+    choose(YOU, EXILED_WITH_THIS, Prompt::new(Purpose::Choose).most(1)),
+    if_then(
+        IF_YOU_DO,
+        &sequence(&[
+            put_into_graveyard(THOSE),
+            if_else(
+                Condition::Is(THOSE, Filter::Types(Types::LAND)),
+                &create_tokens(YOU, &TREASURE, 1),
+                &create_tokens(YOU, &ROGUE, 1),
+            ),
+        ]),
+    ),
+]);
 
-pub static CARD: CardDef = CardDef {
-    name: names::CURRENCY_CONVERTER,
-    faces: &[Face {
-        cost: ManaCost::generic(1),
-        types: Types::ARTIFACT,
-        abilities: &[
-            Ability::triggered(&Trigger::discards(Players::You))
-                .custom(bodies!(exile_discarded))
-                .pauses(),
+pub static CARD: CardDef = card(
+    names::CURRENCY_CONVERTER,
+    &[Face::EMPTY
+        .cost(mana("{1}"))
+        .types(Types::ARTIFACT)
+        .abilities(&[
+            Ability::triggered(&Trigger::discards(Players::You)).effect(&EXILE_DISCARDED),
             Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP])).effect(&LOOT),
-            Ability::activated(Cost::TAP)
-                .custom(bodies!(convert))
-                .pauses()
-                .needing(Needs::ExiledWithSource),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[&TREASURE, &ROGUE],
-};
+            Ability::activated(Cost::TAP).effect(&CONVERT),
+        ])],
+)
+.creating(&[&TREASURE, &ROGUE]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

@@ -16,7 +16,7 @@ use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::resolution::Resolution;
-use crate::state::Zone;
+use crate::state::{TARGETS, Zone};
 use crate::table::GameTable;
 
 /// How a token is created.
@@ -171,7 +171,10 @@ pub(crate) fn create_instruction<L: Layout>(
 /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "the copy acquires
 /// the copiable values of the original object's characteristics". Those of the ability's
 /// own source are its card's once it has left (CR 608.2h), as offspring's "a copy of it"
-/// (CR 702.175a). The outcome is the tokens.
+/// (CR 702.175a), and those of a target the effect has moved are its last known ones (CR
+/// 608.2h): an exiled token has ceased to exist
+/// ([CR 111.7](https://yawgatog.com/resources/magic-rules/#R1117)) and is copied all the
+/// same. The outcome is the tokens.
 pub(crate) fn create_copies_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
@@ -208,5 +211,37 @@ pub(crate) fn create_copies_instruction<L: Layout>(
         let what = run.state().copiable(object.slot);
         copy(run.game(), what)?;
     }
+    // A target for each place at most, in the order they were chosen.
+    let mut moved = [None; TARGETS];
+    for (known, kept) in run.scene().moved(of).zip(&mut moved) {
+        *kept = known.copiable;
+    }
+    for what in moved.into_iter().flatten() {
+        copy(run.game(), what)?;
+    }
     Ok(Outcome::acted_on(created))
+}
+
+/// [`Effect::CreateAttackingTokens`](beryl_card::Effect::CreateAttackingTokens): "[Player]
+/// creates [count] [token] tokens that are tapped and attacking [players] or a planeswalker
+/// they control" (CR 508.4): [`create_attacking`]. The outcome is the tokens.
+pub(crate) fn create_attacking_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+    token: &'static CardDef,
+    count: Amount,
+    attacking: Players,
+) -> Result<Outcome<L>, Stop> {
+    let count = run.scene().amount(count);
+    if count == 0 {
+        return Ok(Outcome::NOTHING);
+    }
+    let defending = run.scene().players(attacking);
+    let mut tokens = Bitboard::EMPTY;
+    for player in run.in_turn_order(players) {
+        let (game, resolution) = run.resolving();
+        let what = predefined(game.table, token);
+        tokens |= create_attacking(game, resolution, player, what, count, defending)?;
+    }
+    Ok(Outcome::acted_on(tokens))
 }

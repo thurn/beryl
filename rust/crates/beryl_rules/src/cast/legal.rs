@@ -5,7 +5,7 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Needs, ObjectAbility, Timing, Types,
+    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, ObjectAbility, Timing, Types,
 };
 use crate::casting;
 use crate::decision::{Opt, Refusal};
@@ -365,9 +365,9 @@ fn activatable<L: Layout>(
     paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
 }
 
-/// Whether activating `ability` of the object in `slot` now would do nothing, as its card
-/// declares ([`Needs`]): its cost would be paid and its effect find nothing to act on. The
-/// activation is still legal (CR 602.2);
+/// Whether activating `ability` of the object in `slot` now would do nothing, as its effect
+/// says ([`Ability::needs`]): its cost would be paid and its effect find nothing to act on.
+/// The activation is still legal (CR 602.2);
 /// [`Profile::hides_pointless`](crate::profile::Profile) says who isn't offered it.
 pub fn pointless<L: Layout>(
     s: &State<L>,
@@ -378,11 +378,8 @@ pub fn pointless<L: Layout>(
     let Some((source, index)) = activated(s, slot, ability) else {
         return false;
     };
-    match source.face(t).ability(index).needs() {
-        Needs::Nothing => false,
-        // CR 607.2a: a linked ability finds only the cards exiled with its own source.
-        Needs::ExiledWithSource => s.exiled_with(slot).is_empty(),
-    }
+    (source.face(t).ability(index).needs())
+        .is_some_and(|objects| crate::interpret::names_nothing(s, t, slot, objects))
 }
 
 /// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an

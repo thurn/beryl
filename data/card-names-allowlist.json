@@ -7,7 +7,5 @@
     "tools/src/beryl_tools/xmage.py": 56,
     "ui/src/screens/samples.ts": 1
   },
-  "mechanics": [
-    "Needs::ExiledWithSource"
-  ]
+  "mechanics": []
 }

@@ -34,11 +34,34 @@ pub enum Objects {
     /// What the instruction before acted on: "it", "them", "that card", "those tokens" (the
     /// [module](crate::effect) says which instruction that is).
     Those,
+    /// What the ability's trigger event was about: "that card", "that spell", "that creature"
+    /// ([CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032)): "Whenever a game
+    /// event or game state matches a triggered ability's trigger event, that ability
+    /// automatically triggers." The object as the event left it: one that has changed zones
+    /// since is a new object
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), and this is nothing.
+    TriggeredOn,
+    /// "The cards exiled with this": those in exile that an ability of this object exiled,
+    /// linked to it ([`crate::Effect::ExileLinked`];
+    /// [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+    /// refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." Known whether or not this is still
+    /// where it was.
+    ExiledWithThis,
     /// Every object in a zone that passes a filter, read for the ability's controller: "all
     /// creatures", "each artifact you control", "the cards in your graveyard". An effect
     /// means permanents unless it says otherwise
     /// ([CR 609.2](https://yawgatog.com/resources/magic-rules/#R6092)), so the zone is said.
     All { zone: Zone, filter: Filter },
+    /// The cards in a zone each player has one of, of the players named, that pass a filter:
+    /// "target opponent's hand", "a nonland card from it", "that player's graveyard"
+    /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has their
+    /// own library, hand, and graveyard." The filter is read for the ability's controller.
+    InZoneOf {
+        zone: Zone,
+        players: &'static Players,
+        filter: Filter,
+    },
     /// What paying the cost of the spell or ability did this to: "the sacrificed creature",
     /// "the exiled card", "the revealed card"
     /// ([CR 608.2k](https://yawgatog.com/resources/magic-rules/#R6082k)): "If an ability's
@@ -98,6 +121,9 @@ pub enum Players {
     /// "That player", "they": the player an [`crate::Effect::ForEachPlayer`] is being done
     /// for.
     ThatPlayer,
+    /// "Each player other than [players]", "each other player": everyone in the game (CR
+    /// 102.1) but them.
+    EachOther(&'static Players),
 }
 
 /// What damage is dealt to
@@ -128,9 +154,12 @@ impl Objects {
     /// ([`crate::LayerSpec::needs_a_resolution`]).
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
-            Objects::This | Objects::AttachedTo => false,
-            Objects::Target(_) | Objects::Those | Objects::Paid(_) => true,
+            Objects::This | Objects::AttachedTo | Objects::ExiledWithThis => false,
+            Objects::Target(_) | Objects::Those | Objects::Paid(_) | Objects::TriggeredOn => true,
             Objects::All { filter, .. } => filter.needs_a_resolution(),
+            Objects::InZoneOf {
+                players, filter, ..
+            } => players.needs_a_resolution() || filter.needs_a_resolution(),
         }
     }
 }
@@ -146,6 +175,7 @@ impl Players {
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
                 objects.needs_a_resolution()
             }
+            Players::EachOther(players) => players.needs_a_resolution(),
         }
     }
 }
@@ -155,6 +185,7 @@ impl Players {
     pub const fn names_paid(&self) -> bool {
         match self {
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.names_paid(),
+            Players::EachOther(players) => players.names_paid(),
             Players::You
             | Players::EachOpponent
             | Players::EachPlayer

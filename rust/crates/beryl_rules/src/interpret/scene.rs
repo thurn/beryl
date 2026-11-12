@@ -15,6 +15,7 @@ use crate::cast;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Conditions, Layout};
+use crate::query::Copiable;
 use crate::state::{
     CountersHeld, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
     Tracker, Zone, ZoneKey, placed,
@@ -70,8 +71,11 @@ impl<L: Layout> Outcome<L> {
 /// that zone, or if the effect has moved it from a public zone to a hidden zone, the effect
 /// uses the object's last known information."
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Known {
+pub(crate) struct Known<L: Layout> {
     pub(crate) controller: Seat,
+    /// Its copiable values ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
+    /// which a copy of it made after it left has.
+    pub(crate) copiable: Option<Copiable<L>>,
     pub(crate) power: i8,
     pub(crate) toughness: i8,
     pub(crate) mana_value: u8,
@@ -92,7 +96,7 @@ pub(crate) struct Registers<L: Layout> {
     /// place, as it did. One that is no longer where it was has moved; one the instruction
     /// could not move is read where it is.
     pub(crate) noted: TargetPlaces,
-    pub(crate) known: [Known; TARGETS],
+    pub(crate) known: [Known<L>; TARGETS],
     pub(crate) outcome: Outcome<L>,
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
     pub(crate) that_player: Option<Seat>,
@@ -129,13 +133,16 @@ impl<L: Layout> Scene<'_, L> {
     /// The targets among [`Scene::targets`] the effect has moved, as they were last known.
     /// One an instruction set out to move and could not, as when what would have exiled it
     /// had left first (CR 610.3b), is still what [`Scene::objects`] names, and is not here.
-    fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known> + '_ {
+    pub(crate) fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known<L>> + '_ {
         let spec = match objects {
             Objects::Target(spec) => Some(spec),
             Objects::This
             | Objects::AttachedTo
             | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::ExiledWithThis
             | Objects::All { .. }
+            | Objects::InZoneOf { .. }
             | Objects::Paid(_) => None,
         };
         spec.into_iter()
@@ -176,6 +183,16 @@ impl<L: Layout> Scene<'_, L> {
                 .and_then(|source| s.object(source.slot).attached_to())
                 .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
+            Objects::TriggeredOn => (self.subject.info.object)
+                .filter(|&object| s.is_current(object))
+                .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
+            // CR 607.2a: "The second ability refers only to cards in the exile zone that
+            // were put there as a result of an instruction to exile them in the first
+            // ability." An ability of an object that has left still refers to the cards
+            // that object exiled, so its slot is asked whether or not it is current.
+            Objects::ExiledWithThis => {
+                (self.subject.source).map_or(Bitboard::EMPTY, |source| s.exiled_with(source.slot))
+            }
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }
@@ -185,6 +202,19 @@ impl<L: Layout> Scene<'_, L> {
                 zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
                 filter: Filter::Whose(&Players::You),
             } => s.zone(ZoneKey::Of(self.you(), zone)),
+            // CR 400.1: "Each player has their own library, hand, and graveyard."
+            Objects::InZoneOf {
+                zone,
+                players,
+                filter,
+            } => {
+                let mut within = Bitboard::EMPTY;
+                // A set is built, whose order is nothing.
+                for player in s.players_in_seat_order(self.players(*players)) {
+                    within |= s.zone(ZoneKey::Of(player, zone));
+                }
+                filter.select_x(s, self.t, within, self.you(), self.x)
+            }
             Objects::All { zone, filter } => {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),
@@ -241,6 +271,14 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
+            // CR 102.1: everyone in the game, but them.
+            Players::EachOther(players) => {
+                let mut who = self.s.players();
+                for player in self.s.players_in_seat_order(self.players(*players)) {
+                    who = who.without(player);
+                }
+                who
+            }
             Players::ThatPlayer => {
                 debug_assert!(
                     self.registers.that_player.is_some(),
@@ -254,9 +292,10 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// What is known of the object in `slot` as it is now, for an effect about to move it.
-    pub(crate) fn known(&self, slot: L::Slot) -> Known {
+    pub(crate) fn known(&self, slot: L::Slot) -> Known<L> {
         Known {
             controller: self.s.controller(slot),
+            copiable: Some(self.s.copiable(slot)),
             power: self.s.power(self.t, slot),
             toughness: self.s.toughness(self.t, slot),
             mana_value: self.s.mana_value(self.t, slot),
@@ -270,7 +309,7 @@ impl<L: Layout> Scene<'_, L> {
         &self,
         objects: Objects,
         of: impl Fn(&Self, L::Slot) -> i32,
-        known: impl Fn(&Known) -> i32,
+        known: impl Fn(&Known<L>) -> i32,
     ) -> i32 {
         let here: i32 = self.objects(objects).sum(|slot| of(self, slot));
         here + self.moved(objects).map(known).sum::<i32>()

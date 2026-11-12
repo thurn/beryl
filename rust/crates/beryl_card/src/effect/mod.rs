@@ -42,6 +42,7 @@ use crate::definition::CardDef;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
+use crate::prompt::Prompt;
 use crate::target::Takes;
 
 /// One instruction, or several composed
@@ -97,6 +98,25 @@ pub enum Effect {
         players: Players,
         effect: &'static Effect,
     },
+    /// "[Player] chooses one of [objects]", as the instruction is reached (CR 608.2d): what
+    /// "a card exiled with this" or "a nonland card from it" says before the card says what
+    /// is done with it, which the instruction after does to [`Objects::Those`]. With
+    /// `optional`, "you may": the player may choose none. With none to choose among, no one
+    /// is asked and nothing is chosen
+    /// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
+    ///
+    /// The `prompt` is what the choice is for ([`Prompt`]): a pick of one object.
+    Choose {
+        player: Players,
+        among: Objects,
+        prompt: Prompt,
+        optional: bool,
+    },
+    /// "[Player] looks at [cards]", cards of a hidden zone
+    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Hidden zones are
+    /// zones in which not all players can be expected to see the cards' faces." The player
+    /// knows them from then on; no one else learns anything.
+    LookAt { player: Players, cards: Objects },
     /// "Counter [spell]"
     /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)): "To counter a spell
     /// or ability means to cancel it, removing it from the stack. It doesn't resolve and none
@@ -122,6 +142,13 @@ pub enum Effect {
     /// one-shot effect is created immediately after the specified event. This second one-shot
     /// effect returns the object to its previous zone."
     ExileUntilThisLeaves(Objects),
+    /// "Exile [cards]", by an ability of an object that has another ability referring to the
+    /// cards "exiled with" it: the two are linked
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+    /// refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." Those cards are
+    /// [`Objects::ExiledWithThis`].
+    ExileLinked(Objects),
     /// "Sacrifice [permanents]": each one's controller does
     /// ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)): "To sacrifice a
     /// permanent, its controller moves it from the battlefield directly to its owner's
@@ -132,6 +159,17 @@ pub enum Effect {
     /// go to any library, graveyard, or hand other than its owner's, it goes to its owner's
     /// corresponding zone."
     ReturnToHand(Objects),
+    /// "Put [objects] into their owners' graveyards" (CR 400.3), from wherever they are, by
+    /// no keyword action: a card put there from exile was not destroyed, sacrificed, milled
+    /// or discarded.
+    PutIntoGraveyard(Objects),
+    /// "Return [cards] to the battlefield transformed under their owners' control"
+    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
+    /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
+    /// enters the battlefield with its back face up. If a player is instructed to put a card
+    /// that isn't a double-faced card onto the battlefield transformed or converted, that
+    /// card stays in its current zone." The cards an instruction before exiled.
+    ReturnTransformed(Objects),
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
     PutIntoLibrary {
         objects: Objects,
@@ -165,6 +203,11 @@ pub enum Effect {
     /// counter on the exploring permanent and may put the revealed card into their
     /// graveyard."
     Explore(Objects),
+    /// "[Player] manifests dread"
+    /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "Look at the top
+    /// two cards of your library. Manifest one of them, then put the cards you looked at that
+    /// were not manifested this way into your graveyard."
+    ManifestDread(Players),
     /// "[Player] flips a coin"
     /// ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "the player that
     /// flips the coin calls 'heads' or 'tails.' If the call matches the result, the player
@@ -196,10 +239,27 @@ pub enum Effect {
         token: &'static CardDef,
         count: Amount,
     },
+    /// "[Player] creates [count] [token] tokens that are tapped and attacking [players] or a
+    /// planeswalker they control"
+    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "If a creature is put
+    /// onto the battlefield attacking, its controller chooses which defending player,
+    /// planeswalker a defending player controls, or battle a defending player protects it's
+    /// attacking as it enters the battlefield (unless the effect that put it onto the
+    /// battlefield specifies what it's attacking)." A token whose controller is not attacking
+    /// one of those players enters tapped and attacks nothing (CR 506.3b, CR 506.3c).
+    CreateAttackingTokens {
+        player: Players,
+        token: &'static CardDef,
+        count: Amount,
+        attacking: Players,
+    },
     /// "[Player] creates [count] tokens that are copies of [object]"
     /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "When copying an
     /// object, the copy acquires the copiable values of the original object's
     /// characteristics".
+    /// A target the effect has moved is copied as it last was
+    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "the effect uses
+    /// the object's last known information."
     CreateCopies {
         player: Players,
         of: Objects,
@@ -248,6 +308,28 @@ pub enum Effect {
     ChangeRule {
         rule: &'static RuleChange,
         duration: Duration,
+    },
+    /// "[Cards] gain flashback until end of turn. The flashback cost is equal to its mana
+    /// cost": a keyword ability granted to a card that is no permanent
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
+    /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an
+    /// instant or sorcery spell by paying [cost] rather than paying its mana cost' and 'If the
+    /// flashback cost was paid, exile this card instead of putting it anywhere else any time
+    /// it would leave the stack.'" Each card's owner is the player who may cast it.
+    GainFlashback(Objects),
+    /// "[Player] may cast [cards] [duration]": a permission
+    /// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin
+    /// to cast a spell only if a rule or effect allows that player to cast it and no rule or
+    /// effect prohibits that player from casting it." It is about each card where it is, so
+    /// it ends when the card leaves that zone
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which is the whole of
+    /// "for as long as that card remains exiled" ([`Duration::Indefinite`]); "this turn" is
+    /// [`Duration::EndOfTurn`]. What it says of a spell cast this way is its `terms`.
+    PermitCast {
+        player: Players,
+        cards: Objects,
+        duration: Duration,
+        terms: CastTerms,
     },
     /// "[Player] may cast [card]", and with `free`, "without paying its mana cost"
     /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): "If an effect
@@ -331,7 +413,10 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::Scry { .. }
             | Effect::Explore(_)
-            | Effect::UntapUpTo { .. } => true,
+            | Effect::UntapUpTo { .. }
+            | Effect::ManifestDread(_)
+            | Effect::CreateAttackingTokens { .. }
+            | Effect::Choose { .. } => true,
             Effect::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
@@ -352,14 +437,20 @@ impl Effect {
                     }
             }
             Effect::ForEachPlayer { effect, .. } => effect.asks(),
-            Effect::Counter(_)
+            Effect::LookAt { .. }
+            | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::Destroy(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
+            | Effect::ExileLinked(_)
             | Effect::Sacrifice(_)
             | Effect::ReturnToHand(_)
+            | Effect::PutIntoGraveyard(_)
+            | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
+            | Effect::GainFlashback(_)
+            | Effect::PermitCast { .. }
             | Effect::Draw { .. }
             | Effect::Mill { .. }
             | Effect::GainLife { .. }
@@ -409,8 +500,10 @@ impl Effect {
             Effect::Destroy(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
+            | Effect::ExileLinked(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
+            | Effect::PutIntoGraveyard(objects)
             | Effect::PutIntoLibrary { objects, .. } => {
                 matches!(how, Takes::Removal) && is_target(objects, target)
             }
@@ -453,6 +546,13 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::Modify { .. }
             | Effect::Explore(_)
+            | Effect::Choose { .. }
+            | Effect::LookAt { .. }
+            | Effect::ManifestDread(_)
+            | Effect::CreateAttackingTokens { .. }
+            | Effect::ReturnTransformed(_)
+            | Effect::GainFlashback(_)
+            | Effect::PermitCast { .. }
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
@@ -462,6 +562,21 @@ impl Effect {
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_) => false,
+        }
+    }
+
+    /// The objects its player must choose one of before it does anything else
+    /// ([`Effect::Choose`], not optional): with none of them it does nothing at all, which a
+    /// player about to pay for it can be told ([`crate::Ability::needs`]).
+    pub const fn needs(&self) -> Option<Objects> {
+        match *self {
+            Effect::Choose {
+                among,
+                optional: false,
+                ..
+            } => Some(among),
+            Effect::Sequence([first, ..]) => first.needs(),
+            _ => None,
         }
     }
 
@@ -535,11 +650,28 @@ impl Effect {
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
+            | Effect::ExileLinked(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
+            | Effect::PutIntoGraveyard(objects)
+            | Effect::ReturnTransformed(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
+            | Effect::GainFlashback(objects)
             | Effect::Modify { objects, .. } => objects.names_paid(),
+            Effect::PermitCast { player, cards, .. }
+            | Effect::LookAt { player, cards }
+            | Effect::Choose {
+                player,
+                among: cards,
+                ..
+            } => player.names_paid() || cards.names_paid(),
+            Effect::CreateAttackingTokens {
+                player,
+                count,
+                attacking,
+                ..
+            } => player.names_paid() || count.names_paid() || attacking.names_paid(),
             Effect::DealDamage { to, amount } => to.names_paid() || amount.names_paid(),
             Effect::MayCast { player, card, .. } => player.names_paid() || card.names_paid(),
             Effect::ChangeRule { .. } => false,
@@ -573,6 +705,7 @@ impl Effect {
             }
             Effect::AddMana { player, .. }
             | Effect::GetEmblem { player, .. }
+            | Effect::ManifestDread(player)
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player) => player.names_paid(),
@@ -597,6 +730,46 @@ pub enum LibraryPosition {
     /// a player to put a card into a library 'Nth from the top,' and that library has fewer
     /// than N cards in it, the player puts that card on the bottom of that library."
     FromTop(u8),
+}
+
+/// What a permission to cast says of a spell cast by it ([`Effect::PermitCast`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct CastTerms {
+    /// "A spell cast this way costs {N} more to cast": a cost increase
+    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): the total cost is
+    /// the mana cost "plus all additional costs and cost increases". Generic mana.
+    pub costs_more: u8,
+    /// "If that spell would be put into your graveyard, exile it instead": a replacement
+    /// effect on the spell
+    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use
+    /// the word 'instead' are replacement effects."
+    pub exiled_instead: bool,
+}
+
+impl CastTerms {
+    /// A permission that says nothing more of the spell.
+    pub const PLAIN: CastTerms = CastTerms {
+        costs_more: 0,
+        exiled_instead: false,
+    };
+
+    /// These terms, with "a spell cast this way costs {`generic`} more to cast".
+    #[must_use]
+    pub const fn costing_more(self, generic: u8) -> CastTerms {
+        CastTerms {
+            costs_more: generic,
+            ..self
+        }
+    }
+
+    /// These terms, with "if that spell would be put into your graveyard, exile it instead".
+    #[must_use]
+    pub const fn exiled_instead(self) -> CastTerms {
+        CastTerms {
+            exiled_instead: true,
+            ..self
+        }
+    }
 }
 
 /// How a copy differs from what it copies

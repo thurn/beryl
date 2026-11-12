@@ -66,14 +66,14 @@
 //! every save and every rollout, which replay the answers by their place. A change to any of
 //! the three is a change of the save format.
 
-use beryl_card::Effect;
+use beryl_card::{Effect, Objects, Place, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Players, Prompt, Purpose, Shape, Stop};
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::interpret::Run;
+use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 
@@ -292,20 +292,63 @@ pub fn pay<L: Layout>(
 /// The yes or no of an [`Effect::May`], about nothing but the effect.
 const MAY: Prompt = Prompt::new(Purpose::May);
 
+/// The yes or no of an [`Effect::May`] whose whole effect is to exile cards: whether to move
+/// them there.
+const MAY_EXILE: Prompt = Prompt::new(Purpose::Move).places(Place::Exile, Place::None);
+
 /// [`Effect::May`]: "[Player] may [effect]" (CR 608.2d). The player is asked as the effect
-/// is applied, and with no such player no one is. The outcome is the effect's, or nothing
-/// when it was declined.
+/// is applied, and with no such player no one is. Where the effect is to exile cards the
+/// question is about them ([`Purpose::Move`]), and with none to exile there is nothing to
+/// ask. The outcome is the effect's, or nothing when it was declined.
 pub(crate) fn may_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
     effect: &'static Effect,
 ) -> Flow {
+    let (prompt, about) = match *effect {
+        Effect::Exile(cards) | Effect::ExileLinked(cards) => {
+            let cards = run.elsewhere_than(cards, Zone::Exile);
+            if cards.is_empty() {
+                return run.carry_out_or_nothing(None);
+            }
+            (MAY_EXILE, cards)
+        }
+        _ => (MAY, Bitboard::EMPTY),
+    };
     let agreed = match run.one(player) {
         Some(player) => {
             let (game, resolution) = run.resolving();
-            yes_no(game, resolution, player, MAY, Bitboard::EMPTY)?
+            yes_no(game, resolution, player, prompt, about)?
         }
         None => false,
     };
     run.carry_out_or_nothing(agreed.then_some(effect))
+}
+
+/// [`Effect::Choose`]: "[Player] chooses one of [objects]", or with `optional` may choose
+/// none (CR 608.2d): a [`pick`], or a [`may_pick`]. With no such player or no object there
+/// is nothing to ask. The outcome is the object chosen.
+pub(crate) fn choose_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    player: Players,
+    among: Objects,
+    prompt: Prompt,
+    optional: bool,
+) -> Result<Outcome<L>, Stop> {
+    let candidates = run.scene().objects(among);
+    let Some(player) = run.one(player) else {
+        return Ok(Outcome::NOTHING);
+    };
+    if candidates.is_empty() {
+        return Ok(Outcome::NOTHING);
+    }
+    let (game, resolution) = run.resolving();
+    let chosen = if optional {
+        may_pick(game, resolution, player, candidates, prompt)?
+    } else {
+        Some(pick(game, resolution, player, candidates, prompt)?)
+    };
+    Ok(chosen.map_or(Outcome::NOTHING, |slot| {
+        Outcome::acted_on(Bitboard::single(slot))
+    }))
 }

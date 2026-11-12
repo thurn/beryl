@@ -2,4 +2,6 @@
 
 pub mod counter;
 pub mod explore;
+pub mod manifest_dread;
 pub mod tap;
+pub mod transform;

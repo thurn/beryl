@@ -1,34 +1,12 @@
 //! Fractured Identity. {3}{W}{U} Sorcery. "Exile target nonland permanent. Each player other
 //! than its controller creates a token that's a copy of it."
 
-use beryl_engine::Zone;
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::event::{Reason, TokenEntry};
-use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
-
-pub static CARD: CardDef = CardDef {
-    name: names::FRACTURED_IDENTITY,
-    faces: &[Face {
-        cost: ManaCost::new(3, [1, 1, 0, 0, 0, 0]),
-        types: Types::SORCERY,
-        colors: Colors::WHITE.union(Colors::BLUE),
-        abilities: &[Ability::spell()
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Not(&Filter::Types(Types::LAND)),
-            )
-            .removal()])
-            .custom(bodies!(fracture))],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
+use beryl_card::effect::build::{
+    ITS_CONTROLLER, TARGET, create_copy, each_player_other_than, exile, sequence,
+};
+use beryl_card::{
+    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
 };
 
 /// "Its controller" and "it" are the permanent as it last existed on the battlefield
@@ -39,23 +17,27 @@ pub static CARD: CardDef = CardDef {
 /// current information of that object if it's in the public zone it was expected to be in;
 /// if it's no longer in that zone, ... the effect uses the object's last known information."
 /// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy
-/// has the permanent's copiable values ([`beryl_engine::State::copiable`], CR 707.2): not its
-/// counters, so a planeswalker's copy enters with its printed loyalty (CR 306.5b).
-fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let Some(permanent) = ctx.target_object(TargetPlace::FIRST) else {
-        return Ok(());
-    };
-    let controller = ctx.state().controller(permanent.slot);
-    let what = ctx.state().copiable(permanent.slot);
-    ctx.move_to(permanent, Zone::Exile, Reason::Exile);
-    // CR 111.2: "The player who creates a token is its owner. The token enters the
-    // battlefield under that player's control."
-    let others = ctx.state().players().without(controller);
-    for player in ctx.state().players_in_turn_order(others) {
-        ctx.create_tokens_of_for(player, what, 1, TokenEntry::default());
-    }
-    Ok(())
-}
+/// has the permanent's copiable values (CR 707.2): not its counters, so a planeswalker's copy
+/// enters with its printed loyalty (CR 306.5b).
+///
+/// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
+/// token is its owner. The token enters the battlefield under that player's control."
+pub static CARD: CardDef = card(
+    names::FRACTURED_IDENTITY,
+    &[Face::EMPTY
+        .cost(mana("{3}{W}{U}"))
+        .types(Types::SORCERY)
+        .colors(Colors::WHITE.union(Colors::BLUE))
+        .abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Not(&Filter::Types(Types::LAND)),
+            )])
+            .effect(&sequence(&[
+                exile(TARGET),
+                create_copy(each_player_other_than(&ITS_CONTROLLER), TARGET),
+            ]))])],
+);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

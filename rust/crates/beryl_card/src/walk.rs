@@ -131,8 +131,16 @@ impl Objects {
             | Objects::Target(_)
             | Objects::AttachedTo
             | Objects::Those
-            | Objects::Paid(_) => {}
+            | Objects::Paid(_)
+            | Objects::TriggeredOn
+            | Objects::ExiledWithThis => {}
             Objects::All { filter, .. } => filter.filters(visit),
+            Objects::InZoneOf {
+                players, filter, ..
+            } => {
+                players.filters(visit);
+                filter.filters(visit);
+            }
         }
     }
 }
@@ -146,6 +154,7 @@ impl Players {
             | Players::Target(_)
             | Players::ThatPlayer => {}
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.filters(visit),
+            Players::EachOther(players) => players.filters(visit),
         }
     }
 }
@@ -250,10 +259,14 @@ impl Effect {
             | Effect::Destroy(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
+            | Effect::ExileLinked(objects)
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
+            | Effect::PutIntoGraveyard(objects)
+            | Effect::ReturnTransformed(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
+            | Effect::GainFlashback(objects)
             | Effect::CounterInto {
                 spells: objects, ..
             } => objects.filters(visit),
@@ -261,9 +274,33 @@ impl Effect {
                 to.filters(visit);
                 amount.filters(visit);
             }
-            Effect::MayCast { player, card, .. } => {
+            Effect::MayCast { player, card, .. }
+            | Effect::PermitCast {
+                player,
+                cards: card,
+                ..
+            }
+            | Effect::LookAt {
+                player,
+                cards: card,
+            }
+            | Effect::Choose {
+                player,
+                among: card,
+                ..
+            } => {
                 player.filters(visit);
                 card.filters(visit);
+            }
+            Effect::CreateAttackingTokens {
+                player,
+                count,
+                attacking,
+                ..
+            } => {
+                player.filters(visit);
+                count.filters(visit);
+                attacking.filters(visit);
             }
             Effect::Modify {
                 objects,
@@ -324,6 +361,7 @@ impl Effect {
             Effect::Delay { carrying, .. } => carrying.filters(visit),
             Effect::AddMana { player, .. }
             | Effect::GetEmblem { player, .. }
+            | Effect::ManifestDread(player)
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player) => {

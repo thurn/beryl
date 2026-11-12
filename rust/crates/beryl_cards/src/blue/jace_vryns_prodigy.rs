@@ -10,15 +10,19 @@
 //! spell would be put into your graveyard, exile it instead.
 //! −9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
 
-use beryl_card::effect::build::{TARGET, TARGET_PLAYER, mill, modify};
-use beryl_card::{Duration, Effect, Players};
+use beryl_card::effect::build::{
+    TARGET, TARGET_PLAYER, THIS, THOSE, YOU, discard, draw, exile, if_then, mill, modify,
+    permit_cast, return_transformed, sequence,
+};
+use beryl_card::{
+    Amount, CastTerms, Comparison, Condition, Duration, Effect, Objects, Players, Zone,
+};
 use beryl_engine::card::{
     Ability, CardDef, Colors, Cost, Face, Flow, ManaCost, Modification, Subtype, Subtypes,
     Supertypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::state::TargetPlace;
 use beryl_engine::{Layout, bodies};
 
 use crate::names;
@@ -37,9 +41,7 @@ pub static CARD: CardDef = CardDef {
             colors: Colors::BLUE,
             power: Some(0),
             toughness: Some(2),
-            abilities: &[Ability::activated(Cost::TAP)
-                .custom(bodies!(loot_and_transform))
-                .pauses()],
+            abilities: &[Ability::activated(Cost::TAP).effect(&LOOT_AND_TRANSFORM)],
             ..Face::EMPTY
         },
         Face {
@@ -66,7 +68,7 @@ pub static CARD: CardDef = CardDef {
                             Filter::Whose(&Players::You),
                         ]),
                     )])
-                    .custom(bodies!(recast)),
+                    .effect(&RECAST),
                 Ability::loyalty(-9).custom(bodies!(emblem)),
             ],
             transformed: true,
@@ -95,19 +97,30 @@ pub static EMBLEM: CardDef = CardDef {
     tokens: &[],
 };
 
+/// "The cards in your graveyard".
+static YOUR_GRAVEYARD: Objects = Objects::All {
+    zone: Zone::Graveyard,
+    filter: Filter::Whose(&Players::You),
+};
+
 /// "{T}: Draw a card, then discard a card. If there are five or more cards in your graveyard,
 /// exile Jace, then return him to the battlefield transformed under his owner's control."
 /// The graveyard is counted after the discard, as the instructions are followed in order
-/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)).
-fn loot_and_transform<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    let you = ctx.controller();
-    ctx.draw(you, 1);
-    ctx.discard_a_card(you)?;
-    if ctx.state().graveyard(you).len() >= 5 {
-        ctx.exile_and_return_transformed(ctx.source());
-    }
-    Ok(())
-}
+/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)). A Jace that has left
+/// the battlefield is not exiled, and one that was not exiled does not return
+/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+static LOOT_AND_TRANSFORM: Effect = sequence(&[
+    draw(YOU, 1),
+    discard(YOU, 1),
+    if_then(
+        Condition::Compare(
+            Amount::Count(&YOUR_GRAVEYARD),
+            Comparison::AtLeast,
+            Amount::Fixed(5),
+        ),
+        &sequence(&[exile(THIS), return_transformed(THOSE)]),
+    ),
+]);
 
 /// "+1: Up to one target creature gets -2/-0 until your next turn." A layer 7c effect
 /// ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
@@ -126,12 +139,12 @@ static WEAKEN: Effect = modify(
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which "exile it instead"
 /// follows wherever it would go to the graveyard: resolving, countered or fizzling
 /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)).
-fn recast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    if let Some(card) = ctx.target_object(TargetPlace::FIRST) {
-        ctx.allow_cast(card, ctx.controller(), 0, true, true);
-    }
-    Ok(())
-}
+static RECAST: Effect = permit_cast(
+    YOU,
+    TARGET,
+    Duration::EndOfTurn,
+    CastTerms::PLAIN.exiled_instead(),
+);
 
 /// "−9: You get an emblem with 'Whenever you cast a spell, target opponent mills five
 /// cards.'" [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that

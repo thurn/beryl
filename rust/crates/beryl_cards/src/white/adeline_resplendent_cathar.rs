@@ -3,15 +3,14 @@
 //! attack, for each opponent, create a 1/1 white Human creature token that's tapped and
 //! attacking that player or a planeswalker they control."
 
-use beryl_card::{Amount, Filter, Players, Zone};
-use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, LayerSpec, ManaCost, Modification, Objects,
-    Subtype, Subtypes, Supertypes, Trigger, Types,
-};
-use beryl_engine::effect::EffectCtx;
-use beryl_engine::{Layout, bodies};
-
 use crate::names;
+use beryl_card::effect::build::{
+    EACH_OPPONENT, THAT_PLAYER, YOU, create_attacking_tokens, for_each_player,
+};
+use beryl_card::{
+    Ability, Amount, CardDef, Colors, Face, Filter, Keywords, LayerSpec, Modification, Objects,
+    Players, Subtype, Subtypes, Supertypes, Trigger, Types, Zone, card, mana,
+};
 
 /// "The number of creatures you control".
 static CREATURES_YOU_CONTROL: Amount = Amount::Count(&Objects::All {
@@ -25,41 +24,28 @@ static CREATURES_YOU_CONTROL: Amount = Amount::Count(&Objects::All {
 pub const HUMAN_TOKEN: &str = "Human Token";
 
 /// The Human token.
-pub static HUMAN: CardDef = CardDef {
-    name: HUMAN_TOKEN,
-    faces: &[Face {
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human]),
-        colors: Colors::WHITE,
-        power: Some(1),
-        toughness: Some(1),
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
+pub static HUMAN: CardDef = card(
+    HUMAN_TOKEN,
+    &[Face::EMPTY
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Human]))
+        .colors(Colors::WHITE)
+        .power_toughness(1, 1)],
+);
 
-/// "Whenever you attack" ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)):
-/// it "triggers if one or more creatures that player controls are declared as attackers." One
-/// Human for the one opponent, attacking what its controller chooses (CR 508.4).
-fn human_attacking<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
-    ctx.create_attacking_tokens(&HUMAN, 1)?;
-    Ok(())
-}
-
-pub static CARD: CardDef = CardDef {
-    name: names::ADELINE_RESPLENDENT_CATHAR,
-    faces: &[Face {
-        cost: ManaCost::new(1, [2, 0, 0, 0, 0, 0]),
-        supertypes: Supertypes::LEGENDARY,
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human, Subtype::Knight]),
-        colors: Colors::WHITE,
+pub static CARD: CardDef = card(
+    names::ADELINE_RESPLENDENT_CATHAR,
+    &[Face::EMPTY
+        .cost(mana("{1}{W}{W}"))
+        .supertypes(Supertypes::LEGENDARY)
+        .types(Types::CREATURE)
+        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Knight]))
+        .colors(Colors::WHITE)
         // The printed "*": her ability defines it. Nothing reads a creature card's power off
         // the battlefield, and layers apply on it, so 0 stands in elsewhere.
-        power: Some(0),
-        toughness: Some(4),
-        keywords: Keywords::VIGILANCE,
-        abilities: &[
+        .power_toughness(0, 4)
+        .keywords(Keywords::VIGILANCE)
+        .abilities(&[
             // A characteristic-defining ability
             // ([CR 604.3](https://yawgatog.com/resources/magic-rules/#R6043)), applied in
             // layer 7a ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)):
@@ -70,14 +56,18 @@ pub static CARD: CardDef = CardDef {
                 condition: None,
                 modification: Modification::SetPower(&CREATURES_YOU_CONTROL),
             }),
-            Ability::triggered(&Trigger::attack(Players::You))
-                .custom(bodies!(human_attacking))
-                .pauses(),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[&HUMAN],
-};
+            // "Whenever you attack"
+            // ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)): it
+            // "triggers if one or more creatures that player controls are declared as
+            // attackers." A Human for each opponent, attacking that player or, as its
+            // controller chooses, a planeswalker they control (CR 508.4).
+            Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
+                EACH_OPPONENT,
+                &create_attacking_tokens(YOU, &HUMAN, 1, THAT_PLAYER),
+            )),
+        ])],
+)
+.creating(&[&HUMAN]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

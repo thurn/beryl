@@ -34,7 +34,7 @@ pub mod target;
 pub mod trigger;
 mod walk;
 
-pub use ability::{Ability, AbilityKind, Behavior, Custom, Needs, Timing};
+pub use ability::{Ability, AbilityKind, Behavior, Custom, Timing};
 pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
@@ -48,8 +48,8 @@ pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
 };
 pub use effect::{
-    Amount, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects, Players,
-    Recipients,
+    Amount, CastTerms, Comparison, Condition, CopyException, Effect, LibraryPosition, Objects,
+    Players, Recipients,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone};

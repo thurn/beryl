@@ -9,11 +9,16 @@ use crate::names;
 
 pub mod actions;
 pub mod casting;
+pub mod choices;
 pub mod coins;
 pub mod continuous;
 pub mod damage;
 pub mod delayed_triggers;
 pub mod emblems;
+pub mod keywords;
+pub mod linked;
+pub mod tokens;
+pub mod zones;
 
 /// Every entry's scenarios: the library module, the card that has the effect, and the
 /// scenarios, which the oracles play as that card's.
@@ -34,10 +39,22 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         actions::tap::SCENARIOS,
     ),
     (
+        "actions::manifest_dread",
+        names::ABHORRENT_OCULUS,
+        actions::manifest_dread::SCENARIOS,
+    ),
+    (
+        "actions::transform",
+        names::JACE_VRYNS_PRODIGY,
+        actions::transform::SCENARIOS,
+    ),
+    (
         "casting",
         names::MALCOLM_ALLURING_SCOUNDREL,
         casting::SCENARIOS,
     ),
+    ("casting", names::JACE_VRYNS_PRODIGY, casting::PERMITTED),
+    ("choices", names::ELITE_SPELLBINDER, choices::SCENARIOS),
     ("coins", names::MANA_CRYPT, coins::SCENARIOS),
     (
         "continuous",
@@ -55,6 +72,24 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::TEFERI_HERO_OF_DOMINARIA,
         emblems::SCENARIOS,
     ),
+    (
+        "keywords::flashback",
+        names::SNAPCASTER_MAGE,
+        keywords::flashback::SCENARIOS,
+    ),
+    ("linked", names::CURRENCY_CONVERTER, linked::SCENARIOS),
+    (
+        "tokens",
+        names::ADELINE_RESPLENDENT_CATHAR,
+        tokens::ATTACKING,
+    ),
+    ("tokens", names::FRACTURED_IDENTITY, tokens::COPIES),
+    (
+        "zones",
+        names::CURRENCY_CONVERTER,
+        zones::PUT_INTO_GRAVEYARD,
+    ),
+    ("zones", names::ELITE_SPELLBINDER, zones::LOOK_AT),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

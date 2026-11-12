@@ -6,13 +6,13 @@
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
 
-use beryl_card::{Objects, Players};
+use beryl_card::{CastTerms, Objects, Players};
 
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::interpret::{Outcome, Run};
+use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
 use crate::state::{
@@ -137,4 +137,33 @@ pub(crate) fn may_cast_instruction<L: Layout>(
     let (_, resolution) = run.resolving();
     offer(resolution, card, player, free);
     Outcome::acted_on(Bitboard::single(slot))
+}
+
+/// [`Effect::PermitCast`](beryl_card::Effect::PermitCast): "[Player] may cast [cards]
+/// [duration]" (CR 601.3), on `terms`: [`allow`], for each card. The permission has one
+/// player. The outcome is the cards.
+pub(crate) fn permit_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    player: Players,
+    cards: Objects,
+    duration: beryl_card::Duration,
+    terms: CastTerms,
+) -> Result<Outcome<L>, Full> {
+    let cards = run.scene().objects(cards);
+    let Some(player) = run.one(player) else {
+        return Ok(Outcome::NOTHING);
+    };
+    let this_turn = match duration {
+        beryl_card::Duration::EndOfTurn => true,
+        beryl_card::Duration::Indefinite => false,
+        beryl_card::Duration::UntilYourNextTurn => no_primitive(&duration),
+    };
+    // Each permission is an entry of its own card, so the order they start in is nothing.
+    for slot in run.state().in_candidate_order(cards) {
+        let card = run.state().object_ref(slot);
+        let (extra, exile) = (terms.costs_more, terms.exiled_instead);
+        let (game, resolution) = run.resolving();
+        allow(game, resolution, card, player, extra, this_turn, exile)?;
+    }
+    Ok(Outcome::acted_on(cards))
 }
