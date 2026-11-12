@@ -25,7 +25,7 @@ from typing import IO
 from . import paths
 
 # The cache folders that hold one folder per checkout, named for it (`paths.REPO.name`):
-# shots.py's and specs.py's output.
+# shots.py's, specs.py's and motion.py's output.
 PER_CHECKOUT: tuple[str, ...] = (
     "ui-shots",
     "ui-test",
@@ -35,6 +35,7 @@ PER_CHECKOUT: tuple[str, ...] = (
     "spec-film",
     "spec-motion",
     "spec-drive",
+    "motion",
 )
 MIN_AGE = timedelta(days=1)
 
