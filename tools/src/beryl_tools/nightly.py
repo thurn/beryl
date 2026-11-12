@@ -7,8 +7,9 @@ throughout), the stage's verbs held to their own values in a stepped capture (`b
 every card scenario in the oracles (`by oracle`, which slow CI plays only some of). It costs no
 agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
-`last-output.txt` (the last run's output). More nightly work joins as another [`Step`] in
-[`STEPS`].
+`last-output.txt` (the last run's output). A check a step fails on origin/staging also goes to
+a Steward bead (nightly_failures.py), so it reaches someone. More nightly work joins as another
+[`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
 over [`FRESH_HOURS`] old and the machine is not busy, so the hourly retries cost nothing once a
@@ -269,11 +270,16 @@ def measure(
             "seconds": round(time.monotonic() - began, 1),
         }
     codes: dict[str, int] = {}
-    with open(folder() / "last-output.txt", "w") as out:
+    # The run log's records carry the wall clock, whatever `stamp` says.
+    since = datetime.now(timezone.utc).replace(microsecond=0)
+    output = folder() / "last-output.txt"
+    with open(output, "w") as out:
         for step in steps:
             out.write(f"== {step.name} on {commit}\n")
             out.flush()
             codes[step.name] = step.run(commit, out)
+    if any(codes.values()):
+        file_failures(commit, since, output.read_text(errors="replace"))
     return {
         "time": stamp,
         "commit": commit,
@@ -281,6 +287,25 @@ def measure(
         "outcome": "ok" if not any(codes.values()) else "failed",
         "steps": codes,
     }
+
+
+def last_passed_commit(records: list[dict[str, object]]) -> str:
+    """The commit of the last nightly that passed every step, or empty."""
+    for r in reversed(records):
+        if r.get("outcome") == "ok" and r.get("commit"):
+            return str(r["commit"])
+    return ""
+
+
+def file_failures(commit: str, since: datetime, output: str) -> None:
+    """Files the checks the night's steps failed in beads (nightly_failures.py), printing a
+    line for each bead touched."""
+    from . import nightly_failures  # It imports runlog, which imports this module.
+
+    failed = nightly_failures.failed_checks(commit, since)
+    passed = last_passed_commit(read_log())
+    for line in nightly_failures.file(commit, failed, output, passed):
+        print(line, file=sys.stderr)
 
 
 def nightly_command(args: argparse.Namespace) -> int:

@@ -6,7 +6,7 @@ from typing import IO
 
 import pytest
 
-from beryl_tools import nightly, runlog
+from beryl_tools import nightly, nightly_failures, runlog, verdicts
 
 NOW = datetime(2026, 11, 11, 3, 0, tzinfo=timezone.utc)
 
@@ -210,3 +210,135 @@ def test_the_oracles_play_every_scenario_at_low_priority_and_log_each(
     [record] = runlog.read_log(NOW - timedelta(days=3650))
     assert (record["check"], record["outcome"]) == ("oracle:A/a/forge", "fail")
     assert (record["script"], record["commit"]) == ("nightly", "abc123")
+
+
+class FakeBd(verdicts.Beads):
+    """bd as the nightly's filing uses it, in memory."""
+
+    def __init__(self) -> None:
+        self.issues: list[dict[str, object]] = []
+
+    def bd(self, *args: str) -> tuple[int, str]:
+        if args[:3] == ("list", "--label", nightly_failures.LABEL):
+            return 0, json.dumps(self.issues)
+        if args[0] == "create":
+            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
+            bead = f"by-{len(self.issues) + 1}"
+            self.issues.append(
+                {
+                    "id": bead,
+                    "title": flag("--title"),
+                    "description": flag("--description"),
+                    "priority": int(flag("--priority")),
+                    "labels": flag("--labels").split(","),
+                    "metadata": json.loads(flag("--metadata")),
+                    "status": "open",
+                    "comments": [],
+                }
+            )
+            return 0, bead
+        if args[:2] == ("comments", "add"):
+            [issue] = [i for i in self.issues if i["id"] == args[2]]
+            comments = issue["comments"]
+            assert isinstance(comments, list)
+            comments.append(args[3])
+            return 0, ""
+        raise AssertionError(args)
+
+
+@pytest.fixture
+def bd(monkeypatch: pytest.MonkeyPatch) -> FakeBd:
+    fake = FakeBd()
+    monkeypatch.setattr(verdicts, "STORE", fake)
+    return fake
+
+
+def filed_for(issue: dict[str, object]) -> list[str]:
+    """The checks a bead was filed for, from its metadata."""
+    meta = issue["metadata"]
+    assert isinstance(meta, dict)
+    return str(meta[nightly_failures.CHECKS_KEY]).splitlines()
+
+
+def checking(lane: str, results: dict[str, str]) -> nightly.Step:
+    """A step that logs `results` (check: outcome) to the run log as the nightly's steps do,
+    failing when any check does."""
+
+    def run(commit: str, out: IO[str]) -> int:
+        record = runlog.Run("nightly", commit, place="nightly")
+        failed = "fail" in results.values()
+        with record.step({}) as (_, path):
+            with open(path, "a") as f:
+                for check, outcome in results.items():
+                    f.write(
+                        json.dumps({"check": check, "outcome": outcome, "seconds": 1})
+                    )
+                    f.write("\n")
+            record.log(lane, lane, not failed, 1.0, path)
+        out.write(f"{lane} output\n")
+        return int(failed)
+
+    return nightly.Step(lane, run)
+
+
+def night(steps: list[nightly.Step], tip: str, now: datetime) -> dict[str, object]:
+    return nightly.run_nightly(
+        steps, now=lambda: now, load=lambda: 1.0, cores=lambda: 4, tip=lambda: tip
+    )
+
+
+def test_a_failed_check_files_one_steward_bead_and_a_repeat_comments_on_it(
+    bd: FakeBd,
+) -> None:
+    passing = checking("oracle", {"oracle:Card A/a/forge": "pass"})
+    assert night([passing], "good", NOW)["outcome"] == "ok"
+    assert bd.issues == [], "a passing night files nothing"
+
+    broken = checking(
+        "oracle",
+        {"oracle:Card A/a/forge": "fail", "oracle:Card B/b/xmage": "pass"},
+    )
+    assert night([broken], "bad1", NOW + timedelta(hours=21))["outcome"] == "failed"
+    [issue] = bd.issues
+    assert "role:steward" in issue["labels"]  # pyre-ignore[58]
+    assert issue["priority"] == 1
+    assert filed_for(issue) == ["oracle:Card A/a/forge"]
+    text = str(issue["description"])
+    assert "bad1" in text and "`oracle:Card A/a/forge`" in text
+    assert "Card B" not in text.split("Output tail")[0], "only the failed checks"
+    assert "just oracle 'Card A'" in text
+    assert "last nightly that passed every step was at good" in text
+    assert "oracle output" in text, "the tail of the night's output"
+
+    # The next night fails the same check and one more.
+    worse = checking(
+        "oracle",
+        {"oracle:Card A/a/forge": "fail", "oracle:Card B/b/xmage": "fail"},
+    )
+    night([worse], "bad2", NOW + timedelta(hours=42))
+    first, second = bd.issues
+    [comment] = first["comments"]  # pyre-ignore[23]
+    assert "bad2" in comment and "Card A" in comment and "Card B" not in comment
+    assert filed_for(second) == ["oracle:Card B/b/xmage"]
+
+
+def test_a_closed_bead_does_not_hold_back_a_new_one(bd: FakeBd) -> None:
+    broken = checking("fuzz", {"fuzz:games": "fail"})
+    night([broken], "bad1", NOW)
+    bd.issues[0]["status"] = "closed"
+    night([broken], "bad2", NOW + timedelta(hours=21))
+    assert len(bd.issues) == 2
+    assert "just fuzz" in str(bd.issues[1]["description"])
+
+
+def test_each_failing_lane_gets_its_own_bead(bd: FakeBd) -> None:
+    steps = [
+        checking("motion", {"motion:fly/desktop": "fail"}),
+        checking("oracle", {"oracle:Card A/a/forge": "fail"}),
+    ]
+    night(steps, "bad", NOW)
+    titles = sorted(str(i["title"]) for i in bd.issues)
+    assert titles == [
+        "Fix nightly motion failure: motion:fly/desktop",
+        "Fix nightly oracle failure: oracle:Card A/a/forge",
+    ]
