@@ -1,0 +1,712 @@
+//! The combat planner: each attack or block it weighs is played out to the end of
+//! combat on an engine copy of a determinization of its observation, both players passing
+//! priority, and the position it leaves is scored. In our attacks the defender blocks as we
+//! would ourselves, by this same planner one level deep; everything else, such as damage
+//! assignment, is the rollout policy's. The plans weighed are small: one attacker or two at
+//! the player or a planeswalker, just enough power at each planeswalker, every safe attacker,
+//! and every attacker at the player (the lethal check); one blocker or two, and the cheapest
+//! chump blocks that keep us alive. The best is declared through, and the next declaration
+//! weighs again. The engine offers interchangeable creatures as one option (§7.2), so a
+//! plan's creature stands for any of its kind.
+
+use beryl_engine::card::{Keywords, Types};
+use beryl_engine::layout::Queue;
+use beryl_engine::state::ObjectFlags;
+use beryl_engine::two_player::TwoPlayerSeat as _;
+use beryl_engine::{
+    Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Scratch,
+    Seat, Slot, State, Step, TurnStep, apply, next,
+};
+use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
+
+use std::marker::PhantomData;
+
+use crate::rollout::{Inline, Policy, RolloutPolicy};
+
+/// The decisions that can be answered by a combat plan.
+pub(super) fn handles(kind: DecisionKind) -> bool {
+    matches!(
+        kind,
+        DecisionKind::Attacker
+            | DecisionKind::AttackTarget
+            | DecisionKind::Blocker
+            | DecisionKind::BlockTarget
+    )
+}
+
+/// Adjustments an agent can make to the planner's general combat judgment.
+pub(super) trait Judgments<L: Layout> {
+    fn hold_back(_t: &GameTable, _s: &State<L>, _slot: L::Slot) -> bool {
+        false
+    }
+
+    fn life(_t: &GameTable, s: &State<L>, player: Seat) -> i16 {
+        s.player(player).life()
+    }
+
+    fn tapped_risk(_t: &GameTable, _s: &State<L>, _me: Seat, _policy: &Policy<'_, L>) -> i32 {
+        0
+    }
+}
+
+pub(super) struct General;
+
+impl<L: Layout> Judgments<L> for General {}
+
+/// A win or a loss, far beyond any position's score.
+const DECIDED: i32 = 100_000;
+
+/// How much worse being dead on board to the opponent's next attack is than any trade.
+const DEAD_ON_BOARD: i32 = 2_000;
+
+/// One declaration to make in a simulation, at our next combat decisions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Declare<L: Layout = Small> {
+    /// Attack with a creature, the player (`None`) or a planeswalker.
+    Attack(L::Slot, Option<L::Slot>),
+    /// Block an attacker with a creature.
+    Block(L::Slot, L::Slot),
+    /// Attack with every creature still able to, the player or a planeswalker.
+    Every(Option<L::Slot>),
+}
+
+/// The declarations chosen for this combat, followed through its decisions so that the
+/// attackers of one plan attack the same planeswalker and blockers of one plan block
+/// together: the ones still to declare, and the follow-up answer for the one declared last.
+#[derive(Clone, Debug, Default)]
+pub(super) struct Plan<L: Layout = Small> {
+    turn: u16,
+    rest: Vec<Declare<L>>,
+    follow_up: Option<Opt<L>>,
+}
+
+impl Plan<Small> {
+    /// The same plan in [`Large`], by the same slots.
+    pub(super) fn widen(&self) -> Plan<Large> {
+        let slot = |s: Slot| LargeSlot::from(s);
+        Plan {
+            turn: self.turn,
+            rest: self
+                .rest
+                .iter()
+                .map(|&d| match d {
+                    Declare::Attack(a, p) => Declare::Attack(slot(a), p.map(slot)),
+                    Declare::Block(b, a) => Declare::Block(slot(b), slot(a)),
+                    Declare::Every(p) => Declare::Every(p.map(slot)),
+                })
+                .collect(),
+            follow_up: self.follow_up.map(|o| o.relayout()),
+        }
+    }
+}
+
+/// The combat simulator for one decision of `me`'s.
+pub(super) struct Sim<'a, L: Layout, J> {
+    t: &'a GameTable,
+    policy: &'a RolloutPolicy,
+    x: &'a mut Scratch<L>,
+    me: Seat,
+    plan: &'a mut Plan<L>,
+    /// Whether this simulates the other side's blocks inside one of our attacks, so that
+    /// its own simulations leave the attacker's choices to the rollout policy.
+    nested: bool,
+    judgments: PhantomData<J>,
+}
+
+impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
+    pub(super) fn new(
+        t: &'a GameTable,
+        policy: &'a RolloutPolicy,
+        x: &'a mut Scratch<L>,
+        me: Seat,
+        plan: &'a mut Plan<L>,
+    ) -> Self {
+        Self {
+            t,
+            policy,
+            x,
+            me,
+            plan,
+            nested: false,
+            judgments: PhantomData,
+        }
+    }
+
+    /// The answer to a combat decision in the determinized position `start`.
+    pub fn choose(&mut self, start: &State<L>, d: &Decision<L>) -> Choice {
+        let turn = start.turn().number();
+        if self.plan.turn != turn {
+            *self.plan = Plan {
+                turn,
+                ..Plan::default()
+            };
+        }
+        match d.kind {
+            DecisionKind::AttackTarget | DecisionKind::BlockTarget => {
+                if let Some(c) = self.plan.follow_up.take().and_then(|o| option(d, o)) {
+                    return c;
+                }
+                self.follow_up(start, d)
+            }
+            DecisionKind::Attacker | DecisionKind::Blocker => {
+                // The plan's next declaration, while it is still legal.
+                if let Some(&next) = self.plan.rest.first()
+                    && let Some(c) = declare(start, d, next)
+                {
+                    if !matches!(next, Declare::Every(_)) {
+                        self.plan.rest.remove(0);
+                    }
+                    self.plan.follow_up = Some(follow_up(next));
+                    return c;
+                }
+                let plans = if d.kind == DecisionKind::Attacker {
+                    self.attack_plans(start, d)
+                } else {
+                    self.block_plans(start, d)
+                };
+                let mut top: (&[Declare<L>], i32) = (&[], self.weigh(start, d, &[], None));
+                for p in &plans {
+                    let score = self.weigh(start, d, p, None);
+                    // Every attacker, the unsafe ones too, is the lethal check only.
+                    if matches!(p.first(), Some(Declare::Every(_))) && score < DECIDED {
+                        continue;
+                    }
+                    // Of the lines that win, the one with the most attackers: the most robust
+                    // against what the simulation does not see.
+                    if score >= DECIDED && top.1 >= DECIDED && p.len() > top.0.len() {
+                        top = (p, score);
+                    }
+                    if score >= DECIDED && matches!(p.first(), Some(Declare::Every(_))) {
+                        top = (p, score);
+                        break;
+                    }
+                    if score > top.1 {
+                        top = (p, score);
+                    }
+                }
+                // When every line loses, block what we can all the same: the opponent may
+                // still misplay.
+                if top.1 <= -DECIDED
+                    && d.kind == DecisionKind::Blocker
+                    && let Some(chumps) = plans.last()
+                {
+                    top.0 = chumps;
+                }
+                let Some((&first, rest)) = top.0.split_first() else {
+                    return option(d, Opt::Done).unwrap_or(Choice(0));
+                };
+                self.plan.rest = if matches!(first, Declare::Every(_)) {
+                    top.0.to_vec()
+                } else {
+                    rest.to_vec()
+                };
+                self.plan.follow_up = Some(follow_up(first));
+                declare(start, d, first).unwrap_or(Choice(0))
+            }
+            _ => Choice(0),
+        }
+    }
+
+    /// The attacks worth weighing: each attacker alone and each pair together, at the player
+    /// or a planeswalker, and every attacker at the player, the lethal check.
+    fn attack_plans(&self, start: &State<L>, d: &Decision<L>) -> Vec<Vec<Declare<L>>> {
+        // A creature without power deals nothing.
+        let attackers = offered(start, d, |o| match o {
+            Opt::Attack(slot) if start.derived(slot).power > 0 => Some(slot),
+            _ => None,
+        });
+        // A creature an untapped blocker would kill for nothing attacks only all in,
+        // as does a creature the agent judges more valuable held back.
+        let all_in = !attackers.is_empty();
+        let attackers: Vec<L::Slot> = attackers
+            .into_iter()
+            .filter(|&a| !self.dies_for_nothing(start, a) && !J::hold_back(self.t, start, a))
+            .collect();
+        let mut plans = Vec::new();
+        for target in self.defenders(start) {
+            for (i, &a) in attackers.iter().enumerate() {
+                plans.push(vec![Declare::Attack(a, target)]);
+                for &b in &attackers[i + 1..] {
+                    plans.push(vec![Declare::Attack(a, target), Declare::Attack(b, target)]);
+                }
+            }
+        }
+        if all_in {
+            plans.push(vec![Declare::Every(None)]);
+        }
+        if attackers.len() > 2 {
+            plans.push(
+                attackers
+                    .iter()
+                    .map(|&a| Declare::Attack(a, None))
+                    .collect(),
+            );
+        }
+        if !attackers.is_empty() {
+            let kills = self.walker_kills(start, &attackers);
+            if !kills.is_empty() {
+                // The rest of the safe attackers at the player.
+                let mut all = kills.clone();
+                all.extend(
+                    attackers
+                        .iter()
+                        .filter(|&&a| {
+                            !kills
+                                .iter()
+                                .any(|k| matches!(k, Declare::Attack(b, _) if *b == a))
+                        })
+                        .map(|&a| Declare::Attack(a, None)),
+                );
+                plans.push(kills);
+                plans.push(all);
+            }
+        }
+        plans
+    }
+
+    /// Whether an untapped creature of the opponent's could block `attacker`, kill it and
+    /// survive.
+    fn dies_for_nothing(&self, s: &State<L>, attacker: L::Slot) -> bool {
+        let left = |slot: L::Slot| {
+            i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage())
+        };
+        s.battlefield().iter().any(|&b| {
+            s.controller(b) != self.me
+                && s.derived(b).types.intersects(Types::CREATURE)
+                && !s.object(b).flags().has(ObjectFlags::TAPPED)
+                && can_block(s, b, attacker)
+                && i16::from(s.derived(b).power) >= left(attacker)
+                && i16::from(s.derived(attacker).power) < left(b)
+        })
+    }
+
+    /// Just enough power at each of the opponent's planeswalkers to kill it, the most
+    /// valuable first: the weakest attacker that kills it alone, or the strongest together.
+    fn walker_kills(&self, s: &State<L>, attackers: &[L::Slot]) -> Vec<Declare<L>> {
+        let p = self
+            .policy
+            .view(self.t, Observation::new(s, self.me), self.me, true);
+        let mut walkers: Vec<L::Slot> = self.defenders(s).into_iter().flatten().collect();
+        walkers.sort_by_key(|&w| -p.value(w));
+        let power = |a: L::Slot| i32::from(s.derived(a).power.max(0));
+        let mut free = attackers.to_vec();
+        free.sort_by_key(|&a| power(a));
+        let mut plan = Vec::new();
+        for w in walkers {
+            let loyalty = i32::from(s.object(w).counters().loyalty);
+            if let Some(i) = free.iter().position(|&a| power(a) >= loyalty) {
+                plan.push(Declare::Attack(free.remove(i), Some(w)));
+                continue;
+            }
+            let total: i32 = free.iter().map(|&a| power(a)).sum();
+            if total < loyalty {
+                continue;
+            }
+            let mut dealt = 0;
+            while dealt < loyalty
+                && let Some(a) = free.pop()
+            {
+                dealt += power(a);
+                plan.push(Declare::Attack(a, Some(w)));
+            }
+        }
+        plan
+    }
+
+    /// The blocks worth weighing: each blocker on each attacker it could block, two blockers
+    /// on one attacker or on two, and the cheapest chump blocks that keep us alive.
+    fn block_plans(&self, start: &State<L>, d: &Decision<L>) -> Vec<Vec<Declare<L>>> {
+        let blockers = offered(start, d, |o| match o {
+            Opt::Block(slot) => Some(slot),
+            _ => None,
+        });
+        let attackers = attacking(start, self.me);
+        let pairs: Vec<(L::Slot, L::Slot)> = blockers
+            .iter()
+            .flat_map(|&b| attackers.iter().map(move |&a| (b, a)))
+            .filter(|&(b, a)| can_block(start, b, a))
+            .collect();
+        let mut plans: Vec<Vec<Declare<L>>> = pairs
+            .iter()
+            .map(|&(b, a)| vec![Declare::Block(b, a)])
+            .collect();
+        for (i, &(b, a)) in pairs.iter().enumerate() {
+            for &(c, e) in &pairs[i + 1..] {
+                // Two attackers each blocked, only when there are few enough to weigh.
+                if c != b && (a == e || pairs.len() <= 12) {
+                    plans.push(vec![Declare::Block(b, a), Declare::Block(c, e)]);
+                }
+            }
+        }
+        plans.push(self.chumps(start, &blockers, &attackers));
+        plans
+    }
+
+    /// Chump blocks, the cheapest blocker in front of the strongest attacker it can block,
+    /// until what gets through no longer kills us.
+    fn chumps(&self, s: &State<L>, blockers: &[L::Slot], attackers: &[L::Slot]) -> Vec<Declare<L>> {
+        let p = self
+            .policy
+            .view(self.t, Observation::new(s, self.me), self.me, true);
+        let power = |a: L::Slot| i32::from(s.derived(a).power.max(0));
+        let mut attackers = attackers.to_vec();
+        attackers.sort_by_key(|&a| -power(a));
+        let mut free = blockers.to_vec();
+        free.sort_by_key(|&b| p.value(b));
+        let mut through: i32 = attackers.iter().map(|&a| power(a)).sum();
+        let life = i32::from(s.player(self.me).life());
+        let mut plan = Vec::new();
+        for a in attackers {
+            if through < life {
+                break;
+            }
+            if let Some(i) = free.iter().position(|&b| can_block(s, b, a)) {
+                plan.push(Declare::Block(free.remove(i), a));
+                through -= power(a);
+            }
+        }
+        plan
+    }
+
+    /// What the creature just declared attacks, or blocks, with no plan to follow.
+    fn follow_up(&mut self, start: &State<L>, d: &Decision<L>) -> Choice {
+        let candidates: Vec<Opt<L>> = match &d.candidates {
+            Candidates::Options(o) => o.iter().copied().collect(),
+            Candidates::Objects(_) => d.candidates.objects().map(Opt::Object).collect(),
+        };
+        let mut top = (0, i32::MIN);
+        for (i, &o) in candidates.iter().enumerate() {
+            let score = self.weigh(start, d, &[], Some(o));
+            if score > top.1 {
+                top = (i, score);
+            }
+        }
+        Choice(top.0 as u16)
+    }
+
+    /// What an attacker could attack: the player, then each planeswalker the opponent
+    /// controls.
+    fn defenders(&self, s: &State<L>) -> Vec<Option<L::Slot>> {
+        let mut out = vec![None];
+        out.extend(
+            s.battlefield()
+                .iter()
+                .copied()
+                .filter(|&w| {
+                    s.controller(w) != self.me && s.derived(w).types.intersects(Types::PLANESWALKER)
+                })
+                .map(Some),
+        );
+        out
+    }
+
+    /// The score of declaring `plan` at decision `d`, with `pending` answering the
+    /// follow-up question: for our attack, mostly the worse of the defender blocking as
+    /// planned and not blocking at all, so that an attack is not made on a block the
+    /// defender need not make (one that leaves us dead on board if it does not come), and a
+    /// quarter of what the better one adds, so that of two lines alike when blocked, the one
+    /// that gains more unblocked is taken; when either decides the game, the worse alone.
+    fn weigh(
+        &mut self,
+        start: &State<L>,
+        d: &Decision<L>,
+        plan: &[Declare<L>],
+        pending: Option<Opt<L>>,
+    ) -> i32 {
+        let planned = self.run(start, plan, pending, true);
+        let ours = matches!(d.kind, DecisionKind::Attacker | DecisionKind::AttackTarget);
+        if !ours || self.nested || planned >= DECIDED {
+            return planned;
+        }
+        let free = self.run(start, plan, pending, false);
+        let (lo, hi) = (planned.min(free), planned.max(free));
+        if hi >= DECIDED || lo <= -DECIDED {
+            lo
+        } else {
+            lo + (hi - lo) / 4
+        }
+    }
+
+    /// Plays combat on from `start` with our next declarations `plan`, then stopping, and
+    /// scores where it ends. `pending` answers the follow-up question of a declaration
+    /// already made: what a declared attacker attacks, or what a declared blocker blocks.
+    /// The opponent blocks as planned with `blocks`, else not at all.
+    fn run(
+        &mut self,
+        start: &State<L>,
+        plan: &[Declare<L>],
+        mut pending: Option<Opt<L>>,
+        blocks: bool,
+    ) -> i32 {
+        let mut s = start.clone();
+        self.x.counts.copied();
+        let turn = s.turn().number();
+        let mut inline = Inline {
+            policy: self.policy,
+            t: self.t,
+        };
+        let mut plan = plan.iter().copied().peekable();
+        // The opponent's blocks, planned as we plan ours, one level deep.
+        let mut theirs = Plan::default();
+        loop {
+            let step = s.turn().step();
+            if s.turn().number() != turn
+                || matches!(
+                    step,
+                    TurnStep::EndOfCombat | TurnStep::PostcombatMain | TurnStep::End
+                )
+            {
+                break;
+            }
+            let d = match next(&mut s, self.t, self.x, &mut inline) {
+                Step::Over(_) => break,
+                Step::Decide(d) => d,
+            };
+            let c = match (d.kind, d.player == self.me) {
+                (DecisionKind::Priority, _) => Choice(0),
+                (DecisionKind::Attacker | DecisionKind::Blocker, true) => {
+                    let mut c = None;
+                    while c.is_none()
+                        && let Some(&p) = plan.peek()
+                    {
+                        c = declare(&s, &d, p);
+                        pending = Some(follow_up(p));
+                        // Every attacker is declared one decision at a time, until none is
+                        // left.
+                        if c.is_none() || !matches!(p, Declare::Every(_)) {
+                            plan.next();
+                        }
+                    }
+                    c.unwrap_or_else(|| option(&d, Opt::Done).unwrap_or(Choice(0)))
+                }
+                (DecisionKind::AttackTarget | DecisionKind::BlockTarget, true) => pending
+                    .take()
+                    .and_then(|want| option(&d, want))
+                    .unwrap_or(Choice(0)),
+                // An opponent declaring attackers here would be past this combat.
+                (DecisionKind::Attacker, false) => option(&d, Opt::Done).unwrap_or(Choice(0)),
+                (DecisionKind::Blocker, false) if !blocks => {
+                    option(&d, Opt::Done).unwrap_or(Choice(0))
+                }
+                (DecisionKind::Blocker | DecisionKind::BlockTarget, false) if !self.nested => {
+                    let mut sim = Sim {
+                        t: self.t,
+                        policy: self.policy,
+                        x: &mut *self.x,
+                        me: d.player,
+                        plan: &mut theirs,
+                        nested: true,
+                        judgments: PhantomData::<J>,
+                    };
+                    sim.choose(&s, &d)
+                }
+                _ => self
+                    .policy
+                    .choose(self.t, Observation::new(&s, d.player), &d),
+            };
+            apply(&mut s, self.t, self.x, &mut inline, c);
+        }
+        self.score(&s, s.turn().active() == self.me)
+    }
+
+    /// A position's score for us: the permanents' values on each side, other than lands,
+    /// and life, which counts for more as it runs low; and the
+    /// damage the opponent's creatures could swing back with next turn past our blockers.
+    fn score(&self, s: &State<L>, ours: bool) -> i32 {
+        match s.outcome() {
+            Some(Outcome::Win(p)) if p == self.me => return DECIDED,
+            Some(Outcome::Win(_)) => return -DECIDED,
+            Some(_) => return 0,
+            None => {}
+        }
+        let me = self.me;
+        let p = self.policy.view(self.t, Observation::new(s, me), me, true);
+        let mut e = 0;
+        for &slot in s.battlefield() {
+            if s.derived(slot).types.intersects(Types::LAND) {
+                continue;
+            }
+            let v = p.value(slot);
+            e += if s.controller(slot) == me { v } else { -v };
+        }
+        let mine = J::life(self.t, s, me);
+        // Their creatures are a clock on us, the more so the lower our life.
+        let clock: i32 = s
+            .battlefield()
+            .iter()
+            .filter(|&&c| s.controller(c) != me && s.derived(c).types.intersects(Types::CREATURE))
+            .map(|&c| i32::from(s.derived(c).power.max(0)))
+            .sum();
+        e -= clock * if mine <= 10 { 3 } else { 1 };
+        e += life(mine) - life(J::life(self.t, s, me.opponent()));
+        // After our attack, our attackers stay tapped through their turn; after our blocks,
+        // all of ours untap before they attack again.
+        let back = swing_back(s, me, !ours, mine <= 5);
+        let to_us = if back >= i32::from(mine) {
+            DEAD_ON_BOARD
+        } else {
+            life(mine) - life(mine - back as i16)
+        };
+        // Or they swing at a planeswalker of ours instead.
+        let to_walker = s
+            .battlefield()
+            .iter()
+            .filter(|&&w| {
+                s.controller(w) == me && s.derived(w).types.intersects(Types::PLANESWALKER)
+            })
+            .map(|&w| {
+                if back >= i32::from(s.object(w).counters().loyalty) {
+                    p.value(w)
+                } else {
+                    6 * back
+                }
+            })
+            .max()
+            .unwrap_or(0);
+        let risk = if ours {
+            J::tapped_risk(self.t, s, me, &p)
+        } else {
+            0
+        };
+        e - to_us.max(to_walker) - risk
+    }
+}
+
+/// What life is worth: each point 2, 10 more each of the last 10, and 15 more each of the
+/// last 5, where one trick or loot away from dead.
+fn life(l: i16) -> i32 {
+    let l = i32::from(l.max(0));
+    2 * l + 10 * l.min(10) + 15 * l.min(5)
+}
+
+/// The damage the opponent's creatures could deal `me` attacking next turn, each of our
+/// creatures blocking one of them it could block, the strongest first: our untapped ones, or
+/// with `untap`, all of them. With `fragile`, the opponent removes one of our blockers first,
+/// as they will when one more blocker is all that keeps us alive.
+fn swing_back<L: Layout>(s: &State<L>, me: Seat, untap: bool, fragile: bool) -> i32 {
+    let creature = |slot: L::Slot| s.derived(slot).types.intersects(Types::CREATURE);
+    let flies = |slot: L::Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
+    let mut attackers: Vec<(i32, bool)> = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&a| s.controller(a) != me && creature(a) && s.derived(a).power > 0)
+        .map(|a| (i32::from(s.derived(a).power), flies(a, Keywords::FLYING)))
+        .collect();
+    attackers.sort_unstable_by(|a, b| b.cmp(a));
+    let mut blockers: Vec<bool> = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&b| {
+            s.controller(b) == me
+                && creature(b)
+                && (untap || !s.object(b).flags().has(ObjectFlags::TAPPED))
+        })
+        .map(|b| flies(b, Keywords::FLYING.union(Keywords::REACH)))
+        .collect();
+    if fragile && !blockers.is_empty() {
+        // The best of them: one that blocks fliers too, if any.
+        let i = blockers.iter().position(|&reach| reach).unwrap_or(0);
+        blockers.swap_remove(i);
+    }
+    let mut damage = 0;
+    for (power, flying) in attackers {
+        match blockers.iter().position(|&reach| reach || !flying) {
+            Some(i) => {
+                blockers.swap_remove(i);
+            }
+            None => damage += power,
+        }
+    }
+    damage
+}
+
+/// The choice that makes declaration `want` at decision `d`: its creature, or one
+/// interchangeable with it; for [`Declare::Every`], any attacker with power. `None` when it
+/// is no longer legal.
+fn declare<L: Layout>(s: &State<L>, d: &Decision<L>, want: Declare<L>) -> Option<Choice> {
+    let Candidates::Options(options) = &d.candidates else {
+        return None;
+    };
+    options
+        .iter()
+        .position(|&o| match (want, o) {
+            (Declare::Attack(a, _), Opt::Attack(b)) | (Declare::Block(a, _), Opt::Block(b)) => {
+                like(s, a, b)
+            }
+            (Declare::Every(_), Opt::Attack(b)) => s.derived(b).power > 0,
+            _ => false,
+        })
+        .map(|i| Choice(i as u16))
+}
+
+/// The answer to the question that follows declaring `d`: what it attacks or blocks.
+fn follow_up<L: Layout>(d: Declare<L>) -> Opt<L> {
+    match d {
+        Declare::Attack(_, target) | Declare::Every(target) => Opt::Defender(target),
+        Declare::Block(_, a) => Opt::Object(a),
+    }
+}
+
+/// Every creature of ours a decision's options could declare: the ones it names, and those
+/// interchangeable with one, which the engine offers as the same option (§7.2).
+fn offered<L: Layout>(
+    s: &State<L>,
+    d: &Decision<L>,
+    pick: impl Fn(Opt<L>) -> Option<L::Slot>,
+) -> Vec<L::Slot> {
+    let Candidates::Options(options) = &d.candidates else {
+        return Vec::new();
+    };
+    let named: Vec<L::Slot> = options.iter().filter_map(|&o| pick(o)).collect();
+    s.battlefield()
+        .iter()
+        .copied()
+        .filter(|&c| named.iter().any(|&n| like(s, n, c)))
+        .filter(|&c| {
+            let f = s.object(c).flags();
+            !f.has(ObjectFlags::ATTACKING) && !f.has(ObjectFlags::BLOCKING)
+        })
+        .collect()
+}
+
+/// Whether two creatures are interchangeable: the same card, the same power and toughness.
+fn like<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool {
+    a == b
+        || (s.controller(a) == s.controller(b)
+            && s.copiable(a).key() == s.copiable(b).key()
+            && s.derived(a).power == s.derived(b).power
+            && s.derived(a).toughness == s.derived(b).toughness
+            && s.object(a).flags().has(ObjectFlags::TAPPED)
+                == s.object(b).flags().has(ObjectFlags::TAPPED))
+}
+
+/// Whether `blocker` could block `attacker`, by evasion
+/// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b)): "A creature with
+/// flying can't be blocked except by creatures with flying and/or reach."
+fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bool {
+    let has = |slot: L::Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
+    !has(attacker, Keywords::FLYING) || has(blocker, Keywords::FLYING.union(Keywords::REACH))
+}
+
+/// The opponent's creatures attacking `me`.
+fn attacking<L: Layout>(s: &State<L>, me: Seat) -> Vec<L::Slot> {
+    s.battlefield()
+        .iter()
+        .copied()
+        .filter(|&a| s.controller(a) != me && s.object(a).flags().has(ObjectFlags::ATTACKING))
+        .collect()
+}
+
+/// The choice naming `want` among a decision's candidates.
+fn option<L: Layout>(d: &Decision<L>, want: Opt<L>) -> Option<Choice> {
+    match &d.candidates {
+        Candidates::Options(o) => o.iter().position(|&o| o == want),
+        Candidates::Objects(_) => match want {
+            Opt::Object(slot) => d.candidates.objects().position(|s| s == slot),
+            _ => None,
+        },
+    }
+    .map(|i| Choice(i as u16))
+}

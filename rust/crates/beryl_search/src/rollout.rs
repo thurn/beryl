@@ -61,7 +61,6 @@ const LAND_MAX: i32 = 15;
 pub struct Rules {
     pub hold: bool,
     pub waste: bool,
-    pub combat: bool,
 }
 
 /// The rollout policy for one game: its per-card values and rules. Stateless between

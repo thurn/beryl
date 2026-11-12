@@ -59,6 +59,7 @@ use beryl_engine::{
     Replay, Scratch, Seat, State, Step, Zone, apply, next, observe,
 };
 
+use crate::combat;
 use crate::eval::evaluate;
 use crate::mcts::{shows_the_same, smart};
 use crate::rollout::{RolloutPolicy, Rules, Softmax, soft_rollout, soft_rollout_to};
@@ -139,7 +140,8 @@ pub struct Options {
     pub hold: bool,
     /// Avoid spending resources on effects with no worthwhile targets.
     pub waste: bool,
-    /// Use the additional attack and block heuristics.
+    /// With the anchor, use the combat planner's answer at declarations and their targets.
+    /// Below the root, the planner answers those decisions for both players on the root's turn.
     pub combat: bool,
 }
 
@@ -362,7 +364,6 @@ impl Options {
         Rules {
             hold: self.hold,
             waste: self.waste,
-            combat: self.combat,
         }
     }
 }
@@ -373,6 +374,7 @@ pub struct LongSearch<L: Layout = Small> {
     table: GameTable,
     policy: RolloutPolicy,
     expert: Option<ExpertAgent<L>>,
+    combat_plan: combat::Plan<L>,
     settings: Settings,
     seed: u64,
     /// The next decision's index among the agent's own.
@@ -406,6 +408,7 @@ impl<L: Layout> LongSearch<L> {
             table: t.clone(),
             policy: family.rollout_policy(t),
             expert: family.options.expert.then(|| ExpertAgent::new(t, seed)),
+            combat_plan: combat::Plan::default(),
             settings,
             seed,
             decision,
@@ -624,7 +627,7 @@ struct Plan<'a> {
 /// An anchored search's check of its choice against the default answer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnchorCheck {
-    /// The default answer, from the live expert for [`Options::expert`] and greedy otherwise.
+    /// The default answer, from the combat planner, live expert or greedy policy.
     pub greedy: Choice,
     /// The search's own choice: the candidate visited most.
     pub search: Choice,
@@ -880,6 +883,7 @@ impl Widen for LongSearch<Small> {
             table: self.table.clone(),
             policy: self.policy.clone(),
             expert: self.expert.as_ref().map(Widen::widen),
+            combat_plan: self.combat_plan.widen(),
             settings: self.settings,
             seed: self.seed,
             decision: self.decision,
@@ -916,7 +920,21 @@ impl<L: Layout> LongSearch<L> {
         let inherited = trees.iter().map(Tree::visits).sum();
         // The default answers from the player's observation, independently of the search trees.
         let options = self.settings.family.options;
+        let combat_default = options.anchor && options.combat && combat::handles(d.kind);
         let default = options.anchor.then(|| match &mut self.expert {
+            _ if combat_default => {
+                // Use a stream separate from the worlds planted for the search.
+                let mut rng = SplitMix64::new(self.seed ^ !u64::from(decision.0));
+                let start = obs.determinize(&self.table, &mut rng);
+                combat::Sim::<_, combat::General>::new(
+                    &self.table,
+                    &self.policy,
+                    &mut Scratch::unchecked(),
+                    d.player,
+                    &mut self.combat_plan,
+                )
+                .choose(&start, d)
+            }
             Some(expert) => expert.choose(obs, d),
             None => self.policy.choose(&self.table, obs, d),
         });
@@ -940,6 +958,10 @@ impl<L: Layout> LongSearch<L> {
             Some(check(&trees, search, g))
         });
         let choice = anchor.map_or(best, |a| a.played());
+        if combat_default && default != Some(choice) {
+            // The rest of the plan assumed that we made the declaration it chose.
+            self.combat_plan = combat::Plan::default();
+        }
         self.last = Some(Search {
             decision,
             chain,
@@ -980,8 +1002,9 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     }
 
     fn resume_point(&self) -> Option<AgentDecision> {
-        if self.expert.is_some() {
-            // Match replay must rebuild the expert's combat plan and random stream too.
+        let options = self.settings.family.options;
+        if self.expert.is_some() || (options.anchor && options.combat) {
+            // Match replay must rebuild the combat plan and the expert's random stream too.
             return Some(AgentDecision(0));
         }
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
@@ -993,6 +1016,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
 
     fn rewind(&mut self, to: AgentDecision) {
         self.decision = to;
+        self.combat_plan = combat::Plan::default();
         if self.expert.is_some() {
             self.expert = Some(ExpertAgent::new(&self.table, self.seed));
         }
@@ -1265,6 +1289,8 @@ impl<L: Layout> Tree<L> {
         let mut depth = 0;
         let mut node = self.root;
         let mut d = self.decision.clone();
+        let root_turn = self.state.turn().number();
+        let mut plans = [combat::Plan::default(), combat::Plan::default()];
         let value = loop {
             let at_root = node == self.root;
             let keys = if at_root {
@@ -1272,11 +1298,26 @@ impl<L: Layout> Tree<L> {
             } else {
                 keys(&s, &d, self.known, self.viewer)
             };
+            let combat_only = !at_root
+                && self.family.options.combat
+                && combat::handles(d.kind)
+                && s.turn().number() == root_turn;
             let policy_only = !at_root && self.family.options.mid && answered_by_policy(&d);
             let (child, choice) = match self.allowed {
                 Some(pair) if at_root => {
                     let (child, Choice(i)) = self.select(node, &pair.map(|i| keys[i]), d.player);
                     (child, Choice(pair[usize::from(i)] as u16))
+                }
+                _ if combat_only => {
+                    let c = combat::Sim::<_, combat::General>::new(
+                        t,
+                        policy,
+                        &mut self.x,
+                        d.player,
+                        &mut plans[d.player.index()],
+                    )
+                    .choose(&s, &d);
+                    (self.only(node, keys[usize::from(c.0)], d.player), c)
                 }
                 _ if policy_only => {
                     let c = policy.choose(t, Observation::new(&s, d.player), &d);
@@ -1291,7 +1332,7 @@ impl<L: Layout> Tree<L> {
                 if at_root {
                     trace.enter(choice);
                 } else {
-                    trace.advance(t, &s, &d, choice, policy_only);
+                    trace.advance(t, &s, &d, choice, policy_only || combat_only);
                 }
             }
             path[depth] = child;
@@ -1450,7 +1491,8 @@ impl<L: Layout> Tree<L> {
 /// At priority, hold against a cast or activation scored at 0 or less by the rollout policy,
 /// regardless of greedy's answer, with the same `never_cast` exemption.
 ///
-/// With [`Options::expert`], hold the expert's answer at every decision.
+/// With [`Options::combat`], hold the planner's answer at combat declarations and targets.
+/// With [`Options::expert`], hold the default at every decision.
 pub fn guarded<L: Layout>(
     t: &GameTable,
     policy: &RolloutPolicy,
@@ -1460,7 +1502,7 @@ pub fn guarded<L: Layout>(
     search: Choice,
     options: Options,
 ) -> bool {
-    if options.expert {
+    if options.expert || (options.combat && combat::handles(d.kind)) {
         return search != default;
     }
     let eligible = |slot: L::Slot| {

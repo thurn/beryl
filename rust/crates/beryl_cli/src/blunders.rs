@@ -508,6 +508,37 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn combat_planner_holds_back_at_the_two_blocker_positions() {
+        for name in ["beza-trinket-into-blockers", "manifest-into-samurai"] {
+            let at = reach(&entry(name)).unwrap();
+            let seed = run_seed(name, 0);
+            let family = "pimc2/hidden/rollout/tuned/anchor+combat".parse().unwrap();
+            let mut scratch = Scratch::new();
+            let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+            let shown = labels(&at.t, view(&at.s, &at.t, &mut Scratch::new()), &at.d);
+            let settings = |work| beryl_search::Settings {
+                family,
+                work,
+                threads: 1,
+            };
+
+            // With no budget for an iteration, the guarded decision uses the default.
+            let mut planner = beryl_search::LongSearch::new(&at.t, settings(0), seed);
+            let choice = planner.choose(obs, &at.d);
+            assert_eq!(planner.last_search().unwrap().rollouts, 0);
+            assert_eq!(shown[usize::from(choice.0)], "done", "{name}");
+
+            let mut first = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
+            let mut second = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
+            assert_eq!(
+                first.choose(obs, &at.d),
+                second.choose(obs, &at.d),
+                "{name}"
+            );
+        }
+    }
+
     /// Reviewed hunt positions reject the recorded mistake but retain a useful alternative.
     #[test]
     fn reviewed_hunt_choices_and_drift() {

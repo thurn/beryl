@@ -4,6 +4,7 @@
 //! and the [`FrozenExpertAgent`] is a copy of it that never changes, the bar general agents
 //! are measured against. [`AGENTS`] names every agent a game can be played against.
 
+mod combat;
 mod eval;
 mod expert;
 mod frozen;

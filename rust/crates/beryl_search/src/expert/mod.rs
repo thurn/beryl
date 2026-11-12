@@ -1,7 +1,7 @@
 //! The expert system (Milestone 1 decision 6): prioritized rules with card knowledge for the
 //! WU Control mirrors, cb8d5d5f's and the Vintage deck's before it. It decides from its
 //! [`Observation`] only. It looks further in two places, on engine copies of a
-//! determinization: combat ([`combat`]), where it plays out the attacks and blocks it weighs,
+//! determinization: combat ([`crate::combat`]), where it plays out the attacks and blocks it weighs,
 //! for combat math and lethal checks; and a payment plan, where it reads which sources each
 //! plan would tap.
 //!
@@ -39,6 +39,8 @@
 //!   expert does ([`appraise`]).
 
 mod combat;
+use crate::combat::{Plan, Sim};
+use combat::ExpertCombat;
 
 use beryl_engine::layout::Queue;
 use beryl_engine::two_player::TwoPlayerSeat as _;
@@ -111,7 +113,7 @@ pub struct ExpertAgent<L: Layout = Small> {
     policy: RolloutPolicy,
     rng: SplitMix64,
     x: Scratch<L>,
-    plan: combat::Plan<L>,
+    plan: Plan<L>,
 }
 
 impl<L: Layout> ExpertAgent<L> {
@@ -121,7 +123,7 @@ impl<L: Layout> ExpertAgent<L> {
             policy: RolloutPolicy::new(t),
             rng: SplitMix64::new(seed),
             x: Scratch::unchecked(),
-            plan: combat::Plan::default(),
+            plan: Plan::default(),
         }
     }
 }
@@ -162,16 +164,9 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
             | DecisionKind::AttackTarget
             | DecisionKind::Blocker
             | DecisionKind::BlockTarget => {
-                let mut sim = combat::Sim {
-                    t,
-                    policy: &self.policy,
-                    x: &mut self.x,
-                    me: d.player,
-                    plan: &mut self.plan,
-                    nested: false,
-                };
                 let start = obs.determinize(t, &mut self.rng);
-                sim.choose(&start, d)
+                Sim::<_, ExpertCombat>::new(t, &self.policy, &mut self.x, d.player, &mut self.plan)
+                    .choose(&start, d)
             }
             DecisionKind::YesNo if d.prompt.purpose == Purpose::PayLife => e.pay_life(d),
             DecisionKind::YesNo => e
