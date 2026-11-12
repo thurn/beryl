@@ -55,6 +55,10 @@ function Ability({
   );
 }
 
+/** Whether the way `candidate` is shown as its card: a cast or a land played. */
+const shows = ({ option }: Candidate) =>
+  option.kind === "cast" || option.kind === "playLand";
+
 /** The card `object` as the way `candidate` uses it: by the face it is cast with, or the
  * land face it is played as, and for an ability the ability. */
 function Way({
@@ -74,7 +78,7 @@ function Way({
       : option.kind === "cast" && option.face > 0
         ? cardEntry(name)?.faces[option.face]?.name
         : undefined;
-  if (option.kind !== "cast" && option.kind !== "playLand") {
+  if (!shows(candidate)) {
     return <Ability object={object} candidate={candidate} width={width} />;
   }
   return (
@@ -124,6 +128,8 @@ export function Ways({
         {object && candidate && (
           <span
             className="stage-way-face"
+            // The card shown again: what the audits know a way's frame by.
+            data-card={shows(candidate) ? (object.name ?? undefined) : undefined}
             style={{ width, height: width / CARD_ASPECT }}
             aria-hidden
           >
