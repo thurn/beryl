@@ -20,7 +20,9 @@ export const EDGE = 3;
 
 /** In the page: plays the moment as the recording's seat did, holding the stage's clock and
  * advancing it in ticks of `tick`: the seat answers once the stage has stood idle for `gap`,
- * until an ability has come onto the stack and gone and `edge` ticks after, or with `whole`,
+ * until an ability has come onto the stack and gone and `tail` ticks after (`edge`, the
+ * still ticks before the first answer, if not said: what a finished ability left room for
+ * takes longer to close up), or with `whole`,
  * for all of its `answers`: to the recording's end, which the view the stage then shows tells
  * (`shows`); and with `written`, the marks of the script written by hand after it. Before each tick whose number is in `shoot` it waits on
  * `window.berylShoot(number, time)`. Returns every step the stage told of, with its subject,
@@ -44,6 +46,7 @@ export async function walk({
     gap,
     answers,
     edge,
+    tail = edge,
     shoot,
     whole,
     paced,
@@ -235,12 +238,12 @@ export async function walk({
     }
     let after = 0;
     let finished = false;
-    for (let answer = 0; answer < answers && after < edge; answer++) {
+    for (let answer = 0; answer < answers && after < tail; answer++) {
         await window.berylFixture.invoke("choose", { request: {} });
         // The transport hands the views on in a microtask.
         await new Promise((resolve) => wait(resolve));
         let idle = 0;
-        while (after < edge && idle < gap) {
+        while (after < tail && idle < gap) {
             // On the whole milliseconds nearest each tick's time, so that two plays read the
             // same to the bit wherever the page's clock stood when it was held.
             const took =
@@ -248,10 +251,9 @@ export async function walk({
                 Math.round((ticks.length - 1) * tick);
             clock.advance(took);
             await sample();
-            // Over once an ability has come onto the stack and gone, as verbs.mjs's walk is,
-            // and what it left room for has closed up after it.
+            // Over once an ability has come onto the stack and gone, as verbs.mjs's walk is.
             finished ||= !whole && lifted && !abilities;
-            if (finished && !stage.shown.busy) after += 1;
+            if (finished) after += 1;
             // No step plays while what a card left room for closes up after its step.
             idle = stage.step || stage.shown.busy ? 0 : idle + took;
         }
@@ -293,7 +295,7 @@ export async function walk({
         steps,
         ticks,
         orbs,
-        done: whole ? !stage.shown.busy : after >= edge,
+        done: whole ? !stage.shown.busy : after >= tail,
         shows: shown && [shown.turn.number, shown.turn.step, shown.status],
     };
 }

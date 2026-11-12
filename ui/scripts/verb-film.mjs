@@ -556,6 +556,7 @@ for (const [layout, { query, size }] of Object.entries(LAYOUTS)) {
                     gap: GAP,
                     answers: end?.answers ?? ANSWERS,
                     edge: EDGE,
+                    tail: TAIL,
                     shoot,
                     whole: moment.whole,
                     paced: true,
