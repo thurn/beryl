@@ -199,3 +199,37 @@ export function sounded(run, sound, at, what, delay = 0) {
         `${what}: no ${sound} at ${at} ms among ${JSON.stringify(run.sounds)}`,
     );
 }
+
+/** Every sound `run`'s page was asked for is a step's, at the stage time that step begins or
+ * ends as the step says, to sound then or the share of the step after it the step says; and
+ * every sound a step asks for was asked for then, once however many steps ask at one time. */
+export function soundsFollowSteps(run) {
+    const asked = [];
+    for (const { edge, at, span, cues } of run.edges) {
+        for (const cue of cues) {
+            const same = (s) => s.sound === cue.sound && s.at === at;
+            if (cue.edge === edge && !asked.some(same)) {
+                const delay = (cue.into ?? 0) * span;
+                asked.push({ sound: cue.sound, at, delay });
+            }
+        }
+    }
+    assert.deepEqual(run.sounds, asked, "the sounds against the steps");
+}
+
+/** The scripts' steps are played in the script's order: those seen, which take time, are
+ * among `script`'s in order. */
+export function inOrder(run, script) {
+    let at = 0;
+    const recorded = run.steps.filter(
+        (step) => !run.written || step.from < run.written.from,
+    );
+    for (const step of recorded) {
+        const found = script.findIndex(
+            (act, i) =>
+                i >= at && JSON.stringify(act) === JSON.stringify(step.act),
+        );
+        assert.ok(found >= 0, `step ${step.verb} is out of the script's order`);
+        at = found + 1;
+    }
+}

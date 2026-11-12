@@ -13,27 +13,24 @@
 // verb-cases-place.mjs for changes on a card where it lies and to a player, and
 // verb-cases-rest.mjs for what moves no card (streaks, announcements, waits). The checks of
 // `appear` and `vanish` also hold the stage's audit to the first moment (verb-audit.mjs): it
-// passes the moment and reports a step a faulted stage skips. Exits non-zero if
-// a check fails or a page logs an error.
+// passes the moment and reports a step a faulted stage skips. A moment is played once at each
+// window and tick however many checks watch it (verb-pages.mjs), only the marks written by
+// hand making a play of their own, and each check holds its cases to those shared runs.
+// Exits non-zero if a check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import {
-    coverage,
-    launch,
-    recordResult,
-    stageFaults,
-    workers,
-} from "./capture.mjs";
+import { launch, recordResult, stageFaults, workers } from "./capture.mjs";
 import { ending as endOf } from "./fixture-views.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
 import { CASES as ZONES } from "./verb-cases.mjs";
-import { complete } from "./verb-run.mjs";
+import { complete, inOrder, soundsFollowSteps } from "./verb-run.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
 import { CASES as PILES } from "./verb-cases-piles.mjs";
 import { CASES as SPANS } from "./verb-cases-spans.mjs";
 import { CASES as REST } from "./verb-cases-rest.mjs";
 import { AUDITED, auditsHold } from "./verb-audit.mjs";
+import { given, sharedPages } from "./verb-pages.mjs";
 import { install as installRest } from "./verb-rest.mjs";
 import { install as installSpans } from "./verb-spans.mjs";
 import { install as installMarks } from "./written-marks.mjs";
@@ -508,23 +505,6 @@ async function ending(fixture) {
     );
 }
 
-/** Every sound `run`'s page was asked for is a step's, at the stage time that step begins or
- * ends as the step says, to sound then or the share of the step after it the step says; and
- * every sound a step asks for was asked for then, once however many steps ask at one time. */
-function soundsFollowSteps(run) {
-    const asked = [];
-    for (const { edge, at, span, cues } of run.edges) {
-        for (const cue of cues) {
-            const same = (s) => s.sound === cue.sound && s.at === at;
-            if (cue.edge === edge && !asked.some(same)) {
-                const delay = (cue.into ?? 0) * span;
-                asked.push({ sound: cue.sound, at, delay });
-            }
-        }
-    }
-    assert.deepEqual(run.sounds, asked, "the sounds against the steps");
-}
-
 /** What each verb's check asks of its runs: each of its cases there is. */
 const CASES = Object.fromEntries(
     verbs.map((verb) => [
@@ -641,148 +621,133 @@ async function play(context, watch, query, fixture, tick, end, written) {
     }
 }
 
-/** The scripts' steps are played in the script's order: those seen, which take time, are
- * among `script`'s in order. */
-function inOrder(run, script) {
-    let at = 0;
-    const recorded = run.steps.filter(
-        (step) => !run.written || step.from < run.written.from,
-    );
-    for (const step of recorded) {
-        const found = script.findIndex(
-            (act, i) =>
-                i >= at && JSON.stringify(act) === JSON.stringify(step.act),
-        );
-        assert.ok(found >= 0, `step ${step.verb} is out of the script's order`);
-        at = found + 1;
-    }
-}
+const { once, contextOf, settled, close } = sharedPages(queue, open);
 
+/** Each chosen check with the pages it reads: for each window, each moment it watches with a
+ * play at each tick, and its audit if it has one. Every check's first page is its moment
+ * whole at its layout's first window in the first tick, so each first page is asked for as
+ * the first of its check. */
+const checks = [];
 for (const verb of verbs) {
     for (const [seat, fixture] of Object.entries(moment)) {
         for (const layout of layouts) {
             const check = `verb:${verb}/${seat}/${layout}`;
             if (!wanted(check)) continue;
             ran += 1;
-            await queue(async () => {
-                const started = performance.now();
-                const { query, windows, reflows } = LAYOUTS[layout];
-                const contexts = [];
-                const seen = [];
-                let threw = false;
-                let covered;
-                // Every page's errors are the check's; what a page ran is taken of the first,
-                // since each plays the same code.
-                const watch = async (page) => {
-                    page.on("pageerror", (e) =>
-                        seen.push(`${check}: ${e.message}`),
-                    );
-                    page.on(
-                        "console",
-                        (m) =>
-                            m.type() === "error" &&
-                            seen.push(`${check}: ${m.text()}`),
-                    );
-                    if (covered !== undefined) return async () => {};
-                    covered = null;
-                    const finish = await coverage(page);
-                    return async () => {
-                        covered = await finish();
-                    };
-                };
-                try {
-                    // Only the lift is asked how its views were batched; the moments a
-                    // verb watches besides are each played to their recordings' ends.
-                    const names = [
-                        ...(verb === "emerge" ? ["whole", "cut"] : ["whole"]),
-                        ...(watches[verb] ?? []),
-                    ];
-                    const played = {
-                        ...fixture,
-                        ...Object.fromEntries(
-                            Object.entries(more).map(([name, by]) => [
-                                name,
-                                by[seat],
-                            ]),
-                        ),
-                    };
-                    const script = await recorded(fixture.whole);
-                    for (const [i, size] of windows.entries()) {
-                        const at = `${size.width}x${size.height}`;
-                        const context = await open(size);
-                        contexts.push(context);
-                        const runs = { seat, script, reflows };
-                        for (const name of names) {
-                            const each = [];
-                            for (const tick of i ? TICKS.slice(-1) : TICKS) {
-                                each.push(
-                                    await play(
-                                        context,
-                                        watch,
-                                        query,
-                                        played[name],
-                                        tick,
-                                        name in more
-                                            ? await ending(played[name])
-                                            : undefined,
-                                        verb === "mark",
-                                    ),
-                                );
-                            }
-                            for (const read of ["steps", "sounds"]) {
-                                assert.deepEqual(
-                                    each.at(-1)[read],
-                                    each[0][read],
-                                    `${name} at ${at}: ticks of ${TICKS[1]} ms read otherwise than ${TICKS[0]}`,
-                                );
-                            }
-                            inOrder(each[0], await recorded(played[name]));
-                            runs[name] =
-                                name in more ? complete(each[0]) : each[0];
-                        }
-                        try {
-                            CASES[verb](runs);
-                        } catch (e) {
-                            e.message = `at ${at}: ${e.message}`;
-                            throw e;
-                        }
-                        // The audits are held to the moment too, with the verbs that come
-                        // to be and go (verb-audit.mjs), at the layout's first window.
-                        if (i === 0 && verb in AUDITED) {
-                            await hangGuard(
-                                auditsHold({
-                                    context,
-                                    base,
-                                    query,
-                                    fixture: fixture.whole,
-                                    verb,
+            const { query, windows, reflows } = LAYOUTS[layout];
+            const written = verb === "mark";
+            // Only the lift is asked how its views were batched; the moments a verb watches
+            // besides are each played to their recordings' ends.
+            const names = [
+                ...(verb === "emerge" ? ["whole", "cut"] : ["whole"]),
+                ...(watches[verb] ?? []),
+            ];
+            const played = {
+                ...fixture,
+                ...Object.fromEntries(
+                    Object.entries(more).map(([name, by]) => [name, by[seat]]),
+                ),
+            };
+            const reads = windows.map((size, i) => ({
+                at: `${size.width}x${size.height}`,
+                moments: names.map((name) => ({
+                    name,
+                    plays: (i ? TICKS.slice(-1) : TICKS).map((tick) =>
+                        once(
+                            `play ${played[name]} ${query} ${size.width}x${size.height} ${tick}${written ? " written" : ""}`,
+                            i === 0 && name === names[0] && tick === TICKS[0],
+                            async (watch) =>
+                                play(
+                                    await contextOf(size),
                                     watch,
-                                }),
-                                CHECK_SECONDS,
-                                `${check}: the audit`,
-                            );
-                        }
-                    }
-                    console.log(`ok: ${check}`);
-                } catch (e) {
-                    failed = true;
-                    threw = true;
-                    console.error(`FAILED: ${check}\n${e.stack ?? e}`);
-                } finally {
-                    for (const context of contexts) await context.close();
-                }
-                errors.push(...seen);
-                recordResult(
-                    check,
-                    threw || seen.length ? "fail" : "pass",
-                    (performance.now() - started) / 1000,
-                    covered ?? null,
-                );
-            });
+                                    query,
+                                    played[name],
+                                    tick,
+                                    name in more
+                                        ? await ending(played[name])
+                                        : undefined,
+                                    written,
+                                ),
+                        ),
+                    ),
+                })),
+            }));
+            const audit =
+                verb in AUDITED
+                    ? once(`audit ${check}`, false, async (watch) =>
+                          hangGuard(
+                              auditsHold({
+                                  context: await contextOf(windows[0]),
+                                  base,
+                                  query,
+                                  fixture: fixture.whole,
+                                  verb,
+                                  watch,
+                              }),
+                              CHECK_SECONDS,
+                              `${check}: the audit`,
+                          ),
+                      )
+                    : null;
+            checks.push({ check, verb, seat, reflows, played, reads, audit });
         }
     }
 }
-await queue.drain();
+await settled();
+
+// Each check then holds what its pages gave to what holds of every run and to its cases.
+for (const { check, verb, seat, reflows, played, reads, audit } of checks) {
+    const read = [
+        ...reads.flatMap(({ moments }) => moments.flatMap((m) => m.plays)),
+        ...(audit ? [audit] : []),
+    ];
+    let threw = false;
+    try {
+        const script = await recorded(played.whole);
+        for (const { at, moments } of reads) {
+            const runs = { seat, script, reflows };
+            for (const { name, plays } of moments) {
+                // A run is the check's own to read: a case may write on it.
+                const each = plays.map((held) => structuredClone(given(held)));
+                for (const field of ["steps", "sounds"]) {
+                    assert.deepEqual(
+                        each.at(-1)[field],
+                        each[0][field],
+                        `${name} at ${at}: ticks of ${TICKS[1]} ms read otherwise than ${TICKS[0]}`,
+                    );
+                }
+                inOrder(each[0], await recorded(played[name]));
+                runs[name] = name in more ? complete(each[0]) : each[0];
+            }
+            try {
+                CASES[verb](runs);
+            } catch (e) {
+                e.message = `at ${at}: ${e.message}`;
+                throw e;
+            }
+        }
+        // The audits are held to the moment too, with the verbs that come to be and go
+        // (verb-audit.mjs), at the layout's first window.
+        if (audit) given(audit);
+        console.log(`ok: ${check}`);
+    } catch (e) {
+        failed = true;
+        threw = true;
+        console.error(`FAILED: ${check}\n${e.stack ?? e}`);
+    }
+    const seen = [...new Set(read)].flatMap((held) =>
+        held.errors.map((e) => `${check}: ${e}`),
+    );
+    errors.push(...seen);
+    // A check's seconds are what its pages took, as if it ran alone.
+    recordResult(
+        check,
+        threw || seen.length ? "fail" : "pass",
+        [...new Set(read)].reduce((sum, held) => sum + held.seconds, 0),
+        read[0].covered,
+    );
+}
+await close();
 await browser.close();
 
 if (ran === 0 && !chosen) {

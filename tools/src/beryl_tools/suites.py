@@ -16,6 +16,7 @@ VERB_SCRIPT = "ui/scripts/verbs.mjs"
 VERB_CASES = (
     "ui/scripts/verb-cases.mjs",
     "ui/scripts/verb-run.mjs",
+    "ui/scripts/verb-pages.mjs",
     "ui/scripts/verb-cases-place.mjs",
     "ui/scripts/verb-cases-piles.mjs",
     "ui/scripts/verb-cases-spans.mjs",
