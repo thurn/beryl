@@ -80,6 +80,11 @@ from .rust_tests import (
 FAST_BUDGET = 60
 # Windows runs the same lanes markedly slower (process start, file system, antivirus).
 SLOW_BUDGET = 450 if system.WINDOWS else 300
+# The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
+# the phone toolchains are set up on macOS; the app and the browser lanes hung headless Chrome
+# on Windows (by-xppd) and are the Mac's to judge. A Windows pass can then advance master with
+# them unrun, until the Mac's next run catches a break.
+WINDOWS_SKIPS: tuple[str, ...] = ("counts", "mobile", "app", "shots", "ui-test")
 # The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
 # times its deadline, however loaded the machine.
 MAX_STRETCH = 8.0
@@ -654,12 +659,13 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     cited = None if every else [p for p in changed or [] if citations.cites(p)]
     if cited or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
         lanes.append(names_lane(cited))
-    # The browser checks the change can break, as many as fit the budget (plan K19).
-    if not every and touched(r"^(rust|ui)/"):
+    # The browser checks the change can break, as many as fit the budget (plan K19); none on
+    # Windows (WINDOWS_SKIPS).
+    if not every and touched(r"^(rust|ui)/") and not system.WINDOWS:
         lanes += [ui_test_lane(select=True), shots_lane(select=True)]
     from . import motion  # It imports this module, by way of shots.py.
 
-    if not every and touched(motion.INPUTS):
+    if not every and touched(motion.INPUTS) and not system.WINDOWS:
         lanes.append(motion.lane())
     if cards := changed_cards(changed):
         lanes.append(card_oracle_lane(cards))
@@ -694,10 +700,11 @@ def slow(args: argparse.Namespace) -> int:
         "mobile": mobile_lane(),
     }
     if system.WINDOWS and not args.lanes:
-        # The count gate's VM is Lima's, and the phone toolchains are set up, on macOS.
-        print("ci: skipping counts and mobile, which need macOS")
-        del lanes["counts"]
-        del lanes["mobile"]
+        print(
+            f"ci: skipping {' '.join(WINDOWS_SKIPS)} on Windows; the Mac's slow CI runs them"
+        )
+        for name in WINDOWS_SKIPS:
+            del lanes[name]
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)
     if unknown:

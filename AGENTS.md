@@ -232,8 +232,10 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
   `counts` (`just count-gate`: the rollout benchmark's instruction count, held
   to the bar in `rust/crates/beryl_bench/count-gate.toml`, whose comments say
   when it may rise) and `mobile` (`cargo check` of the app for the iOS Simulator
-  and Android, which needs `just mobile-setup`). A run over budget fails: speed
-  up, move or delete the slowest step rather than raise it.
+  and Android, which needs `just mobile-setup`). Windows leaves `app`, `shots`,
+  `ui-test`, `counts` and `mobile` to the Mac, and its fast check runs no
+  browser checks or `motion` (`checks.py`, `WINDOWS_SKIPS`). A run over budget
+  fails: speed up, move or delete the slowest step rather than raise it.
 - A UI fix adds the broken state as a fixture or spec moment for the generic
   audits (overlap, off-screen, reachability, duplicate objects, page errors,
   motion), extending an audit for a new class of bug. Write a scripted check in

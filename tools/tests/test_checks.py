@@ -303,10 +303,12 @@ def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
 
 
 def lanes_for(
-    monkeypatch: pytest.MonkeyPatch, changed: list[str]
+    monkeypatch: pytest.MonkeyPatch, changed: list[str], windows: bool = False
 ) -> dict[str, list[list[str]]]:
-    """The fast check's lanes for `changed`, as each lane's step commands."""
+    """The fast check's lanes for `changed`, as each lane's step commands, on a Mac unless
+    `windows`."""
     monkeypatch.setattr(oracles, "built", lambda oracle: False)
+    monkeypatch.setattr(checks.system, "WINDOWS", windows)
     return {
         lane.name: [s.cmd for s in lane.steps] for lane in checks.fast_lanes(changed)
     }
@@ -418,3 +420,14 @@ def test_the_motion_capture_runs_when_the_stage_or_its_data_change(
         assert "motion" in lanes_for(monkeypatch, [path]), path
     for path in ["ui/src/game/Board.tsx", "data/card-store.tsv", "tools/x.py"]:
         assert "motion" not in lanes_for(monkeypatch, [path]), path
+
+
+def test_windows_leaves_the_browser_checks_to_the_mac(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    changed = ["ui/src/stage/verbs.ts", "rust/crates/beryl_engine/src/turn.rs"]
+    mac = lanes_for(monkeypatch, changed)
+    assert {"ui-test", "shots"} <= set(mac)
+    windows = lanes_for(monkeypatch, changed, windows=True)
+    assert not {"ui-test", "shots", "motion"} & set(windows)
+    assert {"ui", "rust"} <= set(windows)
