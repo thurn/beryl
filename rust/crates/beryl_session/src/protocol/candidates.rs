@@ -208,7 +208,7 @@ pub(crate) fn own_activated<L: Layout>(
     };
     let abilities = t.def(card).face(obs.object(slot).face()).abilities;
     (abilities.iter().enumerate())
-        .filter(|(_, a)| a.kind == AbilityKind::Activated)
+        .filter(|(_, a)| a.kind() == AbilityKind::Activated)
         .map(|(i, _)| {
             let ability = u8::try_from(i).expect("a face has fewer than 256 abilities");
             let activate = Opt::Activate {
