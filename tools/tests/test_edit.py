@@ -33,7 +33,10 @@ def test_files_are_formatted_by_the_tool_their_check_uses() -> None:
 
     assert tool("README.md") == f"{Path(sys.executable).name} /tree"
     assert tool(".beads/notes.md") is None
-    assert tool("rust/crates/beryl_app/src/main.rs") == "cargo /tree/rust"
+    # The checks' rustfmt step: cargo fmt, then the card files it does not reach.
+    rustfmt = f"{Path(sys.executable).name} /tree/rust"
+    assert tool("rust/crates/beryl_app/src/main.rs") == rustfmt
+    assert tool("rust/cards/cards_1993_1994/lea/island.rs") == rustfmt
     assert tool("ui/src/App.tsx") == "prettier /tree/ui"
     assert tool("justfile") == "just /tree"
     assert tool("data/card-printings.csv") is None
