@@ -460,6 +460,23 @@ fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     }
 }
 
+/// A block's declaration in another layout.
+fn block<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
+    let &Event::Block {
+        player,
+        blocker,
+        attacker,
+    } = e
+    else {
+        unreachable!("a block");
+    };
+    Event::Block {
+        player,
+        blocker: blocker.relayout(),
+        attacker: attacker.relayout(),
+    }
+}
+
 /// An ability's announcement in another layout.
 fn ability<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     let Event::Ability {
@@ -540,6 +557,7 @@ impl<L: Layout> Relayout for Tag<L> {
                     entry,
                 },
             },
+            together: self.together,
         }
     }
 }
@@ -638,6 +656,7 @@ impl<L: Layout> Relayout for Event<L> {
                 player,
                 attackers: bits(attackers),
             },
+            Event::Block { .. } => block(self),
             &Event::StepBegins { step, active } => Event::StepBegins { step, active },
             &Event::GainControl { object, player } => Event::GainControl {
                 object: object.relayout(),

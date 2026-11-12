@@ -138,6 +138,10 @@ pub(crate) fn move_one<L: Layout>(
 ///    more simultaneous batch ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)):
 ///    "A second one-shot effect is created immediately after the specified event. This
 ///    second one-shot effect returns the object to its previous zone."
+///
+/// The events of all of it are kept as one group ([`Sink::push_joined`]): the batch is one
+/// event, and no player can act between it and the return the rules make "immediately
+/// after" it, which is told from it by its [`Reason::Return`].
 pub(crate) fn move_batch<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -201,7 +205,9 @@ pub(crate) fn move_batch_to<L: Layout>(
             _ => None,
         },
     };
-    for &(slot, from, dest, entry) in moves.iter() {
+    let first = moves.as_slice().as_ptr();
+    for each in moves.iter() {
+        let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
         }
@@ -209,7 +215,9 @@ pub(crate) fn move_batch_to<L: Layout>(
         if dest == Zone::Battlefield {
             arrive(s, t, slot, entry)?;
         }
-        sink.push(changed(s.object_ref(slot), from, dest));
+        sink.push_joined(changed(s.object_ref(slot), from, dest), || {
+            !std::ptr::eq(each, first)
+        });
     }
     layers::refresh(s, t, sink)?;
     for &(slot, from, dest, _) in moves.iter() {
@@ -218,7 +226,8 @@ pub(crate) fn move_batch_to<L: Layout>(
     if !returning.is_empty() {
         // CR 610.3c: "An object returned to the battlefield this way returns under its
         // owner's control unless otherwise specified."
-        move_batch(
+        sink.together_with_last();
+        let returned = move_batch(
             s,
             t,
             sink,
@@ -226,7 +235,9 @@ pub(crate) fn move_batch_to<L: Layout>(
             Zone::Battlefield,
             Reason::Return,
             Entry::default(),
-        )?;
+        );
+        sink.apart();
+        returned?;
     }
     Ok(())
 }

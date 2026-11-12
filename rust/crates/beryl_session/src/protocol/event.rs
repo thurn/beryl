@@ -313,8 +313,10 @@ pub(super) fn game_events<L: Layout>(
                 return None;
             }
             // Said for whoever follows the stack through the events, which no view does yet:
-            // a view shows the stack itself.
-            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
+            // a view shows the stack itself, and the blocks declared.
+            if let Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } =
+                e
+            {
                 return None;
             }
             let mut event = game_event(t, obs, e);
@@ -383,8 +385,8 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             item: stack_item(t, obs, item),
         },
         Event::AbilityFinished => GameEvent::AbilityFinished,
-        Event::StackArrival { .. } | Event::StackDeparture { .. } => {
-            unreachable!("the stack's arrivals and departures are in no view")
+        Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } => {
+            unreachable!("the stack's arrivals and departures and the blocks are in no view")
         }
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),

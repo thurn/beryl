@@ -704,7 +704,7 @@ fn perform<L: Layout>(
         DecisionKind::Blocker => {
             match option() {
                 Opt::Block(slot) => combat::block_with(s, slot),
-                _ => combat::finish_blocks(s),
+                _ => combat::finish_blocks(s, sink),
             }
             Ok(())
         }

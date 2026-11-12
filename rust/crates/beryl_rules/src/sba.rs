@@ -52,6 +52,8 @@ pub(crate) fn check<L: Layout>(
         });
         return Ok(true);
     }
+    // "As a single event": the one batch below is every action of this check that has an
+    // event, and a batch's events are kept as one group (`event::move_batch`).
     // Each token ceases to exist on its own, with no event, so the order is nothing.
     for slot in s.in_candidate_order(tokens) {
         s.cease_to_exist(slot);
@@ -221,13 +223,15 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
         .players()
         .filter(|player| causes[player.index()].is_none());
     s.end_game(left.sole().map_or(Outcome::Draw, Outcome::Win));
-    // They lose at once: the events of one happening, by seat.
+    // They lose at once: the events of one happening, by seat, kept as one group.
+    sink.together();
     for player in s.players_in_seat_order(s.players()) {
         sink.push(match causes[player.index()] {
             Some(cause) => Event::Lose { player, cause },
             None => Event::Win { player },
         });
     }
+    sink.apart();
 }
 
 /// The name of the permanent in `slot`: its face up's (CR 712.6c, 712.6d).

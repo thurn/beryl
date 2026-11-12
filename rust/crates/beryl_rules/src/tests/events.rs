@@ -42,6 +42,7 @@ use beryl_kernel::two_player::TwoPlayerSeat as _;
 use super::{LAND, begin};
 
 mod causes;
+mod groups;
 
 /// An ability for a resolution whose test reads none of it.
 static NO_ABILITY: Ability = Ability::spell();

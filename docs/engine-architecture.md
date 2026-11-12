@@ -665,6 +665,20 @@ for the spell or ability resolving, which keeps its place until then though the
 state has taken it off its stack. The tag is no part of the event, so trigger
 matching never reads one.
 
+The tag also says which events are one event of the rules, a group: the
+permanents one instruction destroys whoever owns them (CR 608.2f), the actions
+of one state-based check (CR 704.3), all the combat damage of a step (CR 510.2),
+the permanents of the untap step (CR 502.3), the attackers' taps with their
+declaration (CR 508.1f), the taps and mana of one payment (CR 601.2h), and a
+permanent leaving with what it had exiled until then returning (CR 610.3). Cards
+drawn are not one (CR 121.2). The rules open a group around what they do at
+once, and one opened inside another is part of it. A tag has no group number,
+only `together`: the event is of the group of the event kept before it. A body
+that runs again from its start (§7.3) so keeps the same tags as its run before,
+which the session relies on to tell the repeats, and `Tag::groups` numbers a
+list's groups for a reader. A block declared (CR 509.1) is an event only a
+recording sink keeps, `Block`, one for each blocker, together.
+
 ### 8.2 The pipeline
 
 For each event a primitive builds:
@@ -690,9 +704,10 @@ events. The rules open a scope around what they do (a player's action, a
 resolution, a mana ability's effect) and close it on the way out; scopes nest,
 as a mana ability activated to pay a cost an effect asks for sits inside that
 payment, inside the resolution; and with none open the cause is the rules.
-Search pays nothing per event for this and one branch to open or close a scope:
-a sink that is off never builds a cause, and the code that records sits out of
-line. A body run that is discarded (§7.3) drops its tags with its events.
+Search pays nothing per event for this and one branch to open or close a scope
+or a group: a sink that is off never builds a cause, and the code that records
+sits out of line. A body run that is discarded (§7.3) drops its tags with its
+events.
 
 ### 8.3 Triggers
 

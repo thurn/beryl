@@ -115,6 +115,39 @@ impl<L: Layout> Cause<L> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Tag<L: Layout = Small> {
     pub cause: Cause<L>,
+    /// Whether the event happened as one event of the rules with the event kept before it:
+    /// the two are of one group ([`Tag::groups`]). The rules open a group around what they
+    /// do at once ([`Sink::together`]), or say so of each event of a batch after its first
+    /// ([`Sink::push_joined`]), as
+    /// [CR 704.3](https://yawgatog.com/resources/magic-rules/#R7043) has the game perform
+    /// "all applicable state-based actions simultaneously as a single event", and every
+    /// event kept until it closes is of it; an event kept with no group open is a group of
+    /// its own.
+    ///
+    /// A group has no number of its own, only this word about its neighbor: a body that runs
+    /// again from its start (architecture §7.3) keeps the same events with the same tags as
+    /// its run before, which a count of the groups so far would not be.
+    ///
+    /// [`Sink::together`]: crate::event::Sink::together
+    /// [`Sink::push_joined`]: crate::event::Sink::push_joined
+    pub together: bool,
+}
+
+impl<L: Layout> Tag<L> {
+    /// The group of each of `tags`, in step with them, numbered from 0 in the order the
+    /// groups began: two events have the same number exactly when they happened as one
+    /// event of the rules. The first of a list cut from a longer one begins a group here,
+    /// whatever it was together with before the cut.
+    pub fn groups<'a>(tags: impl IntoIterator<Item = &'a Tag<L>>) -> Vec<u32> {
+        let mut next = 0;
+        let groups = tags.into_iter().enumerate().map(|(i, tag)| {
+            if i > 0 && !tag.together {
+                next += 1;
+            }
+            next
+        });
+        groups.collect()
+    }
 }
 
 /// The causes of what the rules are doing now, the innermost last, and none while the game
@@ -126,6 +159,11 @@ pub(crate) struct Scopes<L: Layout> {
     /// The place of the spell or ability that is resolving, which the state has taken off
     /// its stack ([`StackIx`]).
     resolving: Option<StackIx>,
+    /// How many groups are open, one inside another: the outermost is the group
+    /// ([`Tag::together`]).
+    groups: u32,
+    /// Whether an event has been kept in the open group.
+    begun: bool,
 }
 
 impl<L: Layout> Default for Scopes<L> {
@@ -133,19 +171,42 @@ impl<L: Layout> Default for Scopes<L> {
         Self {
             open: Vec::new(),
             resolving: None,
+            groups: 0,
+            begun: false,
         }
     }
 }
 
 impl<L: Layout> Scopes<L> {
-    pub(crate) fn tag(&self) -> Tag<L> {
+    /// The tag of the event being kept now.
+    pub(crate) fn tag(&mut self) -> Tag<L> {
+        let together = self.groups > 0 && self.begun;
+        self.begun = true;
         Tag {
             cause: self.open.last().copied().unwrap_or(Cause::Rules),
+            together,
         }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.open.is_empty() && self.resolving.is_none()
+        self.open.is_empty() && self.resolving.is_none() && self.groups == 0
+    }
+
+    /// Opens a group. One opened inside another is part of it: what the rules do at once
+    /// may be made of things they also do at once.
+    ///
+    /// `joined`: the group is the one of the event kept last, which what follows it is part
+    /// of.
+    pub(crate) fn together(&mut self, joined: bool) {
+        if self.groups == 0 {
+            self.begun = joined;
+        }
+        self.groups += 1;
+    }
+
+    pub(crate) fn apart(&mut self) {
+        debug_assert!(self.groups > 0, "no group to close");
+        self.groups = self.groups.saturating_sub(1);
     }
 
     pub(crate) fn enter(&mut self, cause: Cause<L>) {

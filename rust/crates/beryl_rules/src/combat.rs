@@ -10,7 +10,7 @@ use crate::card::{Keywords, Part, Prompt, Purpose, Types};
 use crate::damage;
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Recipient, Sink};
+use crate::event::{self, Event, Recipient, Sink};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -194,12 +194,28 @@ pub(crate) fn attack<L: Layout>(
 /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): creatures put onto the
 /// battlefield attacking, "for the purposes of trigger events and effects, ... never
 /// 'attacked.'"
+///
+/// The taps and the attack are kept as one group: the one declaration
+/// ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081): "First, the active player
+/// declares attackers. This turn-based action doesn't use the stack.").
 fn finish_attack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     s.settle_question();
+    sink.together();
+    let declared = declare_attack(s, t, sink);
+    sink.apart();
+    declared
+}
+
+/// [`finish_attack`], inside the group it opens.
+fn declare_attack<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
     let attackers = with_flag(s, ObjectFlags::ATTACKING);
     // In battlefield order, never slot order: the taps' events are seen in this order, and a
     // slot number says nothing about a card (architecture §13). Tapping moves nothing. A
@@ -353,9 +369,33 @@ pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) {
     s.ask(Pending::DeclareBlockers { blocker: None });
 }
 
-/// Finishes the block declaration.
-pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>) {
+/// Finishes the block declaration, and says what was declared: each blocker and the
+/// creature it blocks, in the order the blockers entered the battlefield, as one group
+/// ([CR 509.1](https://yawgatog.com/resources/magic-rules/#R5091): "First, the defending
+/// player declares blockers. This turn-based action doesn't use the stack."). Only a
+/// recording sink is told: no card yet reads a block, so the declaration goes through no
+/// trigger matching, and a search pays one branch for it.
+pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
     s.settle_question();
+    if sink.records() {
+        note_blocks(s, sink);
+    }
+}
+
+#[cold]
+fn note_blocks<L: Layout>(s: &State<L>, sink: &mut Sink<L>) {
+    sink.together();
+    for &slot in s.battlefield() {
+        let o = s.object(slot);
+        if let (true, Some(attacker)) = (o.flags().has(ObjectFlags::BLOCKING), o.combat()) {
+            sink.note(Event::Block {
+                player: s.controller(slot),
+                blocker: s.object_ref(slot),
+                attacker: s.object_ref(attacker),
+            });
+        }
+    }
+    sink.apart();
 }
 
 /// Whether the combat damage step gets a first-strike step before it
@@ -558,8 +598,23 @@ struct Assignment<L: Layout = Small> {
 ///
 /// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage
 /// that's been assigned is dealt simultaneously." Every assignment is made from the creatures
-/// as they are before any damage is dealt.
+/// as they are before any damage is dealt, and the events of the damage are kept as one
+/// group. Damage to a player is the life they lose (CR 120.3a), in the one event.
 fn deal<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    lethal: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    sink.together();
+    let dealt = deal_assigned(s, t, sink, lethal);
+    sink.apart();
+    dealt
+}
+
+/// [`deal`], inside the group it opens.
+#[inline]
+fn deal_assigned<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,

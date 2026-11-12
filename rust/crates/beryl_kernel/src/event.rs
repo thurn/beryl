@@ -239,6 +239,17 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         attackers: Bitboard<L::Slot>,
     },
+    /// A creature was declared as a blocker for `attacker`
+    /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending
+    /// player chooses which creatures they control, if any, will block. ... For each of
+    /// the chosen creatures, the defending player chooses one creature for it to block"),
+    /// one event for each blocker of a declaration, together. For the UI, which
+    /// draws the block; no rule acts on it yet, so it is only noted.
+    Block {
+        player: Seat,
+        blocker: ObjectRef<L>,
+        attacker: ObjectRef<L>,
+    },
     /// A step or phase began ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)).
     StepBegins {
         step: TurnStep,
@@ -325,15 +336,18 @@ pub struct Tagged<L: Layout = Small> {
 /// Where executed events go for the UI or a replay (§8.2, step 6). Search leaves it off.
 ///
 /// A recording sink keeps a [`Tag`] beside each event, written from the scope the rules have
-/// open ([`Sink::enter`]). Tags are no part of an [`Event`], so trigger matching never reads
-/// one, and a sink that is off keeps neither: a scope costs it one branch to open and one to
-/// close, and an event nothing more than it did.
+/// open ([`Sink::enter`]) and the group ([`Sink::together`]). Tags are no part of an
+/// [`Event`], so trigger matching never reads one, and a sink that is off keeps neither: a
+/// scope or a group costs it one branch to open and one to close, and an event nothing more
+/// than it did.
 #[derive(Debug, Default)]
 pub struct Sink<L: Layout = Small> {
     events: Vec<Event<L>>,
     /// The tag of each event, in step with `events`.
     tags: Vec<Tag<L>>,
     scopes: Scopes<L>,
+    /// Where in `events` the first event of the batch being kept is ([`Sink::push_joined`]).
+    batch: usize,
     on: bool,
     /// The work done since the scratch last took the counts: the sink goes everywhere the
     /// engine does it.
@@ -436,6 +450,7 @@ impl<L: Layout> Sink<L> {
             events: self.events.iter().map(Relayout::relayout).collect(),
             tags: self.tags.iter().map(Relayout::relayout).collect(),
             scopes: Scopes::default(),
+            batch: self.batch,
             on: self.on,
             work: self.work,
             chance: self.chance.clone(),
@@ -508,7 +523,59 @@ impl<L: Layout> Sink<L> {
         }
     }
 
-    /// Whether no scope is open, as between the engine's calls.
+    /// Opens a group: the events kept until [`Sink::apart`] happened as one event of the
+    /// rules ([`Tag::together`]). A group opened inside another is part of it.
+    #[inline]
+    pub fn together(&mut self) {
+        if self.on {
+            self.join();
+        }
+    }
+
+    /// Closes the group [`Sink::together`] opened.
+    #[inline]
+    pub fn apart(&mut self) {
+        if self.on {
+            self.part();
+        }
+    }
+
+    /// Opens a group as [`Sink::together`] does, of which the event kept last is part: what
+    /// the rules do "immediately after" an event, with nothing between
+    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)).
+    #[inline]
+    pub fn together_with_last(&mut self) {
+        if self.on {
+            self.rejoin();
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn join(&mut self) {
+        self.scopes.together(false);
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn rejoin(&mut self) {
+        self.scopes.together(!self.events.is_empty());
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn part(&mut self) {
+        self.scopes.apart();
+    }
+
+    /// Whether it keeps events: what only a recording sink is told may be left unread
+    /// otherwise.
+    #[inline]
+    pub fn records(&self) -> bool {
+        self.on
+    }
+
+    /// Whether no scope or group is open, as between the engine's calls.
     pub fn is_idle(&self) -> bool {
         self.scopes.is_empty()
     }
@@ -557,7 +624,26 @@ impl<L: Layout> Sink<L> {
     #[inline(never)]
     fn keep(&mut self, e: Event<L>) {
         self.events.push(e);
-        self.tags.push(self.scopes.tag());
+        let tag = self.scopes.tag();
+        self.tags.push(tag);
+    }
+
+    /// Keeps an event of a batch: its first, or with `joined` one after, which is then of
+    /// the first's group with whatever was kept between them, as a card the move revealed.
+    #[cold]
+    #[inline(never)]
+    fn keep_batched(&mut self, e: Event<L>, joined: bool) {
+        let at = self.events.len();
+        self.keep(e);
+        if joined {
+            // A sink drained or cut since the first has no first to join.
+            let first = self.batch.min(at);
+            for tag in &mut self.tags[first + 1..] {
+                tag.together = true;
+            }
+        } else {
+            self.batch = at;
+        }
     }
 
     /// Keeps an event only the UI reads, which no rule acts on and so counts as no work of
@@ -596,6 +682,17 @@ impl<L: Layout> Sink<L> {
         self.work.events += 1;
         if self.on {
             self.keep(e);
+        }
+    }
+
+    /// [`Sink::push`], for an event of a batch: its first, or with `joined` one after it,
+    /// which happened as one event of the rules with the first ([`Tag::together`]). It
+    /// costs a sink that is off no branch a push does not, and it never asks `joined`.
+    #[inline]
+    pub fn push_joined(&mut self, e: Event<L>, joined: impl FnOnce() -> bool) {
+        self.work.events += 1;
+        if self.on {
+            self.keep_batched(e, joined());
         }
     }
 }

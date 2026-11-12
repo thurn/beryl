@@ -4,7 +4,8 @@
 //!
 //! An instruction acts on every object it names at once where the engine has a primitive
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
-//! order the game can see (slots are none: the deal puts cards in them at random).
+//! order the game can see (slots are none: the deal puts cards in them at random). Either
+//! way the events of such an instruction are kept as one group ([`at_once`]).
 
 use beryl_card::{Effect, Objects, Players};
 
@@ -135,7 +136,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
-            _ => self.instruction(effect)?,
+            _ => {
+                let together = self.game.sink.records() && at_once(effect);
+                if together {
+                    self.game.sink.together();
+                }
+                let outcome = self.instruction(effect);
+                if together {
+                    self.game.sink.apart();
+                }
+                outcome?
+            }
         };
         Ok(())
     }
@@ -286,7 +297,27 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// Carries out `effect` for each of `players` in turn order (CR 101.4), each of them
     /// "that player" in it. Each begins from what the instruction before this one did, and
     /// the outcome is every player's together, as is who controlled what it moved.
+    ///
+    /// One action each of them takes is one event
+    /// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)): "If multiple
+    /// players would make choices and/or take actions at the same time, the active player
+    /// ... makes any choices required, then the next player in turn order ... Then the
+    /// actions happen simultaneously." Its events are kept as one group, though the engine
+    /// has each player act in turn. An effect of several steps is carried out whole for each
+    /// player, so its events are grouped a step and a player at a time.
     fn for_each_player(&mut self, players: Players, effect: &'static Effect) -> Flow {
+        let together = self.game.sink.records() && at_once(effect);
+        if together {
+            self.game.sink.together();
+        }
+        let done = self.each_player_in_turn(players, effect);
+        if together {
+            self.game.sink.apart();
+        }
+        done
+    }
+
+    fn each_player_in_turn(&mut self, players: Players, effect: &'static Effect) -> Flow {
         let (before, outer) = (self.registers.outcome, self.registers.that_player);
         let mut together = Outcome::NOTHING;
         let mut controlled = self.registers.controlled.clone();
@@ -384,6 +415,52 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let s = &*self.game.state;
         Outcome::acted_on(objects.filter(|slot| s.object(slot).zone() == zone))
     }
+}
+
+/// Whether what `effect` does to every player and object it names is one event of the
+/// rules ([CR 608.2f](https://yawgatog.com/resources/magic-rules/#R6082f)): "Some spells and
+/// abilities include actions taken on multiple players and/or objects. In most cases, each
+/// such action is processed simultaneously. If the action can't be processed
+/// simultaneously, it's instead processed considering each affected player or object
+/// individually."
+///
+/// Not so the instructions of several steps (a search and its shuffle, a look and what is
+/// done with each card), those that take whole other actions (casting a spell), nor draws
+/// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "Cards may only be drawn
+/// one at a time. If a player is instructed to draw multiple cards, that player performs
+/// that many individual card draws." A move of several cards those make is still one event,
+/// which the move itself says (`event::move_batch`).
+///
+/// Only a recording sink asks.
+#[cold]
+fn at_once(effect: &Effect) -> bool {
+    matches!(
+        effect,
+        Effect::Destroy(_)
+            | Effect::Exile(_)
+            | Effect::ExileUntilThisLeaves(_)
+            | Effect::ExileLinked(_)
+            | Effect::Sacrifice(_)
+            | Effect::ReturnToHand(_)
+            | Effect::PutIntoGraveyard(_)
+            | Effect::PutIntoLibrary { .. }
+            | Effect::ShuffleInto { .. }
+            | Effect::Discard { .. }
+            | Effect::Mill { .. }
+            | Effect::DealDamage { .. }
+            | Effect::GainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::CreateTokens { .. }
+            | Effect::CreateAttackingTokens { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::AddCounters { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::AddMana { .. }
+            | Effect::AddManaOfKind { .. }
+            | Effect::UntapUpTo { .. }
+            | Effect::WinGame(_)
+            | Effect::LoseGame(_)
+    )
 }
 
 /// Stops on an entry the engine has no primitive for: no card can come to depend on one

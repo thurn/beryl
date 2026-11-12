@@ -92,8 +92,17 @@ pub(crate) fn begin_step<L: Layout>(
 /// Untaps the active player's permanents
 /// ([CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023)): "the active player
 /// determines which permanents they control will untap. Then they untap them all
-/// simultaneously."
+/// simultaneously." Their events are kept as one group.
 fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
+    sink.together();
+    let untapped = untap_all(s, t, sink);
+    sink.apart();
+    untapped
+}
+
+/// [`untap`], inside the group it opens.
+#[inline]
+fn untap_all<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
     let active = s.turn().active();
     let mut i = 0;
     while i < s.battlefield().len() {

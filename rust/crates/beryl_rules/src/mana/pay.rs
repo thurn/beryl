@@ -23,8 +23,25 @@ use super::{KINDS, Taps};
 /// abilities must be activated before costs are paid."
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
-/// total cost. ... Partial payments are not allowed."
+/// total cost. ... Partial payments are not allowed." So the events of the payment, each
+/// source's tap and the mana it makes, are kept as one group: the cost is paid or it is not.
 pub(crate) fn pay<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    cost: ManaCost,
+    exclude: Bitboard<L::Slot>,
+    plan: &Plan<L>,
+) -> Result<(), Full> {
+    sink.together();
+    let paid = pay_whole(s, t, sink, player, cost, exclude, plan);
+    sink.apart();
+    paid
+}
+
+/// [`pay`], inside the group it opens.
+fn pay_whole<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -291,7 +308,9 @@ pub(crate) fn manual_options<L: Layout>(
     Ok(out)
 }
 
-/// Performs a manual payment option, returning what remains to pay.
+/// Performs a manual payment option, returning what remains to pay. The source's tap and
+/// its mana are kept as one group, a part of the payment a player makes a source at a time:
+/// what they pay for (`Cause::entry`) says which payment each is of.
 pub(crate) fn manual_pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -303,7 +322,10 @@ pub(crate) fn manual_pay<L: Layout>(
     let color = match option {
         Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
-            activate(s, t, sink, slot, color)?;
+            sink.together();
+            let activated = activate(s, t, sink, slot, color);
+            sink.apart();
+            activated?;
             color
         }
         _ => unreachable!("a manual payment option"),
