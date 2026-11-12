@@ -1,0 +1,257 @@
+// The prompt bar on the stage's boards (plan K26): what the open prompt asks and its buttons,
+// each as the session sent it. Its words, which button it puts forward and whether one can be
+// pressed are the session's (prompt.ts); a press goes back to it. What is laid out here is
+// only where each stands: the button put forward at the foot of the desktop's dock, where the
+// turn button is, with what it says under it; the button that passes on to a later stop as the
+// round one beside it; and the others stacked over, in the order they came.
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import {
+  Button,
+  Dock,
+  DockButtons,
+  FastForwardIcon,
+  Tip,
+  TurnButton,
+} from "../components/Controls";
+import { RulesText } from "../components/Mana";
+import type { ButtonId, PromptButton } from "../generated/protocol";
+import type { Asked, Prompts } from "./prompt.ts";
+
+/** What the page's stage asks, as the screen draws it. */
+export const usePrompt = (prompts: Prompts) =>
+  useSyncExternalStore(prompts.subscribe, prompts.asked);
+
+/** The answers a board gives besides the prompt's own buttons. */
+interface Answers {
+  /** A view is on its way, or the game plays on without the player. */
+  waiting: boolean;
+  press(button: ButtonId): void;
+  /** Takes back the cast the open decision is part of, where it may be. */
+  cancel?: () => void;
+}
+
+/** A prompt's buttons by where they stand: the one put forward, the one that passes on to a
+ * later stop, and the others in the order the session laid them out. */
+function standing(buttons: readonly PromptButton[]) {
+  const forward = buttons.find((button) => button.primary);
+  const passOn = buttons.find((button) => button.id.kind === "passOn");
+  const others = buttons.filter(
+    (button) => button !== forward && button !== passOn,
+  );
+  return { forward, passOn, others };
+}
+
+const keyOf = ({ id }: PromptButton) =>
+  id.kind === "option" ? `option-${id.index}` : id.kind;
+
+/** The keys that answer the open prompt, as the old board has them: Space or Enter presses
+ * the button put forward, Shift with either the one that passes on, and Escape takes a cast
+ * back. A control that has the focus keeps its own key, and `idle` is false while something
+ * else on the screen takes the keys. */
+export function usePromptKeys(
+  { prompt, decision, sending }: Asked,
+  { press, cancel }: Pick<Answers, "press" | "cancel">,
+  idle: boolean,
+) {
+  const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
+  onKey.current = (e) => {
+    if (!prompt || sending || !idle || e.repeat) return;
+    if (e.key === "Escape" && decision?.cancellable && cancel) {
+      e.preventDefault();
+      cancel();
+      return;
+    }
+    if (e.key !== " " && e.key !== "Enter") return;
+    const control =
+      e.target instanceof Element &&
+      e.target.closest("button, input, select, textarea, a");
+    if (control) return;
+    const { forward, passOn } = standing(prompt.buttons);
+    const button = e.shiftKey ? passOn : forward;
+    if (!button?.enabled) return;
+    e.preventDefault();
+    press(button.id);
+  };
+  useEffect(() => {
+    const heard = (e: KeyboardEvent) => onKey.current?.(e);
+    window.addEventListener("keydown", heard);
+    return () => window.removeEventListener("keydown", heard);
+  }, []);
+}
+
+/** The round button that passes on to a later stop, which its label names. */
+function PassOn({
+  button,
+  disabled,
+  press,
+  tip,
+}: {
+  button: PromptButton;
+  disabled: boolean;
+  press(button: ButtonId): void;
+  tip?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={tip ? "pass-on-button has-tip" : "pass-on-button"}
+      aria-label={button.label}
+      disabled={disabled}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => press(button.id)}
+    >
+      <span className="pass-on-face button-primary">
+        <FastForwardIcon />
+      </span>
+      {tip && (
+        <Tip side="above">
+          {button.label}
+          <kbd>⇧ Space</kbd>
+        </Tip>
+      )}
+    </button>
+  );
+}
+
+/** The desktop's dock for the open prompt. While the game plays on, the turn button stands
+ * where it will be with nothing to press, as the old board's does. */
+export function PromptDock({
+  asked: { prompt, decision, sending },
+  waiting,
+  press,
+  cancel,
+}: { asked: Asked } & Answers) {
+  if (!prompt) {
+    return waiting ? (
+      <Dock className="stage-prompt">
+        <div className="turn-action">
+          <TurnButton label="Pass" disabled />
+        </div>
+      </Dock>
+    ) : null;
+  }
+  const { forward, passOn, others } = standing(prompt.buttons);
+  const off = (button: PromptButton) => sending || !button.enabled;
+  const takesBack = decision?.cancellable && cancel;
+  return (
+    <Dock
+      className="stage-prompt"
+      title={prompt.title ? <RulesText text={prompt.title} /> : undefined}
+    >
+      {(others.length > 0 || takesBack) && (
+        <DockButtons>
+          {others.map((button) => (
+            <Button
+              key={keyOf(button)}
+              variant="secondary"
+              disabled={off(button)}
+              onClick={() => press(button.id)}
+            >
+              <RulesText text={button.label} />
+            </Button>
+          ))}
+          {takesBack && (
+            <Button variant="secondary" disabled={sending} onClick={cancel}>
+              {prompt.words.cancel}
+            </Button>
+          )}
+        </DockButtons>
+      )}
+      {forward && (
+        <div className="turn-action">
+          <TurnButton
+            label={forward.label}
+            disabled={off(forward)}
+            onClick={() => press(forward.id)}
+          />
+          {passOn && (
+            <PassOn button={passOn} disabled={off(passOn)} press={press} tip />
+          )}
+          {forward.caption && (
+            <span className="turn-caption">{forward.caption}</span>
+          )}
+        </div>
+      )}
+    </Dock>
+  );
+}
+
+/** The phone's dock for the open prompt, in the player's strip: the button put forward and
+ * the one that passes on. */
+export function PhonePromptDock({
+  asked: { prompt, sending },
+  waiting,
+  press,
+}: { asked: Asked } & Answers) {
+  if (!prompt) {
+    return waiting ? (
+      <div className="phone-dock">
+        <TurnButton label="Pass" disabled />
+      </div>
+    ) : null;
+  }
+  const { forward, passOn } = standing(prompt.buttons);
+  if (!forward && !passOn) return null;
+  return (
+    <div className="phone-dock">
+      {forward && (
+        <TurnButton
+          label={forward.label}
+          disabled={sending || !forward.enabled}
+          onClick={() => press(forward.id)}
+        />
+      )}
+      {passOn && (
+        <PassOn
+          button={passOn}
+          disabled={sending || !passOn.enabled}
+          press={press}
+        />
+      )}
+    </div>
+  );
+}
+
+/** What of the open prompt stands over the phone's player strip, whose top is `top`: what it
+ * asks, and its other buttons stacked over the dock. */
+export function PhonePromptOver({
+  asked: { prompt, decision, sending },
+  press,
+  cancel,
+  top,
+}: { asked: Asked; top: number } & Answers) {
+  if (!prompt) return null;
+  const { others } = standing(prompt.buttons);
+  const takesBack = decision?.cancellable && cancel;
+  return (
+    <>
+      {prompt.title && (
+        <div className="phone-pill" role="status" style={{ top: top - 30 }}>
+          <RulesText text={prompt.title} />
+        </div>
+      )}
+      {(others.length > 0 || takesBack) && (
+        <div
+          className="phone-prompt-more"
+          style={{ bottom: `calc(100% - ${top - 6}px)` }}
+        >
+          {others.map((button) => (
+            <Button
+              key={keyOf(button)}
+              variant="secondary"
+              disabled={sending || !button.enabled}
+              onClick={() => press(button.id)}
+            >
+              <RulesText text={button.label} />
+            </Button>
+          ))}
+          {takesBack && (
+            <Button variant="secondary" disabled={sending} onClick={cancel}>
+              {prompt.words.cancel}
+            </Button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}

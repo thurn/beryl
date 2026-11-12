@@ -5,8 +5,10 @@
 // the chrome the desktop's board has, composed for a phone (PhoneChrome.tsx). The same scripts
 // play as on the desktop. What the chrome shows of the table (life, mana, the piles, the
 // phase) is the stage's table, so that what a step changes shows as the step plays; the dock
-// and undo answer the view last played out. A touch on a card inspects it, as the stage tells
-// it (pointer.ts); the prompt shapes add what a touch chooses.
+// and undo answer the view last played out. The dock is the open prompt's, as the session
+// sent it (prompt.ts, PromptBar.tsx). A touch goes to that prompt first, and one it has no
+// use for inspects the card touched; a card of the hand is read by a touch and played by
+// carrying it out of the hand.
 import {
   useEffect,
   useLayoutEffect,
@@ -18,17 +20,9 @@ import {
 import { ManaPool, Thinking } from "../components/Player";
 import type { StopsSetting } from "../generated/protocol";
 import { incoming } from "../game/combat";
-import { interactions } from "../game/decisions";
 import type { LogEntry } from "../game/log";
 import { opponentActing } from "../game/Narration";
-import {
-  MenuButton,
-  Middle,
-  Orb,
-  PhoneDock,
-  Piles,
-  useViewport,
-} from "../mobile/chrome";
+import { MenuButton, Middle, Orb, Piles, useViewport } from "../mobile/chrome";
 import { PHONE } from "../mobile/faces";
 import { phoneLayout } from "../mobile/layout";
 import type { PhoneBoard } from "../mobile/PhoneBoard";
@@ -50,6 +44,7 @@ import {
   type PhonePile,
 } from "./PhoneChrome.tsx";
 import { pageStage } from "./playback.ts";
+import { PhonePromptDock, PhonePromptOver, usePrompt } from "./PromptBar.tsx";
 import "./stage.css";
 
 /** What the phone's board on the stage takes: the old phone board's, and what the chrome it
@@ -69,8 +64,7 @@ const SIDES = ["opponent", "you"] as const;
 export function PhoneStageBoard({
   view,
   waiting,
-  choose,
-  passOn,
+  cancel,
   onLeave,
   log,
   undo,
@@ -78,7 +72,9 @@ export function PhoneStageBoard({
   setStops,
   onConcede,
 }: PhoneStageProps) {
-  const { stage, feed } = pageStage();
+  const { stage, feed, prompts } = pageStage();
+  const asked = usePrompt(prompts);
+  const answers = { waiting, press: prompts.press.bind(prompts), cancel };
   const { ref, viewport } = useViewport();
   const { layer, surface } = useSurface(stage);
   const { table, counts, resting } = useSyncExternalStore(
@@ -93,21 +89,25 @@ export function PhoneStageBoard({
     () => viewport && table && phoneLayout(table, viewport).bands,
     [table, viewport],
   );
-  const can = useMemo(() => interactions(view), [view]);
-  const objects = useMemo(
-    () => new Map(view.objects.map((o) => [o.slot, o])),
-    [view],
-  );
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
   >();
   // The slot of the card a touch inspects.
   const [inspecting, setInspecting] = useState<number>();
-  // A touch on a card the player can read inspects it, and a second one puts it away.
+  // A touch on a card the player can read inspects it, and a second one puts it away: one
+  // the open prompt had no use for, or on a card of the hand, which the prompt leaves to be
+  // read.
+  useEffect(() => {
+    prompts.clicks = (name) =>
+      stage.shown.resting.get(name)?.dress.zone !== "hand";
+    return () => {
+      prompts.clicks = () => true;
+    };
+  }, [stage, prompts]);
   useEffect(
     () =>
-      stage.pointer.listen({
+      prompts.listen({
         click(name) {
           const touched = stage.shown.resting.get(name);
           const readable =
@@ -120,7 +120,7 @@ export function PhoneStageBoard({
           );
         },
       }),
-    [stage],
+    [stage, prompts],
   );
   const inspected =
     inspecting === undefined
@@ -167,14 +167,7 @@ export function PhoneStageBoard({
                 change={lifeChange(counts, side)}
               />
               {side === "you" ? (
-                <PhoneDock
-                  view={view}
-                  waiting={waiting}
-                  can={can}
-                  objects={objects}
-                  choose={choose}
-                  passOn={passOn}
-                />
+                <PhonePromptDock asked={asked} {...answers} />
               ) : (
                 <>
                   {opponentActing(view, waiting) && (
@@ -208,6 +201,11 @@ export function PhoneStageBoard({
             onOpen={({ side, zone }) => setSheet({ side, zone })}
           />
           <Notices stage={stage} view={view} table={table} bands={bands} />
+          <PhonePromptOver
+            asked={asked}
+            {...answers}
+            top={bands.yourStrip.top}
+          />
         </>
       )}
       {sheet === "menu" && (

@@ -20,7 +20,7 @@ export interface Fed {
   log: LogEntry[];
 }
 
-/** The stage as the feed uses it. */
+/** The stage as the feed uses it: itself, or through what draws its prompts (prompt.ts). */
 type Player = Pick<ScriptStage, "play" | "skip" | "shown" | "subscribe">;
 
 export class Feed {
@@ -120,7 +120,8 @@ export class Feed {
     const before = this.#fed;
     const fed: Fed = {
       shown,
-      behind: this.#stage.shown.busy,
+      // What the stage plays besides (a prompt's marks coming up) is no view to wait for.
+      behind: this.#sent.length > 0,
       latest: this.#held?.at(-1),
       log: this.#logged.log,
     };

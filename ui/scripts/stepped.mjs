@@ -130,6 +130,9 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
     const stage = window.berylStage;
     const { clock } = stage;
     clock.hold();
+    // What is measured is the recording's steps and the marks written by hand: no prompt's.
+    window.berylPrompts.shut();
+    stage.settle();
     while (!Number.isInteger(clock.now)) {
         clock.advance(Math.ceil(clock.now) - clock.now);
     }

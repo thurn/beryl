@@ -316,6 +316,7 @@ def measure_here() -> int:
                 scripts = [
                     ("ui-test", ["scripts/interactions.mjs", url, str(recorded)]),
                     ("ui-test", ["scripts/verbs.mjs", url, str(recorded)]),
+                    ("ui-test", ["scripts/shapes.mjs", url, str(recorded)]),
                     ("shots", ["scripts/shots.mjs", url, str(out), "shots.json"]),
                 ]
                 for lane, script in scripts:

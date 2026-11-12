@@ -2,8 +2,9 @@
 // (switch.tsx) until it takes over: the cloth, one node an object or ability where the page's
 // stage has it (playback.ts), and the chrome around them (Chrome.tsx, game/Corner.tsx). The
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out
-// for what stands around it, and hears the pointer. No prompt is here yet: the shapes come
-// with their own beads, and answer through the same props.
+// for what stands around it, and hears the pointer. The prompt picked on the table is the
+// session's, drawn and answered through prompt.ts and PromptBar.tsx; the other shapes come
+// with their own beads, and are answered over the table until then.
 import {
   useCallback,
   useEffect,
@@ -20,6 +21,7 @@ import { desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { pageStage } from "./playback.ts";
+import { PromptDock, usePrompt, usePromptKeys } from "./PromptBar.tsx";
 import "./stage.css";
 
 export function StageBoard({
@@ -27,6 +29,7 @@ export function StageBoard({
   log,
   waiting,
   onSkip,
+  cancel,
   undo,
   stops,
   setStops,
@@ -35,7 +38,8 @@ export function StageBoard({
   dimmed,
   inert,
 }: ComponentProps<typeof Board>) {
-  const { stage } = pageStage();
+  const { stage, prompts } = pageStage();
+  const asked = usePrompt(prompts);
   const { layer, surface } = useSurface(stage);
   const width = useStageWidth();
   const [settings, setSettings] = useState(false);
@@ -53,6 +57,9 @@ export function StageBoard({
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
+  const answers = { waiting, press: prompts.press.bind(prompts), cancel };
+  // A prompt's keys answer it while nothing else takes them.
+  usePromptKeys(asked, answers, !settings && !onSkip && !inert);
   // The keys that are not a prompt's: Escape closes the settings, the platform's undo takes
   // back an answer, and Space or Enter ends a replay as a press on the table does.
   const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
@@ -100,11 +107,14 @@ export function StageBoard({
         {surface && <Faces stage={stage} surface={surface} skin={DESKTOP} />}
         <Controls
           stage={stage}
+          prompts={prompts}
           stops={stops}
           setStops={setStops}
           inert={inert}
           dimmed={dimmed}
-        />
+        >
+          <PromptDock asked={asked} {...answers} />
+        </Controls>
         <Corner
           inert={inert}
           open={settings}

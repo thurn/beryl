@@ -108,8 +108,8 @@ class Suspect:
 
 def names(arg: str, check: str) -> bool:
     """Whether the narrowing argument `arg` names the run-log check `check`: a title or a shot
-    is the check (`ui-test:<title>`), a verb check is named whole
-    (`verb:<verb>/<seat>/<layout>`), a nextest `<binary> <test>` is `rust:<binary>::<test>`
+    is the check (`ui-test:<title>`), a verb or shape check is named whole
+    (`verb:<verb>/<seat>/<layout>`, `shape:<shape>/<seat>/<layout>`), a nextest `<binary> <test>` is `rust:<binary>::<test>`
     and a card is each of its scenarios (`oracle:<card>/<scenario>/<engine>`)."""
     tail = check.split(":", 1)[-1]
     return (

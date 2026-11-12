@@ -300,8 +300,9 @@ def ui_test(args: argparse.Namespace) -> int:
 
 
 def ui_test_fixtures() -> list[str]:
-    """The fixtures `ui-test` records: interactions.mjs' and the verb suite's."""
-    return list(dict.fromkeys(INTERACTION_FIXTURES + selection.verb_fixtures()))
+    """The fixtures `ui-test` records: interactions.mjs' and the verb and shape suites'."""
+    fixtures = selection.verb_fixtures() + selection.shape_fixtures()
+    return list(dict.fromkeys(INTERACTION_FIXTURES + fixtures))
 
 
 def interactions(
@@ -310,10 +311,10 @@ def interactions(
     only: list[str],
     chooser: selection.Chooser | None,
 ) -> int:
-    """Plays the checks of interactions.mjs and then verbs.mjs: those `only` names, or with
-    `chooser`, those it chose, which the scripts match exactly so that a rerun's filters narrow
-    them. A script none of the names is for does not run (selection.scripts). Fails if either
-    script does."""
+    """Plays the checks of interactions.mjs, then verbs.mjs, then shapes.mjs: those `only`
+    names, or with `chooser`, those it chose, which the scripts match exactly so that a rerun's
+    filters narrow them. A script none of the names is for does not run (selection.scripts).
+    Fails if any script does."""
     with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
         names = only
         if chooser:

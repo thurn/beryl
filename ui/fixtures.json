@@ -577,7 +577,6 @@
         "Island",
         "Tundra",
         "press decline",
-        "Counterspell",
         "Oust",
         "Thundertrap Trainer",
         "press decline",
@@ -588,7 +587,8 @@
     {
       "name": "shape-pick-theirs",
       "board": "shape-pick-theirs",
-      "until": "first priority decision for seat 1"
+      "until": "first priority decision for seat 1",
+      "after": 1
     }
   ]
 }

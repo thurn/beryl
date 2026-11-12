@@ -375,16 +375,58 @@ def test_a_change_to_the_verb_suite_chooses_its_checks(repo: Path) -> None:
 
 
 def test_each_name_goes_to_the_script_whose_check_it_is() -> None:
-    both = {selection.INTERACTIONS: [], selection.VERB_SCRIPT: []}
-    assert selection.scripts([]) == both
-    assert selection.scripts(["joins", "verb:fly/yours/desktop", "drag"]) == {
+    every = {
+        selection.INTERACTIONS: [],
+        selection.VERB_SCRIPT: [],
+        selection.SHAPE_SCRIPT: [],
+    }
+    assert selection.scripts([]) == every
+    names = ["joins", "verb:fly/yours/desktop", "shape:pick/yours/phone", "drag"]
+    assert selection.scripts(names) == {
         selection.INTERACTIONS: ["joins", "drag"],
         selection.VERB_SCRIPT: ["verb:fly/yours/desktop"],
+        selection.SHAPE_SCRIPT: ["shape:pick/yours/phone"],
     }
     assert selection.scripts(["verb:emerge"]) == {
         selection.VERB_SCRIPT: ["verb:emerge"]
     }
+    assert selection.scripts(["shape:"]) == {selection.SHAPE_SCRIPT: ["shape:"]}
     assert selection.scripts(["drag"]) == {selection.INTERACTIONS: ["drag"]}
+
+
+SHAPES = {
+    "shapes": {"pick": {"yours": "shape-pick", "theirs": "shape-pick-theirs"}},
+    "layouts": ["desktop", "phone"],
+}
+SHAPE_CHECKS = [
+    "shape:pick/yours/desktop",
+    "shape:pick/yours/phone",
+    "shape:pick/theirs/desktop",
+    "shape:pick/theirs/phone",
+]
+
+
+def test_the_shape_suite_lists_its_checks_and_fixtures(repo: Path) -> None:
+    assert selection.shape_checks() == []
+    assert selection.shape_fixtures() == []
+    (repo / "ui" / "shapes.json").write_text(json.dumps(SHAPES))
+    assert selection.shape_checks() == SHAPE_CHECKS
+    assert selection.shape_fixtures() == ["shape-pick", "shape-pick-theirs"]
+    # They are the lane's checks, after every other.
+    assert selection.lane_checks("ui-test", [], None)[-4:] == SHAPE_CHECKS
+
+
+def test_a_change_to_the_shape_suite_chooses_its_checks(repo: Path) -> None:
+    universe = [*UNIVERSE, *VERB_CHECKS, *SHAPE_CHECKS]
+    script = "ui/scripts/shapes.mjs"
+    code = {script: [hunk(script, 9, 9, ["a"], ["b"])]}
+    choice = selection.choose("ui-test", [script], code, universe, None, "")
+    assert choice.reasons == dict.fromkeys(SHAPE_CHECKS, "body")
+    choice = selection.choose("ui-test", ["ui/shapes.json"], {}, universe, None, "")
+    assert choice.reasons == dict.fromkeys(SHAPE_CHECKS, "body")
+    # A change to the verb suite leaves them be.
+    choice = selection.choose("ui-test", ["ui/verbs.json"], {}, universe, None, "")
+    assert choice.reasons == dict.fromkeys(VERB_CHECKS, "body")
 
 
 def test_checks_the_prune_moved_to_slow_ci_are_never_chosen(

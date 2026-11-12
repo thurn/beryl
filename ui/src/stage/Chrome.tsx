@@ -5,7 +5,13 @@
 // answers the player (undo, the settings) goes by the view last played out. Announcements show
 // for as long as the step that makes them plays, on the stage's time (`Shown.notices`); the
 // combat banner, which no step announces, keeps the old board's timer.
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { Button, Tip } from "../components/Controls";
 import { LifeOrb, ManaPool, PlayerBadge, Thinking } from "../components/Player";
 import { StepStops } from "../components/Steps";
@@ -27,6 +33,7 @@ import { knownLibraries, zonePiles } from "../game/zoneViews";
 import { desktop } from "./desktop.ts";
 import type { Name } from "./layout.ts";
 import { announced, coinBanner, lifeChange, scryWords } from "./notices.ts";
+import type { Prompts } from "./prompt.ts";
 import type { ScriptStage } from "./stage.ts";
 
 const SIDES = ["opponent", "you"] as const;
@@ -158,28 +165,34 @@ export function Hud({
   );
 }
 
-/** The node the pointer is on, as the stage tells it (pointer.ts). The one listener the stage's
- * pointer has is this board's: the prompt shapes add what a click and a drop do here. */
-function useHovered(stage: ScriptStage): Name | undefined {
+/** The node the pointer is on, as the stage tells it (pointer.ts) through what draws its
+ * prompts, which hears the pointer first (prompt.ts). */
+function useHovered(stage: ScriptStage, prompts: Prompts): Name | undefined {
   const [hovered, setHovered] = useState<Name>();
   useEffect(() => {
     setHovered(stage.pointer.hovered);
-    return stage.pointer.listen({ hover: setHovered });
-  }, [stage]);
+    return prompts.listen({ hover: setHovered });
+  }, [stage, prompts]);
   return hovered;
 }
 
 /** What lies over the table's cards: a button on each pile and the viewer it opens, the
  * strips the stack's lower items peek out by, each player's step stops with full control's
- * mark, and the inspector of the card the pointer is on. */
+ * mark and the dock beside them (`children`), and the inspector of the card the pointer is
+ * on. */
 export function Controls({
   stage,
+  prompts,
   stops,
   setStops,
   inert,
   dimmed,
+  children,
 }: {
   stage: ScriptStage;
+  prompts: Prompts;
+  /** The dock: the open prompt's buttons (PromptBar.tsx). */
+  children?: ReactNode;
   stops: StopsSetting;
   setStops(stops: StopsSetting): void;
   /** A screen over the table answers the decision: the turn's controls give way. */
@@ -192,7 +205,7 @@ export function Controls({
   );
   const width = useStageWidth();
   const [viewing, setViewing] = useState<{ side: Side; zone: string }>();
-  const hovered = useHovered(stage);
+  const hovered = useHovered(stage, prompts);
   const piles = useMemo(
     () =>
       table ? [...zonePiles(table, NO_ORDER), ...knownLibraries(table)] : [],
@@ -265,6 +278,7 @@ export function Controls({
               />
             );
           })}
+          {children}
         </div>
       )}
       {inspected && !dimmed && !viewed && (

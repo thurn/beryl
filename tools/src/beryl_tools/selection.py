@@ -10,6 +10,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
 - `body`: its own body changed: its `check(...)` call in ui/scripts/interactions.mjs, or a
   top-level block of them, or its entry in ui/shots.json; for a verb check
   (`verb:<verb>/<seat>/<layout>`, ui/scripts/verbs.mjs), that script or its list, ui/verbs.json;
+  for a shape check (`shape:<shape>/<seat>/<layout>`, ui/scripts/shapes.mjs), that script or its
+  list, ui/shapes.json;
 - `import:<file>`: code changed in a ui/src file interactions.mjs imports into Node, which no
   coverage sees: as if each line of interactions.mjs that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
@@ -83,6 +85,11 @@ VERB_CASES = (
 )
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"
+# The shape suite, which `ui-test` runs after it: its script, the list of its checks, and the
+# prefix of their ids in the run log.
+SHAPE_SCRIPT = "ui/scripts/shapes.mjs"
+SHAPES = "ui/shapes.json"
+SHAPE_PREFIX = "shape:"
 SHOTS = "ui/shots.json"
 FIXTURES = "ui/fixtures.json"
 COMMENT = ("//", "/*", "*")
@@ -436,15 +443,52 @@ def verb_fixtures() -> list[str]:
     return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
 
 
+def shape_suite() -> dict[str, object]:
+    """ui/shapes.json: the shape suite's shapes, each with its fixture by seat, and its layouts.
+    Empty where a checkout has none."""
+    try:
+        found = json.loads((paths.REPO / SHAPES).read_text())
+    except (OSError, ValueError):
+        return {}
+    return found if isinstance(found, dict) else {}
+
+
+def shape_checks() -> list[str]:
+    """The shape suite's checks, by their run-log ids."""
+    suite = shape_suite()
+    shapes, layouts = suite.get("shapes"), suite.get("layouts")
+    if not (isinstance(shapes, dict) and isinstance(layouts, list)):
+        return []
+    return [
+        f"{SHAPE_PREFIX}{shape}/{seat}/{layout}"
+        for shape, seats in shapes.items()
+        if isinstance(seats, dict)
+        for seat in seats
+        for layout in layouts
+    ]
+
+
+def shape_fixtures() -> list[str]:
+    """The fixtures the shape suite plays: each shape's, one a seat."""
+    shapes = shape_suite().get("shapes")
+    seats = list(shapes.values()) if isinstance(shapes, dict) else []
+    return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
+
+
 def scripts(names: list[str]) -> dict[str, list[str]]:
     """Which of `ui-test`'s scripts run, each with the checks of `names` that are its own: a
-    verb check's name goes to verbs.mjs and any other to interactions.mjs, and a script with
-    none does not run. With no names both run every check."""
+    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs and any other to
+    interactions.mjs, and a script with none does not run. With no names all run every check.
+    """
     if not names:
-        return {INTERACTIONS: [], VERB_SCRIPT: []}
-    verbs = [n for n in names if n.startswith(VERB_PREFIX)]
-    rest = [n for n in names if not n.startswith(VERB_PREFIX)]
-    found = {INTERACTIONS: rest, VERB_SCRIPT: verbs}
+        return {INTERACTIONS: [], VERB_SCRIPT: [], SHAPE_SCRIPT: []}
+    suites = {VERB_PREFIX: VERB_SCRIPT, SHAPE_PREFIX: SHAPE_SCRIPT}
+    found: dict[str, list[str]] = {INTERACTIONS: [], VERB_SCRIPT: [], SHAPE_SCRIPT: []}
+    for name in names:
+        script = next(
+            (s for p, s in suites.items() if name.startswith(p)), INTERACTIONS
+        )
+        found[script].append(name)
     return {script: own for script, own in found.items() if own}
 
 
@@ -578,6 +622,10 @@ def choose(
         rewritten(p, changed, hunks_now) for p in (VERB_SCRIPT, *VERB_CASES, VERBS)
     ):
         choice.add((c for c in universe if c.startswith(VERB_PREFIX)), "body")
+    if lane == "ui-test" and any(
+        rewritten(p, changed, hunks_now) for p in (SHAPE_SCRIPT, SHAPES)
+    ):
+        choice.add((c for c in universe if c.startswith(SHAPE_PREFIX)), "body")
     if lane == "shots" and SHOTS in changed:
         old = shot_entries(checks.git("show", f"{base}:{SHOTS}")) if base else {}
         new = shot_entries((paths.REPO / SHOTS).read_text())
@@ -651,7 +699,8 @@ def lane_checks(
 ) -> list[str]:
     """The lane's checks as they are now, but those the prune moved to slow CI alone
     (verdicts.SLOW_ONLY): shots.json's names, or the checks interactions.mjs spells out with
-    those the log and coverage name that it can still give, and the verb suite's."""
+    those the log and coverage name that it can still give, and the verb and shape suites'.
+    """
     slow = {s.check for s in verdicts.SLOW_ONLY}
     return [c for c in every_check(lane, log, found) if c not in slow]
 
@@ -676,7 +725,7 @@ def every_check(
             or json.dumps(c.removeprefix(prefix)) in source
         )
     }
-    return sorted(current | set(literal)) + verb_checks()
+    return sorted(current | set(literal)) + verb_checks() + shape_checks()
 
 
 class Chooser:

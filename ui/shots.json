@@ -502,6 +502,30 @@
       "click": ".game-log-toggle"
     },
     {
+      "name": "stage-pick",
+      "route": "/?stage&fixture=shape-pick&at=1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "stage-pick-target",
+      "route": "/?stage&fixture=shape-pick&at=3#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-pick",
+      "route": "/?phone&stage&fixture=shape-pick&at=1#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stage-pick-target",
+      "route": "/?phone&stage&fixture=shape-pick&at=3#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
       "name": "game-declare-attack",
       "route": "/?fixture=combat-declare&at=26#/game",
       "width": 1600,

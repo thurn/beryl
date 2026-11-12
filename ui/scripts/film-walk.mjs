@@ -88,6 +88,9 @@ export async function walk({
         await new Promise((resolve) => wait(resolve, 20));
     }
     clock.hold();
+    // What is filmed is the recording's steps and the marks written by hand: no prompt's.
+    window.berylPrompts.shut();
+    stage.settle();
     while (!Number.isInteger(clock.now)) {
         clock.advance(Math.ceil(clock.now) - clock.now);
     }

@@ -68,7 +68,8 @@ interface Open {
   until?: number;
 }
 
-const keyOf = (act: SpanAct) =>
+/** What names the span `act` begins or ends among a stage's spans. */
+export const keyOf = (act: SpanAct) =>
   act.verb === "point"
     ? `${act.arrow} ${namedBy(act.from)} ${namedBy(act.to)}`
     : `${act.mark} ${namedBy(act.on)}`;

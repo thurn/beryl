@@ -2,7 +2,7 @@
 // mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
 // the open decision through `choose`. A reloaded page takes up the game in progress.
-import { Board, PhoneBoard } from "../stage/switch";
+import { Board, PhoneBoard, useAsked } from "../stage/switch";
 import { Button, Dock } from "../components/Controls";
 import {
   type CandidateIndex,
@@ -144,11 +144,14 @@ function Playing({ playback }: { playback: Playback }) {
   const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
+  // What the stage asks, where it draws the prompt and answers it by clicks itself.
+  const onStage = useAsked();
   const confirmingRemoval = removal?.view === view ? removal : undefined;
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
   // or a step passing, shown or still to show.
   const waiting =
     answered === view ||
+    onStage?.answered === true ||
     behind ||
     status.kind === "thinking" ||
     status.kind === "playing";
@@ -163,6 +166,10 @@ function Playing({ playback }: { playback: Playback }) {
       setError(message);
     }
   };
+  const clickFailed = onStage?.error;
+  useEffect(() => {
+    if (clickFailed !== undefined) fail(clickFailed);
+  }, [clickFailed]);
   const decision = status.kind === "deciding" ? status.decision : undefined;
   // A spec may open directly at a target choice. Give the reviewer its paused state
   // before applying the normal shortcut for a lone target.

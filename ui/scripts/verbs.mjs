@@ -108,6 +108,10 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     const stage = window.berylStage;
     const { clock } = stage;
     clock.hold();
+    // The steps watched are the recording's: the prompts' marks are the shape suite's
+    // (shapes.mjs), and this one's own are written by hand.
+    window.berylPrompts.shut();
+    stage.settle();
     // Whole milliseconds from here on, so that two runs give the same numbers to the bit.
     while (!Number.isInteger(clock.now)) {
         clock.advance(Math.ceil(clock.now) - clock.now);

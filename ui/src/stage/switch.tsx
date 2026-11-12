@@ -7,7 +7,9 @@ import { Board as CardBoard } from "../game/Board";
 import { usePlayback as useBeats } from "../game/playback";
 import { PhoneBoard as CardPhoneBoard } from "../mobile/PhoneBoard";
 import { PhoneStageBoard, type PhoneStageProps } from "./PhoneStageBoard.tsx";
-import { useStagePlayback } from "./playback.ts";
+import { pageStage, useStagePlayback } from "./playback.ts";
+import type { Asked } from "./prompt.ts";
+import { usePrompt } from "./PromptBar.tsx";
 import { StageBoard } from "./StageBoard.tsx";
 
 const staged = new URLSearchParams(window.location.search).has("stage");
@@ -26,6 +28,12 @@ export function PhoneBoard(props: PhoneStageProps) {
     <CardPhoneBoard {...props} />
   );
 }
+
+/** What the stage asks of the player, where it draws the prompt itself (prompt.ts): none
+ * without it, where the old boards answer every decision through the screen. */
+export const useAsked: () => Asked | undefined = staged
+  ? () => usePrompt(pageStage().prompts)
+  : () => undefined;
 
 /** The game in progress as the player watches it: on the stage, the views' scripts played on
  * its clock; without it, the views cut into beats and held by timers. */
