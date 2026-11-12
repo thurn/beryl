@@ -3,6 +3,7 @@
 // is desktop.ts, and a phone's is its own.
 import type {
   ObjectView,
+  PaidCost,
   PlayerView,
   Side,
   StackItem,
@@ -47,6 +48,9 @@ export interface Dress {
   /** How far a card of your hand rises under the pointer, where the layout raises it and by
    * less than it would with nothing over it (game/placement.ts `RAISE`). */
   lift?: number;
+  /** On a spell on the stack, what its card does not say of how it was cast: the X it was
+   * announced with and the alternative or additional costs paid for it. */
+  cast?: { x: number; paid: PaidCost[] };
 }
 
 /** One thing at rest: where it lies, how it is dressed, and what its face is drawn from. A
@@ -73,7 +77,8 @@ export const sameDress = (a: Dress, b: Dress) =>
   a.back === b.back &&
   a.rim === b.rim &&
   a.count === b.count &&
-  a.lift === b.lift;
+  a.lift === b.lift &&
+  JSON.stringify(a.cast) === JSON.stringify(b.cast);
 
 /** A point on the stage. */
 export interface Point {

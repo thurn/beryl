@@ -215,6 +215,11 @@ function rest(
     const place = placements.get(object.slot);
     if (place) out.set(object.slot, resting(object, place));
   }
+  for (const item of view.stack) {
+    if (item.kind !== "spell") continue;
+    const spell = out.get(item.slot);
+    if (spell) spell.dress.cast = { x: item.x, paid: item.paid };
+  }
   // An ability the table has no number for (a stage that started over from a view in the
   // middle of a game) cannot be named by a later step, so it is not drawn.
   let numbered = 0;

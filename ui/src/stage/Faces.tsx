@@ -18,7 +18,8 @@ import type { ScriptStage } from "./stage.ts";
 /** The skin's own highlights mark no card here: a mark of script/verb.rs is the stage's, an
  * element of its own on the node with its one look (spans.ts, stage.css). The one the skin
  * draws is the ring of what is attached to the permanent the pointer is on, or what that is
- * attached to (`linked`): the pointer's, and no script's. */
+ * attached to (`linked`): the pointer's, and no script's. A spell on the stack wears how it
+ * was cast, as its dress has it. */
 const UNMARKED: CardState = {};
 const LINKED: CardState = { linked: true };
 
@@ -47,7 +48,7 @@ const Face = memo(function Face({
     <Look
       object={object}
       place={{ look: dress.look, width: dress.frame, count: dress.count }}
-      state={linked ? LINKED : UNMARKED}
+      state={linked ? LINKED : (dress.cast ?? UNMARKED)}
     />
   );
 });

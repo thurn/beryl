@@ -119,6 +119,9 @@ export function StageBoard({
   // back an answer, and Space or Enter ends a replay as a press on the table does.
   const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
   onKey.current = (e) => {
+    // A key the prompt took has done its one thing: the answer it sent may already have
+    // views playing, which the same press must not end.
+    if (e.defaultPrevented) return;
     if (e.key === "Escape") {
       if (settings) setSettings(false);
     } else if (e.key.toLowerCase() === "z" && (e.metaKey || e.ctrlKey)) {
