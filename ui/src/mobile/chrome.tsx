@@ -3,7 +3,7 @@
 // answering the decisions the desktop's does. The phone's board draws its cards among these
 // itself (PhoneBoard.tsx); behind `?stage` the stage does (stage/PhoneStageBoard.tsx), and
 // these stay as they are.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type {
   CandidateIndex,
   ObjectView,
@@ -72,11 +72,14 @@ export function Orb({
   view,
   incoming,
   change,
+  children,
 }: {
   side: Side;
   view: PlayerView;
   incoming?: number;
   change?: number;
+  /** What lies over the orb: where a prompt takes a touch on the player (the stage's). */
+  children?: ReactNode;
 }) {
   const { life } = view.players[side];
   return (
@@ -86,6 +89,7 @@ export function Orb({
         <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
       )}
       {change !== undefined && <LifeChange by={change} />}
+      {children}
     </div>
   );
 }

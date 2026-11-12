@@ -14,7 +14,7 @@ import {
   TurnButton,
 } from "../components/Controls";
 import { RulesText } from "../components/Mana";
-import type { ButtonId, PromptButton } from "../generated/protocol";
+import type { ButtonId, PromptButton, Side } from "../generated/protocol";
 import type { Asked, Prompts } from "./prompt.ts";
 
 /** What the page's stage asks, as the screen draws it. */
@@ -77,6 +77,31 @@ export function usePromptKeys(
     window.addEventListener("keydown", heard);
     return () => window.removeEventListener("keydown", heard);
   }, []);
+}
+
+/** A player's life total as the open prompt marks it: its face takes the click, which goes to
+ * the session as one on that player. Nothing where the prompt marks no such player. */
+export function PlayerTarget({
+  prompts,
+  asked: { prompt },
+  side,
+}: {
+  prompts: Prompts;
+  asked: Asked;
+  side: Side;
+}) {
+  const marked = prompt?.marks.some(
+    ({ on }) => on.kind === "player" && on.player === side,
+  );
+  if (!marked) return null;
+  return (
+    <span
+      className="life-hit life-target"
+      role="button"
+      aria-label={side === "you" ? "Target yourself" : "Target opponent"}
+      onClick={() => prompts.on({ kind: "player", player: side })}
+    />
+  );
 }
 
 /** The round button that passes on to a later stop, which its label names. */

@@ -21,7 +21,12 @@ import { desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { pageStage } from "./playback.ts";
-import { PromptDock, usePrompt, usePromptKeys } from "./PromptBar.tsx";
+import {
+  PlayerTarget,
+  PromptDock,
+  usePrompt,
+  usePromptKeys,
+} from "./PromptBar.tsx";
 import "./stage.css";
 
 export function StageBoard({
@@ -102,6 +107,9 @@ export function StageBoard({
           waiting={waiting}
           logOpen={logOpen}
           onLog={toggleLog}
+          orb={(side) => (
+            <PlayerTarget prompts={prompts} asked={asked} side={side} />
+          )}
         />
         <div className="card-layer" ref={layer} />
         {surface && <Faces stage={stage} surface={surface} skin={DESKTOP} />}

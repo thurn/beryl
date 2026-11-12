@@ -20,9 +20,17 @@ import {
 import { ManaPool, Thinking } from "../components/Player";
 import type { StopsSetting } from "../generated/protocol";
 import { incoming } from "../game/combat";
+import { interactions } from "../game/decisions";
 import type { LogEntry } from "../game/log";
 import { opponentActing } from "../game/Narration";
-import { MenuButton, Middle, Orb, Piles, useViewport } from "../mobile/chrome";
+import {
+  MenuButton,
+  Middle,
+  Orb,
+  PhoneDock,
+  Piles,
+  useViewport,
+} from "../mobile/chrome";
 import { PHONE } from "../mobile/faces";
 import { phoneLayout } from "../mobile/layout";
 import type { PhoneBoard } from "../mobile/PhoneBoard";
@@ -44,7 +52,12 @@ import {
   type PhonePile,
 } from "./PhoneChrome.tsx";
 import { pageStage } from "./playback.ts";
-import { PhonePromptDock, PhonePromptOver, usePrompt } from "./PromptBar.tsx";
+import {
+  PhonePromptDock,
+  PhonePromptOver,
+  PlayerTarget,
+  usePrompt,
+} from "./PromptBar.tsx";
 import "./stage.css";
 
 /** What the phone's board on the stage takes: the old phone board's, and what the chrome it
@@ -64,6 +77,8 @@ const SIDES = ["opponent", "you"] as const;
 export function PhoneStageBoard({
   view,
   waiting,
+  choose,
+  passOn,
   cancel,
   onLeave,
   log,
@@ -88,6 +103,13 @@ export function PhoneStageBoard({
   const bands = useMemo(
     () => viewport && table && phoneLayout(table, viewport).bands,
     [table, viewport],
+  );
+  // What the stage does not yet draw the prompt of (a declaration, a division of damage)
+  // keeps the old phone board's dock, which answers through the screen.
+  const can = useMemo(() => interactions(view), [view]);
+  const objects = useMemo(
+    () => new Map(view.objects.map((o) => [o.slot, o])),
+    [view],
   );
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
   const [sheet, setSheet] = useState<
@@ -165,9 +187,22 @@ export function PhoneStageBoard({
                 view={table}
                 incoming={beforeDamage ? incoming(table, side) : undefined}
                 change={lifeChange(counts, side)}
-              />
+              >
+                <PlayerTarget prompts={prompts} asked={asked} side={side} />
+              </Orb>
               {side === "you" ? (
-                <PhonePromptDock asked={asked} {...answers} />
+                asked.prompt || waiting || decision?.kind === "priority" ? (
+                  <PhonePromptDock asked={asked} {...answers} />
+                ) : (
+                  <PhoneDock
+                    view={view}
+                    waiting={waiting}
+                    can={can}
+                    objects={objects}
+                    choose={choose}
+                    passOn={passOn}
+                  />
+                )
               ) : (
                 <>
                   {opponentActing(view, waiting) && (

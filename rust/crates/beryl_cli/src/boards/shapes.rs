@@ -3,10 +3,11 @@
 //! the table with the same play scripted.
 
 use beryl_cards::names::{
-    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, OUST, THUNDERTRAP_TRAINER, TUNDRA,
+    COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, JACE_WIELDER_OF_MYSTERIES, OUST, THUNDERTRAP_TRAINER,
+    TUNDRA,
 };
 use beryl_engine::{DecisionKind, TurnStep};
-use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
+use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
 use super::shorthand::{ISLAND_, LANDS, choose, play_land};
 
@@ -14,13 +15,14 @@ use super::shorthand::{ISLAND_, LANDS, choose, play_land};
 const PICKERS: &[Permanent] = &[
     Permanent::new(TUNDRA),
     Permanent::new(THUNDERTRAP_TRAINER).sick(),
+    Permanent::new(JACE_WIELDER_OF_MYSTERIES),
 ];
 const WATCHERS: &[Permanent] = &[Permanent::new(ELITE_SPELLBINDER), ISLAND_];
 
 /// Picking on the table: the human's main phase with a land to play, of two alike in hand;
 /// a Tundra, whose two ways to tap open the choice among them; a Counterspell with nothing
-/// to counter; and an Oust, whose targets are a creature of each player's, their own asked
-/// about before it is taken.
+/// to counter; a planeswalker whose ability targets a player; and an Oust, whose targets are
+/// a creature of each player's, their own asked about before it is taken.
 const fn pick(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
@@ -37,6 +39,8 @@ pub(super) const SHAPES: &[Scenario] = &[
     // The same play, for the seat across the table to watch.
     pick("shape-pick-theirs").actions(&[
         play_land(P0, ISLAND),
+        Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1),
+        Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
         Action::cast(P0, OUST),
         choose(P0, DecisionKind::Target, ELITE_SPELLBINDER),
     ]),

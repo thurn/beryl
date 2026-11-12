@@ -163,9 +163,11 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 2. UI: `cd ui && npm run typecheck`. `npm test` runs what needs no browser
    (`ui/scripts/*.test.mjs`: the stage's clock and sequencing).
    `just ui-shots [names]` screenshots UI states headless and prints their
-   paths; `just ui-test` plays the game screen through a fixture, and then the
+   paths; `just ui-test` plays the game screen through a fixture, then the
    stage's verbs on the stage's own clock (`ui/scripts/verbs.mjs`;
-   `just ui-test verb:` runs those alone). Every card has a spec
+   `just ui-test verb:` runs those alone), and then its prompt shapes, each
+   answered by the clicks its fixture recorded with the session's replies
+   (`ui/scripts/shapes.mjs`; `just ui-test shape:`). Every card has a spec
    (`/specs/<card>`), generated from its definition and scenarios, showing each
    of its UI moments as a live game from both seats. To reproduce, debug or
    verify a card's behavior in the UI, use the `specs` skill:

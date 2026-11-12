@@ -508,7 +508,7 @@
       "height": 900
     },
     {
-      "name": "stage-pick-target",
+      "name": "stage-pick-player",
       "route": "/?stage&fixture=shape-pick&at=3#/game",
       "width": 1600,
       "height": 900
@@ -521,7 +521,7 @@
     },
     {
       "name": "phone-stage-pick-target",
-      "route": "/?phone&stage&fixture=shape-pick&at=3#/game",
+      "route": "/?phone&stage&fixture=shape-pick&at=10#/game",
       "width": 393,
       "height": 759
     },

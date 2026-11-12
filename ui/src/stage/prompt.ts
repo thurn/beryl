@@ -85,7 +85,7 @@ const AIMED: Partial<Record<string, Arrow>> = {
 export class Prompts {
   readonly #stage: Prompted;
   readonly #send: Send;
-  /** Called as the session's reply to a click comes. */
+  /** Called as a click is taken up: one that changed the prompt or answered it. */
   heard: () => void = () => {};
   /** Which nodes a click on is the prompt's: all, until a board says otherwise (a phone's
    * hand is read by a touch and played by a drag). */
@@ -187,6 +187,11 @@ export class Prompts {
     this.#mark();
   }
 
+  /** A click on what the stage has no node of: a player, whose life total the chrome draws. */
+  on(subject: Subject) {
+    this.#click({ kind: "on", on: subject });
+  }
+
   /** Presses the button `button` of the open prompt. */
   press(button: ButtonId) {
     this.#click({ kind: "button", button });
@@ -258,14 +263,15 @@ export class Prompts {
       (reply) => {
         // A view that arrived meanwhile closed the prompt: the reply is of no state shown.
         if (!open()) return;
-        this.heard();
         if (reply.kind === "answered") {
+          this.heard();
           // Its marks stay until the view it answered into ends them, and a card carried
           // out of the hand waits for that view's script where it was let go.
           this.#set({ sending: false, answered: true });
           return;
         }
         if (reply.prompt.revision === prompt.revision) unused?.();
+        else this.heard();
         this.#set({ ...IDLE, decision, prompt: reply.prompt });
         this.#mark();
       },

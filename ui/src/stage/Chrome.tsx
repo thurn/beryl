@@ -55,8 +55,11 @@ export function Hud({
   waiting,
   logOpen,
   onLog,
+  orb,
 }: {
   stage: ScriptStage;
+  /** What a prompt lays over a player's life total: where a click picks that player. */
+  orb?: (side: Side) => ReactNode;
   /** The view last played out. */
   view: PlayerView;
   log: LogEntry[];
@@ -118,6 +121,7 @@ export function Hud({
               <Incoming amount={damage} lethal={damage > 0 && damage >= life} />
             )}
             {change !== undefined && <LifeChange by={change} />}
+            {orb?.(side)}
           </div>
         );
       })}

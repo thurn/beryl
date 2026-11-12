@@ -319,7 +319,13 @@ recordings do not show them.
   total's rim. A touch on a graveyard, or on a library with a known card, lists
   its cards; a touch on a card shows it whole, and a touch beside it puts it
   away. The turn's banner crosses the middle band, a combat step's lies under
-  the opponent's strip, and a scry's pill beside its player's strip.
+  the opponent's strip, and a scry's pill beside its player's strip. A prompt
+  picked on the table is the desktop's: the button it puts forward stands in the
+  player's strip where the turn button is, with the one that passes on beside
+  it; what it asks is a pill over that strip, and its other buttons are stacked
+  over the turn button. A touch on a card the prompt can use uses it, and one it
+  has no use for shows the card whole; a card in your hand is read by a touch
+  and played by carrying it out of the hand.
 
 ## Verbs
 
