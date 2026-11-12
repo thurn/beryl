@@ -1,0 +1,353 @@
+{
+  "rule": "Crates of card files (`by cards`; tools/src/beryl_tools/set_groups.py specifies them): first-printing sets oldest first in runs of 500 to 1,500 cards, a larger set alone. A set never moves: a new one joins the newest crate while it holds at most 1,500 cards, else opens one. A crate is named for its sets' years when made and keeps its name.",
+  "groups": [
+    {
+      "crate": "cards_1993_1994",
+      "sets": [
+        "lea",
+        "leb",
+        "arn",
+        "atq",
+        "leg"
+      ]
+    },
+    {
+      "crate": "cards_1994_1996",
+      "sets": [
+        "drk",
+        "fem",
+        "phpr",
+        "ice",
+        "hml",
+        "all",
+        "mir"
+      ]
+    },
+    {
+      "crate": "cards_1996_1998",
+      "sets": [
+        "mgb",
+        "vis",
+        "por",
+        "wth",
+        "tmp",
+        "sth",
+        "exo",
+        "p02",
+        "usg"
+      ]
+    },
+    {
+      "crate": "cards_1999_2000",
+      "sets": [
+        "ulg",
+        "ptk",
+        "uds",
+        "s99",
+        "mmq",
+        "nem",
+        "pcy",
+        "inv"
+      ]
+    },
+    {
+      "crate": "cards_2001_2002",
+      "sets": [
+        "pls",
+        "apc",
+        "ody",
+        "tor",
+        "jud",
+        "ons"
+      ]
+    },
+    {
+      "crate": "cards_2003_2005",
+      "sets": [
+        "lgn",
+        "scg",
+        "8ed",
+        "mrd",
+        "dst",
+        "5dn",
+        "chk",
+        "bok"
+      ]
+    },
+    {
+      "crate": "cards_2005_2007",
+      "sets": [
+        "sok",
+        "rav",
+        "gpt",
+        "dis",
+        "csp",
+        "tsb",
+        "tsp",
+        "plc"
+      ]
+    },
+    {
+      "crate": "cards_2007_2009",
+      "sets": [
+        "fut",
+        "lrw",
+        "mor",
+        "shm",
+        "eve",
+        "drb",
+        "ala",
+        "con"
+      ]
+    },
+    {
+      "crate": "cards_2009_2011",
+      "sets": [
+        "arb",
+        "m10",
+        "hop",
+        "zen",
+        "wwk",
+        "roe",
+        "arc",
+        "m11",
+        "v10",
+        "ddf",
+        "som",
+        "mbs",
+        "nph"
+      ]
+    },
+    {
+      "crate": "cards_2011_2013",
+      "sets": [
+        "cmd",
+        "m12",
+        "v11",
+        "isd",
+        "dka",
+        "avr",
+        "pc2",
+        "m13",
+        "ddj",
+        "rtr",
+        "gtc"
+      ]
+    },
+    {
+      "crate": "cards_2013_2014",
+      "sets": [
+        "dgm",
+        "m14",
+        "ddl",
+        "ths",
+        "c13",
+        "bng",
+        "jou",
+        "cns",
+        "m15",
+        "ddn",
+        "ktk"
+      ]
+    },
+    {
+      "crate": "cards_2014_2016",
+      "sets": [
+        "c14",
+        "frf",
+        "dtk",
+        "ori",
+        "ddp",
+        "bfz",
+        "c15",
+        "ogw",
+        "ddq",
+        "soi"
+      ]
+    },
+    {
+      "crate": "cards_2016_2017",
+      "sets": [
+        "ema",
+        "emn",
+        "cn2",
+        "kld",
+        "mps",
+        "c16",
+        "aer",
+        "akh",
+        "mp2",
+        "hou",
+        "c17",
+        "xln"
+      ]
+    },
+    {
+      "crate": "cards_2018_2019",
+      "sets": [
+        "rix",
+        "dom",
+        "bbd",
+        "gs1",
+        "m19",
+        "c18",
+        "grn",
+        "g18",
+        "gnt",
+        "med",
+        "rna",
+        "war"
+      ]
+    },
+    {
+      "crate": "cards_2019_2020",
+      "sets": [
+        "mh1",
+        "m20",
+        "c19",
+        "eld",
+        "gn2",
+        "thb",
+        "c20",
+        "iko"
+      ]
+    },
+    {
+      "crate": "cards_2020_2021",
+      "sets": [
+        "m21",
+        "jmp",
+        "znc",
+        "znr",
+        "sld",
+        "cmr",
+        "khc",
+        "khm",
+        "c21",
+        "sta",
+        "stx"
+      ]
+    },
+    {
+      "crate": "cards_2021_2022",
+      "sets": [
+        "mh2",
+        "afc",
+        "afr",
+        "mic",
+        "mid",
+        "voc",
+        "vow",
+        "nec",
+        "neo"
+      ]
+    },
+    {
+      "crate": "cards_2022",
+      "sets": [
+        "ncc",
+        "snc",
+        "clb",
+        "2x2",
+        "dmc",
+        "dmu",
+        "40k",
+        "gn3",
+        "bot",
+        "brc",
+        "bro"
+      ]
+    },
+    {
+      "crate": "cards_2022_2023",
+      "sets": [
+        "j22",
+        "one",
+        "onc",
+        "moc",
+        "mom",
+        "mul",
+        "mat",
+        "ltc",
+        "ltr",
+        "cmm",
+        "woc",
+        "woe"
+      ]
+    },
+    {
+      "crate": "cards_2023_2024",
+      "sets": [
+        "who",
+        "lcc",
+        "lci",
+        "rex",
+        "mkc",
+        "mkm",
+        "clu",
+        "pip",
+        "big",
+        "otc",
+        "otj",
+        "m3c"
+      ]
+    },
+    {
+      "crate": "cards_2024_2025",
+      "sets": [
+        "mh3",
+        "acr",
+        "blb",
+        "blc",
+        "mb2",
+        "plst",
+        "dsc",
+        "dsk",
+        "fdn",
+        "j25",
+        "dft",
+        "drc"
+      ]
+    },
+    {
+      "crate": "cards_2025",
+      "sets": [
+        "tdc",
+        "tdm",
+        "fic",
+        "fin",
+        "eoc",
+        "eoe",
+        "spe",
+        "spm",
+        "tla"
+      ]
+    },
+    {
+      "crate": "cards_2025_2026",
+      "sets": [
+        "tle",
+        "ecc",
+        "ecl",
+        "tmc",
+        "tmt",
+        "soc",
+        "sos",
+        "msc"
+      ]
+    },
+    {
+      "crate": "cards_2026",
+      "sets": [
+        "msh",
+        "hob",
+        "hoc",
+        "slz",
+        "fra",
+        "frc",
+        "trc",
+        "trk"
+      ]
+    }
+  ]
+}

@@ -4,7 +4,9 @@ of every card (scryfall.py downloads it into the cache and reuses it for a week,
 store (card_store.py specifies it): a record for every card in the pool and every token or
 emblem a pool card makes (its `all_parts`). The app serves the UI the records it asks for by
 name (rust/crates/beryl_session/src/card_records.rs) and downloads the images themselves on
-demand (rust/crates/beryl_app/src/art.rs).
+demand (rust/crates/beryl_app/src/art.rs). Beside the store it writes set-groups.json, the
+crates card files go in by first-printing set (set_groups.py), and catalogs.json, Scryfall's
+type and keyword catalogs and the pool's counter kinds (catalogs.py).
 
 The pool is every card in Scryfall's Oracle data except un-set, dexterity and Alchemy cards: a
 card whose Vintage legality is anything but not_legal (which drops un-cards, Alchemy and other
@@ -37,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from . import card_store, paths, scryfall
+from . import card_store, catalogs, paths, scryfall, set_groups
 
 # Scryfall's card back images: /<size>/<id[0]>/<id[1]>/<card_back_id>.jpg.
 DATA: Path = paths.REPO / "data"
@@ -321,6 +323,8 @@ class Pool:
     by Scryfall id (tokens are found there)."""
 
     shown: dict[str, Json] = field(default_factory=dict)
+    # Each card's first printing (`first_of`), by oracle id.
+    first: dict[str, Json] = field(default_factory=dict)
     by_id: dict[str, Json] = field(default_factory=dict)
     # Cards (oracle ids) out of the pool, per reason.
     dropped: Counter[str] = field(default_factory=Counter)
@@ -361,7 +365,9 @@ def read_pool(
             if reason == NOT_LEGAL:
                 pool.not_legal[set_type] += 1
     for oracle, found in sorted(groups.items()):
-        pool.shown[oracle] = chosen.get(oracle) or choose(sorted(found, key=released))
+        ordered = sorted(found, key=released)
+        pool.first[oracle] = first_of(ordered)
+        pool.shown[oracle] = chosen.get(oracle) or choose(ordered)
     missing = set(pinned) - {
         (str(c["set"]), str(c["collector_number"])) for c in chosen.values()
     }
@@ -461,7 +467,13 @@ def store_faces(card: Json, token: bool) -> list[Json]:
     return out
 
 
-def store_record(card: Json, token: bool, tokens: list[Json] | None = None) -> Json:
+def store_record(
+    card: Json,
+    token: bool,
+    tokens: list[Json] | None = None,
+    first: Json | None = None,
+) -> Json:
+    """A card's or token's record; a card's names its `first` printing's set and date."""
     faces = store_faces(card, token)
     name = display_name(card)
     if token and len(faces) == 1:
@@ -472,6 +484,11 @@ def store_record(card: Json, token: bool, tokens: list[Json] | None = None) -> J
         "scryfall_id": card["id"],
         "set": card["set"],
         "collector_number": card["collector_number"],
+    }
+    if first is not None:
+        record["first_set"] = first["set"]
+        record["first_released"] = first.get("released_at", "")
+    record |= {
         "layout": card["layout"],
         "artist": card.get("artist", ""),
     }
@@ -495,9 +512,11 @@ def aliases(card: Json, record: Json) -> list[str]:
 
 @dataclass
 class Built:
-    """The store's lines, each card's printing by every name it answers to, and counts."""
+    """The store's lines, its card records, each card's printing by every name it answers to,
+    and counts."""
 
     lines: list[bytes] = field(default_factory=list)
+    records: list[Json] = field(default_factory=list)
     by_name: dict[str, Json] = field(default_factory=dict)
     counts: Counter[str] = field(default_factory=Counter)
 
@@ -506,7 +525,7 @@ def build_store(pool: Pool) -> Built:
     built = Built()
     tokens: dict[str, Json] = {}
     named: dict[str, list[tuple[Json, Json]]] = {}
-    for card in pool.shown.values():
+    for oracle, card in pool.shown.items():
         links: list[Json] = []
         for linked in made(card):
             if linked not in pool.by_id:
@@ -516,13 +535,14 @@ def build_store(pool: Pool) -> Built:
                 linked, store_record(pool.by_id[linked], token=True)
             )
             links.append({"name": token["name"], "scryfall_id": linked})
-        record = store_record(card, token=False, tokens=links)
+        record = store_record(card, False, links, pool.first[oracle])
         named.setdefault(str(record["name"]), []).append((card, record))
     for name, found in named.items():
         if len(found) > 1:
             raise LookupError(f"two cards named {name}")
         card, record = found[0]
         built.lines.append(card_store.line("card", name, record))
+        built.records.append(record)
         built.by_name[name] = card
     for name, found in named.items():
         card, record = found[0]
@@ -545,11 +565,13 @@ def build_store(pool: Pool) -> Built:
 
 
 def sample(path: Path, bulk: Path, built: Built, pool: Pool, names: list[str]) -> None:
-    """Writes the tests' fixture: the printings of the decks' cards, the pinned ones, and
-    every printing of each of `names`, pruned, one per line."""
+    """Writes the tests' fixture: the printings of the decks' cards and the pinned ones, with
+    their first printings, and every printing of each of `names`, pruned, one per line.
+    """
     pinned = [n for n in printings(PRINTINGS) if n in built.by_name]
     shown = [built.by_name[n] for n in dict.fromkeys(m1_names() + pinned)]
-    ids = {str(c["id"]) for c in shown} | set(token_parts(shown))
+    firsts = {str(pool.first[oracle_id(c)]["id"]) for c in shown}
+    ids = {str(c["id"]) for c in shown} | firsts | set(token_parts(shown))
     wanted = set(names)
     with path.open("w", encoding="utf-8", newline="\n") as out:
         for raw in scryfall.objects(bulk):
@@ -586,8 +608,20 @@ def cards(args: argparse.Namespace) -> int:
         sample(Path(args.sample), bulk, built, pool, args.names)
         print(f"cards: wrote {args.sample}", file=sys.stderr)
         return 0
-    card_store.write(Path(args.store), built.lines)
-    print(f"cards: wrote {args.store}", file=sys.stderr)
+    store = Path(args.store)
+    card_store.write(store, built.lines)
+    groups = set_groups.update(store.parent / set_groups.GROUPS.name, built.records)
+    texts = [
+        str(f.get("oracle_text", ""))
+        for r in built.records
+        for f in cast(list[Json], r["faces"])
+    ]
+    found = catalogs.fetch(args.refresh)
+    catalogs.write(store.parent / catalogs.CATALOGS.name, found, texts)
+    print(
+        f"cards: wrote {store} and, beside it, {len(groups)} set groups",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -596,7 +630,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "cards",
         help="build the card store from Scryfall's bulk data",
     )
-    p.add_argument("--store", default=str(card_store.STORE))
+    p.add_argument(
+        "--store",
+        default=str(card_store.STORE),
+        help="the card store; set-groups.json and catalogs.json are written beside it",
+    )
     source = p.add_mutually_exclusive_group()
     source.add_argument(
         "--refresh", action="store_true", help="download a new bulk file"

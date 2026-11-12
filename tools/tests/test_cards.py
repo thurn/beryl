@@ -10,7 +10,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import card_store, cards, scryfall
+from beryl_tools import card_store, cards, catalogs, scryfall, set_groups
 from beryl_tools.cli import main
 
 FIXTURES: Path = Path(__file__).parent / "fixtures"
@@ -23,6 +23,13 @@ def sample_pool() -> cards.Pool:
         cards.printings(cards.PRINTINGS),
         cards.exclusions(cards.EXCLUSIONS),
     )
+
+
+@pytest.fixture(autouse=True)
+def no_scryfall(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The catalogs come from the committed file, not Scryfall's API."""
+    found = cast(dict[str, list[str]], catalogs.load()["catalogs"])
+    monkeypatch.setattr(catalogs, "fetch", lambda refresh: found)
 
 
 def run(tmp_path: Path) -> Path:
@@ -117,6 +124,26 @@ def test_the_store_answers_every_name_a_card_goes_by(tmp_path: Path) -> None:
     assert len(ids) == len(set(ids))
 
 
+def test_cards_name_their_first_printing_and_the_run_writes_its_groups(
+    tmp_path: Path,
+) -> None:
+    path = run(tmp_path)
+    with card_store.Store(path) as store:
+        jace = store.card("Jace, Vryn's Prodigy")
+        assert jace is not None
+        assert (jace["first_set"], jace["first_released"]) == ("ori", "2015-07-17")
+        # The card shows a later printing of its first art, but its file goes by the first.
+        island = store.card("Island")
+        assert island is not None and island["set"] == "ust"
+        assert island["first_set"] == "lea"
+        assert all("first_set" not in t for kind, t in store if kind == "token")
+        records = [r for kind, r in store if kind == "card"]
+    groups = set_groups.SetGroups(set_groups.load(tmp_path / "set-groups.json"))
+    assert {str(r["first_set"]) for r in records} <= set(groups.crates)
+    kinds = catalogs.load(tmp_path / "catalogs.json")["counter_kinds"]
+    assert "+1/+1" in cast(list[str], kinds)
+
+
 def test_the_store_keeps_no_volatile_fields(tmp_path: Path) -> None:
     path = run(tmp_path)
     text = path.read_text()
@@ -142,19 +169,19 @@ def test_the_pool_is_vintage_legality_less_the_exclusions() -> None:
 
 
 def test_a_card_printed_only_in_un_sets_is_out_of_the_pool() -> None:
-    sample = {str(c["name"]): c for c in scryfall.objects(SAMPLE)}
     # Tournament legal, as most of Unfinity is, but printed only in an un-set.
-    unset_only = {**sample["Goblin Bowling Team"], "legalities": {"vintage": "legal"}}
-    # Unstable's Island stays, though the sample has no other printing of it: a basic land.
+    unset_only: dict[str, object] = {"legalities": {"vintage": "legal"}}
     printings = [
-        unset_only,
-        *(c for n, c in sample.items() if n != "Goblin Bowling Team"),
+        {**c, **unset_only} if c["name"] == "Goblin Bowling Team" else c
+        for c in scryfall.objects(SAMPLE)
+        if c["name"] != "Island" or c["set"] == "ust"
     ]
     pool = cards.read_pool(
         printings, cards.printings(cards.PRINTINGS), cards.exclusions(cards.EXCLUSIONS)
     )
     names = {str(c["name"]) for c in pool.shown.values()}
     assert "Goblin Bowling Team" not in names
+    # Unstable's Island stays, though printed only in an un-set here: a basic land.
     assert "Island" in names
     assert pool.dropped[cards.IN_UN_SETS_ONLY] == 1
 

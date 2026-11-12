@@ -44,11 +44,15 @@ the release pinned in `data/rules-version.json`.
   it). The app embeds it (`beryl_card_store`) and serves the UI the records it
   asks for by name (`beryl_session`'s `card_records`: printing, artist, per-face
   text and image URLs), which `ui/src/cardRecords.ts` caches before a view is
-  drawn; the UI bundles no card data. `card-pool-exclusions.json`, the cards the
-  store leaves out though legal in Vintage; `card-printings.csv`, the printings
-  it pins; `oracle-divergences.json`, the scenarios where an oracle is wrong,
-  each with its CR citation; `oracle-exporter-gaps.json`, the generated
-  scenarios an oracle's exporter cannot script, reported as unsupported;
+  drawn; the UI bundles no card data. Beside it `just cards` writes
+  `set-groups.json`, the crates card files go in, each a run of first-printing
+  sets that never moves (`set_groups.py`), and `catalogs.json`, Scryfall's type
+  and keyword catalogs and the pool's counter kinds (`catalogs.py`).
+  `card-pool-exclusions.json`, the cards the store leaves out though legal in
+  Vintage; `card-printings.csv`, the printings it pins;
+  `oracle-divergences.json`, the scenarios where an oracle is wrong, each with
+  its CR citation; `oracle-exporter-gaps.json`, the generated scenarios an
+  oracle's exporter cannot script, reported as unsupported;
   `card-names-allowlist.json`, the generic files that still name cards and the
   one-card mechanics still in the engine; `save-breaks.json`, the corpus saves
   no migration carries past a change; `arena-motion.json`, Arena's motion per

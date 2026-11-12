@@ -28,6 +28,10 @@ pub struct Record {
     pub scryfall_id: String,
     pub set: String,
     pub collector_number: String,
+    /// A card's first printing's set code and release date (`YYYY-MM-DD`), which place its
+    /// file; none for a token.
+    pub first_set: Option<String>,
+    pub first_released: Option<String>,
     pub layout: String,
     #[serde(default)]
     pub artist: String,

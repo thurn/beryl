@@ -25,6 +25,9 @@ A record:
 - `name`, `oracle_id`; the printing shown: `scryfall_id`, `set`, `collector_number`, `layout`,
   `artist`, `card_back_id` (absent for a card whose back is its other face); Scryfall's
   `keywords`;
+- a card's first printing, the earliest real one (`cards.first_of`), which places its file
+  (set_groups.py): `first_set`, its set code, and `first_released`, its release date
+  (`YYYY-MM-DD`); a token has neither;
 - a card's `tokens`: each token or emblem it makes as `{"name", "scryfall_id"}`, the key and id
   of its record;
 - `faces`, each with the characteristics CR 109.3 lists that a printed face carries: `name`,

@@ -97,6 +97,9 @@ fn the_committed_store_answers_by_card_face_and_token_name() {
     assert_eq!(STORE.card("Jace, Telepath Unbound"), Some(jace.clone()));
     assert_eq!(jace.faces[1].side, Side::Back);
     assert_eq!(jace.faces[1].loyalty.as_deref(), Some("5"));
+    // The first printing places the card's file; a token has none.
+    assert_eq!(jace.first_set.as_deref(), Some("ori"));
+    assert_eq!(jace.first_released.as_deref(), Some("2015-07-17"));
     let emblem = &jace.tokens[0];
     assert!(
         STORE
@@ -109,6 +112,7 @@ fn the_committed_store_answers_by_card_face_and_token_name() {
     let offspring = STORE.tokens("Thundertrap Trainer");
     assert_eq!(offspring.len(), 1);
     assert_ne!(trainer.scryfall_id, offspring[0].scryfall_id);
+    assert!(offspring[0].first_set.is_none());
     assert!(STORE.tokens("Treasure Token").len() > 1);
     assert!(STORE.card("Nonexistent Card").is_none());
 }
