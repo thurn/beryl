@@ -50,6 +50,7 @@ from . import (
     card_names,
     citations,
     conventions,
+    discarded_push,
     file_length,
     hygiene,
     paths,
@@ -556,9 +557,10 @@ def ui_lane() -> Lane:
 
 def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
     """No card name in generic code, held to the burn-down list (card_names.py), no other
-    player of two and no board door in rules code (two_player.py, board_door.py), and every
-    rules citation held to the pinned release (citations.py): in the files `cited`, or with
-    None in the whole tree, fetching the release's text if `fetch` and it is not cached.
+    player of two, no board door and no failed push thrown away in rules code (two_player.py,
+    board_door.py, discarded_push.py), and every rules citation held to the pinned release
+    (citations.py): in the files `cited`, or with None in the whole tree, fetching the
+    release's text if `fetch` and it is not cached.
     """
     checks = [sys.executable, "-m", "beryl_tools.checks"]
     lane = (
@@ -566,6 +568,7 @@ def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
         .step("card-names", [*checks, "card-names"])
         .step("two-player", [*checks, "two-player"])
         .step("board-door", [*checks, "board-door"])
+        .step("discarded-push", [*checks, "discarded-push"])
     )
     if cited != []:
         flags = ["--fetch"] if fetch else []
@@ -762,6 +765,7 @@ if __name__ == "__main__":
         "file-length": file_length.step,
         "two-player": two_player.step,
         "board-door": board_door.step,
+        "discarded-push": discarded_push.step,
         "citations": citations.step,
         "conventions": conventions.step,
         "build-paths": build_paths.step,
