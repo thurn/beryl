@@ -2,7 +2,7 @@
 //! results of a permanent (architecture §4.2, §5, §9).
 //!
 //! Only the kernel writes an object: through [`State`](crate::State)'s mutators, the zone and
-//! chance chokepoints, the board door and the legacy accessor. No `&mut Object` leaves the
+//! chance chokepoints and the board door. No `&mut Object` leaves the
 //! crate. Other crates read an object through the getters below.
 
 use beryl_card::{Colors, FaceIx, GrantIx, Keywords, Subtypes, Supertypes, Types, Zone};

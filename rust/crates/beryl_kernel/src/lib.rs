@@ -125,13 +125,6 @@
 //! and rules code has no use for it: the `board-door` check in the `names` lane refuses
 //! `.board()` and `board::Board` in `beryl_engine` and `beryl_cards` outside their tests.
 //!
-//! ## The legacy accessor
-//!
-//! [`State::legacy_mut`] lends a [`legacy::Legacy`], which wrote, raw, what milestone 4
-//! (by-w8gv.7.1) deletes, until each had moved to a store ("Stores"). Nothing is left
-//! behind it: the last was the counters no object keeps in a field (by-w8gv.7.9).
-//! Milestone 4 deletes the accessor (by-w8gv.7.10).
-//!
 //! ## Stores
 //!
 //! A struct field holds what the Comprehensive Rules give a player, an object or the turn.
@@ -277,8 +270,8 @@
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
 //!   store has an entry about, the members of the locked-in sets among them, so the move
 //!   tests one bit and calls nothing else: it pays for the sets only while an object of
-//!   one moves. This replaces three sweeps, all gone: `State::drop_stale_effects`,
-//!   `Legacy::end_permissions_of_turn` and the one in `Legacy::remember_x`. A permission to
+//!   one moves. This replaces three sweeps, all gone: a drop of stale effects, one of
+//!   the turn's permissions and one of the cast value of X. A permission to
 //!   cast a card "for as long as it remains exiled" is an entry of no stated duration on
 //!   the card: it ends as the card leaves.
 //!
@@ -602,7 +595,6 @@ pub mod ids;
 pub mod invariants;
 mod knowledge;
 pub mod layout;
-pub mod legacy;
 pub mod memos;
 pub mod mutate;
 mod new;
