@@ -1,16 +1,19 @@
-//! Get Lost. {1}{W} Instant. "Destroy target creature, enchantment, or planeswalker. Its
-//! controller creates two Map tokens."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Get Lost {1}{W}
+//! Instant
 //!
-//! Map: Token Artifact — Map. "{1}, {T}, Sacrifice this token: Target creature you control
-//! explores. Activate only as a sorcery."
+//! Destroy target creature, enchantment, or planeswalker. Its controller creates two Map tokens.
+//! (They're artifacts with "{1}, {T}, Sacrifice this token: Target creature you control explores.
+//! Activate only as a sorcery.")
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     ITS_CONTROLLER, TARGET, create_tokens, destroy, explore, sequence,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Cost, CostPart, Face, Filter, ManaCost, Players, Subtype, Subtypes,
-    TargetKind, TargetSpec, Types, card, mana,
+    Ability, CardDef, Cost, CostPart, Filter, ManaCost, Players, TargetKind, TargetSpec, Types,
+    card,
 };
 
 /// "Its controller" is the permanent's controller as it was destroyed
@@ -22,23 +25,19 @@ use beryl_card::{
 /// information."
 pub static CARD: CardDef = card(
     names::GET_LOST,
-    &[Face::EMPTY
-        .cost(mana("{1}{W}"))
-        .types(Types::INSTANT)
-        .colors(Colors::WHITE)
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Types(
-                    Types::CREATURE
-                        .union(Types::ENCHANTMENT)
-                        .union(Types::PLANESWALKER),
-                ),
-            )])
-            .effect(&sequence(&[
-                destroy(TARGET),
-                create_tokens(ITS_CONTROLLER, &MAP, 2),
-            ]))])],
+    &[printed::GET_LOST.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(
+            TargetKind::Permanent,
+            Filter::Types(
+                Types::CREATURE
+                    .union(Types::ENCHANTMENT)
+                    .union(Types::PLANESWALKER),
+            ),
+        )])
+        .effect(&sequence(&[
+            destroy(TARGET),
+            create_tokens(ITS_CONTROLLER, &MAP, 2),
+        ]))])],
 )
 .creating(&[&MAP]);
 
@@ -52,10 +51,8 @@ pub use crate::tokens::MAP_TOKEN;
 /// Explore is [CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a).
 pub static MAP: CardDef = card(
     MAP_TOKEN,
-    &[Face::EMPTY
-        .types(Types::ARTIFACT)
-        .subtypes(Subtypes::of(&[Subtype::Map]))
-        .abilities(&[Ability::activated(Cost::of(
+    &[
+        printed::token::MAP_TOKEN.abilities(&[Ability::activated(Cost::of(
             ManaCost::generic(1),
             &[CostPart::TAP, CostPart::SACRIFICE],
         ))
@@ -64,7 +61,8 @@ pub static MAP: CardDef = card(
             Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
         )])
         .as_a_sorcery()
-        .effect(&explore(TARGET))])],
+        .effect(&explore(TARGET))]),
+    ],
 );
 
 #[cfg(feature = "scenarios")]

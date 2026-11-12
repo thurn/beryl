@@ -1,12 +1,13 @@
-//! Oust. {W} Sorcery. "Put target creature into its owner's library second from the top. Its
-//! controller gains 3 life."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Oust {W}
+//! Sorcery
+//!
+//! Put target creature into its owner's library second from the top. Its controller gains 3 life.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, gain_life, put_into_library, sequence};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, LibraryPosition, TargetKind, TargetSpec, Types, card,
-    mana,
-};
+use beryl_card::{Ability, CardDef, Filter, LibraryPosition, TargetKind, TargetSpec, Types, card};
 
 /// "Second from the top" is under one card, or the top of an empty library. "Its controller"
 /// is the creature's as it was on the battlefield: in a library it has no controller
@@ -16,19 +17,15 @@ use beryl_card::{
 /// goes to its owner's library while its controller gains the life.
 pub static CARD: CardDef = card(
     names::OUST,
-    &[Face::EMPTY
-        .cost(mana("{W}"))
-        .types(Types::SORCERY)
-        .colors(Colors::WHITE)
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Types(Types::CREATURE),
-            )])
-            .effect(&sequence(&[
-                put_into_library(TARGET, LibraryPosition::FromTop(2)),
-                gain_life(ITS_CONTROLLER, 3),
-            ]))])],
+    &[printed::OUST.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(
+            TargetKind::Permanent,
+            Filter::Types(Types::CREATURE),
+        )])
+        .effect(&sequence(&[
+            put_into_library(TARGET, LibraryPosition::FromTop(2)),
+            gain_life(ITS_CONTROLLER, 3),
+        ]))])],
 );
 
 #[cfg(feature = "scenarios")]

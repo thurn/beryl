@@ -1,17 +1,20 @@
-//! Teferi, Hero of Dominaria. {3}{W}{U} Legendary Planeswalker — Teferi. Loyalty 4.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Teferi, Hero of Dominaria {3}{W}{U}
+//! Legendary Planeswalker — Teferi, loyalty 4
 //!
-//! "+1: Draw a card. At the beginning of the next end step, untap up to two lands.
+//! +1: Draw a card. At the beginning of the next end step, untap up to two lands.
 //! −3: Put target nonland permanent into its owner's library third from the top.
-//! −8: You get an emblem with 'Whenever you draw a card, exile target permanent an opponent
-//! controls.'"
+//! −8: You get an emblem with "Whenever you draw a card, exile target permanent an opponent
+//! controls."
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     TARGET, YOU, delay, draw, exile, get_emblem, put_into_library, sequence, untap_up_to,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Effect, Face, Filter, LibraryPosition, Objects, Players, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TurnStep, Types, Zone, card, mana,
+    Ability, CardDef, Effect, Face, Filter, LibraryPosition, Objects, Players, TargetKind,
+    TargetSpec, Trigger, TurnStep, Types, Zone, card,
 };
 
 /// The place of the delayed untap among the face's abilities.
@@ -19,25 +22,18 @@ const UNTAP: u8 = 3;
 
 pub static CARD: CardDef = card(
     names::TEFERI_HERO_OF_DOMINARIA,
-    &[Face::EMPTY
-        .cost(mana("{3}{W}{U}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::PLANESWALKER)
-        .subtypes(Subtypes::of(&[Subtype::Teferi]))
-        .colors(Colors::WHITE.union(Colors::BLUE))
-        .loyalty(4)
-        .abilities(&[
-            Ability::loyalty(1).effect(&DRAW_AND_DELAY),
-            Ability::loyalty(-3)
-                .targeting(&[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::Not(&Filter::Types(Types::LAND)),
-                )])
-                .effect(&THIRD_FROM_THE_TOP),
-            Ability::loyalty(-8).effect(&get_emblem(YOU, &EMBLEM)),
-            Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
-                .effect(&UNTAP_TWO_LANDS),
-        ])],
+    &[printed::TEFERI_HERO_OF_DOMINARIA.abilities(&[
+        Ability::loyalty(1).effect(&DRAW_AND_DELAY),
+        Ability::loyalty(-3)
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Not(&Filter::Types(Types::LAND)),
+            )])
+            .effect(&THIRD_FROM_THE_TOP),
+        Ability::loyalty(-8).effect(&get_emblem(YOU, &EMBLEM)),
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+            .effect(&UNTAP_TWO_LANDS),
+    ])],
 )
 .creating(&[&EMBLEM]);
 

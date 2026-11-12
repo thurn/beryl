@@ -1,12 +1,14 @@
-//! Portable Hole. {W} Artifact. "When this artifact enters, exile target nonland permanent an
-//! opponent controls with mana value 2 or less until this artifact leaves the battlefield."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Portable Hole {W}
+//! Artifact
+//!
+//! When this artifact enters, exile target nonland permanent an opponent controls with mana value 2
+//! or less until this artifact leaves the battlefield.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, Players, TargetKind, TargetSpec, Trigger, Types, card,
-    mana,
-};
+use beryl_card::{Ability, CardDef, Filter, Players, TargetKind, TargetSpec, Trigger, Types, card};
 
 /// "Exile target ... until this artifact leaves the battlefield"
 /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
@@ -16,11 +18,8 @@ use beryl_card::{
 /// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
 pub static CARD: CardDef = card(
     names::PORTABLE_HOLE,
-    &[Face::EMPTY
-        .cost(mana("{W}"))
-        .types(Types::ARTIFACT)
-        .colors(Colors::WHITE)
-        .abilities(&[Ability::triggered(&Trigger::ENTERS)
+    &[
+        printed::PORTABLE_HOLE.abilities(&[Ability::triggered(&Trigger::ENTERS)
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[
@@ -29,7 +28,8 @@ pub static CARD: CardDef = card(
                     Filter::ManaValueAtMost(2),
                 ]),
             )])
-            .effect(&exile_until_this_leaves(TARGET))])],
+            .effect(&exile_until_this_leaves(TARGET))]),
+    ],
 );
 
 #[cfg(feature = "scenarios")]

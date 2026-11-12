@@ -1,7 +1,12 @@
-//! Tundra. Land — Plains Island. "({T}: Add {W} or {U}.)"
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Tundra
+//! Land — Plains Island
+//!
+//! ({T}: Add {W} or {U}.)
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Types, card};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
 
 /// Not basic, but it has both basic land types, and with them both intrinsic mana abilities
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
@@ -13,13 +18,10 @@ use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, 
 /// from a library."
 pub static CARD: CardDef = card(
     names::TUNDRA,
-    &[Face::EMPTY
-        .types(Types::LAND)
-        .subtypes(Subtypes::of(&[Subtype::Plains, Subtype::Island]))
-        .abilities(&[
-            Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
-            Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-        ])],
+    &[printed::TUNDRA.abilities(&[
+        Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+    ])],
 );
 
 #[cfg(feature = "scenarios")]

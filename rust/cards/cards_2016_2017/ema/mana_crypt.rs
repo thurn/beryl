@@ -1,13 +1,17 @@
-//! Mana Crypt. {0} Artifact. "At the beginning of your upkeep, flip a coin. If you lose the
-//! flip, Mana Crypt deals 3 damage to you. {T}: Add {C}{C}."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Mana Crypt {0}
+//! Artifact
+//!
+//! At the beginning of your upkeep, flip a coin. If you lose the flip, this artifact deals 3 damage
+//! to you.
+//! {T}: Add {C}{C}.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     IF_YOU_LOSE_THE_FLIP, YOU, deal_damage_to, flip_coin, if_then, sequence,
 };
-use beryl_card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Players, Trigger, TurnStep, Types, card,
-};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Players, Trigger, TurnStep, card};
 
 /// [CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052): "If the call matches the
 /// result, the player wins the flip. Otherwise, the player loses the flip." The damage is
@@ -16,7 +20,7 @@ use beryl_card::{
 /// player by a source without infect causes that player to lose that much life."
 pub static CARD: CardDef = card(
     names::MANA_CRYPT,
-    &[Face::EMPTY.types(Types::ARTIFACT).abilities(&[
+    &[printed::MANA_CRYPT.abilities(&[
         Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&sequence(&[
             flip_coin(YOU),
             if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),

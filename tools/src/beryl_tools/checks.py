@@ -50,6 +50,7 @@ from . import (
     board_door,
     build_paths,
     card_files,
+    card_header,
     card_names,
     citations,
     conventions,
@@ -563,20 +564,20 @@ def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
     """No card name in generic code, held to the burn-down list (card_names.py), no other
     player of two, no board door and no failed push thrown away in rules code (two_player.py,
     board_door.py, discarded_push.py), and every rules citation held to the pinned release
-    (citations.py): in the files `cited`, or with None in the whole tree, fetching the
-    release's text if `fetch` and it is not cached.
+    (citations.py) and card file header to the card store (card_header.py): in the files
+    `cited`, or with None in the whole tree, fetching the release's text if `fetch` and it is
+    not cached.
     """
     checks = [sys.executable, "-m", "beryl_tools.checks"]
-    lane = (
-        Lane("names")
-        .step("card-names", [*checks, "card-names"])
-        .step("two-player", [*checks, "two-player"])
-        .step("board-door", [*checks, "board-door"])
-        .step("discarded-push", [*checks, "discarded-push"])
-    )
+    lane = Lane("names")
+    for check in ("card-names", "two-player", "board-door", "discarded-push"):
+        lane.step(check, [*checks, check])
     if cited != []:
         flags = ["--fetch"] if fetch else []
         lane.step("citations", [*checks, "citations", *flags, *(cited or [])])
+        headers = [p for p in cited or [] if card_files.FILE.match(p)]
+        if cited is None or headers:
+            lane.step("card-headers", [*checks, "card-headers", *headers])
     return lane
 
 
@@ -786,6 +787,7 @@ if __name__ == "__main__":
         "rust-tests": rust_tests_step,
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
+        "card-headers": card_header.step,
         "file-length": file_length.step,
         "two-player": two_player.step,
         "board-door": board_door.step,

@@ -1,20 +1,19 @@
-//! Swamp. Basic Land — Swamp.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Swamp
+//! Basic Land — Swamp
+//!
+//! ({T}: Add {B}.)
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types, card,
-};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
 
 /// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land
 /// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' ... for
 /// Swamps, {B}".
 pub static CARD: CardDef = card(
     names::SWAMP,
-    &[Face::EMPTY
-        .supertypes(Supertypes::BASIC)
-        .types(Types::LAND)
-        .subtypes(Subtypes::of(&[Subtype::Swamp]))
-        .abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))])],
+    &[printed::SWAMP.abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))])],
 );
 
 #[cfg(feature = "scenarios")]

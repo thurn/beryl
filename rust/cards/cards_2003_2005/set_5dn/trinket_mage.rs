@@ -1,13 +1,14 @@
-//! Trinket Mage. {2}{U} Creature — Human Wizard, 2/2. "When this creature enters, you may
-//! search your library for an artifact card with mana value 1 or less, reveal that card, put
-//! it into your hand, then shuffle."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Trinket Mage {2}{U}
+//! Creature — Human Wizard, 2/2
+//!
+//! When this creature enters, you may search your library for an artifact card with mana value 1 or
+//! less, reveal that card, put it into your hand, then shuffle.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, may, search};
-use beryl_card::{
-    Ability, CardDef, Colors, Effect, Face, Filter, Found, Subtype, Subtypes, Trigger, Types, card,
-    mana,
-};
+use beryl_card::{Ability, CardDef, Effect, Filter, Found, Trigger, Types, card};
 
 /// "An artifact card with mana value 1 or less".
 const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMost(1)]);
@@ -23,13 +24,7 @@ static TUTOR: Effect = may(YOU, &search(YOU, TRINKET, Found::RevealToHand));
 
 pub static CARD: CardDef = card(
     names::TRINKET_MAGE,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
-        .colors(Colors::BLUE)
-        .power_toughness(2, 2)
-        .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&TUTOR)])],
+    &[printed::TRINKET_MAGE.abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&TUTOR)])],
 );
 
 #[cfg(feature = "scenarios")]

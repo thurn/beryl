@@ -249,8 +249,10 @@ impl CardDef {
     }
 }
 
-/// What a card file says of a face, starting from [`Face::EMPTY`]. The printed
-/// characteristics are typed here until the card store generates them (plan K2).
+/// What a definition says of a face, starting from [`Face::EMPTY`]. A card file's face starts
+/// instead from its `printed::` constant, which its crate's build script generates from the
+/// card store with the builders that set printed characteristics (plan K2: "Nobody types a
+/// cost or type line"), and adds its abilities.
 impl Face {
     /// The name of a back face ([`Face::name`]).
     #[must_use]

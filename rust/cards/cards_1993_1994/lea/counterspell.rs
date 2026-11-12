@@ -1,20 +1,19 @@
-//! Counterspell. {U}{U} Instant. "Counter target spell."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Counterspell {U}{U}
+//! Instant
+//!
+//! Counter target spell.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, counter};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
 
 pub static CARD: CardDef = card(
     names::COUNTERSPELL,
-    &[Face::EMPTY
-        .cost(mana("{U}{U}"))
-        .types(Types::INSTANT)
-        .colors(Colors::BLUE)
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&counter(TARGET))])],
+    &[printed::COUNTERSPELL.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+        .effect(&counter(TARGET))])],
 );
 
 #[cfg(feature = "scenarios")]

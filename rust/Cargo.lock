@@ -160,12 +160,16 @@ version = "0.1.0"
 [[package]]
 name = "beryl_card_build"
 version = "0.1.0"
+dependencies = [
+ "beryl_card_store",
+]
 
 [[package]]
 name = "beryl_card_shared"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_card_build",
 ]
 
 [[package]]

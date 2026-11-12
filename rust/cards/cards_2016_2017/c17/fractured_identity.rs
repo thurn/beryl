@@ -1,13 +1,16 @@
-//! Fractured Identity. {3}{W}{U} Sorcery. "Exile target nonland permanent. Each player other
-//! than its controller creates a token that's a copy of it."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Fractured Identity {3}{W}{U}
+//! Sorcery
+//!
+//! Exile target nonland permanent. Each player other than its controller creates a token that's a
+//! copy of it.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     ITS_CONTROLLER, TARGET, create_copy, each_player_other_than, exile, sequence,
 };
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, Types, card};
 
 /// "Its controller" and "it" are the permanent as it last existed on the battlefield
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
@@ -24,19 +27,15 @@ use beryl_card::{
 /// token is its owner. The token enters the battlefield under that player's control."
 pub static CARD: CardDef = card(
     names::FRACTURED_IDENTITY,
-    &[Face::EMPTY
-        .cost(mana("{3}{W}{U}"))
-        .types(Types::SORCERY)
-        .colors(Colors::WHITE.union(Colors::BLUE))
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Not(&Filter::Types(Types::LAND)),
-            )])
-            .effect(&sequence(&[
-                exile(TARGET),
-                create_copy(each_player_other_than(&ITS_CONTROLLER), TARGET),
-            ]))])],
+    &[printed::FRACTURED_IDENTITY.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(
+            TargetKind::Permanent,
+            Filter::Not(&Filter::Types(Types::LAND)),
+        )])
+        .effect(&sequence(&[
+            exile(TARGET),
+            create_copy(each_player_other_than(&ITS_CONTROLLER), TARGET),
+        ]))])],
 );
 
 #[cfg(feature = "scenarios")]

@@ -1,10 +1,14 @@
-//! Spara's Headquarters. Land — Forest Plains Island. "({T}: Add {G}, {W}, or {U}.) This land
-//! enters tapped. Cycling {3} ({3}, Discard this card: Draw a card.)"
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Spara's Headquarters
+//! Land — Forest Plains Island
+//!
+//! ({T}: Add {G}, {W}, or {U}.)
+//! This land enters tapped.
+//! Cycling {3} ({3}, Discard this card: Draw a card.)
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Subtype, Subtypes, Types, card, mana,
-};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Replacement, card, mana};
 
 /// Its three basic land types give it their intrinsic mana abilities
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
@@ -13,20 +17,13 @@ use beryl_card::{
 /// only while the card with cycling is in a player's hand."
 pub static CARD: CardDef = card(
     names::SPARAS_HEADQUARTERS,
-    &[Face::EMPTY
-        .types(Types::LAND)
-        .subtypes(Subtypes::of(&[
-            Subtype::Forest,
-            Subtype::Plains,
-            Subtype::Island,
-        ]))
-        .abilities(&[
-            Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),
-            Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
-            Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-            Ability::replacing(Replacement::EntersTapped),
-            Ability::cycling(mana("{3}")),
-        ])],
+    &[printed::SPARAS_HEADQUARTERS.abilities(&[
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
+        Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+        Ability::replacing(Replacement::EntersTapped),
+        Ability::cycling(mana("{3}")),
+    ])],
 );
 
 #[cfg(feature = "scenarios")]

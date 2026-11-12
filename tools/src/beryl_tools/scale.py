@@ -13,8 +13,10 @@ release numbers would mean nothing. The crates depend on the checkout's own, by 
 crates are built once in each profile before the clock starts, so only the clones are timed.
 
 A clone keeps its `use crate::...` lines working: each shard re-exports the real card modules
-(`crate::tokens`) and has a `names` module of its own, the real names
-plus one constant per clone. Files reaching past those (`super::`) are left out of the pool.
+(`crate::tokens`), has a `names` module of its own, the real names plus one constant per clone,
+and a `printed` module re-exporting from the real set crates the printed faces its clones start
+from (a clone's faces are its original's). Files reaching past those (`super::`) are left out of
+the pool.
 
 It then prints what scripts cost (plan K24): the seconds `beryl_cli script-check` takes to play
 every spec moment of each pooled card from both seats in a debug build, where every script the
@@ -52,6 +54,9 @@ CRATES: Path = paths.RUST / "crates"
 # The modules a clone reaches by `crate::`, which a shard re-exports from `beryl_cards`: the
 # shared tokens, and the props its scenarios name.
 REEXPORTED = ("tokens", "props")
+# A face a clone starts from: `printed::<CONSTANT>` or `printed::token::<CONSTANT>`, which its
+# original's set crate generates.
+PRINTED: re.Pattern[str] = re.compile(r"\bprinted::((?:token::)?[A-Z0-9_]+)\b")
 # What a file may reach in its own crate; others, such as another card's private helper, can't
 # be cloned.
 CRATE_PATH: re.Pattern[str] = re.compile(r"\b(?:crate|super)::(\w+)")
@@ -96,7 +101,8 @@ def sources(root: Path = card_files.CARDS) -> list[Source]:
             for group in CRATE_GROUP.findall(text)
             for name in group.split(",")
         }
-        reaches = (set(CRATE_PATH.findall(text)) | grouped) - {"names", *REEXPORTED}
+        own = {"names", "printed", *REEXPORTED}
+        reaches = (set(CRATE_PATH.findall(text)) | grouped) - own
         if field is None or reaches or field.group(1) not in names:
             continue
         found.append(Source(path, text, field.group(1), names[field.group(1)]))
@@ -121,6 +127,26 @@ def shard_counts(cards: int, crates: int) -> list[int]:
     return counts
 
 
+def printed_module(picks: list[Source]) -> list[str]:
+    """A shard's `printed` module: each face its clones start from, from its original's set
+    crate (`rust/cards/<crate>/<set>/<card>.rs`)."""
+    faces, tokens = set(), set()
+    for pick in picks:
+        crate = pick.path.parent.parent.name
+        for used in PRINTED.findall(pick.text):
+            (tokens if used.startswith("token::") else faces).add(
+                f"{crate}::printed::{used}"
+            )
+    return [
+        "pub mod printed {",
+        *(f"    pub use {face};" for face in sorted(faces)),
+        "    pub mod token {",
+        *(f"        pub use {token};" for token in sorted(tokens)),
+        "    }",
+        "}",
+    ]
+
+
 def shard_lib(first: int, picks: list[Source]) -> str:
     """A shard's `lib.rs`: the modules it re-exports, its `names`, its clones and its tables."""
     ids = range(first, first + len(picks))
@@ -134,6 +160,7 @@ def shard_lib(first: int, picks: list[Source]) -> str:
     for i, pick in zip(ids, picks, strict=True):
         lines.append(f'    pub const {pick.const}_{i}: &str = "{pick.name} {i}";')
     lines.append("}")
+    lines += printed_module(picks)
     lines += [f"pub mod c{i};" for i in ids]
     lines.append("pub static CARDS: &[&beryl_card::CardDef] = &[")
     lines += [f"    &c{i}::CARD," for i in ids]
@@ -153,6 +180,12 @@ def shard_manifest(name: str) -> str:
     dependencies = f'beryl_cards = {{ path = "{CRATES / "beryl_cards"}" }}\n'
     dependencies += "".join(
         f'{crate} = {{ path = "{CRATES / crate}" }}\n' for crate in CARD_CRATES
+    )
+    # The set crates, for the printed faces the clones start from.
+    dependencies += "".join(
+        f'{crate} = {{ path = "{path}" }}\n'
+        for crate, path in ((p.name, p) for p in sorted(card_files.CARDS.iterdir()))
+        if (path / "Cargo.toml").is_file()
     )
     return f"""[package]
 name = "{name}"

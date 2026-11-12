@@ -1,20 +1,19 @@
-//! Plains. Basic Land — Plains.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Plains
+//! Basic Land — Plains
+//!
+//! ({T}: Add {W}.)
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types, card,
-};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
 
 /// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land
 /// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' ... For
 /// Plains, [mana symbol] is {W}".
 pub static CARD: CardDef = card(
     names::PLAINS,
-    &[Face::EMPTY
-        .supertypes(Supertypes::BASIC)
-        .types(Types::LAND)
-        .subtypes(Subtypes::of(&[Subtype::Plains]))
-        .abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::White))])],
+    &[printed::PLAINS.abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::White))])],
 );
 
 #[cfg(feature = "scenarios")]

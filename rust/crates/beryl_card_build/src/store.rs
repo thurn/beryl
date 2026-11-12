@@ -1,9 +1,11 @@
-//! The card names of the card store, `data/card-store.tsv`, each with its first-printing set.
-//! `tools/src/beryl_tools/card_store.py` specifies the format; this reads the two fields a
-//! build script needs with the standard library alone.
+//! The card store, `data/card-store.tsv`: its card names, each with its first-printing set,
+//! and its records. `tools/src/beryl_tools/card_store.py` specifies the format; this reads
+//! the names with the standard library alone, and a record with `beryl_card_store`'s reader.
 
 use std::collections::HashMap;
 use std::path::Path;
+
+pub use beryl_card_store::Record;
 
 /// A name the store answers to, a card's own or one of its faces', with the set the card was
 /// first printed in.
@@ -13,10 +15,14 @@ pub struct Card {
     pub set: String,
 }
 
-/// The cards of the store, found by a file's modules or by a constant.
+/// The cards of the store, found by a file's modules or by a constant, and its records.
 pub struct Store {
     /// By [`crate::names::card_module`] of the name.
     by_module: HashMap<String, Vec<Card>>,
+    /// The names of its tokens and emblems, by [`crate::names::card_module`] of each.
+    tokens_by_module: HashMap<String, Vec<String>>,
+    /// The store's text, which [`beryl_card_store::Store`] searches for a record.
+    text: String,
 }
 
 /// The JSON string starting after `"<field>":"` in `value`, unescaped. The store's values are
@@ -52,7 +58,20 @@ impl Store {
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut sets: HashMap<&str, String> = HashMap::new();
         let mut aliases: Vec<(&str, String)> = Vec::new();
+        let mut tokens_by_module: HashMap<String, Vec<String>> = HashMap::new();
         for line in text.lines() {
+            if let Some((name, _)) = line
+                .strip_prefix("token:")
+                .and_then(|entry| entry.split_once('\t'))
+            {
+                let spelled = tokens_by_module
+                    .entry(crate::names::card_module(name)?)
+                    .or_default();
+                if !spelled.iter().any(|n| n == name) {
+                    spelled.push(name.to_string());
+                }
+                continue;
+            }
             let Some((name, value)) = line
                 .strip_prefix("card:")
                 .and_then(|entry| entry.split_once('\t'))
@@ -91,7 +110,11 @@ impl Store {
                 set.ok_or(format!("{name}: an alias of {target}, which is no card"))?,
             )?;
         }
-        Ok(Self { by_module })
+        Ok(Self {
+            by_module,
+            tokens_by_module,
+            text: text.to_string(),
+        })
     }
 
     /// Reads the store at `path`.
@@ -151,6 +174,38 @@ impl Store {
                 "names::{constant}: no card in the store is spelled so"
             )),
             _ => Err(format!("names::{constant} could be any of {names:?}")),
+        }
+    }
+
+    /// The record of the card named `name`, or with a face of that name.
+    ///
+    /// # Errors
+    ///
+    /// When the store has none.
+    pub fn card(&self, name: &str) -> Result<Record, String> {
+        beryl_card_store::Store::new(self.text.as_bytes())
+            .card(name)
+            .ok_or(format!("{name}: no record in the card store"))
+    }
+
+    /// The token or emblem a `printed::token::<constant>` means, and each of its records.
+    ///
+    /// # Errors
+    ///
+    /// When no token's name, or more than one's, is spelled `constant`.
+    pub fn tokens_by_constant(&self, constant: &str) -> Result<(&str, Vec<Record>), String> {
+        let spelled = self.tokens_by_module.get(&constant.to_ascii_lowercase());
+        match spelled.map_or(&[][..], Vec::as_slice) {
+            [name] => {
+                let records = beryl_card_store::Store::new(self.text.as_bytes()).tokens(name);
+                Ok((name, records))
+            }
+            [] => Err(format!(
+                "printed::token::{constant}: no token in the store is spelled so"
+            )),
+            names => Err(format!(
+                "printed::token::{constant} could be any of {names:?}"
+            )),
         }
     }
 }

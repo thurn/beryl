@@ -1,11 +1,13 @@
-//! Thirst for Discovery. {2}{U} Instant. "Draw three cards. Then discard two cards unless you
-//! discard a basic land card."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Thirst for Discovery {2}{U}
+//! Instant
+//!
+//! Draw three cards. Then discard two cards unless you discard a basic land card.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, discard, draw, sequence, unless};
-use beryl_card::{
-    Ability, CardDef, Colors, Cost, CostPart, Effect, Face, Filter, Supertypes, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Cost, CostPart, Effect, Filter, Supertypes, Types, card};
 
 const BASIC_LAND: Filter = Filter::All(&[
     Filter::Types(Types::LAND),
@@ -34,11 +36,7 @@ static DRAW_THREE_DISCARD: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::THIRST_FOR_DISCOVERY,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}"))
-        .types(Types::INSTANT)
-        .colors(Colors::BLUE)
-        .abilities(&[Ability::spell().effect(&DRAW_THREE_DISCARD)])],
+    &[printed::THIRST_FOR_DISCOVERY.abilities(&[Ability::spell().effect(&DRAW_THREE_DISCARD)])],
 );
 
 #[cfg(feature = "scenarios")]

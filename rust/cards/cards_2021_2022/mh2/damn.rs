@@ -1,12 +1,17 @@
-//! Damn. {B}{B} Sorcery. "Destroy target creature. A creature destroyed this way can't be
-//! regenerated. Overload {2}{W}{W} (You may cast this spell for its overload cost. If you do,
-//! change "target" in its text to "each.")"
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Damn {B}{B}
+//! Sorcery
+//!
+//! Destroy target creature. A creature destroyed this way can't be regenerated.
+//! Overload {2}{W}{W} (You may cast this spell for its overload cost. If you do, change "target" in
+//! its text to "each.")
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, destroy};
 use beryl_card::{
-    Ability, CardDef, CastingOption, Colors, Face, Filter, Objects, TargetKind, TargetSpec, Types,
-    Zone, card, mana,
+    Ability, CardDef, CastingOption, Filter, Objects, TargetKind, TargetSpec, Types, Zone, card,
+    mana,
 };
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
@@ -17,10 +22,7 @@ const CREATURES: Filter = Filter::Types(Types::CREATURE);
 /// overload.
 pub static CARD: CardDef = card(
     names::DAMN,
-    &[Face::EMPTY
-        .cost(mana("{B}{B}"))
-        .types(Types::SORCERY)
-        .colors(Colors::BLACK)
+    &[printed::DAMN
         .abilities(&[
             Ability::spell()
                 .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURES)])

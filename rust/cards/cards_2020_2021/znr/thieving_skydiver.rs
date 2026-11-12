@@ -1,24 +1,23 @@
-//! Thieving Skydiver. {1}{U} Creature — Merfolk Rogue, 2/1. "Kicker {X}. X can't be 0. (You
-//! may pay an additional {X} as you cast this spell.) Flying. When this creature enters, if
-//! it was kicked, gain control of target artifact with mana value X or less. If that artifact
-//! is an Equipment, attach it to this creature."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Thieving Skydiver {1}{U}
+//! Creature — Merfolk Rogue, 2/1
+//!
+//! Kicker {X}. X can't be 0. (You may pay an additional {X} as you cast this spell.)
+//! Flying
+//! When this creature enters, if it was kicked, gain control of target artifact with mana value X
+//! or less. If that artifact is an Equipment, attach it to this creature.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, modify};
 use beryl_card::{
-    Ability, CardDef, CastingKind, CastingOption, Colors, Condition, Duration, Face, Filter,
-    Keywords, ManaCost, Modification, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
-    card, mana,
+    Ability, CardDef, CastingKind, CastingOption, Condition, Duration, Filter, Keywords, ManaCost,
+    Modification, TargetKind, TargetSpec, Trigger, Types, card,
 };
 
 pub static CARD: CardDef = card(
     names::THIEVING_SKYDIVER,
-    &[Face::EMPTY
-        .cost(mana("{1}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Merfolk, Subtype::Rogue]))
-        .colors(Colors::BLUE)
-        .power_toughness(2, 1)
+    &[printed::THIEVING_SKYDIVER
         .keywords(Keywords::FLYING)
         .abilities(&[
             // X is the kicker's (CR 107.3m), the trigger's own. "Gain control of target

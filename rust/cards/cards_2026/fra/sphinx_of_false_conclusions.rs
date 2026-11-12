@@ -1,22 +1,20 @@
-//! Sphinx of False Conclusions. {2}{U}{U} Creature — Sphinx Illusion, 4/2. "Flash. Flying.
-//! Whenever this creature attacks, draw a card, then discard a card. When this creature dies,
-//! if it isn't a token, create a token that's a copy of it."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Sphinx of False Conclusions {2}{U}{U}
+//! Creature — Sphinx Illusion, 4/2
+//!
+//! Flash
+//! Flying
+//! Whenever this creature attacks, draw a card, then discard a card.
+//! When this creature dies, if it isn't a token, create a token that's a copy of it.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{THIS, YOU, create_copy, discard, draw, sequence};
-use beryl_card::{
-    Ability, CardDef, Colors, Condition, Face, Keywords, Subtype, Subtypes, Trigger, Types, card,
-    mana,
-};
+use beryl_card::{Ability, CardDef, Condition, Keywords, Trigger, card};
 
 pub static CARD: CardDef = card(
     names::SPHINX_OF_FALSE_CONCLUSIONS,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Sphinx, Subtype::Illusion]))
-        .colors(Colors::BLUE)
-        .power_toughness(4, 2)
+    &[printed::SPHINX_OF_FALSE_CONCLUSIONS
         .keywords(Keywords::FLASH.union(Keywords::FLYING))
         .abilities(&[
             // "Draw a card, then discard a card."

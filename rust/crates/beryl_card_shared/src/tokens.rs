@@ -2,7 +2,8 @@
 //! card's scenarios or the rules library's name. Such a token's definition stays in the file of
 //! the card that creates it.
 
-use beryl_card::{Ability, CardDef, Cost, CostPart, Face, ManaSet, Subtype, Subtypes, Types, card};
+use crate::printed;
+use beryl_card::{Ability, CardDef, Cost, CostPart, ManaSet, card};
 
 /// A token's name where the effect creating it gives none
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)): "If the spell or ability
@@ -27,15 +28,12 @@ pub const TREASURE_TOKEN: &str = "Treasure Token";
 /// ability ..., and its cost and effect don't move any card to or from a library."
 pub static TREASURE: CardDef = card(
     TREASURE_TOKEN,
-    &[Face::EMPTY
-        .types(Types::ARTIFACT)
-        .subtypes(Subtypes::of(&[Subtype::Treasure]))
-        .abilities(&[Ability::mana(
-            Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
-            // W, U, B, R and G.
-            ManaSet {
-                colors: 0b1_1111,
-                amount: 1,
-            },
-        )])],
+    &[printed::token::TREASURE_TOKEN.abilities(&[Ability::mana(
+        Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
+        // W, U, B, R and G.
+        ManaSet {
+            colors: 0b1_1111,
+            amount: 1,
+        },
+    )])],
 );

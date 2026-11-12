@@ -1,27 +1,26 @@
-//! Mana Tithe. {W} Instant. "Counter target spell unless its controller pays {1}."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Mana Tithe {W}
+//! Instant
+//!
+//! Counter target spell unless its controller pays {1}.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, counter, unless_pays};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, ManaCost, TargetKind, TargetSpec, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Filter, ManaCost, TargetKind, TargetSpec, card};
 
 /// [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "[Do something] unless
 /// [a player does something else]" means "[A player may do something else]. If [that player
 /// doesn't], [do something]." A controller who can't pay is never asked.
 pub static CARD: CardDef = card(
     names::MANA_TITHE,
-    &[Face::EMPTY
-        .cost(mana("{W}"))
-        .types(Types::INSTANT)
-        .colors(Colors::WHITE)
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&unless_pays(
-                &counter(TARGET),
-                ITS_CONTROLLER,
-                ManaCost::generic(1),
-            ))])],
+    &[printed::MANA_TITHE.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+        .effect(&unless_pays(
+            &counter(TARGET),
+            ITS_CONTROLLER,
+            ManaCost::generic(1),
+        ))])],
 );
 
 #[cfg(feature = "scenarios")]

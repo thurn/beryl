@@ -1,9 +1,14 @@
-//! Timetwister. {2}{U} Sorcery. "Each player shuffles their hand and graveyard into their
-//! library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)"
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Timetwister {2}{U}
+//! Sorcery
+//!
+//! Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then
+//! put Timetwister into its owner's graveyard.)
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{EACH_PLAYER, draw, sequence, shuffle_into};
-use beryl_card::{Ability, CardDef, Colors, Effect, Face, Objects, Types, Zone, card, mana};
+use beryl_card::{Ability, CardDef, Effect, Objects, Zone, card};
 
 /// "Each player shuffles their hand and graveyard into their library, then draws seven
 /// cards." The cards go to their libraries together, each to its owner's
@@ -28,11 +33,7 @@ static TWIST: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::TIMETWISTER,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}"))
-        .types(Types::SORCERY)
-        .colors(Colors::BLUE)
-        .abilities(&[Ability::spell().effect(&TWIST)])],
+    &[printed::TIMETWISTER.abilities(&[Ability::spell().effect(&TWIST)])],
 );
 
 #[cfg(feature = "scenarios")]

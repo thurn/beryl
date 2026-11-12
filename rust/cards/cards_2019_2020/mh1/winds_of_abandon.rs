@@ -1,16 +1,21 @@
-//! Winds of Abandon. {1}{W} Sorcery. "Exile target creature you don't control. For each
-//! creature exiled this way, its controller searches their library for a basic land card.
-//! Those players put those cards onto the battlefield tapped, then shuffle. Overload
-//! {4}{W}{W} (You may cast this spell for its overload cost. If you do, change "target" in its
-//! text to "each.")"
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Winds of Abandon {1}{W}
+//! Sorcery
+//!
+//! Exile target creature you don't control. For each creature exiled this way, its controller
+//! searches their library for a basic land card. Those players put those cards onto the battlefield
+//! tapped, then shuffle.
+//! Overload {4}{W}{W} (You may cast this spell for its overload cost. If you do, change "target" in
+//! its text to "each.")
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     EACH_PLAYER, TARGET, THAT_PLAYER, exile, for_each_player, sequence,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, CastingOption, Colors, Effect, Face, Filter, Found, ManaCost,
-    Objects, Players, Supertypes, TargetKind, TargetSpec, Types, Zone, card, mana,
+    Ability, Amount, CardDef, CastingOption, Effect, Filter, Found, ManaCost, Objects, Players,
+    Supertypes, TargetKind, TargetSpec, Types, Zone, card,
 };
 
 /// "Creature you don't control". Not "an opponent controls": a teammate's creature is one
@@ -68,10 +73,7 @@ static EXILE_EACH: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::WINDS_OF_ABANDON,
-    &[Face::EMPTY
-        .cost(mana("{1}{W}"))
-        .types(Types::SORCERY)
-        .colors(Colors::WHITE)
+    &[printed::WINDS_OF_ABANDON
         .abilities(&[
             Ability::spell()
                 .targeting(&[TargetSpec::one(

@@ -1,15 +1,17 @@
-//! Teferi, Time Raveler. {1}{W}{U} Legendary Planeswalker — Teferi. Loyalty 4.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Teferi, Time Raveler {1}{W}{U}
+//! Legendary Planeswalker — Teferi, loyalty 4
 //!
-//! "Each opponent can cast spells only any time they could cast a sorcery.
+//! Each opponent can cast spells only any time they could cast a sorcery.
 //! +1: Until your next turn, you may cast sorcery spells as though they had flash.
-//! −3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw a
-//! card."
+//! −3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw a card.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, YOU, change_rule, draw, return_to_hand, sequence};
 use beryl_card::{
-    Ability, CardDef, Colors, Duration, Face, Filter, Governed, Players, RuleChange, Subtype,
-    Subtypes, Supertypes, TargetKind, TargetSpec, Types, When, card, mana,
+    Ability, CardDef, Duration, Filter, Governed, Players, RuleChange, TargetKind, TargetSpec,
+    Types, When, card,
 };
 
 /// "Each opponent can cast spells only any time they could cast a sorcery."
@@ -36,39 +38,32 @@ static SORCERIES_AS_FLASH: RuleChange = RuleChange {
 /// has previously activated a loyalty ability of that permanent that turn."
 pub static CARD: CardDef = card(
     names::TEFERI_TIME_RAVELER,
-    &[Face::EMPTY
-        .cost(mana("{1}{W}{U}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::PLANESWALKER)
-        .subtypes(Subtypes::of(&[Subtype::Teferi]))
-        .colors(Colors::WHITE.union(Colors::BLUE))
-        .loyalty(4)
-        .abilities(&[
-            // A prohibition the casting machine reads: a "can't" beats a "can"
-            // ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)), so even a
-            // spell with flash waits for sorcery timing.
-            Ability::rule_change(&ONLY_AS_SORCERIES),
-            // "+1: Until your next turn, you may cast sorcery spells as though they had
-            // flash." It ends as its controller's next turn begins.
-            Ability::loyalty(1).effect(&change_rule(
-                &SORCERIES_AS_FLASH,
-                Duration::UntilYourNextTurn,
-            )),
-            // "−3: Return up to one target artifact, creature, or enchantment to its owner's
-            // hand. Draw a card." With no target chosen it still draws; with its one target
-            // illegal, it doesn't resolve at all
-            // ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
-            Ability::loyalty(-3)
-                .targeting(&[TargetSpec::up_to_one(
-                    TargetKind::Permanent,
-                    Filter::Types(
-                        Types::ARTIFACT
-                            .union(Types::CREATURE)
-                            .union(Types::ENCHANTMENT),
-                    ),
-                )])
-                .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
-        ])],
+    &[printed::TEFERI_TIME_RAVELER.abilities(&[
+        // A prohibition the casting machine reads: a "can't" beats a "can"
+        // ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)), so even a
+        // spell with flash waits for sorcery timing.
+        Ability::rule_change(&ONLY_AS_SORCERIES),
+        // "+1: Until your next turn, you may cast sorcery spells as though they had
+        // flash." It ends as its controller's next turn begins.
+        Ability::loyalty(1).effect(&change_rule(
+            &SORCERIES_AS_FLASH,
+            Duration::UntilYourNextTurn,
+        )),
+        // "−3: Return up to one target artifact, creature, or enchantment to its owner's
+        // hand. Draw a card." With no target chosen it still draws; with its one target
+        // illegal, it doesn't resolve at all
+        // ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
+        Ability::loyalty(-3)
+            .targeting(&[TargetSpec::up_to_one(
+                TargetKind::Permanent,
+                Filter::Types(
+                    Types::ARTIFACT
+                        .union(Types::CREATURE)
+                        .union(Types::ENCHANTMENT),
+                ),
+            )])
+            .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
+    ])],
 );
 
 #[cfg(feature = "scenarios")]

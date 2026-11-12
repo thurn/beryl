@@ -1,14 +1,19 @@
-//! Subtlety. {2}{U}{U} Creature — Elemental Incarnation, 3/3. "Flash. Flying. When this
-//! creature enters, choose up to one target creature spell or planeswalker spell. Its owner
-//! puts it on their choice of the top or bottom of their library. Evoke—Exile a blue card
-//! from your hand."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Subtlety {2}{U}{U}
+//! Creature — Elemental Incarnation, 3/3
+//!
+//! Flash
+//! Flying
+//! When this creature enters, choose up to one target creature spell or planeswalker spell. Its
+//! owner puts it on their choice of the top or bottom of their library.
+//! Evoke—Exile a blue card from your hand.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, put_into_library};
 use beryl_card::{
-    Ability, CardDef, CastingOption, Colors, CostPart, Effect, Face, Filter, Keywords,
-    LibraryPosition, ManaCost, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types, Zone,
-    card, mana,
+    Ability, CardDef, CastingOption, Colors, CostPart, Effect, Filter, Keywords, LibraryPosition,
+    ManaCost, TargetKind, TargetSpec, Trigger, Types, Zone, card,
 };
 
 /// The spell leaves the stack without resolving, to the library of its owner, who chooses
@@ -25,12 +30,7 @@ static TUCK: Effect = put_into_library(TARGET, LibraryPosition::TopOrBottom);
 /// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b)).
 pub static CARD: CardDef = card(
     names::SUBTLETY,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Elemental, Subtype::Incarnation]))
-        .colors(Colors::BLUE)
-        .power_toughness(3, 3)
+    &[printed::SUBTLETY
         .keywords(Keywords::FLASH.union(Keywords::FLYING))
         .abilities(&[
             Ability::triggered(&Trigger::ENTERS)

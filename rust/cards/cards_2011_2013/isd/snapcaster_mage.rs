@@ -1,12 +1,17 @@
-//! Snapcaster Mage. {1}{U} Creature — Human Wizard, 2/1. "Flash. When this creature enters,
-//! target instant or sorcery card in your graveyard gains flashback until end of turn. The
-//! flashback cost is equal to its mana cost."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Snapcaster Mage {1}{U}
+//! Creature — Human Wizard, 2/1
+//!
+//! Flash
+//! When this creature enters, target instant or sorcery card in your graveyard gains flashback
+//! until end of turn. The flashback cost is equal to its mana cost. (You may cast that card from
+//! your graveyard for its flashback cost. Then exile it.)
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, gain_flashback};
 use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, Keywords, Players, Subtype, Subtypes, TargetKind,
-    TargetSpec, Trigger, Types, card, mana,
+    Ability, CardDef, Filter, Keywords, Players, TargetKind, TargetSpec, Trigger, Types, card,
 };
 
 /// Flashback for the card's mana cost, an alternative cost
@@ -22,12 +27,7 @@ use beryl_card::{
 /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
 pub static CARD: CardDef = card(
     names::SNAPCASTER_MAGE,
-    &[Face::EMPTY
-        .cost(mana("{1}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
-        .colors(Colors::BLUE)
-        .power_toughness(2, 1)
+    &[printed::SNAPCASTER_MAGE
         .keywords(Keywords::FLASH)
         .abilities(&[Ability::triggered(&Trigger::ENTERS)
             .targeting(&[TargetSpec::one(

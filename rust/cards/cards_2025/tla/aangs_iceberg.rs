@@ -1,26 +1,26 @@
-//! Aang's Iceberg. {2}{W} Enchantment.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Aang's Iceberg {2}{W}
+//! Enchantment
 //!
-//! "Flash
+//! Flash
 //! When this enchantment enters, exile up to one other target nonland permanent until this
 //! enchantment leaves the battlefield.
-//! Waterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend
-//! cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
+//! Waterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend cost,
+//! you can tap your artifacts and creatures to help. Each one pays for {1}.)
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     IF_YOU_DO, TARGET, THIS, YOU, exile_until_this_leaves, if_then, sacrifice, scry, sequence,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Cost, CostPart, Face, Filter, Keywords, ManaCost, TargetKind,
-    TargetSpec, Trigger, Types, card, mana,
+    Ability, CardDef, Cost, CostPart, Filter, Keywords, ManaCost, TargetKind, TargetSpec, Trigger,
+    Types, card,
 };
 
 pub static CARD: CardDef = card(
     names::AANGS_ICEBERG,
-    &[Face::EMPTY
-        .cost(mana("{2}{W}"))
-        .types(Types::ENCHANTMENT)
-        .colors(Colors::WHITE)
+    &[printed::AANGS_ICEBERG
         .keywords(Keywords::FLASH)
         .abilities(&[
             // "Exile up to one other target nonland permanent until this enchantment leaves

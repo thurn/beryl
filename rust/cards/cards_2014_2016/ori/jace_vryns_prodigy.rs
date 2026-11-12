@@ -1,26 +1,29 @@
-//! Jace, Vryn's Prodigy // Jace, Telepath Unbound. A transforming double-faced card.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Jace, Vryn's Prodigy {1}{U}
+//! Legendary Creature — Human Wizard, 0/2
 //!
-//! Front: {1}{U} Legendary Creature — Human Wizard, 0/2. "{T}: Draw a card, then discard a
-//! card. If there are five or more cards in your graveyard, exile Jace, then return him to the
-//! battlefield transformed under his owner's control."
+//! {T}: Draw a card, then discard a card. If there are five or more cards in your graveyard, exile
+//! Jace, then return him to the battlefield transformed under his owner's control.
 //!
-//! Back: Legendary Planeswalker — Jace. Loyalty 5. "+1: Up to one target creature gets -2/-0
-//! until your next turn.
-//! −3: You may cast target instant or sorcery card from your graveyard this turn. If that
-//! spell would be put into your graveyard, exile it instead.
-//! −9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
+//! Jace, Telepath Unbound
+//! Legendary Planeswalker — Jace, loyalty 5
+//!
+//! +1: Up to one target creature gets -2/-0 until your next turn.
+//! −3: You may cast target instant or sorcery card from your graveyard this turn. If that spell
+//! would be put into your graveyard, exile it instead.
+//! −9: You get an emblem with "Whenever you cast a spell, target opponent mills five cards."
+// End of the generated card header.
 
 use beryl_card::effect::build::{
     TARGET, TARGET_PLAYER, THIS, THOSE, YOU, discard, draw, exile, get_emblem, if_then, mill,
     modify, permit_cast, return_transformed, sequence,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, CastTerms, Colors, Comparison, Condition, Cost, Duration, Effect,
-    Face, Filter, Modification, Objects, Players, Subtype, Subtypes, Supertypes, TargetKind,
-    TargetSpec, Trigger, Types, Zone, card, mana,
+    Ability, Amount, CardDef, CastTerms, Comparison, Condition, Cost, Duration, Effect, Face,
+    Filter, Modification, Objects, Players, TargetKind, TargetSpec, Trigger, Types, Zone, card,
 };
 
-use crate::names;
+use crate::{names, printed};
 
 /// [CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122): a double-faced card "has a
 /// Magic card face on each side rather than a Magic card face on one side and a Magic card
@@ -28,42 +31,26 @@ use crate::names;
 pub static CARD: CardDef = card(
     names::JACE_VRYNS_PRODIGY,
     &[
-        Face::EMPTY
-            .cost(mana("{1}{U}"))
-            .supertypes(Supertypes::LEGENDARY)
-            .types(Types::CREATURE)
-            .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Wizard]))
-            .colors(Colors::BLUE)
-            .power_toughness(0, 2)
+        printed::JACE_VRYNS_PRODIGY
             .abilities(&[Ability::activated(Cost::TAP).effect(&LOOT_AND_TRANSFORM)]),
-        Face::EMPTY
-            .named(TELEPATH)
-            .supertypes(Supertypes::LEGENDARY)
-            .types(Types::PLANESWALKER)
-            .subtypes(Subtypes::of(&[Subtype::Jace]))
-            // CR 712.6d: the back face has only its own characteristics. Its color indicator
-            // makes it blue (CR 204.1).
-            .colors(Colors::BLUE)
-            .loyalty(5)
-            .abilities(&[
-                Ability::loyalty(1)
-                    .targeting(&[TargetSpec::up_to_one(
-                        TargetKind::Permanent,
-                        Filter::Types(Types::CREATURE),
-                    )])
-                    .effect(&WEAKEN),
-                Ability::loyalty(-3)
-                    .targeting(&[TargetSpec::one(
-                        TargetKind::GraveyardCard,
-                        Filter::All(&[
-                            Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                            Filter::Whose(&Players::You),
-                        ]),
-                    )])
-                    .effect(&RECAST),
-                Ability::loyalty(-9).effect(&GET_EMBLEM),
-            ])
-            .transformed(),
+        printed::JACE_TELEPATH_UNBOUND.abilities(&[
+            Ability::loyalty(1)
+                .targeting(&[TargetSpec::up_to_one(
+                    TargetKind::Permanent,
+                    Filter::Types(Types::CREATURE),
+                )])
+                .effect(&WEAKEN),
+            Ability::loyalty(-3)
+                .targeting(&[TargetSpec::one(
+                    TargetKind::GraveyardCard,
+                    Filter::All(&[
+                        Filter::Types(Types::INSTANT.union(Types::SORCERY)),
+                        Filter::Whose(&Players::You),
+                    ]),
+                )])
+                .effect(&RECAST),
+            Ability::loyalty(-9).effect(&GET_EMBLEM),
+        ]),
     ],
 )
 .creating(&[&EMBLEM]);

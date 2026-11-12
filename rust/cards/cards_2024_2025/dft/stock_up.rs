@@ -1,9 +1,14 @@
-//! Stock Up. {2}{U} Sorcery. "Look at the top five cards of your library. Put two of them
-//! into your hand and the rest on the bottom of your library in any order."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Stock Up {2}{U}
+//! Sorcery
+//!
+//! Look at the top five cards of your library. Put two of them into your hand and the rest on the
+//! bottom of your library in any order.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, dig};
-use beryl_card::{Ability, CardDef, Colors, Effect, Face, LibraryOrder, Taken, Types, card, mana};
+use beryl_card::{Ability, CardDef, Effect, LibraryOrder, Taken, card};
 
 /// The two for the hand are chosen one at a time and go there together; with two or fewer
 /// cards left to choose from, they all go unasked. The rest go to the bottom one at a time,
@@ -16,11 +21,7 @@ static STOCK_UP: Effect = dig(YOU, 5, Taken::Put(2), LibraryOrder::Any);
 
 pub static CARD: CardDef = card(
     names::STOCK_UP,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}"))
-        .types(Types::SORCERY)
-        .colors(Colors::BLUE)
-        .abilities(&[Ability::spell().effect(&STOCK_UP)])],
+    &[printed::STOCK_UP.abilities(&[Ability::spell().effect(&STOCK_UP)])],
 );
 
 #[cfg(feature = "scenarios")]

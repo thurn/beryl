@@ -1,13 +1,16 @@
-//! Time Spiral. {4}{U}{U} Sorcery. "Exile Time Spiral. Each player shuffles their hand and
-//! graveyard into their library, then draws seven cards. You untap up to six lands."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Time Spiral {4}{U}{U}
+//! Sorcery
+//!
+//! Exile Time Spiral. Each player shuffles their hand and graveyard into their library, then draws
+//! seven cards. You untap up to six lands.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     EACH_PLAYER, THIS, YOU, draw, exile, sequence, shuffle_into, untap_up_to,
 };
-use beryl_card::{
-    Ability, CardDef, Colors, Effect, Face, Filter, Objects, Types, Zone, card, mana,
-};
+use beryl_card::{Ability, CardDef, Effect, Filter, Objects, Types, Zone, card};
 
 /// The instructions in order ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
@@ -42,11 +45,7 @@ static SPIRAL: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::TIME_SPIRAL,
-    &[Face::EMPTY
-        .cost(mana("{4}{U}{U}"))
-        .types(Types::SORCERY)
-        .colors(Colors::BLUE)
-        .abilities(&[Ability::spell().effect(&SPIRAL)])],
+    &[printed::TIME_SPIRAL.abilities(&[Ability::spell().effect(&SPIRAL)])],
 );
 
 #[cfg(feature = "scenarios")]

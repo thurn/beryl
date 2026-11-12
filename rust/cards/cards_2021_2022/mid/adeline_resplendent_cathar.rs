@@ -1,15 +1,20 @@
-//! Adeline, Resplendent Cathar. {1}{W}{W} Legendary Creature — Human Knight, */4.
-//! "Vigilance. Adeline's power is equal to the number of creatures you control. Whenever you
-//! attack, for each opponent, create a 1/1 white Human creature token that's tapped and
-//! attacking that player or a planeswalker they control."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Adeline, Resplendent Cathar {1}{W}{W}
+//! Legendary Creature — Human Knight, */4
+//!
+//! Vigilance
+//! Adeline's power is equal to the number of creatures you control.
+//! Whenever you attack, for each opponent, create a 1/1 white Human creature token that's tapped
+//! and attacking that player or a planeswalker they control.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     EACH_OPPONENT, THAT_PLAYER, YOU, create_attacking_tokens, for_each_player,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, Colors, Face, Filter, Keywords, LayerSpec, Modification, Objects,
-    Players, Subtype, Subtypes, Supertypes, Trigger, Types, Zone, card, mana,
+    Ability, Amount, CardDef, Filter, Keywords, LayerSpec, Modification, Objects, Players, Trigger,
+    Types, Zone, card,
 };
 
 /// "The number of creatures you control".
@@ -24,26 +29,11 @@ static CREATURES_YOU_CONTROL: Amount = Amount::Count(&Objects::All {
 pub use crate::tokens::HUMAN_TOKEN;
 
 /// The Human token.
-pub static HUMAN: CardDef = card(
-    HUMAN_TOKEN,
-    &[Face::EMPTY
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Human]))
-        .colors(Colors::WHITE)
-        .power_toughness(1, 1)],
-);
+pub static HUMAN: CardDef = card(HUMAN_TOKEN, &[printed::token::HUMAN_TOKEN]);
 
 pub static CARD: CardDef = card(
     names::ADELINE_RESPLENDENT_CATHAR,
-    &[Face::EMPTY
-        .cost(mana("{1}{W}{W}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Knight]))
-        .colors(Colors::WHITE)
-        // The printed "*": her ability defines it. Nothing reads a creature card's power off
-        // the battlefield, and layers apply on it, so 0 stands in elsewhere.
-        .power_toughness(0, 4)
+    &[printed::ADELINE_RESPLENDENT_CATHAR
         .keywords(Keywords::VIGILANCE)
         .abilities(&[
             // A characteristic-defining ability

@@ -6,18 +6,24 @@ use std::path::{Path, PathBuf};
 
 use crate::files::{card_files, set_crates};
 use crate::names::constant;
-use crate::store::Store;
+use crate::printed::{Subtypes, faces};
+use crate::store::{Record, Store};
 
 /// The basic lands, which every `names` module of the registry has: the rules name them
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "The basic land types are
 /// Plains, Island, Swamp, Mountain, and Forest").
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
 
-/// The constants `text` reads from a `names` module: each `names::<CONSTANT>`.
-fn constants_used(text: &str) -> Vec<&str> {
+/// The constants `text` reads from a module: each `<module>::<CONSTANT>`, where `module` is
+/// `names::` or `printed::token::`.
+fn constants_used<'a>(text: &'a str, module: &str) -> Vec<&'a str> {
     let mut found = Vec::new();
-    for (at, _) in text.match_indices("names::") {
-        let rest = &text[at + "names::".len()..];
+    for (at, _) in text.match_indices(module) {
+        // `printed::token::` is no `names::`, nor is `printed::names::`.
+        if at > 0 && text.as_bytes()[at - 1] == b':' {
+            continue;
+        }
+        let rest = &text[at + module.len()..];
         let end = rest
             .find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
             .unwrap_or(rest.len());
@@ -26,6 +32,138 @@ fn constants_used(text: &str) -> Vec<&str> {
         }
     }
     found
+}
+
+/// The builder calls that would type a printed characteristic of a face in a card file, which
+/// its `printed` constant holds instead (plan K2: "Nobody types a cost or type line").
+const TYPED: [&str; 8] = [
+    ".cost(",
+    ".supertypes(",
+    ".types(",
+    ".subtypes(",
+    ".colors(",
+    ".power_toughness(",
+    ".loyalty(",
+    ".named(",
+];
+
+/// The first printed characteristic `text`, a card file or a shared module, types by hand.
+pub fn typed_characteristic(text: &str) -> Option<&'static str> {
+    TYPED.into_iter().find(|call| text.contains(call))
+}
+
+/// What a crate's card files and shared modules start their faces from: the faces of the
+/// crate's own cards, by name, and the tokens they define.
+pub struct Printed<'a> {
+    pub store: &'a Store,
+    pub subtypes: &'a Subtypes,
+    /// The `(constant, source)` of each face, in order.
+    faces: Vec<(String, String)>,
+    /// The tokens the crate's cards make, as their records link them.
+    links: Vec<beryl_card_store::TokenLink>,
+    /// The `printed::token::` constants its files use.
+    tokens: Vec<String>,
+}
+
+impl<'a> Printed<'a> {
+    pub fn new(store: &'a Store, subtypes: &'a Subtypes) -> Self {
+        Self {
+            store,
+            subtypes,
+            faces: Vec::new(),
+            links: Vec::new(),
+            tokens: Vec::new(),
+        }
+    }
+
+    /// Adds the faces of `record`, a card with a file in the crate, and the tokens it makes.
+    fn card(&mut self, record: &Record) -> Result<(), String> {
+        for (name, source) in faces(record, self.subtypes)? {
+            let spelled = constant(&name)?;
+            if self.faces.iter().any(|(c, _)| *c == spelled) {
+                return Err(format!("two faces of this crate give printed::{spelled}"));
+            }
+            self.faces.push((spelled, source));
+        }
+        self.links.extend(record.tokens.iter().cloned());
+        Ok(())
+    }
+
+    /// Reads a file of the crate: refuses a typed characteristic and notes the tokens it
+    /// uses.
+    fn file(&mut self, path: &Path, text: &str) -> Result<(), String> {
+        if let Some(call) = typed_characteristic(text) {
+            return Err(format!(
+                "{}: a printed characteristic is typed by hand ({call}...): the face starts \
+                 from its `printed::` constant, which the card store generates",
+                path.display()
+            ));
+        }
+        for used in constants_used(text, "printed::token::") {
+            if !self.tokens.iter().any(|t| t == used) {
+                self.tokens.push(used.to_string());
+            }
+        }
+        Ok(())
+    }
+
+    /// The source of the token `printed::token::<spelled>`: the one record a card of the
+    /// crate links, or the store's records of that name, which must agree.
+    fn token(&self, spelled: &str) -> Result<String, String> {
+        let (name, records) = self.store.tokens_by_constant(spelled)?;
+        let linked: Vec<&Record> = records
+            .iter()
+            .filter(|r| {
+                self.links
+                    .iter()
+                    .any(|l| l.name == name && l.scryfall_id == r.scryfall_id)
+            })
+            .collect();
+        let chosen = if linked.is_empty() {
+            records.iter().collect()
+        } else {
+            linked
+        };
+        let mut sources = Vec::new();
+        for record in chosen {
+            match &faces(record, self.subtypes)?[..] {
+                [(_, source)] => sources.push(source.clone()),
+                _ => return Err(format!("{name}: a token of more than one face")),
+            }
+        }
+        sources.dedup();
+        match &sources[..] {
+            [source] => Ok(source.clone()),
+            [] => Err(format!("{name}: no record in the card store")),
+            _ => Err(format!(
+                "printed::token::{spelled}: the store's printings of {name} differ; a card \
+                 of this crate must make it to choose one"
+            )),
+        }
+    }
+
+    /// The `printed` module.
+    fn source(&self) -> Result<String, String> {
+        let mut out = String::from(
+            "/// The printed characteristics of this crate's cards' faces and of the tokens its \
+             files\n/// define, generated from the card store: where each face starts.\n\
+             pub mod printed {\n",
+        );
+        for (spelled, source) in &self.faces {
+            writeln!(out, "    pub const {spelled}: beryl_card::Face = {source};").unwrap();
+        }
+        out.push_str("    pub mod token {\n");
+        for spelled in &self.tokens {
+            let source = self.token(spelled)?;
+            writeln!(
+                out,
+                "        pub const {spelled}: beryl_card::Face = {source};"
+            )
+            .unwrap();
+        }
+        out.push_str("    }\n}\n");
+        Ok(out)
+    }
 }
 
 /// A `names` module's constants, in order.
@@ -45,8 +183,15 @@ fn constants_source(constants: &BTreeMap<String, String>, indent: &str) -> Strin
 ///
 /// # Errors
 ///
-/// When a file is no card of its set in the store, or uses a constant that spells no card.
-pub fn set_crate_source(crate_dir: &Path, from_out: &str, store: &Store) -> Result<String, String> {
+/// When a file is no card of its set in the store, uses a constant that spells no card or
+/// token, or types a printed characteristic, or a face's characteristics are none the engine
+/// can hold.
+pub fn set_crate_source(
+    crate_dir: &Path,
+    from_out: &str,
+    printed: &mut Printed,
+) -> Result<String, String> {
+    let store = printed.store;
     let files = card_files(crate_dir);
     let mut constants = BTreeMap::new();
     let mut tree = String::new();
@@ -58,7 +203,9 @@ pub fn set_crate_source(crate_dir: &Path, from_out: &str, store: &Store) -> Resu
         let own = constant(name)?;
         let text = std::fs::read_to_string(&file.path)
             .map_err(|e| format!("{}: {e}", file.path.display()))?;
-        for used in constants_used(&text) {
+        printed.card(&store.card(name)?)?;
+        printed.file(&file.path, &text)?;
+        for used in constants_used(&text, "names::") {
             if used != own && !constants.contains_key(used) {
                 let named = store
                     .by_constant(used)
@@ -93,6 +240,7 @@ pub fn set_crate_source(crate_dir: &Path, from_out: &str, store: &Store) -> Resu
          pub use beryl_card_shared::{{props, tokens}};\n\n\
          /// The names of this crate's cards and of the cards its files name.\n\
          pub mod names {{\n{}}}\n\n\
+         {}\n\
          {tree}\n\
          /// This crate's cards, by set and file.\n\
          pub const CARDS: &[&beryl_card::CardDef] = &[\n{cards}];\n\n\
@@ -100,7 +248,29 @@ pub fn set_crate_source(crate_dir: &Path, from_out: &str, store: &Store) -> Resu
          #[cfg(feature = \"scenarios\")]\n\
          pub const SCENARIOS: &[(&str, &[beryl_scenario_types::Scenario])] = &[\n{scenarios}];\n",
         constants_source(&constants, "    "),
+        printed.source()?,
     ))
+}
+
+/// The shared crate's `printed` module: the tokens its modules in `dir` define.
+///
+/// # Errors
+///
+/// As [`Printed`]: a typed characteristic, or a token the store cannot settle.
+pub fn shared_source(dir: &Path, printed: &mut Printed) -> Result<String, String> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|e| e == "rs"))
+        .collect();
+    paths.sort();
+    for path in paths {
+        let text =
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        printed.file(&path, &text)?;
+    }
+    printed.source()
 }
 
 /// The card names of the decklists in `dir`, main deck and sideboard: each `<count> <name>`
@@ -219,6 +389,15 @@ fn repository(manifest_dir: &Path) -> (PathBuf, Result<Store, String>) {
     (root, store)
 }
 
+/// The subtypes the engine has, from `beryl_card`'s source under `root`, telling Cargo to run
+/// the script again when they change.
+fn subtypes(root: &Path) -> Result<Subtypes, String> {
+    println!("cargo:rerun-if-changed=../../../rust/crates/beryl_card/src/characteristics.rs");
+    let path = root.join("rust/crates/beryl_card/src/characteristics.rs");
+    let source = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Subtypes::parse(&source)
+}
+
 /// A set crate's whole build script: writes `OUT_DIR/cards.rs`, which the crate's `lib.rs`
 /// includes, and runs again when anything in the crate changes.
 ///
@@ -228,10 +407,30 @@ fn repository(manifest_dir: &Path) -> (PathBuf, Result<Store, String>) {
 pub fn set_crate() {
     let crate_dir = env_path("CARGO_MANIFEST_DIR");
     println!("cargo:rerun-if-changed=.");
-    let (_, store) = repository(&crate_dir);
+    let (root, store) = repository(&crate_dir);
     let from_out = relative(&env_path("OUT_DIR"), &crate_dir);
-    let source = store.and_then(|store| set_crate_source(&crate_dir, &from_out, &store));
+    let source = store.and_then(|store| {
+        let subtypes = subtypes(&root)?;
+        set_crate_source(&crate_dir, &from_out, &mut Printed::new(&store, &subtypes))
+    });
     write_out("cards.rs", source);
+}
+
+/// The shared crate's whole build script: writes `OUT_DIR/printed.rs`, the printed
+/// characteristics of the tokens its modules define.
+///
+/// # Panics
+///
+/// With what is wrong, failing the build: [`shared_source`]'s errors.
+pub fn shared() {
+    let crate_dir = env_path("CARGO_MANIFEST_DIR");
+    println!("cargo:rerun-if-changed=src");
+    let (root, store) = repository(&crate_dir);
+    let source = store.and_then(|store| {
+        let subtypes = subtypes(&root)?;
+        shared_source(&crate_dir.join("src"), &mut Printed::new(&store, &subtypes))
+    });
+    write_out("printed.rs", source);
 }
 
 /// The registry's whole build script: writes `OUT_DIR/tables.rs` and `OUT_DIR/names.rs`, and

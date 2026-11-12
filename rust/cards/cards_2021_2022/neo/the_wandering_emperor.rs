@@ -1,21 +1,22 @@
-//! The Wandering Emperor. {2}{W}{W} Legendary Planeswalker. Loyalty 3.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! The Wandering Emperor {2}{W}{W}
+//! Legendary Planeswalker, loyalty 3
 //!
-//! "Flash
-//! As long as The Wandering Emperor entered this turn, you may activate her loyalty abilities
-//! any time you could cast an instant.
-//! +1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of
-//! turn.
+//! Flash
+//! As long as The Wandering Emperor entered this turn, you may activate her loyalty abilities any
+//! time you could cast an instant.
+//! +1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of turn.
 //! −1: Create a 2/2 white Samurai creature token with vigilance.
-//! −2: Exile target tapped creature. You gain 2 life."
+//! −2: Exile target tapped creature. You gain 2 life.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     TARGET, YOU, add_counters, create_tokens, exile, gain_life, modify, sequence,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Condition, CounterKind, Duration, Effect, Face, Filter, Governed,
-    Keywords, Modification, Objects, Players, RuleChange, Subtype, Subtypes, Supertypes,
-    TargetKind, TargetSpec, Types, When, card, mana,
+    Ability, CardDef, Condition, CounterKind, Duration, Effect, Filter, Governed, Keywords,
+    Modification, Objects, Players, RuleChange, TargetKind, TargetSpec, Types, When, card,
 };
 
 /// "You may activate her loyalty abilities any time you could cast an instant."
@@ -30,12 +31,7 @@ static ENTERED_THIS_TURN: Condition = Condition::EnteredThisTurn(Objects::This);
 
 pub static CARD: CardDef = card(
     names::THE_WANDERING_EMPEROR,
-    &[Face::EMPTY
-        .cost(mana("{2}{W}{W}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::PLANESWALKER)
-        .colors(Colors::WHITE)
-        .loyalty(3)
+    &[printed::THE_WANDERING_EMPEROR
         .keywords(Keywords::FLASH)
         .abilities(&[
             Ability::rule_change(&LOYALTY_AS_INSTANT).only_if(&ENTERED_THIS_TURN),
@@ -64,12 +60,7 @@ pub use crate::tokens::SAMURAI_TOKEN;
 /// "A 2/2 white Samurai creature token with vigilance"
 pub static SAMURAI: CardDef = card(
     SAMURAI_TOKEN,
-    &[Face::EMPTY
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Samurai]))
-        .colors(Colors::WHITE)
-        .power_toughness(2, 2)
-        .keywords(Keywords::VIGILANCE)],
+    &[printed::token::SAMURAI_TOKEN.keywords(Keywords::VIGILANCE)],
 );
 
 /// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of

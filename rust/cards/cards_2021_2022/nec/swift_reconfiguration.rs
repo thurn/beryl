@@ -1,14 +1,17 @@
-//! Swift Reconfiguration. {W} Enchantment — Aura.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Swift Reconfiguration {W}
+//! Enchantment — Aura
 //!
-//! "Flash
+//! Flash
 //! Enchant creature or Vehicle
-//! Enchanted permanent is a Vehicle artifact with crew 5 and it loses all other card types.
-//! (It's not a creature unless it's crewed.)"
+//! Enchanted permanent is a Vehicle artifact with crew 5 and it loses all other card types. (It's
+//! not a creature unless it's crewed.)
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subtype,
-    Subtypes, TargetKind, TargetSpec, Types, card, mana,
+    Ability, CardDef, Filter, Keywords, LayerSpec, Modification, Objects, Subtype, TargetKind,
+    TargetSpec, Types, card,
 };
 
 /// What a static ability of the Aura does to the permanent it enchants.
@@ -22,11 +25,7 @@ const fn enchanted(modification: Modification) -> LayerSpec {
 
 pub static CARD: CardDef = card(
     names::SWIFT_RECONFIGURATION,
-    &[Face::EMPTY
-        .cost(mana("{W}"))
-        .types(Types::ENCHANTMENT)
-        .subtypes(Subtypes::of(&[Subtype::Aura]))
-        .colors(Colors::WHITE)
+    &[printed::SWIFT_RECONFIGURATION
         .keywords(Keywords::FLASH)
         .abilities(&[
             Ability::spell().targeting(&[TargetSpec::one(

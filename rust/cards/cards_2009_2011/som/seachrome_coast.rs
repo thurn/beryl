@@ -1,8 +1,13 @@
-//! Seachrome Coast. Land. "This land enters tapped unless you control two or fewer other
-//! lands. {T}: Add {W} or {U}."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Seachrome Coast
+//! Land
+//!
+//! This land enters tapped unless you control two or fewer other lands.
+//! {T}: Add {W} or {U}.
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Types, card};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Replacement, card};
 
 /// The entering replacement ([CR 614.1d](https://yawgatog.com/resources/magic-rules/#R6141d)):
 /// "Continuous effects that read "[This permanent] enters . . ." ... are replacement
@@ -10,7 +15,7 @@ use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Replacement, Types,
 /// other lands.
 pub static CARD: CardDef = card(
     names::SEACHROME_COAST,
-    &[Face::EMPTY.types(Types::LAND).abilities(&[
+    &[printed::SEACHROME_COAST.abilities(&[
         Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),

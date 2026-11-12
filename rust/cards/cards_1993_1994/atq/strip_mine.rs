@@ -1,10 +1,16 @@
-//! Strip Mine. Land. "{T}: Add {C}. {T}, Sacrifice Strip Mine: Destroy target land."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Strip Mine
+//! Land
+//!
+//! {T}: Add {C}.
+//! {T}, Sacrifice this land: Destroy target land.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, destroy};
 use beryl_card::{
-    Ability, CardDef, Cost, CostPart, Face, Filter, ManaColor, ManaSet, TargetKind, TargetSpec,
-    Types, card,
+    Ability, CardDef, Cost, CostPart, Filter, ManaColor, ManaSet, TargetKind, TargetSpec, Types,
+    card,
 };
 
 /// The second ability is not a mana ability: it has a target
@@ -13,7 +19,7 @@ use beryl_card::{
 /// move it from the battlefield to its owner's graveyard."
 pub static CARD: CardDef = card(
     names::STRIP_MINE,
-    &[Face::EMPTY.types(Types::LAND).abilities(&[
+    &[printed::STRIP_MINE.abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
         Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
             .targeting(&[TargetSpec::one(

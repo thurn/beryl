@@ -1,15 +1,17 @@
-//! Overlord of the Mistmoors. {5}{W}{W} Enchantment Creature — Avatar Horror, 6/6.
-//! "Impending 4—{2}{W}{W} (If you cast this spell for its impending cost, it enters with four
-//! time counters and isn't a creature until the last is removed. At the beginning of your end
-//! step, remove a time counter from it.) Whenever this permanent enters or attacks, create two
-//! 2/1 white Insect creature tokens with flying."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Overlord of the Mistmoors {5}{W}{W}
+//! Enchantment Creature — Avatar Horror, 6/6
+//!
+//! Impending 4—{2}{W}{W} (If you cast this spell for its impending cost, it enters with four time
+//! counters and isn't a creature until the last is removed. At the beginning of your end step,
+//! remove a time counter from it.)
+//! Whenever this permanent enters or attacks, create two 2/1 white Insect creature tokens with
+//! flying.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, create_tokens};
-use beryl_card::{
-    Ability, CardDef, CastingOption, Colors, Effect, Face, Keywords, Subtype, Subtypes, Trigger,
-    Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, CastingOption, Effect, Keywords, Trigger, card, mana};
 
 /// The Insect token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
 /// its subtype plus the word "Token".
@@ -18,12 +20,7 @@ pub use crate::tokens::INSECT_TOKEN;
 /// The Insect token: a 2/1 white Insect creature token with flying.
 pub static INSECT: CardDef = card(
     INSECT_TOKEN,
-    &[Face::EMPTY
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Insect]))
-        .colors(Colors::WHITE)
-        .power_toughness(2, 1)
-        .keywords(Keywords::FLYING)],
+    &[printed::token::INSECT_TOKEN.keywords(Keywords::FLYING)],
 );
 
 /// "Create two 2/1 white Insect creature tokens with flying": one event
@@ -36,12 +33,7 @@ static TWO_INSECTS: Effect = create_tokens(YOU, &INSECT, 2);
 /// has one, and the end-step countdown.
 pub static CARD: CardDef = card(
     names::OVERLORD_OF_THE_MISTMOORS,
-    &[Face::EMPTY
-        .cost(mana("{5}{W}{W}"))
-        .types(Types::ENCHANTMENT.union(Types::CREATURE))
-        .subtypes(Subtypes::of(&[Subtype::Avatar, Subtype::Horror]))
-        .colors(Colors::WHITE)
-        .power_toughness(6, 6)
+    &[printed::OVERLORD_OF_THE_MISTMOORS
         .abilities(&[
             Ability::impending(),
             Ability::impending_countdown(),

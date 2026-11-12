@@ -1,17 +1,22 @@
-//! Currency Converter. {1} Artifact. "Whenever you discard a card, you may exile that card
-//! from your graveyard. {2}, {T}: Draw a card, then discard a card. {T}: Put a card exiled
-//! with this artifact into its owner's graveyard. If it's a land card, create a Treasure
-//! token. If it's a nonland card, create a 2/2 black Rogue creature token."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Currency Converter {1}
+//! Artifact
+//!
+//! Whenever you discard a card, you may exile that card from your graveyard.
+//! {2}, {T}: Draw a card, then discard a card.
+//! {T}: Put a card exiled with this artifact into its owner's graveyard. If it's a land card,
+//! create a Treasure token. If it's a nonland card, create a 2/2 black Rogue creature token.
+// End of the generated card header.
 
-use crate::names;
 use crate::tokens::TREASURE;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     EXILED_WITH_THIS, IF_YOU_DO, THAT_CARD, THOSE, YOU, choose, create_tokens, discard, draw,
     exile_linked, if_else, if_then, may, put_into_graveyard, sequence,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Condition, Cost, CostPart, Effect, Face, Filter, ManaCost, Players,
-    Prompt, Purpose, Subtype, Subtypes, Trigger, Types, card, mana,
+    Ability, CardDef, Condition, Cost, CostPart, Effect, Filter, ManaCost, Players, Prompt,
+    Purpose, Trigger, Types, card,
 };
 
 /// The Rogue token's name: its subtype plus the word "Token"
@@ -19,14 +24,7 @@ use beryl_card::{
 pub use crate::tokens::ROGUE_TOKEN;
 
 /// The Rogue token: a 2/2 black Rogue creature token.
-pub static ROGUE: CardDef = card(
-    ROGUE_TOKEN,
-    &[Face::EMPTY
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Rogue]))
-        .colors(Colors::BLACK)
-        .power_toughness(2, 2)],
-);
+pub static ROGUE: CardDef = card(ROGUE_TOKEN, &[printed::token::ROGUE_TOKEN]);
 
 /// "That card" is the card as it was put into the graveyard: once it has left, it is a new
 /// object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and nothing is
@@ -62,14 +60,11 @@ static CONVERT: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::CURRENCY_CONVERTER,
-    &[Face::EMPTY
-        .cost(mana("{1}"))
-        .types(Types::ARTIFACT)
-        .abilities(&[
-            Ability::triggered(&Trigger::discards(Players::You)).effect(&EXILE_DISCARDED),
-            Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP])).effect(&LOOT),
-            Ability::activated(Cost::TAP).effect(&CONVERT),
-        ])],
+    &[printed::CURRENCY_CONVERTER.abilities(&[
+        Ability::triggered(&Trigger::discards(Players::You)).effect(&EXILE_DISCARDED),
+        Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP])).effect(&LOOT),
+        Ability::activated(Cost::TAP).effect(&CONVERT),
+    ])],
 )
 .creating(&[&TREASURE, &ROGUE]);
 

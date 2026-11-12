@@ -1,11 +1,14 @@
-//! No More Lies. {W}{U} Instant. "Counter target spell unless its controller pays {3}. If that
-//! spell is countered this way, exile it instead of putting it into its owner's graveyard."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! No More Lies {W}{U}
+//! Instant
+//!
+//! Counter target spell unless its controller pays {3}. If that spell is countered this way, exile
+//! it instead of putting it into its owner's graveyard.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, counter_and_exile, unless_pays};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, ManaCost, TargetKind, TargetSpec, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Filter, ManaCost, TargetKind, TargetSpec, card};
 
 /// "Unless" as [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a) reads it. The
 /// second sentence modifies the first
@@ -15,17 +18,13 @@ use beryl_card::{
 /// owner's graveyard.')", so the countered spell goes straight to exile.
 pub static CARD: CardDef = card(
     names::NO_MORE_LIES,
-    &[Face::EMPTY
-        .cost(mana("{W}{U}"))
-        .types(Types::INSTANT)
-        .colors(Colors::WHITE.union(Colors::BLUE))
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&unless_pays(
-                &counter_and_exile(TARGET),
-                ITS_CONTROLLER,
-                ManaCost::generic(3),
-            ))])],
+    &[printed::NO_MORE_LIES.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+        .effect(&unless_pays(
+            &counter_and_exile(TARGET),
+            ITS_CONTROLLER,
+            ManaCost::generic(3),
+        ))])],
 );
 
 #[cfg(feature = "scenarios")]

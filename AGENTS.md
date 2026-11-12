@@ -34,8 +34,10 @@ the release pinned in `data/rules-version.json`.
   vocabulary alone. Nothing lists card files by hand: build scripts
   (`beryl_card_build`) write each set crate's modules and tables, and
   `beryl_cards`' registry and `names` over them, so a new card is a new file.
-  `docs/engine-architecture.md` §16 maps the crates; `docs/project-50k.md` is
-  the plan for restructuring them to scale.
+  Nobody types a cost or type line: a face starts from its `printed::` constant,
+  generated from the card store, and a file's header is generated too
+  (`just card header`). `docs/engine-architecture.md` §16 maps the crates;
+  `docs/project-50k.md` is the plan for restructuring them to scale.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it. Its fixture
   transport replays sessions recorded from seeded games or scripted boards

@@ -1,14 +1,19 @@
-//! Thundertrap Trainer. {1}{U} Creature — Otter Wizard, 1/2. "Offspring {4} (You may pay an
-//! additional {4} as you cast this spell. If you do, when this creature enters, create a 1/1
-//! token copy of it.) When this creature enters, look at the top four cards of your library.
-//! You may reveal a noncreature, nonland card from among them and put it into your hand. Put
-//! the rest on the bottom of your library in a random order."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Thundertrap Trainer {1}{U}
+//! Creature — Otter Wizard, 1/2
+//!
+//! Offspring {4} (You may pay an additional {4} as you cast this spell. If you do, when this
+//! creature enters, create a 1/1 token copy of it.)
+//! When this creature enters, look at the top four cards of your library. You may reveal a
+//! noncreature, nonland card from among them and put it into your hand. Put the rest on the bottom
+//! of your library in a random order.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, dig};
 use beryl_card::{
-    Ability, CardDef, CastingOption, Colors, Effect, Face, Filter, LibraryOrder, ManaCost, Subtype,
-    Subtypes, Taken, Trigger, Types, card, mana,
+    Ability, CardDef, CastingOption, Effect, Filter, LibraryOrder, ManaCost, Taken, Trigger, Types,
+    card,
 };
 
 const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.union(Types::LAND)));
@@ -27,12 +32,7 @@ static DIG: Effect = dig(
 
 pub static CARD: CardDef = card(
     names::THUNDERTRAP_TRAINER,
-    &[Face::EMPTY
-        .cost(mana("{1}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Otter, Subtype::Wizard]))
-        .colors(Colors::BLUE)
-        .power_toughness(1, 2)
+    &[printed::THUNDERTRAP_TRAINER
         .abilities(&[
             Ability::offspring(),
             Ability::triggered(&Trigger::ENTERS).effect(&DIG),

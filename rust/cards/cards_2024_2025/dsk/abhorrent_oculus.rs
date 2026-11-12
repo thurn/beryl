@@ -1,12 +1,18 @@
-//! Abhorrent Oculus. {2}{U} Creature — Eye, 5/5. "As an additional cost to cast this spell,
-//! exile six cards from your graveyard. Flying. At the beginning of each opponent's upkeep,
-//! manifest dread."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Abhorrent Oculus {2}{U}
+//! Creature — Eye, 5/5
+//!
+//! As an additional cost to cast this spell, exile six cards from your graveyard.
+//! Flying
+//! At the beginning of each opponent's upkeep, manifest dread. (Look at the top two cards of your
+//! library. Put one onto the battlefield face down as a 2/2 creature and the other into your
+//! graveyard. Turn it face up any time for its mana cost if it's a creature card.)
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{YOU, manifest_dread};
 use beryl_card::{
-    Ability, CardDef, Colors, CostPart, Face, Filter, Keywords, Players, Subtype, Subtypes,
-    Trigger, TurnStep, Types, Zone, card, mana,
+    Ability, CardDef, CostPart, Filter, Keywords, Players, Trigger, TurnStep, Zone, card,
 };
 
 /// The six cards are an additional cost
@@ -26,12 +32,7 @@ use beryl_card::{
 /// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
 pub static CARD: CardDef = card(
     names::ABHORRENT_OCULUS,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Eye]))
-        .colors(Colors::BLUE)
-        .power_toughness(5, 5)
+    &[printed::ABHORRENT_OCULUS
         .keywords(Keywords::FLYING)
         .abilities(&[
             Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))

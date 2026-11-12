@@ -1,25 +1,27 @@
-//! Mana Drain. {U}{U} Instant. "Counter target spell. At the beginning of your next main phase,
-//! add an amount of {C} equal to that spell's mana value."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Mana Drain {U}{U}
+//! Instant
+//!
+//! Counter target spell. At the beginning of your next main phase, add an amount of {C} equal to
+//! that spell's mana value.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     CARRIED, TARGET, YOU, add_mana_of_kind, counter, delay_carrying, sequence,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, Colors, Effect, Face, Filter, ManaColor, Players, TargetKind,
-    TargetSpec, Trigger, Types, card, mana,
+    Ability, Amount, CardDef, Effect, Filter, ManaColor, Players, TargetKind, TargetSpec, Trigger,
+    card,
 };
 
 /// The place of the delayed ability among the face's abilities.
 const ADD_COLORLESS: u8 = 1;
 
-pub static CARD: CardDef = card(
-    names::MANA_DRAIN,
-    &[Face::EMPTY
-        .cost(mana("{U}{U}"))
-        .types(Types::INSTANT)
-        .colors(Colors::BLUE)
-        .abilities(&[
+pub static CARD: CardDef =
+    card(
+        names::MANA_DRAIN,
+        &[printed::MANA_DRAIN.abilities(&[
             Ability::spell()
                 .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
                 .effect(&COUNTER_AND_DELAY),
@@ -28,7 +30,7 @@ pub static CARD: CardDef = card(
             Ability::triggered(&Trigger::main_phase(Players::You).next())
                 .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED)),
         ])],
-);
+    );
 
 /// The mana value is the spell's as it was on the stack, X included
 /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the

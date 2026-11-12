@@ -18,6 +18,8 @@ and reads nothing under Forge's checkout. A part whose source is missing (offlin
 rulings cached, no XMage checkout) says so and the brief goes on. A name the store lacks exits
 1, naming the closest names it has.
 
+`card header <name>` (or `--all`) rewrites a card file's generated header (card_header.py).
+
 `card path <name>` prints the card's file, `rust/cards/<crate>/<set>/<card>.rs` by its first
 printing (set_groups.py). A card with no file yet is a record in the store alone: it says so,
 with where the file would go, and exits 1.
@@ -38,6 +40,7 @@ from typing import cast
 
 from . import (
     card_files,
+    card_header,
     card_store,
     nearest,
     paths,
@@ -234,7 +237,9 @@ def run_path(args: argparse.Namespace, sources: Sources = Sources()) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = sub.add_parser("card", help="the tools a card is written with: brief, path")
+    p = sub.add_parser(
+        "card", help="the tools a card is written with: brief, path, header"
+    )
     commands = p.add_subparsers(dest="card_command", required=True)
     b = commands.add_parser(
         "brief",
@@ -246,3 +251,4 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     w = commands.add_parser("path", help="the card's file, by its first printing")
     w.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     w.set_defaults(func=run_path)
+    card_header.register(commands)

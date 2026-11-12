@@ -1,10 +1,14 @@
-//! Reprieve. {1}{W} Instant. "Return target spell to its owner's hand. Draw a card."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Reprieve {1}{W}
+//! Instant
+//!
+//! Return target spell to its owner's hand.
+//! Draw a card.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
-use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types, card, mana,
-};
+use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
 
 /// The spell leaves the stack without resolving, to its owner's hand
 /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
@@ -19,13 +23,9 @@ use beryl_card::{
 /// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
 pub static CARD: CardDef = card(
     names::REPRIEVE,
-    &[Face::EMPTY
-        .cost(mana("{1}{W}"))
-        .types(Types::INSTANT)
-        .colors(Colors::WHITE)
-        .abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))])],
+    &[printed::REPRIEVE.abilities(&[Ability::spell()
+        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+        .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))])],
 );
 
 #[cfg(feature = "scenarios")]

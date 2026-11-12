@@ -12,13 +12,22 @@
 //! Names come from the card store, `data/card-store.tsv` ([`store`]): a file is found there by
 //! its set and module, so a misspelled file or constant fails the build, and no crate compiles
 //! a constant it does not use.
+//!
+//! So do printed characteristics ([`printed`], plan K2): the crate's `printed` module holds a
+//! `Face` constant for each face of its cards and each token its files name as
+//! `printed::token::<CONSTANT>`, and a card file starts each face from one. A file that types a
+//! cost, type, subtype, color, power, toughness, loyalty or face name fails the build.
 
 pub mod files;
 mod generate;
 pub mod names;
+pub mod printed;
 pub mod store;
 
-pub use generate::{registry, registry_source, set_crate, set_crate_source};
+pub use generate::{
+    Printed, registry, registry_source, set_crate, set_crate_source, shared, shared_source,
+    typed_characteristic,
+};
 
 #[cfg(test)]
 mod tests;

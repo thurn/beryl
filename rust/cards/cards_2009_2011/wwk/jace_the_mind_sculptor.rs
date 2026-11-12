@@ -1,46 +1,41 @@
-//! Jace, the Mind Sculptor. {2}{U}{U} Legendary Planeswalker — Jace. Loyalty 3.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Jace, the Mind Sculptor {2}{U}{U}
+//! Legendary Planeswalker — Jace, loyalty 3
 //!
-//! "+2: Look at the top card of target player's library. You may put that card on the bottom
-//! of that player's library.
+//! +2: Look at the top card of target player's library. You may put that card on the bottom of that
+//! player's library.
 //! 0: Draw three cards, then put two cards from your hand on top of your library in any order.
 //! −1: Return target creature to its owner's hand.
-//! −12: Exile all cards from target player's library, then that player shuffles their hand
-//! into their library."
+//! −12: Exile all cards from target player's library, then that player shuffles their hand into
+//! their library.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     TARGET, TARGET_PLAYER, YOU, draw, exile, fateseal, put_back, return_to_hand, sequence,
     shuffle_into,
 };
 use beryl_card::{
-    Ability, CardDef, Colors, Effect, Face, Filter, Objects, Subtype, Subtypes, Supertypes,
-    TargetKind, TargetSpec, Types, Zone, card, mana,
+    Ability, CardDef, Effect, Filter, Objects, TargetKind, TargetSpec, Types, Zone, card,
 };
 
 const A_PLAYER: &[TargetSpec] = &[TargetSpec::one(TargetKind::Player, Filter::Any)];
 
 pub static CARD: CardDef = card(
     names::JACE_THE_MIND_SCULPTOR,
-    &[Face::EMPTY
-        .cost(mana("{2}{U}{U}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::PLANESWALKER)
-        .subtypes(Subtypes::of(&[Subtype::Jace]))
-        .colors(Colors::BLUE)
-        .loyalty(3)
-        .abilities(&[
-            Ability::loyalty(2).targeting(A_PLAYER).effect(&FATESEAL),
-            Ability::loyalty(0).effect(&BRAINSTORM),
-            Ability::loyalty(-1)
-                .targeting(&[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::Types(Types::CREATURE),
-                )])
-                .effect(&BOUNCE),
-            Ability::loyalty(-12)
-                .targeting(A_PLAYER)
-                .effect(&EXILE_LIBRARY),
-        ])],
+    &[printed::JACE_THE_MIND_SCULPTOR.abilities(&[
+        Ability::loyalty(2).targeting(A_PLAYER).effect(&FATESEAL),
+        Ability::loyalty(0).effect(&BRAINSTORM),
+        Ability::loyalty(-1)
+            .targeting(&[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::CREATURE),
+            )])
+            .effect(&BOUNCE),
+        Ability::loyalty(-12)
+            .targeting(A_PLAYER)
+            .effect(&EXILE_LIBRARY),
+    ])],
 );
 
 /// "+2: Look at the top card of target player's library. You may put that card on the

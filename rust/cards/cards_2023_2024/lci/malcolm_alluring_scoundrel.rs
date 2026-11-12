@@ -1,15 +1,20 @@
-//! Malcolm, Alluring Scoundrel. {1}{U} Legendary Creature — Siren Pirate, 2/1. "Flash.
-//! Flying. Whenever Malcolm deals combat damage to a player, put a chorus counter on it. Draw
-//! a card, then discard a card. If there are four or more chorus counters on Malcolm, you may
-//! cast the discarded card without paying its mana cost."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Malcolm, Alluring Scoundrel {1}{U}
+//! Legendary Creature — Siren Pirate, 2/1
+//!
+//! Flash
+//! Flying
+//! Whenever Malcolm deals combat damage to a player, put a chorus counter on it. Draw a card, then
+//! discard a card. If there are four or more chorus counters on Malcolm, you may cast the discarded
+//! card without paying its mana cost.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     THIS, THOSE, YOU, add_counters, discard, draw, if_then, may_cast_free, sequence,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, Colors, Comparison, Condition, CounterKind, Effect, Face, Keywords,
-    Subtype, Subtypes, Supertypes, Trigger, Types, card, mana,
+    Ability, Amount, CardDef, Comparison, Condition, CounterKind, Effect, Keywords, Trigger, card,
 };
 
 /// The counter, the loot, and the offer to cast the discarded card as the ability finishes
@@ -38,13 +43,7 @@ static CHORUS: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::MALCOLM_ALLURING_SCOUNDREL,
-    &[Face::EMPTY
-        .cost(mana("{1}{U}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Siren, Subtype::Pirate]))
-        .colors(Colors::BLUE)
-        .power_toughness(2, 1)
+    &[printed::MALCOLM_ALLURING_SCOUNDREL
         .keywords(Keywords::FLASH.union(Keywords::FLYING))
         .abilities(&[
             Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&CHORUS),

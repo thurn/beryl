@@ -1,8 +1,13 @@
-//! Floodfarm Verge. Land. "{T}: Add {W}. {T}: Add {U}. Activate only if you control a Plains
-//! or an Island."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Floodfarm Verge
+//! Land
+//!
+//! {T}: Add {W}.
+//! {T}: Add {U}. Activate only if you control a Plains or an Island.
+// End of the generated card header.
 
-use crate::names;
-use beryl_card::{Ability, CardDef, Face, Filter, ManaColor, ManaSet, Subtype, Types, card};
+use crate::{names, printed};
+use beryl_card::{Ability, CardDef, Filter, ManaColor, ManaSet, Subtype, card};
 
 /// The {U} ability's restriction reads the land's subtypes, so a Tundra, a Plains Island,
 /// counts, as a basic does
@@ -10,7 +15,7 @@ use beryl_card::{Ability, CardDef, Face, Filter, ManaColor, ManaSet, Subtype, Ty
 /// Plains, Island, Swamp, Mountain, and Forest."
 pub static CARD: CardDef = card(
     names::FLOODFARM_VERGE,
-    &[Face::EMPTY.types(Types::LAND).abilities(&[
+    &[printed::FLOODFARM_VERGE.abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)).if_you_control(&Filter::AnyOf(&[
             Filter::Subtype(Subtype::Plains),

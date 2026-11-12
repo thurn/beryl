@@ -1,15 +1,17 @@
-//! Jace, Wielder of Mysteries. {1}{U}{U}{U} Legendary Planeswalker — Jace. Loyalty 4.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Jace, Wielder of Mysteries {1}{U}{U}{U}
+//! Legendary Planeswalker — Jace, loyalty 4
 //!
-//! "If you would draw a card while your library has no cards in it, you win the game instead.
+//! If you would draw a card while your library has no cards in it, you win the game instead.
 //! +1: Target player mills two cards. Draw a card.
-//! −8: Draw seven cards. Then if your library has no cards in it, you win the game."
+//! −8: Draw seven cards. Then if your library has no cards in it, you win the game.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, if_then, mill, sequence, win_game};
 use beryl_card::{
-    Ability, Amount, CardDef, Colors, Comparison, Condition, Effect, Face, Filter, Objects,
-    Players, Replacement, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Types, Zone, card,
-    mana,
+    Ability, Amount, CardDef, Comparison, Condition, Effect, Filter, Objects, Players, Replacement,
+    TargetKind, TargetSpec, Zone, card,
 };
 
 /// "While your library has no cards in it", "if your library has no cards in it".
@@ -27,25 +29,18 @@ static YOU_WIN: Effect = win_game(YOU);
 
 pub static CARD: CardDef = card(
     names::JACE_WIELDER_OF_MYSTERIES,
-    &[Face::EMPTY
-        .cost(mana("{1}{U}{U}{U}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::PLANESWALKER)
-        .subtypes(Subtypes::of(&[Subtype::Jace]))
-        .colors(Colors::BLUE)
-        .loyalty(4)
-        .abilities(&[
-            // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
-            // "Effects that use the word 'instead' are replacement effects." The draw
-            // machinery offers it each draw, an empty library or not (CR 614.11).
-            Ability::replacing(Replacement::WouldDraw)
-                .only_if(&LIBRARY_IS_EMPTY)
-                .effect(&YOU_WIN),
-            Ability::loyalty(1)
-                .targeting(&[TargetSpec::one(TargetKind::Player, Filter::Any)])
-                .effect(&MILL_TWO_AND_DRAW),
-            Ability::loyalty(-8).effect(&DRAW_SEVEN),
-        ])],
+    &[printed::JACE_WIELDER_OF_MYSTERIES.abilities(&[
+        // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
+        // "Effects that use the word 'instead' are replacement effects." The draw
+        // machinery offers it each draw, an empty library or not (CR 614.11).
+        Ability::replacing(Replacement::WouldDraw)
+            .only_if(&LIBRARY_IS_EMPTY)
+            .effect(&YOU_WIN),
+        Ability::loyalty(1)
+            .targeting(&[TargetSpec::one(TargetKind::Player, Filter::Any)])
+            .effect(&MILL_TWO_AND_DRAW),
+        Ability::loyalty(-8).effect(&DRAW_SEVEN),
+    ])],
 );
 
 /// "+1: Target player mills two cards. Draw a card." In order

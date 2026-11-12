@@ -1,16 +1,21 @@
-//! Sink into Stupor // Soporific Springs, a modal double-faced card.
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Sink into Stupor {1}{U}{U}
+//! Instant
 //!
-//! Sink into Stupor. {1}{U}{U} Instant. "Return target spell or nonland permanent an opponent
-//! controls to its owner's hand."
+//! Return target spell or nonland permanent an opponent controls to its owner's hand.
 //!
-//! Soporific Springs. Land. "As this land enters, you may pay 3 life. If you don't, it enters
-//! tapped. {T}: Add {U}."
+//! Soporific Springs
+//! Land
+//!
+//! As this land enters, you may pay 3 life. If you don't, it enters tapped.
+//! {T}: Add {U}.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{TARGET, return_to_hand};
 use beryl_card::{
-    Ability, CardDef, Colors, Face, Filter, ManaColor, ManaSet, Players, Replacement, TargetKind,
-    TargetSpec, Types, card, mana,
+    Ability, CardDef, Filter, ManaColor, ManaSet, Players, Replacement, TargetKind, TargetSpec,
+    Types, card,
 };
 
 /// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
@@ -24,26 +29,19 @@ use beryl_card::{
 pub static CARD: CardDef = card(
     names::SINK_INTO_STUPOR,
     &[
-        Face::EMPTY
-            .cost(mana("{1}{U}{U}"))
-            .types(Types::INSTANT)
-            .colors(Colors::BLUE)
-            .abilities(&[Ability::spell()
-                .targeting(&[TargetSpec::one(
-                    TargetKind::SpellOrPermanent,
-                    Filter::All(&[
-                        Filter::Whose(&Players::EachOpponent),
-                        Filter::Not(&Filter::Types(Types::LAND)),
-                    ]),
-                )])
-                .effect(&return_to_hand(TARGET))]),
-        Face::EMPTY
-            .named("Soporific Springs")
-            .types(Types::LAND)
-            .abilities(&[
-                Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
-                Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-            ]),
+        printed::SINK_INTO_STUPOR.abilities(&[Ability::spell()
+            .targeting(&[TargetSpec::one(
+                TargetKind::SpellOrPermanent,
+                Filter::All(&[
+                    Filter::Whose(&Players::EachOpponent),
+                    Filter::Not(&Filter::Types(Types::LAND)),
+                ]),
+            )])
+            .effect(&return_to_hand(TARGET))]),
+        printed::SOPORIFIC_SPRINGS.abilities(&[
+            Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
+            Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+        ]),
     ],
 );
 

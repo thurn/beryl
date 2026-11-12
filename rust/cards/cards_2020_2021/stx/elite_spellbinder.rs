@@ -1,16 +1,20 @@
-//! Elite Spellbinder. {2}{W} Creature — Human Cleric, 3/1. "Flying. When this creature
-//! enters, look at target opponent's hand. You may exile a nonland card from it. For as long
-//! as that card remains exiled, its owner may play it. A spell cast this way costs {2} more
-//! to cast."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Elite Spellbinder {2}{W}
+//! Creature — Human Cleric, 3/1
+//!
+//! Flying
+//! When this creature enters, look at target opponent's hand. You may exile a nonland card from it.
+//! For as long as that card remains exiled, its owner may play it. A spell cast this way costs {2}
+//! more to cast.
+// End of the generated card header.
 
-use crate::names;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     TARGET_PLAYER, THOSE, YOU, exile, look_at, may_choose, owner_of, permit_cast, sequence,
 };
 use beryl_card::{
-    Ability, CardDef, CastTerms, Colors, Duration, Effect, Face, Filter, Keywords, Objects, Place,
-    Players, Prompt, Purpose, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types, Zone,
-    card, mana,
+    Ability, CardDef, CastTerms, Duration, Effect, Filter, Keywords, Objects, Place, Players,
+    Prompt, Purpose, TargetKind, TargetSpec, Trigger, Types, Zone, card,
 };
 
 /// "Target opponent's hand".
@@ -53,12 +57,7 @@ static SPELLBIND: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::ELITE_SPELLBINDER,
-    &[Face::EMPTY
-        .cost(mana("{2}{W}"))
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Human, Subtype::Cleric]))
-        .colors(Colors::WHITE)
-        .power_toughness(3, 1)
+    &[printed::ELITE_SPELLBINDER
         .keywords(Keywords::FLYING)
         .abilities(&[Ability::triggered(&Trigger::ENTERS)
             .targeting(&[TargetSpec::one(

@@ -1,17 +1,21 @@
-//! Beza, the Bounding Spring. {2}{W}{W} Legendary Creature — Elemental Elk, 4/5. "When Beza
-//! enters, create a Treasure token if an opponent controls more lands than you. You gain 4
-//! life if an opponent has more life than you. Create two 1/1 blue Fish creature tokens if an
-//! opponent controls more creatures than you. Draw a card if an opponent has more cards in
-//! hand than you."
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Beza, the Bounding Spring {2}{W}{W}
+//! Legendary Creature — Elemental Elk, 4/5
+//!
+//! When Beza enters, create a Treasure token if an opponent controls more lands than you. You gain
+//! 4 life if an opponent has more life than you. Create two 1/1 blue Fish creature tokens if an
+//! opponent controls more creatures than you. Draw a card if an opponent has more cards in hand
+//! than you.
+// End of the generated card header.
 
-use crate::names;
 use crate::tokens::TREASURE;
+use crate::{names, printed};
 use beryl_card::effect::build::{
     EACH_OPPONENT, YOU, create_tokens, draw, gain_life, if_then, sequence,
 };
 use beryl_card::{
-    Ability, Amount, CardDef, Colors, Comparison, Condition, Effect, Face, Filter, Objects,
-    Players, Subtype, Subtypes, Supertypes, Trigger, Types, Zone, card, mana,
+    Ability, Amount, CardDef, Comparison, Condition, Effect, Filter, Objects, Players, Trigger,
+    Types, Zone, card,
 };
 
 /// The Fish token's name: its subtype plus the word "Token"
@@ -19,14 +23,7 @@ use beryl_card::{
 pub const FISH_TOKEN: &str = "Fish Token";
 
 /// The Fish token: a 1/1 blue Fish creature token.
-pub static FISH: CardDef = card(
-    FISH_TOKEN,
-    &[Face::EMPTY
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Fish]))
-        .colors(Colors::BLUE)
-        .power_toughness(1, 1)],
-);
+pub static FISH: CardDef = card(FISH_TOKEN, &[printed::token::FISH_TOKEN]);
 
 /// "An opponent has more [of an amount] than you": the most any of them has, against yours
 /// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022): "In a two-player game, a
@@ -76,13 +73,7 @@ static COMPARE: Effect = sequence(&[
 
 pub static CARD: CardDef = card(
     names::BEZA_THE_BOUNDING_SPRING,
-    &[Face::EMPTY
-        .cost(mana("{2}{W}{W}"))
-        .supertypes(Supertypes::LEGENDARY)
-        .types(Types::CREATURE)
-        .subtypes(Subtypes::of(&[Subtype::Elemental, Subtype::Elk]))
-        .colors(Colors::WHITE)
-        .power_toughness(4, 5)
+    &[printed::BEZA_THE_BOUNDING_SPRING
         .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&COMPARE)])],
 )
 .creating(&[&TREASURE, &FISH]);
