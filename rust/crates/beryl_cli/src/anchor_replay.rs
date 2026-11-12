@@ -28,7 +28,7 @@ use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Profile, Replay, Scratch, State, Step, apply, next,
     observe,
 };
-use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, RolloutPolicy, Settings, guarded};
+use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, Settings, guarded};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -226,7 +226,7 @@ fn replay(
     let family: Family = family.parse()?;
     let work = parse_work(budget).ok_or_else(bad)?;
     let t = mirror();
-    let policy = RolloutPolicy::with(&t, family.knowledge);
+    let policy = family.rollout_policy(&t);
     let mut searched = 0u32;
     let mut differs = Vec::new();
     let played = walk(dir, entrant, |game, s, d, choice, search, names| {
@@ -236,6 +236,7 @@ fn replay(
         let greedy = policy.choose(&t, obs, d);
         let counted = !only_guarded
             || guarded(
+                &t,
                 &policy,
                 obs,
                 d,
