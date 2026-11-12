@@ -17,6 +17,9 @@ use crate::values::{CardInfo, CardValues};
 #[cfg(test)]
 mod hold_tests;
 
+#[cfg(test)]
+mod waste_tests;
+
 /// One decision's view, for the rules above.
 pub(crate) struct Policy<'a, L: Layout> {
     pub(crate) values: &'a CardValues,
@@ -247,12 +250,19 @@ impl<L: Layout> Policy<'_, L> {
             return 0;
         }
         let mut v = i32::from(info.value);
+        let mut evoked = false;
         for option in costs.paid(f) {
             v += match option {
                 CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
-                // A card from hand and the permanent itself, for its enters ability alone.
-                CastingOption::Evoke { .. } => -30,
+                // Evoke trades the permanent for its enters ability
+                // ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)):
+                // "When this permanent enters, if its evoke cost was paid, its controller
+                // sacrifices it."
+                CastingOption::Evoke { .. } => {
+                    evoked = true;
+                    -30
+                }
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts
@@ -269,8 +279,8 @@ impl<L: Layout> Policy<'_, L> {
         }
         match f.spell_ability_with(costs) {
             Some(a) if face == FaceIx::FRONT && info.draws(index_of(f, a)) && !self.may_draw() => 0,
-            Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v),
-            None => self.enters_worth(f, info, v),
+            Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v, false),
+            None => self.enters_worth(f, info, v, self.rules.waste && evoked),
         }
     }
 
@@ -279,13 +289,18 @@ impl<L: Layout> Policy<'_, L> {
     /// mana value 2 or less exiles nothing, for the trigger is removed from the stack
     /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)): "If a choice is required when the
     /// triggered ability goes on the stack but no legal choices can be made for it, ... the
-    /// ability is simply removed from the stack." A creature keeps its body.
-    fn enters_worth(&self, f: &Face, info: CardInfo, v: i32) -> i32 {
-        if f.types.intersects(Types::CREATURE) {
+    /// ability is simply removed from the stack." A creature keeps its body unless
+    /// the waste rule is pricing an evoke, which must have a worthwhile target.
+    fn enters_worth(&self, f: &Face, info: CardInfo, v: i32, require_target: bool) -> i32 {
+        if f.types.intersects(Types::CREATURE) && !require_target {
             return v;
         }
-        targeted_enters(f).fold(v, |v, a| {
-            self.worth_targeting(a, info.friendly(index_of(f, a)), v)
+        let mut enters = targeted_enters(f).peekable();
+        if require_target && enters.peek().is_none() {
+            return 0;
+        }
+        enters.fold(v, |v, a| {
+            self.worth_targeting(a, info.friendly(index_of(f, a)), v, require_target)
         })
     }
 
@@ -316,7 +331,7 @@ impl<L: Layout> Policy<'_, L> {
             None if a.cost.does(beryl_engine::card::CostAction::Discard) => 3,
             None => 15,
         };
-        self.worth_targeting(a, info.friendly(i), v)
+        self.worth_targeting(a, info.friendly(i), v, false)
     }
 
     /// Whether drawing by choice is safe: our library holds more than [`LIBRARY_LOW`] cards,
@@ -364,8 +379,8 @@ impl<L: Layout> Policy<'_, L> {
 
     /// `v`, or 0 when the ability's first target is not worth it: a harmful one needs an
     /// opponent's object worth the removal or counter threshold, unless it may target
-    /// nothing; a helpful one needs one of ours.
-    pub(crate) fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32) -> i32 {
+    /// nothing and `require_target` is false. A helpful one needs one of ours.
+    fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32, require_target: bool) -> i32 {
         let Some(spec) = a.targets.first() else {
             return v;
         };
@@ -379,7 +394,7 @@ impl<L: Layout> Policy<'_, L> {
         // The best target is worth `min` exactly when some target is.
         if self.target_values(spec, friendly).any(|best| best >= min) {
             v
-        } else if spec.optional && !matches!(spec.kind, TargetKind::Spell) {
+        } else if !require_target && spec.optional && !matches!(spec.kind, TargetKind::Spell) {
             v / 2
         } else {
             0

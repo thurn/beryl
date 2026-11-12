@@ -219,13 +219,20 @@ impl RolloutPolicy {
             // A search's finds are worth taking, the best first, as Winds of Abandon's basic.
             // Other cards on top of a library are being chosen for the bottom, as a scry asks:
             // only those not worth drawing go. Anything else, such as lands to untap, is worth
-            // taking by its value.
+            // taking by its value. With waste, decline to help an opponent's permanent.
             DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
                 Some(slot) if d.prompt.purpose == Purpose::Search => {
                     Some(1 + p.in_hand(slot).max(0))
                 }
                 Some(slot) if obs.object(slot).zone() == Zone::Library => {
                     Some(DRAW_MIN - p.in_hand(slot))
+                }
+                Some(slot)
+                    if p.rules.waste
+                        && obs.object(slot).zone() == Zone::Battlefield
+                        && obs.controller(slot) != p.me =>
+                {
+                    None
                 }
                 Some(slot) => Some(p.value(slot)),
                 None => Some(0),
