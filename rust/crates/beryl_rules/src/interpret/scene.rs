@@ -101,7 +101,9 @@ pub(crate) struct Registers<L: Layout> {
     /// The player an [`beryl_card::Effect::ForEachPlayer`] is being done for.
     pub(crate) that_player: Option<Seat>,
     /// The objects the last instruction to move any set out to move, by the player who
-    /// controlled each as it did ([`Amount::ThoseOf`], CR 608.2h).
+    /// controlled each as it did ([`Amount::ThoseOf`], [`Players::ControllerOf`] of
+    /// [`Objects::Those`], CR 608.2h). Under an [`beryl_card::Effect::ForEachPlayer`], what
+    /// each player's turn at the instruction moved, together.
     pub(crate) controlled: PerPlayer<L, Bitboard<L::Slot>>,
 }
 
@@ -270,14 +272,20 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
-            // A target the effect moved is known as it last was. What `Those` and `All`
-            // name are read where they are now, so their owners once they have left.
+            // CR 608.2h: "the effect uses the object's last known information." A target the
+            // effect moved is known as it last was, and so is one of `Those` the instruction
+            // moved ([`Scene::controller`]). What any other name names is read where it is.
             Players::ControllerOf(objects) => {
                 let mut who = PlayerSet::NOBODY;
+                let moved = objects == Objects::Those;
                 // The candidate order, here and for the owners: a set is built, whose order
                 // is nothing.
                 for slot in self.s.in_candidate_order(self.objects(objects)) {
-                    who.insert(self.s.controller(slot));
+                    who.insert(if moved {
+                        self.controller(slot)
+                    } else {
+                        self.s.controller(slot)
+                    });
                 }
                 for known in self.moved(objects) {
                     who.insert(known.controller);
@@ -316,6 +324,23 @@ impl<L: Layout> Scene<'_, L> {
                     .map_or(PlayerSet::NOBODY, PlayerSet::only)
             }
         }
+    }
+
+    /// The controller of one of [`Objects::Those`]: of a permanent or a spell, its controller
+    /// ([CR 108.4](https://yawgatog.com/resources/magic-rules/#R1084)): "A card doesn't have
+    /// a controller unless that card represents a permanent or spell". Of a card anywhere
+    /// else that the last instruction to move any set out to move, the player who controlled
+    /// it as that instruction did ([`Registers::controlled`], CR 608.2h), and of any other
+    /// its owner (CR 108.4a).
+    fn controller(&self, slot: L::Slot) -> Seat {
+        let s = self.s;
+        let now = s.controller(slot);
+        if matches!(s.object(slot).zone(), Zone::Battlefield | Zone::Stack) {
+            return now;
+        }
+        s.players_in_seat_order(s.players())
+            .find(|player| self.registers.controlled[player.index()].contains(slot))
+            .unwrap_or(now)
     }
 
     /// What is known of the object in `slot` as it is now, for an effect about to move it.
@@ -438,7 +463,9 @@ impl<L: Layout> Scene<'_, L> {
             Condition::Token(names) => self.is_a_token(names),
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds
-                // no characteristics), so "if it was a [filter]" cannot be asked of one yet.
+                // no characteristics), so "if it was a [filter]" cannot be asked of one: a
+                // definition that would is refused as it compiles (`beryl_card`'s
+                // `Malformed::LastKnown`).
                 debug_assert!(
                     self.moved(names).next().is_none(),
                     "the last known characteristics of a target the effect moved"

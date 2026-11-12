@@ -330,6 +330,31 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
 }
 
 #[test]
+fn the_controllers_of_what_an_instruction_moved_are_who_controlled_each() {
+    // "Destroy all creatures. Each of their controllers loses 1 life."
+    const ALL_CREATURES: Objects = Objects::All {
+        zone: Zone::Battlefield,
+        filter: CREATURES,
+    };
+    static WRATH: Ability = does(&sequence(&[
+        destroy(ALL_CREATURES),
+        lose_life(controller_of(THOSE), 1),
+    ]));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    // Its owner's opponent controls it. In the graveyard it is its owner's card (CR 108.4a),
+    // and its controller is still who controlled it as it was destroyed (CR 608.2h).
+    let stolen = s.object_ref(bear);
+    with_game(&t, &mut s, &mut x, source.slot, |game, resolution| {
+        continuous::gain_control(game, resolution, stolen, crate::state::Duration::Indefinite)
+            .unwrap();
+    });
+    assert!(resolve(&t, &mut s, &mut x, source, &WRATH, &[], &[]).is_none());
+    assert_eq!(zone_of(&s, bear), Zone::Graveyard);
+    assert_eq!((life(&s, p), life(&s, p.opponent())), (19, 20));
+}
+
+#[test]
 fn a_target_an_instruction_could_not_move_is_read_where_it_is() {
     // The source has left, so nothing is exiled (CR 610.3b): the creature is still a 2/2 on
     // the battlefield, counted once.

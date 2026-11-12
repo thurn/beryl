@@ -285,18 +285,22 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// Carries out `effect` for each of `players` in turn order (CR 101.4), each of them
     /// "that player" in it. Each begins from what the instruction before this one did, and
-    /// the outcome is every player's together.
+    /// the outcome is every player's together, as is who controlled what it moved.
     fn for_each_player(&mut self, players: Players, effect: &'static Effect) -> Flow {
         let (before, outer) = (self.registers.outcome, self.registers.that_player);
         let mut together = Outcome::NOTHING;
+        let mut controlled = self.registers.controlled.clone();
         for player in self.in_turn_order(players) {
             self.registers.that_player = Some(player);
             self.registers.outcome = before;
             self.carry_out(effect)?;
             together = together.with(self.registers.outcome);
+            let theirs = &self.registers.controlled;
+            controlled = Table::from_fn(|player| controlled[player] | theirs[player]);
         }
         self.registers.that_player = outer;
         self.registers.outcome = together;
+        self.registers.controlled = controlled;
         Ok(())
     }
 

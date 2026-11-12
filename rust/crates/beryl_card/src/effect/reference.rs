@@ -119,8 +119,12 @@ pub enum Players {
     /// "Its controller", "their controllers"
     /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's
     /// controller is, by default, the player under whose control it entered the battlefield."
-    /// Of an object that has no controller where it is, its owner (CR 109.5), and of one that
-    /// has left, its last controller (CR 608.2h).
+    /// Of an object that has no controller where it is, its owner (CR 109.5). Of one an
+    /// instruction of the same effect moved, its last controller (CR 608.2h), which is kept
+    /// for a target ([`Objects::Target`]) and for what the instruction before moved
+    /// ([`Objects::Those`]) and for nothing else: of the ability's source, what that is
+    /// attached to or what it triggered on, once moved, it is refused
+    /// ([`crate::Malformed::LastKnown`]).
     ControllerOf(Objects),
     /// "Its owner"
     /// ([CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083)): "The owner of a card

@@ -302,6 +302,81 @@ fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
     assert_eq!(checked(TWO_RULES), Err(Malformed::Rules));
 }
 
+/// What an object was is asked only where the interpreter keeps it (CR 608.2h): a moved
+/// target's controller and numbers, and the controllers of what the instruction before moved.
+#[test]
+fn what_a_moved_object_was_is_refused_where_it_is_not_kept() {
+    use crate::effect::build::{
+        ITS_CONTROLLER, THIS, THOSE, controller_of, exile, gain_life, lose_life, sacrifice,
+        sequence,
+    };
+    const fn spell(effect: &'static Effect) -> [Ability; 1] {
+        [Ability::spell().targeting(&[A_CREATURE]).effect(effect)]
+    }
+    const IS_A_CREATURE: Condition = Condition::Is(TARGET, Filter::Any);
+    const DRAW_IF_IT_IS: Effect = if_then(IS_A_CREATURE, &draw(YOU, 1));
+    const ASKED_BEFORE: &[Ability] = &spell(&sequence(&[DRAW_IF_IT_IS, destroy(TARGET)]));
+    const ASKED_AFTER: &[Ability] = &spell(&sequence(&[destroy(TARGET), DRAW_IF_IT_IS]));
+    // One way through the effect moved it.
+    const ASKED_AFTER_A_BRANCH: &[Ability] = &spell(&sequence(&[
+        if_then(Condition::Did, &exile(TARGET)),
+        DRAW_IF_IT_IS,
+    ]));
+    // The second player's turn at it comes after the first's moved it.
+    const ASKED_BY_EACH: &[Ability] = &spell(&for_each_player(
+        Players::EachPlayer,
+        &sequence(&[DRAW_IF_IT_IS, destroy(TARGET)]),
+    ));
+    const TOKEN_AFTER: &[Ability] = &spell(&sequence(&[
+        destroy(TARGET),
+        if_then(Condition::Token(TARGET), &draw(YOU, 1)),
+    ]));
+    // The new object the move made is asked where it is (CR 400.7j).
+    const THOSE_ASKED_AFTER: &[Ability] = &spell(&sequence(&[
+        destroy(TARGET),
+        if_then(Condition::Is(THOSE, Filter::Any), &draw(YOU, 1)),
+    ]));
+    const KEPT_OF_A_TARGET: &[Ability] = &spell(&sequence(&[
+        destroy(TARGET),
+        lose_life(ITS_CONTROLLER, 1),
+        lose_life(controller_of(THOSE), 1),
+        Effect::GainLife {
+            player: YOU,
+            amount: Amount::Power(TARGET),
+        },
+    ]));
+    const SOURCE_CONTROLLER_AFTER: &[Ability] = &spell(&sequence(&[
+        sacrifice(THIS),
+        gain_life(controller_of(THIS), 1),
+    ]));
+    const SOURCE_POWER_AFTER: &[Ability] = &spell(&sequence(&[
+        exile(THIS),
+        Effect::GainLife {
+            player: YOU,
+            amount: Amount::Power(THIS),
+        },
+    ]));
+    // An Aura that has left enchants nothing.
+    const ENCHANTED_AFTER: &[Ability] = &spell(&sequence(&[
+        sacrifice(THIS),
+        gain_life(controller_of(Objects::AttachedTo), 1),
+    ]));
+    assert_eq!(checked(ASKED_BEFORE), Ok(()));
+    assert_eq!(checked(THOSE_ASKED_AFTER), Ok(()));
+    assert_eq!(checked(KEPT_OF_A_TARGET), Ok(()));
+    for refused in [
+        ASKED_AFTER,
+        ASKED_AFTER_A_BRANCH,
+        ASKED_BY_EACH,
+        TOKEN_AFTER,
+        SOURCE_CONTROLLER_AFTER,
+        SOURCE_POWER_AFTER,
+        ENCHANTED_AFTER,
+    ] {
+        assert_eq!(checked(refused), Err(Malformed::LastKnown));
+    }
+}
+
 /// In a card's `static` this panic is the build failure.
 #[test]
 #[should_panic(expected = "an effect adds mana outside a mana ability")]

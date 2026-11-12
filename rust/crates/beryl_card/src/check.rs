@@ -77,6 +77,15 @@ pub enum Malformed {
     /// More than one [`Effect::ChangeRule`] in an ability, which names one rule change to
     /// the game ([`Ability::rule`]): the others would have no number.
     Rules,
+    /// What an object was, asked after an instruction of the same effect moved it, where the
+    /// interpreter keeps no such answer
+    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "the effect uses
+    /// the object's last known information." It keeps a moved target's controller, power,
+    /// toughness, mana value and counters, and who controlled each of [`Objects::Those`].
+    /// So this is [`Condition::Is`], [`Condition::EnteredThisTurn`] or [`Condition::Token`]
+    /// of a target, the ability's source, what that is attached to or what it triggered on,
+    /// once moved, and the controller, the owner or a number of any of those but a target.
+    LastKnown,
 }
 
 impl Malformed {
@@ -96,6 +105,9 @@ impl Malformed {
             Malformed::Fateseal => "an effect fateseals a number of cards other than one",
             Malformed::Cast => "an effect lets a player cast a card before its last instruction",
             Malformed::Rules => "an ability's effect starts more than one rule change",
+            Malformed::LastKnown => {
+                "an expression asks what an object was after its effect moved it, which is not kept"
+            }
             Malformed::Delayed => {
                 "an effect delays an ability that is not a delayed trigger of its face"
             }
@@ -153,6 +165,7 @@ const fn check_abilities(face: &Face, abilities: &[Ability]) -> Checked {
             face,
             ability: &abilities[i],
             for_a_player: false,
+            moved: Moved::NONE,
         };
         if let Err(malformed) = scope.ability() {
             return Err(malformed);
@@ -247,6 +260,75 @@ const fn rule_changes(effect: &Effect) -> usize {
     }
 }
 
+/// The objects an instruction sets out to move from where they are, if it names them: a
+/// new object once it has
+/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that moves
+/// from one zone to another becomes a new object with no memory of, or relation to, its
+/// previous existence."
+const fn moved_by(effect: &Effect) -> Option<&Objects> {
+    match effect {
+        Effect::Counter(objects)
+        | Effect::CounterInto {
+            spells: objects, ..
+        }
+        | Effect::Destroy(objects)
+        | Effect::Exile(objects)
+        | Effect::ExileUntilThisLeaves(objects)
+        | Effect::ExileLinked(objects)
+        | Effect::Sacrifice(objects)
+        | Effect::ReturnToHand(objects)
+        | Effect::PutIntoGraveyard(objects)
+        | Effect::ReturnTransformed(objects)
+        | Effect::PutIntoLibrary { objects, .. }
+        | Effect::ShuffleInto { cards: objects, .. } => Some(objects),
+        _ => None,
+    }
+}
+
+/// The objects named one at a time that the instructions before the one being read may have
+/// moved: a target by its place, the ability's source, what that is attached to and what the
+/// ability triggered on. A set named by what is in it ([`Objects::All`] and the like) is
+/// read anew each time, and [`Objects::Those`] follows what moved.
+#[derive(Clone, Copy)]
+struct Moved(u32);
+
+impl Moved {
+    const NONE: Moved = Moved(0);
+    const THIS: u32 = 1 << 31;
+    const ATTACHED_TO: u32 = 1 << 30;
+    const TRIGGERED_ON: u32 = 1 << 29;
+
+    /// The bit of `objects`, if it is such a name. A target past the bits is not followed.
+    const fn bit(objects: &Objects) -> u32 {
+        match objects {
+            Objects::Target(target) if target.index() < 29 => 1 << target.index(),
+            Objects::This => Moved::THIS,
+            Objects::AttachedTo => Moved::ATTACHED_TO,
+            Objects::TriggeredOn => Moved::TRIGGERED_ON,
+            _ => 0,
+        }
+    }
+
+    /// These and `objects`. A source that has left is attached to nothing
+    /// ([`Objects::AttachedTo`]).
+    const fn with(self, objects: &Objects) -> Moved {
+        let attached = match objects {
+            Objects::This => Moved::ATTACHED_TO,
+            _ => 0,
+        };
+        Moved(self.0 | Moved::bit(objects) | attached)
+    }
+
+    /// What either of two ways through an effect may have moved.
+    const fn or(self, other: Moved) -> Moved {
+        Moved(self.0 | other.0)
+    }
+
+    const fn has(self, objects: &Objects) -> bool {
+        self.0 & Moved::bit(objects) != 0
+    }
+}
+
 /// Where an expression is read: the ability it is part of, on its face.
 #[derive(Clone, Copy)]
 struct Scope<'a> {
@@ -254,6 +336,8 @@ struct Scope<'a> {
     ability: &'a Ability,
     /// Within an [`Effect::ForEachPlayer`].
     for_a_player: bool,
+    /// What the instructions before this one may have moved.
+    moved: Moved,
 }
 
 impl Scope<'_> {
@@ -267,7 +351,13 @@ impl Scope<'_> {
             None => Ok(()),
         };
         let body = match self.ability.body() {
-            Behavior::Data(effect) => both(self.effect(effect), whole(effect)),
+            Behavior::Data(effect) => {
+                let instructions = match self.effect(effect) {
+                    Ok(_) => Ok(()),
+                    Err(malformed) => Err(malformed),
+                };
+                both(instructions, whole(effect))
+            }
             Behavior::Custom(_) => Ok(()),
         };
         both(condition, both(layer, body))
@@ -284,49 +374,73 @@ impl Scope<'_> {
         )
     }
 
-    const fn effects(self, effects: &[Effect]) -> Checked {
+    /// Instructions in the order written (CR 608.2c): each is read after what those before
+    /// it moved, and what they have moved by the end is the answer.
+    const fn effects(self, effects: &[Effect]) -> Result<Moved, Malformed> {
+        let mut scope = self;
         let mut i = 0;
         while i < effects.len() {
-            if let Err(malformed) = self.effect(&effects[i]) {
-                return Err(malformed);
+            match scope.effect(&effects[i]) {
+                Ok(moved) => scope = Scope { moved, ..scope },
+                Err(malformed) => return Err(malformed),
             }
             i += 1;
         }
-        Ok(())
+        Ok(scope.moved)
     }
 
-    /// An instruction: itself, and then the instructions it holds.
-    const fn effect(self, effect: &Effect) -> Checked {
-        let held = match effect {
+    /// An instruction: itself, and then the instructions it holds. What it may have moved
+    /// by its end, with what was moved before it.
+    const fn effect(self, effect: &Effect) -> Result<Moved, Malformed> {
+        if let Err(malformed) = self.instruction(effect) {
+            return Err(malformed);
+        }
+        match effect {
             Effect::Sequence(effects) => self.effects(effects),
             Effect::If {
                 condition,
                 then,
                 otherwise,
             } => {
-                let otherwise = match otherwise {
-                    Some(otherwise) => self.effect(otherwise),
-                    None => Ok(()),
+                if let Err(malformed) = self.condition(condition) {
+                    return Err(malformed);
+                }
+                let then = match self.effect(then) {
+                    Ok(moved) => moved,
+                    Err(malformed) => return Err(malformed),
                 };
-                both(
-                    self.condition(condition),
-                    both(self.effect(then), otherwise),
-                )
+                match otherwise {
+                    Some(otherwise) => match self.effect(otherwise) {
+                        Ok(moved) => Ok(then.or(moved)),
+                        Err(malformed) => Err(malformed),
+                    },
+                    None => Ok(then),
+                }
             }
             Effect::May { effect, .. } => self.effect(effect),
             Effect::Unless { effect, cost, .. } => {
-                both(self.resolution_cost(cost), self.effect(effect))
+                if let Err(malformed) = self.resolution_cost(cost) {
+                    return Err(malformed);
+                }
+                self.effect(effect)
             }
+            // Read a second time after what one player's turn at it moved, as the next
+            // player's is.
             Effect::ForEachPlayer { effect, .. } => {
                 let each = Scope {
                     for_a_player: true,
                     ..self
                 };
-                each.effect(effect)
+                match each.effect(effect) {
+                    Ok(moved) => Scope { moved, ..each }.effect(effect),
+                    Err(malformed) => Err(malformed),
+                }
             }
-            _ => Ok(()),
-        };
-        both(self.instruction(effect), held)
+            _ => Ok(match moved_by(effect) {
+                Some(objects) => self.moved.with(objects),
+                None => self.moved,
+            }),
+        }
     }
 
     /// One instruction without those it holds: what the check asks of its entry alone, and
@@ -441,6 +555,26 @@ impl Scope<'_> {
         }
     }
 
+    /// Whether no instruction before has moved `objects`: what it was is then asked of it
+    /// where it is.
+    const fn unmoved(self, objects: &Objects) -> Checked {
+        if self.moved.has(objects) {
+            Err(Malformed::LastKnown)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Whether its controller, its owner and its numbers can be read: of a target they are
+    /// kept through a move (`beryl_rules`' `Known`), and of anything else only while no
+    /// instruction before has moved it.
+    const fn kept(self, objects: &Objects) -> Checked {
+        match objects {
+            Objects::Target(_) => Ok(()),
+            _ => self.unmoved(objects),
+        }
+    }
+
     const fn objects(self, objects: &Objects) -> Checked {
         match objects {
             Objects::This
@@ -478,7 +612,9 @@ impl Scope<'_> {
                 Some(TargetKind::Player) => Ok(()),
                 _ => Err(Malformed::Target),
             },
-            Players::ControllerOf(objects) | Players::OwnerOf(objects) => self.objects(objects),
+            Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
+                both(self.kept(objects), self.objects(objects))
+            }
             Players::EachOther(players) => self.players(players),
             Players::ThatPlayer if self.for_a_player => Ok(()),
             Players::ThatPlayer => Err(Malformed::ThatPlayer),
@@ -499,7 +635,7 @@ impl Scope<'_> {
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)
-            | Amount::Counters(objects, _) => self.objects(objects),
+            | Amount::Counters(objects, _) => both(self.kept(objects), self.objects(objects)),
         }
     }
 
@@ -529,9 +665,12 @@ impl Scope<'_> {
                 Err(Malformed::Paid)
             }
             Condition::Compare(left, _, right) => both(self.amount(left), self.amount(right)),
-            Condition::Is(objects, filter) => both(self.objects(objects), self.filter(filter)),
+            Condition::Is(objects, filter) => both(
+                self.unmoved(objects),
+                both(self.objects(objects), self.filter(filter)),
+            ),
             Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
-                self.objects(objects)
+                both(self.unmoved(objects), self.objects(objects))
             }
             Condition::Not(condition) => self.condition(condition),
             Condition::All(conditions) | Condition::Any(conditions) => self.conditions(conditions),

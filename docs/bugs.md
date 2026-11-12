@@ -312,3 +312,16 @@ fixed in the same session. Newest first.
   for what the state already says. Whether an object moved is whether its
   reference is still current, so the register now only says that its last known
   information was noted.
+
+- "Their controllers", said of what an instruction had just moved
+  (`ControllerOf(Objects::Those)`), named each card's owner: the interpreter
+  read the controller of a card where it now was, a graveyard or exile, where a
+  card has none (CR 108.4a), though it kept who controlled each as it left for
+  counting them (CR 608.2h). A permanent controlled by another player than its
+  owner charged the wrong player. No card said it yet. Beside it, "if it was a
+  [filter]" of a target the effect had moved was held only by a debug assertion,
+  so a release build answered no. Prevention: one rule for what a moved object
+  was. Each expression that needs last known information either reads a register
+  the interpreter keeps, or the definition check refuses it as the card compiles
+  (`Malformed::LastKnown`); a comment promising a value is no guard, and neither
+  is an assertion a release build drops.
