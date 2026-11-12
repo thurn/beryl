@@ -620,9 +620,10 @@ await check(
         await list.evaluate((e) => {
             e.scrollTop = e.scrollHeight;
         });
-        // The browser sends the scroll event with its next frame, in its own time.
+        // The browser sends the scroll event with its next frame, in its own time: the
+        // tries only guard against a hang, with room for a loaded machine.
         let more;
-        for (let tries = 0; tries < 30 && more !== "above"; tries++) {
+        for (let tries = 0; tries < 200 && more !== "above"; tries++) {
             await new Promise((resolve) => setTimeout(resolve, 100));
             await page.clock.runFor(100);
             ({ more } = await state());

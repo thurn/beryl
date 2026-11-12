@@ -242,7 +242,8 @@ await check(
                 el.scrollHeight,
             ]);
         let [top, height, full] = await scroll();
-        for (let i = 0; i < 30 && top + height < full - 2; i++) {
+        // The tries only guard against a hang, with room for a loaded machine.
+        for (let i = 0; i < 200 && top + height < full - 2; i++) {
             await page.clock.runFor(100);
             await page.waitForTimeout(100);
             [top, height, full] = await scroll();
