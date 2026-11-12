@@ -333,7 +333,7 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
 #[test]
 fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
     let name = "Beza's Treasure pays for Counterspell";
-    let [first, second] = scripts(names::BEZA_THE_BOUNDING_SPRING, name).swap_remove(8);
+    let [first, second] = scripts(names::BEZA_THE_BOUNDING_SPRING, name).swap_remove(9);
     let paid = |who: &str| {
         text(&[
             format!("fly #1 (Counterspell) hand>stack cast at #258 <- {who}"),
