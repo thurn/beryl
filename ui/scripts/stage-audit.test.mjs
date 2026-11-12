@@ -149,10 +149,38 @@ test("a card that flies is seen to travel, and one that jumps is not", () => {
         verdicts(judge(run([[fly, [50, 450]]], frames(600, covered))))[0],
         /^unseen fly: visible in 0 of \d+ frames$/,
     );
+    // Under the turn's banner it is seen: play goes on beneath an announcement.
+    const announced = (t) =>
+        glide(t).map((c) => ({ ...c, top: false, cover: ".stage-notice" }));
+    assert.match(
+        verdicts(judge(run([[fly, [50, 450]]], frames(600, announced))))[0],
+        /^ok fly: /,
+    );
     const stuck = () => [card(9, 100, 300)];
     assert.deepEqual(
         verdicts(judge(run([[fly, [50, 450]]], frames(600, stuck)))),
         ["still fly: it did not move"],
+    );
+});
+
+test("an ability whose source is gone appears on the stack", () => {
+    const emerge = {
+        verb: "emerge",
+        id: 3,
+        item: { kind: "ability", source: 9, name: "Map" },
+    };
+    const ability = (t) =>
+        t < 100 ? [] : [card("a3", t < 130 ? 300 : 900, t < 130 ? 600 : 300)];
+    // Its source sacrificed for its cost, it is on the stack at once.
+    assert.deepEqual(
+        verdicts(judge(run([[emerge, [100, 400]]], frames(600, ability)))),
+        ["ok emerge: appeared over 300 ms"],
+    );
+    // With its source there to lift out of, the same is a jump.
+    const sourced = (t) => [card(9, 300, 600), ...ability(t)];
+    assert.match(
+        verdicts(judge(run([[emerge, [100, 400]]], frames(600, sourced))))[0],
+        /^instant emerge: moved 671px in \d\d ms of its 300$/,
     );
 });
 

@@ -147,16 +147,18 @@ export function record(ui) {
         return false;
     };
     // What a player sees at (cx, cy) in place of `e`: the stage's node that lies over it
-    // there, by its name, or how the element that does is classed.
+    // there, by its name; an announcement passing over the table (`.stage-notice`); or how
+    // the element that does is classed.
     const coverOf = (e, cx, cy) => {
         for (const x of under(cx, cy)) {
             if (x === e || e.contains(x)) return undefined;
-            if (hides(x)) {
-                return (
-                    x.closest("[data-stage]")?.dataset.stage ??
-                    `.${String(x.className.baseVal ?? x.className).split(" ")[0]}`
-                );
+            if (!hides(x)) continue;
+            const node = x.closest("[data-stage]");
+            if (node) return node.dataset.stage;
+            if (x.closest(".stage-notice, .stage-notice-scry")) {
+                return ".stage-notice";
             }
+            return `.${String(x.className.baseVal ?? x.className).split(" ")[0]}`;
         }
         return undefined;
     };

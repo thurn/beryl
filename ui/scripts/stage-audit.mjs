@@ -290,12 +290,14 @@ export function describe(act, names) {
     }
 }
 
-/** Whether a measured instance is one a player sees in `frame`: painted, on screen, and on top
- * or under its like in a pile, a card of its name lying over it in its zone, which shows it as
- * the pile does (UI Conventions, "Lands unstacked until seven"). */
+/** Whether a measured instance is one a player sees in `frame`: painted, on screen, and on
+ * top; or under an announcement, which passes over the cards in flight while play goes on
+ * (UI Conventions, Verbs, announce); or under its like in a pile, a card of its name lying over
+ * it in its zone, which shows it as the pile does (UI Conventions, "Lands unstacked until
+ * seven"). */
 function seen(card, frame) {
     if (card === undefined || card.o <= 0.3 || !card.on) return false;
-    if (card.top) return true;
+    if (card.top || card.cover === ".stage-notice") return true;
     const over = frame.nodes.get(card.cover);
     return (
         over !== undefined && over.name === card.name && over.zone === card.zone
@@ -311,8 +313,9 @@ const apart = (a, b) =>
         Math.abs(a.h - b.h),
     );
 
-/** How the page showed one step of a view's script, given its edges: `verdict` and `why`. */
-function judgeStep(act, start, end, frames) {
+/** How the page showed one step of a view's script, given its edges: `verdict` and `why`.
+ * `taken(name, from, to)` says whether another step about `name` began in that time. */
+function judgeStep(act, start, end, frames, taken) {
     if (!start) {
         return { verdict: "still", why: "the stage played no such step" };
     }
@@ -357,10 +360,12 @@ function judgeStep(act, start, end, frames) {
         ) {
             return { verdict: "unseen", why: "it went where no player saw it" };
         }
-        // A card is at its new place as it is gone; an ability, or a token that is no more,
-        // has no node.
+        // A card is at its new place as it is gone, unless its next step has it already (a
+        // card exiled and returned at once); an ability, or a token that is no more, has no
+        // node.
         const gone = act.object
-            ? after && after.zone === act.object.zone
+            ? (after && after.zone === act.object.zone) ||
+              taken(name, to, over?.t ?? to)
             : !after || after.o === 0;
         return gone
             ? { verdict: "ok", why: `gone over ${took} ms` }
@@ -369,7 +374,13 @@ function judgeStep(act, start, end, frames) {
     if (path.length === 0) {
         return { verdict: "still", why: "no node on the page shows it" };
     }
-    if (act.verb === "appear") {
+    // An ability whose source is no more has nothing to lift out of: it appears on the stack
+    // (UI Conventions, "An ability with no source on the battlefield").
+    const source = act.verb === "emerge" && act.item.source;
+    const sourceless =
+        act.verb === "emerge" &&
+        (source == null || !frames[first - 1]?.nodes.has(String(source)));
+    if (act.verb === "appear" || sourceless) {
         if (!after) {
             return { verdict: "still", why: "nothing came to be at its place" };
         }
@@ -402,12 +413,8 @@ function judgeStep(act, start, end, frames) {
         if (act.verb === "tap") {
             return { verdict: "still", why: "it did not turn" };
         }
-        // A card put elsewhere in the pile it lies in, or an ability with no source to leave,
-        // has nowhere to travel (UI Conventions, "An ability with no source on the
-        // battlefield").
-        const same = act.verb === "fly" && act.from === act.object.zone;
-        const sourceless = act.verb === "emerge" && act.item.source == null;
-        return same || sourceless
+        // A card put elsewhere in the pile it lies in has nowhere to travel.
+        return act.verb === "fly" && act.from === act.object.zone
             ? { verdict: "ok", why: "it stays where it lies" }
             : { verdict: "still", why: "it did not move" };
     }
@@ -526,6 +533,13 @@ export function judge(
         ),
     }));
     const findings = [];
+    // When each step about a node began, to tell a step whose subject the next has taken up.
+    const began = edges.flatMap((edge) => {
+        const name =
+            edge.edge === "start" &&
+            subjectOf(views[edge.view].steps[edge.index].act);
+        return name ? [{ name, edge }] : [];
+    });
     views.forEach((view, n) => {
         if (!view.plays) return;
         const own = edges.filter((edge) => edge.view === n);
@@ -540,7 +554,20 @@ export function judge(
                 kind: act.verb,
                 minor: act.verb === "tap",
                 what: describe(act, view.names),
-                ...judgeStep(act, start, edge(index, "end"), frames),
+                ...judgeStep(
+                    act,
+                    start,
+                    edge(index, "end"),
+                    frames,
+                    (name, from, to) =>
+                        began.some(
+                            (other) =>
+                                other.name === name &&
+                                other.edge !== start &&
+                                other.edge.from >= from &&
+                                other.edge.from <= to,
+                        ),
+                ),
                 start: start?.from,
             });
         });
