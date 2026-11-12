@@ -235,7 +235,8 @@ mod tests {
     }
 
     fn tagged(event: Event, cause: Tag) -> Tagged {
-        let tag = beryl_engine::event::Tag { cause };
+        let together = false;
+        let tag = beryl_engine::event::Tag { cause, together };
         Tagged { event, tag }
     }
 

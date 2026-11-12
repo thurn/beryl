@@ -313,21 +313,11 @@ pub(super) fn game_events<L: Layout>(
                 drawn.push(slot.num());
                 return None;
             }
-<<<<<<< HEAD
-            // Said for whoever follows the stack through the events, which no view does yet:
-            // a view shows the stack itself, and the blocks declared.
+            // Said for whoever follows the stack through the events, which a seat's screen
+            // does ([`heard`]): a view shows the stack itself, and the blocks declared.
             if let Event::StackArrival { .. } | Event::StackDeparture { .. } | Event::Block { .. } =
                 e
             {
-||||||| parent of b243260d (feat: scripts read causes and stack names from the engine)
-            // Said for whoever follows the stack through the events, which no view does yet:
-            // a view shows the stack itself.
-            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
-=======
-            // Said for whoever follows the stack through the events, which a seat's screen
-            // does ([`heard`]): a view shows the stack itself.
-            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
->>>>>>> b243260d (feat: scripts read causes and stack names from the engine)
                 return None;
             }
             let mut event = game_event(t, obs, e);
@@ -368,9 +358,13 @@ pub fn heard<L: Layout>(
             (Event::StackDeparture { .. }, Some(Subject::Ability { id })) => {
                 heard.moves.push((before, Move::Departure { id, cause }));
             }
-            // A view's draw says its cards, and a spell arrives and leaves as its card moves.
+            // A view's draw says its cards, a spell arrives and leaves as its card moves, and
+            // no view is told a block.
             (
-                Event::DrawCard { .. } | Event::StackArrival { .. } | Event::StackDeparture { .. },
+                Event::DrawCard { .. }
+                | Event::StackArrival { .. }
+                | Event::StackDeparture { .. }
+                | Event::Block { .. },
                 _,
             ) => {}
             _ => heard.causes.push(cause),
