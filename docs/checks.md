@@ -153,6 +153,8 @@ in `$BERYL_CACHE/sweep`.
   fixture) could keep most of what the check protects. If so, it writes that
   test and deletes the check. If not, it deletes the check when it has never
   caught a bug, or moves it to the nightly when it has.
+- The `flakefix` skill works the open `flaky-check` beads as one Enact run,
+  grouped by shared cause. `just beads` leaves them out.
 - There is no quarantine. Every check that runs can fail CI, except those on
   `verdicts.PENDING`, each tied to the bead whose work will make it pass.
 
