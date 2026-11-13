@@ -6,7 +6,15 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+import pytest
+
 from beryl_tools import budget, check_value, verdicts
+
+
+@pytest.fixture(autouse=True)
+def measured_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Slow CI's budget is checked only off Windows, and these tests run there too."""
+    monkeypatch.setattr(budget.system, "WINDOWS", False)
 
 
 def labels(issue: dict[str, object]) -> list[str]:

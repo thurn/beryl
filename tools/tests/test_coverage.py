@@ -150,6 +150,10 @@ def test_a_dirty_tree_leaves_latest_alone(tmp_path: Path) -> None:
     assert latest["commit"] == "abc123"
 
 
+# Windows records no coverage, so `coverage.refresh` does nothing there.
+WINDOWS_SKIP = pytest.mark.skipif(system.WINDOWS, reason="no coverage on Windows")
+
+
 def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """The commands `coverage.refresh` starts, recorded instead of run, from a main checkout
     at /main."""
@@ -163,6 +167,7 @@ def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     return commands
 
 
+@WINDOWS_SKIP
 def test_a_refresh_measures_a_commit_newer_than_the_coverage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -174,6 +179,7 @@ def test_a_refresh_measures_a_commit_newer_than_the_coverage(
     assert command[-4:] == ["by", "coverage", "--commit", "def456"]
 
 
+@WINDOWS_SKIP
 def test_a_refresh_skips_the_commit_coverage_has(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -183,6 +189,7 @@ def test_a_refresh_skips_the_commit_coverage_has(
     assert commands == []
 
 
+@WINDOWS_SKIP
 def test_a_refresh_waits_for_no_coverage_run_in_progress(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

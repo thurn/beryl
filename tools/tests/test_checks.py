@@ -581,7 +581,8 @@ def test_unformatted_markdown_is_named_without_a_build(
     monkeypatch.setattr(hygiene.paths, "REPO", tmp_path)
     found = hygiene.unformatted("mdformat", ["a.md"])
     assert found and found[0].startswith("mdformat:")
-    (tmp_path / "a.md").write_text("# Title\n\n- item\n")
+    # Not CRLF, which write_text gives on Windows and mdformat calls unformatted.
+    (tmp_path / "a.md").write_text("# Title\n\n- item\n", newline="\n")
     assert hygiene.unformatted("mdformat", ["a.md"]) == []
 
 

@@ -188,6 +188,10 @@ def chooser_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(verdicts, "cached_history", lambda: {})
     fresh = Coverage("c0", datetime.now(timezone.utc), {}, {})
     monkeypatch.setattr(Coverage, "load", staticmethod(lambda: fresh))
+    # Windows records no coverage, and these tests run there too.
+    monkeypatch.setattr(
+        selection, "stale", lambda found, now: "" if found else "no coverage"
+    )
 
 
 def test_slow_ci_plays_every_chosen_check_with_no_time_box(

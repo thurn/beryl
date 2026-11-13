@@ -68,10 +68,9 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
     # The set crates are the tree's but for their paths to the checkout.
     crate = tmp_path / "rust" / "cards" / "cards_s000"
     assert (crate / "build.rs").read_text() == (scale_workspace.card_crates.BUILD)
-    assert (
-        str(scale_workspace.CRATES / "beryl_card_build")
-        in (crate / "Cargo.toml").read_text()
-    )
+    assert (scale_workspace.CRATES / "beryl_card_build").as_posix() in (
+        crate / "Cargo.toml"
+    ).read_text()
     registry = (tmp_path / "rust" / "crates" / "beryl_cards" / "Cargo.toml").read_text()
     for name in names:
         assert f"\n{name} = " in registry and f'"{name}/scenarios"' in registry
