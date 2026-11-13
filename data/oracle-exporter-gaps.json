@@ -28,5 +28,11 @@
     "card": "Generated",
     "scenario": "Generated 80",
     "gap": "a shuffle the harness does not replay: after Time Spiral shuffles each hand and graveyard into its library and both players draw seven, Forge's player 1 holds different cards than Beryl's and has nothing to play in the main phase, so Forge passes to turn 4's draw step before the asserts"
+  },
+  {
+    "oracle": "forge",
+    "card": "Generated",
+    "scenario": "Generated 22",
+    "gap": "a payment the harness leaves to Forge: P0 has exactly three untapped blue sources for Stock Up ({2}{U}) and then Mana Drain ({U}{U}), and Forge pays Stock Up's generic mana with blue, leaving too little for Mana Drain"
   }
 ]
