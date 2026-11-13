@@ -86,6 +86,11 @@ ui-test *args:
 ui-play *args:
     {{ by }} ui-play "$@"
 
+# Time the frames of fixtures played live on a production build (--verbs, --phone, --browser chromium --throttle N)
+[group('app')]
+ui-perf *args:
+    {{ by }} ui-perf "$@"
+
 # Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
 [group('app')]
 ui-live *args:

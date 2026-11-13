@@ -15,6 +15,10 @@ instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's 
 desktop's layout and the phone's, under the stage's audit of each step and the screen audits of
 where it ends (ui/scripts/playthrough.mjs).
 
+`ui-perf` plays recorded fixtures live on a production build, following the browser's frames,
+and reports how long the frames took and which animations the long ones came in
+(ui/scripts/perf.mjs).
+
 `ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
 the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless page
 open on it that an agent drives one step at a time over HTTP, until interrupted.
@@ -394,6 +398,43 @@ def ui_play(args: argparse.Namespace) -> int:
     return code
 
 
+def ui_perf(args: argparse.Namespace) -> int:
+    """Times the frames of recorded fixtures played live on a production build
+    (ui/scripts/perf.mjs). Measures; never fails on what it measures."""
+    recorded = paths.cache_root() / "ui-perf" / paths.REPO.name
+    try:
+        env = browser_env(args.browser)
+        if record_fixtures(recorded, list(args.fixtures)):
+            return checks.CANNOT_RUN
+        # React's development build is several times slower than the app's.
+        built = subprocess.run(
+            [system.npm_bin("vite"), "build"],
+            cwd=paths.UI,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+        if built.returncode != 0:
+            raise UiError("vite build failed")
+        with served_ui(env, preview=True) as url:
+            return subprocess.run(
+                ["node", "scripts/perf.mjs", url, str(recorded)]
+                + ["--browser", args.browser, "--runs", str(args.runs)]
+                + (["--phone"] if args.phone else [])
+                + (["--verbs"] if args.verbs else [])
+                + (["--throttle", str(args.throttle)] if args.throttle > 1 else [])
+                + list(args.fixtures),
+                cwd=paths.UI,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+    except UiError as e:
+        print(f"ui-perf: {e}", file=sys.stderr)
+        return checks.CANNOT_RUN
+
+
 def ui_live(args: argparse.Namespace) -> int:
     out = (
         paths.cache_root()
@@ -506,6 +547,29 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument("--minor", action="store_true", help="count minor findings too")
     p.set_defaults(func=ui_play)
+    p = sub.add_parser(
+        "ui-perf",
+        help="time the frames of fixtures played live on a production build",
+    )
+    p.add_argument("fixtures", nargs="+", help="fixtures to play, by name")
+    p.add_argument(
+        "--browser",
+        default=BROWSER,
+        choices=["webkit", "chromium"],
+        help="the engine; the app webview's by default",
+    )
+    p.add_argument("--phone", action="store_true", help="the phone's layout")
+    p.add_argument(
+        "--verbs", action="store_true", help="the long frames by the verb playing"
+    )
+    p.add_argument("--runs", type=int, default=1, help="plays of each fixture")
+    p.add_argument(
+        "--throttle",
+        type=int,
+        default=1,
+        help="slow Chromium's CPU this many times (Chromium only)",
+    )
+    p.set_defaults(func=ui_perf)
     p = sub.add_parser(
         "ui-live",
         help="live games in a headless page an agent drives over HTTP, until interrupted",
