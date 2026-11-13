@@ -117,11 +117,15 @@ export const flatAt = (through: number, { at, each }: Turning = CAST) =>
  * is farthest off it, `peak` of the way along (half way, if not said), leaning `lean`
  * degrees into the bow there and upright again as it lands. It bows `toward` the edge
  * of the table its card's controller sits at (1 down the stage, -1 up it): the outside of
- * the table, where it crosses the fewest cards. */
+ * the table, where it crosses the fewest cards. One that swings `back` also leaves away from
+ * where it is going, across the table, by that share of how far across the line runs where
+ * it is farthest off it: with a bow toward the middle of the table, the card comes out of a
+ * hand into the open table and hooks round to its place. */
 export interface Bow {
   share: number;
   peak?: number;
   lean?: number;
+  back?: number;
   toward: number;
 }
 
@@ -134,10 +138,16 @@ export interface Bow {
  * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
  * (data/arena-motion.json, fly and emerge). A card drawn that no one reads, the opponent's,
- * leaves the line toward the middle of the table, away from its player's edge. */
+ * leaves the line toward the middle of the table, away from its player's edge. So does the
+ * land an opponent plays, and farther: Arena's drops out of their hand down into the table
+ * on the side away from their lands, tilted, and swings back along the table to its place
+ * (`UrGalw_f35w 16:46.33`, `pE4XSNi-nZc 20:13.60`: farthest out about 0.4 of its time in,
+ * between 0.12 and 0.39 of the table's width beyond where it left the hand and 0.18 to 0.27
+ * of its height below it). */
 export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6 },
+  played: { share: 0.3, back: 1, peak: 0.6, lean: 20 },
   lands: { share: 0.1, lean: 2 },
   lifts: { share: 0.12, peak: 0.6 },
   drawn: { share: 0.2, peak: 0.42 },
@@ -152,8 +162,13 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
     return { ...(toward < 0 ? BOWS.theirs : BOWS.cast), toward };
   }
   if (draws(act)) return { ...BOWS.drawn, toward: -toward };
-  const lands = act.from === "stack" && act.object.zone === "battlefield";
-  return lands ? { ...BOWS.lands, toward } : undefined;
+  if (act.object.zone !== "battlefield") return undefined;
+  // The player's own land glides straight from where it is let go (Arena's, `UrGalw_f35w
+  // 16:35.42`).
+  if (act.from === "hand") {
+    return toward < 0 ? { ...BOWS.played, toward: -toward } : undefined;
+  }
+  return act.from === "stack" ? { ...BOWS.lands, toward } : undefined;
 }
 
 /** `pose`, which is `through` of the straight way from `from` to `to`, as far off that way
@@ -171,9 +186,10 @@ export function bowed(
   const sharpness = Math.log(0.5) / Math.log(bow.peak ?? 0.5);
   const arch = Math.sin(Math.PI * Math.max(0, through) ** sharpness);
   const off = side * bow.share * arch;
+  const back = (bow.back ?? 0) * arch;
   return {
     ...pose,
-    x: pose.x - down * off,
+    x: pose.x - down * off - across * back,
     y: pose.y + across * off,
     // It leans into the bow, its top toward the side it swings out to.
     rotation: pose.rotation - side * (bow.lean ?? 0) * arch,
@@ -606,7 +622,11 @@ export function carried(
   const toward = resting.object?.controller === "opponent" ? -1 : 1;
   const about = verb === "fly" || verb === "count";
   const flies = about && litBy(run.step.act) === name;
-  const turns = flies && start.face === "back" && resting.pose.face === "front";
+  // The land an opponent plays is face up as it leaves their hand, the way up it will lie
+  // (Arena's, `UrGalw_f35w 16:46.37`): it does not turn over on the way.
+  const faceUp = flies && bowOf(run.step.act, toward)?.back !== undefined;
+  const turns =
+    flies && !faceUp && start.face === "back" && resting.pose.face === "front";
   const opens = run.opens !== undefined && !flies;
   const [from, to] = opens
     ? [at, run.opens!.by]
@@ -623,7 +643,10 @@ export function carried(
         over: turns ? halfTurn : undefined,
         turning: turningOf(run.step.act),
         bow: flies ? bowOf(run.step.act, toward) : undefined,
-        round: flies && resting.pose.face === "back" ? halfTurn : undefined,
+        round:
+          flies && (faceUp || resting.pose.face === "back")
+            ? halfTurn
+            : undefined,
       }));
   const turn = turns ? turningOf(run.step.act).at : kept && 1;
   return [{ from, to, closes: to > end, pose, turn, own: flies }, kept];

@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { caseOf, effectsOf, timingOf } from "../src/stage/timing.ts";
+import { bowed, bowOf } from "../src/stage/tracks.ts";
 import { move, object, reach, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
@@ -403,5 +404,72 @@ test("the design language says which announcements pass and how long each wait i
     assert.equal(
         caseOf({ verb: "set", fact: { kind: "object", object: object(1) } }),
         undefined,
+    );
+});
+
+test("a land played is quicker than a spell, lands with no flash, and the opponent's hooks round", () => {
+    const fly = (from, zone, controller) => ({
+        verb: "fly",
+        from,
+        object: { ...object(1), zone, controller },
+    });
+    const [mine, theirs, resolved] = [
+        fly("hand", "battlefield", "you"),
+        fly("hand", "battlefield", "opponent"),
+        fly("stack", "battlefield", "you"),
+    ];
+    assert.deepEqual(
+        [mine, theirs, resolved].map((act) => caseOf(act)),
+        ["land played", "opponent land played", "permanent resolves"],
+    );
+    // Arena's own land is at rest 300 to 330 ms after it is let go, and the opponent's 600
+    // to 630 ms after it leaves their hand (data/arena-motion.json, fly).
+    assert.deepEqual(
+        [mine, theirs].map((act) => timingOf(act).duration),
+        [315, 615],
+    );
+    // Neither flashes where it lands, as a permanent that resolves does.
+    assert.deepEqual(
+        [mine, theirs, resolved].map((act) =>
+            effectsOf(act).map((effect) => effect.name),
+        ),
+        [[], [], ["settle"]],
+    );
+    // The player's own land glides straight. The opponent's leaves the line: with their
+    // hand at the top middle and their lands at the top left, it is farthest off the line
+    // below it and to the right of where it left, the side away from where it is going.
+    assert.equal(bowOf(mine, 1), undefined);
+    const bow = bowOf(theirs, -1);
+    const [from, to] = [
+        { x: 800, y: 0, rotation: 0 },
+        { x: 200, y: 150, rotation: 0 },
+    ];
+    const at = (through) =>
+        bowed(
+            {
+                ...from,
+                x: from.x + (to.x - from.x) * through,
+                y: from.y + (to.y - from.y) * through,
+            },
+            from,
+            to,
+            through,
+            bow,
+        );
+    const farthest = at(bow.peak);
+    assert.ok(farthest.x > from.x + 150, "it swings out past where it left");
+    assert.ok(farthest.y > to.y + 50, "and down into the open table");
+    assert.ok(Math.abs(farthest.rotation) >= 15, "tilted as it goes");
+    assert.deepEqual(
+        [at(0), at(1)].map((pose) => [
+            Math.round(pose.x),
+            Math.round(pose.y),
+            Math.round(pose.rotation),
+        ]),
+        [
+            [800, 0, 0],
+            [200, 150, 0],
+        ],
+        "and leaves and lands on the line, upright",
     );
 });

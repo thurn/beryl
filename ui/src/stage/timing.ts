@@ -110,7 +110,9 @@ export function caseOf(
         case "stack>battlefield":
           return "permanent resolves";
         case "hand>battlefield":
-          return "land played";
+          return act.object.controller === "you"
+            ? "land played"
+            : "opponent land played";
         case "hand>graveyard":
           return "discard";
         case "library>hand":
@@ -346,6 +348,7 @@ interface Use {
   when: string;
   case?: string;
   into?: string;
+  except?: readonly string[];
   on?: string;
 }
 
@@ -363,8 +366,9 @@ const uses = new Map(
   ]),
 );
 
-/** The effects the step `act` begins, which finds the table `table`: its verb's that fit it,
- * and only its case's own where the case has any (a card that leaves for exile is lost in
+/** The effects the step `act` begins, which finds the table `table`: its verb's that fit it
+ * and do not leave its case out (`except`: a land played lands with no flash, as Arena's
+ * does), and only its case's own where the case has any (a card that leaves for exile is lost in
  * light, and does not break up besides). */
 export function effectsOf(act: Act, table?: PlayerView): Effect[] {
   const found = caseOf(act, table);
@@ -372,7 +376,8 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
   const fit = (uses.get(act.verb) ?? []).filter(
     (use) =>
       (use.case === undefined || use.case === found) &&
-      (use.into === undefined || use.into === into),
+      (use.into === undefined || use.into === into) &&
+      !(found !== undefined && use.except?.includes(found)),
   );
   const own = fit.filter((use) => use.case !== undefined);
   // What a strike or a streak lands on: a card, an ability, or a player's life total. And

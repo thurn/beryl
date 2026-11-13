@@ -182,8 +182,13 @@ def use_problems(where: str, verb: dict[str, Any], data: dict[str, Any]) -> list
             found.append(f"{where}: {use['case']!r} is not one of its cases")
         if "on" in use and use["on"] not in ONS:
             found.append(f"{where}: an effect is on one of {ONS}, or on its step's own")
-        if set(use) - {"effect", "when", "case", "into", "on"}:
-            found.append(f"{where}: an effect's use is effect, when, case, into and on")
+        for left_out in use.get("except", []):
+            if left_out not in verb.get("cases", {}):
+                found.append(f"{where}: {left_out!r} is not one of its cases")
+        if set(use) - {"effect", "when", "case", "into", "except", "on"}:
+            found.append(
+                f"{where}: an effect's use is effect, when, case, into, except and on"
+            )
     return found
 
 
@@ -391,6 +396,7 @@ def uses(verb: dict[str, Any]) -> str:
                 WHEN_WORDS[use["when"]],
                 *([f"({use['case']})"] if "case" in use else []),
                 *([f"(into the {use['into']})"] if "into" in use else []),
+                *([f"(but not {', '.join(use['except'])})"] if "except" in use else []),
                 *([ON_WORDS[use["on"]]] if "on" in use else []),
             ]
         )

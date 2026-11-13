@@ -360,7 +360,7 @@ def case_of(act: dict[str, Any], seat: str) -> str | None:
         cases = {
             ("hand", "stack"): "own spell cast" if own else "opponent spell cast",
             ("stack", "battlefield"): "permanent resolves",
-            ("hand", "battlefield"): "land played",
+            ("hand", "battlefield"): "land played" if own else "opponent land played",
             ("hand", "graveyard"): "discard",
         }
         if (origin, zone) == ("library", "hand"):

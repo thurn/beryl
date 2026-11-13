@@ -12,7 +12,7 @@
       "verb": "fly",
       "path": "Rises out of the hand or library and glides on a shallow arc to its place, easing out. An opponent's card turns face up a little past halfway. A draw holds large beside the library for about 0.2 s, then drops into the hand.",
       "gaps": [
-        "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows.",
+        "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows. Opponent land played: two instances, whose farthest points differ (0.93 and 0.68 of the table's width).",
         "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
         "Draw: SswBO8aOOgc 21:30.4 and 24:22.9 were tracked only inside a crop that misses the library leg (fly-in 330 to 360 ms, hold 200 ms, drop 200 to 330 ms), so they are left out.",
         "Peak size of the spells was not taken. The land played and discard peaks are widths read by eye, not retaken as the tracker takes size (the resolves' were, by-w8gv.21.37)."
@@ -21,48 +21,84 @@
         {
           "case": "land played",
           "recording": "UrGalw_f35w",
-          "time": "16:34.9",
-          "span": 1.2,
+          "time": "16:35.37",
+          "span": 0.4,
           "crop": [
             300,
-            450,
-            1200,
-            630
+            650,
+            1100,
+            350
           ],
           "method": "filmstrip",
           "why": "just video measure refused: 'cannot measure: 2 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards' (the glow, the hand and the dragged preview also move); same message on the sister land at 16:14.8 with two different crops.",
-          "command": "just video film UrGalw_f35w 16:35.4 --span 0.8 --fps 20 --cols 4 --width 480 --crop 300,450,1200,630",
+          "command": "just video film UrGalw_f35w 16:35.37 --span 0.4 --fps 60 --cols 6 --width 640 --crop 300,650,1100,350",
           "since": "",
-          "duration_ms": 350,
+          "duration_ms": 300,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": 1.9,
-          "path": "Island is dragged to the table enlarged, released at 16:35.40, shrinks to table size at once and glides up-and-left in a nearly straight line to its slot beside the other lands, rest by 16:35.80. Crop x centres 411,377,328,268,201,129,104,105 at 20 fps: steps grow then stop abruptly.",
+          "path": "Island is dragged to the table enlarged, released at 16:35.40, is at table size in the next frame (16:35.42) and glides up and left in a nearly straight line to its slot beside the other land, at rest 16:35.72. Share of the way across at each 60 fps frame from 16:35.47: 7, 12, 26, 34 (half its time), 46, 54, 63, 68, 77, 86, 89, 98 percent: it gathers speed and stops abruptly.",
           "curve": "ease-in",
-          "note": "Duration counted from release (first frame at battlefield size, 16:35.45) to rest (16:35.80). Before it the card was held under the cursor at about 1.9x its rest width; true start inside the hand is not visible because the card is dragged out first. Peak is that held size. No flash on the land landing."
+          "note": "Retaken at 60 fps, the recording's own rate (the first take read 350 ms from 20 fps frames). Duration runs from the first frame at table size (16:35.42) to rest (16:35.72). Before it the card was held under the cursor at about 1.9x its rest width; the true start inside the hand is not visible because the card is dragged out first. Peak is that held size. No flash on the land landing, in the whole-table film either (just video film UrGalw_f35w 16:34.9 --span 1.07 --fps 30 --cols 8 --width 480)."
         },
         {
           "case": "land played",
           "recording": "UrGalw_f35w",
-          "time": "16:14.7",
-          "span": 1.0,
+          "time": "16:14.9",
+          "span": 0.6,
           "crop": [
             300,
-            450,
+            650,
             1100,
-            630
+            350
           ],
           "method": "filmstrip",
           "why": "just video measure refused with '2 things moved where 1 card was asked for' at 16:14.8 (crop 700,0,1220,880), 16:14.5 (300,450,1100,500) and 16:14.8 (300,600,1100,400): the Your Turn banner and glow move too.",
-          "command": "just video film UrGalw_f35w 16:14.7 --span 0.8 --fps 20 --cols 4 --width 480 --crop 300,450,1100,630",
+          "command": "just video film UrGalw_f35w 16:14.9 --span 0.6 --fps 30 --cols 6 --width 640 --crop 300,650,1100,350",
           "since": "",
-          "duration_ms": 450,
+          "duration_ms": 330,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": 1.9,
-          "path": "Tundra held enlarged near the hand with a yellow outline until about 16:14.95, then shrinks and glides up-left to the first land slot, at rest about 16:15.40.",
-          "curve": null,
-          "note": "First land of the game. Duration 14.95 to 15.40 from 20 fps frames; curve not judged because positions were only read by eye. Same mechanism as the 16:34.9 land (drag, release, glide)."
+          "path": "Tundra is held enlarged near the hand with an orange outline until 16:15.03, is at table size at 16:15.07 and glides up and left to the first land slot, at rest between 16:15.37 and 16:15.40. Share of the way across at each 30 fps frame from 16:15.10: 3, 8, 23, 28, 44, 64, 69, 87, 98 percent.",
+          "curve": "ease-in",
+          "note": "First land of the game. Retaken at 30 fps on a closer crop: the first take read 450 ms from 20 fps frames, counting the frames in which the card is still held under the cursor. Same mechanism as the 16:35.37 land (drag, release, glide). No flash where it lands."
+        },
+        {
+          "case": "opponent land played",
+          "recording": "UrGalw_f35w",
+          "time": "16:46.1",
+          "span": 1.07,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "the hand it leaves, its shadow on the table and the lands it joins all change in the clip, so the tracker has more movers than cards",
+          "command": "just video film UrGalw_f35w 16:46.1 --span 1.07 --fps 30 --cols 8 --width 480",
+          "since": "",
+          "duration_ms": 630,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "The opponent's land leaves the middle of their hand at the top of the table at 16:46.33, already face up, and drops down and to the right, away from their lands at the top left, tilted about 25 degrees with its shadow apart from it on the table. It is farthest out at 16:46.60, about 0.93 of the table's width across and 0.3 of its height down, where it levels out, and then glides left along the table to its slot at the top left, at rest 16:46.97.",
+          "curve": "ease-out",
+          "note": "Whole table, no crop. Farthest out 270 ms in, 0.43 of its time. It slows as it comes in. No flash where it lands."
+        },
+        {
+          "case": "opponent land played",
+          "recording": "pE4XSNi-nZc",
+          "time": "20:13.2",
+          "span": 1.07,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "the hand it leaves, its shadow on the table and the lands it joins all change in the clip, so the tracker has more movers than cards",
+          "command": "just video film pE4XSNi-nZc 20:13.2 --span 1.07 --fps 30 --cols 8 --width 480",
+          "since": "",
+          "duration_ms": 600,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "The opponent's land leaves their hand at the top at 20:13.60, face up, drops down and to the right tilted with its shadow apart from it, is farthest out at 20:13.83, about 0.68 of the table's width across and 0.22 of its height down, levels out and glides left to its slot beside their other lands, at rest about 20:14.20.",
+          "curve": "ease-out",
+          "note": "Whole table, no crop. Farthest out 230 ms in, 0.38 of its time: the same hooked route as UrGalw_f35w 16:46.1, less far out. The land's own trigger follows it."
         },
         {
           "case": "permanent resolves",
@@ -435,7 +471,7 @@
       ],
       "summary": {
         "duration_ms": {
-          "median": 475,
+          "median": 525,
           "min": 130,
           "max": 1117
         },
@@ -455,9 +491,9 @@
         "cases": {
           "land played": {
             "duration_ms": {
-              "median": 400,
-              "min": 350,
-              "max": 450
+              "median": 315,
+              "min": 300,
+              "max": 330
             },
             "delay_ms": null,
             "stagger_ms": null,
@@ -468,6 +504,18 @@
             },
             "start": null,
             "curve": "ease-in"
+          },
+          "opponent land played": {
+            "duration_ms": {
+              "median": 615,
+              "min": 600,
+              "max": 630
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
+            "peak": null,
+            "start": null,
+            "curve": "ease-out"
           },
           "permanent resolves": {
             "duration_ms": {
