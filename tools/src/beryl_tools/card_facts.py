@@ -13,6 +13,7 @@ card.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import cast
 
 Json = dict[str, object]
@@ -35,9 +36,12 @@ COUNTER_WORDS: dict[str, str] = {"PlusOne": "+1/+1", "MinusOne": "-1/-1"}
 CHOICES_AS_TARGETS = ("Search", "PutBack", "Fateseal")
 
 # How many words of an ability's effect follow its cost in the text that names it: enough to
-# tell two abilities of one cost apart, too few to reach a card's reference to itself, which
-# XMage writes differently.
+# tell two abilities of one cost apart.
 EFFECT_WORDS = 3
+
+# A card's reference to itself, which XMage writes as the card's name: the text that names an
+# ability stops before it, as "{B}: Regenerate this creature." does after "Regenerate".
+SELF_REFERENCE: re.Pattern[str] = re.compile(r" this \w+")
 
 # The triggered abilities casting keywords give a permanent, by keyword, as the one thing each
 # does: CR 702.74a, evoke: "When this permanent enters, if its evoke cost was paid, its
@@ -127,8 +131,8 @@ class Cards:
         written = [p for p in self.paragraphs(card) if p.startswith(f"{text} ")]
         if len(written) != 1:
             return None
-        words = written[0][len(text) :].split()
-        return " ".join([text, *words[:EFFECT_WORDS]])
+        effect = SELF_REFERENCE.split(written[0][len(text) :], maxsplit=1)[0]
+        return " ".join([text, *effect.split()[:EFFECT_WORDS]])
 
     def paragraphs(self, card: str) -> list[str]:
         """The paragraphs of the Oracle text of every face of `card`."""
@@ -330,6 +334,13 @@ class Cards:
         if not comma:
             raise Unsupported(f"ordering two triggers of {card} on one event")
         return f"{trigger}, {rest.split(' ')[0]}"
+
+
+def named_cards(entries: Iterable[Json]) -> list[str]:
+    """The names of the cards the dump's scenarios describe, each once and sorted: with the
+    decks' cards, those the exporters need the Oracle text of, as of a card implemented only
+    for scenarios."""
+    return sorted({n for e in entries for n in cast(Json, e.get("cards", {}))})
 
 
 class Unsupported(Exception):

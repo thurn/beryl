@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -87,13 +87,13 @@ class Faces:
     oracle: dict[str, str]
 
     @staticmethod
-    def load(store: Path) -> Faces:
+    def load(store: Path, also: Iterable[str] = ()) -> Faces:
         back: dict[str, str] = {}
         land_back: dict[str, str] = {}
         loyalty: dict[str, int] = {}
         mana_cost: dict[str, str] = {}
         oracle: dict[str, str] = {}
-        for card in listed(store)[0]:
+        for card in listed(store, also)[0]:
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
             mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))

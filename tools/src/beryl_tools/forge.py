@@ -15,13 +15,13 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, paths
-from .card_facts import Cards, Unsupported, cost_text, keyword_cost
+from .card_facts import Cards, Unsupported, cost_text, keyword_cost, named_cards
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
 HARNESS_CLASS = "beryl.BerylForgeHarness"
@@ -103,12 +103,13 @@ class Card:
     oracle: str
 
 
-def card_faces(store: Path) -> dict[str, Card]:
-    """Every face name of the decks' cards and their tokens in the card store with what a
-    GameState line needs, its printed loyalty, which GameState does not supply on its own, and
-    its Oracle text, from which Forge builds its description of an ability."""
+def card_faces(store: Path, also: Iterable[str] = ()) -> dict[str, Card]:
+    """Every face name of the decks' cards, the cards named in `also` and their tokens in the
+    card store with what a GameState line needs, its printed loyalty, which GameState does not
+    supply on its own, and its Oracle text, from which Forge builds its description of an
+    ability."""
     faces: dict[str, Card] = {}
-    listed, tokens = cards.listed(store)
+    listed, tokens = cards.listed(store, also)
     for record in [*listed, *tokens]:
         for face in cast(list[JsonObject], record["faces"]):
             loyalty = face.get("loyalty")
@@ -305,7 +306,7 @@ def export(
     entries: Sequence[JsonObject], store: Path
 ) -> tuple[list[JsonObject], list[JsonObject]]:
     """The dump's scenarios as harness input, and the unsupported ones with their reasons."""
-    faces = card_faces(store)
+    faces = card_faces(store, named_cards(entries))
     oracle = {name: face.oracle for name, face in faces.items()}
     exported: list[JsonObject] = []
     skipped: list[JsonObject] = []

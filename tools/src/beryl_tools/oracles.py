@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
-from . import card_diverge, xmage, xmage_java
+from . import card_diverge, card_facts, xmage, xmage_java
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -602,7 +602,7 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
     (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
     """
-    faces = xmage_java.Faces.load(card_store.STORE)
+    faces = xmage_java.Faces.load(card_store.STORE, card_facts.named_cards(entries))
     exports = xmage.export_all(entries, faces, xmage_java.xmage_cards(checkout(XMAGE)))
     classes = xmage_java.write(exports, xmage_tests())
     for old in reports().glob(f"TEST-{xmage_java.PACKAGE}.*.xml"):

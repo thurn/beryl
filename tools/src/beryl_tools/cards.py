@@ -137,12 +137,20 @@ def m1_names() -> list[str]:
     )
 
 
-def listed(path: Path = card_store.STORE) -> tuple[list[Json], list[Json]]:
+def listed(
+    path: Path = card_store.STORE, also: Iterable[str] = ()
+) -> tuple[list[Json], list[Json]]:
     """The store's records for `m1_names`' cards, each once, and for the tokens and emblems
-    they make: the cards the tools work on.
+    they make: the cards the tools work on. `also` adds the cards of those names that the
+    store has, such as a card in no deck that a scenario names; other names (a token's, a
+    prop's role) are passed over.
     """
     with card_store.Store(path) as store:
         found = {str(r["scryfall_id"]): r for r in store.cards(m1_names())}
+        for name in also:
+            record = store.card(name)
+            if record is not None:
+                found.setdefault(str(record["scryfall_id"]), record)
         tokens = {
             str(t["scryfall_id"]): t for r in found.values() for t in store.made_by(r)
         }
