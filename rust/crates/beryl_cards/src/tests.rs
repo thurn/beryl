@@ -18,6 +18,7 @@ mod derive;
 mod facts;
 mod knowledge;
 mod props;
+mod render;
 mod store;
 mod vocabulary;
 

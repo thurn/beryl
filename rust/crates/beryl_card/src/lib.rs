@@ -33,6 +33,7 @@ pub mod index;
 pub mod mana;
 pub mod mana_notation;
 pub mod prompt;
+pub mod render;
 pub mod target;
 pub mod trigger;
 mod walk;

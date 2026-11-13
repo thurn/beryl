@@ -1,3 +1,7 @@
+//! `beryl_scenario render [NAME]...`: prints the rules text each named card's definition renders
+//! to ([`beryl_card::render`]), each face under its name, or every card written in a file when
+//! none is named, for comparing a definition with the card's Oracle text (plan K13).
+//!
 //! `beryl_scenario dump [PATH] [--generated N] [--card NAME]...`: writes every card's scenarios
 //! as JSON, to PATH or to standard output, for the oracle exporters (architecture §17.2), with
 //! the scenarios generated for each card built from library effects ([`beryl_cards::derive`]),
@@ -20,8 +24,8 @@ use beryl_scenario::Scenario;
 /// The seed of the first generated scenario: fixed, so a dump is the same each time.
 const SEED: u64 = 1;
 
-const USAGE: &str =
-    "usage: beryl_scenario dump [PATH] [--generated N] [--card NAME]... | run --card NAME";
+const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--card NAME]... | run \
+                     --card NAME | render [NAME]...";
 
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
@@ -30,6 +34,9 @@ fn usage() -> ExitCode {
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "render") {
+        return render(&args[1..]);
+    }
     let mut named = Vec::new();
     while let Some(i) = args.iter().position(|a| a == "--card") {
         let Some(name) = args.get(i + 1).cloned() else {
@@ -141,4 +148,35 @@ fn run_card(name: &str) -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+/// Prints the rendered rules text of the cards named, or of every card written in a file.
+fn render(names: &[String]) -> ExitCode {
+    let defs: Vec<&'static beryl_card::CardDef> = if names.is_empty() {
+        beryl_cards::CARDS.cards().to_vec()
+    } else {
+        let mut defs = Vec::new();
+        for name in names {
+            let Some(def) = beryl_cards::CARDS.get(name) else {
+                eprintln!("beryl_scenario: no card named {name:?}");
+                return ExitCode::FAILURE;
+            };
+            defs.push(def);
+        }
+        defs
+    };
+    let texts: Vec<String> = defs
+        .iter()
+        .map(|def| {
+            def.face_ixs()
+                .map(|face| {
+                    let text = beryl_card::render::render_face(def, face);
+                    format!("{}\n{text}", def.face_name(face))
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        })
+        .collect();
+    println!("{}", texts.join("\n\n"));
+    ExitCode::SUCCESS
 }

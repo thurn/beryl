@@ -11,6 +11,11 @@ macro_rules! bitset {
             pub const NONE: $name = $name(0);
             $($(#[$fmeta])* pub const $flag: $name = $name(1 << $bit);)*
 
+            /// Every member with the name of its constant, in the order written, so that a
+            /// tool can name each member ([`crate::render`]) and a new member is named the
+            /// moment it is added: `FIRST_STRIKE` is "first strike".
+            pub const NAMED: &[($name, &str)] = &[$(($name::$flag, stringify!($flag))),*];
+
             #[must_use]
             pub const fn union(self, other: $name) -> $name {
                 $name(self.0 | other.0)
