@@ -224,8 +224,8 @@ class Run:
         for c in checks:
             if c["check"] in pending:
                 c["outcome"] = PENDING_OUTCOMES.get(str(c["outcome"]), c["outcome"])
-        ran = [c for c in checks if c["outcome"] != "skip"]
-        weight = sum(float(str(c["seconds"])) for c in ran)
+        ran: list[dict[str, object]] = [c for c in checks if c["outcome"] != "skip"]
+        weight: float = sum(float(str(c["seconds"])) for c in ran)
 
         def share(c: dict[str, object]) -> float:
             if cpu is None or c["outcome"] == "skip":
