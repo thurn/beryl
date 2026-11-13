@@ -128,10 +128,16 @@ means `python3 ~/enact/scripts/enact.py`.
   filing, so either land what it depends on in `staging` first or block it with
   a dependency.
 - Every session has to spend time learning the code it touches, so each bead
-  should name the files, helpers and tests it needs. Give beads that touch the
-  same code the same `lane:<name>` label so one session works through them in
-  order. Label mechanical beads (wiring, renames, boilerplate tests)
-  `tier:light` so they run on Sonnet.
+  should name the files, helpers and tests it needs. Label mechanical beads
+  (wiring, renames, boilerplate tests) `tier:light` so they run on Sonnet.
+- A lane is a group of beads that one session works through in order, so it
+  learns their code once. Give two to four beads the same `lane:<name>` label
+  when they touch the same code and have the same tier. A lane's session keeps
+  the model of its first bead, so a bead with a different tier stays out of the
+  lane, as does a design bead large enough to fill a session by itself. Block
+  such a bead with a dependency if it edits the lane's code. Never put a lane or
+  tier label on an epic, because its children inherit it. `/enact-plan` applies
+  the same rules ("Lane and tier pass" in its skill) to beads it is given.
 - **No Fable without an explicit ask.** Never label a bead `tier:fable`, and
   never start a session or subagent on a Fable model, unless the user has
   explicitly asked for it. Design work defaults to `tier:opus` and mechanical
