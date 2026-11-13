@@ -42,11 +42,10 @@ def test_lease_takes_what_is_free_and_releases(tmp_path: Path) -> None:
 
 def test_lower_classes_leave_room_for_higher(tmp_path: Path) -> None:
     pool = Pool(tmp_path, 8)
+    # Slow CI may take every token an agent may: three quarters of the pool.
     ci = pool.acquire("ci", 8, never)
-    assert ci is not None and ci.size == 4  # Half the pool.
-    agent = pool.acquire("agent", 8, never)
-    # Slow CI's tokens count against the agents' ceiling of three quarters.
-    assert agent is not None and agent.size == 2
+    assert ci is not None and ci.size == 6
+    # Its tokens count against the agents' ceiling, so an agent waits for them.
     assert pool.acquire("agent", 1, once) is None
     push = pool.acquire("push", 8, never)
     assert push is not None and push.size == 2
@@ -127,4 +126,13 @@ def test_lease_environment_sets_every_thread_count() -> None:
 
 def test_light_steps_take_no_tokens() -> None:
     assert tokens.step_tokens("repo", "just") == 0
-    assert tokens.step_tokens("rust", "tests") == tokens.largest(tokens.pool_size())
+    assert tokens.step_tokens("repo", "just", 1, 18) == 0
+
+
+def test_heavy_lanes_running_at_once_share_the_pool() -> None:
+    # Slow CI starts about ten heavy lanes at once; each takes an even share of the pool.
+    assert tokens.step_tokens("rust", "clippy", 9, 18) == 2
+    assert tokens.step_tokens("rust", "tests", 3, 18) == 6
+    # A lane alone takes at most two thirds, and never less than one token.
+    assert tokens.step_tokens("rust", "tests", 1, 18) == 12
+    assert tokens.step_tokens("rust", "tests", 30, 18) == 1

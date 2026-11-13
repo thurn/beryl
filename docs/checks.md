@@ -151,16 +151,20 @@ processes are attributed.
   motion, mobile and counts steps), `just test-rust`, `just fuzz`,
   `just exhaust` and `just freeze-saves` take them; the other steps are scripts
   that use one core at most and take none. One command takes at most two thirds
-  of the pool.
+  of the pool, and a check's heavy steps take an even share of it among the
+  lanes with heavy steps still running, so ten lanes that start at once share
+  the pool instead of the first taking most of it.
 - The classes, highest first, are the fast check of a push, a command an agent
   runs by hand, and slow CI. Agents' commands and slow CI together hold at most
-  three quarters of the pool, and slow CI at most half, so a push always finds
-  free tokens. A class takes nothing while a higher one waits. Work at utility
-  QoS (tournaments, the nightly, the justfile's `low`) takes no tokens, because
-  macOS already gives every core to normal-priority work first.
-- A check step's wait for tokens counts against the run's deadline, but the
-  push's reserved quarter keeps that wait short. `just tokens` shows who holds
-  and waits for tokens. `BERYL_CPU_POOL=0` turns the pool off, and
+  three quarters of the pool, so a push always finds free tokens. Slow CI may
+  take any of those tokens that nobody else holds. A class takes nothing while a
+  higher one waits. Work at utility QoS (tournaments, the nightly, the
+  justfile's `low`) takes no tokens, because macOS already gives every core to
+  normal-priority work first.
+- A check step's wait for tokens does not count against the run's deadline or
+  its budget: it moves that lane's deadline back by as long, and the step's log
+  line reports the wait apart from the step's own time. `just tokens` shows who
+  holds and waits for tokens. `BERYL_CPU_POOL=0` turns the pool off, and
   `just tokens-run -- COMMAND` runs any command inside a lease.
 - The machine runs at most half its core count's worth of browser pages at once,
   across all runs (`ui/scripts/slots.mjs`). Runs that aren't checks share a

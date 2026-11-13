@@ -14,8 +14,11 @@ exited, such as a check killed at its deadline, is taken back by the next proces
 Each command has a class, highest first: `push` (the fast check of `enact push`), `agent` (a
 command a session runs by hand, such as `just test-rust`) and `ci` (slow CI). A class may take a
 token only while the tokens held by it and every lower class stay under its ceiling (`ceiling`),
-so a push always finds a quarter of the cores that only it can take, and slow CI never holds more
-than half. A class also takes nothing while a higher class waits.
+so a push always finds a quarter of the cores that only it can take. A class also takes nothing
+while a higher class waits. Slow CI once had a ceiling of half the pool as well, and its runs
+timed out with half the cores idle: ten heavy steps shared nine tokens whether or not anything
+else wanted the rest. Now it may take any token an agent may, and the waiting rule alone puts
+pushes and agents first.
 
 Long background work (tournaments, the nightly, `just blunder-hunt`) takes no tokens. It runs at
 utility QoS (the justfile's `low`, `system.utility`), under which macOS gives every core to
@@ -61,8 +64,8 @@ LEASE_ENV = "BERYL_CPU_TOKENS"
 # `0` turns the pool off: every lease is granted at once, with every core.
 POOL_ENV = "BERYL_CPU_POOL"
 
-# A check's steps that run many threads (`lane:step`), which each want `largest` tokens. Every
-# other step is a script that keeps one core busy at most and takes none.
+# A check's steps that run many threads (`lane:step`), which each want a share of the pool
+# (`step_tokens`). Every other step is a script that keeps one core busy at most and takes none.
 HEAVY_STEPS: frozenset[str] = frozenset(
     {
         "rust:clippy",
@@ -89,12 +92,10 @@ def pool_size() -> int:
 
 
 def ceiling(klass: str, total: int) -> int:
-    """The most tokens `klass` and every class below it may hold together."""
-    return {
-        "push": total,
-        "agent": max(1, total - total // 4),
-        "ci": max(1, total // 2),
-    }[klass]
+    """The most tokens `klass` and every class below it may hold together: every token for a
+    push, and three quarters of them for agents and slow CI, which leaves the rest to pushes.
+    """
+    return total if klass == "push" else max(1, total - total // 4)
 
 
 def largest(total: int) -> int:
@@ -104,9 +105,16 @@ def largest(total: int) -> int:
     return max(1, -(-total * 2 // 3))
 
 
-def step_tokens(lane: str, step: str) -> int:
-    """The tokens a check's step wants: zero (it takes none) unless it is heavy."""
-    return largest(pool_size()) if f"{lane}:{step}" in HEAVY_STEPS else 0
+def step_tokens(lane: str, step: str, lanes: int = 1, total: int = 0) -> int:
+    """The tokens a check's step wants: zero (it takes none) unless it is heavy, and otherwise
+    an even share of the `total` tokens (the pool's size by default) among the `lanes` with
+    heavy steps still running, at most `largest`. Slow CI starts about ten heavy lanes at once:
+    if each wanted `largest`, the first would take most of the pool and the rest one token
+    each, for the length of their steps."""
+    if f"{lane}:{step}" not in HEAVY_STEPS:
+        return 0
+    total = total or pool_size()
+    return max(1, min(largest(total), -(-total // max(1, lanes))))
 
 
 @dataclass

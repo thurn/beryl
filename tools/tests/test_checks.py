@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,9 @@ from beryl_tools import (
     paths,
     reruns,
     rust_tests,
+    tokens,
 )
+from beryl_tools.clock import Clock
 
 
 def test_only_lanes_that_build_warm_the_caches(
@@ -574,3 +577,44 @@ def test_unformatted_markdown_is_named_without_a_build(
     assert found and found[0].startswith("mdformat:")
     (tmp_path / "a.md").write_text("# Title\n\n- item\n")
     assert hygiene.unformatted("mdformat", ["a.md"]) == []
+
+
+class StoppedClock(Clock):
+    """A clock that moves only when a test moves it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.t = 0.0
+
+    def now(self) -> float:
+        return self.t
+
+    def wall(self) -> float:
+        return self.t
+
+
+def test_a_wait_for_tokens_moves_the_lane_deadline_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock: StoppedClock = StoppedClock()
+    steps = checks.Steps(1.0, clock, klass="ci")
+    gave_up: list[bool] = []
+
+    def slow_lease(klass: str, want: int, give_up: Callable[[], bool]) -> tokens.Lease:
+        # The wait takes 100 s, far past the run's deadline of 1 s.
+        clock.t += 100.0
+        gave_up.append(give_up())
+        return tokens.Lease(want, [])
+
+    monkeypatch.setattr(checks.tokens, "lease", slow_lease)
+    code, _ = steps.run([sys.executable, "-c", "pass"], Path.cwd(), dict(os.environ), 2)
+    # The step ran, since the deadline does not apply while it waits for tokens.
+    assert code == 0 and gave_up == [False]
+    assert steps.waited() == (100.0, 100.0)
+    assert steps.left() == 1.0
+    # A step that takes no tokens does not wait, and adds nothing.
+    steps.run([sys.executable, "-c", "pass"], Path.cwd(), dict(os.environ))
+    assert steps.waited() == (100.0, 100.0)
+    # The run being stopped still ends a wait.
+    steps.stop()
+    assert steps.cut()
