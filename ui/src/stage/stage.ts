@@ -313,9 +313,8 @@ export class ScriptStage {
     return entry ? this.#poseOf(name, entry, this.clock.now) : null;
   }
 
-  /** The arrows and lines the stage holds, each as it is drawn at `clock.now` (overlay.ts).
-   * The line from an ability to its source is hidden while the view shown asks the player
-   * something other than priority. */
+  /** The arrows and lines the stage holds, each as drawn at `clock.now` (overlay.ts). The line
+   * to an ability's source is hidden while the view shown asks for more than priority. */
   lines(now = this.clock.now): Line[] {
     return this.#over.lines(now, this.#prompt);
   }
@@ -772,9 +771,8 @@ export class ScriptStage {
     return turned ? paying(pose, entry.resting.pose, object, turned) : pose;
   }
 
-  /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, or
-   * a player's life total, or with `pool` their unspent mana; none for what the stage does
-   * not hold. */
+  /** How one end of a line lies at stage time `at` (lines.ts): a node as the model has it, a
+   * player's life total, or with `pool` their unspent mana; none for what it does not hold. */
   reach(on: On, at = this.clock.now, pool = false): Reach | undefined {
     const layout = this.#layout;
     if (on === "you" || on === "opponent") {
