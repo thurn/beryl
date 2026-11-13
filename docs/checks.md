@@ -159,6 +159,18 @@ Mac, and its fast check skips the browser checks and `motion` (see
 - If a push fails because a step appears hung, look at the processes its log
   lists before pushing again: a rerun will hang again.
 
+## What each check is worth
+
+`just ci-value` scores every check slow CI ran in the last 30 days by its real
+catches (failures judged `catch`: a fix to product code made it pass) per
+CPU-second, lowest value first (`check_value.py`). CPU time, not wall time, is
+the cost, because the machine is never quiet. Records from before the run log
+measured CPU time are estimated from their wall seconds and marked `~`. Checks
+that failed in exactly the same runs, such as the variants of one verb, are
+scored as one group, since together they cost the sum but catch only once.
+`--budget <cpu seconds>` also lists the lowest-value groups whose removal brings
+the median slow-CI run under that budget.
+
 ## Recording CPU use
 
 `just cpu sample` samples every process's CPU time every 2 seconds and appends

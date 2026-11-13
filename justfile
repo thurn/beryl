@@ -357,6 +357,11 @@ ci *lanes:
 ci-report *args:
     {{ by }} ci-report "$@"
 
+# Each slow-CI check's real catches per CPU-second, lowest first, checks that fail together grouped (--days 30, --json, --budget CPU_S)
+[group('checks')]
+ci-value *args:
+    {{ by }} ci-value "$@"
+
 # The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/staging; --here)
 [group('checks')]
 coverage *args:
