@@ -636,12 +636,25 @@ edited crate's recheck fell from 0.9 s to 0.45 s and 0.35 s, but the whole
 rebuild barely moved: at a load of about 11 it took 1.8 to 2.1 s on the clock at
 37 crates and 1.8 to 1.9 s at 74 and 111; over eight rounds at a load of 13 to
 20 the load-adjusted medians were 3.2, 2.8 and 3.0 s, over the 2 s budget at
-every size. With smaller crates, `beryl_card_names` is the longest path instead:
-its build script watches every card file, so an edit to one card's code reruns
-it (0.3 s) and rechecks its 50,000 constants (0.7 s), though the names change
-only when a card file is added or removed. K8's rule of 500 to 1,500 cards per
-crate stays until the names crate no longer rebuilds on such an edit
-(by-w8gv.13.16). More crates also cost more to link: the release build took 164,
+every size. With smaller crates, `beryl_card_names`, then a crate of every card
+name, was the longest path instead: its build script watched every card file, so
+an edit to one card's code reran it (0.3 s) and rechecked its 50,000 constants
+(0.7 s), though the names change only when a card file is added or removed.
+
+That crate is gone (by-w8gv.13.16). Each set crate now writes the names of its
+own cards, and `beryl_cards::names` re-exports them, so an edit to a card reruns
+only its own crate's build script. Measured again with the same 50,000 clones in
+37 and 74 crates, editing one card in each workspace in turn over eight rounds
+at a load of 28 to 37, the rebuild's wall-clock median was 3.7 s at 37 crates
+and 3.0 s at 74, and 74 was faster in seven of the eight pairs. With
+`cargo --timings` at a load of about 25, a rebuild took 2.4 s at 37 crates and
+1.5 to 1.7 s at 74. In both, units start after about 0.45 s, the set crate's
+build script takes 0.25 s and the registry's recheck about 0.2 s (0.05 s more
+than before, for re-exporting the names). The rest is the edited crate's
+recheck: 1.55 s at 37 crates and 0.6 s at 74. So the crate's size is now what
+the rebuild depends on, and the grouping is to change from K8's rule of 500 to
+1,500 cards to one crate per calendar year, split in halves when a year is large
+(by-w8gv.13.18). More crates also cost more to link: the release build took 164,
 212 and 220 CPU-seconds at 37, 74 and 111 crates, while the cold check stayed at
 about 490 CPU-seconds.
 
