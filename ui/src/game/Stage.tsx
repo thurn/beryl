@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { isPhone } from "../mobile/phone";
 import { setStageWidth, STAGE, STAGE_WIDTHS } from "./perspective";
 
 /** How many window pixels a stage pixel takes, for turning pointer motion into stage pixels. */
@@ -43,6 +44,9 @@ export function fitStage(width: number, height: number) {
  * placed from the stage's right edge or its middle in CSS adds `--shift` or `--shift-mid`, how
  * far that edge or middle lies from where it would on the base stage. */
 export function Stage({ children }: { children: ReactNode }) {
+  if (import.meta.env.DEV && isPhone()) {
+    console.error("the desktop stage was drawn on a phone");
+  }
   const [fit, setFit] = useState(() => fitWindow());
   useEffect(() => {
     const onResize = () => setFit(fitWindow());

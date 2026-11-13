@@ -122,6 +122,78 @@
       "click": ".game-over .button-secondary"
     },
     {
+      "name": "phone-opening-play",
+      "route": "/?phone&fixture=opening-play#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".opening-actions .button"
+    },
+    {
+      "name": "phone-opening-play-se",
+      "route": "/?phone&fixture=opening-play#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".opening-actions .button"
+    },
+    {
+      "name": "phone-opening-keep",
+      "route": "/?phone&fixture=greedy-turn-9&at=4#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".opening-hand .opening-card:not(:disabled)"
+    },
+    {
+      "name": "phone-opening-keep-se",
+      "route": "/?phone&fixture=greedy-turn-9&at=4#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".opening-hand .opening-card:not(:disabled)"
+    },
+    {
+      "name": "phone-opening-bottom",
+      "route": "/?phone&fixture=opening-bottom#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".opening-slots .opening-slot"
+    },
+    {
+      "name": "phone-opening-bottom-se",
+      "route": "/?phone&fixture=opening-bottom#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".opening-slots .opening-slot"
+    },
+    {
+      "name": "phone-opening-wait",
+      "route": "/?phone&fixture=opening-bottom&at=4#/game",
+      "width": 393,
+      "height": 759,
+      "waitFor": ".opening-coin[data-starting]",
+      "expect": ".phone-opening-wait .thinking"
+    },
+    {
+      "name": "phone-opening-wait-se",
+      "route": "/?phone&fixture=opening-bottom&at=4#/game",
+      "width": 375,
+      "height": 647,
+      "waitFor": ".opening-coin[data-starting]",
+      "expect": ".phone-opening-wait .thinking"
+    },
+    {
+      "name": "phone-opening-theirs",
+      "route": "/?phone&fixture=opening-opponent-play&at=2#/game",
+      "width": 393,
+      "height": 759,
+      "waitFor": ".opening-coin[data-starting]"
+    },
+    {
+      "name": "phone-opening-theirs-se",
+      "route": "/?phone&fixture=opening-opponent-play&at=2#/game",
+      "width": 375,
+      "height": 647,
+      "waitFor": ".opening-coin[data-starting]"
+    },
+    {
       "name": "phone-start",
       "route": "/?phone&fixture=greedy-turn-9&at=0#/",
       "width": 393,

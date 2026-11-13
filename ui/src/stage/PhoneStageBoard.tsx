@@ -64,6 +64,7 @@ const SIDES = ["opponent", "you"] as const;
 
 export function PhoneStageBoard({
   view,
+  opening,
   waiting,
   cancel,
   onLeave,
@@ -75,6 +76,8 @@ export function PhoneStageBoard({
 }: {
   /** The latest view whose script has played out. */
   view: PlayerView;
+  /** The opening owns the hand and the decision while it covers the board. */
+  opening: boolean;
   /** An answer is on its way, or the game plays on without the player. */
   waiting: boolean;
   /** Takes back the cast in progress. */
@@ -89,7 +92,8 @@ export function PhoneStageBoard({
   onConcede?: () => void;
 }) {
   const { stage, feed, prompts } = pageStage();
-  const asked = usePrompt(prompts);
+  const prompt = usePrompt(prompts);
+  const asked = opening ? { sending: false, answered: false } : prompt;
   const { pay, suggest } = usePaying(asked);
   const { press, lost } = useLostMana(
     asked,
@@ -180,6 +184,8 @@ export function PhoneStageBoard({
     <div
       className="phone-board"
       data-pay={pay}
+      data-opening={opening || undefined}
+      inert={opening}
       ref={ref}
       onPointerDown={(e) => {
         feed.skip();
@@ -214,10 +220,10 @@ export function PhoneStageBoard({
                 <PlayerTarget prompts={prompts} asked={asked} side={side} />
               </Orb>
               {side === "you" ? (
-                <PhonePromptDock asked={asked} {...answers} />
+                !opening && <PhonePromptDock asked={asked} {...answers} />
               ) : (
                 <>
-                  {opponentActing(view, waiting) && (
+                  {!opening && opponentActing(view, waiting) && (
                     <div className="phone-thinking">
                       <Thinking />
                     </div>

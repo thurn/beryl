@@ -10,6 +10,7 @@
   padding-top: 92px;
 }
 .opening > :not(.overlay-backdrop),
+.opening-cards > *,
 .game-over > :not(.overlay-backdrop) {
   position: relative;
 }
@@ -33,6 +34,9 @@
   line-height: 1.05;
 }
 
+.opening-cards {
+  display: contents;
+}
 .opening-hand {
   display: flex;
   gap: 8px;

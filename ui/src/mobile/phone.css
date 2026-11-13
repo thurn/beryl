@@ -636,3 +636,87 @@ body.phone .game-toast {
   overflow-wrap: anywhere;
   pointer-events: none;
 }
+
+/* The opening shows the player's hand above the board. */
+.phone-board[data-opening] .card-el-you[data-zone="hand"] {
+  visibility: hidden;
+}
+
+/* The opening occupies the same safe area as the table, with its own viewport-sized layout. */
+body.phone .phone-opening {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  padding-block: calc(88px - var(--opening-coin-size) / 2)
+    calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.phone-opening > .overlay-backdrop {
+  inset: calc(-1 * env(safe-area-inset-top, 0px)) 0 0;
+  background: rgb(0 0 0 / 60%);
+}
+.phone-opening .opening-coin {
+  flex-direction: column;
+  gap: 0;
+  height: auto;
+  min-height: calc(var(--opening-coin-size) + 13px);
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 13px;
+}
+.phone-opening .opening-title {
+  margin-bottom: 16px;
+  font-size: 18px;
+  line-height: 18px;
+  text-align: center;
+}
+.phone-opening .opening-cards {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.phone-opening .opening-hand {
+  flex-wrap: wrap;
+  justify-content: center;
+  width: var(--opening-hand-width);
+}
+.phone-opening .opening-card {
+  display: block;
+}
+.phone-opening .opening-card :is(.card-pt b, .card-loyalty b) {
+  font-size: max(12px, 1em);
+}
+.phone-opening .opening-card .card-loyalty b {
+  font-size: max(12px, 1.8em);
+}
+.phone-opening .opening-slots {
+  margin-top: 16px;
+  gap: 8px;
+}
+.phone-opening .opening-slot {
+  width: var(--opening-slot-width);
+  height: var(--opening-slot-height);
+}
+.opening.phone-opening > .dock {
+  position: relative;
+  inset: auto;
+  align-self: stretch;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  margin-inline: 16px;
+  animation: none;
+}
+.phone-opening .dock-buttons {
+  gap: 8px;
+}
+.phone-opening .dock .button {
+  height: 48px;
+  font-size: 18px;
+}
+.phone-opening-wait {
+  display: flex;
+}
+.phone-opening > .inspect {
+  pointer-events: auto;
+}

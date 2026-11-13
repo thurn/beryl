@@ -360,6 +360,8 @@ recordings do not show them.
   the seed and game buttons at the bottom. The game result shows over the board
   with its reason and any culprit card centered, and the full-width result
   buttons stay above the bottom safe area when the result is shown or put aside.
+  The opening shows the coin above two centered rows of cards, with bottom picks
+  in slots beneath the hand and full-width actions above the bottom safe area.
   The menu button opens the settings with the log and the bug report in them.
   Undo and full control's mark stand at the end of the middle band, across from
   the phase. Unspent mana lies beside its player's life total, and the combat

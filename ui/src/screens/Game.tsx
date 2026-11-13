@@ -296,6 +296,7 @@ function Playing({ playback }: { playback: Playback }) {
     <>
       <PhoneStageBoard
         view={view}
+        opening={opening}
         waiting={waiting}
         cancel={cancelCast}
         onLeave={leave}
@@ -305,8 +306,7 @@ function Playing({ playback }: { playback: Playback }) {
         setStops={chooseStops}
         onConcede={onConcede}
       />
-      {/* The opening still uses the desktop layout. */}
-      {openingScreen && <Stage>{openingScreen}</Stage>}
+      {openingScreen}
       {overlays}
     </>
   );
