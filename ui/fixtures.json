@@ -104,7 +104,7 @@
     },
     {
       "name": "verbs-opening-theirs",
-      "seed": 34,
+      "seed": 1,
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
       "until": "first chooseObject decision for seat 1"
