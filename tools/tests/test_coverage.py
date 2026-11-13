@@ -151,7 +151,9 @@ def test_a_dirty_tree_leaves_latest_alone(tmp_path: Path) -> None:
 
 
 # Windows records no coverage, so `coverage.refresh` does nothing there.
-WINDOWS_SKIP = pytest.mark.skipif(system.WINDOWS, reason="no coverage on Windows")
+WINDOWS_SKIP: pytest.MarkDecorator = pytest.mark.skipif(
+    system.WINDOWS, reason="no coverage on Windows"
+)
 
 
 def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
