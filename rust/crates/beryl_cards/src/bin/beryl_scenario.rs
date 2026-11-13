@@ -36,7 +36,7 @@ fn main() -> ExitCode {
         args.drain(i..i + 2);
     }
     let scenarios = generate::scenarios(generated, SEED);
-    let mut cards = beryl_cards::SCENARIOS.to_vec();
+    let mut cards = beryl_cards::scenarios().to_vec();
     // The rules library's entries' scenarios, each as its card's.
     for (card, of_entry) in beryl_cards::library::by_card() {
         cards.push((card, of_entry));

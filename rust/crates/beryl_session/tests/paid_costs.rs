@@ -4,7 +4,7 @@
 //! this spell's overload cost, change its text by replacing all instances of the word 'target'
 //! with the word 'each.'"
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::{Observation, Seat};
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{Moment, PaidCost, StackItem, player_view};
@@ -12,7 +12,7 @@ use beryl_session::protocol::{Moment, PaidCost, StackItem, player_view};
 /// The costs Damn was cast with in its scenario named `name`, as each player sees its spell
 /// on the stack.
 fn paid(name: &str) -> Vec<Vec<PaidCost>> {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(card, _)| card == names::DAMN)
         .expect("the card's scenarios");

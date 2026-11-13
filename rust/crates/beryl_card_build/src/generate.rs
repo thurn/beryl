@@ -180,6 +180,12 @@ fn constants_source(constants: &BTreeMap<String, String>, indent: &str) -> Strin
 /// relative path so that a target directory copied to another checkout compiles that
 /// checkout's files.
 ///
+/// The tables are statics, not consts. Rust evaluates a const again in every crate that reads
+/// it, so with const tables the registry evaluated every card's scenarios a second time, on one
+/// thread after all the set crates had finished: at 50,000 cards that was 85 s and 5.9 GiB of a
+/// 145 s cold check (the scale rehearsal, `just scale`). A static is evaluated once, in its own
+/// crate, and the registry reads it.
+///
 /// It also writes `STORE_CARDS`: a definition for each card first printed in one of `group`'s
 /// sets that is complete from the store and has no file ([`complete`]), in a module `store`.
 ///
@@ -249,15 +255,17 @@ pub fn set_crate_source(
          {}\n\
          {tree}\n\
          /// This crate's cards, by set and file.\n\
-         pub const CARDS: &[&beryl_card::CardDef] = &[\n{cards}];\n\n\
+         pub static CARDS: [&beryl_card::CardDef; {count}] = [\n{cards}];\n\n\
          /// Each card's scenarios, by its name, in the order of `CARDS`.\n\
          #[cfg(feature = \"scenarios\")]\n\
-         pub const SCENARIOS: &[(&str, &[beryl_scenario_types::Scenario])] = &[\n{scenarios}];\n\n\
+         pub static SCENARIOS: [(&str, &[beryl_scenario_types::Scenario]); {count}] = [\n{scenarios}];\n\n\
          {from_store}\
          /// The cards of this crate's sets complete from the card store, which have no file.\n\
-         pub const STORE_CARDS: &[&beryl_card::CardDef] = &[\n{store_cards}];\n",
+         pub static STORE_CARDS: [&beryl_card::CardDef; {store_count}] = [\n{store_cards}];\n",
         constants_source(&constants, "    "),
         printed.source()?,
+        count = files.len(),
+        store_count = store_cards.lines().count(),
     ))
 }
 
@@ -414,7 +422,7 @@ pub fn registry_source(
     let list = |table: &str| -> String {
         let mut out = String::new();
         for (name, _) in &crates {
-            writeln!(out, "    {name}::{table},").unwrap();
+            writeln!(out, "    &{name}::{table},").unwrap();
         }
         out
     };

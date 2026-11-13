@@ -12,7 +12,7 @@ use beryl_engine::{
     Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
 
-use crate::{CARDS, SCENARIOS, decks, names};
+use crate::{CARDS, decks, names};
 
 mod derive;
 mod facts;
@@ -29,7 +29,7 @@ fn crate_dir() -> PathBuf {
 
 /// The scenarios in the file of the card called `name`.
 fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
-    let found = SCENARIOS.iter().find(|(card, _)| *card == name);
+    let found = crate::scenarios().iter().find(|(card, _)| *card == name);
     found.unwrap_or_else(|| panic!("{name} has no scenarios")).1
 }
 
@@ -38,8 +38,8 @@ fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
 #[test]
 fn the_registry_lists_every_card_file_once() {
     let mut seen = std::collections::BTreeSet::new();
-    assert_eq!(CARDS.cards().len(), SCENARIOS.len());
-    for (def, (name, _)) in CARDS.cards().iter().zip(SCENARIOS) {
+    assert_eq!(CARDS.cards().len(), crate::scenarios().len());
+    for (def, (name, _)) in CARDS.cards().iter().zip(crate::scenarios()) {
         assert_eq!(def.name, *name);
         assert!(seen.insert(def.name), "{name} is listed twice");
     }
@@ -172,14 +172,18 @@ fn a_game_of_the_three_lands_runs_to_decking() {
 /// position, so a scenario that breaks one fails here too.
 #[test]
 fn every_card_has_scenarios_and_they_pass() {
-    let mut cards: Vec<_> = SCENARIOS.iter().map(|&(name, _)| name).collect();
+    let mut cards: Vec<_> = crate::scenarios().iter().map(|&(name, _)| name).collect();
     cards.sort_unstable();
     let mut table: Vec<_> = CARDS.cards().iter().map(|c| c.name).collect();
     table.sort_unstable();
     assert_eq!(cards, table, "one SCENARIOS entry per card");
     let mut failures = Vec::new();
     // A card's own, then the rules library's entries' (`crate::library`).
-    for (card, scenarios) in SCENARIOS.iter().copied().chain(crate::library::by_card()) {
+    for (card, scenarios) in crate::scenarios()
+        .iter()
+        .copied()
+        .chain(crate::library::by_card())
+    {
         if scenarios.is_empty() {
             failures.push(format!("{card} has no scenario"));
         }
@@ -292,7 +296,7 @@ fn every_ability_and_casting_option_is_exercised_by_a_scenario() {
     use beryl_engine::coverage;
 
     coverage::start();
-    for &(_, scenarios) in SCENARIOS {
+    for &(_, scenarios) in crate::scenarios() {
         for scenario in scenarios {
             // `every_card_has_scenarios_and_they_pass` reports failures.
             let _ = beryl_scenario::run(&CARDS, scenario);
@@ -331,8 +335,8 @@ fn every_ability_and_casting_option_is_exercised_by_a_scenario() {
 #[test]
 fn the_dump_is_valid_json_with_every_scenario() {
     let json: serde_json::Value =
-        serde_json::from_str(&beryl_scenario::to_json(&CARDS, SCENARIOS)).unwrap();
-    let total: usize = SCENARIOS.iter().map(|(_, s)| s.len()).sum();
+        serde_json::from_str(&beryl_scenario::to_json(&CARDS, crate::scenarios())).unwrap();
+    let total: usize = crate::scenarios().iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
     assert_eq!(json[0]["card"], CARDS.cards()[0].name);
 }

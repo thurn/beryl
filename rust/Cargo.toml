@@ -32,6 +32,16 @@ opt-level = 3
 [profile.dev.package.miniz_oxide]
 opt-level = 3
 
+# Every set crate's build script reads the whole card store, and the scale rehearsal's one-card
+# rebuild (`just scale`) waits for one: unoptimized, the build helper took 1.5 s to read a 36 MiB
+# store. These are compiled once and change rarely.
+[profile.dev.package.beryl_card_build]
+opt-level = 3
+[profile.dev.package.beryl_card_store]
+opt-level = 3
+[profile.dev.package.serde_json]
+opt-level = 3
+
 [profile.release]
 debug = "line-tables-only"
 codegen-units = 1

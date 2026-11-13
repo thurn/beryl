@@ -4,7 +4,7 @@
 //! A card's file is `rust/cards/<crate>/<set>/<card>.rs`, by its first printing
 //! (`data/set-groups.json`; `just card path <name>` prints it). No list of them is kept by
 //! hand: each set crate's build script writes its tables from its directories, and this
-//! crate's writes [`CARDS`] and [`SCENARIOS`] over those, crate by crate, then set, then file
+//! crate's writes [`CARDS`] and [`scenarios`] over those, crate by crate, then set, then file
 //! (`beryl_card_build`, plan K8). The cards complete from the card store, single-faced
 //! creatures with no abilities but keywords the engine has, have no file: each set crate's build
 //! writes their definitions from their records. Nothing may depend on that order: a game numbers its cards
@@ -74,13 +74,24 @@ static ALL_STORE_CARDS: [&CardDef; total(SET_STORE_CARDS)] = gathered(SET_STORE_
 /// [`CardTable::get`] finds by name (`beryl_card_build`'s `complete`).
 pub static CARDS: CardTable = CardTable::with_store(&ALL_CARDS, &ALL_STORE_CARDS);
 
-#[cfg(feature = "scenarios")]
-static ALL_SCENARIOS: [(&str, &[beryl_scenario::Scenario]); total(SET_SCENARIOS)] =
-    gathered(SET_SCENARIOS);
-
 /// Every card's scenarios (architecture §17.1), by card name, in the order of [`CARDS`].
+///
+/// They are gathered from the set crates' tables when first asked for, not at compile time as
+/// [`CARDS`] is. Gathering them in a static made the compiler read every scenario of every set
+/// crate while it checked this crate, on one thread after the set crates had finished: 11 of
+/// the 14 CPU-seconds of this crate's check at 50,000 cards (the scale rehearsal, `just
+/// scale`). Only tests and tools build scenarios, so the app never pays for gathering them.
 #[cfg(feature = "scenarios")]
-pub static SCENARIOS: &[(&str, &[beryl_scenario::Scenario])] = &ALL_SCENARIOS;
+pub fn scenarios() -> &'static [(&'static str, &'static [beryl_scenario::Scenario])] {
+    static GATHERED: std::sync::OnceLock<Vec<(&str, &[beryl_scenario::Scenario])>> =
+        std::sync::OnceLock::new();
+    GATHERED.get_or_init(|| {
+        SET_SCENARIOS
+            .iter()
+            .flat_map(|part| part.iter().copied())
+            .collect()
+    })
+}
 
 #[cfg(test)]
 mod tests;

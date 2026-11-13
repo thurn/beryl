@@ -4,7 +4,7 @@
 //! process for activating an ability is identical to the process for casting a spell listed in
 //! rules 601.2b-i." It may have resolved by the time a view shows.
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::{
     Choice, DecisionKind, Observation, Opt, Replay, Scratch, Seat, Step, apply, next,
 };
@@ -21,7 +21,7 @@ fn events(
     actions: usize,
     viewer: Seat,
 ) -> (Vec<GameEvent>, impl Fn(&str) -> u16) {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(c, _)| c == card)
         .expect("the card's scenarios");

@@ -2,7 +2,7 @@
 //! scenarios reach it: a consumer folds a run of picks into one prompt from the record alone,
 //! so the record must keep to the rules its shape and part set.
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Part, Place, Purpose, Shape};
 use beryl_engine::{
     Bitboard, Candidates, Decision, DecisionKind, Opt, Scratch, State, Zone, ZoneKey, view,
@@ -11,7 +11,7 @@ use beryl_engine::{
 /// Every decision `card`'s scenarios reach, with the state it is asked in: for a question a
 /// resolving spell or ability asks, the state as the resolution has left it so far.
 fn decisions(card: &str, mut each: impl FnMut(&str, &State, &Decision)) {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == card)
         .expect("the card's scenarios");
@@ -39,7 +39,7 @@ fn offered(d: &Decision) -> Bitboard {
 
 #[test]
 fn every_decision_says_a_prompt_its_shape_and_part_allow() {
-    for &(card, _) in SCENARIOS {
+    for &(card, _) in beryl_cards::scenarios() {
         decisions(card, |scenario, _, d| {
             let at = format!("{card} / {scenario}: {d:?}");
             let (shape, part) = (d.prompt.shape(), d.prompt.part);

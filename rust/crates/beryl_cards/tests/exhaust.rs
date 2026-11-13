@@ -8,7 +8,7 @@
 
 use std::panic::catch_unwind;
 
-use beryl_cards::{CARDS, SCENARIOS};
+use beryl_cards::CARDS;
 use beryl_engine::{GameTable, State};
 use beryl_scenario::{Action, Bounds, Check, Live, Scenario, exhaust, invariants};
 
@@ -46,7 +46,7 @@ fn bounds() -> Bounds {
 /// ([`beryl_cards::derive`]), or the one card's `BERYL_EXHAUST_CARD` names.
 fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
     let card = var("BERYL_EXHAUST_CARD");
-    let chosen: Vec<_> = SCENARIOS
+    let chosen: Vec<_> = beryl_cards::scenarios()
         .iter()
         .chain(beryl_cards::derive::all())
         .filter(|&&(name, _)| card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name)))

@@ -6,7 +6,7 @@
 mod play;
 
 use beryl_cards::names::{ADELINE_RESPLENDENT_CATHAR, ISLAND, OVERLORD_OF_THE_MISTMOORS};
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::state::Pending;
 use beryl_engine::{Observation, Scratch, TurnStep, view};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
@@ -18,7 +18,7 @@ use play::Play;
 /// Every candidate offered at a decision of `card`'s scenarios, with the name of the object
 /// it is about, if any.
 fn candidates(card: &str) -> Vec<(CandidateView, Option<String>)> {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == card)
         .expect("the card's scenarios");

@@ -5,7 +5,7 @@
 //! can't look at face-down cards in any other zone or face-down spells or permanents controlled
 //! by another player."
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::{Observation, Seat, SlotId, Zone};
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{
@@ -14,7 +14,7 @@ use beryl_session::protocol::{
 
 /// Abhorrent Oculus's scenario named `name`.
 fn oculus_scenario(name: &str) -> &'static beryl_scenario::Scenario {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(card, _)| card == names::ABHORRENT_OCULUS)
         .expect("the card's scenarios");

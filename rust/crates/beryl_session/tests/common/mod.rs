@@ -1,7 +1,7 @@
 //! Card scenarios played for both seats' scripts (plan K23, K24): small scripted positions
 //! played through the engine, each seat's views fed to its screen as the session feeds them.
 
-use beryl_cards::{CARDS, SCENARIOS};
+use beryl_cards::CARDS;
 use beryl_engine::event::Tagged;
 use beryl_engine::{Observation, Seat};
 use beryl_session::StopsSetting;
@@ -33,7 +33,7 @@ pub fn views_heard(
     name: &str,
     mut tweak: impl FnMut(usize, u8, &mut PlayerView),
 ) -> Vec<[(PlayerView, Heard); 2]> {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(c, _)| c == card)
         .expect("the card's scenarios");

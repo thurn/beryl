@@ -63,7 +63,7 @@ pub fn generate(card: &'static str) -> Playground {
         .copied()
         .find(|d| d.name == card)
         .expect("card definition");
-    let scenarios = beryl_cards::SCENARIOS
+    let scenarios = beryl_cards::scenarios()
         .iter()
         .find(|(name, _)| *name == card)
         .map_or(&[][..], |(_, cases)| *cases);

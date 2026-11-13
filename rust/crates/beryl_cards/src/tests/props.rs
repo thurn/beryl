@@ -9,7 +9,7 @@ use beryl_engine::card::{CardDef, Supertypes};
 use beryl_scenario::Scenario;
 use serde_json::Value;
 
-use crate::{CARDS, SCENARIOS, props};
+use crate::{CARDS, props};
 
 /// `def`'s name, its faces' names and those of the tokens it makes.
 fn names_of(def: &'static CardDef, into: &mut BTreeSet<&'static str>) {
@@ -81,7 +81,7 @@ fn scenarios_name_only_their_card_its_tokens_basic_lands_and_props() {
     let shared = shared();
     let mut failures = Vec::new();
     let generated = crate::derive::all().iter().copied();
-    for (name, scenarios) in SCENARIOS
+    for (name, scenarios) in crate::scenarios()
         .iter()
         .copied()
         .chain(crate::library::by_card())

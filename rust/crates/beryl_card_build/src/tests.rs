@@ -232,8 +232,8 @@ fn a_new_file_is_listed_with_no_other_edit() {
         &store,
     )
     .unwrap();
-    assert!(tables.contains("    cards_1993::CARDS,\n"), "{tables}");
-    assert!(tables.contains("    cards_1993::SCENARIOS,\n"), "{tables}");
+    assert!(tables.contains("    &cards_1993::CARDS,\n"), "{tables}");
+    assert!(tables.contains("    &cards_1993::SCENARIOS,\n"), "{tables}");
     for constant in ["FIRE_ICE", "FOREST", "ISLAND", "LIM_DULS_VAULT", "PLAINS"] {
         assert!(
             names.contains(&format!("pub const {constant}: &str = ")),

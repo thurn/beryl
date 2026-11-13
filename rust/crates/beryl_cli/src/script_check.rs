@@ -292,7 +292,7 @@ mod tests {
     fn a_failing_moment_fails_only_its_own_checks() {
         use beryl_cards::names::{MANA_DRAIN, REPRIEVE};
         let scenarios = |card| {
-            beryl_cards::SCENARIOS
+            beryl_cards::scenarios()
                 .iter()
                 .find(|(name, _)| *name == card)
                 .unwrap()

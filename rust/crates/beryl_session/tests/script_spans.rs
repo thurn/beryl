@@ -5,7 +5,7 @@
 
 mod common;
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_search::Budget;
 use beryl_session::protocol::{
     Candidate, Kind, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
@@ -165,7 +165,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
 /// that follows the choice comes before the step that says what was chosen.
 #[test]
 fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(card, _)| card == names::ADELINE_RESPLENDENT_CATHAR)
         .unwrap();

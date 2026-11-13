@@ -4,8 +4,8 @@
 use beryl_card::Keywords;
 use beryl_engine::{GameTable, State};
 
+use crate::CARDS;
 use crate::library::keywords::evasion::{FLYER, VANILLA};
-use crate::{CARDS, SCENARIOS};
 
 #[test]
 fn a_store_card_is_found_by_name_with_its_printed_face_and_keywords() {
@@ -19,7 +19,7 @@ fn a_store_card_is_found_by_name_with_its_printed_face_and_keywords() {
 }
 
 /// The two lists hold different cards, and only the cards with files have scenarios of their
-/// own: the sweeps that walk `CARDS.cards()` or `SCENARIOS` stay the size of the files.
+/// own: the sweeps that walk `CARDS.cards()` or `scenarios()` stay the size of the files.
 #[test]
 fn store_cards_are_apart_from_the_cards_with_files() {
     println!(
@@ -33,7 +33,7 @@ fn store_cards_are_apart_from_the_cards_with_files() {
             "{} has a file and a store definition",
             def.name
         );
-        assert!(!SCENARIOS.iter().any(|(name, _)| *name == def.name));
+        assert!(!crate::scenarios().iter().any(|(name, _)| *name == def.name));
     }
 }
 

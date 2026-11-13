@@ -7,7 +7,7 @@
 //!   abilities gets a stop in its controller's second main phase and on the opponent's end
 //!   step, a board with every land tapped (which abilities stay offered), each ability
 //!   activated, and the permanent bounced in response to one.
-//! - **The card's scenarios** (`beryl_cards::SCENARIOS`). Each is cut at each cast or
+//! - **The card's scenarios** (`beryl_cards::scenarios()`). Each is cut at each cast or
 //!   activation of the card (played out once shown), at each question its resolution or casting
 //!   asks (with a yes or no flipped as well), and at its end.
 //!

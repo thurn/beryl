@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Part, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
@@ -62,7 +62,7 @@ fn name<T: serde::Serialize>(value: &T) -> String {
 
 /// Every decision `card`'s scenarios meet, as its seat is sent it.
 fn decisions(card: &str) -> Vec<DecisionView> {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == card)
         .expect("the card's scenarios");
@@ -110,7 +110,7 @@ fn asks(card: &str, purposes: &[Purpose]) -> Vec<String> {
 
 #[test]
 fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == names::ADELINE_RESPLENDENT_CATHAR)
         .unwrap();
@@ -181,7 +181,7 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
 
 #[test]
 fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == names::STOCK_UP)
         .unwrap();
@@ -426,7 +426,7 @@ fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
         .map(|purpose| (purpose.name(), name(&ShapeName::from(purpose.shape()))))
         .collect();
     let mut reached = BTreeSet::new();
-    for &(card, _) in SCENARIOS {
+    for &(card, _) in beryl_cards::scenarios() {
         for decision in decisions(card) {
             let prompt = *decision.prompt;
             // The state is the game's to add: a view of a position has none.

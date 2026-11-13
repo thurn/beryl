@@ -15,7 +15,7 @@ use beryl_card::Effect;
 use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostPart};
 use beryl_engine::coverage::{self, address};
 
-use crate::{CARDS, SCENARIOS};
+use crate::CARDS;
 
 /// The name of the variant `value`'s debug form begins with.
 fn variant(value: &impl std::fmt::Debug) -> String {
@@ -152,7 +152,11 @@ fn entries() -> Entries {
 #[test]
 fn every_entry_a_card_says_is_carried_out_by_a_hand_written_scenario() {
     coverage::start();
-    for (_, scenarios) in SCENARIOS.iter().copied().chain(crate::library::by_card()) {
+    for (_, scenarios) in crate::scenarios()
+        .iter()
+        .copied()
+        .chain(crate::library::by_card())
+    {
         for scenario in scenarios {
             // `every_card_has_scenarios_and_they_pass` reports failures.
             let _ = beryl_scenario::run(&CARDS, scenario);

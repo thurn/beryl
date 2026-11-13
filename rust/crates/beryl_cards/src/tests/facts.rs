@@ -5,7 +5,7 @@
 use beryl_scenario::facts::{card_facts, named};
 use serde_json::{Value, json};
 
-use crate::{CARDS, SCENARIOS, names};
+use crate::{CARDS, names};
 
 /// The facts of the card called `name`, as the dump writes them.
 fn facts(name: &str) -> Value {
@@ -263,7 +263,7 @@ fn targets_say_what_they_accept_and_faces_whether_they_transform() {
 
 #[test]
 fn a_scenario_names_its_cards_and_the_tokens_they_make() {
-    let (card, scenarios) = SCENARIOS
+    let (card, scenarios) = crate::scenarios()
         .iter()
         .find(|(card, _)| *card == names::STAFF_OF_THE_STORYTELLER)
         .unwrap();

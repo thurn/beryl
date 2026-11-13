@@ -3,7 +3,7 @@
 //! lose the game." The card whose effect ended it, with the ability that did, or the source of
 //! the damage that took the last life.
 
-use beryl_cards::{CARDS, SCENARIOS, names};
+use beryl_cards::{CARDS, names};
 use beryl_engine::event::{Event, Recipient};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -89,7 +89,7 @@ fn ending(scenario: &Scenario, viewer: Seat) -> OutcomeView {
 }
 
 fn jace(name: &str) -> &'static Scenario {
-    let (_, scenarios) = SCENARIOS
+    let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(c, _)| c == names::JACE_WIELDER_OF_MYSTERIES)
         .expect("Jace's scenarios");

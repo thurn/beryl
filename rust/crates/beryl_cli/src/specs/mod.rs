@@ -145,7 +145,7 @@ pub fn generate(specs: &[&Spec]) {
 fn scenarios(card: &str) -> &'static [Scenario] {
     static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
         std::sync::Mutex::new(Vec::new());
-    if let Some((_, written)) = beryl_cards::SCENARIOS
+    if let Some((_, written)) = beryl_cards::scenarios()
         .iter()
         .find(|(name, _)| *name == card)
     {
@@ -406,7 +406,7 @@ mod tests {
             .copied()
             .find(|d| d.name == MANA_TITHE)
             .unwrap();
-        let (_, scenarios) = beryl_cards::SCENARIOS
+        let (_, scenarios) = beryl_cards::scenarios()
             .iter()
             .find(|(n, _)| *n == MANA_TITHE)
             .unwrap();
@@ -478,7 +478,7 @@ mod tests {
             .copied()
             .find(|d| d.name == MANA_TITHE)
             .unwrap();
-        let (_, scenarios) = beryl_cards::SCENARIOS
+        let (_, scenarios) = beryl_cards::scenarios()
             .iter()
             .find(|(n, _)| *n == MANA_TITHE)
             .unwrap();
