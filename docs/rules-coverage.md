@@ -14,7 +14,7 @@ plan its beads are written against.*
 - **In scope:** the engine mechanisms the keystone cards need, the keystone
   cards, and the partner cards their scenarios need. Each keystone is playable
   in the app.
-- **Not in scope:** complete Legacy decks, breadth (more keywords, more trigger
+- **Not in scope:** complete decks, breadth (more keywords, more trigger
   events) beyond what a keystone or partner needs, AI strength, and UI polish.
 - **Unchanged:** the engine stays one exact, flat, `Copy` state machine built
   for search ([engine-architecture.md](engine-architecture.md) §2).
