@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::catalogs::Catalogs;
 use crate::complete::{self, Group, Keywords, complete_from_store};
 use crate::files::{card_files, set_crates};
-use crate::names::constant;
+use crate::names::{camel, constant, constant_of_camel};
 use crate::printed::{Subtypes, faces};
 use crate::store::{Record, Store};
 
@@ -30,6 +30,72 @@ fn constants_used<'a>(text: &'a str, module: &str) -> Vec<&'a str> {
         }
     }
     found
+}
+
+/// The CamelCase constants `text` reads from a generated type: each `<prefix><Camel>`, where
+/// `prefix` is `Card::`, `Printed::` or `Token::` and no letter, digit or underscore comes before
+/// it.
+fn camels_used<'a>(text: &'a str, prefix: &str) -> Vec<&'a str> {
+    let mut found = Vec::new();
+    for (at, _) in text.match_indices(prefix) {
+        let before = text[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') {
+            continue;
+        }
+        let rest = &text[at + prefix.len()..];
+        let end = rest
+            .find(|c: char| !c.is_ascii_alphanumeric())
+            .unwrap_or(rest.len());
+        if rest.starts_with(|c: char| c.is_ascii_uppercase()) {
+            found.push(&rest[..end]);
+        }
+    }
+    found
+}
+
+/// The `names` constant a `Card::<used>` or `Token::<used>` in a file means, checked to spell
+/// back to `used`: `name_of` looks the constant up.
+fn constant_of_used(
+    used: &str,
+    prefix: &str,
+    name_of: impl Fn(&str) -> Result<String, String>,
+) -> Result<String, String> {
+    let spelled = constant_of_camel(used);
+    let name = name_of(&spelled).map_err(|e| format!("{prefix}{used}: {e}"))?;
+    if camel(&name)? != used {
+        return Err(format!(
+            "{prefix}{used}: the card store's {name:?} is spelled {prefix}{}",
+            camel(&name)?
+        ));
+    }
+    Ok(spelled)
+}
+
+/// A generated type's associated constants: `pub struct <ty>;` with a constant for each
+/// `(camel, value)`, which CamelCase lets card files write like an enum's variants.
+fn associated_source(
+    doc: &str,
+    ty: &str,
+    value_type: &str,
+    constants: &[(String, String)],
+) -> String {
+    let mut out = format!(
+        "{doc}
+#[derive(Clone, Copy, Debug)]
+pub struct {ty};
+
+         #[allow(non_upper_case_globals)]
+impl {ty} {{
+"
+    );
+    for (camel, value) in constants {
+        writeln!(out, "    pub const {camel}: {value_type} = {value};").unwrap();
+    }
+    out.push_str(
+        "}
+",
+    );
+    out
 }
 
 /// The builder calls that would type a printed characteristic of a face in a card file, which
@@ -55,8 +121,8 @@ pub fn typed_characteristic(text: &str) -> Option<&'static str> {
 pub struct Printed<'a> {
     pub store: &'a Store,
     pub subtypes: &'a Subtypes,
-    /// The `(constant, source)` of each face, in order.
-    faces: Vec<(String, String)>,
+    /// The `(constant, camel, source)` of each face, in order.
+    faces: Vec<(String, String, String)>,
     /// The tokens the crate's cards make, as their records link them.
     links: Vec<beryl_card_store::TokenLink>,
     /// The `printed::token::` constants its files use.
@@ -78,10 +144,10 @@ impl<'a> Printed<'a> {
     fn card(&mut self, record: &Record) -> Result<(), String> {
         for (name, source) in faces(record, self.subtypes)? {
             let spelled = constant(&name)?;
-            if self.faces.iter().any(|(c, _)| *c == spelled) {
+            if self.faces.iter().any(|(c, _, _)| *c == spelled) {
                 return Err(format!("two faces of this crate give printed::{spelled}"));
             }
-            self.faces.push((spelled, source));
+            self.faces.push((spelled, camel(&name)?, source));
         }
         self.links.extend(record.tokens.iter().cloned());
         Ok(())
@@ -100,6 +166,17 @@ impl<'a> Printed<'a> {
         for used in constants_used(text, "printed::token::") {
             if !self.tokens.iter().any(|t| t == used) {
                 self.tokens.push(used.to_string());
+            }
+        }
+        for used in camels_used(text, "Token::") {
+            let spelled = constant_of_used(used, "Token::", |c| {
+                self.store
+                    .tokens_by_constant(c)
+                    .map(|(name, _)| name.to_string())
+            })
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+            if !self.tokens.contains(&spelled) {
+                self.tokens.push(spelled);
             }
         }
         Ok(())
@@ -148,10 +225,11 @@ impl<'a> Printed<'a> {
              files\n/// define, generated from the card store: where each face starts.\n\
              pub mod printed {\n",
         );
-        for (spelled, source) in &self.faces {
+        for (spelled, _, source) in &self.faces {
             writeln!(out, "    pub const {spelled}: beryl_card::Face = {source};").unwrap();
         }
         out.push_str("    pub mod token {\n");
+        let mut tokens = Vec::new();
         for spelled in &self.tokens {
             let source = self.token(spelled)?;
             writeln!(
@@ -159,8 +237,30 @@ impl<'a> Printed<'a> {
                 "        pub const {spelled}: beryl_card::Face = {source};"
             )
             .unwrap();
+            let (name, _) = self.store.tokens_by_constant(spelled)?;
+            tokens.push((camel(name)?, format!("printed::token::{spelled}")));
         }
-        out.push_str("    }\n}\n");
+        out.push_str("    }\n}\n\n");
+        let faces: Vec<(String, String)> = self
+            .faces
+            .iter()
+            .map(|(spelled, camel, _)| (camel.clone(), format!("printed::{spelled}")))
+            .collect();
+        out.push_str(&associated_source(
+            "/// Each face's printed characteristics, as `Printed::CardName`: where a\n\
+             /// card file starts the face.",
+            "Printed",
+            "beryl_card::Face",
+            &faces,
+        ));
+        out.push('\n');
+        out.push_str(&associated_source(
+            "/// The printed characteristics of the tokens this crate's files define, as\n\
+             /// `Token::Clue`.",
+            "Token",
+            "beryl_card::Face",
+            &tokens,
+        ));
         Ok(out)
     }
 }
@@ -210,6 +310,8 @@ pub fn set_crate_source(
     let mut scenarios = String::new();
     let mut open: Option<&str> = None;
     let mut written = Vec::new();
+    // The `Card` constants: the files' own cards, then every other card they name.
+    let mut card_names: Vec<(String, String)> = Vec::new();
     for file in &files {
         let name = store.in_set(&file.set, &file.module)?;
         written.push(name);
@@ -224,6 +326,15 @@ pub fn set_crate_source(
                     .by_constant(used)
                     .map_err(|e| format!("{}: {e}", file.path.display()))?;
                 used_names.insert(used.to_string(), named.to_string());
+            }
+        }
+        for used in camels_used(&text, "Card::") {
+            let spelled =
+                constant_of_used(used, "Card::", |c| store.by_constant(c).map(str::to_string))
+                    .map_err(|e| format!("{}: {e}", file.path.display()))?;
+            if let std::collections::btree_map::Entry::Vacant(entry) = used_names.entry(spelled) {
+                let named = store.by_constant(entry.key())?;
+                entry.insert(named.to_string());
             }
         }
         if open != Some(&file.set) {
@@ -243,22 +354,37 @@ pub fn set_crate_source(
             "    (names::{own}, {set}::{module}::scenarios::SCENARIOS),"
         )
         .unwrap();
+        card_names.push((camel(name)?, format!("names::{own}")));
         constants.insert(own, name.to_string());
     }
     if open.is_some() {
         tree.push_str("}\n");
     }
     let (from_store, store_cards) = store_cards(group, &written, &mut constants, printed)?;
+    for (spelled, name) in &used_names {
+        let value = format!("names::{spelled}");
+        if !card_names.iter().any(|(_, v)| *v == value) {
+            card_names.push((camel(name)?, value));
+        }
+    }
     used_names.retain(|constant, _| !constants.contains_key(constant));
+    let card_type = associated_source(
+        "/// The card names this crate's files use, as `Card::CardName`: its own cards' and\n\
+         /// the other cards' its files name.",
+        "Card",
+        "&str",
+        &card_names,
+    );
     Ok(format!(
         "// Generated by beryl_card_build from this crate's directories and the card store.\n\n\
-         pub use beryl_card_shared::{{props, tokens}};\n\n\
+         pub use beryl_card_shared::{{Prop, props, tokens}};\n\n\
          /// The names of this crate's cards: those with a file and those complete from the card\n\
          /// store. Each card is first printed in one set, so no two set crates share a name, and\n\
          /// the registry re-exports every set crate's as `beryl_cards::names`.\n\
          pub mod own_names {{\n{}}}\n\n\
          /// The names this crate's files use: its own cards' and the other cards' they name.\n\
          pub mod names {{\n    pub use super::own_names::*;\n{}}}\n\n\
+         {card_type}\n\
          {}\n\
          {tree}\n\
          /// This crate's cards, by set and file.\n\

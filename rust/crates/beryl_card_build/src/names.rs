@@ -85,3 +85,44 @@ pub fn card_module(name: &str) -> Result<String, String> {
 pub fn constant(name: &str) -> Result<String, String> {
     card_module(name).map(|module| module.to_ascii_uppercase())
 }
+
+/// A card's name as an associated constant of the generated `Card` and `Printed` types: its
+/// module's words, each capitalized, so "Jace, Vryn's Prodigy" is `JaceVrynsProdigy`.
+///
+/// # Errors
+///
+/// As [`card_module`].
+pub fn camel(name: &str) -> Result<String, String> {
+    card_module(name).map(|module| {
+        module
+            .split('_')
+            .map(|word| {
+                let mut chars = word.chars();
+                chars.next().map_or_else(String::new, |first| {
+                    first.to_ascii_uppercase().to_string() + chars.as_str()
+                })
+            })
+            .collect()
+    })
+}
+
+/// The [`constant`] a [`camel`] spelling most likely came from: a word starts at each capital
+/// letter and at each change between letters and digits, so `Card2Mace` is `CARD_2_MACE`. The
+/// build looks the result up in the card store and checks it spells back to `camel`.
+pub fn constant_of_camel(camel: &str) -> String {
+    let mut out = String::new();
+    let mut previous: Option<char> = None;
+    for c in camel.chars() {
+        if let Some(p) = previous {
+            let starts = c.is_ascii_uppercase()
+                || (c.is_ascii_digit() && !p.is_ascii_digit())
+                || (!c.is_ascii_digit() && p.is_ascii_digit());
+            if starts {
+                out.push('_');
+            }
+        }
+        out.push(c.to_ascii_uppercase());
+        previous = Some(c);
+    }
+    out
+}

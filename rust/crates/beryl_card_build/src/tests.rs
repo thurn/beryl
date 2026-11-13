@@ -4,7 +4,7 @@ mod complete;
 
 use crate::complete::Group;
 use crate::files::{card_files, set_crates};
-use crate::names::{card_module, constant, set_module};
+use crate::names::{camel, card_module, constant, constant_of_camel, set_module};
 use crate::printed::Subtypes;
 use crate::store::Store;
 use crate::{Printed, names_source, registry_source, set_crate_source, shared_source};
@@ -153,6 +153,27 @@ fn modules_and_constants_spell_names_plainly() {
     );
     assert!(card_module("Ætherize").is_err());
     assert!(card_module("!?").is_err());
+}
+
+#[test]
+fn camel_case_constants_spell_names_and_back() {
+    for (name, spelled, constant) in [
+        (
+            "Jace, Vryn's Prodigy",
+            "JaceVrynsProdigy",
+            "JACE_VRYNS_PRODIGY",
+        ),
+        ("Fire // Ice", "FireIce", "FIRE_ICE"),
+        ("+2 Mace", "Card2Mace", "CARD_2_MACE"),
+        (
+            "Troll of Khazad-dûm",
+            "TrollOfKhazadDum",
+            "TROLL_OF_KHAZAD_DUM",
+        ),
+    ] {
+        assert_eq!(camel(name).unwrap(), spelled);
+        assert_eq!(constant_of_camel(spelled), constant);
+    }
 }
 
 #[test]

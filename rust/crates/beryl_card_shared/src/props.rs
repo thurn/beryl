@@ -66,3 +66,32 @@ pub const ALL: &[&str] = &[
     PLANESWALKER,
     NONBASIC_LAND,
 ];
+
+/// The props as card files name them, `Prop::Creature`: the constants above, each with the name
+/// of its role.
+#[derive(Clone, Copy, Debug)]
+pub struct Prop;
+
+#[allow(non_upper_case_globals)]
+impl Prop {
+    /// [`CREATURE`].
+    pub const Creature: &str = CREATURE;
+    /// [`SMALL_CREATURE`].
+    pub const SmallCreature: &str = SMALL_CREATURE;
+    /// [`ARTIFACT`].
+    pub const Artifact: &str = ARTIFACT;
+    /// [`INSTANT`].
+    pub const Instant: &str = INSTANT;
+    /// [`REMOVAL`].
+    pub const Removal: &str = REMOVAL;
+    /// [`SORCERY`].
+    pub const Sorcery: &str = SORCERY;
+    /// [`UNTARGETED_SPELL`].
+    pub const UntargetedSpell: &str = UNTARGETED_SPELL;
+    /// [`PLANESWALKER`].
+    pub const Planeswalker: &str = PLANESWALKER;
+    /// [`EQUIPMENT`].
+    pub const Equipment: &str = EQUIPMENT;
+    /// [`NONBASIC_LAND`].
+    pub const NonbasicLand: &str = NONBASIC_LAND;
+}

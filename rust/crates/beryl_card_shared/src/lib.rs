@@ -4,6 +4,7 @@
 //! from the printed characteristics its build script generates from the card store.
 
 pub mod props;
+pub use props::Prop;
 pub mod tokens;
 
 include!(concat!(env!("OUT_DIR"), "/printed.rs"));
