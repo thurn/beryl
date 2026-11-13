@@ -50,7 +50,11 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   its set crate, plays its scenarios in Beryl, XMage and Forge (`--no-oracles`
   for a fast loop), and compares the rules text its definition renders to with
   its Oracle text. `just card render <name>` prints that comparison, and
-  `just card render --all` the match rate over every card file. A card the
+  `just card render --all` the match rate over every card file.
+  `just card diverge <name> <scenario> <xmage|forge> --cr <rule> --reason <text>`
+  records that one oracle is wrong about a scenario; it writes
+  `data/oracle-divergences.json` only when the other oracle passes the scenario
+  and the rule is in the pinned release, and refuses otherwise. A card the
   vocabulary cannot yet express is recorded in `data/card-escalations.json`, and
   its brief says what it is waiting for. The `card-writing` skill is the whole
   procedure.

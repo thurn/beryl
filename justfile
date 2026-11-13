@@ -176,7 +176,8 @@ count-gate:
 # The tools a card is written with: brief <name> prints the packet it is written from, new <name> starts its
 # file, check <name> [--no-oracles] builds it, plays its scenarios in Beryl, XMage and Forge and diffs its
 # rendered text, render <name>...|--all diffs rendered text against Oracle text, path <name> its file,
-# header <name>|--all rewrites its file's generated header from the card store
+# header <name>|--all rewrites its file's generated header from the card store, diverge <name> <scenario>
+# <xmage|forge> --cr <rule> --reason <text> records an oracle's own fault when the other oracle agrees
 [group('data')]
 card command *args:
     {{ by }} card "$@"

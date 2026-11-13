@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
-from . import xmage, xmage_java
+from . import card_diverge, xmage, xmage_java
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -764,7 +764,7 @@ def oracle(args: argparse.Namespace) -> int:
     }
     summary["report"] = str(report)
     print(json.dumps(summary, indent=2))
-    return 1 if stale or any(r["fail"] for r in results.values()) else 0
+    return 1 if stale or card_diverge.failed(results) else 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

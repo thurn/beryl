@@ -26,7 +26,8 @@ rulings cached, no XMage checkout) says so and the brief goes on. A name the sto
 1, naming the closest names it has.
 
 `card new <name>` starts a card's file (card_new.py), and `card check <name>` builds the card and
-plays its scenarios in Beryl, XMage and Forge (card_check.py).
+plays its scenarios in Beryl, XMage and Forge (card_check.py). `card diverge` records that one
+oracle is wrong about a scenario, when the other agrees with Beryl (card_diverge.py).
 
 `card render <name>...` (or `--all`) prints a card's rendered rules text and its diff against its
 Oracle text (render_diff.py).
@@ -333,10 +334,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     w.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     w.set_defaults(func=run_path)
     # Imported here: both modules use this one's `find` and `Sources`.
-    from . import card_check, card_new, render_diff
+    from . import card_check, card_diverge, card_new, render_diff
 
     card_new.register(commands)
     card_check.register(commands)
+    card_diverge.register(commands)
     render_diff.register(commands)
     card_header.register(commands)
     card_crates.register(commands)

@@ -19,7 +19,7 @@ and builders a card definition is made of.
   (see "Reading failures"). Never edit the vocabulary
   (`rust/crates/beryl_card`), the engine (`beryl_rules`, `beryl_kernel`), the
   renderer, tools, other existing cards, or any other allowlist or divergence
-  file under `data/`.
+  file under `data/` (the exception is `just card diverge`, below).
 - **Every clause, always.** Implement every sentence of the Oracle text, even
   one that no card in the decks makes happen today. "No Equipment is among the
   cards, so attaching never comes up" is how Thieving Skydiver shipped without
@@ -45,8 +45,9 @@ and builders a card definition is made of.
   brief's XMage class is a reference for what the card does, never code to
   translate.
 - **Never weaken a check.** Don't skip a step, delete a failing scenario, or add
-  an entry to `data/oracle-divergences.json` or any allowlist to make a check
-  pass, apart from a `wording` entry as "Reading failures" describes. A failing
+  an entry to any allowlist to make a check pass, apart from a `wording` entry
+  and an oracle fault as "Reading failures" describes. Never edit
+  `data/oracle-divergences.json` by hand. A failing
   scenario, oracle or render diff means your definition is wrong until you have
   shown otherwise.
 
@@ -147,6 +148,16 @@ steal, a creature with a particular ability, a spell to counter):
 - `beryl` or `oracles` fails on an assertion: the definition or the scenario is
   wrong. Reread the Oracle text and rulings. If Beryl agrees with neither XMage
   nor Forge, Beryl is wrong.
+- `oracles` fails in one oracle only, while the other passes the same scenario,
+  and the Comprehensive Rules say the failing oracle is wrong (XMage requires a
+  search to find a card that CR 701.23b lets the player not find): record it
+  with `just card diverge "<name>" "<scenario>" <xmage|forge> --cr <rule>
+  --reason "<what that oracle does>"`, then run `just card check` again. The
+  command plays the scenarios itself and refuses unless that oracle fails, the
+  other passes and the rule is in the pinned release; it fills in the rule's
+  quotation. Never edit `data/oracle-divergences.json` by hand: the
+  `divergences` check fails a hand-written entry, and the oracle run fails an
+  entry whose oracle now passes.
 - `render` fails: it prints the rendered text against the Oracle text, with
   `[-removed-]` and `{+added+}` words. Oracle words the render lacks (a `[-...-]`
   with no matching `{+...+}`) mean a clause is missing: implement it, or

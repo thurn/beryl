@@ -33,7 +33,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.
 - `oracle-divergences.json`: test scenarios where an oracle (XMage or Forge)
-  gets the rules wrong, each with its rules citation.
+  gets the rules wrong, each with its rules citation. Never edit it by hand:
+  `just card diverge` writes an entry, only when the other oracle agrees with
+  Beryl, and the `divergences` check holds each entry to the pinned rules.
 - `oracle-exporter-gaps.json`: generated scenarios that an oracle's exporter
   can't express, which are reported as unsupported.
 - `card-names-allowlist.json`: generic code files that still mention card names,

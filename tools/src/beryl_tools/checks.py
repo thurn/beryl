@@ -50,6 +50,7 @@ from . import (
     board_door,
     build_paths,
     card_crates,
+    card_diverge,
     card_files,
     card_header,
     card_names,
@@ -466,6 +467,7 @@ def play(
 
 
 def repo_lane() -> Lane:
+    checks = [sys.executable, "-m", "beryl_tools.checks"]
     return (
         Lane("repo")
         .step("just", ["just", "--fmt", "--check", "--unstable"])
@@ -473,12 +475,8 @@ def repo_lane() -> Lane:
             "markdown",
             [sys.executable, "-m", "mdformat", "--check", *markdown_files()],
         )
-        .step(
-            "file-length", [sys.executable, "-m", "beryl_tools.checks", "file-length"]
-        )
-        .step(
-            "conventions", [sys.executable, "-m", "beryl_tools.checks", "conventions"]
-        )
+        .step("file-length", [*checks, "file-length"])
+        .step("conventions", [*checks, "conventions"])
     )
 
 
@@ -600,6 +598,7 @@ def names_lane(
         "board-door",
         "discarded-push",
         "plan-references",
+        "divergences",
     ):
         lane.step(check, [*checks, check])
     if cited != []:
@@ -782,6 +781,7 @@ def steps() -> dict[str, Callable[..., int]]:
         "plan-references": plan_references.step,
         "discarded-push": discarded_push.step,
         "citations": citations.step,
+        "divergences": card_diverge.step,
         "conventions": conventions.step,
         "build-paths": build_paths.step,
         "rustfmt": card_files.rustfmt_step,
