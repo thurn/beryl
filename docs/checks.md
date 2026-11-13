@@ -118,6 +118,24 @@ processes are attributed.
 
 ## Shared machine resources
 
+- Heavy commands take CPU tokens from one pool per machine, one token per core
+  (`tools/src/beryl_tools/tokens.py`), and run with as many threads as they got
+  (`CARGO_BUILD_JOBS`, `NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`). The heavy
+  steps of a check (clippy, the Rust tests, the app, browser, script, oracle,
+  motion, mobile and counts steps), `just test-rust`, `just fuzz`,
+  `just exhaust` and `just freeze-saves` take them; the other steps are scripts
+  that use one core at most and take none. One command takes at most two thirds
+  of the pool.
+- The classes, highest first, are the fast check of a push, a command an agent
+  runs by hand, and slow CI. Agents' commands and slow CI together hold at most
+  three quarters of the pool, and slow CI at most half, so a push always finds
+  free tokens. A class takes nothing while a higher one waits. Work at utility
+  QoS (tournaments, the nightly, the justfile's `low`) takes no tokens, because
+  macOS already gives every core to normal-priority work first.
+- A check step's wait for tokens counts against the run's deadline, but the
+  push's reserved quarter keeps that wait short. `just tokens` shows who holds
+  and waits for tokens. `BERYL_CPU_POOL=0` turns the pool off, and
+  `just tokens-run -- COMMAND` runs any command inside a lease.
 - The machine runs at most half its core count's worth of browser pages at once,
   across all runs (`ui/scripts/slots.mjs`). Runs that aren't checks share a
   third of those slots. Headless WebKit runs at a higher priority than any

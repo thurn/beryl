@@ -18,7 +18,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import paths, runlog, verdicts, warm
+from . import paths, runlog, tokens, verdicts, warm
 from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED
 
 
@@ -286,9 +286,14 @@ def session_tests(args: argparse.Namespace) -> int:
     # A fresh worktree's first build clones the cached target, as the checks' does.
     warm.ensure_target(paths.REPO, tauri=False)
     cmd = session_command(args.extra, shutil.which("cargo-nextest") is not None)
-    if cmd is None:
-        return rust_tests_step()
-    return subprocess.run(cmd, cwd=paths.RUST, check=False).returncode
+    # The build and the tests run with as many threads as the machine's CPU tokens allow.
+    lease = tokens.acquire("agent", tokens.largest(tokens.pool_size()))
+    assert lease is not None
+    with lease:
+        os.environ.update(lease.env())
+        if cmd is None:
+            return rust_tests_step()
+        return subprocess.run(cmd, cwd=paths.RUST, check=False).returncode
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

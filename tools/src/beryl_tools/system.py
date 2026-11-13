@@ -144,6 +144,32 @@ def kill_tree(pid: int) -> None:
             pass
 
 
+def alive(pid: int) -> bool:
+    """Whether process `pid` is running. On Windows `os.kill(pid, 0)` would send it Ctrl-C, so
+    there it asks for the process's exit code instead."""
+    if not WINDOWS:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True  # Another user's process.
+        return True
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # pyre-ignore[16]: Windows only
+    query_limited_information, still_active = 0x1000, 259
+    handle = kernel32.OpenProcess(query_limited_information, False, pid)
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        return bool(ok) and code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def terminate(proc: subprocess.Popen[bytes]) -> None:
     """Ends `proc`. On Windows with everything under it: there a `.cmd` shim's process is
     cmd.exe, and ending only it leaves the program it started running."""
@@ -205,10 +231,12 @@ def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
 def utility(command: list[str]) -> list[str]:
     """`command` as one that runs at low priority: at utility QoS on macOS, where the CPU
     goes first to interactive work and checks (`nice` does not do that); at idle priority
-    through `by low` on Windows. The justfile's `low`, for work `by` starts itself."""
+    through `by low` on Windows. The justfile's `low`, for work `by` starts itself. Work at low
+    priority takes no CPU tokens (tokens.py), so `BERYL_CPU_POOL=0` turns the pool off for it.
+    """
     if WINDOWS:
         return [sys.executable, "-m", "beryl_tools.cli", "low", "--", *command]
-    return ["taskpolicy", "-c", "utility", *command]
+    return ["env", "BERYL_CPU_POOL=0", "taskpolicy", "-c", "utility", *command]
 
 
 def low(args: argparse.Namespace) -> int:
@@ -231,6 +259,7 @@ def low(args: argparse.Namespace) -> int:
         kernel32.SetThreadExecutionState(es_continuous | es_system_required)
     proc = subprocess.Popen(
         [which(command[0]), *command[1:]],
+        env={**os.environ, "BERYL_CPU_POOL": "0"},
         # pyre-ignore[16]: Windows only
         creationflags=subprocess.IDLE_PRIORITY_CLASS,
     )

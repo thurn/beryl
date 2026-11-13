@@ -31,8 +31,12 @@ import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import paths, system, warm
+
+if TYPE_CHECKING:
+    from .checks import Lane
 
 # Compilers and the like, named in the load report: their bursts come and go faster than one
 # CPU sample.
@@ -470,6 +474,16 @@ def judge(gate: Gate, measured: int) -> tuple[bool, str]:
             f"{said}: lower `instructions` in {GATE_FILE.name} to keep the gain",
         )
     return True, said
+
+
+def lane() -> Lane:
+    """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
+    fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
+    target dir, so it needs no warm clone."""
+    from .checks import BY, Lane  # It imports this module.
+    from .reruns import whole
+
+    return Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
 
 
 def count_gate(args: argparse.Namespace) -> int:

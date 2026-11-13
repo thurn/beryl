@@ -22,6 +22,11 @@ search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C tar
 # work at full priority. Windows has neither: `by low` starts the work at idle priority.
 
 by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
+
+# A command run inside a lease of the machine's CPU tokens (tokens.py), with as many threads as
+# it got.
+
+pooled := by_anywhere + " tokens-run --"
 low := if os() == "windows" { by_anywhere + " low --" } else { "taskpolicy -c utility" }
 
 # Low priority, kept awake, for a blunder hunt that runs for hours.
@@ -147,6 +152,17 @@ speed *args:
 cpu *args:
     {{ by }} cpu "$@"
 
+# Who holds and waits for the machine's CPU tokens
+[group('bench')]
+tokens:
+    {{ by }} tokens
+
+# A command inside a lease of CPU tokens, with as many threads as it got (--class push|agent|ci, --cores N, -- COMMAND...)
+[group('bench')]
+[no-cd]
+tokens-run *args:
+    {{ by_anywhere }} tokens-run "$@"
+
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
 [group('bench')]
 bench-count *args:
@@ -214,8 +230,8 @@ test-rust *args:
 [group('test')]
 fuzz games="10000":
     cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
-    cargo test --release -p beryl_search --test games --test shrink -- --nocapture && \
-    cargo test --release -p beryl_session --lib fuzz:: -- --nocapture
+    {{ pooled }} cargo test --release -p beryl_search --test games --test shrink -- --nocapture && \
+    {{ pooled }} cargo test --release -p beryl_session --lib fuzz:: -- --nocapture
 
 # The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
 [group('test')]
@@ -231,13 +247,13 @@ exhaust *args:
         --nodes) nodes="$2"; shift 2 ;; \
         *) card="$1"; shift ;; \
     esac; done; \
-    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
+    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true {{ pooled }} cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
 
 # Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
 [group('test')]
 [no-cd]
 freeze-saves *args:
-    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
+    {{ pooled }} cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
 
 # A seeded WU Control mirror game between two agents at low priority, as a transcript (--seed N, --out FILE)
 [group('agents')]

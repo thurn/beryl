@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import (
+    bench,
     board_door,
     build_paths,
     card_crates,
@@ -58,6 +59,7 @@ from . import (
     discarded_push,
     file_length,
     hygiene,
+    mobile,
     paths,
     plan_references,
     python_tests,
@@ -66,6 +68,7 @@ from . import (
     speed,
     store_cards,
     system,
+    tokens,
     two_player,
     verdicts,
     warm,
@@ -183,8 +186,10 @@ class Steps:
         deadline: float,
         clock: Clock | None = None,
         wall_limit: float | None = None,
+        klass: str = "agent",
     ) -> None:
         self.deadline = deadline
+        self.klass = klass
         self.clock: Clock = clock or Clock()
         # Wall seconds (`Clock.wall`) before someone else's wall clock kills the run, such as
         # Enact's `slow_timeout`: a loaded machine stretches the deadline past it (by-tkgu),
@@ -203,6 +208,10 @@ class Steps:
             left = min(left, self.wall_limit - self.clock.wall())
         return left
 
+    def over(self) -> bool:
+        """Whether the run was stopped or its time is up, so no step may start."""
+        return self.stopped.is_set() or self.left() <= 0
+
     def walled(self) -> bool:
         """Whether the wall limit has passed, so a step killed now was cut off by it."""
         return self.wall_limit is not None and self.wall_limit - self.clock.wall() <= 0
@@ -214,14 +223,19 @@ class Steps:
         return f"deadline {self.deadline:.0f} s"
 
     def run(
-        self, cmd: list[str], cwd: Path, env: dict[str, str]
+        self, cmd: list[str], cwd: Path, env: dict[str, str], cores: int = 0
     ) -> tuple[int | None, str]:
         """The step's exit code, None when the deadline killed it, and its output. The output
         goes to a file, not a pipe, so a killed step's straggler cannot hold up reading it.
+        It first waits for up to `cores` CPU tokens (tokens.py), against the deadline.
         """
-        with tempfile.TemporaryFile("w+", errors="replace") as out:
+        lease = tokens.lease(self.klass, cores, self.over)
+        if lease is None:
+            return None, ""
+        with tempfile.TemporaryFile("w+", errors="replace") as out, lease:
+            env = {**env, **lease.env()}
             with self.lock:
-                if self.stopped.is_set() or self.left() <= 0:
+                if self.over():
                     return None, ""
                 proc = subprocess.Popen(
                     cmd,
@@ -278,7 +292,9 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
         records it logged and the output that names its failed checks."""
         t, wall = clock.now(), clock.wall()
         with run.step(env) as (step_env, results):
-            code, output = steps.run(cmd, step.cwd, step_env)
+            code, output = steps.run(
+                cmd, step.cwd, step_env, tokens.step_tokens(lane.name, step.name)
+            )
             seconds, wall = clock.now() - t, clock.wall() - wall
             records = run.log(lane.name, step.name, code == 0, wall, results)
         if output.strip():
@@ -375,7 +391,8 @@ def run_all(
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
     many wall seconds in is killed (`Steps.wall_limit`)."""
     deadline = float(os.environ.get("CHECK_DEADLINE_S", max(2 * budget, HANG_DEADLINE)))
-    steps = Steps(deadline, wall_limit=wall_limit)
+    klass = tokens.script_class(script)
+    steps = Steps(deadline, wall_limit=wall_limit, klass=klass)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
@@ -393,7 +410,7 @@ def run_all(
             f" fresh deadline ({load_note()})"
         )
         run.timed_out(names)
-        steps = Steps(steps.clock.now() + deadline, steps.clock, wall_limit)
+        steps = Steps(steps.clock.now() + deadline, steps.clock, wall_limit, klass)
         again = play([lanes[i] for i in killed], run, env, steps)
         for i, o in zip(killed, again):
             first = outcomes[i]
@@ -635,19 +652,6 @@ def card_oracle_lane(cards: list[str]) -> Lane:
     return Lane("oracle", warm=True).step("oracle", cmd, rerun=failed_cards)
 
 
-def mobile_lane() -> Lane:
-    """Type-checks the app crate for the iOS Simulator and Android (`by mobile-check`); the
-    phone builds themselves take minutes, too long for the budget."""
-    return Lane("mobile", warm=True).step("mobile-check", [*BY, "mobile-check"])
-
-
-def counts_lane() -> Lane:
-    """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
-    fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
-    target dir, so it needs no warm clone."""
-    return Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
-
-
 def fast(args: argparse.Namespace) -> int:
     started = speed.start_background()
     if started:
@@ -738,8 +742,8 @@ def slow(args: argparse.Namespace) -> int:
         "shots": shots_lane(),
         "ui-test": ui_test_lane(),
         "oracle": oracle_lane(),
-        "counts": counts_lane(),
-        "mobile": mobile_lane(),
+        "counts": bench.lane(),
+        "mobile": mobile.lane(),
     }
     if system.WINDOWS and not args.lanes:
         print(

@@ -13,9 +13,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import app, paths, system
+
+if TYPE_CHECKING:
+    from .checks import Lane
 
 BUNDLE_ID = "ca.thurn.beryl"
 APPLE: Path = paths.APP / "gen" / "apple"
@@ -138,6 +141,14 @@ def ndk_env() -> dict[str, str]:
         "CC_aarch64_linux_android": str(clang),
         "AR_aarch64_linux_android": str(clang.with_name("llvm-ar")),
     }
+
+
+def lane() -> Lane:
+    """Type-checks the app crate for the iOS Simulator and Android (`by mobile-check`); the
+    phone builds themselves take minutes, too long for the budget."""
+    from .checks import BY, Lane  # It imports this module.
+
+    return Lane("mobile", warm=True).step("mobile-check", [*BY, "mobile-check"])
 
 
 def check(args: argparse.Namespace) -> int:
