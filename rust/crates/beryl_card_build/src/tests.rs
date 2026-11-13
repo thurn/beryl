@@ -303,11 +303,12 @@ fn typed_or_unknown_characteristics_fail_the_build() {
     let store = Store::parse(&store_text()).unwrap();
     scratch.write("lea/island.rs", "printed::ISLAND.types(Types::LAND)");
     let error = crate_source(&scratch.0, &store).unwrap_err();
+    let island = scratch.0.join("lea").join("island.rs");
     assert!(
-        error.contains("lea/island.rs") && error.contains(".types("),
+        error.starts_with(&format!("{}: ", island.display())) && error.contains(".types("),
         "{error}"
     );
-    std::fs::remove_file(scratch.0.join("lea/island.rs")).unwrap();
+    std::fs::remove_file(island).unwrap();
     scratch.write("lea/plains.rs", "printed::PLAINS");
     let without_plains = Subtypes::named(&["Island"]);
     let error =
