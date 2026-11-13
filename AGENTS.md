@@ -292,3 +292,6 @@ pixel for pixel, use the `arena-pixel-match` skill.
   how similar bugs could be prevented in future (for example, through the type
   system). Link the fixing commit's hash when the bug wasn't found and fixed in
   the same session.
+- Do not directly reference planning documents or beads in code (e.g. "plan
+  K16"), this gets stale fast. If you touch code with such references, delete
+  them.
