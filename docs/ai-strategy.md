@@ -194,21 +194,35 @@ The gate bead runs these steps in order. `CHALLENGER` is the family the build
 bead named; `CLAIMS` is the comma-separated list of suite entries it claims.
 
 1. **Audit check.** If §4.5 says an audit is due, run it first.
+
 2. **Suite.** `just gate CHALLENGER --claims CLAIMS`. It runs the suite (§5) for
-   the champion and the challenger and prints `GATE: PASS` or `GATE: FAIL`. The
-   gate passes when all three hold:
-   - at least one claimed entry is open for the champion and fixed for the
-     challenger;
-   - no entry fixed for the champion is open for the challenger;
-   - no entry passes 4 or more fewer of its 10 runs than it did for the
-     champion.
+   both agents on seeds 0–4 at 3M and 30M. A claim is marked `claimed-fixed` if
+   only the challenger passes all 10 runs. An entry is marked `re-opened` if
+   only the champion passes all 10. Of the remaining entries, one is marked
+   `worse` if the challenger passes at least four fewer runs than the champion.
+
+   The gate reruns both agents at both budgets on seeds 5–9 for every
+   `re-opened` entry and every claim the challenger passed 7–9 times. The table
+   shows the combined counts out of 20 and labels these rows `(rerun)`. A
+   `re-opened` mark stands if the challenger passes at least three fewer runs
+   than the champion. A rerun claim is marked `claimed-fixed` if the challenger
+   passes at least 18 runs and at least six more than the champion. The `worse`
+   mark and all marks for entries outside the rerun use the first round.
+
+   The gate prints `GATE: PASS` if at least one claim is marked `claimed-fixed`
+   (or the rung makes no claims) and there are no `re-opened` or `worse` marks.
+   Otherwise it prints `GATE: FAIL`.
+
 3. **On `GATE: FAIL`:** copy the printed table into the bead's notes, add a row
    to `docs/ladder.md` with the verdict `failed at the suite`, close the bead as
    failed. Play no match. Go on to the next rung.
+
 4. **Match.** On `GATE: PASS`, play the match of the rung's kind (§4.4). A root
    rung first runs the screen and writes its cost a game in the bead's notes;
    the cost stops nothing.
+
 5. **On the test accepting the bar:** promote (§4.6).
+
 6. **On a rejection or the cap:** add the row with the score and the verdict,
    leave the champion as it is, close the bead as failed.
 
@@ -337,8 +351,10 @@ A ledger of every blunder a human has caught, and the gate's first condition.
   the position at 3M and at 30M from five seeds each: 10 runs an entry. A run
   passes when it makes no forbidden choice and every required one.
 - **Fixed and open.** An entry is *fixed* when all 10 runs pass and *open*
-  otherwise. The champion made every play the suite forbids, so some entries are
-  always open; those are what the rungs are for.
+  otherwise. For a gate that judges an entry on 20 runs, the rule in §4.3
+  decides whether a claim is fixed or a previously fixed entry re-opens. The
+  champion made every play the suite forbids, so some entries are always open;
+  those are what the rungs are for.
 - **Greedy's and the expert's own answers are recorded for every entry.**
   `just blunders greedy --seeds 1` takes seconds. Where greedy passes, the
   search lost a good answer and a root rule may keep it. Where greedy fails,
@@ -639,9 +655,9 @@ run, and it is recorded here so that they are built toward it.
 - Do the start positions cut the spread of pair scores against the shuffle? The
   first match's report says; if they buy nothing, they go.
 - Does a policy gain at 1M hold at 10M? The first audit says.
-- Does a fixed entry stay fixed from run to run? An entry is fixed at 10 of 10,
-  so one unlucky run re-opens it and fails a gate. If that happens to a rung
-  whose change cannot have touched the entry, the gate needs a rerun rule.
+- The gate now reruns close calls (§4.3). In a 20-seed check, the champion
+  passed `decline-both-teferi-untaps` 19/20 at 3M and 18/20 at 30M, and passed
+  `staff-in-upkeep` 12/20 at 3M and 15/20 at 30M.
 - Where do the search's clear leads for a wrong play come from, if not from the
   rollouts (§2.2)? The turn discount and the tree below the move are the two
   suspects. by-97g.34 measures both; until it has, no rung claims

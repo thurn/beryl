@@ -255,11 +255,13 @@ fn build(t: &GameTable, name: &str, seed: u64) -> Result<Box<dyn Agent>, String>
 }
 
 /// Runs the suite's `entries` for `agent` (a family, played at each of `budgets`, or a
-/// registered agent or `family@budget`, played as named), from `seeds` seeds each.
+/// registered agent or `family@budget`, played as named), from `seeds` seeds each starting
+/// at `first_seed`.
 pub fn run(
     entries: &[Entry],
     agent: &str,
     budgets: &[u64],
+    first_seed: u32,
     seeds: u32,
     mut progress: impl FnMut(&str),
 ) -> Result<Report, String> {
@@ -297,7 +299,7 @@ pub fn run(
             }
             Ok(at) => {
                 for (name, budget) in &names {
-                    for k in 0..seeds {
+                    for k in first_seed..first_seed + seeds {
                         let mut agent = build(&at.t, name, run_seed(&e.name, k))?;
                         let chosen = play(e, &at, agent.as_mut());
                         let pass = passes(e, &chosen);
@@ -400,7 +402,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         }
         entries.retain(|e| only.contains(&e.name));
     }
-    let report = run(&entries, &agent, &budgets, seeds, |line| {
+    let report = run(&entries, &agent, &budgets, 0, seeds, |line| {
         eprintln!("{line}");
     })?;
     print!("{}", table(&report));
