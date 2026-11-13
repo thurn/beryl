@@ -55,6 +55,9 @@ from .xmage_java import (
 # prompt is for (the trace's `purpose`), the permanents to tap or cards to exile for a cost.
 FORCED_ASKED = ("Target", "TargetCount", "X")
 FORCED_COSTS = ("crew", "waterbend", "exile-cost")
+# The kinds of answer a player gives while casting a spell or activating an ability, before
+# paying for it (601.2b-601.2c): an X and the targets.
+CAST_CHOICES = ("X", "Target", "TargetCount")
 # Others XMage asks when the one answer stands for several identical cards.
 FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 
@@ -447,9 +450,22 @@ class Exporter:
         itself, by their one mana ability (`Cards.mana_text`). A payment with a source of
         several kinds of mana is left to XMage. One that sacrifices a source for mana of any
         color is unsupported: XMage asks the color, which the trace doesn't record."""
-        if self.index + 1 >= len(self.trace):
+        # The payment comes after the choices made while casting (601.2b-601.2f: an X, the
+        # targets), each a position of its own with nothing tapped yet, so the taps are at the
+        # first position past those answers. Reading only the next position left a spell with
+        # an X to XMage's own payment, which could spend a source a later spell needed.
+        after = self.index + 1
+        while (
+            after < len(self.actions)
+            and after + 1 < len(self.trace)
+            and self.actions[after]["action"] == "Answer"
+            and self.actions[after]["kind"] in CAST_CHOICES
+            and not self.trace[after].taps
+        ):
+            after += 1
+        if after >= len(self.trace):
             return
-        taps = list(self.trace[self.index + 1].taps)
+        taps = list(self.trace[after].taps)
         if any(self.cards.sacrificed_for_mana_of_any_color(name) for name in taps):
             raise Unsupported(
                 "a payment sacrificing a source for mana of a color XMage asks"
