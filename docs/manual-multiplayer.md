@@ -4,7 +4,8 @@
 with no rules enforcement, moving the cards themselves as they would in
 Cockatrice. Decided 2026-11-12 in a design interview, on a survey of Beryl's
 code, a survey of Cockatrice's source at commit `587c4b43c`, and measurements
-taken that day.*
+taken that day. Revised 2026-11-13 in a second interview that turned it into a
+work plan: see [Decisions of 2026-11-13](#decisions-of-2026-11-13).*
 
 Beryl is a desktop app that plays Magic: The Gathering. Today it plays one kind
 of game: one person against an AI, with every move checked by Beryl's rules
@@ -71,6 +72,9 @@ A few parts of Beryl are named throughout, and are defined here once.
   [relay documentation](https://docs.iroh.computer/concepts/relays): the
   peer-to-peer library this design uses, and the terms of the public relay
   servers it falls back to.
+- The epic `by-bmdk` in the project's issue tracker: the work plan for this
+  design, in three milestones. Its description fixes the names of the crates,
+  commands and files the work uses.
 - Reference images in `docs/ui_mockups/`, shown in the sections they illustrate:
   `manual_card_menu.png`, `manual_library_menu.png`, `manual_palette.png`,
   `manual_combat_proposal.png` and `manual_lobby.png`. Each is a real screenshot
@@ -79,8 +83,9 @@ A few parts of Beryl are named throughout, and are defined here once.
 
 ## Decisions
 
-The interview settled the decisions below. T19 to T24 were not asked: they are
-defaults chosen while writing, recorded here so they can be challenged.
+The first interview settled the decisions below. T19 to T24 were defaults chosen
+while writing. The second interview, on 2026-11-13, replaced T19, confirmed T20
+to T24, and added T25 to T29.
 
 Who it is for, and what a table is:
 
@@ -97,15 +102,15 @@ Who it is for, and what a table is:
 
 How it is built:
 
-| ID  | Decision                                                                                                                                               | Why                                                                                                                                        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| T3  | One player's app, the host, holds the table. It sends each seat its view and script, and the other app, the guest, sends actions.                      | The session already builds a view and a script per seat. The guest only displays, and the rules engine can sit behind the same connection. |
-| T4  | Two apps connect with iroh, behind a small interface that also has an in-memory and a localhost implementation.                                        | One pasted code connects two machines behind home routers. Tests and two apps on one Mac never need the internet.                          |
-| T5  | The manual table has its own state, separate from the rules engine's.                                                                                  | The engine's state has closed lists of counters and zones, cannot be saved to a file, and knows only its 47 cards.                         |
-| T7  | The parts that need no change to the stage or the session are independent of the rebuilding of both that is in progress. The rest waits for the stage. | The session and the stage took about 170 commits in three days. The table should not add to that churn or be broken by it.                 |
-| T19 | Both apps must be the same build. The handshake refuses a mismatch.                                                                                    | The connection carries Beryl's own view types, which change daily.                                                                         |
-| T20 | The host saves the table after every action. A guest who drops rejoins with the same invite code.                                                      | The host has the only copy of the game.                                                                                                    |
-| T22 | The connection carries whole views and scripts, not table actions for the guest to replay.                                                             | It is the only shape the rules engine can also produce. A view and script from an engine game is 1.3 KB compressed.                        |
+| ID  | Decision                                                                                                                                           | Why                                                                                                                                            |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| T3  | One player's app, the host, holds the table. It sends each seat its view and script, and the other app, the guest, sends actions.                  | The session already builds a view and a script per seat. The guest only displays, and the rules engine can sit behind the same connection.     |
+| T4  | Two apps connect with iroh, behind a small interface that also has an in-memory and a localhost implementation.                                    | One pasted code connects two machines behind home routers. Tests and two apps on one Mac never need the internet.                              |
+| T5  | The manual table has its own state, separate from the rules engine's.                                                                              | The engine's state has closed lists of counters and zones, cannot be saved to a file, and knows only its 47 cards.                             |
+| T7  | The work divides into a part that needs no change to the stage or the session, and a part that binds to them. The independent part is built first. | The session and the stage change many times a day. The table should add little to that churn and not be broken by it.                          |
+| T19 | Both apps must have the same wire types. The handshake compares a hash of them and refuses a mismatch.                                             | The connection carries Beryl's own view types. Comparing the commit instead would refuse two builds that differ in nothing the guest receives. |
+| T20 | The host saves the table after every action. A guest who drops rejoins with the same invite code.                                                  | The host has the only copy of the game.                                                                                                        |
+| T22 | The connection carries whole views and scripts, not table actions for the guest to replay.                                                         | It is the only shape the rules engine can also produce. A view and script from an engine game is 1.3 KB compressed.                            |
 
 How it is used:
 
@@ -120,6 +125,34 @@ How it is used:
 | T16 | The desktop comes first. Every interaction is specified with a touch equivalent, and no command assumes a mouse or a keyboard.                                                  | Beryl's phone app is unfinished. Designing touch in now avoids revisiting the interaction model.                                                                              |
 | T17 | Shortcuts are Cockatrice's defaults, with Cmd on macOS where Cockatrice says Ctrl. Where a default collides with macOS or Beryl, Cockatrice's wins if the app can take the key. | Muscle memory is the point of keeping them.                                                                                                                                   |
 | T24 | Playing a card sends a land to the battlefield and anything else to the stack. This is what "play" means, not an assist.                                                        | It is Cockatrice's default, and a click has to send the card somewhere.                                                                                                       |
+
+### Decisions of 2026-11-13
+
+The second interview decided how much is built now and how it is verified.
+
+| ID  | Decision                                                                                                                                             | Why                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| T25 | The desktop is built in full. Touch gets every gesture in the [Touch](#touch) table, with one automated check per group of gestures and no more.     | The desktop is where the table will be played first.                                                          |
+| T26 | The phone apps get the solo table and can join a table as the guest. They cannot host.                                                               | A guest runs no game logic. Hosting would put the table, its save file and reconnection on a phone, untested. |
+| T27 | iroh is built now, and no automated check touches the internet. The iroh link is tested by two endpoints in one process with the relay switched off. | A check that depends on a public relay fails when the relay does.                                             |
+| T28 | Engine games over the same connection are designed here and not built yet.                                                                           | The session has no ordinary game with two human seats.                                                        |
+| T29 | Every step of Manual QA that can be scripted is an automated check. No automated agent opens a window.                                               | The work is done unattended. What is left for a person is listed under [Manual QA](#manual-qa).               |
+
+The same day's survey of the code settled these points, which the sections below
+now state.
+
+- **The host decides where a played card goes.** `move` accepts two computed
+  destinations, `play` and `resolve`, so the interface never reads a type line.
+- **Every applied action records its primitive changes.** Undo inverts them and
+  the adapter animates from them.
+- **The guest is a session in Rust behind the same app commands** a local table
+  uses. The interface does not know which kind of table it is showing.
+- **What only a manual table shows is one optional field of the view,** named
+  `table`. An engine game leaves it empty.
+- **The table's menu is the gear at the top right,** which engine games already
+  have.
+- **Typed entry in the number prompt is for the manual table only.** Engine
+  prompts keep the two steps Arena has.
 
 ## The table
 
@@ -275,31 +308,47 @@ graveyard. The second adds a counter.
 The complete set follows. Each takes one object or many, so acting on a
 selection is one action and one log line.
 
-| Action                                    | What it does, and what it takes                                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `move`                                    | Moves cards to a zone: a position (top, bottom, or nth), a face, and tapped or not.                                             |
-| `reorder`, `pin`, `give`                  | Changes a card's place in a row or a hand, pins it to a row, or gives control to a seat.                                        |
-| `tap`, `face`, `flag`                     | Sets tapped; sets the face (front, back, down); sets "doesn't untap".                                                           |
-| `peek`                                    | Adds the acting seat to a face-down card's `known_to`.                                                                          |
-| `counter`, `stats`, `damage`, `note`      | Adds to or sets a named counter; sets or clears manual power and toughness, damage, a note.                                     |
-| `attach`, `unattach`                      | Attaches cards to a host permanent, or detaches them.                                                                           |
-| `clone`, `token`, `marker`                | Creates a copy of a card, a token (from the store or custom; optionally attached to a card), or an ability marker on the stack. |
-| `remove`                                  | A token or marker ceases to exist.                                                                                              |
-| `draw`, `mulligan`                        | Draws n cards; shuffles a hand into its library and draws n.                                                                    |
-| `shuffle`                                 | Shuffles a whole library, or its top or bottom n cards.                                                                         |
-| `look`                                    | Shows the acting seat the top or bottom n cards of a library, or all of it.                                                     |
-| `reveal`                                  | Shows chosen cards, a whole zone, or n random cards of it, to named seats.                                                      |
-| `lend`                                    | Lets another seat act on this hidden zone until it is next shuffled.                                                            |
-| `always_reveal_top`, `always_look_at_top` | Keeps a library's top card revealed to all, or known to its owner.                                                              |
-| `sort_hand`                               | Orders a hand by name, type or mana value.                                                                                      |
-| `life`, `player_counter`                  | Adds to or sets a life total or a player's named counter.                                                                       |
-| `phase`, `next_turn`                      | Sets the phase; passes the turn.                                                                                                |
-| `roll`                                    | Rolls n dice of s sides, or flips coins.                                                                                        |
-| `arrow`, `clear_arrows`                   | Draws an arrow from a card to a card or player; removes the acting seat's arrows.                                               |
-| `load_deck`, `sideboard`, `ready`         | Sets a seat's deck; swaps cards between deck and sideboard; marks the seat ready.                                               |
-| `start`, `next_game`, `concede`           | Starts a game; ends the game with a result and returns to the lobby; concedes.                                                  |
-| `undo`, `rewind`                          | See [The log, undo and rewind](#the-log-undo-and-rewind).                                                                       |
-| `batch`                                   | Applies several actions as one. See [Assists](#assists).                                                                        |
+| Action                                    | What it does, and what it takes                                                                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `move`                                    | Moves cards to a zone: a position (top, bottom, or nth), a face, and tapped or not. The zone may be `play` or `resolve`, which the host works out. See below. |
+| `reorder`, `pin`, `give`                  | Changes a card's place in a row or a hand, pins it to a row, or gives control to a seat.                                                                      |
+| `tap`, `face`, `flag`                     | Sets tapped; sets the face (front, back, down); sets "doesn't untap".                                                                                         |
+| `peek`                                    | Adds the acting seat to a face-down card's `known_to`.                                                                                                        |
+| `counter`, `stats`, `damage`, `note`      | Adds to or sets a named counter; sets or clears manual power and toughness, damage, a note.                                                                   |
+| `attach`, `unattach`                      | Attaches cards to a host permanent, or detaches them.                                                                                                         |
+| `clone`, `token`, `marker`                | Creates a copy of a card, a token (from the store or custom; optionally attached to a card), or an ability marker on the stack.                               |
+| `remove`                                  | A token or marker ceases to exist.                                                                                                                            |
+| `draw`, `mulligan`                        | Draws n cards; shuffles a hand into its library and draws n.                                                                                                  |
+| `shuffle`                                 | Shuffles a whole library, or its top or bottom n cards.                                                                                                       |
+| `look`                                    | Shows the acting seat the top or bottom n cards of a library, or all of it.                                                                                   |
+| `reveal`                                  | Shows chosen cards, a whole zone, or n random cards of it, to named seats.                                                                                    |
+| `lend`                                    | Lets another seat act on this hidden zone until it is next shuffled.                                                                                          |
+| `always_reveal_top`, `always_look_at_top` | Keeps a library's top card revealed to all, or known to its owner.                                                                                            |
+| `sort_hand`                               | Orders a hand by name, type or mana value.                                                                                                                    |
+| `life`, `player_counter`                  | Adds to or sets a life total or a player's named counter.                                                                                                     |
+| `phase`, `next_turn`                      | Sets the phase; passes the turn.                                                                                                                              |
+| `roll`                                    | Rolls n dice of s sides, or flips coins.                                                                                                                      |
+| `arrow`, `clear_arrows`                   | Draws an arrow from a card to a card or player; removes the acting seat's arrows.                                                                             |
+| `load_deck`, `sideboard`, `ready`         | Sets a seat's deck; swaps cards between deck and sideboard; marks the seat ready.                                                                             |
+| `start`, `next_game`, `concede`           | Starts a game; ends the game with a result and returns to the lobby; concedes.                                                                                |
+| `set_assist`                              | Switches one of the acting seat's assists on or off.                                                                                                          |
+| `flow`                                    | Opens a library flow for the acting seat. See [Library flows](#library-flows).                                                                                |
+| `undo`, `rewind`                          | See [The log, undo and rewind](#the-log-undo-and-rewind).                                                                                                     |
+| `batch`                                   | Applies several actions as one. See [Assists](#assists).                                                                                                      |
+
+Two destinations of `move` are worked out by the host from the card store, so
+that the guest's app computes nothing.
+
+- **`play`** sends a land to the battlefield and anything else to the stack. A
+  permanent whose rules text says it enters tapped arrives tapped.
+- **`resolve`** sends a permanent to the battlefield and anything else to its
+  owner's graveyard. An ability marker ceases to exist.
+
+Applying an action produces a list of **changes**: reversible primitives such as
+"this object moved from this position to that one" or "this field went from this
+value to that one". Nothing alters the table except by a change. The log keeps
+each action's changes, undo applies their inverses, and the adapter builds
+animation from them.
 
 A few changes happen as a consequence of an action. All but the last two are
 Cockatrice's.
@@ -444,10 +493,16 @@ engine game is drawn.
 - **A status meaning free play:** the game is live and no decision is pending.
   The existing statuses are deciding, thinking, playing, stopped and over, all
   of which describe an engine game.
-- **A counter with a free-form name,** beside the six kinds the engine has.
+- **A counter with a free-form name and a count up to 999,** beside the closed
+  list of counter kinds the engine has, whose counts stop at 255. A name the
+  engine's list has is sent as that kind, so the stage draws it as it does
+  today.
 - **A note, a pinned row and the back face on an object.**
 - **A sideboard zone.**
-- **A proposal:** the lines of a pending assist's panel.
+- **A field named `table`, empty in an engine game,** that holds what only a
+  manual table shows: the log's lines, pending proposals and labels, the
+  viewer's assists, the phase, the state of the connection, and any prompt the
+  host is holding for the viewer.
 
 A view for the manual table sets the fields the engine fills from rules to
 neutral values: no priority, no legal plays, no pending decision. The phase and
@@ -466,10 +521,12 @@ runs no game logic at all: it shows the views it is sent and sends back the
 actions its player takes. Assists are computed on the host too, for both
 players.
 
-Beryl's interface already reaches its game through one interface with three
+Beryl's interface reaches its game through one interface with three
 implementations: the desktop app's own command channel, recorded games used by
-tests, and an HTTP server used for testing. The guest adds a fourth. No screen
-or stage code knows whether its game is local or remote.
+tests, and an HTTP server used for testing. The guest needs no fourth. The
+guest's app holds the link in Rust, behind the same commands a local table
+answers, and passes each update it receives to the interface unchanged. No
+screen or stage code knows whether its table is local, hosted or joined.
 
 ### The link
 
@@ -547,7 +604,7 @@ The exchange opens with a handshake, shown here in order. The `table` field is
 `new` or `resumed`.
 
 ```json
-{ "hello": { "build": "cb758e7f", "secret": "3mxd", "name": "Mara" } }
+{ "hello": { "wire": "9c41e07ab2d35f18", "secret": "3mxd", "name": "Mara" } }
 { "welcome": { "seat": 1, "table": "resumed", "host": "Derek" } }
 ```
 
@@ -614,13 +671,22 @@ copy and makes rejoining automatic.
 
 ### Builds must match
 
-The handshake carries the commit the app was built from. The host refuses a
-guest whose build differs, with a message both players see: "Both players need
-the same version of Beryl."
+The handshake carries a hash of the app's wire types: the generated definitions
+of the view and script types, and of the table's actions and lobby messages. The
+host refuses a guest whose hash differs, with a message both players see: "Both
+players need the same version of Beryl."
 
-This is deliberate. Updates are Beryl's own view and script types, which change
-many times a day while the stage is being built. Requiring equal builds means no
-compatibility layer exists to maintain.
+Two builds may therefore share a table exactly when the guest can read what the
+host sends. The guest runs no game logic, so nothing else about its build
+matters.
+
+The hash was chosen over the commit the app was built from. In the week before
+this was decided, 928 commits landed and 58 of them changed the wire types.
+Comparing commits would refuse the other 870 for no reason. The types still
+change several times a day, so two builds made a day apart will usually be
+refused, and the practical way to play is for both players to install the same
+built app. No compatibility layer between different wire types exists or is
+planned.
 
 ### Two apps on one machine
 
@@ -633,7 +699,7 @@ Development and testing need a host and a guest on the same Mac.
 - **One command starts the pair** for a person: two windows, one hosting a table
   with a test deck loaded and one joined to it.
 - **Automated agents and the checks use the in-memory link** and open no window.
-  Beryl's rule is that agents never open one.
+  Beryl's rule is that agents never open one. `just table-pair` is for a person.
 
 `just` is the command runner Beryl's developer commands are defined in.
 
@@ -643,9 +709,9 @@ just table-pair            # two windows on one Mac, joined over localhost
 
 ### Engine games over the same connection
 
-The same connection will later carry an engine game between two people. Nothing
-in the link, the handshake, the lobby or the reconnection logic changes when it
-does.
+The same connection will later carry an engine game between two people. This is
+not built yet, by decision T28. Nothing in the link, the handshake, the lobby or
+the reconnection logic changes when it does.
 
 - **The host runs the engine's session** in place of the table. The session
   already builds a view and script for either seat.
@@ -755,6 +821,9 @@ Two details complete "play".
 - **A permanent whose rules text says it enters tapped is played tapped.**
   Cockatrice does the same from a flag in its card database.
 
+The interface sends `move` to `play` or to `resolve`, and the host chooses the
+zone.
+
 ### Select
 
 Selection lets one action apply to many cards.
@@ -863,7 +932,8 @@ Three rules hold for every menu.
 
 A row or shortcut that needs a number opens the stage's existing number prompt,
 at the lower right where engine games ask for a value: a number with a minus and
-a plus beside it, and a button that confirms.
+a plus beside it, and a button that confirms. On a manual table the number can
+also be typed. Engine games keep the two steps alone, as Arena has them.
 
 - **The number starts at the likeliest value:** 1 for most commands, the current
   value for "Set life…".
@@ -970,15 +1040,17 @@ phase or pass the turn at any time.
 
 ### The table's menu
 
-The menu button at the top left of the table, which engine games already have,
+The gear button at the top right of the table, which engine games already have,
 holds the commands about the game as a whole: Lobby, Next game, Concede,
 Assists, Shortcuts and Leave table.
 
 ### Touch
 
 Every interaction above has a touch equivalent, so that a phone or tablet can
-use the same table when Beryl's phone app is ready. The commands are shared.
-Only the gestures and the menu's presentation differ.
+use the same table when Beryl's phone app is ready. The commands are shared. By
+decisions T25 and T26, touch is built with light checking, and a phone can play
+a solo table or join one but not host. Only the gestures and the menu's
+presentation differ.
 
 | With a mouse and keyboard               | By touch                                                          |
 | --------------------------------------- | ----------------------------------------------------------------- |
@@ -1232,14 +1304,16 @@ giving control and passing the turn to another player are unavailable.
 
 ## Working alongside the engine and stage work
 
-Beryl's session and stage are being rebuilt while this is designed. In the three
-days before this document, the session's code took 102 commits and the stage's
-68\. The stage does not yet draw every game: an older table view is still in use,
-and the task that retires it, `by-w8gv.21.32` in the project's issue tracker, is
-open. The manual table must neither slow that work nor be broken by it.
+Beryl's session and stage change many times a day. When this design was first
+written the stage did not yet draw every game, and the bound part below was to
+wait for it. The stage has drawn every game since 2026-11-12, when the task
+`by-w8gv.21.32` retired the older table view, so nothing here waits on work
+outside this design. The boundary still orders the work: the independent part is
+built first, and the manual table must neither slow the work on the session and
+stage nor be broken by it.
 
-The design answers this with a boundary. The work divides into a part that
-touches nothing being rebuilt and a part that binds to the stage.
+The work divides into a part that touches nothing in the session or the stage
+and a part that binds to them.
 
 The independent part depends only on the card store and on new code.
 
@@ -1251,8 +1325,8 @@ The independent part depends only on the card store and on new code.
 - Deck import, card search and custom tokens.
 - The list of commands and the default shortcuts.
 
-The bound part needs the stage and the view and script types. It waits until the
-stage draws every game.
+The bound part needs the stage and the view and script types. It is built
+second.
 
 - The adapter from the table to views and scripts.
 - The context menu, the command list, selection and the gestures.
@@ -1264,10 +1338,11 @@ additive change.
 - **The view and script types** gain the additions listed in
   [Views and animation](#views-and-animation).
 - **The adapter is the only code that names those types.** It builds them
-  through constructor functions that the session's own code provides, so a field
-  added for the engine gets its default there and the adapter does not change.
-- **The interface's connection to its game** gains one implementation, for the
-  guest.
+  through constructor functions that are added to the session's code for it. The
+  session builds its own views field by field today. A field added for the
+  engine gets its default in the constructor and the adapter does not change.
+- **The session's list of app commands** gains the table's: start a solo table,
+  host, join, act, and answer a prompt the host holds.
 - **The stage's pointer handling** gains three hooks that a second client can
   use: a secondary click or long press on a card, a drag of any card the client
   allows, and a rectangle drag on empty table. Its only client today is the code
@@ -1286,7 +1361,8 @@ Three rules keep the boundary honest.
 
 ## Automated checks
 
-The manual table is verified mostly without a window, like the rest of Beryl.
+The manual table is verified without a window, like the rest of Beryl. No check
+touches the internet, by decision T27.
 
 - **A host and a guest over the in-memory link** play a scripted game in one
   test process: load decks, start, draw, play, attack, apply a combat proposal,
@@ -1301,12 +1377,23 @@ The manual table is verified mostly without a window, like the rest of Beryl.
 - **Scripts:** every script the adapter builds replays over the previous view to
   the next view.
 - **Permissions:** each row of the permissions table, allowed and refused.
+- **The iroh link:** two endpoints in one test process, with the relay switched
+  off, exchange frames in both directions.
+- **The appendix:** every row of the Cockatrice inventory that is carried over
+  maps to a command or to a gesture with a check of its own, and a row with no
+  mapping fails.
 - **Interface states:** the context menu for each kind of thing, the command
   list, a pending proposal, a selection and the lobby are added to the recorded
   states that Beryl's interface audits run on (overlapping elements, anything
   off screen, controls that cannot be reached, page errors).
 
 ## Manual QA
+
+By decision T29, every step below that can be scripted is also an automated
+check, and no automated agent runs this section. Three things can only be tried
+by a person: play between two machines on different networks, the keys that
+macOS would otherwise take (Cmd+W, Cmd+M, Cmd+Q and the others in the collision
+table) in a real window, and the phone apps beyond their start-up checks.
 
 Manual QA needs two app instances. Start them with `just table-pair`, which
 opens a host and a guest on one Mac over the localhost link with a test deck
@@ -1396,8 +1483,8 @@ Then work through the areas below.
 **Connection**
 
 - Paste a wrong invite code. Confirm a clear failure and no table.
-- Join from an app built at a different commit. Confirm both players see the
-  message about needing the same version.
+- Join from an app whose wire types differ. Confirm both players see the message
+  about needing the same version.
 - Quit the guest app during a game and reopen it. Confirm it rejoins the same
   table without a new invite.
 - Quit the host app during a game, reopen it and resume the table. Confirm the
