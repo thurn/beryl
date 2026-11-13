@@ -477,7 +477,7 @@ def judge(gate: Gate, measured: int) -> tuple[bool, str]:
 
 
 def lane() -> Lane:
-    """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
+    """Counts the rollout benchmark's instructions in the bench VM (`by count-gate`) and
     fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
     target dir, so it needs no warm clone."""
     from .checks import BY, Lane  # It imports this module.
