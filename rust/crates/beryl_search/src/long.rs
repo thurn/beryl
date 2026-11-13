@@ -143,6 +143,8 @@ pub struct Options {
     /// With the anchor, use the combat planner's answer at declarations and their targets.
     /// Below the root, the planner answers those decisions for both players on the root's turn.
     pub combat: bool,
+    /// Try unvisited children in descending order of their greedy scores, including at the root.
+    pub order: bool,
 }
 
 /// A searcher's settings.
@@ -265,7 +267,7 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste and combat joined by + in that order; \
+                 means, hold, waste, combat and order joined by + in that order; \
                  expert and guard require anchor)"
             )
         };
@@ -288,6 +290,7 @@ impl FromStr for Family {
                         "hold" => &mut o.hold,
                         "waste" => &mut o.waste,
                         "combat" => &mut o.combat,
+                        "order" => &mut o.order,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -342,7 +345,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -353,6 +356,7 @@ impl Options {
             (self.hold, "hold"),
             (self.waste, "waste"),
             (self.combat, "combat"),
+            (self.order, "order"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -1303,27 +1307,23 @@ impl<L: Layout> Tree<L> {
                 && combat::handles(d.kind)
                 && s.turn().number() == root_turn;
             let policy_only = !at_root && self.family.options.mid && answered_by_policy(&d);
-            let (child, choice) = match self.allowed {
-                Some(pair) if at_root => {
-                    let (child, Choice(i)) = self.select(node, &pair.map(|i| keys[i]), d.player);
-                    (child, Choice(pair[usize::from(i)] as u16))
-                }
-                _ if combat_only => {
-                    let c = combat::Sim::<_, combat::General>::new(
-                        t,
-                        policy,
-                        &mut self.x,
-                        d.player,
-                        &mut plans[d.player.index()],
-                    )
-                    .choose(&s, &d);
-                    (self.only(node, keys[usize::from(c.0)], d.player), c)
-                }
-                _ if policy_only => {
-                    let c = policy.choose(t, Observation::new(&s, d.player), &d);
-                    (self.only(node, keys[usize::from(c.0)], d.player), c)
-                }
-                _ => self.select(node, &keys, d.player),
+            let (child, choice) = if combat_only {
+                let c = combat::Sim::<_, combat::General>::new(
+                    t,
+                    policy,
+                    &mut self.x,
+                    d.player,
+                    &mut plans[d.player.index()],
+                )
+                .choose(&s, &d);
+                (self.only(node, keys[usize::from(c.0)], d.player), c)
+            } else if policy_only {
+                let c = policy.choose(t, Observation::new(&s, d.player), &d);
+                (self.only(node, keys[usize::from(c.0)], d.player), c)
+            } else {
+                self.select(node, &keys, d.player, |x| {
+                    policy.scores(t, observe(&s, t, x, d.player), &d)
+                })
             };
             if at_root {
                 self.root_keys = keys;
@@ -1372,26 +1372,49 @@ impl<L: Layout> Tree<L> {
     }
 
     /// The child of `node` to play next among the actions `keys` names, adding any it lacks
-    /// and counting each as available: one not yet played, at random, else the one with the
-    /// highest UCB1 bound for `mover` over its availability, one of equals at random.
-    fn select(&mut self, node: u32, keys: &[u64], mover: Seat) -> (u32, Choice) {
+    /// and counting each as available. Try an unplayed action first, by greedy score with
+    /// `order` and at random otherwise. Once all have played, use the highest UCB1 bound for
+    /// `mover` over its availability, breaking ties at random.
+    fn select(
+        &mut self,
+        node: u32,
+        keys: &[u64],
+        mover: Seat,
+        scores: impl FnOnce(&mut Scratch<L>) -> Vec<Option<i32>>,
+    ) -> (u32, Choice) {
+        let allowed = self.allowed.filter(|_| node == self.root);
+        let pair_keys;
+        let keys = if let Some(pair) = allowed {
+            pair_keys = pair.map(|i| keys[i]);
+            &pair_keys
+        } else {
+            keys
+        };
+        let candidate_index = |i| allowed.map_or(i, |pair| pair[i]);
         let mut children = Vec::with_capacity(keys.len());
         for &k in keys {
             children.push(self.only(node, k, mover));
         }
-        let fresh = children
-            .iter()
-            .filter(|&&c| self.nodes[c as usize].visits == 0)
-            .count() as u64;
-        if fresh > 0 {
-            let pick = self.rng.below(fresh) as usize;
-            let (i, &c) = children
+        let unplayed = || {
+            children
                 .iter()
                 .enumerate()
                 .filter(|&(_, &c)| self.nodes[c as usize].visits == 0)
-                .nth(pick)
-                .expect("a fresh child");
-            return (c, Choice(i as u16));
+        };
+        let fresh = unplayed().count() as u64;
+        if fresh > 0 {
+            let (i, &c) = if self.family.options.order {
+                let scores = scores(&mut self.x);
+                unplayed().max_by_key(|&(i, _)| {
+                    let i = candidate_index(i);
+                    (scores[i], std::cmp::Reverse(i))
+                })
+            } else {
+                let pick = self.rng.below(fresh) as usize;
+                unplayed().nth(pick)
+            }
+            .expect("a fresh child");
+            return (c, Choice(candidate_index(i) as u16));
         }
         // Equal bounds are broken at random: by index, the first candidate (passing, in a
         // priority decision) would take every tie, and with flat rewards the root's visits
@@ -1416,7 +1439,7 @@ impl<L: Layout> Tree<L> {
                 std::cmp::Ordering::Less => {}
             }
         }
-        (children[best.0], Choice(best.0 as u16))
+        (children[best.0], Choice(candidate_index(best.0) as u16))
     }
 
     /// The child of `node` for the action `key`, added if it lacks one, counted as available.
@@ -1837,7 +1860,8 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat",
             "pimc72/hidden/rollout/tuned/anchor+guard+mid+means+hold+waste+combat",
             "pimc72/hidden/rollout/tuned/anchor+expert",
-            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat",
+            "pimc72/hidden/rollout/tuned/anchor+order",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1861,6 +1885,7 @@ mod tests {
             "pimc18/hidden/rollout/tuned/hold+anchor",
             "pimc18/hidden/rollout/tuned/expert",
             "pimc18/hidden/rollout/tuned/anchor+guard+expert",
+            "pimc18/hidden/rollout/tuned/anchor+order+combat",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
@@ -1936,6 +1961,38 @@ mod tests {
             apply(&mut s, t, &mut x, &mut Replay, c);
         }
         out
+    }
+
+    #[test]
+    fn order_expands_the_greedy_root_choice_first() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let (s, d, greedy) = positions(&t, 1)
+            .into_iter()
+            .find_map(|(s, d)| {
+                let greedy = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
+                (greedy != Choice(0)).then_some((s, d, greedy))
+            })
+            .expect("a priority decision where greedy plays an action");
+        let obs = observe(&s, &t, &mut x, d.player);
+        let known = Slot::all().filter(|&slot| obs.knows(slot)).collect();
+        let ordered = family(Options {
+            order: true,
+            ..Options::default()
+        });
+        let greedy = usize::from(greedy.0);
+        for seed in 0..4 {
+            for allowed in [None, Some([greedy, 0])] {
+                let mut tree = Tree::new(&t, ordered, obs, &d, known, false, seed);
+                tree.allowed = allowed;
+                tree.iterate(&t, &policy);
+                for (i, child) in tree.root_children().into_iter().enumerate() {
+                    let visits = child.map_or(0, |c| tree.nodes[c as usize].visits);
+                    assert_eq!(visits, u32::from(i == greedy));
+                }
+            }
+        }
     }
 
     /// With `mid`, a question asked below the root while casting or resolving has one child in

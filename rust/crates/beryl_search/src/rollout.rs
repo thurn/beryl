@@ -1,6 +1,6 @@
 //! The rollout policy (architecture §19.1, decision D21): one cheap, greedy answer to every
 //! decision, from per-card values and simple combat rules. It makes no copies and looks
-//! nothing ahead, allocates nothing, and reads only an [`Observation`]. Wrapped as an agent it
+//! nothing ahead, and reads only an [`Observation`]. Wrapped as an agent it
 //! is `greedy`; inside search it plays rollouts, answering mid-resolution questions inline
 //! (§7.3).
 //!
@@ -147,6 +147,19 @@ impl RolloutPolicy {
         self.decide(t, obs, d, false)
     }
 
+    /// Each candidate's greedy score in decision order. `None` ranks below any score.
+    /// When the policy picks an answer directly, only the chosen candidate scores 1.
+    pub fn scores<L: Layout>(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+    ) -> Vec<Option<i32>> {
+        let mut scores = Vec::with_capacity(d.len());
+        self.decide_by(t, obs, d, false, &mut Pick::Scores(&mut scores));
+        scores
+    }
+
     /// The policy's answer to `d`, with `expert`, valuing permanents as the expert does.
     pub(crate) fn decide<L: Layout>(
         &self,
@@ -171,9 +184,8 @@ impl RolloutPolicy {
         self.decide_by(t, obs, d, false, &mut Pick::Soft(soft))
     }
 
-    /// The rules' answer to `d`, its scores made a choice by `pick`. The decisions scored
-    /// yes or no (mulligans, play or draw, a "may") and the numbers chosen are always the
-    /// best: their scores are flags, not values a temperature could weigh.
+    /// The rules' answer to `d`, its scores made a choice by `pick`. The policy picks
+    /// one answer directly for yes/no decisions and numbers, even in a softmax rollout.
     fn decide_by<L: Layout>(
         &self,
         t: &GameTable,
@@ -187,17 +199,19 @@ impl RolloutPolicy {
             DecisionKind::Priority | DecisionKind::CastOffer => {
                 pick.choose(d, |c| c.option().map(|o| p.action(o)))
             }
-            DecisionKind::PlayOrDraw => best(d, |c| Some(i32::from(c.option() == Some(Opt::Play)))),
+            DecisionKind::PlayOrDraw => {
+                pick.choose_fixed(d, |c| Some(i32::from(c.option() == Some(Opt::Play))))
+            }
             DecisionKind::KeepOrMulligan => {
                 let keep = p.keep();
-                best(d, |c| {
+                pick.choose_fixed(d, |c| {
                     Some(i32::from((c.option() == Some(Opt::Keep)) == keep))
                 })
             }
             // A "may" is taken; life for an untapped land is paid only from above 10.
             DecisionKind::YesNo => {
                 let yes = d.prompt.purpose != Purpose::PayLife || obs.player(p.me).life() > 10;
-                best(d, |c| {
+                pick.choose_fixed(d, |c| {
                     Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
                 })
             }
@@ -272,18 +286,18 @@ impl RolloutPolicy {
                 let worth = p
                     .targeting()
                     .is_some_and(|(spec, friendly)| p.best_target(spec, friendly).is_some());
-                best(d, |c| match c.option() {
+                pick.choose_fixed(d, |c| match c.option() {
                     Some(Opt::Number(n)) => Some(if worth { i32::from(n) } else { -i32::from(n) }),
                     _ => None,
                 })
             }
-            DecisionKind::X => best(d, |c| match c.option() {
+            DecisionKind::X => pick.choose_fixed(d, |c| match c.option() {
                 Some(Opt::Number(n)) => Some(i32::from(n)),
                 _ => None,
             }),
             // The first: a cost that offers permanents in place of mana lists mana first.
             DecisionKind::TriggerOrder | DecisionKind::PaymentPlan | DecisionKind::ManaPayment => {
-                Choice(0)
+                pick.fixed(d, Choice(0))
             }
         }
     }
@@ -303,15 +317,7 @@ pub(crate) fn best<L: Layout>(
             top = (i, s);
         }
     };
-    match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
-            .enumerate()
-            .for_each(|(i, slot)| consider(i, Candidate::Object(slot))),
-        Candidates::Options(o) => o
-            .iter()
-            .enumerate()
-            .for_each(|(i, &opt)| consider(i, Candidate::Option(opt))),
-    }
+    for_each(d, &mut consider);
     Choice(top.0 as u16)
 }
 
@@ -321,18 +327,40 @@ enum Pick<'s, 'r> {
     Best,
     /// A draw by the scores ([`Softmax`]).
     Soft(&'s mut Softmax<'r>),
+    /// Collects the greedy scores in candidate order.
+    Scores(&'s mut Vec<Option<i32>>),
 }
 
 impl Pick<'_, '_> {
     fn choose<L: Layout>(
         &mut self,
         d: &Decision<L>,
-        score: impl FnMut(Candidate<L>) -> Option<i32>,
+        mut score: impl FnMut(Candidate<L>) -> Option<i32>,
     ) -> Choice {
         match self {
             Pick::Best => best(d, score),
             Pick::Soft(soft) => soft.choose(d, score),
+            Pick::Scores(scores) => best(d, |candidate| {
+                let value = score(candidate);
+                scores.push(value);
+                value
+            }),
         }
+    }
+
+    fn fixed<L: Layout>(&mut self, d: &Decision<L>, choice: Choice) -> Choice {
+        if let Pick::Scores(scores) = self {
+            scores.extend((0..d.len()).map(|i| Some(i32::from(i == usize::from(choice.0)))));
+        }
+        choice
+    }
+
+    fn choose_fixed<L: Layout>(
+        &mut self,
+        d: &Decision<L>,
+        score: impl FnMut(Candidate<L>) -> Option<i32>,
+    ) -> Choice {
+        self.fixed(d, best(d, score))
     }
 }
 
