@@ -62,7 +62,7 @@ DEFAULT_CARDS = 50_000
 # The one-edit rebuild is a few seconds of mostly serial work, which the machine's other load
 # moves by more than its budget's margin: its measure is the median of this many edits.
 REBUILDS = 3
-GIB = 2**30
+GIB: int = 2**30
 # A card's script check in the run log: `script:<card>/<moment>/<seat>`.
 SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
 # The cards the script cost names by name, the costliest first.

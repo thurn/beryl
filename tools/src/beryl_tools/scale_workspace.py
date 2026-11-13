@@ -111,7 +111,7 @@ def renames(source: Source, index: int) -> dict[str, str]:
 
 def clone(source: Source, index: int) -> str:
     """`source`'s file as clone number `index`: its own constants are the clone's."""
-    table = renames(source, index)
+    table: dict[str, str] = renames(source, index)
 
     def rename(found: re.Match[str]) -> str:
         module, constant = found.group(1), found.group(2)
