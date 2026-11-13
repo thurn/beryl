@@ -478,6 +478,13 @@ class Exporter:
                 "a payment sacrificing a source for mana of a color XMage asks"
             )
         if p.stack:
+            if self.payment_left_to_xmage and taps:
+                # A spell cast onto a stack is paid by XMage too, from whatever an earlier
+                # payment of XMage's choosing left untapped, which may be too little for it
+                # (two spells needing {U} and {U}{U} from exactly three blue sources).
+                raise Unsupported(
+                    "a payment after one XMage chose the sources of, onto a stack"
+                )
             return
         if source in taps:
             taps.remove(source)

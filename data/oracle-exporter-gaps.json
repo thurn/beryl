@@ -22,11 +22,5 @@
     "card": "Teferi, Hero of Dominaria",
     "scenario": "generated 2: activate ability 0 on the battlefield",
     "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: untapping up to two lands when none is tapped"
-  },
-  {
-    "oracle": "forge",
-    "card": "Generated",
-    "scenario": "Generated 22",
-    "gap": "a payment the harness leaves to Forge: P0 has exactly three untapped blue sources for Stock Up ({2}{U}) and then Mana Drain ({U}{U}), and Forge pays Stock Up's generic mana with blue, leaving too little for Mana Drain"
   }
 ]
